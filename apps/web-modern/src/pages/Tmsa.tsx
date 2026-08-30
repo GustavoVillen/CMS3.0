@@ -22,8 +22,11 @@ type TmsaStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
 interface TmsaMetric { key: string; value: number; kind: "count" | "pct"; }
 interface TmsaGroup { key: string; element: string; status: TmsaStatus; metrics: TmsaMetric[]; }
 interface TmsaVesselEvidence {
+  /** "" cuando el item consolida toda la flota. */
   vesselCode: string;
   vesselName: string;
+  /** Cuántos buques entraron en el total (1 salvo en el item de flota). */
+  vesselCount: number;
   summary: { ok: number; attention: number; gap: number; info: number };
   groups: TmsaGroup[];
 }
@@ -429,7 +432,9 @@ const TmsaChecklistCard: React.FC<{ item: ChecklistItem; items: TmsaVesselEviden
             // Los porcentajes y las métricas sin planilla propia quedan como
             // badge apagado, sin cursor ni hover, para que se vea que no llevan
             // a ningún lado.
-            const link = m.kind === "count" && vesselCode ? moduleListLink(m.key, vesselCode) : null;
+            // Sin condición sobre vesselCode: en el bloque de flota va vacío a
+            // propósito y el link sale sin buque (planilla de toda la flota).
+            const link = m.kind === "count" ? moduleListLink(m.key, vesselCode) : null;
             const label = t(`tmsa.metric.${m.key}` as TranslationKey);
             const content = (
               <>
@@ -612,7 +617,16 @@ export const TmsaPage: React.FC = () => {
         <section key={v.vesselCode} className="space-y-3">
           {/* Encabezado de buque + resumen */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-sm font-bold text-fg">{v.vesselName}</h3>
+            {/* Un buque, o el nombre de la empresa + cuántos buques cuando el
+                bloque consolida la flota. */}
+            <h3 className="text-sm font-bold text-fg">
+              {v.vesselName}
+              {!v.vesselCode && (
+                <span className="ml-2 font-medium text-text-industrial/50">
+                  · {t("tmsa.fleetVessels").replace("{n}", String(v.vesselCount))}
+                </span>
+              )}
+            </h3>
             <div className="flex items-center gap-3 text-[11px] font-medium">
               <span className="text-emerald-600 dark:text-emerald-400">{t("tmsa.status.OK")} {v.summary.ok}</span>
               <span className="text-yellow-700 dark:text-yellow-400">{t("tmsa.status.ATTENTION")} {v.summary.attention}</span>

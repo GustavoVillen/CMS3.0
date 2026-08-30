@@ -39,11 +39,23 @@ export interface TmsaGroup {
 }
 
 export interface TmsaVesselEvidence {
+  /** Código del buque, o "" cuando el item consolida toda la flota. */
   vesselCode: string;
   vesselName: string;
+  /** Cuántos buques entraron en el cálculo (1 salvo en el item de flota). */
+  vesselCount: number;
   summary: { ok: number; attention: number; gap: number; info: number };
   groups: TmsaGroup[];
 }
+
+/**
+ * "fleet"     → un solo item con los totales de todos los buques del alcance.
+ * "perVessel" → un item por buque (lo que necesita el PDF, que imprime el
+ *               desglose para el auditor).
+ *
+ * Pedir un buque puntual da lo mismo en los dos modos: un item, ese buque.
+ */
+export type TmsaEvidenceMode = "fleet" | "perVessel";
 
 // ── Thresholds (ajustables) ──────────────────────────────────────────────────
 const PMS_COVERAGE_GAP = 0.90;        // cobertura de PMS por debajo → GAP
@@ -83,32 +95,53 @@ interface Delegate {
 export async function getTmsaMaintenanceEvidence(
   session: TenantAccessSession,
   vesselCode: string | null,
+  mode: TmsaEvidenceMode = "fleet",
 ): Promise<{ items: TmsaVesselEvidence[] }> {
   const prisma = getPrismaClient();
   if (!prisma) return { items: [] };
-  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  // El nombre visible de la empresa vive en TenantSetting.displayName; titula el
+  // bloque de flota (CLAUDE.md: nombres, no códigos).
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: session.tenantSlug },
+    include: { settings: { select: { displayName: true } } },
+  });
   if (!tenant) return { items: [] };
 
   const vessels = await listVesselsInScope(prisma, session, tenant.id, vesselCode);
   if (vessels.length === 0) return { items: [] };
 
+  // Sin buque pedido y en modo flota: UN item con los totales de todo el
+  // alcance. No se suman las tarjetas de cada buque — se corre la misma consulta
+  // con `vesselCode IN (...)`, porque los porcentajes (cobertura, % OT en plazo)
+  // no se pueden promediar sin mentir.
+  if (mode === "fleet" && vessels.length > 1) {
+    const fleetName = tenant.settings?.displayName ?? session.tenantSlug.toUpperCase();
+    return { items: [await computeOne(prisma, tenant.id, vessels, fleetName)] };
+  }
+
   // Todos los buques en paralelo: el costo de la pantalla no crece en serie
   // con el tamaño de la flota.
-  const items = await Promise.all(vessels.map((v) => computeOne(prisma, tenant.id, v)));
+  const items = await Promise.all(vessels.map((v) => computeOne(prisma, tenant.id, [v], v.name)));
   return { items };
 }
 
 async function computeOne(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenantId: string,
-  vessel: { code: string; name: string; vesselType: string | null },
+  /** Uno solo, o todos los del alcance cuando el item consolida la flota. */
+  vesselsIn: Array<{ code: string; name: string; vesselType: string | null }>,
+  /** Título del bloque: el nombre del buque, o el de la empresa para la flota. */
+  displayName: string,
 ): Promise<TmsaVesselEvidence> {
   const now = new Date();
   const d90 = new Date(now.getTime() - 90 * 86_400_000);
   const d60 = new Date(now.getTime() - 60 * 86_400_000);
   const dCritical = new Date(now.getTime() - CRITICAL_OVERDUE_DAYS * 86_400_000);
   const d365 = new Date(now.getTime() - 365 * 86_400_000);
-  const base = { tenantId, vesselCode: vessel.code, deletedAt: null };
+  // Un buque o todos los del alcance: el mismo `where` sirve para los dos casos.
+  const vesselCodes = vesselsIn.map(v => v.code);
+  const scope = vesselCodes.length === 1 ? vesselCodes[0]! : { in: vesselCodes };
+  const base = { tenantId, vesselCode: scope, deletedAt: null };
 
   const p = prisma as unknown as {
     asset: Delegate;
@@ -135,7 +168,9 @@ async function computeOne(
   // de rutina del plan de mantenimiento y el indicador mentiría.
   const auditPlanIds = (await safe(
     () => p.maintenancePlan.findMany({
-      where: { tenantId, vesselCode: vessel.code, deletedAt: null, taskCode: { startsWith: `${vessel.code}-AUD-ING` } },
+      // El código es `<BUQUE>-AUD-ING-NN`; con varios buques no sirve un
+      // startsWith, y el prefijo ya lo garantiza el filtro de vesselCode.
+      where: { ...base, taskCode: { contains: "-AUD-ING" } },
       select: { id: true },
     }) as Promise<Array<{ id: string }>>,
     [] as Array<{ id: string }>,
@@ -194,7 +229,7 @@ async function computeOne(
     safe(() => p.maintenancePlan.count({ where: { ...base, status: "ACTIVE", samplingKind: { not: null } } }), 0),
     // Análisis de fluidos fuera de rango (verdict crítico) del buque, últimos 90d.
     safe(() => p.fluidAnalysisResult.count({
-      where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode: vessel.code, deletedAt: null } },
+      where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode: scope, deletedAt: null } },
     }), 0),
     safe(() => p.defect.count({ where: { ...base, rcaApprovedAt: { not: null } } }), 0),
     // Activos con defectos recurrentes (≥3 en 60d) — misma lógica que getSmartAlerts.
@@ -526,7 +561,15 @@ async function computeOne(
     else summary.info++;
   }
 
-  return { vesselCode: vessel.code, vesselName: vessel.name, summary, groups };
+  // vesselCode vacío = item de flota; el frontend lo usa para titular el bloque
+  // con el nombre de la empresa en vez del de un barco.
+  return {
+    vesselCode: vesselsIn.length === 1 ? vesselsIn[0]!.code : "",
+    vesselName: displayName,
+    vesselCount: vesselsIn.length,
+    summary,
+    groups,
+  };
 }
 
 // ── Drill-down por métrica ────────────────────────────────────────────────────
@@ -569,7 +612,11 @@ export async function getTmsaMetricDetail(
   const d60 = new Date(now.getTime() - 60 * 86_400_000);
   const dCritical = new Date(now.getTime() - CRITICAL_OVERDUE_DAYS * 86_400_000);
   const d365 = new Date(now.getTime() - 365 * 86_400_000);
-  const base = { tenantId, vesselCode, deletedAt: null };
+  // vesselCode vacío = el detalle de una tarjeta de flota: mismo alcance que
+  // usó computeOne para contarla, así el número de la tarjeta y el largo de la
+  // lista no pueden separarse.
+  const scope = vesselCode ? vesselCode : { in: vessels.map(v => v.code) };
+  const base = { tenantId, vesselCode: scope, deletedAt: null };
 
   const p = prisma as unknown as {
     asset: { findMany(a: unknown): Promise<any[]> };
@@ -723,7 +770,7 @@ export async function getTmsaMetricDetail(
     }
     case "analysesOutOfRange": {
       const rows = await p.fluidAnalysisResult.findMany({
-        where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode, deletedAt: null } },
+        where: { tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] }, receivedAt: { gte: d90 }, sample: { vesselCode: scope, deletedAt: null } },
         select: { id: true, verdict: true, receivedAt: true, sample: { select: { sampleCode: true } } },
         orderBy: { receivedAt: "desc" },
       });
@@ -807,7 +854,9 @@ export async function getTmsaMetricDetail(
     case "auditsLast12m":
     case "auditsAtSea": {
       const auditPlans = await p.maintenancePlan.findMany({
-        where: { tenantId, vesselCode, deletedAt: null, taskCode: { startsWith: `${vesselCode}-AUD-ING` } },
+        // Mismo criterio que computeOne: el prefijo del buque ya lo garantiza
+        // el filtro de vesselCode, así que alcanza con el sufijo del código.
+        where: { ...base, taskCode: { contains: "-AUD-ING" } },
         select: { id: true },
       });
       if (auditPlans.length === 0) return { items: [] };

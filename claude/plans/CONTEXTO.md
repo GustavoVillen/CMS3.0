@@ -246,6 +246,42 @@ mensuales, casi todas vencidas en julio. Es la foto real, no un problema de la c
 
 Informe: https://claude.ai/code/artifact/4d3d942f-e785-474b-b0b1-61684dcb2a6b
 
+## Auditoría de la carga (2026-08-29)
+
+Se comparó fila por fila la planilla contra la base (dump read-only del VPS). Scripts:
+`scripts/_tmp-audit-dch-dump.ts` / `_tmp-audit-dch-dump2.ts` (VPS) y `scripts/_tmp-audit-dch.py`
+(compara y arma `_tmp-dch-auditoria.json`); el informe HTML lo genera
+`scripts/_tmp-informe-auditoria-dch.py`.
+Informe: https://claude.ai/code/artifact/62e86f2c-1798-4843-8c79-be87baa07789
+
+**382 filas del papel · 488 planes vivos · 373 emparejados.** Hallazgos:
+
+1. ⚠ **8 filas del papel se perdieron por colisión de código.** Dos hojas distintas le dan el
+   mismo sufijo (30/31/32) al mismo activo y `load-vessel-plan.ts` empareja por
+   `(activo, sufijo)` → la segunda hoja **actualiza** el plan de la primera en vez de crear uno
+   nuevo. Casilleros afectados: `DCH-6-ED-001-30`, `DCH-CENT-HID-30`, `DCH-EB-INC-P-30`,
+   `DCH-EB-LASTRE-30`, `DCH-HID-GOB-30` (pierde 2), `DCH-MBBA-PORT-30`, `DCH-MBBA-PORT-31`.
+   Sin equivalente en el sistema: prueba mensual del gobierno de emergencia, engrase de timón,
+   engrase de sala de máquinas, control mensual de la bomba de la central hidráulica y el
+   recorrido general de la motobomba de incendio (72 m). Dos son casi duplicados de la fila que
+   sobrevivió (bomba de incendio principal y de lastre: "verificar funcionamiento" vs "prueba de
+   funcionamiento").
+   **Arreglo del generador pendiente**: en `_tmp-gen-dch-hoja.py` la secuencia 30+ es por HOJA;
+   tiene que ser por ACTIVO y compartida entre hojas. Vale para los demás buques.
+2. `DCH-AA-SPLIT-32` (control de aprietes, trimestral) se cargó bien y **se dio de baja el
+   28-ago** junto con `DCH-AA-SPLIT-02`. Confirmar si fue a propósito.
+3. **11 planes con la última ejecución movida a mano, sin OT detrás** (editados por Admin
+   Mercurio el 19/20-ago y 28/29-ago): AA-SPLIT-30/31, AIS-01, ALARM-SENT-30, ALARM-TK-30/31,
+   ALT-ER-30, ALT-PTO-30, BAROM-01, BAT-EGA-30/31. Los muestreos de aceite de los auxiliares
+   (MA-BR-06 / MA-ER-06) sí tienen OT cerrada el 12-ago.
+4. **Muestreo de aceite: la planilla cuenta 180 días y el sistema 6 meses** → 3 días de
+   diferencia en MP-BR-18, MP-ER-18 y MA-PTO-06. No es un error de carga; hay que elegir criterio.
+5. **115 planes fuera de la planilla**: 54 genéricos heredados del clon ("Mantenimiento CADA…",
+   "OVERHAUL"), 49 propios del equipo, 7 de clase/estatutarios y 5 dados de alta después
+   (inspecciones de clase, 20 y 29-ago). Los 54 del clon son los que conviene depurar.
+
+La planilla **no cambió** desde la carga (los 20 lotes regenerados dan byte a byte lo mismo).
+
 ## ⚠ Trampa que costó tres hojas: los planes borrados reservan el taskCode
 
 El unique de `MaintenancePlan` es `(tenantId, vesselCode, taskCode)` y **no excluye

@@ -1,39 +1,39 @@
+# --- Dependencias y compilados -------------------------------------------
 node_modules/
 dist/
 build/
 .next/
 .turbo/
 coverage/
+.pnpm-store/
+
+# Cliente Prisma generado (se regenera con pnpm prisma:generate)
+generated/
+
+# --- Entorno y credenciales ----------------------------------------------
 .env
 .env.*
 !.env.example
+Pass/
+
+# --- Contenido del usuario, no codigo fuente ------------------------------
+# Documentos, planillas y manuales reales de la flota
+MisDocs/
+# Adjuntos subidos desde la app
+apps/api/uploads/
+
+# --- Salidas de herramientas y temporales ---------------------------------
 *.log
 tmp/
 temp/
-
-# Prisma generated client
-generated/
-
-# Claude Code local settings
-.claude/
-
-# Uploaded files (user content, not source code)
-apps/api/uploads/
-
-# Docs / legacy files
-docs/
-"Check Lists/"
-
-# Archivos con posibles credenciales (no versionar)
-Pass.docx
-
-# Source Excel files (large, owner-controlled)
-MANTENIMIENTO/
-
-# Mercurio import: regenerable JSON dumps (keep .py + .sql)
-scripts/mercurio-import/data/
-scripts/mercurio-import/normalized/
-
-# Python bytecode
+.vscode/
+.playwright-mcp/
+scripts/out/
+scripts/vessel-plan-tools/out/
 __pycache__/
 *.pyc
+
+# --- Claude Code ----------------------------------------------------------
+# Las skills del proyecto (.claude/skills) SI se versionan.
+.claude/settings.local.json
+.claude/projects/

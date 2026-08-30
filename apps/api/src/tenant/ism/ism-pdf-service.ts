@@ -59,8 +59,10 @@ const OWN_GROUP_TITLE: Record<string, string> = {
 };
 
 const OWN_METRIC_LABEL: Record<string, string> = {
-  ismRuleBasedCriteria:        "Criterios de regla o clase",
-  ismCompanyCriteria:          "Criterios de la Compañía",
+  ismRuleBasedCriteria:        "Tareas con origen de regla o clase",
+  ismCompanyCriteria:          "Tareas con origen de la Compañía",
+  ismPlansWithoutCriteria:     "Tareas sin origen declarado",
+  ismInspectionCriteria:       "Inspecciones con origen (12 m)",
   ismRegulatoryInspections:    "Inspecciones reglamentarias",
   ismCertificatesWithPlan:     "Certificados con plan",
   ismNcOpen:                   "No conformidades abiertas",
@@ -109,7 +111,9 @@ export async function buildIsmChapter10Pdf(
   const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
   const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
 
-  const { items } = await getIsmChapter10Evidence(session, vesselCode);
+  // "perVessel": igual que el PDF de TMSA, el documento del auditor conserva el
+  // desglose barco por barco (ver TmsaEvidenceMode).
+  const { items } = await getIsmChapter10Evidence(session, vesselCode, "perVessel");
 
   let tenantName: string | null = null;
   let tenantLogoBuffer: Buffer | null = null;

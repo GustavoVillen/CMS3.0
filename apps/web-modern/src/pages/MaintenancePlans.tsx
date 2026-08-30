@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   FileText,
   Filter,
+  FlaskConical,
   GitBranch,
   ListTree,
   Loader2,
@@ -63,6 +64,7 @@ import {
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { CRITERIA_SOURCES, type CriteriaSource } from "../lib/criteria-source";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,8 @@ export interface MaintenancePlan {
   title: string;
   description: string | null;
   taskType: "MAINTENANCE" | "INSPECTION";
+  /** ISM 10.1 — de qué regla nace la tarea. Ver CRITERIA_SOURCES. */
+  criteriaSource?: CriteriaSource | null;
   triggerType: string;
   frequencyHours: number | null;
   frequencyMonths: number | null;
@@ -1057,6 +1061,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const vesselDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [taskType, setTaskType] = useState<"MAINTENANCE" | "INSPECTION">(plan?.taskType ?? "MAINTENANCE");
+  const [criteriaSource, setCriteriaSource] = useState<CriteriaSource | "">(plan?.criteriaSource ?? "");
   const [title, setTitle] = useState(plan?.title ?? "");
   const [description, setDescription] = useState(plan?.description ?? "");
   const [responsible, setResponsible] = useState(plan?.responsible ?? "");
@@ -1258,6 +1263,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setAssetId(plan.assetId ?? "");
     setTaskCode(plan.taskCode ?? "");
     setTaskType(plan.taskType ?? "MAINTENANCE");
+    setCriteriaSource(plan.criteriaSource ?? "");
     setTitle(plan.title);
     setDescription(plan.description ?? "");
     setResponsible(plan.responsible ?? "");
@@ -1492,6 +1498,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           assetId,
           taskCode: taskCode.trim() || undefined,
           taskType,
+          criteriaSource: criteriaSource || null,
           title: title.trim(),
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
@@ -1534,6 +1541,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           ...(assetId ? { assetId } : {}),
           ...(isAdmin && taskCode.trim() && taskCode.trim() !== plan.taskCode ? { taskCode: taskCode.trim().toUpperCase() } : {}),
           taskType,
+          criteriaSource: criteriaSource || null,
           title: title.trim(),
           description: normalizeOptionalText(description),
           responsible: normalizeOptionalText(responsible),
@@ -1613,7 +1621,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   // ESC guard
   const planDirty = useDirtyTracker({
-    vesselCode, taskCode, assetId, taskType, title, description, responsible, department, providerRequests,
+    vesselCode, taskCode, assetId, taskType, criteriaSource, title, description, responsible, department, providerRequests,
     acceptanceCriteria, loto, sfiGroupNumber,
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
@@ -1764,6 +1772,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   .grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #cbd5e1;border-top:none}
   .cell{padding:6px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;background:#f8fafc}
   .cell:last-child{border-right:none}
+  /* Última fila incompleta: la celda final se estira hasta el borde en vez de
+     dejar un hueco sin fondo (pasa cuando la sección no tiene múltiplo de 3). */
+  .cell:last-child:not(.cell-full){grid-column-end:-1}
   .cell-label{font-size:7pt;font-weight:bold;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:3px}
   .cell-full .cell-label{font-size:11.2pt;color:#ffffff;background-color:#0f172a;display:block;padding:4px 10px;margin:0 -10px 8px;letter-spacing:0.5px}
   .cell-value{font-size:10pt;font-weight:bold;color:#0f172a}
@@ -1827,6 +1838,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             : "",
         )}</div></div>
         <div class="cell"><div class="cell-label">${t("mp.pdf.criticality")}</div><div class="cell-value">${v(plan.criticality)}</div></div>
+        <div class="cell"><div class="cell-label">${t("mp.criteriaSource")}</div><div class="cell-value">${
+          plan.criteriaSource ? t(`mp.cs.${plan.criteriaSource}` as Parameters<typeof t>[0]) : "—"
+        }</div></div>
       </div>
 
       <div class="section-title">${t("mp.pdf.planFreq")}</div>
@@ -2120,20 +2134,36 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               </>
             )}
 
-            {/* Task type */}
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.taskType")}</label>
-              <div className="flex gap-2">
-                {(["MAINTENANCE", "INSPECTION"] as const).map(tt => (
-                  <button key={tt} type="button" onClick={() => setTaskType(tt)}
-                    className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all ${
-                      taskType === tt
-                        ? "bg-accent/15 border-accent/50 text-accent"
-                        : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
-                    }`}>
-                    {t(`mp.taskType.${tt}` as any)}
-                  </button>
-                ))}
+            {/* Task type + origen del criterio (ISM 10.1) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("mp.taskType")}</label>
+                <div className="flex gap-2">
+                  {(["MAINTENANCE", "INSPECTION"] as const).map(tt => (
+                    <button key={tt} type="button" onClick={() => setTaskType(tt)}
+                      className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all ${
+                        taskType === tt
+                          ? "bg-accent/15 border-accent/50 text-accent"
+                          : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
+                      }`}>
+                      {t(`mp.taskType.${tt}` as any)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* De qué regla nace la tarea. Es lo que el Código ISM 10.1 le pide
+                  mostrar a la Compañía: requisito → tarea de mantenimiento. */}
+              <div className="space-y-1.5">
+                <label className={labelCls} title={t("mp.criteriaSource.hint")}>{t("mp.criteriaSource")}</label>
+                <select
+                  value={criteriaSource}
+                  onChange={e => setCriteriaSource(e.target.value as CriteriaSource | "")}
+                  className={selectCls}
+                  disabled={readOnly}
+                >
+                  <option value="">{t("mp.cs.none")}</option>
+                  {CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>)}
+                </select>
               </div>
             </div>
 
@@ -3339,10 +3369,29 @@ export const MaintenancePlansPage: React.FC = () => {
             <TaskTypeIcon className="w-3.5 h-3.5 text-accent/70" />
           </span>
         );
+        // Plan de muestreo con laboratorio contratado: la muestra no la analiza
+        // el buque, la manda a un tercero. Saberlo desde la lista evita abrir la
+        // tarea para descubrir que hay que coordinar con el proveedor.
+        // (samplingFluidType sin samplingKind = planes viejos, mismo criterio
+        // de retrocompatibilidad que el formulario.)
+        const isSampling = !!(row.samplingKind || row.samplingFluidType);
+        const labNames = (row.providerRequests ?? [])
+          .map(r => r.providerName)
+          .filter((n): n is string => !!n && n.trim().length > 0);
+        if (labNames.length === 0 && row.providerName) labNames.push(row.providerName);
+        const labIcon = isSampling && labNames.length > 0 && (
+          <span
+            title={`${t("mp.samplingLab")}: ${labNames.join(", ")}`}
+            className="shrink-0 inline-flex"
+          >
+            <FlaskConical className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          </span>
+        );
         if (groupByEquipment) {
           return (
             <span className="flex items-center gap-1.5 min-w-0">
               {taskTypeIcon}
+              {labIcon}
               <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
               {oosBadge}
             </span>
@@ -3354,6 +3403,7 @@ export const MaintenancePlansPage: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5 min-w-0">
               {taskTypeIcon}
+              {labIcon}
               <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
               {oosBadge}
             </span>

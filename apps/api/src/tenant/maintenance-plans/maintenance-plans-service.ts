@@ -10,11 +10,22 @@ import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 import { isInspectionWorkOrder, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
 
+/**
+ * ISM 10.1 — origen normativo de la tarea. Mismo enum que usan los ítems de
+ * inspección (`InspectionChecklistItem.criteriaSource`): la pregunta es la
+ * misma ("¿de qué regla nace este criterio?") y duplicar el vocabulario haría
+ * que el panel del Capítulo 10 tuviera que traducir entre dos listas.
+ */
+export type PlanCriteriaSource =
+  | "MAKER_MANUAL" | "COMPANY_STANDARD" | "CLASS_REQUIREMENT" | "STATUTORY" | "ENGINEERING_CRITERION";
+
 export interface MaintenancePlanListFilters {
   vesselCode?: string | null;
   status?: string | null;
   /** MAINTENANCE | INSPECTION — separa el plan de mantenimiento del de inspección. */
   taskType?: string | null;
+  /** Origen normativo. El valor especial "NONE" filtra los planes que no lo declaran. */
+  criteriaSource?: string | null;
   triggerType?: string | null;
   /** Excluye un disparador (ej. todo lo que NO es por evento = inspección periódica). */
   triggerTypeNot?: string | null;
@@ -31,6 +42,8 @@ export interface CreateMaintenancePlanInput {
   title: string;
   description?: string | null;
   taskType?: "MAINTENANCE" | "INSPECTION" | null;
+  /** ISM 10.1 — de qué regla nace la tarea. Ver PlanCriteriaSource. */
+  criteriaSource?: PlanCriteriaSource | null;
   triggerType: "HOURS" | "MONTHS" | "CONDITION" | "EVENT" | "CALENDAR" | "RUNNING_HOURS";
   frequencyHours?: number | null;
   frequencyMonths?: number | null;
@@ -91,6 +104,8 @@ export interface PlanSpare {
 
 export interface UpdateMaintenancePlanInput {
   taskType?: "MAINTENANCE" | "INSPECTION" | null;
+  /** ISM 10.1 — de qué regla nace la tarea. Ver PlanCriteriaSource. */
+  criteriaSource?: PlanCriteriaSource | null;
   assetId?: string;
   taskCode?: string;
   title?: string;
@@ -685,6 +700,10 @@ export async function listTenantMaintenancePlans(
   applyVesselScope(session, where, filters.vesselCode ?? null);
   if (filters.status) where.status = filters.status;
   if (filters.taskType) where.taskType = filters.taskType;
+  // "NONE" = los que no declaran origen normativo (el pendiente de ISM 10.1).
+  if (filters.criteriaSource) {
+    where.criteriaSource = filters.criteriaSource === "NONE" ? null : filters.criteriaSource;
+  }
   if (filters.triggerType) where.triggerType = filters.triggerType;
   else if (filters.triggerTypeNot) where.triggerType = { not: filters.triggerTypeNot };
   if (filters.executionStatus) where.executionStatus = filters.executionStatus;
@@ -1091,6 +1110,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     title: normalizeRequiredText(payload.title, "title"),
     description: normalizeOptionalText(payload.description),
     taskType: payload.taskType ?? "MAINTENANCE",
+    criteriaSource: payload.criteriaSource ?? null,
     triggerType: payload.triggerType,
     frequencyHours: normalizeOptionalNumber(payload.frequencyHours, "frequencyHours"),
     frequencyMonths: normalizeOptionalNumber(payload.frequencyMonths, "frequencyMonths"),
@@ -1200,6 +1220,7 @@ export async function updateTenantMaintenancePlan(
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (payload.taskType !== undefined && payload.taskType !== null) data.taskType = payload.taskType;
+  if (payload.criteriaSource !== undefined) data.criteriaSource = payload.criteriaSource ?? null;
   // La creación valida que el asset sea del tenant; el update no lo hacía, y
   // permitía reapuntar un plan propio a un equipo de otra empresa.
   if (payload.assetId !== undefined && payload.assetId) {
@@ -1333,6 +1354,86 @@ export async function updateTenantMaintenancePlan(
     metadata: { title: current.title, taskCode: current.taskCode, vesselCode: current.vesselCode },
   });
   return updated;
+}
+
+/**
+ * ISM 10.1 — asignar el origen normativo a MUCHOS planes de una vez.
+ *
+ * Un buque real tiene cientos de planes históricos sin origen declarado, y
+ * abrirlos uno por uno para elegir un valor de una lista de cinco no es un
+ * trabajo que alguien vaya a terminar. La planilla manda los ids que tiene a la
+ * vista (ya filtrados por buque / grupo SFI / lo que sea) y acá se escriben en
+ * una sola pasada.
+ *
+ * Seguridad: NO se confía en los ids del cliente. El `where` del updateMany
+ * lleva el tenant y el alcance por buque del usuario, así que un id de otra
+ * empresa o de un buque fuera de su alcance simplemente no entra en el update
+ * (no hay error que revele su existencia; sí una cuenta menor a la pedida).
+ *
+ * `onlyEmpty` (default) toca sólo los planes que todavía no declaran origen:
+ * es lo que se quiere el 99% de las veces y evita que un clic pise a mano
+ * clasificaciones ya hechas.
+ */
+export interface BulkCriteriaSourceInput {
+  ids: string[];
+  criteriaSource: PlanCriteriaSource | null;
+  onlyEmpty?: boolean;
+}
+
+/** Tope por request. Con más planes que esto, se hace en varias tandas. */
+const BULK_CRITERIA_MAX_IDS = 2000;
+
+const CRITERIA_SOURCE_VALUES: readonly PlanCriteriaSource[] = [
+  "MAKER_MANUAL", "COMPANY_STANDARD", "CLASS_REQUIREMENT", "STATUTORY", "ENGINEERING_CRITERION",
+];
+
+export async function bulkSetPlanCriteriaSource(
+  session: TenantAccessSession,
+  payload: BulkCriteriaSourceInput,
+): Promise<{ updated: number }> {
+  ensureCanManagePlans(session);
+
+  const ids = Array.isArray(payload?.ids)
+    ? [...new Set(payload.ids.map(id => String(id ?? "").trim()).filter(Boolean))]
+    : [];
+  if (ids.length === 0) {
+    throw new RouteError(400, "NO_PLANS", "No se recibió ningún plan para actualizar.");
+  }
+  if (ids.length > BULK_CRITERIA_MAX_IDS) {
+    throw new RouteError(400, "TOO_MANY_PLANS", `No se pueden actualizar más de ${BULK_CRITERIA_MAX_IDS} planes por vez.`);
+  }
+
+  const criteriaSource = payload.criteriaSource ?? null;
+  if (criteriaSource !== null && !CRITERIA_SOURCE_VALUES.includes(criteriaSource)) {
+    throw new RouteError(400, "INVALID_CRITERIA_SOURCE", "Origen del criterio inválido.");
+  }
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = maintenanceClient(prismaRaw);
+
+  const tenantId = await getTenantIdOrThrow(session);
+  const where: Record<string, unknown> = { id: { in: ids }, tenantId, deletedAt: null };
+  applyVesselScope(session, where);
+  // Por defecto sólo se completan los que están vacíos: un borrado masivo de
+  // clasificaciones ya hechas tiene que ser una decisión explícita.
+  if (payload.onlyEmpty !== false) where.criteriaSource = null;
+
+  const { count } = await prisma.maintenancePlan.updateMany({
+    where,
+    data: { criteriaSource, updatedByUserId: session.user.id },
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "MaintenancePlan.criteriaSourceBulkSet",
+    entityType: "MaintenancePlan",
+    entityId: `${count} planes`,
+    metadata: { criteriaSource, requested: ids.length, updated: count, onlyEmpty: payload.onlyEmpty !== false },
+  });
+
+  return { updated: count };
 }
 
 // ---------------------------------------------------------------------------

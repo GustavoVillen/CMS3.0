@@ -24,8 +24,11 @@ type IsmStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
 interface IsmMetric { key: string; value: number; kind: "count" | "pct"; }
 interface IsmGroup { key: string; clause: string; status: IsmStatus; own: boolean; metrics: IsmMetric[]; }
 interface IsmVesselEvidence {
+  /** "" cuando el item consolida toda la flota. */
   vesselCode: string;
   vesselName: string;
+  /** Cuántos buques entraron en el total (1 salvo en el item de flota). */
+  vesselCount: number;
   summary: { ok: number; attention: number; gap: number; info: number };
   groups: IsmGroup[];
 }
@@ -323,7 +326,7 @@ interface ChecklistItem {
 }
 
 const CHECKLIST_ITEMS: ChecklistItem[] = [
-  { clause: "10.1", rating: "partial", liveGroupKey: "regulatoryBasis",
+  { clause: "10.1", rating: "full", liveGroupKey: "regulatoryBasis",
     chips: [{ navKey: "nav.maintenancePlans", route: "/maintenance-plans" }, { navKey: "nav.certificates", route: "/certificates" }, { navKey: "nav.inspections", route: "/inspections" }] },
   { clause: "10.2.1", rating: "full", liveGroupKey: "inspections",
     chips: [{ navKey: "nav.inspections", route: "/inspections" }, { navKey: "nav.checklists", route: "/checklists" }] },
@@ -396,7 +399,9 @@ const IsmChecklistCard: React.FC<{ item: ChecklistItem; items: IsmVesselEvidence
             // El badge ENTERO abre la planilla del módulo con esos mismos
             // registros. Los porcentajes y las métricas sin planilla propia
             // quedan como badge apagado, sin cursor ni hover (ver Tmsa.tsx).
-            const link = m.kind === "count" && vesselCode ? moduleListLink(m.key, vesselCode) : null;
+            // Sin condición sobre vesselCode: en el bloque de flota va vacío a
+            // propósito y el link sale sin buque (planilla de toda la flota).
+            const link = m.kind === "count" ? moduleListLink(m.key, vesselCode) : null;
             const content = (
               <>
                 <dt className="text-text-industrial/60">{t(metricLabelKey(m.key))}:</dt>
@@ -555,7 +560,16 @@ export const IsmPage: React.FC = () => {
           {!loading && items.map(v => (
             <section key={v.vesselCode} className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <h3 className="text-sm font-bold text-fg">{v.vesselName}</h3>
+                {/* Un buque, o el nombre de la empresa + cuántos buques cuando el
+                bloque consolida la flota. */}
+            <h3 className="text-sm font-bold text-fg">
+              {v.vesselName}
+              {!v.vesselCode && (
+                <span className="ml-2 font-medium text-text-industrial/50">
+                  · {t("tmsa.fleetVessels").replace("{n}", String(v.vesselCount))}
+                </span>
+              )}
+            </h3>
                 <div className="flex items-center gap-3 text-[11px] font-medium">
                   <span className="text-emerald-600 dark:text-emerald-400">{t("tmsa.status.OK")} {v.summary.ok}</span>
                   <span className="text-yellow-700 dark:text-yellow-400">{t("tmsa.status.ATTENTION")} {v.summary.attention}</span>

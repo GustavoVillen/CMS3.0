@@ -96,7 +96,10 @@ export async function buildTmsaMaintenancePdf(
   const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
   const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
-  const { items } = await getTmsaMaintenanceEvidence(session, vesselCode);
+  // "perVessel": el PDF es el documento que se le entrega al auditor, y ahí el
+  // desglose barco por barco ES lo que se quiere. La pantalla, en cambio, pide
+  // el consolidado (ver TmsaEvidenceMode).
+  const { items } = await getTmsaMaintenanceEvidence(session, vesselCode, "perVessel");
 
   let tenantName: string | null = null;
   let tenantLogoBuffer: Buffer | null = null;

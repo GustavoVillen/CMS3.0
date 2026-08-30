@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, ScrollText } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
+import { FormModal } from "./FormModal";
+import { AlertDialog } from "./AlertDialog";
+import { CRITERIA_SOURCES, type CriteriaSource } from "../lib/criteria-source";
 import type { MaintenancePlan } from "../pages/MaintenancePlans";
 
 // Planilla compacta estilo Excel para Plan de Mantenimiento.
@@ -19,19 +22,21 @@ const isHoursTT = (tt: string) => tt === "HOURS" || tt === "RUNNING_HOURS";
 // Columnas en orden de render. Anchos ajustables (drag en el borde del encabezado),
 // persistidos en localStorage.
 const COL_IDS = [
-  "open", "sfi", "taskCode", "equipo", "title", "freqType", "freqValue",
+  "open", "sfi", "taskCode", "equipo", "title", "criteriaSource", "freqType", "freqValue",
   "estimatedHours", "lastExecution", "nextDue", "status", "actions",
 ] as const;
 type ColId = (typeof COL_IDS)[number];
 const DEFAULT_WIDTHS: Record<ColId, number> = {
-  open: 34, sfi: 64, taskCode: 132, equipo: 200, title: 260, freqType: 112,
+  open: 34, sfi: 64, taskCode: 132, equipo: 200, title: 260, criteriaSource: 150, freqType: 112,
   freqValue: 80, estimatedHours: 80, lastExecution: 140, nextDue: 150, status: 124, actions: 150,
 };
 const MIN_WIDTHS: Record<ColId, number> = {
-  open: 34, sfi: 44, taskCode: 90, equipo: 110, title: 120, freqType: 90,
+  open: 34, sfi: 44, taskCode: 90, equipo: 110, title: 120, criteriaSource: 100, freqType: 90,
   freqValue: 56, estimatedHours: 56, lastExecution: 96, nextDue: 96, status: 96, actions: 110,
 };
-const COL_WIDTHS_LS_KEY = "mp.grid.colWidths";
+// Se versiona la clave porque los anchos guardados son de un layout sin la
+// columna "Origen": reusarlos dejaba la planilla desalineada al actualizar.
+const COL_WIDTHS_LS_KEY = "mp.grid.colWidths.v2";
 
 interface Asset { id: string; assetCode: string; name: string | null }
 
@@ -47,7 +52,7 @@ interface Props {
 }
 
 type SortKey =
-  | "sfi" | "taskCode" | "equipo" | "title" | "freqType" | "freqValue"
+  | "sfi" | "taskCode" | "equipo" | "title" | "criteriaSource" | "freqType" | "freqValue"
   | "estimatedHours" | "lastExecution" | "nextDue" | "status";
 
 function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
@@ -145,6 +150,119 @@ const DateCell: React.FC<{
 const ro = "text-[11px] text-fg/90 px-1.5 py-1 block truncate";
 const roMono = ro + " font-mono";
 
+// ─── Asignación masiva del origen del criterio (ISM 10.1) ───────────────────
+//
+// Un buque tiene cientos de planes históricos sin origen declarado. Abrirlos de
+// a uno para elegir un valor de una lista de cinco no es un trabajo que alguien
+// termine, así que se asigna sobre las filas que la planilla YA está mostrando
+// (con sus filtros de buque / grupo SFI / búsqueda puestos): el usuario filtra
+// lo que comparte un mismo origen y lo aplica de una vez.
+//
+// Por defecto sólo completa las vacías. Pisar clasificaciones ya hechas es una
+// decisión aparte, que hay que elegir a mano.
+
+const BulkCriteriaSourceDialog: React.FC<{
+  rows: MaintenancePlan[];
+  onClose: () => void;
+  onDone: (updated: number, value: CriteriaSource, onlyEmpty: boolean) => void;
+}> = ({ rows, onClose, onDone }) => {
+  const t = useT();
+  const [value, setValue] = useState<CriteriaSource | "">("");
+  const [onlyEmpty, setOnlyEmpty] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [alert, setAlert] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const emptyCount = rows.filter(r => !r.criteriaSource).length;
+
+  const apply = async () => {
+    if (!value) { setAlert(t("mp.bulkCs.needSource")); return; }
+    const target = onlyEmpty ? rows.filter(r => !r.criteriaSource) : rows;
+    if (target.length === 0) { setAlert(t("mp.bulkCs.nothingToDo")); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.post<{ updated: number }>("/app/pms/maintenance-plans/bulk-criteria-source", {
+        ids: target.map(r => r.id),
+        criteriaSource: value,
+        onlyEmpty,
+      });
+      onDone(res.updated ?? 0, value, onlyEmpty);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("mp.grid.saveError"));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <FormModal
+        title={t("mp.bulkCs.title")}
+        onClose={onClose}
+        error={error}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-medium text-fg/70 hover:bg-fg/10 transition-all"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={apply}
+              disabled={saving}
+              className="px-3 py-2 rounded-xl bg-accent/15 border border-accent/50 text-xs font-bold text-accent hover:bg-accent/25 transition-all disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {t("mp.bulkCs.apply")}
+            </button>
+          </>
+        }
+      >
+        <p className="text-[11px] text-text-industrial/60">
+          {t("mp.bulkCs.intro").replace("{total}", String(rows.length))}
+        </p>
+
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">
+            {t("mp.criteriaSource")}
+          </label>
+          <select
+            value={value}
+            onChange={e => setValue(e.target.value as CriteriaSource | "")}
+            className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
+          >
+            <option value="">—</option>
+            {CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>)}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          {([true, false] as const).map(only => (
+            <label key={String(only)} className="flex items-start gap-2 text-[11px] text-fg/80 cursor-pointer">
+              <input
+                type="radio"
+                name="bulkCsScope"
+                checked={onlyEmpty === only}
+                onChange={() => setOnlyEmpty(only)}
+                className="mt-0.5 accent-[var(--accent,#2563eb)]"
+              />
+              <span>
+                {only
+                  ? t("mp.bulkCs.scopeEmpty").replace("{n}", String(emptyCount))
+                  : t("mp.bulkCs.scopeAll").replace("{n}", String(rows.length))}
+              </span>
+            </label>
+          ))}
+        </div>
+      </FormModal>
+      {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
+    </>
+  );
+};
+
 // ─── Main grid ──────────────────────────────────────────────────────────────
 
 export const MaintenancePlansGrid: React.FC<Props> = ({
@@ -170,6 +288,8 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errById, setErrById] = useState<Record<string, string>>({});
   const [errTick, setErrTick] = useState(0);
+  const [bulkCsOpen, setBulkCsOpen] = useState(false);
+  const [bulkCsDone, setBulkCsDone] = useState<string | null>(null);
 
   const patchRow = useCallback(async (
     row: MaintenancePlan,
@@ -204,6 +324,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
       case "taskCode": return row.taskCode ?? null;
       case "equipo": return (row.assetName ?? row.assetId ?? "").toLowerCase();
       case "title": return (row.title ?? "").toLowerCase();
+      case "criteriaSource": return row.criteriaSource ?? null;
       case "freqType": return row.triggerType ?? null;
       case "freqValue": return (hb ? row.frequencyHours : row.frequencyMonths) ?? null;
       case "estimatedHours": return row.estimatedHours ?? null;
@@ -288,11 +409,33 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
     );
   };
 
+  // La asignación masiva trabaja sobre lo que la planilla está mostrando, no
+  // sobre toda la base: lo que se ve es lo que se cambia.
+  const applyBulkCriteria = useCallback((updated: number, value: CriteriaSource, onlyEmpty: boolean) => {
+    const ids = new Set((onlyEmpty ? rows.filter(r => !r.criteriaSource) : rows).map(r => r.id));
+    setRows(rs => rs.map(r => (ids.has(r.id) ? { ...r, criteriaSource: value } : r)));
+    setBulkCsOpen(false);
+    setBulkCsDone(t("mp.bulkCs.done").replace("{n}", String(updated)));
+  }, [rows, t]);
+
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-text-industrial/50 px-1">
-        {isAdmin ? t("mp.grid.editHint") : t("mp.grid.readonlyHint")}
-      </p>
+      <div className="flex items-center gap-2 px-1">
+        <p className="text-[11px] text-text-industrial/50">
+          {isAdmin ? t("mp.grid.editHint") : t("mp.grid.readonlyHint")}
+        </p>
+        {isAdmin && rows.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setBulkCsOpen(true)}
+            title={t("mp.criteriaSource.hint")}
+            className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-[11px] font-medium text-fg/70 hover:border-accent/40 hover:bg-accent/10 hover:text-accent transition-all"
+          >
+            <ScrollText className="w-3.5 h-3.5" />
+            {t("mp.bulkCs.button")}
+          </button>
+        )}
+      </div>
       <div className="overflow-x-auto rounded-xl border border-fg/10">
         <table className="border-collapse text-fg table-fixed" style={{ width: tableWidth }}>
           <colgroup>
@@ -305,6 +448,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
               {renderHeader("taskCode", t("mp.grid.taskCode"), "taskCode")}
               {renderHeader("equipo", t("mp.grid.equipo"), "equipo")}
               {renderHeader("title", t("mp.grid.title"), "title")}
+              {renderHeader("criteriaSource", t("mp.grid.criteriaSource"), "criteriaSource")}
               {renderHeader("freqType", t("mp.grid.freqType"), "freqType")}
               {renderHeader("freqValue", t("mp.grid.freqValue"), "freqValue")}
               {renderHeader("estimatedHours", t("mp.grid.estimatedHours"), "estimatedHours")}
@@ -316,7 +460,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
           </thead>
           <tbody className="divide-y divide-fg/5">
             {sortedRows.length === 0 && (
-              <tr><td colSpan={12} className="px-4 py-10 text-center text-xs text-text-industrial/40">{emptyText}</td></tr>
+              <tr><td colSpan={COL_IDS.length} className="px-4 py-10 text-center text-xs text-text-industrial/40">{emptyText}</td></tr>
             )}
             {sortedRows.map(row => {
               const assets = assetsByVessel[row.vesselCode] ?? [];
@@ -399,6 +543,25 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
                       : <span className={ro} title={row.title}>{row.title}</span>}
                   </td>
 
+                  {/* Origen del criterio (ISM 10.1) — vacío se resalta: es el
+                      pendiente que el panel del Capítulo 10 cuenta como faltante. */}
+                  <td className="px-1 py-1">
+                    {isAdmin ? (
+                      <select
+                        className={cellCls + (row.criteriaSource ? "" : " text-amber-600 dark:text-amber-400")}
+                        value={row.criteriaSource ?? ""}
+                        onChange={e => patchRow(row, { criteriaSource: (e.target.value || null) as CriteriaSource | null })}
+                      >
+                        <option value="">{t("mp.cs.none")}</option>
+                        {CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>)}
+                      </select>
+                    ) : (
+                      <span className={ro + (row.criteriaSource ? "" : " text-amber-600 dark:text-amber-400")}>
+                        {row.criteriaSource ? t(`mp.cs.${row.criteriaSource}` as any) : t("mp.cs.none")}
+                      </span>
+                    )}
+                  </td>
+
                   {/* Frecuencia (tipo) */}
                   <td className="px-1 py-1 w-32">
                     {isAdmin ? (
@@ -473,6 +636,15 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
           </tbody>
         </table>
       </div>
+
+      {bulkCsOpen && (
+        <BulkCriteriaSourceDialog
+          rows={rows}
+          onClose={() => setBulkCsOpen(false)}
+          onDone={applyBulkCriteria}
+        />
+      )}
+      {bulkCsDone && <AlertDialog message={bulkCsDone} onClose={() => setBulkCsDone(null)} />}
     </div>
   );
 };

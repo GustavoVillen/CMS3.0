@@ -1460,6 +1460,13 @@ model MaintenancePlan {
   riskConsequence      String?                // FATALITY | MAJOR | MINOR | NEGLIGIBLE
   riskAnalysisResult   String?
   taskType             TaskType               @default(MAINTENANCE)
+  // ISM 10.1 — de qué regla nace la tarea (requisito de clase, estatutario,
+  // manual del fabricante, estándar de la Compañía, criterio de ingeniería).
+  // Sin esto el plan dice QUÉ hacer y CADA CUÁNTO, pero no de dónde sale la
+  // exigencia, que es exactamente la trazabilidad que pide el Capítulo 10.
+  // Reusa el enum de los ítems de inspección: misma pregunta, mismo vocabulario.
+  // Opcional: los planes históricos no lo declaran y no se les puede inventar.
+  criteriaSource       CriteriaSource?
   // RCM: clasificación de qué consecuencia mitiga este plan. Usado para
   // reportes de distribución por consecuencia y para ordenar prioridades.
   consequenceCategory  ConsequenceCategory?

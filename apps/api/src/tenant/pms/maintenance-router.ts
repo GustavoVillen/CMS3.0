@@ -17,6 +17,7 @@ import {
   getTenantMaintenancePlan,
   getTenantMaintenancePlansSummary,
   listPlanExecutions,
+  bulkSetPlanCriteriaSource,
   listTenantMaintenancePlans,
   openFormalWorkOrder,
   postponePlan,
@@ -133,6 +134,7 @@ export async function handleMaintenanceRoutes(
       vesselCode: url.searchParams.get("vesselCode"),
       status: url.searchParams.get("status"),
       taskType: url.searchParams.get("taskType"),
+      criteriaSource: url.searchParams.get("criteriaSource"),
       triggerType: url.searchParams.get("triggerType"),
       triggerTypeNot: url.searchParams.get("triggerTypeNot"),
       executionStatus: url.searchParams.get("executionStatus"),
@@ -187,6 +189,15 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && url.pathname === "/app/pms/maintenance-plans") {
     const body = await readJsonBody(request) as Parameters<typeof createTenantMaintenancePlan>[1];
     sendJson(response, 201, await createTenantMaintenancePlan(session, body));
+    return true;
+  }
+
+  // ISM 10.1 — asignar el origen normativo a varios planes de una vez. Va ANTES
+  // de las rutas genéricas /maintenance-plans/:id: "bulk-criteria-source" es un
+  // segmento y las capturaría como un id.
+  if (method === "POST" && url.pathname === "/app/pms/maintenance-plans/bulk-criteria-source") {
+    const body = await readJsonBody(request) as Parameters<typeof bulkSetPlanCriteriaSource>[1];
+    sendJson(response, 200, await bulkSetPlanCriteriaSource(session, body));
     return true;
   }
 

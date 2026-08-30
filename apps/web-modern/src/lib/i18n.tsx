@@ -479,6 +479,28 @@ const dict = {
   "mp.taskType":              { es: "Tipo de tarea",      en: "Task type",                pt: "Tipo de tarefa" },
   "mp.taskType.MAINTENANCE":  { es: "Mant",               en: "Maint",                    pt: "Mant" },
   "mp.taskType.INSPECTION":   { es: "Insp",               en: "Insp",                     pt: "Insp" },
+
+  // ISM 10.1 — origen normativo de la tarea (de qué regla nace).
+  "mp.criteriaSource":            { es: "Origen del criterio",          en: "Criteria source",              pt: "Origem do critério" },
+  "mp.criteriaSource.hint":       { es: "De qué regla nace la tarea. Es la trazabilidad que pide el Código ISM 10.1.", en: "Which rule the task comes from. This is the traceability required by ISM Code 10.1.", pt: "De qual regra nasce a tarefa. É a rastreabilidade exigida pelo Código ISM 10.1." },
+  "mp.cs.none":                   { es: "Sin declarar",                 en: "Not declared",                 pt: "Não declarado" },
+  "mp.cs.CLASS_REQUIREMENT":      { es: "Requisito de Clase",           en: "Class requirement",            pt: "Requisito de Classe" },
+  "mp.cs.STATUTORY":              { es: "Estatutario / Bandera",        en: "Statutory / Flag",             pt: "Estatutário / Bandeira" },
+  "mp.cs.MAKER_MANUAL":           { es: "Manual del fabricante",        en: "Maker's manual",               pt: "Manual do fabricante" },
+  "mp.cs.COMPANY_STANDARD":       { es: "Estándar de la Compañía",      en: "Company standard",             pt: "Padrão da Companhia" },
+  "mp.cs.ENGINEERING_CRITERION":  { es: "Criterio de ingeniería",       en: "Engineering criterion",        pt: "Critério de engenharia" },
+
+  // Asignación masiva del origen del criterio desde la Vista Planilla.
+  "mp.bulkCs.button":             { es: "Asignar origen",               en: "Assign source",                pt: "Atribuir origem" },
+  "mp.bulkCs.title":              { es: "Asignar origen del criterio",  en: "Assign criteria source",       pt: "Atribuir origem do critério" },
+  "mp.bulkCs.intro":              { es: "Se aplica a las tareas que estás viendo en la planilla ({total}).", en: "Applies to the tasks currently shown in the sheet ({total}).", pt: "Aplica-se às tarefas exibidas na planilha ({total})." },
+  "mp.bulkCs.scopeEmpty":         { es: "Sólo las que no tienen origen ({n})", en: "Only those with no source ({n})", pt: "Apenas as que não têm origem ({n})" },
+  "mp.bulkCs.scopeAll":           { es: "Todas las visibles ({n}) — pisa lo ya cargado", en: "All visible ({n}) — overwrites existing values", pt: "Todas as visíveis ({n}) — sobrescreve o já carregado" },
+  "mp.bulkCs.apply":              { es: "Aplicar",                      en: "Apply",                        pt: "Aplicar" },
+  "mp.bulkCs.needSource":         { es: "Elegí un origen del criterio antes de aplicar.", en: "Choose a criteria source before applying.", pt: "Escolha uma origem do critério antes de aplicar." },
+  "mp.bulkCs.nothingToDo":        { es: "No hay tareas para actualizar con esa opción.", en: "There are no tasks to update with that option.", pt: "Não há tarefas para atualizar com essa opção." },
+  "mp.bulkCs.done":               { es: "Tareas actualizadas: {n}",     en: "Tasks updated: {n}",           pt: "Tarefas atualizadas: {n}" },
+  "mp.grid.criteriaSource":       { es: "Origen",                       en: "Source",                       pt: "Origem" },
   "mp.lastExecution":         { es: "Última ejecución",   en: "Last execution",           pt: "Última execução" },
   "mp.vesselCode":        { es: "Código de buque",        en: "Vessel code",              pt: "Código da embarcação" },
   "mp.asset":             { es: "Activo",                 en: "Asset",                    pt: "Ativo" },
@@ -1869,6 +1891,8 @@ const dict = {
   "mp.col.frequency":          { es: "FRECUENCIA (HS / MES)",  en: "FREQUENCY (HRS / MO)",  pt: "FREQUÊNCIA (HS / MÊS)" },
   "mp.col.lastExecution":      { es: "ÚLTIMA EJECUCIÓN",       en: "LAST EXECUTION",        pt: "ÚLTIMA EXECUÇÃO" },
   "mp.col.nextDue":            { es: "PRÓXIMO VENCIMIENTO",    en: "NEXT DUE",              pt: "PRÓXIMO VENCIMENTO" },
+  // Tooltip del matraz: plan de muestreo cuyo análisis lo hace un laboratorio externo.
+  "mp.samplingLab":            { es: "Muestra analizada por laboratorio", en: "Sample analyzed by lab", pt: "Amostra analisada por laboratório" },
   // Aviso junto al nombre del equipo cuando el activo está OUT_OF_SERVICE.
   "mp.assetOutOfService":      { es: "Fuera de Servicio",      en: "Out of Service",        pt: "Fora de Serviço" },
   "mp.col.status":             { es: "STATUS",                 en: "STATUS",                pt: "STATUS" },
@@ -2311,6 +2335,10 @@ const dict = {
   "dashboard.equipmentStatus.overdue":  { es: "Con tareas vencidas", en: "Has overdue tasks", pt: "Com tarefas vencidas" },
   "dashboard.equipmentStatus.upcoming": { es: "Con tareas próximas", en: "Has upcoming tasks", pt: "Com tarefas próximas" },
   "dashboard.equipmentStatus.ok":       { es: "Al día", en: "Up to date", pt: "Em dia" },
+  // Detalle del modal de estado del equipo: qué tareas son las que están
+  // vencidas o por vencer, no sólo el semáforo.
+  "eqStatus.overdueTasks":  { es: "Tareas vencidas",           en: "Overdue tasks",     pt: "Tarefas vencidas" },
+  "eqStatus.upcomingTasks": { es: "Tareas próximas a vencer",  en: "Tasks coming due",  pt: "Tarefas a vencer" },
   "dashboard.ssChooser.title":       { es: "Nueva Solicitud de Servicio", en: "New Service Request", pt: "Nova Solicitação de Serviço" },
   "dashboard.ssChooser.subtitle":    { es: "¿Para qué es el pedido?", en: "What's the request for?", pt: "Para que é o pedido?" },
   "dashboard.ssChooser.maintenance": { es: "Para Registrar un Mantenimiento", en: "To Register Maintenance", pt: "Para Registrar uma Manutenção" },
@@ -2451,6 +2479,9 @@ const dict = {
   "tmsa.checklist.disclaimer": { es: "Mapeo interno de capacidades, no una autoevaluación TMSA presentada ante OCIMF ni una promesa de nivel de madurez.", en: "Internal capability mapping, not a TMSA self-assessment submitted to OCIMF nor a maturity-level claim.", pt: "Mapeamento interno de capacidades, não uma autoavaliação TMSA apresentada à OCIMF nem uma promessa de nível de maturidade." },
   "tmsa.checklist.liveLabel": { es: "En tu buque:", en: "On your vessel:", pt: "No seu navio:" },
   "tmsa.checklist.noVessel":  { es: "Elegí un buque para ver el dato en vivo.", en: "Pick a vessel to see the live figure.", pt: "Escolha um navio para ver o dado ao vivo." },
+  // Bloque consolidado de flota: el título lleva el nombre de la empresa y
+  // cuántos buques entraron en el total.
+  "tmsa.fleetVessels":       { es: "{n} buques",                                en: "{n} vessels",                          pt: "{n} navios" },
   "tmsa.checklist.capacityLabel": { es: "Capacidad",         en: "Capability",         pt: "Capacidade" },
   "tmsa.checklist.usageLabel":    { es: "Uso en tu buque",   en: "Usage on your vessel", pt: "Uso no seu navio" },
   "tmsa.checklist.usage.unverified": { es: "Sin verificación automática", en: "No automatic verification", pt: "Sem verificação automática" },
@@ -2712,7 +2743,7 @@ const dict = {
   // Cláusulas — título, texto del Código y qué hace CMS3 al respecto
   "ism.clause.10-1.title":  { es: "Conformidad con reglas, reglamentos y requisitos de la Compañía", en: "Conformity with rules, regulations and Company requirements", pt: "Conformidade com regras, regulamentos e requisitos da Companhia" },
   "ism.clause.10-1.text":   { es: "La Compañía debe establecer procedimientos para asegurar que el buque se mantiene de conformidad con las disposiciones de las reglas y los reglamentos pertinentes, así como con cualquier requisito adicional que establezca la Compañía.", en: "The Company should establish procedures to ensure that the ship is maintained in conformity with the provisions of the relevant rules and regulations and with any additional requirements which may be established by the Company.", pt: "A Companhia deve estabelecer procedimentos para assegurar que o navio seja mantido em conformidade com as disposições das regras e regulamentos pertinentes e com quaisquer requisitos adicionais que a Companhia estabeleça." },
-  "ism.clause.10-1.expl":   { es: "El plan de mantenimiento cubre la flota y los certificados se enlazan al plan que los renueva. Queda parcial porque el origen normativo se traza a nivel de ítem de inspección (criterio de clase, estatutario o estándar de la Compañía) y de certificado, pero una tarea del plan no declara de qué regla nace.", en: "The maintenance plan covers the fleet and certificates link to the plan that renews them. It stays partial because the regulatory origin is traced at inspection-item level (class, statutory or Company criteria) and at certificate level, but a plan task does not state which rule it comes from.", pt: "O plano de manutenção cobre a frota e os certificados se ligam ao plano que os renova. Fica parcial porque a origem normativa é rastreada no nível do item de inspeção (critério de classe, estatutário ou padrão da Companhia) e do certificado, mas uma tarefa do plano não declara de qual regra nasce." },
+  "ism.clause.10-1.expl":   { es: "Cada tarea del plan declara de qué regla nace (requisito de clase, estatutario, manual del fabricante, estándar de la Compañía o criterio de ingeniería), los certificados se enlazan al plan que los renueva y los ítems de inspección traen su propio origen. Mientras queden tareas sin declararlo, la trazabilidad regla → mantenimiento está incompleta.", en: "Every plan task states which rule it comes from (class requirement, statutory, maker's manual, Company standard or engineering criterion), certificates link to the plan that renews them, and inspection items carry their own source. While tasks remain undeclared, the rule → maintenance traceability is incomplete.", pt: "Cada tarefa do plano declara de qual regra nasce (requisito de classe, estatutário, manual do fabricante, padrão da Companhia ou critério de engenharia), os certificados se ligam ao plano que os renova e os itens de inspeção trazem sua própria origem. Enquanto restarem tarefas sem declarar, a rastreabilidade regra → manutenção fica incompleta." },
   "ism.clause.10-2-1.title": { es: "Inspecciones a intervalos apropiados", en: "Inspections at appropriate intervals", pt: "Inspeções em intervalos apropriados" },
   "ism.clause.10-2-1.text":  { es: "Para cumplir con estos requisitos, la Compañía debe garantizar que las inspecciones se realicen a intervalos apropiados.", en: "In meeting these requirements the Company should ensure that inspections are held at appropriate intervals.", pt: "Para cumprir estes requisitos, a Companhia deve garantir que as inspeções sejam realizadas em intervalos apropriados." },
   "ism.clause.10-2-1.expl":  { es: "Las inspecciones tienen plantilla, periodicidad y ventana propia, con su próxima fecha calculada, y el panel muestra cuántas están vencidas sin hacer. Los checklists de a bordo (zarpe, arribo, espacios confinados) quedan registrados con firma.", en: "Inspections have their own template, interval and window with a computed next date, and the panel shows how many are overdue. Onboard checklists (departure, arrival, enclosed space) are recorded with signature.", pt: "As inspeções têm modelo, periodicidade e janela própria, com a próxima data calculada, e o painel mostra quantas estão vencidas. Os checklists de bordo (partida, chegada, espaço confinado) ficam registrados com assinatura." },
@@ -2738,8 +2769,10 @@ const dict = {
   "ism.group.maintenanceRecords": { es: "Registros de mantenimiento",       en: "Maintenance records",          pt: "Registros de manutenção" },
   "ism.group.standbyTesting":     { es: "Fiabilidad y prueba del equipo crítico", en: "Critical equipment reliability and testing", pt: "Confiabilidade e teste do equipamento crítico" },
   // Métricas propias
-  "ism.metric.ismRuleBasedCriteria":        { es: "Criterios de regla o clase",     en: "Rule or class criteria",       pt: "Critérios de regra ou classe" },
-  "ism.metric.ismCompanyCriteria":          { es: "Criterios de la Compañía",       en: "Company criteria",             pt: "Critérios da Companhia" },
+  "ism.metric.ismRuleBasedCriteria":        { es: "Tareas con origen de regla o clase", en: "Tasks with rule or class source", pt: "Tarefas com origem de regra ou classe" },
+  "ism.metric.ismCompanyCriteria":          { es: "Tareas con origen de la Compañía", en: "Tasks with Company source",   pt: "Tarefas com origem da Companhia" },
+  "ism.metric.ismPlansWithoutCriteria":     { es: "Tareas sin origen declarado",    en: "Tasks with no declared source", pt: "Tarefas sem origem declarada" },
+  "ism.metric.ismInspectionCriteria":       { es: "Inspecciones con origen (12 m)", en: "Inspections with a source (12 m)", pt: "Inspeções com origem (12 m)" },
   "ism.metric.ismRegulatoryInspections":    { es: "Inspecciones reglamentarias",    en: "Regulatory inspections",       pt: "Inspeções regulamentares" },
   "ism.metric.ismCertificatesWithPlan":     { es: "Certificados con plan",          en: "Certificates with a plan",     pt: "Certificados com plano" },
   "ism.metric.ismNcOpen":                   { es: "No conformidades abiertas",      en: "Open non-conformities",        pt: "Não conformidades abertas" },

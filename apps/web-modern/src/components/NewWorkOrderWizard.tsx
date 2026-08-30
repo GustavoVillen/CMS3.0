@@ -13,6 +13,7 @@ import { fmtDate } from "../lib/utils";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssetSearchDropdown, type AssetOption } from "./AssetSearchDropdown";
 import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
+import { findClassInspectionAsset } from "../lib/class-inspection-asset";
 
 type Category = "MAINTENANCE" | "REPAIR" | "CLASS";
 type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind";
@@ -39,8 +40,6 @@ interface PlanItemCandidate {
   nextDueDate?: string | null;
   nextDueHours?: number | null;
 }
-
-const CLASS_ASSET_NAME = "Inspeccion de Clase";
 
 // Mismo texto oficial del formulario (WO_MAINTENANCE_KINDS, wo-form-catalog.ts) — no se traduce.
 const REPAIR_KIND_OPTIONS: { value: RepairKind; label: string; icon: typeof Wrench }[] = [
@@ -123,8 +122,7 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
     setAssetStepShown(false);
     const items = await loadAssets(vc);
     if (cat === "CLASS") {
-      const needle = CLASS_ASSET_NAME.trim().toLowerCase();
-      const match = items.find(a => (a.name ?? "").trim().toLowerCase() === needle);
+      const match = findClassInspectionAsset(items);
       if (match) {
         setAssetId(match.id);
         void loadPlanItems(cat, vc, match.id);

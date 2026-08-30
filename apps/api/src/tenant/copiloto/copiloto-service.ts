@@ -716,6 +716,9 @@ async function executeCopilotTool(
           // Muestreo estructurado: marca si el plan exige análisis de fluido/aceite.
           samplingKind: true,
           samplingFluidType: true,
+          // ISM 10.1: de qué regla nace la tarea. Sin esto el copiloto no puede
+          // responder qué planes tienen (o les falta) trazabilidad normativa.
+          criteriaSource: true,
         },
       });
 

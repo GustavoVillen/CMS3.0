@@ -36,7 +36,9 @@ const DETAIL_CAP = 1000;
  *    salen de la tabla Inspection, y /inspections en realidad lista OT;
  *  · `drydockItemsTotal` / `drydockItemsFromBacklog` son renglones adentro de
  *    una especificación de varada;
- *  · `ismAuditFindingsOpen` son hallazgos, y /external-audits lista auditorías.
+ *  · `ismAuditFindingsOpen` son hallazgos, y /external-audits lista auditorías;
+ *  · `ismInspectionCriteria` cuenta ejecuciones de inspección, y /inspections
+ *    filtra por su propio código, no por el id que devuelve el detalle.
  *
  * Las métricas de porcentaje (kind "pct") tampoco navegan: no son una lista.
  */
@@ -57,6 +59,8 @@ const MODULE_BY_METRIC: Record<string, string> = {
   permitsTotal: "/permits", permitsDraftStuck: "/permits",
   drydockSpecsOpen: "/drydock-specs",
   // ── Código ISM Cap. 10 ──
+  ismRuleBasedCriteria: "/maintenance-plans", ismCompanyCriteria: "/maintenance-plans",
+  ismPlansWithoutCriteria: "/maintenance-plans",
   ismCertificatesWithPlan: "/certificates",
   ismNcOpen: "/defects", ismNcWithCause: "/defects", ismNcWithoutCause: "/defects",
   ismDefectsClosed90d: "/defects", ismClosedWithAction: "/defects", ismClosedWithoutAction: "/defects",
@@ -65,11 +69,17 @@ const MODULE_BY_METRIC: Record<string, string> = {
   ismPreDepartureChecks30d: "/checklists",
 };
 
-/** Link a la planilla del módulo con el filtro de esta métrica puesto. */
+/**
+ * Link a la planilla del módulo con el filtro de esta métrica puesto.
+ *
+ * `vesselCode` vacío = la tarjeta consolidada de flota: el link va sin buque y
+ * la planilla muestra los registros de todos los buques del alcance.
+ */
 export function moduleListLink(metricKey: string, vesselCode: string): string | null {
   const route = MODULE_BY_METRIC[metricKey];
   if (!route) return null;
-  return `${route}?tmsaMetric=${encodeURIComponent(metricKey)}&vesselCode=${encodeURIComponent(vesselCode)}`;
+  const vessel = vesselCode ? `&vesselCode=${encodeURIComponent(vesselCode)}` : "";
+  return `${route}?tmsaMetric=${encodeURIComponent(metricKey)}${vessel}`;
 }
 
 
@@ -107,7 +117,7 @@ export function useTmsaFilter(): TmsaFilterState | null {
   );
 
   useEffect(() => {
-    if (!metricKey || !vesselCode) return;
+    if (!metricKey) return;
     let cancelled = false;
     setState({ ids: new Set(), codes: new Set(), loading: true, error: false });
     // Las métricas del panel ISM Cap. 10 se piden a su propio endpoint (que
@@ -116,6 +126,8 @@ export function useTmsaFilter(): TmsaFilterState | null {
     const detailPath = metricKey.startsWith("ism")
       ? "/app/ism/chapter10/detail"
       : "/app/tmsa/maintenance/detail";
+    // Sin vesselCode el backend devuelve el detalle de toda la flota, que es lo
+    // que cuenta la tarjeta consolidada.
     api.get<{ items: TmsaDetailItem[] }>(
       `${detailPath}?vesselCode=${encodeURIComponent(vesselCode)}&metric=${encodeURIComponent(metricKey)}`,
     )
@@ -139,7 +151,7 @@ export function useTmsaFilter(): TmsaFilterState | null {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  if (!metricKey || !vesselCode) return null;
+  if (!metricKey) return null;
   return {
     metricKey, vesselCode,
     ids: state.ids, codes: state.codes,
@@ -185,7 +197,9 @@ export const TmsaFilterBanner: React.FC<{
     <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-accent/10 border border-accent/25 text-xs">
       <Filter className="w-3.5 h-3.5 text-accent shrink-0" />
       <span className="text-text-industrial/70">{t("tmsa.filter.label")}:</span>
-      <span className="font-bold text-fg">{t(`tmsa.metric.${filter.metricKey}` as TranslationKey)}</span>
+      <span className="font-bold text-fg">
+        {t(`${filter.metricKey.startsWith("ism") ? "ism" : "tmsa"}.metric.${filter.metricKey}` as TranslationKey)}
+      </span>
       {filter.loading ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
       ) : filter.error ? (

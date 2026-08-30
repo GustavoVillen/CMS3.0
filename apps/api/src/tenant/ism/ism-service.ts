@@ -34,6 +34,7 @@ import { log } from "../../common/logger";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import {
   getTmsaMaintenanceEvidence,
+  type TmsaEvidenceMode,
   getTmsaMetricDetail,
   type TmsaStatus,
   type TmsaGroup,
@@ -52,8 +53,11 @@ export interface IsmGroup extends Omit<TmsaGroup, "element"> {
 }
 
 export interface IsmVesselEvidence {
+  /** Código del buque, o "" cuando el item consolida toda la flota. */
   vesselCode: string;
   vesselName: string;
+  /** Cuántos buques entraron en el cálculo (1 salvo en el item de flota). */
+  vesselCount: number;
   summary: { ok: number; attention: number; gap: number; info: number };
   groups: IsmGroup[];
 }
@@ -121,22 +125,34 @@ interface Delegate {
 export async function getIsmChapter10Evidence(
   session: TenantAccessSession,
   vesselCode: string | null,
+  mode: TmsaEvidenceMode = "fleet",
 ): Promise<{ items: IsmVesselEvidence[] }> {
   const prisma = getPrismaClient();
   if (!prisma) return { items: [] };
-  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  // displayName titula el bloque de flota (CLAUDE.md: nombres, no códigos).
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: session.tenantSlug },
+    include: { settings: { select: { displayName: true } } },
+  });
   if (!tenant) return { items: [] };
 
   const vessels = await listVesselsInScope(prisma, session, tenant.id, vesselCode);
   if (vessels.length === 0) return { items: [] };
 
-  // La evidencia TMSA ya viene con el scope aplicado y calculada en paralelo:
-  // se pide una sola vez para toda la lista de buques.
-  const tmsa = await getTmsaMaintenanceEvidence(session, vesselCode);
+  // La evidencia TMSA ya viene con el scope aplicado y en el mismo modo, así que
+  // los grupos heredados corresponden uno a uno con los items de acá.
+  const tmsa = await getTmsaMaintenanceEvidence(session, vesselCode, mode);
   const tmsaByVessel = new Map(tmsa.items.map(v => [v.vesselCode, v]));
 
-  const items = await Promise.all(vessels.map(async (v) => {
-    const inherited: IsmGroup[] = (tmsaByVessel.get(v.code)?.groups ?? [])
+  // Igual que TMSA: sin buque pedido y en modo flota, un único item con los
+  // totales de todo el alcance (ver TmsaEvidenceMode).
+  const fleetMode = mode === "fleet" && vessels.length > 1;
+  const buckets: Array<{ code: string; name: string; codes: string[] }> = fleetMode
+    ? [{ code: "", name: tenant.settings?.displayName ?? session.tenantSlug.toUpperCase(), codes: vessels.map(v => v.code) }]
+    : vessels.map(v => ({ code: v.code, name: v.name, codes: [v.code] }));
+
+  const items = await Promise.all(buckets.map(async (b) => {
+    const inherited: IsmGroup[] = (tmsaByVessel.get(b.code)?.groups ?? [])
       .filter(g => INHERITED_CLAUSE[g.key])
       .map(g => ({
         key: g.key,
@@ -146,9 +162,9 @@ export async function getIsmChapter10Evidence(
         own: false,
       }));
 
-    const own = await computeOwnGroups(prisma, tenant.id, v.code);
+    const own = await computeOwnGroups(prisma, tenant.id, b.codes);
     const groups = [...inherited, ...own].sort(
-      (a, b) => CLAUSE_ORDER.indexOf(a.clause) - CLAUSE_ORDER.indexOf(b.clause),
+      (a, b2) => CLAUSE_ORDER.indexOf(a.clause) - CLAUSE_ORDER.indexOf(b2.clause),
     );
 
     const summary = { ok: 0, attention: 0, gap: 0, info: 0 };
@@ -159,7 +175,7 @@ export async function getIsmChapter10Evidence(
       else summary.info++;
     }
 
-    return { vesselCode: v.code, vesselName: v.name, summary, groups };
+    return { vesselCode: b.code, vesselName: b.name, vesselCount: b.codes.length, summary, groups };
   }));
 
   return { items };
@@ -173,12 +189,16 @@ export async function getIsmChapter10Evidence(
 async function computeOwnGroups(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenantId: string,
-  vesselCode: string,
+  /** Un buque, o todos los del alcance cuando el item consolida la flota. */
+  vesselCodes: string[],
 ): Promise<IsmGroup[]> {
   const now = new Date();
   const d30 = new Date(now.getTime() - 30 * 86_400_000);
   const d90 = new Date(now.getTime() - 90 * 86_400_000);
   const d365 = new Date(now.getTime() - 365 * 86_400_000);
+  // El mismo `where` sirve para un buque o para varios.
+  const vesselCode: string | { in: string[] } =
+    vesselCodes.length === 1 ? vesselCodes[0]! : { in: vesselCodes };
   const base = { tenantId, vesselCode, deletedAt: null };
 
   const p = prisma as unknown as {
@@ -198,7 +218,7 @@ async function computeOwnGroups(
 
   const [
     regulatoryInspections, certificatesWithPlan, certificatesTotal,
-    itemResults,
+    planCriteriaRows, inspectionsWithCriteria, itemResults,
     defectsOpen, auditFindingsOpen,
     defectsClosed90d, correctiveWoOpen,
     woClosed90d, workLogs90d, inspectionExecutions90d, maintenanceAttachments,
@@ -210,6 +230,33 @@ async function computeOwnGroups(
     // "regla → tarea de mantenimiento" que pide 10.1.
     safe(() => p.certificate.count({ where: { ...base, maintenancePlanId: { not: null } } }), 0, "certificatesWithPlan"),
     safe(() => p.certificate.count({ where: { ...base } }), 0, "certificatesTotal"),
+    // 10.1 — origen normativo declarado en las tareas del plan. Es la forma en
+    // que la mayoría de las flotas responde "¿de qué regla nace esto?": no con
+    // una plantilla de inspección, sino con el plan de mantenimiento en sí.
+    // Se miran los planes VIGENTES: un plan inactivo ya no mantiene nada, y
+    // contarlo como pendiente de clasificar sería trabajo inventado.
+    safe(
+      () => p.maintenancePlan.findMany({
+        where: { ...base, status: { not: "INACTIVE" } },
+        select: { criteriaSource: true },
+        take: 20000,
+      }) as Promise<Array<{ criteriaSource: string | null }>>,
+      [] as Array<{ criteriaSource: string | null }>,
+      "planCriteriaRows",
+    ),
+    // Inspecciones completadas en el último año cuyos ítems declaran de qué
+    // criterio salen. Es la otra vía de trazabilidad de 10.1, para los tenants
+    // que arman sus rutinas como plantillas de inspección y no como planes.
+    safe(
+      () => p.inspectionExecution.count({
+        where: {
+          ...base, status: "COMPLETED", completedAt: { gte: d365 },
+          itemResults: { some: { checklistItem: { criteriaSource: { not: null } } } },
+        },
+      }),
+      0,
+      "inspectionsWithCriteria",
+    ),
     // Resultados de ítems inspeccionados en el último año, con el origen del
     // criterio (regla / clase / estándar de la Compañía) y su conformidad.
     // Alimenta 10.1 (origen normativo) y 10.2.2 (no conformidades detectadas).
@@ -287,26 +334,50 @@ async function computeOwnGroups(
 
   // ── 10.1 · Base normativa del mantenimiento ────────────────────────────────
   {
-    const evaluated = itemResults.length;
-    const ruleBased = itemResults.filter(
-      r => r.checklistItem?.criteriaSource === "CLASS_REQUIREMENT" || r.checklistItem?.criteriaSource === "STATUTORY",
-    ).length;
-    const companyBased = itemResults.filter(
-      r => r.checklistItem?.criteriaSource === "COMPANY_STANDARD" || r.checklistItem?.criteriaSource === "MAKER_MANUAL",
-    ).length;
+    // Una "tarea con origen declarado" puede ser un plan de mantenimiento o un
+    // ítem de una plantilla de inspección: las dos responden la misma pregunta
+    // del Código ("¿de qué regla nace lo que hago?") y se cuentan juntas. Los
+    // planes son la vía principal — casi ninguna flota arma sus rutinas como
+    // plantillas de inspección.
+    const RULE = ["CLASS_REQUIREMENT", "STATUTORY"];
+    const COMPANY = ["COMPANY_STANDARD", "MAKER_MANUAL", "ENGINEERING_CRITERION"];
+    const isRule = (v: string | null | undefined) => !!v && RULE.includes(v);
+    const isCompany = (v: string | null | undefined) => !!v && COMPANY.includes(v);
+
+    // Cada métrica que se muestra tiene que poder abrir EXACTAMENTE los
+    // registros que contó (ver tmsa-filter.tsx). Por eso los planes y los ítems
+    // de inspección se cuentan por separado en la tarjeta, aunque para decidir
+    // el semáforo se sumen: un solo número mezclado no tendría una planilla que
+    // devolviera esa misma cantidad de filas.
+    const plansTotal = planCriteriaRows.length;
+    const planRuleBased = planCriteriaRows.filter(pl => isRule(pl.criteriaSource)).length;
+    const planCompanyBased = planCriteriaRows.filter(pl => isCompany(pl.criteriaSource)).length;
+    const plansWithoutCriteria = planCriteriaRows.filter(pl => !pl.criteriaSource).length;
+    // Se cuenta la INSPECCIÓN, no el renglón: un renglón de plantilla no es una
+    // entidad que se pueda abrir en una planilla, y una métrica que no puede
+    // mostrar sus registros no sirve delante de un auditor.
+    const inspectionCriteria = inspectionsWithCriteria;
 
     // Sin ningún criterio trazado a una regla ni al estándar de la Compañía no
-    // hay forma de mostrar de dónde sale lo que se inspecciona.
+    // hay forma de mostrar de dónde sale lo que se mantiene. Mientras queden
+    // tareas sin declarar, la trazabilidad está empezada pero incompleta: eso es
+    // atención, no brecha.
+    const declared = planRuleBased + planCompanyBased + inspectionCriteria;
+    const nothingLoaded =
+      plansTotal === 0 && itemResults.length === 0 && regulatoryInspections === 0 && certificatesTotal === 0;
     const status: IsmStatus =
-      evaluated === 0 && regulatoryInspections === 0 && certificatesTotal === 0 ? "INFO" :
-      ruleBased === 0 && companyBased === 0 && regulatoryInspections === 0 ? "GAP" :
+      nothingLoaded ? "INFO" :
+      declared === 0 && regulatoryInspections === 0 ? "GAP" :
+      plansWithoutCriteria > 0 ? "ATTENTION" :
       certificatesTotal > 0 && certificatesWithPlan === 0 ? "ATTENTION" : "OK";
 
     groups.push({
       key: "regulatoryBasis", clause: "10.1", status, own: true,
       metrics: [
-        { key: "ismRuleBasedCriteria", value: ruleBased, kind: "count" },
-        { key: "ismCompanyCriteria", value: companyBased, kind: "count" },
+        { key: "ismRuleBasedCriteria", value: planRuleBased, kind: "count" },
+        { key: "ismCompanyCriteria", value: planCompanyBased, kind: "count" },
+        { key: "ismPlansWithoutCriteria", value: plansWithoutCriteria, kind: "count" },
+        { key: "ismInspectionCriteria", value: inspectionCriteria, kind: "count" },
         { key: "ismRegulatoryInspections", value: regulatoryInspections, kind: "count" },
         { key: "ismCertificatesWithPlan", value: certificatesWithPlan, kind: "count" },
       ],
@@ -441,7 +512,11 @@ export async function getIsmMetricDetail(
   const now = new Date();
   const d30 = new Date(now.getTime() - 30 * 86_400_000);
   const d90 = new Date(now.getTime() - 90 * 86_400_000);
-  const base = { tenantId, vesselCode, deletedAt: null };
+  const d365 = new Date(now.getTime() - 365 * 86_400_000);
+  // vesselCode vacío = detalle de una tarjeta de flota: mismo alcance que usó
+  // computeOwnGroups para contarla, así el número y la lista no se separan.
+  const scope: string | { in: string[] } = vesselCode ? vesselCode : { in: vessels.map(v => v.code) };
+  const base = { tenantId, vesselCode: scope, deletedAt: null };
 
   const p = prisma as unknown as {
     asset: { findMany(a: unknown): Promise<any[]> };
@@ -452,6 +527,7 @@ export async function getIsmMetricDetail(
     certificate: { findMany(a: unknown): Promise<any[]> };
     externalAuditFinding: { findMany(a: unknown): Promise<any[]> };
     checklistExecution: { findMany(a: unknown): Promise<any[]> };
+    inspectionExecution: { findMany(a: unknown): Promise<any[]> };
   };
 
   const isoDate = (d: Date | string | null | undefined) =>
@@ -463,8 +539,17 @@ export async function getIsmMetricDetail(
     ({ id: w.id, code: w.workOrderCode, label: w.title ?? w.workOrderCode, sublabel: w.dueDate ? `Vencimiento ${isoDate(w.dueDate)}` : w.status, entityType: "workOrder" });
   const asAsset = (a: any): TmsaDetailItem =>
     ({ id: a.id, code: a.assetCode, label: a.name ?? a.assetCode, sublabel: `Criticidad ${a.criticality} · ${a.status}`, entityType: "asset" });
+  const asPlan = (pl: any): TmsaDetailItem =>
+    ({ id: pl.id, code: pl.taskCode, label: pl.title ?? pl.taskCode, sublabel: pl.criteriaSource ?? pl.status, entityType: "maintenancePlan" });
 
-  const TAKE = 100;
+  // Mismo tope que el detalle de TMSA (DETAIL_CAP). Con 100 la vista de flota se
+  // quedaba corta —147 OT cerradas devolvían 100— y la planilla filtrada habría
+  // mostrado menos filas de las que dice la tarjeta.
+  const TAKE = 1000;
+  // Un buque tiene cientos de planes vigentes: con el tope de 100 la planilla
+  // mostraría muchas menos filas que el número de la tarjeta y encima sin avisar
+  // (el cartel de "truncado" recién salta en 1000, DETAIL_CAP de tmsa-filter.tsx).
+  const PLAN_TAKE = 1000;
 
   switch (metric) {
     // 10.1
@@ -477,6 +562,37 @@ export async function getIsmMetricDetail(
       return { items: rows.map(i => ({
         id: i.id, code: i.inspectionCode, label: i.type,
         sublabel: `${i.status}${i.scheduledAt ? ` · ${isoDate(i.scheduledAt)}` : ""}`, entityType: "inspection" as const,
+      })) };
+    }
+    case "ismRuleBasedCriteria":
+    case "ismCompanyCriteria":
+    case "ismPlansWithoutCriteria": {
+      // Mismo where que contó la tarjeta: planes VIGENTES del buque, filtrados
+      // por el origen normativo que corresponde a la métrica.
+      const RULE = ["CLASS_REQUIREMENT", "STATUTORY"];
+      const COMPANY = ["COMPANY_STANDARD", "MAKER_MANUAL", "ENGINEERING_CRITERION"];
+      const criteriaWhere =
+        metric === "ismRuleBasedCriteria" ? { in: RULE } :
+        metric === "ismCompanyCriteria" ? { in: COMPANY } : null;
+      const rows = await p.maintenancePlan.findMany({
+        where: { ...base, status: { not: "INACTIVE" }, criteriaSource: criteriaWhere },
+        select: { id: true, taskCode: true, title: true, status: true, criteriaSource: true },
+        orderBy: { taskCode: "asc" }, take: PLAN_TAKE,
+      });
+      return { items: rows.map(asPlan) };
+    }
+    case "ismInspectionCriteria": {
+      const rows = await p.inspectionExecution.findMany({
+        where: {
+          ...base, status: "COMPLETED", completedAt: { gte: d365 },
+          itemResults: { some: { checklistItem: { criteriaSource: { not: null } } } },
+        },
+        select: { id: true, executionCode: true, completedAt: true, template: { select: { title: true } } },
+        orderBy: { completedAt: "desc" }, take: TAKE,
+      });
+      return { items: rows.map(e => ({
+        id: e.id, code: e.executionCode, label: e.template?.title ?? e.executionCode,
+        sublabel: isoDate(e.completedAt), entityType: "inspection" as const,
       })) };
     }
     case "ismCertificatesWithPlan": {
@@ -511,7 +627,7 @@ export async function getIsmMetricDetail(
     }
     case "ismAuditFindingsOpen": {
       const rows = await p.externalAuditFinding.findMany({
-        where: { tenantId, vesselCode, status: "OPEN" },
+        where: { tenantId, vesselCode: scope, status: "OPEN" },
         select: { id: true, findingCode: true, description: true, severity: true, findingType: true },
         take: TAKE,
       });

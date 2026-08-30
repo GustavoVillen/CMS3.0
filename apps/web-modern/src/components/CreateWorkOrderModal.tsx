@@ -11,6 +11,7 @@ import { ModalCloseButton } from "./ModalCloseButton";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
 import { AutoTextArea } from "./AutoTextArea";
+import { findClassInspectionAsset } from "../lib/class-inspection-asset";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -170,10 +171,11 @@ interface CreateWorkOrderModalProps {
   initialMaintKind?: string;
   /** Preset del título (modo standalone) — ej. "Inspección de Clase". */
   initialTitle?: string;
-  /** Modo standalone: al cargar los equipos del buque elegido, preselecciona
-   *  el que coincida con este nombre (ej. "Inspeccion de Clase"), sin esperar
-   *  que el usuario lo busque. */
-  autoSelectAssetByName?: string;
+  /** Modo standalone: al cargar los equipos del buque elegido, preselecciona el
+   *  equipo de inspección de clase (el nombre cambia de buque en buque, se
+   *  resuelve por patrón — ver findClassInspectionAsset), sin esperar que el
+   *  usuario lo busque. */
+  autoSelectClassInspectionAsset?: boolean;
   /** Modo standalone: equipo ya resuelto de antemano (ej. por el asistente de
    *  "Nueva OT") — se preselecciona directo, sin esperar la carga de la lista. */
   initialAssetId?: string;
@@ -218,7 +220,7 @@ function TypeBadge({ type }: { type: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectAssetByName, initialAssetId, initialPriority, requireProvider, onClose, onSaved }) => {
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, onClose, onSaved }) => {
   const t = useT();
   const { user, tenant } = useAuth();
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
@@ -635,11 +637,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // sugerido", mandándole a la IA un texto sin sentido y sin volver a
   // intentarlo aunque el usuario terminara de escribir el título real.
   useEffect(() => {
-    // El equipo preseleccionado por `autoSelectAssetByName` (ej. "Inspección de
-    // Clase") ya lista TODOS sus planes activos apenas se elige, sin pasar por
-    // el matching de la IA — ver el efecto de "Asset lookup". Este detector por
-    // texto no aplica ahí (sería una segunda sugerencia redundante).
-    if (autoSelectAssetByName) return;
+    // El equipo preseleccionado por `autoSelectClassInspectionAsset` ya lista
+    // TODOS sus planes activos apenas se elige, sin pasar por el matching de la
+    // IA — ver el efecto de "Asset lookup". Este detector por texto no aplica
+    // ahí (sería una segunda sugerencia redundante).
+    if (autoSelectClassInspectionAsset) return;
     if (prefill || !assetId || !canLinkPlan) return;
     if (!(title.trim() || description.trim())) return;
     if (suggestedPlanForAssetRef.current === assetId) return;
@@ -648,7 +650,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       void handleSuggestPlanLinks();
     }, 800);
     return () => clearTimeout(timer);
-  }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks, autoSelectAssetByName]);
+  }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks, autoSelectClassInspectionAsset]);
 
   // El aviso de "sin coincidencias" queda desactualizado en cuanto el usuario
   // sigue editando el título/tarea: se limpia para no sugerir que el texto
@@ -788,9 +790,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         const res = await api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(code)}&limit=200`);
         const items = res.items ?? [];
         setAssets(items);
-        if (autoSelectAssetByName) {
-          const needle = autoSelectAssetByName.trim().toLowerCase();
-          const match = items.find(a => a.name.trim().toLowerCase() === needle);
+        if (autoSelectClassInspectionAsset) {
+          const match = findClassInspectionAsset(items);
           if (match) {
             setAssetId(match.id);
             // Con el equipo ya identificado de antemano (no hace falta que la
@@ -818,7 +819,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       finally { setLoadingAssets(false); }
     }, 400);
     return () => clearTimeout(debounceRef.current);
-  }, [vesselCode, prefill, autoSelectAssetByName, initialAssetId]);
+  }, [vesselCode, prefill, autoSelectClassInspectionAsset, initialAssetId]);
 
   // Asset list for prefill mode when the source has no asset (audit findings): user picks one.
   useEffect(() => {

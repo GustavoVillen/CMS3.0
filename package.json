@@ -24,10 +24,7 @@
     "dev:api": "pnpm --filter @cms3/api dev",
     "start:api": "pnpm --filter @cms3/api start",
     "build:api": "pnpm --filter @cms3/api build",
-    "dev:web-legacy": "pnpm --filter @cms3/web-legacy dev",
-    "dev:web-modern": "pnpm --filter web-modern dev",
-    "dev:desktop": "pnpm --filter @cms3/desktop dev",
-    "start:desktop": "pnpm --filter @cms3/desktop start"
+    "dev:web-modern": "pnpm --filter web-modern dev"
   },
   "dependencies": {
     "@prisma/client": "7.7.0",

@@ -62,13 +62,15 @@ export async function suggestTmsaAssessment(
   const vesselCode = String(input.vesselCode ?? "").trim();
   const groupKey = String(input.groupKey ?? "").trim();
   const metricKey = String(input.metricKey ?? "").trim();
-  if (!vesselCode || !groupKey) throw new RouteError(400, "VALIDATION_ERROR", "Faltan parámetros.");
+  // vesselCode vacío es válido: es el análisis del bloque consolidado de flota
+  // (el item que devuelve getTmsaMaintenanceEvidence viaja con vesselCode "").
+  if (!groupKey) throw new RouteError(400, "VALIDATION_ERROR", "Faltan parámetros.");
 
   const apiKey = aiApiKey();
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", `${aiApiKeyName()} no esta configurada.`);
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
 
-  const evidence = await getTmsaMaintenanceEvidence(session, vesselCode);
+  const evidence = await getTmsaMaintenanceEvidence(session, vesselCode || null);
   const vessel = evidence.items.find(v => v.vesselCode === vesselCode);
   const group = vessel?.groups.find(g => g.key === groupKey);
   if (!vessel || !group) throw new RouteError(404, "NOT_FOUND", "No se encontró el grupo TMSA solicitado.");

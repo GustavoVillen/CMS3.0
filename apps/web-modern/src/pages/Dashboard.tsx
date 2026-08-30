@@ -109,15 +109,6 @@ interface InspectionPlanOption {
   sfiGroupNumber?: number | null;
 }
 
-/**
- * Nombre EXACTO del equipo de inspección de clase en el catálogo: el
- * preselector de CreateWorkOrderModal matchea por nombre completo, no por
- * fragmento. Se unificó en toda la flota el 2026-08-29 — antes convivían
- * "Inspecciones de Clase" e "Inspecciones por Sociedad Clasificadora" y el
- * preselector no encontraba nada.
- */
-const CLASS_INSPECTION_ASSET = "Inspeccion de Sociedad Clasificadora";
-
 export const Dashboard: React.FC = () => {
   const { vessels: contextVessels, selectedVessel, selectedVesselCode, isVesselScoped } = useVesselContext();
   const insightsPath = selectedVesselCode
@@ -175,7 +166,7 @@ export const Dashboard: React.FC = () => {
   const [showNewWoWizard, setShowNewWoWizard] = React.useState(false);
   // Preset con el que se abre CreateWorkOrderModal cuando viene del chooser de
   // "Nueva Solicitud de Servicio" (null = alta libre, sin preset).
-  const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; autoAsset?: string } | null>(null);
+  const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
   const [showSsChooser, setShowSsChooser] = React.useState(false);
   // Cuarto camino del asistente de SS: la OT ya existe. En vez de crear una
   // orden nueva, se elige entre las abiertas y se abre esa OT, que es donde vive
@@ -476,7 +467,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           initialVesselCode={selectedVesselCode ?? undefined}
           initialMaintKind={createWoPreset?.maintKind}
           initialTitle={createWoPreset?.title}
-          autoSelectAssetByName={createWoPreset?.autoAsset}
+          autoSelectClassInspectionAsset={createWoPreset?.classAsset}
           requireProvider={!!createWoPreset}
           onClose={() => { setShowCreateWo(false); setCreateWoPreset(null); }}
           onSaved={(_woId, workOrderCode) => {
@@ -526,7 +517,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                 <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.repair")}</span>
               </button>
               <button
-                onClick={() => { setCreateWoPreset({ maintKind: "INSPECTION", title: t("dashboard.ssChooser.classInspection"), autoAsset: CLASS_INSPECTION_ASSET }); setShowSsChooser(false); setShowCreateWo(true); }}
+                onClick={() => { setCreateWoPreset({ maintKind: "INSPECTION", title: t("dashboard.ssChooser.classInspection"), classAsset: true }); setShowSsChooser(false); setShowCreateWo(true); }}
                 className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
               >
                 <ShieldAlert className="w-6 h-6 text-accent shrink-0" />
@@ -613,7 +604,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                       setCreateWoPreset({
                         maintKind: "INSPECTION",
                         title: t("dashboard.inspection.classTitle"),
-                        autoAsset: CLASS_INSPECTION_ASSET,
+                        classAsset: true,
                       });
                       setInspKind("none");
                       setShowCreateWo(true);
