@@ -40,6 +40,33 @@ const DRY = process.env.DRY === "1";
 const FORCE = process.env.FORCE === "1";
 const LIMIT = Number(process.env.LIMIT ?? 0);
 const CONCURRENCY = Math.max(1, Number(process.env.CONCURRENCY ?? 3));
+/** Filtra por tipo de buque (Vessel.vesselType, subcadena). Ej: VESSEL_TYPE=barcaza */
+const VESSEL_TYPE = process.env.VESSEL_TYPE ?? "";
+
+/**
+ * Que es cada buque, dicho de forma que la IA no invente funciones. Sin esto
+ * asume un buque autopropulsado y escribe cosas falsas en las barcazas (llamo
+ * "propulsion principal" al motor de la bomba de descarga en las 30 barcazas).
+ * El dato del motor lo confirmo el cliente (2026-08-30).
+ */
+function vesselContext(vesselType: string | null, vesselName: string, assetName: string): string {
+  const t = (vesselType ?? "").toLowerCase();
+  if (t.includes("barcaza")) {
+    const partes = [
+      `${vesselName} es una barcaza tanque NO TRIPULADA de navegacion fluvial:`,
+      `no tiene propulsion ni gobierno propios (la empuja un remolcador en convoy),`,
+      `no hay dotacion permanente a bordo y el mantenimiento se hace en visitas programadas.`,
+    ];
+    if (/motor/i.test(assetName) && !/lancha/i.test(assetName)) {
+      partes.push(`El motor diesel de esta barcaza acciona la BOMBA DE DESCARGA DE CARGAMENTO; no es propulsion.`);
+    }
+    return partes.join(" ");
+  }
+  if (t.includes("remolcador")) {
+    return `${vesselName} es un remolcador de rio tripulado: navegacion fluvial, empuja convoyes de barcazas.`;
+  }
+  return vesselName;
+}
 
 async function main() {
   const tenant = await prisma.tenant.findUnique({ where: { slug: SLUG }, select: { id: true } });
@@ -53,11 +80,23 @@ async function main() {
   if (!member?.userId) throw new Error(`No hay TENANT_ADMIN en '${SLUG}'.`);
   const session = { tenantSlug: SLUG, user: { id: member.userId, email: member.user?.email ?? "" } } as any;
 
+  const vessels = await prisma.vessel.findMany({
+    where: { tenantId },
+    select: { code: true, name: true, vesselType: true },
+  });
+  const vesselMap = new Map<string, { name: string; type: string | null }>(
+    vessels.map((v: any) => [v.code, { name: v.name, type: v.vesselType }]),
+  );
+  const codigosDelTipo = VESSEL_TYPE
+    ? vessels.filter((v: any) => (v.vesselType ?? "").toLowerCase().includes(VESSEL_TYPE.toLowerCase())).map((v: any) => v.code)
+    : [];
+
   const assets = await prisma.asset.findMany({
     where: {
       tenantId,
       deletedAt: null,
       ...(VESSEL ? { vesselCode: VESSEL } : {}),
+      ...(VESSEL_TYPE ? { vesselCode: { in: codigosDelTipo } } : {}),
       ...(FORCE ? {} : { OR: [{ criticalityRationale: null }, { criticalityRationale: "" }] }),
     },
     select: {
@@ -106,6 +145,10 @@ async function main() {
         serialNumber: a.serialNumber,
         currentCriticality: a.criticality,
         currentSafetyCritical: a.isSafetyCritical,
+        vesselContext: (() => {
+          const v = vesselMap.get(a.vesselCode);
+          return v ? vesselContext(v.type, v.name, a.name) : null;
+        })(),
       });
 
       const data: Record<string, unknown> = {

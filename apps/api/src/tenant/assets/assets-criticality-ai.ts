@@ -66,6 +66,8 @@ El rationale debe ser técnico, específico al equipo (no genérico), y EXPLICAR
 "Criticidad <X> porque <razón operacional>. <ISM-crítico|No ISM-crítico> porque <razón ISM>. Requiere plan de mantenimiento: <SÍ|NO> — <por qué>."
 Mencioná el grupo SFI si es relevante.
 
+Si viene "contextoDelBuque", RESPETALO como un hecho: dice qué tipo de buque es y, cuando corresponde, qué funcion cumple el equipo a bordo. No contradigas ese dato ni asumas funciones que el contexto descarta (por ejemplo: una barcaza no tripulada no tiene propulsion ni gobierno propios, la empuja un remolcador; su motor no es propulsion principal).
+
 Si en los datos viene "criticidadAsignada" (A/B/C), JUSTIFICÁ ESA, no la que vos hubieras elegido: la criticidad operacional es un criterio de la empresa y ya la decidieron. Sólo si es claramente incorrecta, agregá al final una oración que empiece con "Revisar criticidad:" explicando cuál correspondería y por qué; devolvé igual en el JSON la criticidad asignada.
 
 El flag SAFETY-CRITICAL ISM 10.3, en cambio, EVALUALO VOS SIEMPRE, venga o no "ismCriticoAsignado": no es una preferencia de la empresa sino una definición del Código, y si el equipo entra en la definición el flag corresponde aunque hoy esté sin marcar.`;
@@ -81,6 +83,10 @@ interface SuggestInput {
    *  vez de reclasificar (y avisa con "Revisar criticidad:" si la ve mal). */
   currentCriticality?: "A" | "B" | "C" | null;
   currentSafetyCritical?: boolean | null;
+  /** Qué es el buque y, si hace falta, qué función cumple el equipo en él. Sin
+   *  esto la IA asume un buque autopropulsado y escribe fundamentos falsos en
+   *  barcazas (p. ej. llamar "propulsión principal" al motor de la bomba). */
+  vesselContext?: string | null;
 }
 
 export interface SuggestResult {
@@ -114,6 +120,7 @@ export async function suggestAssetCriticality(
     serialNumber: input.serialNumber ?? null,
     criticidadAsignada: input.currentCriticality ?? null,
     ismCriticoAsignado: input.currentSafetyCritical ?? null,
+    contextoDelBuque: input.vesselContext ?? null,
   };
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
