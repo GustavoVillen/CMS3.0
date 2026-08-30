@@ -420,6 +420,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       const yaEscrito = description.trim();
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-task", {
         assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
         taskDesc: base,
         existingTasks: yaEscrito || null,
       });
@@ -445,6 +446,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     try {
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-title", {
         assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
         taskDesc: description.trim() || title.trim() || null,
       });
       const sugerido = (res.text ?? "").trim();
@@ -468,6 +470,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     try {
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance-criteria", {
         assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
         taskDesc: aiTaskDesc,
       });
       if (res.text) setAcceptanceCriteria(res.text);
@@ -490,6 +493,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     try {
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-loto", {
         assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
         taskDesc: aiTaskDesc,
         acceptanceCriteria: acceptanceCriteria || null,
       });
@@ -513,6 +517,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     try {
       const res = await api.post<{ level: string; analysis: string }>("/app/pms/work-orders/suggest-risk", {
         assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
         taskDesc: aiTaskDesc,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,

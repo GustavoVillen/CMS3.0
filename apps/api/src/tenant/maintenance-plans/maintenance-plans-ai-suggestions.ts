@@ -8,6 +8,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { cleanAiText } from "../ai/ai-text";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const MODEL = AI_MODEL.fast;
 
@@ -92,6 +93,9 @@ interface BaseInput {
   assetLabel?: string | null;
   taskDesc?: string | null;
   taskType?: "INSPECTION" | "MAINTENANCE" | null;
+  /** Buque del plan. Con esto el servicio resuelve solo qué clase de embarcación
+   *  es: el JSA de una barcaza sin gente a bordo no es el de un remolcador. */
+  vesselCode?: string | null;
 }
 
 function taskTypeLabel(taskType?: "INSPECTION" | "MAINTENANCE" | null): string | null {
@@ -116,11 +120,16 @@ export interface RiskResult {
   analysis: string;
 }
 
-function buildContext(input: BaseInput, extras: Record<string, string | null | undefined> = {}): string {
+function buildContext(
+  input: BaseInput,
+  extras: Record<string, string | null | undefined> = {},
+  vesselFacts?: string | null,
+): string {
   const lines = [
     `Activo: ${(input.assetLabel ?? "").trim() || "equipo desconocido"}`,
     `Tarea: ${(input.taskDesc ?? "").trim() || "tarea no especificada"}`,
   ];
+  if (vesselFacts) lines.push(`Sobre el buque: ${vesselFacts}`);
   const tt = taskTypeLabel(input.taskType);
   if (tt) lines.push(`Tipo de tarea: ${tt}`);
   for (const [k, v] of Object.entries(extras)) {
@@ -201,7 +210,7 @@ export async function suggestPlanAcceptanceCriteria(
     session,
     "plan_acceptance_criteria_suggestion",
     PROMPT_ACCEPTANCE,
-    buildContext(input),
+    buildContext(input, {}, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     3000,
   );
   return { text };
@@ -215,7 +224,7 @@ export async function suggestPlanLoto(
     session,
     "plan_loto_suggestion",
     PROMPT_LOTO,
-    buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }),
+    buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     3000,
   );
   return { text };
@@ -232,7 +241,7 @@ export async function suggestPlanRisk(
     buildContext(input, {
       "Criterios de aceptación": input.acceptanceCriteria,
       "LOTO": input.loto,
-    }),
+    }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1500,
   );
 

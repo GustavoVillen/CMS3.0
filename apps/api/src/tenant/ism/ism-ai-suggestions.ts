@@ -17,6 +17,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { getIsmChapter10Evidence, getIsmMetricDetail } from "./ism-service";
 
 const MODEL = AI_MODEL.fast;
@@ -109,8 +110,10 @@ export async function suggestIsmAssessment(
     return `Muestra de elementos de la métrica "${key}" (${detail.items.length} en total, mostrando hasta ${SAMPLE_ITEMS}):\n${lines}`;
   });
 
+  const vesselContext = await getVesselAiContext(session.tenantSlug, vesselCode);
   const userContent = [
     `Buque: ${vessel.vesselName} (${vessel.vesselCode})`,
+    ...(vesselContext ? [`Sobre el buque: ${vesselContext}`] : []),
     `Cláusula ISM ${group.clause}: ${CLAUSE_TEXT[group.clause] ?? "(sin texto)"}`,
     `Bloque de evidencia "${group.key}" — estado actual: ${group.status}`,
     `Métricas del bloque:\n${metricsLines}`,

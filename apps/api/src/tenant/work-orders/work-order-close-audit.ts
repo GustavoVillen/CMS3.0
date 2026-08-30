@@ -20,6 +20,7 @@ import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provi
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
@@ -198,12 +199,13 @@ const txt = (v: unknown): string | null => {
  * controlado, así que auditar y firmar miran EXACTAMENTE lo mismo. Se dejan
  * afuera los Buffers (logos, firmas, fotos): del adjunto sólo importa que exista.
  */
-function buildAuditPayload(ctx: any, draft: WoCloseAuditDraft, answers: Record<string, string>) {
+function buildAuditPayload(ctx: any, draft: WoCloseAuditDraft, answers: Record<string, string>, sobreElBuque?: string | null) {
   const wo = ctx.wo ?? {};
   return {
     orden: {
       codigo: wo.workOrderCode,
       buque: ctx.vesselName ?? wo.vesselCode,
+      sobreElBuque: sobreElBuque ?? null,
       equipo: ctx.assetLabel,
       equipoCritico: !!ctx.assetIsSafetyCritical,
       criticidad: wo.criticality,
@@ -305,7 +307,10 @@ export async function auditWorkOrderClose(
   // Misma lectura que el PDF del formulario: auditar y firmar miran lo mismo.
   // Ya filtra por tenant y vessel scope (getTenantWorkOrder).
   const ctx = await loadWorkOrderPdfContext(session, workOrderId);
-  const payload = buildAuditPayload(ctx, body.draft ?? {}, body.answers ?? {});
+  const payload = buildAuditPayload(
+    ctx, body.draft ?? {}, body.answers ?? {},
+    await getVesselAiContext(session.tenantSlug, ctx.wo?.vesselCode),
+  );
 
   // Razonamiento extendido DESACTIVADO: Sonnet 5 lo trae activo y en tareas
   // largas consume todo el presupuesto pensando, sin llegar a emitir la

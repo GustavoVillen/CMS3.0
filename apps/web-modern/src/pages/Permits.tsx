@@ -226,9 +226,12 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
   const aiBaseInput = useCallback(() => ({
     type,
+    // El buque define el escenario: los peligros y el EPP de una barcaza sin
+    // gente a bordo no son los de un remolcador tripulado.
+    vesselCode: vesselCode || null,
     location: location.trim() || null,
     description: description.trim() || null,
-  }), [type, location, description]);
+  }), [type, vesselCode, location, description]);
 
   const onSuggestHazards = useCallback(async () => {
     if (!isEditable || loadingHazards) return;

@@ -1277,6 +1277,11 @@ model Vessel {
   name             String
   owner            String?
   vesselType       String?
+  // Si la embarcacion lleva dotacion permanente a bordo. Cambia el analisis de
+  // riesgo y el RCM: en una barcaza sin gente a bordo una falla no lastima a
+  // nadie en el momento. null = no declarado (se deduce del vesselType, que es
+  // texto libre); por eso es opcional y no un default.
+  isCrewed         Boolean?
   imo              String?
   registration     String?
   powerHp          Float?

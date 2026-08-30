@@ -35,6 +35,7 @@ import {
   type VesselScope,
 } from "./copilot-tool-utils";
 import { EXTENDED_COPILOT_TOOLS, executeExtendedCopilotTool } from "./copilot-tools";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 // ---------------------------------------------------------------------------
 // Immutable guardrails — never exposed to prompt editing
@@ -1530,11 +1531,17 @@ export async function streamCopilotoChat(
   // la flota, tienen prioridad).
   if (req.vesselCode) {
     const vesselLabel = req.vesselName ? `"${req.vesselName}" (código ${req.vesselCode})` : `código ${req.vesselCode}`;
+    // Qué clase de embarcación es. Sin esto el copiloto razona como si toda la
+    // flota fuera autopropulsada y tripulada, y en una barcaza eso lleva a
+    // conclusiones falsas (hablar de propulsión, o de riesgo para la dotación
+    // en una unidad donde no hay nadie a bordo).
+    const vesselFacts = await getVesselAiContext(req.tenantSlug, req.vesselCode);
     volatileSystemBlocks.push({
       type: "text",
       text:
         `## SELECTED VESSEL — DEFAULT WORKING CONTEXT\n` +
         `The user has the vessel ${vesselLabel} selected in the app header.\n` +
+        (vesselFacts ? `- Qué es este buque: ${vesselFacts}\n` : "") +
         `- Treat it as the DEFAULT vessel for any question that does not explicitly name another vessel or ask about the whole fleet.\n` +
         `- When calling query_* tools, use vesselCode "${req.vesselCode}" unless the user clearly refers to a different vessel or to all vessels.\n` +
         `- NEVER ask the user which vessel they mean while a vessel is selected here — use this one and answer directly.\n` +

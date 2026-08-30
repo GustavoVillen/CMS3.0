@@ -4,6 +4,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { recordAiUsage, isAiBudgetAvailable } from "../usage/usage-service";
 import { log } from "../../common/logger";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Prompt de interpretación de análisis de lubricante usado.
@@ -301,6 +302,7 @@ export async function generateFluidAiAnalysis(input: GenerateInput): Promise<Gen
     notaHoras: "runningHours = horas del EQUIPO al momento del muestreo. Las horas del ACEITE (desde el último cambio) no están registradas en el sistema: tratarlas como 'No informado'.",
     asset: { code: assetRow?.assetCode ?? null, name: assetRow?.name ?? null },
     vesselCode: sample.vesselCode,
+    sobreElBuque: await getVesselAiContext(input.tenantSlug, sample.vesselCode),
     fluidType: sample.fluidType,
     currentSample: {
       sampleCode: sample.sampleCode,

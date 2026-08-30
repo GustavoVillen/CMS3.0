@@ -7,6 +7,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { buildPermitTypeRegulationContext } from "../../common/regulations/maritime";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const MODEL = AI_MODEL.fast;
 
@@ -62,15 +63,23 @@ Responde ÚNICAMENTE con los bullets en texto plano, sin introducción, sin nume
 
 export interface PermitAiInput {
   type: string;
+  /** Buque del permiso: el peligro y el EPP no son los mismos en un remolcador
+   *  tripulado que en una barcaza sin dotación a bordo. */
+  vesselCode?: string | null;
   location?: string | null;
   description?: string | null;
   hazardsIdentified?: string | null;   // input para controls / PPE
   controlMeasures?: string | null;     // input para PPE
 }
 
-function buildContext(input: PermitAiInput, extras: Record<string, string | null | undefined> = {}): string {
+function buildContext(
+  input: PermitAiInput,
+  extras: Record<string, string | null | undefined> = {},
+  vesselFacts?: string | null,
+): string {
   const lines = [
     `Tipo de permiso: ${input.type}`,
+    ...(vesselFacts ? [`Sobre el buque: ${vesselFacts}`] : []),
     `Ubicación a bordo: ${(input.location ?? "").trim() || "no especificada"}`,
     `Descripción del trabajo: ${(input.description ?? "").trim() || "no especificada"}`,
   ];
@@ -154,7 +163,7 @@ export async function suggestPermitHazards(session: TenantAccessSession, input: 
     session,
     "ptw_hazards_suggestion",
     resolvePrompt(PROMPT_HAZARDS, input.type),
-    buildContext(input),
+    buildContext(input, {}, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1024,
   );
   return { text };
@@ -165,7 +174,7 @@ export async function suggestPermitControls(session: TenantAccessSession, input:
     session,
     "ptw_controls_suggestion",
     resolvePrompt(PROMPT_CONTROLS, input.type),
-    buildContext(input, { "Peligros identificados": input.hazardsIdentified }),
+    buildContext(input, { "Peligros identificados": input.hazardsIdentified }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1024,
   );
   return { text };
@@ -179,7 +188,7 @@ export async function suggestPermitPpe(session: TenantAccessSession, input: Perm
     buildContext(input, {
       "Peligros identificados": input.hazardsIdentified,
       "Medidas de control": input.controlMeasures,
-    }),
+    }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1024,
   );
   return { text };

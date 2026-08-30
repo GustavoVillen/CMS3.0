@@ -19,6 +19,7 @@ interface Vessel {
   name: string;
   owner?: string | null;
   vesselType?: string | null;
+  isCrewed?: boolean | null;
   imo?: string | null;
   registration?: string | null;
   powerHp?: number | null;
@@ -79,6 +80,9 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
   const [name, setName] = useState(initial?.name ?? "");
   const [owner, setOwner] = useState(asInputText(initial?.owner));
   const [vesselType, setVesselType] = useState(asInputText(initial?.vesselType));
+  // "" = no declarado. Va a los prompts de IA: en una unidad sin gente a bordo
+  // el analisis de riesgo y el RCM cambian.
+  const [isCrewed, setIsCrewed] = useState<string>(initial?.isCrewed == null ? "" : String(initial.isCrewed));
   const [imo, setImo] = useState(asInputText(initial?.imo));
   const [registration, setRegistration] = useState(asInputText(initial?.registration));
   const [powerHp, setPowerHp] = useState(asInputText(initial?.powerHp));
@@ -103,6 +107,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
         name,
         owner: asNullableText(owner),
         vesselType: asNullableText(vesselType),
+        isCrewed: isCrewed === "" ? null : isCrewed === "true",
         imo: asNullableText(imo),
         registration: asNullableText(registration),
         powerHp: asNullableNumber(powerHp),
@@ -128,7 +133,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    code, name, owner, vesselType, imo, registration, powerHp, dwtTons,
+    code, name, owner, vesselType, isCrewed, imo, registration, powerHp, dwtTons,
     lengthM, beamM, depthM, trnTn, trbTn, buildYear, buildCountry,
     incorporationDate, incorporationType, status,
   });
@@ -177,6 +182,13 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Tipo">
               <input value={vesselType} onChange={e => setVesselType(e.target.value)} maxLength={120} placeholder="Remolcador / Empuje" className="input-field" />
+            </Field>
+            <Field label={t("vessel.crewed")}>
+              <select value={isCrewed} onChange={e => setIsCrewed(e.target.value)} className="input-field">
+                <option value="">{t("vessel.crewed.unknown")}</option>
+                <option value="true">{t("vessel.crewed.yes")}</option>
+                <option value="false">{t("vessel.crewed.no")}</option>
+              </select>
             </Field>
             <Field label="IMO">
               <input value={imo} onChange={e => setImo(e.target.value)} maxLength={40} placeholder="-" className="input-field" />
@@ -285,6 +297,7 @@ export const VesselsPage: React.FC = () => {
     fieldValues: {
       name:       formVessel?.name        ?? null,
       vesselType: formVessel?.vesselType  ?? null,
+      isCrewed:   formVessel?.isCrewed == null ? "" : (formVessel.isCrewed ? "Sí" : "No tripulada"),
       status:     formVessel?.status      ?? null,
       imo:        formVessel?.imo         ?? null,
     },

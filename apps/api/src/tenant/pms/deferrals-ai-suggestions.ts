@@ -5,6 +5,7 @@ import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { cleanAiText } from "../ai/ai-text";
 import { getPrismaClient } from "../../platform/data/prisma-client";
@@ -153,6 +154,8 @@ async function buildContext(session: TenantAccessSession, input: CompensatoryInp
   const lines = ["Datos del informe de diferimiento (CONTEXTO COMPLETO Y AUTORITATIVO — usá EXCLUSIVAMENTE estos datos):"];
   if (deferralCode)         lines.push(`- Código del diferimiento: ${deferralCode}`);
   if (vesselName || vesselCode) lines.push(`- Buque: ${vesselName ?? vesselCode}`);
+  const vesselContext = await getVesselAiContext(session.tenantSlug, vesselCode);
+  if (vesselContext) lines.push(`- Sobre el buque: ${vesselContext}`);
   if (assetLabel)        lines.push(`- Activo afectado: ${assetLabel}`);
   if (sourceTypeLabel)   lines.push(`- Tipo de origen: ${sourceTypeLabel}`);
   if (sourceDisplayName) lines.push(`- Origen (código y título): ${sourceDisplayName}`);

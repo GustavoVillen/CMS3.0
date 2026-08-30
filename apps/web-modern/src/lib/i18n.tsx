@@ -717,6 +717,11 @@ const dict = {
   "asset.safetyCritical":       { es: "Equipo crítico para seguridad",                        en: "Safety-critical equipment",                          pt: "Equipamento crítico para segurança" },
   "asset.critRationale":        { es: "Fundamento de Criticidad",                             en: "Criticality Rationale",                              pt: "Fundamento de Criticidade" },
   // Excepción declarada de cobertura: equipo que no lleva plan de mantenimiento.
+  // Ficha del buque: si lleva dotacion permanente a bordo (va a los prompts de IA).
+  "vessel.crewed":              { es: "Tripulada",                                            en: "Crewed",                                             pt: "Tripulada" },
+  "vessel.crewed.yes":          { es: "Sí, con dotación a bordo",                              en: "Yes, crew on board",                                 pt: "Sim, com tripulação a bordo" },
+  "vessel.crewed.no":           { es: "No tripulada",                                          en: "Unmanned",                                           pt: "Não tripulada" },
+  "vessel.crewed.unknown":      { es: "Sin declarar",                                          en: "Not declared",                                       pt: "Não declarado" },
   "asset.planNotRequired":      { es: "No requiere plan de mantenimiento",                    en: "No maintenance plan required",                       pt: "Não requer plano de manutenção" },
   "asset.planNotRequiredHint":  { es: "Marcalo sólo si la decisión está tomada: el equipo se atiende por correctivo. Deja de contar como brecha de cobertura.", en: "Tick only if the decision is made: the equipment is run to failure. It stops counting as a coverage gap.", pt: "Marque apenas se a decisão estiver tomada: o equipamento é atendido por corretiva. Deixa de contar como lacuna de cobertura." },
   "asset.planNotRequiredReasonPh": { es: "Por qué no lleva plan (lo ve el auditor)",           en: "Why it has no plan (the auditor sees this)",         pt: "Por que não tem plano (o auditor vê isto)" },

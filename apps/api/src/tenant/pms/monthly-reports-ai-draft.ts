@@ -15,6 +15,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const MODEL = AI_MODEL.fast;
 
@@ -189,8 +190,10 @@ export async function generateMonthlyDraft(
   const monthLabel = `${String(month).padStart(2, "0")}/${year}`;
 
   // ── Armado del contexto que vuela a la IA ──
+  const sobreElBuque = await getVesselAiContext(session.tenantSlug, vesselCode);
   const contextLines: string[] = [
     `Buque: ${vesselCode}`,
+    ...(sobreElBuque ? [`Sobre el buque: ${sobreElBuque}`] : []),
     `Período: ${monthLabel}`,
     "",
     "KPIs:",

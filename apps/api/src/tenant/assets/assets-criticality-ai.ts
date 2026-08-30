@@ -6,6 +6,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const SYSTEM_PROMPT = `Sos un experto en mantenimiento y clasificación de equipos en buques.
 Te paso los datos de un equipo (asset). Tu tarea es asignarle DOS clasificaciones independientes y justificarlas en un único rationale combinado.
@@ -83,9 +84,10 @@ interface SuggestInput {
    *  vez de reclasificar (y avisa con "Revisar criticidad:" si la ve mal). */
   currentCriticality?: "A" | "B" | "C" | null;
   currentSafetyCritical?: boolean | null;
-  /** Qué es el buque y, si hace falta, qué función cumple el equipo en él. Sin
-   *  esto la IA asume un buque autopropulsado y escribe fundamentos falsos en
-   *  barcazas (p. ej. llamar "propulsión principal" al motor de la bomba). */
+  /** Aclaración extra sobre el buque o la función del equipo a bordo. Opcional:
+   *  el servicio ya resuelve solo el tipo de buque desde `vesselCode`. Se usa
+   *  para agregar lo que la ficha del buque no dice (p. ej. que el motor de la
+   *  barcaza acciona la bomba de descarga y no es propulsión). */
   vesselContext?: string | null;
 }
 
@@ -120,7 +122,12 @@ export async function suggestAssetCriticality(
     serialNumber: input.serialNumber ?? null,
     criticidadAsignada: input.currentCriticality ?? null,
     ismCriticoAsignado: input.currentSafetyCritical ?? null,
-    contextoDelBuque: input.vesselContext ?? null,
+    // El tipo de buque lo resuelve el servicio: si dependiera del caller, el
+    // boton de la pantalla quedaria sin contexto y el script con contexto.
+    contextoDelBuque: [
+      await getVesselAiContext(session.tenantSlug, input.vesselCode),
+      input.vesselContext ?? null,
+    ].filter(Boolean).join(" ") || null,
   };
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);

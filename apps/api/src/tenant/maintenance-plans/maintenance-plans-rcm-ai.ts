@@ -6,6 +6,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const MODEL = AI_MODEL.fast;
 
@@ -50,6 +51,8 @@ interface SuggestInput {
   planTitle?: string | null;
   planDescription?: string | null;
   taskType?: "INSPECTION" | "MAINTENANCE" | null;
+  /** Buque del plan, para saber qué clase de embarcación es. */
+  vesselCode?: string | null;
 }
 
 export interface RcmConsequenceResult {
@@ -78,6 +81,7 @@ export async function suggestPlanConsequence(
     sfi: input.assetSfiCode ?? null,
     plan: input.planTitle ?? null,
     descripcion: input.planDescription ?? null,
+    sobreElBuque: await getVesselAiContext(session.tenantSlug, input.vesselCode),
     tipoTarea:
       input.taskType === "INSPECTION" ? "Inspección / prueba (detecta falla oculta)"
       : input.taskType === "MAINTENANCE" ? "Mantenimiento (previene degradación/falla funcional)"

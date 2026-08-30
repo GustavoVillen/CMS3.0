@@ -11,7 +11,20 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
+
 import { getDefect } from "./defects-service";
+
+/** Linea de contexto del buque para los prompts de defectos. Devuelve null si
+ *  no se sabe de que buque se trata, para que caiga con el .filter(Boolean). */
+async function sobreElBuque(
+  session: { tenantSlug: string },
+  vesselCode: string | null | undefined,
+): Promise<string | null> {
+  const ctx = await getVesselAiContext(session.tenantSlug, vesselCode);
+  return ctx ? `Sobre el buque: ${ctx}` : null;
+}
+
 
 const MODEL = AI_MODEL.fast;
 
@@ -247,6 +260,7 @@ export async function suggestImmediateAction(
     `Estado operacional: ${OP_STATE_LABEL[opStateKey] ?? opStateKey ?? "no especificado"}`,
     input.assetLabel ? `Equipo afectado: ${input.assetLabel}` : null,
     input.vesselCode ? `Buque: ${input.vesselCode}` : null,
+    await sobreElBuque(session, input.vesselCode),
   ].filter(Boolean).join("\n");
 
   const text = await callClaude(
@@ -741,6 +755,7 @@ async function parseVoiceReportInner(
 
   const userContent = [
     `Vessel: ${vesselCode}`,
+    await sobreElBuque(session, vesselCode),
     forcedType
       ? `TIPO FORZADO: "${forcedType}". El usuario eligió explícitamente este tipo desde la UI. NO clasifiques: usá "${forcedType}" sí o sí en el campo "type" del JSON, y extraé los campos correspondientes a ese tipo. Si la transcripción claramente no encaja con el tipo forzado (ej: forzado "defect" pero el usuario describe un near miss puro sin daño material), igual respetá el tipo y avisá en "reasoning" la inconsistencia.`
       : null,
@@ -935,6 +950,7 @@ export async function suggestDefectRca(
 
   const userContent = [
     `Defecto ${defect.defectCode} — buque ${defect.vesselCode}, equipo ${defect.assetId}`,
+    await sobreElBuque(session, defect.vesselCode),
     `Descripción: ${description}`,
     input.severity ? `Severidad: ${input.severity}` : null,
     input.operationalState ? `Estado operacional: ${input.operationalState}` : null,

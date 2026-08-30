@@ -12,10 +12,10 @@
  * existe se le pasa a la IA como contexto (el LOTO se genera sabiendo los
  * criterios de aceptacion, el riesgo sabiendo los dos).
  *
- * Contexto de flota: al prompt se le dice si el plan es de un remolcador de rio
- * (tripulado) o de una barcaza no tripulada. Cambia el analisis: en una barcaza
- * sin dotacion permanente no hay nadie a bordo cuando falla el equipo, y las
- * tareas se hacen en visitas programadas.
+ * Contexto de flota: se le pasa el vesselCode y el propio servicio de IA
+ * resuelve si es un remolcador tripulado o una barcaza no tripulada
+ * (tenant/ai/vessel-ai-context). Cambia el analisis: en una barcaza sin
+ * dotacion permanente no hay nadie a bordo cuando falla el equipo.
  *
  * Uso:
  *   pnpm exec tsx --env-file .env scripts/fill-plan-hse-rcm.ts
@@ -46,19 +46,6 @@ const CONCURRENCY = Math.max(1, Number(process.env.CONCURRENCY ?? 3));
 
 const empty = (v: unknown) => !String(v ?? "").trim();
 
-/** Como describirle el buque a la IA. El tipo cambia el JSA y el RCM. */
-function vesselContext(vesselType: string | null, vesselName: string): string {
-  const t = (vesselType ?? "").toLowerCase();
-  if (t.includes("barcaza")) {
-    return `${vesselName} (barcaza no tripulada de navegacion fluvial: sin dotacion permanente a bordo, ` +
-      `se la empuja/remolca en convoy y el mantenimiento se hace en visitas programadas)`;
-  }
-  if (t.includes("remolcador")) {
-    return `${vesselName} (remolcador de rio tripulado, navegacion fluvial, empuja convoyes de barcazas)`;
-  }
-  return vesselName;
-}
-
 async function main() {
   const tenant = await prisma.tenant.findUnique({ where: { slug: SLUG }, select: { id: true } });
   if (!tenant) throw new Error(`Tenant '${SLUG}' no encontrado.`);
@@ -73,14 +60,6 @@ async function main() {
   // telemetria de uso. Se firma con el admin del tenant, que es quien habria
   // apretado el boton de varita.
   const session = { tenantSlug: SLUG, user: { id: member.userId, email: member.user?.email ?? "" } } as any;
-
-  const vessels = await prisma.vessel.findMany({
-    where: { tenantId },
-    select: { code: true, name: true, vesselType: true },
-  });
-  const vesselMap = new Map<string, string>(
-    vessels.map((v: any) => [v.code, vesselContext(v.vesselType, v.name)]),
-  );
 
   const plans = await prisma.maintenancePlan.findMany({
     where: {
@@ -134,8 +113,9 @@ async function main() {
 
   async function run(p: any) {
     const assetName = assetMap.get(p.assetId) ?? "equipo";
-    const buque = vesselMap.get(p.vesselCode) ?? p.vesselCode;
-    const assetLabel = `${assetName} — a bordo de ${buque}`;
+    // El tipo de buque lo resuelve el propio servicio de IA desde vesselCode
+    // (tenant/ai/vessel-ai-context): no hace falta escribirlo en el label.
+    const assetLabel = assetName;
     const taskDesc = [p.title, p.description].filter(Boolean).join(" — ");
     const taskType = p.taskType === "INSPECTION" ? "INSPECTION" : "MAINTENANCE";
     const data: Record<string, unknown> = {};
@@ -143,19 +123,19 @@ async function main() {
     try {
       let acceptance = p.acceptanceCriteria as string | null;
       if (empty(acceptance)) {
-        acceptance = (await suggestPlanAcceptanceCriteria(session, { assetLabel, taskDesc, taskType })).text;
+        acceptance = (await suggestPlanAcceptanceCriteria(session, { assetLabel, taskDesc, taskType, vesselCode: p.vesselCode })).text;
         data.acceptanceCriteria = acceptance;
       }
 
       let loto = p.loto as string | null;
       if (empty(loto)) {
-        loto = (await suggestPlanLoto(session, { assetLabel, taskDesc, taskType, acceptanceCriteria: acceptance })).text;
+        loto = (await suggestPlanLoto(session, { assetLabel, taskDesc, taskType, acceptanceCriteria: acceptance, vesselCode: p.vesselCode })).text;
         data.loto = loto;
       }
 
       if (!p.riskLevel || empty(p.riskAnalysisResult)) {
         const risk = await suggestPlanRisk(session, {
-          assetLabel, taskDesc, taskType, acceptanceCriteria: acceptance, loto,
+          assetLabel, taskDesc, taskType, acceptanceCriteria: acceptance, loto, vesselCode: p.vesselCode,
         });
         data.riskLevel = risk.level;
         data.riskProbability = risk.probability;
@@ -166,6 +146,7 @@ async function main() {
       if (!p.consequenceCategory) {
         const rcm = await suggestPlanConsequence(session, {
           assetName: assetLabel,
+          vesselCode: p.vesselCode,
           assetSfiCode: p.sfiSubgroupCode,
           planTitle: p.title,
           planDescription: p.description,

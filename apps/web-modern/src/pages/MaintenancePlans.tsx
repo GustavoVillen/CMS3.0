@@ -1373,6 +1373,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-acceptance-criteria", {
         assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
+        vesselCode: vesselCode || null,
       });
       setAcceptanceCriteria(res.text || prev);
     } catch {
@@ -1393,6 +1394,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         taskDesc: description || title || null,
         taskType,
         acceptanceCriteria: acceptanceCriteria || null,
+        vesselCode: vesselCode || null,
       });
       setLoto(res.text || prev);
     } catch {
@@ -1412,6 +1414,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         taskType,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,
+        vesselCode: vesselCode || null,
       });
       // Si la IA devolvió los dos ejes de la matriz, los cargamos y derivamos el
       // nivel desde la celda (misma fuente de verdad que el click manual). Si no,
@@ -1444,6 +1447,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           planTitle: title || null,
           planDescription: description || null,
           taskType,
+          vesselCode: vesselCode || null,
         },
       );
       if (res.category && ["SAFETY","ENVIRONMENTAL","OPERATIONAL","NON_OPERATIONAL"].includes(res.category)) {

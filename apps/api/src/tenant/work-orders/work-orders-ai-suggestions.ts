@@ -7,6 +7,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { cleanAiText } from "../ai/ai-text";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const MODEL = AI_MODEL.fast;
 
@@ -186,6 +187,8 @@ export interface SuggestPlanLinkResult {
 interface BaseInput {
   assetLabel?: string | null;
   taskDesc?: string | null;
+  /** Buque de la OT, para resolver qué clase de embarcación es. */
+  vesselCode?: string | null;
 }
 
 interface TaskInput extends BaseInput {
@@ -207,11 +210,16 @@ export interface RiskResult {
   analysis: string;
 }
 
-function buildContext(input: BaseInput, extras: Record<string, string | null | undefined> = {}): string {
+function buildContext(
+  input: BaseInput,
+  extras: Record<string, string | null | undefined> = {},
+  vesselFacts?: string | null,
+): string {
   const lines = [
     `Activo: ${(input.assetLabel ?? "").trim() || "equipo desconocido"}`,
     `Tarea: ${(input.taskDesc ?? "").trim() || "tarea no especificada"}`,
   ];
+  if (vesselFacts) lines.push(`Sobre el buque: ${vesselFacts}`);
   for (const [k, v] of Object.entries(extras)) {
     if (v && v.trim()) lines.push(`${k}: ${v.trim()}`);
   }
@@ -292,7 +300,7 @@ export async function suggestTitle(
     session,
     "wo_title_suggestion",
     PROMPT_TITLE,
-    buildContext(input),
+    buildContext(input, {}, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     256,
   );
   return { text };
@@ -306,7 +314,7 @@ export async function suggestTaskSteps(
     session,
     "wo_task_steps_suggestion",
     PROMPT_TASK,
-    buildContext(input, { "Tareas ya cargadas": input.existingTasks }),
+    buildContext(input, { "Tareas ya cargadas": input.existingTasks }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     // Sin tope de tareas: un mantenimiento mayor puede ser una lista larga y
     // cortarla a la mitad es peor que no sugerirla.
     4096,
@@ -322,7 +330,7 @@ export async function suggestAcceptanceCriteria(
     session,
     "wo_acceptance_criteria_suggestion",
     PROMPT_ACCEPTANCE,
-    buildContext(input),
+    buildContext(input, {}, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1024,
   );
   return { text };
@@ -336,7 +344,7 @@ export async function suggestLoto(
     session,
     "wo_loto_suggestion",
     PROMPT_LOTO,
-    buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }),
+    buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1024,
   );
   return { text };
@@ -373,7 +381,7 @@ export async function suggestRisk(
     buildContext(input, {
       "Criterios de aceptación": input.acceptanceCriteria,
       "LOTO": input.loto,
-    }),
+    }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     1500,
   );
 

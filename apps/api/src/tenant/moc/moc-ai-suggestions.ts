@@ -6,7 +6,20 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
+
 import { EVAL_QUESTIONS, EVALUATOR_AREAS, CHANGE_TYPES } from "./moc-form-catalog";
+
+/** Contexto del buque como lista (vacia si no se sabe cual es), para spreadear
+ *  dentro de los arrays de lineas que arman el prompt. */
+async function sobreElBuque(
+  session: { tenantSlug: string },
+  vesselCode: string | null | undefined,
+): Promise<string[]> {
+  const ctx = await getVesselAiContext(session.tenantSlug, vesselCode);
+  return ctx ? [`- Sobre el buque: ${ctx}`] : [];
+}
+
 
 const MODEL = AI_MODEL.fast;
 
@@ -127,10 +140,11 @@ export interface RiskAssessmentInput {
   mitigationActions?: string | null;
 }
 
-function buildContext(input: RiskAssessmentInput): string {
+function buildContext(input: RiskAssessmentInput, sobreElBuqueLinea: string[] = []): string {
   const lines = [
     "MOC (Management of Change) propuesto. Contexto completo:",
     `- Buque: ${input.vesselCode ?? "no especificado"}`,
+    ...sobreElBuqueLinea,
     `- Categoría: ${input.category ? (CATEGORY_LABEL[input.category] ?? input.category) : "no especificada"}`,
     `- Título: ${input.title ?? "—"}`,
     `- Razón del cambio: ${input.reasonForChange ?? "no especificada"}`,
@@ -174,6 +188,7 @@ export async function suggestRiskAssessment(
   const client = createAiClient({ apiKey, timeout: 30_000, maxRetries: 1 });
   const aiStarted = Date.now();
   const locale = await getTenantAiLocale(session.tenantSlug);
+  const sobreElBuqueLinea = await sobreElBuque(session, input.vesselCode);
 
   let response;
   try {
@@ -189,7 +204,7 @@ export async function suggestRiskAssessment(
         { type: "text", text: localeInstruction(locale) },
         { type: "text", text: PROMPT_RISK_ASSESSMENT, cache_control: { type: "ephemeral" } },
       ],
-      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${buildContext(input)}` }],
+      messages: [{ role: "user", content: `${localeUserReminder(locale)}\n${buildContext(input, sobreElBuqueLinea)}` }],
     });
   } catch (err) {
     log.error("[suggestRiskAssessment] Anthropic call failed:", err);
@@ -243,6 +258,8 @@ export async function suggestRiskAssessment(
 
 export interface MocDraftInput {
   vesselName?: string | null;
+  /** Para resolver el tipo de buque (remolcador / barcaza no tripulada). */
+  vesselCode?: string | null;
   changeTypesHint?: string[] | null;
   title?: string | null;
   currentSituation?: string | null;
@@ -344,6 +361,7 @@ export async function suggestMocDraft(session: TenantAccessSession, input: MocDr
   const context = [
     "Cambio (MOC) propuesto:",
     `- Unidad/buque: ${input.vesselName ?? "no especificado"}`,
+    ...(await sobreElBuque(session, input.vesselCode)),
     `- Título: ${input.title ?? "—"}`,
     `- Tipo(s) sugeridos por el usuario: ${input.changeTypesHint?.length ? input.changeTypesHint.join(", ") : "—"}`,
     `- Situación actual: ${input.currentSituation ?? "—"}`,

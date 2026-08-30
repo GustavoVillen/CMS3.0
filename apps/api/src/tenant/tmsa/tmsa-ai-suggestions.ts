@@ -17,6 +17,7 @@ import { RouteError } from "../../http/route-error";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { getTmsaMaintenanceEvidence, getTmsaMetricDetail } from "./tmsa-service";
 
 const MODEL = AI_MODEL.fast;
@@ -100,8 +101,10 @@ export async function suggestTmsaAssessment(
     return `Muestra de elementos de la métrica "${key}" (${detail.items.length} en total, mostrando hasta ${SAMPLE_ITEMS}):\n${lines}`;
   });
 
+  const vesselContext = await getVesselAiContext(session.tenantSlug, vesselCode);
   const userContent = [
     `Buque: ${vessel.vesselName} (${vessel.vesselCode})`,
+    ...(vesselContext ? [`Sobre el buque: ${vesselContext}`] : []),
     `Sub-requisito TMSA ${group.element} — grupo "${group.key}" — estado actual: ${group.status}`,
     `Métricas del grupo:\n${metricsLines}`,
     metricKey

@@ -49,23 +49,15 @@ const VESSEL_TYPE = process.env.VESSEL_TYPE ?? "";
  * "propulsion principal" al motor de la bomba de descarga en las 30 barcazas).
  * El dato del motor lo confirmo el cliente (2026-08-30).
  */
-function vesselContext(vesselType: string | null, vesselName: string, assetName: string): string {
+function vesselContext(vesselType: string | null, _vesselName: string, assetName: string): string | null {
   const t = (vesselType ?? "").toLowerCase();
-  if (t.includes("barcaza")) {
-    const partes = [
-      `${vesselName} es una barcaza tanque NO TRIPULADA de navegacion fluvial:`,
-      `no tiene propulsion ni gobierno propios (la empuja un remolcador en convoy),`,
-      `no hay dotacion permanente a bordo y el mantenimiento se hace en visitas programadas.`,
-    ];
-    if (/motor/i.test(assetName) && !/lancha/i.test(assetName)) {
-      partes.push(`El motor diesel de esta barcaza acciona la BOMBA DE DESCARGA DE CARGAMENTO; no es propulsion.`);
-    }
-    return partes.join(" ");
+  // Que clase de buque es lo resuelve el servicio de IA desde vesselCode
+  // (tenant/ai/vessel-ai-context). Aca solo va lo que la ficha del buque NO
+  // dice y sin lo cual la IA se equivoca: para que sirve ese motor.
+  if (t.includes("barcaza") && /motor/i.test(assetName) && !/lancha/i.test(assetName)) {
+    return "El motor diesel de esta barcaza acciona la BOMBA DE DESCARGA DE CARGAMENTO; no es propulsion.";
   }
-  if (t.includes("remolcador")) {
-    return `${vesselName} es un remolcador de rio tripulado: navegacion fluvial, empuja convoyes de barcazas.`;
-  }
-  return vesselName;
+  return null;
 }
 
 async function main() {

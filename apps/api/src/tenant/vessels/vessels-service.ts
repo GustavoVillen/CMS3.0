@@ -4,6 +4,7 @@ import { listDevVesselsForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
+import { invalidateVesselAiContext } from "../ai/vessel-ai-context";
 
 const VESSEL_SELECT = {
   id: true,
@@ -11,6 +12,7 @@ const VESSEL_SELECT = {
   name: true,
   owner: true,
   vesselType: true,
+  isCrewed: true,
   imo: true,
   registration: true,
   powerHp: true,
@@ -79,6 +81,8 @@ export interface VesselWriteInput {
   name: string;
   owner?: string | null;
   vesselType?: string | null;
+  /** Si lleva dotación permanente a bordo. null = no declarado. */
+  isCrewed?: boolean | null;
   imo?: string | null;
   registration?: string | null;
   powerHp?: number | string | null;
@@ -127,6 +131,7 @@ function buildVesselDetailsData(input: Partial<VesselWriteInput>): Record<string
   return {
     owner: normalizeOptionalText(input.owner),
     vesselType: normalizeOptionalText(input.vesselType),
+    isCrewed: input.isCrewed ?? null,
     imo: normalizeOptionalText(input.imo),
     registration: normalizeOptionalText(input.registration),
     powerHp: normalizeOptionalNumber(input.powerHp),
@@ -144,7 +149,7 @@ function buildVesselDetailsData(input: Partial<VesselWriteInput>): Record<string
 }
 
 const DETAIL_FIELDS = new Set([
-  "owner", "vesselType", "imo", "registration",
+  "owner", "vesselType", "isCrewed", "imo", "registration",
   "powerHp", "dwtTons", "lengthM", "beamM", "depthM", "trnTn", "trbTn",
   "buildYear", "buildCountry", "incorporationDate", "incorporationType",
 ]);
@@ -243,6 +248,7 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
   const detailsToUpdate: Record<string, unknown> = {};
   if (input.owner !== undefined) detailsToUpdate.owner = normalizeOptionalText(input.owner);
   if (input.vesselType !== undefined) detailsToUpdate.vesselType = normalizeOptionalText(input.vesselType);
+  if (input.isCrewed !== undefined) detailsToUpdate.isCrewed = input.isCrewed ?? null;
   if (input.imo !== undefined) detailsToUpdate.imo = normalizeOptionalText(input.imo);
   if (input.registration !== undefined) detailsToUpdate.registration = normalizeOptionalText(input.registration);
   if (input.powerHp !== undefined) detailsToUpdate.powerHp = normalizeOptionalNumber(input.powerHp);
@@ -258,6 +264,9 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
   if (input.incorporationType !== undefined) detailsToUpdate.incorporationType = normalizeOptionalText(input.incorporationType);
 
   await updateVesselDetails(prisma, id, tenant.id, detailsToUpdate);
+  // El tipo y la tripulación viajan a los prompts de IA cacheados 5 min: si se
+  // corrigen acá, la próxima sugerencia tiene que verlos ya.
+  invalidateVesselAiContext(session.tenantSlug, vessel.code);
 
   const changedFields = Object.keys(data).filter(k => !["updatedByUserId"].includes(k));
   const allChangedKeys = [...changedFields, ...Object.keys(detailsToUpdate)];

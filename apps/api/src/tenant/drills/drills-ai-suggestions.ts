@@ -7,6 +7,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
+import { getVesselAiContext } from "../ai/vessel-ai-context";
 
 const MODEL = AI_MODEL.fast;
 
@@ -154,6 +155,10 @@ export async function suggestDrillScenario(
     `Vessel: ${input.vesselName ? `${input.vesselCode} — ${input.vesselName}` : (input.vesselCode ?? "no especificado")}`,
     `Referencia normativa aplicable: ${requirement.solasRegulation ?? "—"}`,
   ];
+  // Un simulacro de abandono no se plantea igual en un remolcador tripulado que
+  // en una barcaza sin gente a bordo.
+  const vesselContext = await getVesselAiContext(session.tenantSlug, input.vesselCode);
+  if (vesselContext) lines.push(`Sobre el buque: ${vesselContext}`);
   if (lastScenario) {
     lines.push(`Último escenario realizado${lastCompletedDate ? ` (${lastCompletedDate})` : ""}: ${lastScenario.slice(0, 400)}`);
     lines.push("Variá el escenario para no repetir lugar/condiciones del anterior.");
