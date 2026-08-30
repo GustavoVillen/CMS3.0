@@ -716,6 +716,12 @@ const dict = {
   "asset.suggestCritNeedsName": { es: "Completá el nombre del equipo primero",                en: "Enter the asset name first",                         pt: "Preencha o nome do equipamento primeiro" },
   "asset.safetyCritical":       { es: "Equipo crítico para seguridad",                        en: "Safety-critical equipment",                          pt: "Equipamento crítico para segurança" },
   "asset.critRationale":        { es: "Fundamento de Criticidad",                             en: "Criticality Rationale",                              pt: "Fundamento de Criticidade" },
+  // Excepción declarada de cobertura: equipo que no lleva plan de mantenimiento.
+  "asset.planNotRequired":      { es: "No requiere plan de mantenimiento",                    en: "No maintenance plan required",                       pt: "Não requer plano de manutenção" },
+  "asset.planNotRequiredHint":  { es: "Marcalo sólo si la decisión está tomada: el equipo se atiende por correctivo. Deja de contar como brecha de cobertura.", en: "Tick only if the decision is made: the equipment is run to failure. It stops counting as a coverage gap.", pt: "Marque apenas se a decisão estiver tomada: o equipamento é atendido por corretiva. Deixa de contar como lacuna de cobertura." },
+  "asset.planNotRequiredReasonPh": { es: "Por qué no lleva plan (lo ve el auditor)",           en: "Why it has no plan (the auditor sees this)",         pt: "Por que não tem plano (o auditor vê isto)" },
+  "asset.planNotRequiredSafetyConflict": { es: "Un equipo crítico para la seguridad (ISM 10.3) no puede quedar sin plan de mantenimiento.", en: "Safety-critical equipment (ISM 10.3) cannot be left without a maintenance plan.", pt: "Um equipamento crítico para a segurança (ISM 10.3) não pode ficar sem plano de manutenção." },
+  "asset.planNotRequiredReasonRequired": { es: "Escribí por qué este equipo no requiere plan de mantenimiento.", en: "Write why this equipment requires no maintenance plan.", pt: "Escreva por que este equipamento não requer plano de manutenção." },
   "asset.critRationalePh":      { es: "Justificación del nivel de criticidad y/o flag ISM. Podés generarlo automáticamente con los botones IA.", en: "Justification for the criticality level and/or ISM flag. You can generate it automatically with the AI buttons.", pt: "Justificativa do nível de criticidade e/ou flag ISM. Você pode gerá-la automaticamente com os botões IA." },
   "asset.hoursTracking":        { es: "Seguimiento de horas",                                 en: "Hours tracking",                                     pt: "Acompanhamento de horas" },
   "asset.hoursTrackingHint":    { es: "Incluir este equipo en la carga de horómetros",         en: "Include this asset in hour-meter entry",              pt: "Incluir este equipamento na carga de horímetros" },
@@ -2405,6 +2411,7 @@ const dict = {
   // Métricas
   "tmsa.metric.assetsTotal":          { es: "Activos totales",             en: "Total assets",             pt: "Ativos totais" },
   "tmsa.metric.assetsWithPlan":       { es: "Con plan activo",             en: "With active plan",         pt: "Com plano ativo" },
+  "tmsa.metric.assetsPlanNotRequired": { es: "No requieren plan",         en: "No plan required",         pt: "Não requerem plano" },
   "tmsa.metric.assetsWithoutPlan":    { es: "Sin plan",                    en: "Without plan",             pt: "Sem plano" },
   "tmsa.metric.coverage":             { es: "Cobertura",                   en: "Coverage",                 pt: "Cobertura" },
   "tmsa.metric.criticalAssets":       { es: "Activos criticidad A",        en: "Criticality-A assets",     pt: "Ativos criticidade A" },

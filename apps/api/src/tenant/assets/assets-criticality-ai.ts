@@ -40,14 +40,35 @@ Casos típicos NO safety-critical (operacional pero no riesgo a vidas):
 
 Pista SFI: 770 (contraincendio) y 850 (emergencia) son típicamente ISM-críticos. SFI 700/800 tienen ambos casos.
 
+═══ 3. ¿DEBE ESTAR EN EL PLAN DE MANTENIMIENTO? (true / false) ═══
+
+No todo equipo lleva plan preventivo, pero la decisión tiene que estar tomada y escrita.
+
+LLEVA PLAN (requiresMaintenancePlan = true):
+- Todo lo clasificado A, sin excepción.
+- Todo lo SAFETY-CRITICAL ISM 10.3, sin excepción: el Código exige mantenerlo Y probarlo periódicamente.
+- Maquinaria rotante, motores, bombas, compresores, reductores, sistemas hidráulicos y eléctricos de potencia: tienen desgaste y horas de servicio.
+- Todo lo que el fabricante, la clase o la bandera obliga a mantener o inspeccionar con frecuencia definida.
+
+PUEDE NO LLEVAR PLAN (requiresMaintenancePlan = false):
+- Consumibles y elementos de reemplazo directo sin mantenimiento posible.
+- Mobiliario, habitabilidad y confort sin partes móviles ni energía peligrosa.
+- Estructura pasiva y accesorios que se atienden por inspección general del buque o en dique.
+- Equipo redundante de bajo impacto cuya falla se resuelve por correctivo sin consecuencia operativa.
+Ante la duda, LLEVA PLAN.
+
 ═══ FORMATO DE RESPUESTA ═══
 
 Respondé EXCLUSIVAMENTE con un JSON válido (sin markdown, sin texto extra):
-{"criticality": "A" | "B" | "C", "isSafetyCritical": true | false, "rationale": "texto"}
+{"criticality": "A" | "B" | "C", "isSafetyCritical": true | false, "requiresMaintenancePlan": true | false, "rationale": "texto"}
 
-El rationale debe ser técnico, específico al equipo (no genérico), y EXPLICAR LAS DOS DECISIONES. Sugerencia de formato:
-"Criticidad <X> porque <razón operacional>. <ISM-crítico|No ISM-crítico> porque <razón ISM>."
-Mencioná el grupo SFI si es relevante.`;
+El rationale debe ser técnico, específico al equipo (no genérico), y EXPLICAR LAS TRES DECISIONES. Formato:
+"Criticidad <X> porque <razón operacional>. <ISM-crítico|No ISM-crítico> porque <razón ISM>. Requiere plan de mantenimiento: <SÍ|NO> — <por qué>."
+Mencioná el grupo SFI si es relevante.
+
+Si en los datos viene "criticidadAsignada" (A/B/C), JUSTIFICÁ ESA, no la que vos hubieras elegido: la criticidad operacional es un criterio de la empresa y ya la decidieron. Sólo si es claramente incorrecta, agregá al final una oración que empiece con "Revisar criticidad:" explicando cuál correspondería y por qué; devolvé igual en el JSON la criticidad asignada.
+
+El flag SAFETY-CRITICAL ISM 10.3, en cambio, EVALUALO VOS SIEMPRE, venga o no "ismCriticoAsignado": no es una preferencia de la empresa sino una definición del Código, y si el equipo entra en la definición el flag corresponde aunque hoy esté sin marcar.`;
 
 interface SuggestInput {
   name: string;
@@ -56,11 +77,17 @@ interface SuggestInput {
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
+  /** Clasificación ya asignada por el usuario. Si viene, la IA la justifica en
+   *  vez de reclasificar (y avisa con "Revisar criticidad:" si la ve mal). */
+  currentCriticality?: "A" | "B" | "C" | null;
+  currentSafetyCritical?: boolean | null;
 }
 
 export interface SuggestResult {
   criticality: "A" | "B" | "C";
   isSafetyCritical: boolean;
+  /** Si el equipo debe estar cubierto por un plan de mantenimiento. */
+  requiresMaintenancePlan: boolean;
   rationale: string;
 }
 
@@ -85,6 +112,8 @@ export async function suggestAssetCriticality(
     manufacturer: input.manufacturer ?? null,
     model: input.model ?? null,
     serialNumber: input.serialNumber ?? null,
+    criticidadAsignada: input.currentCriticality ?? null,
+    ismCriticoAsignado: input.currentSafetyCritical ?? null,
   };
 
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
@@ -148,10 +177,13 @@ export async function suggestAssetCriticality(
     throw new RouteError(502, "AI_PARSE_ERROR", `Criticidad inválida: ${crit}`);
   }
   const isSafetyCritical = Boolean(parsed?.isSafetyCritical);
+  // Ante una respuesta ambigua, el default es que SÍ lleva plan: dejar un equipo
+  // fuera del PMS por un parseo dudoso es el error caro.
+  const requiresMaintenancePlan = parsed?.requiresMaintenancePlan === false && !isSafetyCritical ? false : true;
   const rationale = String(parsed?.rationale ?? "").trim();
   if (!rationale) {
     throw new RouteError(502, "AI_PARSE_ERROR", "Falta el fundamento.");
   }
 
-  return { criticality: crit as "A" | "B" | "C", isSafetyCritical, rationale };
+  return { criticality: crit as "A" | "B" | "C", isSafetyCritical, requiresMaintenancePlan, rationale };
 }

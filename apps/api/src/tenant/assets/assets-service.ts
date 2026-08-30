@@ -25,6 +25,8 @@ export interface CreateAssetInput {
   status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
   trackDailyReport?: boolean;
   isSafetyCritical?: boolean;
+  planNotRequired?: boolean;
+  planNotRequiredReason?: string | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -45,6 +47,8 @@ export interface UpdateAssetInput {
   status?: "OPERATIONAL" | "DEGRADED" | "OUT_OF_SERVICE";
   trackDailyReport?: boolean;
   isSafetyCritical?: boolean;
+  planNotRequired?: boolean;
+  planNotRequiredReason?: string | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -83,6 +87,16 @@ interface AssetRecord {
   /** Fecha (YYYY-MM-DD) y origen de esa lectura, para que la UI muestre de cuándo es. */
   currentHoursDate?: string | null;
   currentHoursSource?: string | null;
+}
+
+/** ISM 10.3 no admite excepción: si el equipo es crítico para la seguridad,
+ *  lleva plan y prueba periódica aunque la empresa quiera atenderlo por correctivo. */
+function assertNotExemptIfSafetyCritical(): never {
+  throw new RouteError(
+    400,
+    "SAFETY_CRITICAL_NEEDS_PLAN",
+    "Un equipo crítico para la seguridad (ISM 10.3) no puede marcarse como que no requiere plan de mantenimiento.",
+  );
 }
 
 function canManageAssets(session: TenantAccessSession): boolean {
@@ -269,6 +283,13 @@ export async function createTenantAsset(session: TenantAccessSession, payload: C
     status: payload.status ?? "OPERATIONAL",
     trackDailyReport: payload.trackDailyReport ?? false,
     isSafetyCritical: payload.isSafetyCritical ?? false,
+    // Un equipo sin plan por decisión tiene que decir por qué; si no viene el
+    // motivo, la excepción no se guarda (queda como equipo que lleva plan).
+    planNotRequired: payload.planNotRequired ?? false,
+    // ISM 10.3: un equipo crítico para la seguridad no puede quedar exento —
+    // el Código exige mantenerlo y probarlo, no es una decisión de la empresa.
+    ...(payload.planNotRequired && payload.isSafetyCritical ? assertNotExemptIfSafetyCritical() : {}),
+    planNotRequiredReason: payload.planNotRequired ? normalizeOptionalText(payload.planNotRequiredReason) : null,
     manufacturer: normalizeOptionalText(payload.manufacturer),
     model: normalizeOptionalText(payload.model),
     serialNumber: normalizeOptionalText(payload.serialNumber),
@@ -324,6 +345,19 @@ export async function updateTenantAsset(
   if (payload.status !== undefined) data.status = payload.status;
   if (payload.trackDailyReport !== undefined) data.trackDailyReport = payload.trackDailyReport;
   if (payload.isSafetyCritical !== undefined) data.isSafetyCritical = payload.isSafetyCritical;
+  // Salir de "no requiere plan" limpia el motivo: dejarlo colgado haría que el
+  // equipo muestre una excepción que ya no existe.
+  if (payload.planNotRequired !== undefined) {
+    const safetyCritical = payload.isSafetyCritical
+      ?? (current as unknown as { isSafetyCritical?: boolean }).isSafetyCritical
+      ?? false;
+    if (payload.planNotRequired && safetyCritical) assertNotExemptIfSafetyCritical();
+    data.planNotRequired = payload.planNotRequired;
+    if (!payload.planNotRequired) data.planNotRequiredReason = null;
+  }
+  if (payload.planNotRequiredReason !== undefined && payload.planNotRequired !== false) {
+    data.planNotRequiredReason = normalizeOptionalText(payload.planNotRequiredReason);
+  }
   if (payload.manufacturer !== undefined) data.manufacturer = normalizeOptionalText(payload.manufacturer);
   if (payload.model !== undefined) data.model = normalizeOptionalText(payload.model);
   if (payload.serialNumber !== undefined) data.serialNumber = normalizeOptionalText(payload.serialNumber);

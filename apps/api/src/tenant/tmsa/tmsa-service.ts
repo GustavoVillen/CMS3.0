@@ -184,7 +184,7 @@ async function computeOne(
     active, sparesCriticalA, requestsPending, plansWithSampling, analysesOutOfRange,
     defectsWithRca, defectsGrouped, mocOpen, mocPendingImpl,
     certificateRows, inspectionRows, defectsTotal, defectsStaleOpen, permitsTotal, permitsDraftStuck,
-    drydockSpecs, engineeringAuditRows,
+    drydockSpecs, engineeringAuditRows, assetsPlanNotRequiredRows,
   ] = await Promise.all([
     safe(() => p.asset.count({ where: { ...base } }), 0),
     // Activos con ≥1 plan activo (distinct assetId).
@@ -286,6 +286,12 @@ async function computeOne(
       }) as Promise<Array<{ operatingCondition: string | null }>>,
       [] as Array<{ operatingCondition: string | null }>,
     ),
+    // Equipos con la excepción declarada "no requiere plan de mantenimiento".
+    // No son una brecha de cobertura: son una decisión escrita.
+    safe(
+      () => p.asset.findMany({ where: { ...base, planNotRequired: true }, select: { id: true } }) as Promise<Array<{ id: string }>>,
+      [] as Array<{ id: string }>,
+    ),
   ]);
 
   const certificatesTotal = certificateRows.length;
@@ -298,9 +304,15 @@ async function computeOne(
 
   // ── 4.1 · Cobertura del PMS ────────────────────────────────────────────────
   {
-    const assetsWithPlan = new Set(plans.map(pl => pl.assetId)).size;
-    const assetsWithoutPlan = Math.max(0, assetsTotal - assetsWithPlan);
-    const coverage = assetsTotal === 0 ? 1 : assetsWithPlan / assetsTotal;
+    // Los equipos con la excepción declarada salen del cálculo: no llevan plan
+    // por decisión escrita, así que contarlos como brecha castigaría al que
+    // documentó su estrategia de mantenimiento en vez de al que la omitió.
+    const exempt = new Set(assetsPlanNotRequiredRows.map(a => a.id));
+    const assetsExempt = exempt.size;
+    const assetsRequiringPlan = Math.max(0, assetsTotal - assetsExempt);
+    const assetsWithPlan = new Set(plans.map(pl => pl.assetId).filter(id => !exempt.has(id))).size;
+    const assetsWithoutPlan = Math.max(0, assetsRequiringPlan - assetsWithPlan);
+    const coverage = assetsRequiringPlan === 0 ? 1 : assetsWithPlan / assetsRequiringPlan;
     const status: TmsaStatus =
       assetsTotal === 0 ? "INFO" :
       coverage < PMS_COVERAGE_GAP ? "GAP" :
@@ -311,6 +323,7 @@ async function computeOne(
         { key: "assetsTotal", value: assetsTotal, kind: "count" },
         { key: "assetsWithPlan", value: assetsWithPlan, kind: "count" },
         { key: "assetsWithoutPlan", value: assetsWithoutPlan, kind: "count" },
+        ...(assetsExempt > 0 ? [{ key: "assetsPlanNotRequired", value: assetsExempt, kind: "count" as const }] : []),
         { key: "coverage", value: clamp01(coverage), kind: "pct" },
       ],
     });
@@ -669,11 +682,18 @@ export async function getTmsaMetricDetail(
       const rows = await p.asset.findMany({ where: { ...base }, select: assetSelect, orderBy: { assetCode: "asc" } });
       return { items: rows.map(asAsset) };
     }
+    case "assetsPlanNotRequired": {
+      const rows = await p.asset.findMany({ where: { ...base, planNotRequired: true }, select: assetSelect, orderBy: { assetCode: "asc" } });
+      return { items: rows.map(asAsset) };
+    }
     case "assetsWithPlan":
     case "assetsWithoutPlan": {
       const plans = await p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { assetId: true } });
       const ids = [...new Set(plans.map((pl: any) => pl.assetId))];
-      const where = metric === "assetsWithPlan" ? { ...base, id: { in: ids } } : { ...base, id: { notIn: ids } };
+      // Los exentos no figuran en ninguna de las dos listas: ni cubiertos ni brecha.
+      const where = metric === "assetsWithPlan"
+        ? { ...base, id: { in: ids }, planNotRequired: false }
+        : { ...base, id: { notIn: ids }, planNotRequired: false };
       if (metric === "assetsWithPlan" && ids.length === 0) return { items: [] };
       const rows = await p.asset.findMany({ where, select: assetSelect, orderBy: { assetCode: "asc" } });
       return { items: rows.map(asAsset) };

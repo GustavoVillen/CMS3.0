@@ -27,6 +27,8 @@ interface Asset {
   name: string;
   criticality: string;
   criticalityRationale: string | null;
+  planNotRequired?: boolean;
+  planNotRequiredReason?: string | null;
   status: string;
   manufacturer: string | null;
   model: string | null;
@@ -776,6 +778,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [serialNumber, setSerialNumber] = useState(initial?.serialNumber ?? "");
   const [trackDailyReport, setTrackDailyReport] = useState(initial?.trackDailyReport ?? false);
   const [isSafetyCritical, setIsSafetyCritical] = useState(initial?.isSafetyCritical ?? false);
+  const [planNotRequired, setPlanNotRequired] = useState(initial?.planNotRequired ?? false);
+  const [planNotRequiredReason, setPlanNotRequiredReason] = useState(initial?.planNotRequiredReason ?? "");
   const [installationDate, setInstallationDate] = useState(toDateInputValue(initial?.installationDate ?? null));
   const [lastOverhaulDate, setLastOverhaulDate] = useState(toDateInputValue(initial?.lastOverhaulDate ?? null));
   const [replacementDate, setReplacementDate] = useState(toDateInputValue(initial?.replacementDate ?? null));
@@ -871,6 +875,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setStatus(initial?.status ?? "OPERATIONAL");
     setTrackDailyReport(initial?.trackDailyReport ?? false);
     setIsSafetyCritical(initial?.isSafetyCritical ?? false);
+    setPlanNotRequired(initial?.planNotRequired ?? false);
+    setPlanNotRequiredReason(initial?.planNotRequiredReason ?? "");
     setManufacturer(initial?.manufacturer ?? "");
     setModel(initial?.model ?? "");
     setSerialNumber(initial?.serialNumber ?? "");
@@ -944,6 +950,17 @@ const AssetModal: React.FC<AssetModalProps> = ({
       setActionError("Debe seleccionar o indicar el nombre del asset.");
       return;
     }
+    // Un equipo sin plan tiene que decir por qué: la excepción sin motivo es
+    // exactamente lo que un auditor lee como olvido.
+    if (planNotRequired && !planNotRequiredReason.trim()) {
+      setActionError(t("asset.planNotRequiredReasonRequired"));
+      return;
+    }
+    // ISM 10.3 no admite excepción: si es crítico para la seguridad, lleva plan.
+    if (planNotRequired && isSafetyCritical) {
+      setActionError(t("asset.planNotRequiredSafetyConflict"));
+      return;
+    }
 
     setSaving(true);
     setActionError(null);
@@ -970,6 +987,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
         status,
         trackDailyReport,
         isSafetyCritical,
+        planNotRequired,
+        planNotRequiredReason: planNotRequired ? normalizeOptionalText(planNotRequiredReason) : null,
         manufacturer: normalizeOptionalText(manufacturer),
         model: normalizeOptionalText(model),
         serialNumber: normalizeOptionalText(serialNumber),
@@ -1017,6 +1036,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
     tenantAssets,
     trackDailyReport,
     isSafetyCritical,
+    planNotRequired,
+    planNotRequiredReason,
     vesselCode,
   ]);
 
@@ -1026,7 +1047,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setSuggestingCriticality(true);
     setActionError(null);
     try {
-      const result = await api.post<{ criticality: "A" | "B" | "C"; isSafetyCritical: boolean; rationale: string }>(
+      const result = await api.post<{ criticality: "A" | "B" | "C"; isSafetyCritical: boolean; requiresMaintenancePlan?: boolean; rationale: string }>(
         "/app/pms/assets/suggest-criticality",
         {
           name: name.trim(),
@@ -1040,6 +1061,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
       setCriticality(result.criticality);
       setIsSafetyCritical(result.isSafetyCritical);
       setCriticalityRationale(result.rationale);
+      // La IA también dice si el equipo debe estar en el plan. Se propone la
+      // excepción, con el fundamento como motivo; el usuario la puede destildar.
+      const noLlevaPlan = result.requiresMaintenancePlan === false && !result.isSafetyCritical;
+      setPlanNotRequired(noLlevaPlan);
+      setPlanNotRequiredReason(noLlevaPlan ? result.rationale : "");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "No se pudo obtener sugerencia.");
     } finally {
@@ -1050,6 +1076,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   // ESC guard
   const isDirty = useDirtyTracker({
     vesselCode, assetCode, selectedGroup, name, criticality, criticalityRationale, status,
+    planNotRequired, planNotRequiredReason,
     manufacturer, model, serialNumber, trackDailyReport,
     installationDate, lastOverhaulDate, replacementDate,
   });
@@ -1190,6 +1217,33 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   {t("asset.safetyCritical")} <span className="text-text-industrial/60">(ISM 10.3)</span>
                 </span>
               </label>
+            </div>
+
+            {/* Excepción declarada: equipo que no lleva plan de mantenimiento. Sin
+                esta marca, un equipo sin plan se cuenta como brecha de cobertura
+                (TMSA 4.1.1 / ISM 10.1) aunque la decisión esté tomada. */}
+            <div className="space-y-1.5 col-span-2 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={planNotRequired}
+                  onChange={e => setPlanNotRequired(e.target.checked)}
+                  className="w-4 h-4 accent-accent"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-fg">{t("asset.planNotRequired")}</p>
+                  <p className="text-xs text-text-industrial/50">{t("asset.planNotRequiredHint")}</p>
+                </div>
+              </label>
+              {planNotRequired && (
+                <AutoTextArea
+                  value={planNotRequiredReason}
+                  onChange={e => setPlanNotRequiredReason(e.target.value)}
+                  rows={2}
+                  placeholder={t("asset.planNotRequiredReasonPh")}
+                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
+                />
+              )}
             </div>
 
             <div className="space-y-1.5 col-span-2">

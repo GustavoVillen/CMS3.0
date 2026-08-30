@@ -1353,6 +1353,15 @@ model Asset {
   // (sistemas de gobierno, contraincendio, propulsión emergencia, etc.).
   // Independiente de criticality (A/B/C), que es operacional.
   isSafetyCritical     Boolean       @default(false)
+  // Decisión explícita de "este equipo NO lleva plan de mantenimiento" (correctivo
+  // puro / run-to-failure). Sin esto, un equipo sin plan es indistinguible de un
+  // olvido: el indicador de cobertura (TMSA 4.1.1 / ISM 10.1) lo cuenta como brecha
+  // aunque la decisión esté tomada. Default false = lleva plan, que es lo que
+  // corresponde a los equipos ya cargados.
+  planNotRequired      Boolean       @default(false)
+  // Por qué no lleva plan. Es lo que se le muestra al auditor al lado del equipo
+  // sin plan; sin motivo escrito la excepción no se sostiene.
+  planNotRequiredReason String?
   // PMS extensions
   equipmentClassId String?
   parentAssetId    String?
