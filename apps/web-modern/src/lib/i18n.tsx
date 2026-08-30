@@ -1642,9 +1642,14 @@ const dict = {
   "wo.closeAudit.back":             { es: "Volver a la orden",            en: "Back to the work order",     pt: "Voltar à ordem" },
 
   // ─── Gantt de Mantenimiento ────────────────────────────────────────────────
-  "gantt.onlyG0":        { es: "Solo G0 · Inspecciones",  en: "G0 only · Inspections",  pt: "Só G0 · Inspeções" },
-  "gantt.onlyG0Tooltip": { es: "Mostrar sólo los planes del grupo SFI G0 (Inspecciones). Tocá de nuevo para ver todos.", en: "Show only plans in SFI group G0 (Inspections). Click again to see all.", pt: "Mostrar apenas os planos do grupo SFI G0 (Inspeções). Toque de novo para ver todos." },
-  "gantt.zoomHint":      { es: "Sobre el diagrama: la ruedita hacia arriba ensancha los meses y hacia abajo los angosta (entran más). Shift + ruedita desplaza la lista.", en: "Over the chart: wheel up widens the months and wheel down narrows them (more fit). Shift + wheel scrolls the list.", pt: "Sobre o diagrama: a roda para cima alarga os meses e para baixo os estreita (cabem mais). Shift + roda rola a lista." },
+  "gantt.view.hint":        { es: "Qué planes se ven en el diagrama.", en: "Which plans are shown in the chart.", pt: "Quais planos aparecem no diagrama." },
+  "gantt.view.all":         { es: "Mant. + Inspecciones",     en: "Maint. + Inspections",     pt: "Manut. + Inspeções" },
+  "gantt.view.maintenance": { es: "Solo Mantenimiento",       en: "Maintenance only",         pt: "Só Manutenção" },
+  "gantt.view.inspection":  { es: "Solo Inspecciones",        en: "Inspections only",         pt: "Só Inspeções" },
+  "gantt.view.class":       { es: "Inspecciones de Clase",    en: "Class inspections",        pt: "Inspeções de Classe" },
+  "gantt.zoomHint":      { es: "Zoom del diagrama: − angosta los meses (entran más) y + los ensancha.", en: "Chart zoom: − narrows the months (more fit) and + widens them.", pt: "Zoom do diagrama: − estreita os meses (cabem mais) e + os alarga." },
+  "gantt.zoomOut":       { es: "Angostar los meses (entran más en pantalla)", en: "Narrow the months (more fit on screen)", pt: "Estreitar os meses (cabem mais na tela)" },
+  "gantt.zoomIn":        { es: "Ensanchar los meses", en: "Widen the months", pt: "Alargar os meses" },
   "wo.modal.startDate":        { es: "Fecha inicio",           en: "Start date",           pt: "Data de início" },
   "wo.modal.endDate":          { es: "Fecha finalización",     en: "End date",             pt: "Data de conclusão" },
   "wo.modal.runningHours":     { es: "Horas del motor al momento de ejecución", en: "Engine hours at execution time", pt: "Horas do motor no momento da execução" },

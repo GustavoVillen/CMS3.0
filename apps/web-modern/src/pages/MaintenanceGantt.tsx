@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, Clock, FileSpreadsheet, Loader2, type LucideIcon } from "lucide-react";
+import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, Clock, FileSpreadsheet, Loader2, Minus, Plus, type LucideIcon } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
@@ -185,7 +185,7 @@ function StatusChip({ statusKey, active, count, onClick }: { statusKey: string; 
 // ─── Zoom ───────────────────────────────────────────────────────────────────
 
 // Los tres botones son atajos a un ancho de mes concreto. El zoom real es
-// continuo (la ruedita del mouse lo mueve de a poco), así que `px` es un preset,
+// continuo (los botones − / + lo mueven de a poco), así que `px` es un preset,
 // no el único valor posible.
 const ZOOMS = [
   { key: "week",  label: "Semana", px: 118 },
@@ -196,11 +196,22 @@ const ZOOMS = [
 /** Límites del zoom continuo, en píxeles de ancho por mes. */
 const PX_MIN = 6;    // ~17 años en una pantalla de 1200px
 const PX_MAX = 300;  // un mes ocupa casi un cuarto de pantalla
-/** Cuánto cambia el ancho por cada golpe de ruedita. */
+/** Cuánto cambia el ancho por cada toque de los botones − / +. */
 const ZOOM_STEP = 1.15;
 
 const LEFT_W = 300;   // px — columna izquierda (nombre + fechas), fija
 const ROW_H = 36;     // px — alto de fila
+
+// ─── Filtro de vista ──────────────────────────────────────────────────────────
+
+type ViewFilter = "ALL" | "MAINTENANCE" | "INSPECTION" | "CLASS";
+
+/** Inspecciones de Clase: grupo SFI G0, sea el plan de mantenimiento o de inspección. */
+function matchesView(p: MaintenancePlan, view: ViewFilter): boolean {
+  if (view === "ALL") return true;
+  if (view === "CLASS") return sfiGroupDigit(p.sfiGroupNumber) === 0;
+  return p.taskType === view;
+}
 
 // ─── Timeline row model ───────────────────────────────────────────────────────
 
@@ -217,14 +228,13 @@ export function MaintenanceGanttPage() {
   const { data, loading, error } = useFetch<ListResponse>("/app/pms/maintenance-plans?limit=500");
   const plans = data?.items ?? [];
 
-  const [selectedYear,   setSelectedYear]   = useState<number>(new Date().getFullYear());
-  const [selectedType,   setSelectedType]   = useState<string>("ALL");
-  // Filtro por grupo SFI G0 (Inspecciones). Es aparte del selector de tipo:
-  // "Solo Inspecciones" mira el taskType del plan, esto mira el grupo del código.
-  const [onlyG0,         setOnlyG0]         = useState(false);
+  // Qué se ve en el diagrama. "CLASS" no es un taskType: son las Inspecciones de
+  // Clase, que se reconocen por el grupo SFI G0 del plan (mismo criterio que el
+  // Dashboard), sean periódicas o por evento.
+  const [selectedView,   setSelectedView]   = useState<ViewFilter>("ALL");
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set(Object.keys(STATUS_LABELS)));
-  // Ancho de cada mes en píxeles. Es el zoom: lo mueven los tres botones y,
-  // de forma continua, la ruedita del mouse sobre el diagrama.
+  // Ancho de cada mes en píxeles. Es el zoom: lo mueven los tres presets y,
+  // de forma continua, los botones − / + de la toolbar.
   const [pxPerMonth, setPxPerMonth] = useState<number>(64);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -256,28 +266,20 @@ export function MaintenanceGanttPage() {
     setCollapsed((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
   }
 
-  const years = useMemo(() => {
-    const c = new Date().getFullYear();
-    return [c - 2, c - 1, c, c + 1, c + 2];
-  }, []);
-
   // ── Filtrado (tipo / estado). El buque lo scopea el selector global del header;
-  //    el año NO filtra: se ve todo con scroll. ──
+  //    no hay filtro por año: se ve toda la línea de tiempo con scroll. ──
   const filtered = useMemo(() => plans.filter((p) => {
-    if (selectedType !== "ALL" && p.taskType !== selectedType) return false;
-    if (onlyG0 && sfiGroupDigit(p.sfiGroupNumber) !== 0) return false;
+    if (!matchesView(p, selectedView)) return false;
     if (!activeStatuses.has(p.executionStatus)) return false;
     return true;
-  }), [plans, selectedType, onlyG0, activeStatuses]);
+  }), [plans, selectedView, activeStatuses]);
 
   const statusCounts = useMemo(() => {
-    const base = plans.filter((p) =>
-      (selectedType === "ALL" || p.taskType === selectedType) &&
-      (!onlyG0 || sfiGroupDigit(p.sfiGroupNumber) === 0));
+    const base = plans.filter((p) => matchesView(p, selectedView));
     const counts: Record<string, number> = {};
     base.forEach((p) => { counts[p.executionStatus] = (counts[p.executionStatus] ?? 0) + 1; });
     return counts;
-  }, [plans, selectedType, onlyG0]);
+  }, [plans, selectedView]);
 
   // ── Rango temporal (min/max de últimas ejec. y próximos venc., con padding) ──
   const range = useMemo(() => {
@@ -301,10 +303,15 @@ export function MaintenanceGanttPage() {
 
   const timelineW = range.months * pxPerMonth;
 
-  function xOf(d: Date): number {
+  // Posición de una fecha en el eje, medida en meses (con decimales). No depende
+  // del zoom: por eso sirve para reubicar el scroll cuando el ancho cambia.
+  function monthsOf(d: Date): number {
     const m = monthDiff(range.lo, d);
     const frac = (d.getDate() - 1) / daysInMonth(d);
-    return (m + frac) * pxPerMonth;
+    return m + frac;
+  }
+  function xOf(d: Date): number {
+    return monthsOf(d) * pxPerMonth;
   }
   const xToday = xOf(new Date());
 
@@ -345,61 +352,51 @@ export function MaintenanceGanttPage() {
     return acc;
   }, [axisMonths]);
 
-  // ── Scroll: al cambiar de año, llevar ese año a la vista ──
-  // El zoom NO está en las dependencias a propósito: la ruedita ya reacomoda el
-  // scroll ella misma para no soltar la fecha que estás mirando, y un
-  // scrollTo suave encima le peleaba en cada golpe de rueda.
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const x = xOf(new Date(selectedYear, 0, 1));
-    el.scrollTo({ left: Math.max(0, x - 60), behavior: "smooth" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear, range.lo.getTime(), range.months]);
 
-  // ── Zoom con la ruedita del mouse ──
-  // Rueda ARRIBA ensancha los meses; rueda ABAJO los angosta (entran más en la
-  // misma pantalla). Se ancla en el punto que está bajo el cursor: la fecha que
-  // estabas mirando se queda donde estaba, en vez de irse de pantalla.
-  //
-  // Listener nativo con `passive: false` porque hay que cancelar el scroll
-  // normal de la página; el onWheel de React no lo permite.
-  const pxRef = useRef(pxPerMonth);
-  pxRef.current = pxPerMonth;
+  /** scrollLeft que deja una posición del eje (en meses) en el medio del diagrama. */
+  function scrollLeftToCenter(el: HTMLDivElement, months: number, px: number): number {
+    return Math.max(0, months * px - (el.clientWidth - LEFT_W) / 2);
+  }
+
+  // ── Scroll: centrar HOY al abrir (y cuando cambia el rango del eje) ──
+  // El zoom NO está en las dependencias a propósito: al ensanchar/angostar ya
+  // se reacomoda el scroll ahí mismo, y un scrollTo suave encima le peleaba en
+  // cada toque.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      // Gesto horizontal de trackpad: es desplazamiento, no zoom.
-      if (e.deltaY === 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      // Con la rueda tomada por el zoom, la lista de planes quedaría sin forma
-      // de recorrerse salvo arrastrando la barra: Shift + rueda la desplaza.
-      if (e.shiftKey) {
-        e.preventDefault();
-        el.scrollTop += e.deltaY;
-        return;
-      }
-      e.preventDefault();
-      const prev = pxRef.current;
-      const next = Math.min(PX_MAX, Math.max(PX_MIN, e.deltaY < 0 ? prev * ZOOM_STEP : prev / ZOOM_STEP));
-      if (next === prev) return;
-      // Mes (con decimales) que está justo debajo del cursor, para volver a
-      // dejarlo ahí con el ancho nuevo.
-      const cursorX = e.clientX - el.getBoundingClientRect().left;
-      const months = Math.max(0, (el.scrollLeft + cursorX - LEFT_W) / prev);
-      pxRef.current = next;
-      setPxPerMonth(next);
-      // Recién cuando React repintó el ancho nuevo se puede reubicar el scroll.
-      requestAnimationFrame(() => {
-        el.scrollLeft = Math.max(0, LEFT_W + months * next - cursorX);
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-    // El contenedor no existe mientras carga ni cuando no hay filas: hay que
-    // volver a engancharlo cuando aparece.
-  }, [rows.length]);
+    el.scrollTo({ left: scrollLeftToCenter(el, monthsOf(new Date()), pxPerMonth), behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.lo.getTime(), range.months]);
+
+  // ── Zoom con los botones − / + ──
+  // "+" ensancha los meses; "−" los angosta (entran más en la misma pantalla).
+  // El ancla es siempre HOY: con cualquier ancho, la fecha de hoy queda en el
+  // medio del diagrama.
+  function zoomBy(dir: 1 | -1) {
+    const prev = pxPerMonth;
+    const next = Math.min(PX_MAX, Math.max(PX_MIN, dir > 0 ? prev * ZOOM_STEP : prev / ZOOM_STEP));
+    if (next === prev) return;
+    setPxPerMonth(next);
+    const monthsToday = monthsOf(new Date());
+    // Recién cuando React repintó el ancho nuevo se puede reubicar el scroll.
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollLeft = scrollLeftToCenter(el, monthsToday, next);
+    });
+  }
+
+  /** Atajo a un ancho concreto, recentrando hoy igual que los botones − / +. */
+  function setZoomPreset(px: number) {
+    if (px === pxPerMonth) return;
+    setPxPerMonth(px);
+    const monthsToday = monthsOf(new Date());
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollLeft = scrollLeftToCenter(el, monthsToday, px);
+    });
+  }
 
   const showMonthLabels = pxPerMonth >= 40;
 
@@ -409,40 +406,49 @@ export function MaintenanceGanttPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} title="Ir al año" className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40">
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-
-        <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40">
-          <option value="ALL">Mant. + Inspecciones</option>
-          <option value="MAINTENANCE">Solo Mantenimiento</option>
-          <option value="INSPECTION">Solo Inspecciones</option>
-        </select>
-
-        {/* Grupo SFI G0 = Inspecciones. Se apaga tocándolo de nuevo. */}
-        <button
-          type="button"
-          onClick={() => setOnlyG0((v) => !v)}
-          aria-pressed={onlyG0}
-          title={t("gantt.onlyG0Tooltip")}
-          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-            onlyG0
-              ? "bg-accent/20 border-accent/40 text-accent"
-              : "bg-fg/5 border-fg/10 text-text-industrial/70 hover:border-accent/30"
-          }`}
+        <select
+          value={selectedView}
+          onChange={(e) => setSelectedView(e.target.value as ViewFilter)}
+          title={t("gantt.view.hint")}
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial/80 focus:outline-none focus:border-accent/40"
         >
-          {t("gantt.onlyG0")}
-        </button>
+          <option value="ALL">{t("gantt.view.all")}</option>
+          <option value="MAINTENANCE">{t("gantt.view.maintenance")}</option>
+          <option value="INSPECTION">{t("gantt.view.inspection")}</option>
+          <option value="CLASS">{t("gantt.view.class")}</option>
+        </select>
 
         <div
           className="flex items-center gap-1 bg-fg/5 border border-fg/10 rounded-lg p-0.5"
           title={t("gantt.zoomHint")}
         >
+          <button
+            type="button"
+            onClick={() => zoomBy(-1)}
+            disabled={pxPerMonth <= PX_MIN}
+            title={t("gantt.zoomOut")}
+            aria-label={t("gantt.zoomOut")}
+            className="px-2 py-1 rounded-md text-text-industrial/60 hover:text-fg hover:bg-fg/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+
           {ZOOMS.map(({ key, label, px }) => (
-            <button key={key} onClick={() => setPxPerMonth(px)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${pxPerMonth === px ? "bg-accent/20 text-accent border border-accent/30" : "text-text-industrial/50 hover:text-fg"}`}>
+            <button key={key} onClick={() => setZoomPreset(px)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${pxPerMonth === px ? "bg-accent/20 text-accent border border-accent/30" : "text-text-industrial/50 hover:text-fg"}`}>
               {label}
             </button>
           ))}
+
+          <button
+            type="button"
+            onClick={() => zoomBy(1)}
+            disabled={pxPerMonth >= PX_MAX}
+            title={t("gantt.zoomIn")}
+            aria-label={t("gantt.zoomIn")}
+            className="px-2 py-1 rounded-md text-text-industrial/60 hover:text-fg hover:bg-fg/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {/* La planilla es del buque elegido arriba: sin buque no se puede armar. */}
