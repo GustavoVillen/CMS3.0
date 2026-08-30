@@ -95,8 +95,15 @@ async function main() {
     where: {
       tenantId,
       deletedAt: null,
-      ...(VESSEL ? { vesselCode: VESSEL } : {}),
-      ...(VESSEL_TYPE ? { vesselCode: { in: codigosDelTipo } } : {}),
+      // Los dos filtros de buque se combinan con AND: puestos como dos claves
+      // "vesselCode" sueltas, la segunda pisaba a la primera y VESSEL quedaba
+      // ignorado cuando venia VESSEL_TYPE.
+      ...(VESSEL || VESSEL_TYPE
+        ? { AND: [
+            ...(VESSEL ? [{ vesselCode: VESSEL }] : []),
+            ...(VESSEL_TYPE ? [{ vesselCode: { in: codigosDelTipo } }] : []),
+          ] }
+        : {}),
       ...(FORCE ? {} : { OR: [{ criticalityRationale: null }, { criticalityRationale: "" }] }),
     },
     select: {
