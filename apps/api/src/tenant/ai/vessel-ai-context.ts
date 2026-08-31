@@ -17,6 +17,7 @@
 
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
+import { isCrewedVessel } from "../vessels/vessel-crewing";
 
 interface VesselFacts {
   name: string;
@@ -33,14 +34,10 @@ const TTL_MS = 5 * 60 * 1000;
 const cache = new Map<string, Entry>();
 
 /** ¿Lleva gente a bordo? El campo declarado manda; si no está, se deduce del
- *  tipo (texto libre). Una barcaza no lleva dotación permanente. */
-function crewed(v: VesselFacts): boolean | null {
-  if (v.isCrewed !== null) return v.isCrewed;
-  const t = (v.vesselType ?? "").toLowerCase();
-  if (t.includes("barcaza") || t.includes("barge")) return false;
-  if (t.includes("remolcador") || t.includes("empuje") || t.includes("tug")) return true;
-  return null;
-}
+ *  tipo (texto libre). Una barcaza no lleva dotación permanente.
+ *  La regla vive en vessels/vessel-crewing.ts: la comparten el copiloto, el
+ *  panel de cumplimiento y la apertura de OT en grupo. */
+const crewed = isCrewedVessel;
 
 function describe(v: VesselFacts): string {
   const tipo = (v.vesselType ?? "").trim();

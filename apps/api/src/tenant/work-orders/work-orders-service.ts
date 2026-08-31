@@ -22,6 +22,8 @@ export interface WorkOrderListFilters {
   priority?: string | null;
   assignedToUserId?: string | null;
   assetId?: string | null;
+  /** Sólo las OT de un lote de apertura (ver WorkOrder.batchId en el schema). */
+  batchId?: string | null;
 }
 
 export interface CreateWorkOrderInput {
@@ -388,6 +390,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   if (filters.priority) where.priority = filters.priority;
   if (filters.assignedToUserId) where.assignedToUserId = filters.assignedToUserId;
   if (filters.assetId) where.assetId = filters.assetId;
+  if (filters.batchId) where.batchId = filters.batchId;
 
   // El listado NO devuelve los campos de texto/markdown pesados (description,
   // observations, closeNotes, etc.): con cientos de OTs inflan la respuesta a
@@ -409,6 +412,9 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       voyageNumber: true, operatingCondition: true, requestedByArea: true, assignedToArea: true,
       systemArea: true, maintenanceKind: true, taskCompleted: true,
       woResult: true, executedByName: true, supportingDocUrl: true, runningHoursAtExecution: true,
+      // Lote de apertura: el tablero pliega en una sola fila las OT hermanas
+      // (la misma inspección abierta para todo un convoy de barcazas).
+      batchId: true,
       createdAt: true, createdByUserId: true, updatedAt: true, updatedByUserId: true,
       deletedAt: true, deletedByUserId: true,
       reopenCount: true, lastReopenAt: true, lastReopenByUserId: true,
@@ -1589,6 +1595,113 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
   }
 
   return { ...closedResult, failedMovements };
+}
+
+// ---------------------------------------------------------------------------
+// CIERRE EN GRUPO — el resultado de la inspección de un convoy
+//
+// La contracara de la apertura en grupo (openWorkOrderBatch): la inspección
+// semanal se hizo de una pasada sobre las quince barcazas, y el resultado se
+// registra de una pasada. Cada OT se cierra igual que siempre — con su propia
+// firma, su propio historial y el recálculo del vencimiento de SU plan con SU
+// frecuencia —; lo único que se comparte es lo que el usuario cargó una vez.
+//
+// Las embarcaciones que el usuario destilda NO se tocan: quedan abiertas para
+// cerrarlas aparte con su hallazgo. Es el caso normal, no la excepción — una
+// barcaza del convoy aparece con algo y las otras catorce están bien.
+// ---------------------------------------------------------------------------
+
+export interface CloseWorkOrderBatchInput extends Omit<CloseWorkOrderInput, "spareUsages"> {
+  /** Las OT a cerrar. Todas tienen que ser del mismo lote. */
+  workOrderIds: string[];
+}
+
+export interface CloseWorkOrderBatchResult {
+  batchId: string;
+  closed: Array<{ id: string; workOrderCode: string; vesselCode: string; vesselName: string }>;
+  failed: Array<{ id: string; workOrderCode: string; vesselCode: string; vesselName: string; error: string }>;
+}
+
+export async function closeWorkOrderBatch(
+  session: TenantAccessSession,
+  payload: CloseWorkOrderBatchInput,
+): Promise<CloseWorkOrderBatchResult> {
+  ensureCanOperateWorkOrders(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const ids = [...new Set((payload.workOrderIds ?? []).map((v) => String(v ?? "").trim()).filter(Boolean))];
+  if (ids.length === 0) throw new RouteError(400, "VALIDATION_ERROR", "No se indicó ninguna orden de trabajo.");
+
+  const tenantId = await resolveTenantId(session);
+  if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const where: Record<string, unknown> = { id: { in: ids }, tenantId, deletedAt: null };
+  applyVesselScope(session, where, null);
+  const rows: Array<{ id: string; workOrderCode: string; vesselCode: string; batchId: string | null }> =
+    await (prismaRaw as any).workOrder.findMany({
+      where,
+      select: { id: true, workOrderCode: true, vesselCode: true, batchId: true },
+      orderBy: { vesselCode: "asc" },
+    });
+
+  if (rows.length !== ids.length) {
+    throw new RouteError(404, "NOT_FOUND", "Alguna de las órdenes de trabajo no existe o no está a tu alcance.");
+  }
+  // Guarda deliberada: esto cierra varias OT de un saque, así que sólo acepta un
+  // grupo real. Sin esto, mandando ids sueltos se convertiría en un cierre masivo
+  // arbitrario, que es otra cosa y nadie pidió.
+  const batchIds = [...new Set(rows.map((r) => r.batchId))];
+  if (batchIds.length !== 1 || !batchIds[0]) {
+    throw new RouteError(400, "NOT_SAME_BATCH", "Las órdenes de trabajo no pertenecen a un mismo grupo.");
+  }
+  const batchId = batchIds[0];
+
+  const vesselRows: Array<{ code: string; name: string }> = await (prismaRaw as any).vessel.findMany({
+    where: { tenantId, code: { in: [...new Set(rows.map((r) => r.vesselCode))] } },
+    select: { code: true, name: true },
+  });
+  const vesselNames = new Map(vesselRows.map((v) => [v.code, v.name]));
+
+  const { workOrderIds: _ignored, ...closePayload } = payload;
+  void _ignored;
+
+  const result: CloseWorkOrderBatchResult = { batchId, closed: [], failed: [] };
+  // De a una, no en paralelo: cada cierre mueve el plan del buque, aplaza-
+  // mientos, defectos y muestras asociadas. Con quince barcazas, la previsibi-
+  // lidad vale más que el segundo que se gana.
+  for (const row of rows) {
+    const vesselName = vesselNames.get(row.vesselCode) ?? row.vesselCode;
+    try {
+      await closeWorkOrder(session, row.id, closePayload);
+      result.closed.push({ id: row.id, workOrderCode: row.workOrderCode, vesselCode: row.vesselCode, vesselName });
+    } catch (error) {
+      result.failed.push({
+        id: row.id,
+        workOrderCode: row.workOrderCode,
+        vesselCode: row.vesselCode,
+        vesselName,
+        error: error instanceof RouteError ? error.message : "No se pudo cerrar la orden de trabajo.",
+      });
+    }
+  }
+
+  void publishAudit(prismaRaw, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.batchClosed",
+    entityType: "WorkOrder",
+    entityId: batchId,
+    metadata: {
+      batchId,
+      woResult: payload.woResult,
+      closed: result.closed.map((c) => c.workOrderCode),
+      failed: result.failed.length ? result.failed.map((f) => ({ workOrderCode: f.workOrderCode, error: f.error })) : undefined,
+    },
+  });
+
+  return result;
 }
 
 export async function cancelWorkOrder(session: TenantAccessSession, id: string, payload: CancelWorkOrderInput) {

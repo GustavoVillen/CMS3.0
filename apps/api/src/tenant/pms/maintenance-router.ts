@@ -19,7 +19,9 @@ import {
   listPlanExecutions,
   bulkSetPlanCriteriaSource,
   listTenantMaintenancePlans,
+  findSisterPlans,
   openFormalWorkOrder,
+  openWorkOrderBatch,
   postponePlan,
   previewMergedPlanText,
   quickClosePlan,
@@ -30,6 +32,7 @@ import {
 import {
   cancelWorkOrder,
   closeWorkOrder,
+  closeWorkOrderBatch,
   createTenantWorkOrder,
   getTenantWorkOrder,
   holdWorkOrder,
@@ -294,6 +297,23 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
+  // ── Apertura en grupo: la misma tarea en varias embarcaciones ──────────────
+  // Las rutas van ANTES de la genérica /maintenance-plans/:id (no la capturan
+  // porque terminan en un segmento propio, igual que /open-work-order).
+  if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+\/sister-plans$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const items = await findSisterPlans(session, id);
+    sendJson(response, 200, { items, total: items.length }, request);
+    return true;
+  }
+
+  if (method === "POST" && /^\/app\/pms\/maintenance-plans\/[^/]+\/open-work-order-batch$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof openWorkOrderBatch>[2];
+    sendJson(response, 201, await openWorkOrderBatch(session, id, body));
+    return true;
+  }
+
   // Historial de ejecuciones del plan (OTs). Debe ir ANTES de la ruta genérica
   // /maintenance-plans/:id para no ser capturada por ella.
   if (method === "GET" && /^\/app\/pms\/maintenance-plans\/[^/]+\/executions$/.test(url.pathname)) {
@@ -368,6 +388,7 @@ export async function handleMaintenanceRoutes(
       priority: url.searchParams.get("priority"),
       assignedToUserId: url.searchParams.get("assignedToUserId"),
       assetId: url.searchParams.get("assetId"),
+      batchId: url.searchParams.get("batchId"),
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
@@ -484,6 +505,14 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof setWorkOrderType>[2];
     sendJson(response, 200, await setWorkOrderType(session, id, body));
+    return true;
+  }
+
+  // Cierre en grupo. Va ANTES de las rutas /work-orders/:id/... : "batch-close"
+  // es un segmento suelto y una ruta genérica lo tomaría por un id.
+  if (method === "POST" && url.pathname === "/app/pms/work-orders/batch-close") {
+    const body = await readJsonBody(request) as Parameters<typeof closeWorkOrderBatch>[1];
+    sendJson(response, 200, await closeWorkOrderBatch(session, body));
     return true;
   }
 

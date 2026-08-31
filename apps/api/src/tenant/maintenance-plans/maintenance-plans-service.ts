@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
@@ -9,6 +10,7 @@ import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 import { isInspectionWorkOrder, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
+import { isUncrewedVessel } from "../vessels/vessel-crewing";
 
 /**
  * ISM 10.1 — origen normativo de la tarea. Mismo enum que usan los ítems de
@@ -1869,10 +1871,22 @@ export async function previewMergedPlanText(session: TenantAccessSession, planId
   return { ...mergePlanTexts(plans), providers };
 }
 
+/**
+ * Datos que NO vienen del cliente: los pone el propio backend al orquestar una
+ * apertura. Se pasan por un parámetro aparte y no por `payload` a propósito —
+ * el router manda el body del request tal cual a `payload`, así que cualquier
+ * campo declarado ahí es escribible desde afuera. El `batchId` no debe serlo:
+ * hermanar OT es algo que decide `openWorkOrderBatch`, no quien llama la API.
+ */
+interface OpenFormalWorkOrderInternals {
+  batchId?: string | null;
+}
+
 export async function openFormalWorkOrder(
   session: TenantAccessSession,
   id: string,
   payload: OpenFormalWorkOrderInput,
+  internals: OpenFormalWorkOrderInternals = {},
 ) {
   ensureCanOpenWorkOrderFromPlan(session);
 
@@ -2101,6 +2115,9 @@ export async function openFormalWorkOrder(
         voyageNumber: normalizeOptionalText(payload.voyageNumber) ?? null,
         operatingCondition: payload.operatingCondition ?? null,
         location: normalizeOptionalText(payload.location) ?? null,
+        // Lote de apertura: sólo lo pone openWorkOrderBatch (ver batchId en el
+        // schema). Una OT abierta de a una no pertenece a ningún grupo.
+        batchId: normalizeOptionalText(internals.batchId) ?? null,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,
       },
@@ -2218,9 +2235,349 @@ export async function openFormalWorkOrder(
       inspectionAutoAuthorized: isInspection || undefined,
       // Cuántas SS se crearon solas (una por proveedor del plan).
       autoServiceRequests: providerRequests.length || undefined,
+      // Lote del que forma parte (apertura en grupo para varias embarcaciones).
+      batchId: normalizeOptionalText(internals.batchId) ?? undefined,
     },
   });
   return woTxResult;
+}
+
+// ---------------------------------------------------------------------------
+// APERTURA EN GRUPO — la misma tarea en varias embarcaciones
+//
+// Un convoy de barcazas se inspecciona de una sola pasada: el superintendente
+// recorre las quince barcazas amarradas y hace la misma verificación semanal en
+// todas. Registrarlo abriendo y cerrando quince OT a mano, una por una, es la
+// fricción que esto elimina.
+//
+// Sigue habiendo UNA OT POR EMBARCACIÓN. No es un detalle formal: cada barcaza
+// tiene su propio historial, su plan avanzando con su propia frecuencia y su
+// evidencia individual ante clase y bandera. Lo único que se comparte es el
+// `batchId`, que las hermana para crearlas juntas, cerrarlas juntas y verlas
+// plegadas en una sola fila del tablero.
+// ---------------------------------------------------------------------------
+
+/**
+ * El `taskCode` sin el prefijo del buque. Los planes de la flota se clonan con
+ * `scripts/clone-vessel-mp.ts`, que conserva el sufijo y sólo cambia el prefijo
+ * (`MGT01-610-001` → `MGT02-610-001`), así que el sufijo es lo que identifica
+ * "la misma tarea" entre embarcaciones hermanas.
+ */
+function taskCodeSuffix(taskCode: string, vesselCode: string): string {
+  const code = taskCode.trim().toUpperCase();
+  const vessel = vesselCode.trim().toUpperCase();
+  if (!vessel) return code;
+  if (code.startsWith(`${vessel}-`)) return code.slice(vessel.length + 1);
+  if (code.startsWith(vessel)) return code.slice(vessel.length);
+  return code;
+}
+
+// Marcas de acento sueltas que deja el normalize("NFD"). Escrito como RegExp
+// desde string (mismo criterio que defects-ai-suggestions.ts): un rango de
+// combinantes literal en el fuente es ilegible y frágil según el editor.
+const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
+
+/** Título comparable: sin acentos, sin mayúsculas y sin espacios de más. */
+function normalizeTitleForMatch(title: string | null | undefined): string {
+  return String(title ?? "")
+    .normalize("NFD")
+    .replace(COMBINING_DIACRITICS, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export interface SisterPlanRow {
+  vesselCode: string;
+  /** Nombre del buque: es lo que se muestra, nunca el código a secas. */
+  vesselName: string;
+  vesselType: string | null;
+  /** null = esa embarcación no tiene esta tarea en su plan. */
+  planId: string | null;
+  taskCode: string | null;
+  title: string | null;
+  nextDueDate: Date | null;
+  executionStatus: string | null;
+  /** Cómo se emparejó, para que la pantalla pueda mostrarlo si hace falta. */
+  matchedBy: "TASK_CODE" | "TITLE" | null;
+  /** Ya hay una OT abierta de esa tarea en ese buque: no conviene duplicarla. */
+  hasOpenWorkOrder: boolean;
+}
+
+/**
+ * Las embarcaciones donde existe LA MISMA tarea que el plan indicado, para poder
+ * abrir la OT en todas de una vez.
+ *
+ * Devuelve TODOS los buques del alcance del usuario (menos el del propio plan),
+ * con `planId: null` en los que no tienen la tarea: la pantalla los muestra en
+ * gris como "sin plan equivalente" en vez de esconderlos, así el superintendente
+ * ve que esa barcaza quedó afuera y por qué.
+ *
+ * El emparejamiento es por sufijo de `taskCode` y, sólo si eso no encuentra
+ * nada, por título idéntico con la misma periodicidad. Nunca se aplica en
+ * silencio: el resultado se le muestra al usuario y él tilda o destilda.
+ */
+export async function findSisterPlans(
+  session: TenantAccessSession,
+  planId: string,
+): Promise<SisterPlanRow[]> {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const anyPrisma = prismaRaw as any;
+
+  // Aplica scope de tenant y de buque; 404 si el usuario no puede ver el plan.
+  const source = await getTenantMaintenancePlan(session, planId);
+  const tenantId = source.tenantId;
+  const suffix = taskCodeSuffix(source.taskCode, source.vesselCode);
+
+  // Buques candidatos: los del alcance del usuario, activos, menos el del plan.
+  const vesselWhere: Record<string, unknown> = { tenantId, deletedAt: null, status: "ACTIVE" };
+  applyVesselScope(session, vesselWhere);
+  const vessels: Array<{ code: string; name: string; vesselType: string | null; isCrewed: boolean | null }> =
+    await anyPrisma.vessel.findMany({
+      where: vesselWhere,
+      select: { code: true, name: true, vesselType: true, isCrewed: true },
+      orderBy: { code: "asc" },
+    });
+
+  // ── SÓLO EMBARCACIONES SIN DOTACIÓN ────────────────────────────────────────
+  // Los planes de la flota se clonan entre buques, así que "la misma tarea"
+  // también aparece entre remolcadores: DCH, LATERE, MAO 01 y MAO 02 comparten
+  // el plan del motor principal. Pero un remolcador NO se mantiene en grupo —
+  // cada uno tiene su dotación, sus horas de motor y hace el trabajo cuando le
+  // toca. Ofrecer "abrilo en los cuatro" invitaría a dar por ejecutado un
+  // mantenimiento que en tres de ellos no se hizo: un historial falso, que es
+  // exactamente lo que una auditoría de clase busca.
+  //
+  // Las barcazas son otra cosa: van amarradas en convoy, no llevan gente a
+  // bordo y la recorrida semanal se hace de una sola pasada sobre todas. Ahí
+  // el grupo describe lo que realmente pasó.
+  const sourceVessel = vessels.find((v) => v.code === source.vesselCode);
+  if (!sourceVessel || !isUncrewedVessel(sourceVessel)) return [];
+
+  const candidates = vessels.filter((v) => v.code !== source.vesselCode && isUncrewedVessel(v));
+  if (candidates.length === 0) return [];
+
+  const candidateCodes = candidates.map((v) => v.code);
+  const planFields = {
+    id: true, vesselCode: true, taskCode: true, title: true,
+    nextDueDate: true, executionStatus: true, triggerType: true,
+    frequencyMonths: true, frequencyHours: true,
+  };
+
+  // 1) Por sufijo de taskCode. `endsWith` acota en la base; el sufijo exacto se
+  //    verifica acá, porque "610-001" también terminaría en "1610-001".
+  const byCode: Array<any> = suffix
+    ? await anyPrisma.maintenancePlan.findMany({
+        where: {
+          tenantId, deletedAt: null,
+          vesselCode: { in: candidateCodes },
+          status: { not: "INACTIVE" },
+          taskCode: { endsWith: suffix, mode: "insensitive" },
+        },
+        select: planFields,
+      })
+    : [];
+  const matched = new Map<string, { plan: any; matchedBy: "TASK_CODE" | "TITLE" }>();
+  for (const p of byCode) {
+    if (taskCodeSuffix(p.taskCode, p.vesselCode) !== suffix) continue;
+    if (!matched.has(p.vesselCode)) matched.set(p.vesselCode, { plan: p, matchedBy: "TASK_CODE" });
+  }
+
+  // 2) Respaldo por título, sólo para los buques que el código no resolvió: hay
+  //    planes cargados a mano cuyo código no sigue la convención del clonado.
+  //    Se exige misma periodicidad para no hermanar la semanal con la mensual.
+  const pendingCodes = candidateCodes.filter((c) => !matched.has(c));
+  if (pendingCodes.length > 0) {
+    const sourceTitle = normalizeTitleForMatch(source.title);
+    const byTitle: Array<any> = sourceTitle
+      ? await anyPrisma.maintenancePlan.findMany({
+          where: {
+            tenantId, deletedAt: null,
+            vesselCode: { in: pendingCodes },
+            status: { not: "INACTIVE" },
+            title: { equals: source.title, mode: "insensitive" },
+          },
+          select: planFields,
+        })
+      : [];
+    for (const p of byTitle) {
+      if (matched.has(p.vesselCode)) continue;
+      if (normalizeTitleForMatch(p.title) !== sourceTitle) continue;
+      if (p.triggerType !== source.triggerType) continue;
+      if ((p.frequencyMonths ?? null) !== ((source as any).frequencyMonths ?? null)) continue;
+      if ((p.frequencyHours ?? null) !== ((source as any).frequencyHours ?? null)) continue;
+      matched.set(p.vesselCode, { plan: p, matchedBy: "TITLE" });
+    }
+  }
+
+  // OT ya abiertas de esas tareas: la pantalla las deja destildadas para no
+  // duplicar la misma inspección en el mismo buque.
+  const matchedPlanIds = [...matched.values()].map((m) => m.plan.id);
+  const openByPlan = new Set<string>();
+  if (matchedPlanIds.length > 0) {
+    const openWos: Array<{ maintenancePlanId: string | null }> = await anyPrisma.workOrder.findMany({
+      where: {
+        tenantId, deletedAt: null,
+        maintenancePlanId: { in: matchedPlanIds },
+        status: { notIn: ["CLOSED", "CANCELLED"] },
+      },
+      select: { maintenancePlanId: true },
+    });
+    for (const w of openWos) if (w.maintenancePlanId) openByPlan.add(w.maintenancePlanId);
+  }
+
+  return candidates.map((v) => {
+    const hit = matched.get(v.code);
+    return {
+      vesselCode: v.code,
+      vesselName: v.name,
+      vesselType: v.vesselType ?? null,
+      planId: hit?.plan.id ?? null,
+      taskCode: hit?.plan.taskCode ?? null,
+      title: hit?.plan.title ?? null,
+      nextDueDate: hit?.plan.nextDueDate ?? null,
+      executionStatus: hit?.plan.executionStatus ?? null,
+      matchedBy: hit?.matchedBy ?? null,
+      hasOpenWorkOrder: hit ? openByPlan.has(hit.plan.id) : false,
+    };
+  });
+}
+
+/** Tope de embarcaciones por lote. Un convoy real no pasa de ~30. */
+const MAX_BATCH_VESSELS = 40;
+
+export interface OpenWorkOrderBatchInput extends OpenFormalWorkOrderInput {
+  /**
+   * Embarcaciones a las que se les abre la OT, además de la del plan indicado
+   * (que va siempre: es la tarea que el usuario eligió).
+   */
+  vesselCodes: string[];
+}
+
+export interface OpenWorkOrderBatchResult {
+  batchId: string;
+  created: Array<{ vesselCode: string; vesselName: string; workOrderId: string; workOrderCode: string }>;
+  skipped: Array<{ vesselCode: string; vesselName: string; reason: "NO_PLAN" }>;
+  failed: Array<{ vesselCode: string; vesselName: string; error: string }>;
+}
+
+/**
+ * Abre la misma tarea como OT en varias embarcaciones, hermanadas por `batchId`.
+ *
+ * Se apoya en `openFormalWorkOrder` sin duplicar nada: cada OT nace con el mismo
+ * recorrido de siempre (permisos, alcance de buque, herencia del plan, SS a los
+ * talleres, numeración por buque, y las firmas automáticas si es inspección).
+ *
+ * Va de a una y no en paralelo a propósito: la numeración de OT lee el último
+ * correlativo del buque, y prefiero que sea predecible antes que rápido.
+ *
+ * No hay transacción que abarque el lote: cada apertura ya es atómica por sí
+ * misma (OT + ítems del PDM + SS). Si una barcaza falla, las demás quedan
+ * abiertas igual y el resultado dice cuál falló — deshacer catorce aperturas
+ * buenas por una mala sería peor.
+ */
+export async function openWorkOrderBatch(
+  session: TenantAccessSession,
+  planId: string,
+  payload: OpenWorkOrderBatchInput,
+): Promise<OpenWorkOrderBatchResult> {
+  ensureCanOpenWorkOrderFromPlan(session);
+
+  const source = await getTenantMaintenancePlan(session, planId);
+  const sisters = await findSisterPlans(session, planId);
+  const sisterByVessel = new Map(sisters.map((s) => [s.vesselCode, s]));
+
+  const requested = [...new Set(
+    (payload.vesselCodes ?? [])
+      .map((c) => normalizeOptionalText(c))
+      .filter((c): c is string => !!c)
+      .map((c) => c.toUpperCase()),
+  )].filter((c) => c !== source.vesselCode);
+
+  // Si el buque de origen no admite grupo (un remolcador: ver findSisterPlans)
+  // no hay hermanas y todo caería en "sin plan equivalente", que no explica
+  // nada. Se dice el motivo real.
+  if (requested.length > 0 && sisters.length === 0) {
+    throw new RouteError(
+      400,
+      "BATCH_NOT_APPLICABLE",
+      "Esta tarea no se puede abrir en grupo: el trabajo en grupo es para embarcaciones sin dotación que se atienden juntas en convoy.",
+    );
+  }
+
+  // El buque del plan elegido va primero y siempre: es la OT que el usuario pidió.
+  const targets = [source.vesselCode, ...requested];
+  if (targets.length > MAX_BATCH_VESSELS) {
+    throw new RouteError(
+      400,
+      "BATCH_TOO_LARGE",
+      `Un grupo no puede superar las ${MAX_BATCH_VESSELS} embarcaciones (se pidieron ${targets.length}).`,
+    );
+  }
+
+  // Nombre del buque del plan de origen: el resultado se muestra tal cual en
+  // pantalla y ahí van nombres ("DON CHICUETO"), no códigos.
+  const sourceVessel: { name: string } | null = await (getPrismaClient() as any).vessel.findFirst({
+    where: { tenantId: source.tenantId, code: source.vesselCode },
+    select: { name: true },
+  });
+
+  const batchId = randomUUID();
+  // Lo que es del plan de origen no se replica: los ítems adicionales del PDM
+  // son planes de ESE buque y en otro no existen.
+  const { vesselCodes: _ignored, additionalPlanIds: _alsoIgnored, ...common } = payload;
+  void _ignored; void _alsoIgnored;
+
+  const result: OpenWorkOrderBatchResult = { batchId, created: [], skipped: [], failed: [] };
+
+  for (const vesselCode of targets) {
+    const isSource = vesselCode === source.vesselCode;
+    const sister = sisterByVessel.get(vesselCode) ?? null;
+    const vesselName = isSource
+      ? (sourceVessel?.name ?? source.vesselCode)
+      : (sister?.vesselName ?? vesselCode);
+    const targetPlanId = isSource ? source.id : sister?.planId ?? null;
+
+    if (!targetPlanId) {
+      result.skipped.push({ vesselCode, vesselName, reason: "NO_PLAN" });
+      continue;
+    }
+    try {
+      const wo = await openFormalWorkOrder(session, targetPlanId, common, { batchId });
+      result.created.push({
+        vesselCode,
+        vesselName,
+        workOrderId: (wo as { id: string }).id,
+        workOrderCode: (wo as { workOrderCode: string }).workOrderCode,
+      });
+    } catch (error) {
+      result.failed.push({
+        vesselCode,
+        vesselName,
+        error: error instanceof RouteError ? error.message : "No se pudo abrir la orden de trabajo.",
+      });
+    }
+  }
+
+  void publishAudit(getPrismaClient()!, {
+    tenantId: source.tenantId,
+    actorUserId: session.user.id,
+    action: "WorkOrder.batchOpened",
+    entityType: "WorkOrder",
+    entityId: batchId,
+    metadata: {
+      batchId,
+      sourcePlanId: source.id,
+      sourceTaskCode: source.taskCode,
+      planTitle: source.title,
+      created: result.created.map((c) => ({ vesselCode: c.vesselCode, workOrderCode: c.workOrderCode })),
+      skipped: result.skipped.length || undefined,
+      failed: result.failed.length ? result.failed : undefined,
+    },
+  });
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Ship, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -25,6 +25,7 @@ import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
 import { paperFieldCls } from "../components/paper/PaperKit";
 import { WoCloseAuditModal } from "../components/work-orders/WoCloseAuditModal";
+import { BatchCloseModal, type BatchCloseResult } from "../components/work-orders/BatchCloseModal";
 import { useTheme } from "../lib/theme";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
@@ -202,6 +203,12 @@ interface WorkOrder {
   executedByName: string | null;
   observations: string | null;
   supportingDocUrl: string | null;
+  /**
+   * Lote de apertura: las OT de la misma tarea abiertas de una vez para varias
+   * embarcaciones (la inspección semanal de un convoy de barcazas). Cada buque
+   * tiene la suya; el tablero las pliega en una sola fila.
+   */
+  batchId?: string | null;
   createdAt: string;
   // Tramitación (cadena de aprobación del tablero)
   enviadoAprobacionByName: string | null;
@@ -3559,13 +3566,20 @@ function KanbanCardContent({ wo, deferralMap, srs }: {
   const deferral  = deferralMap.get(wo.id);
   // Tarjeta compacta: lo que interesa acá es el N° de OT y el Título. El equipo
   // se muestra en el header del grupo; quién aprobó/autorizó no va en esta vista.
+  //
+  // En un lote se invierte: el encabezado del grupo ya dice la tarea (es la
+  // misma en todas) y lo que cambia de tarjeta a tarjeta es la EMBARCACIÓN.
+  // Repetir el título quince veces no aporta nada; el nombre del buque sí.
+  const isBatchCard = !!wo.batchId;
   return (
     <>
       <div className="flex items-start justify-between gap-2">
         <span className="font-mono font-bold text-fg text-[10px]">{wo.workOrderCode}</span>
         <CategoryBadge type={wo.type} />
       </div>
-      {wo.title && <p className="text-xs text-fg font-medium line-clamp-2">{wo.title}</p>}
+      {isBatchCard
+        ? <VesselLabel code={wo.vesselCode} className="text-xs font-bold text-fg" />
+        : (wo.title && <p className="text-xs text-fg font-medium line-clamp-2">{wo.title}</p>)}
       {(wo.dueDate || deferral) && (
         <div className="flex items-center justify-between gap-2">
           {wo.dueDate ? (
@@ -3623,18 +3637,39 @@ function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDra
   );
 }
 
-// Agrupa las OT de una columna por equipo (asset). Clave por assetId (único por
-// buque) para no fusionar equipos homónimos de distintos buques; label = nombre.
-function groupWosByAsset(items: WorkOrder[]): { key: string; label: string; items: WorkOrder[] }[] {
-  const map = new Map<string, { label: string; items: WorkOrder[] }>();
+interface WoGroup {
+  key: string;
+  label: string;
+  items: WorkOrder[];
+  /** Set = el grupo es un lote de apertura (misma tarea, varias embarcaciones). */
+  batchId: string | null;
+}
+
+/**
+ * Agrupa las OT de una columna del tablero.
+ *
+ * Por defecto agrupa por equipo (asset): clave por assetId, que es único por
+ * buque, para no fusionar equipos homónimos de distintos buques.
+ *
+ * Las OT abiertas en grupo (una inspección de convoy: la misma tarea en quince
+ * barcazas) se agrupan por su lote en vez de por equipo, y el encabezado dice
+ * la tarea y cuántas embarcaciones cubre. Si no se hiciera, esas quince OT
+ * caerían en quince grupos de a una — un equipo por barcaza — que es
+ * exactamente la pared de filas sueltas que el lote viene a evitar.
+ */
+function groupWos(items: WorkOrder[]): WoGroup[] {
+  const map = new Map<string, { label: string; items: WorkOrder[]; batchId: string | null }>();
   for (const w of items) {
-    const key = w.assetId ?? w.assetName ?? "—";
-    const label = w.assetName ?? w.assetId ?? "—";
+    const batchId = w.batchId ?? null;
+    const key = batchId ? `batch:${batchId}` : (w.assetId ?? w.assetName ?? "—");
+    const label = batchId
+      ? (w.title ?? w.assetName ?? "—")
+      : (w.assetName ?? w.assetId ?? "—");
     const g = map.get(key);
-    if (g) g.items.push(w); else map.set(key, { label, items: [w] });
+    if (g) g.items.push(w); else map.set(key, { label, items: [w], batchId });
   }
   return [...map.entries()]
-    .map(([key, g]) => ({ key, label: g.label, items: g.items }))
+    .map(([key, g]) => ({ key, label: g.label, items: g.items, batchId: g.batchId }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -3653,7 +3688,13 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   const [pendingHold, setPendingHold] = useState<WorkOrder | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "ENVIA" | "APRUEBA" | "AUTORIZA" } | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
+  // Lote elegido para cerrar de una vez (inspección de un convoy de barcazas).
+  const [batchToClose, setBatchToClose] = useState<{ label: string; items: WorkOrder[] } | null>(null);
+  const [batchDone, setBatchDone] = useState<string | null>(null);
   const { user } = useAuth();
+  const can = useCan();
+  // Cerrar una OT es operarla: mismo permiso que el cierre de a una.
+  const canOperate = can("wo.operate");
   const canAuthorize = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
   // Grupos por equipo expandidos (clave `${colId}::${assetKey}`). Default: cerrados.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -3730,24 +3771,49 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
-                {groupWosByAsset(colItems).map(group => {
+                {groupWos(colItems).map(group => {
                   const gkey = `${col.colId}::${group.key}`;
                   const collapsed = !expandedGroups.has(gkey);
+                  const isBatch = !!group.batchId;
+                  // Un lote se cierra de una vez mientras le queden OT abiertas.
+                  const closable = group.items.filter(w => w.status !== "CLOSED" && w.status !== "CANCELLED");
                   return (
-                    <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
+                    <div key={gkey} className={`rounded-lg border bg-fg/[0.02] ${isBatch ? "border-accent/30" : "border-fg/10"}`}>
                       <button
                         type="button"
                         onClick={() => toggleGroup(gkey)}
                         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left rounded-lg hover:bg-fg/[0.05] transition-colors"
-                        title={group.label}
+                        title={isBatch
+                          ? `${group.label} — ${t("wo.batch.groupLabel").replace("{n}", String(group.items.length))}`
+                          : group.label}
                       >
                         <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 shrink-0 transition-transform duration-150 ${collapsed ? "-rotate-90" : ""}`} />
-                        <Wrench className="w-3 h-3 text-accent/70 shrink-0" />
+                        {/* Un lote es la misma tarea en varias embarcaciones: se
+                            marca con el barco, no con la llave del equipo. La
+                            columna del tablero es angosta, así que el contador
+                            queda en el número pelado (igual que los grupos por
+                            equipo) y el detalle va en el tooltip: si el badge
+                            dice "12 embarcaciones", el título no entra. */}
+                        {isBatch
+                          ? <Ship className="w-3 h-3 text-accent shrink-0" />
+                          : <Wrench className="w-3 h-3 text-accent/70 shrink-0" />}
                         <span className="text-[11px] font-bold text-fg truncate flex-1">{group.label}</span>
-                        <span className="text-[10px] font-bold text-text-industrial/50 bg-fg/10 rounded-full px-1.5 py-0.5 shrink-0">{group.items.length}</span>
+                        <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 shrink-0 ${isBatch ? "text-accent bg-accent/15" : "text-text-industrial/50 bg-fg/10"}`}>
+                          {group.items.length}
+                        </span>
                       </button>
                       {!collapsed && (
                         <div className="flex flex-col gap-2 p-2 pt-0">
+                          {isBatch && closable.length > 0 && canOperate && (
+                            <button
+                              type="button"
+                              onClick={() => setBatchToClose({ label: group.label, items: group.items })}
+                              className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-[10px] font-bold text-accent bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-colors"
+                            >
+                              <CheckCheck className="w-3 h-3 shrink-0" />
+                              {t("wo.batch.closeGroup")}
+                            </button>
+                          )}
                           {group.items.map(wo => (
                             <KanbanCard
                               key={wo.id}
@@ -3770,6 +3836,25 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
           );
         })}
       </div>
+      {batchToClose && (
+        <BatchCloseModal
+          items={batchToClose.items.map(w => ({
+            id: w.id, workOrderCode: w.workOrderCode, vesselCode: w.vesselCode, status: w.status, title: w.title,
+          }))}
+          groupLabel={batchToClose.label}
+          onClose={() => setBatchToClose(null)}
+          onDone={(res: BatchCloseResult) => {
+            setBatchToClose(null);
+            onReload();
+            const parts = [t("wo.batch.closedOk").replace("{n}", String(res.closed.length))];
+            if (res.failed.length > 0) {
+              parts.push(t("wo.batch.failedNote").replace("{list}", res.failed.map(f => f.vesselName).join(", ")));
+            }
+            setBatchDone(parts.join(" "));
+          }}
+        />
+      )}
+      {batchDone && <AlertDialog message={batchDone} onClose={() => setBatchDone(null)} />}
       {pendingHold && (
         <HoldModal
           workOrder={pendingHold}
@@ -4026,6 +4111,9 @@ export const WorkOrdersPage: React.FC = () => {
   // `createPrefill` (deep-link desde un defecto, etc.) sigue abriendo el
   // formulario directo — ya trae su propio origen resuelto.
   const [showNewWoWizard, setShowNewWoWizard] = useState(false);
+  // Resumen de una apertura en grupo (cuántas OT se abrieron, cuáles quedaron
+  // afuera). Se muestra en ventanita, no en un recuadro al pie.
+  const [batchOpenSummary, setBatchOpenSummary] = useState<string | null>(null);
   const [viewMode, setViewMode]       = useState<"list" | "kanban">("kanban");
   const [search, setSearch]           = useState("");
 
@@ -4197,7 +4285,16 @@ export const WorkOrdersPage: React.FC = () => {
       sortValue: r => `${r.vesselCode} ${r.workOrderCode}`,
       render: r => (
         <div>
-          <div className="font-mono font-bold text-fg text-xs">{r.workOrderCode}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono font-bold text-fg text-xs">{r.workOrderCode}</span>
+            {/* Abierta en grupo con otras embarcaciones: en la tabla plana no se
+                pliega nada, pero se avisa que no es una orden suelta. */}
+            {r.batchId && (
+              <span title={t("wo.batch.wizardTitle")} className="shrink-0 leading-none">
+                <Ship className="w-3 h-3 text-accent" />
+              </span>
+            )}
+          </div>
           <div className="mt-0.5"><VesselLabel code={r.vesselCode} className="text-[10px]" showCode /></div>
         </div>
       ),
@@ -4372,8 +4469,24 @@ export const WorkOrdersPage: React.FC = () => {
             void reload();
             if (workOrderCode) openLink(workOrderCode);
           }}
+          // Apertura en grupo: no hay UNA orden que abrir a continuación, así
+          // que se refresca el tablero y se informa qué se abrió y qué no.
+          onBatchSaved={(res) => {
+            setShowNewWoWizard(false);
+            void reload();
+            const parts = [t("wo.batch.openedOk").replace("{n}", String(res.created.length))];
+            if (res.skipped.length > 0) {
+              parts.push(t("wo.batch.skippedNote").replace("{list}", res.skipped.map(s => s.vesselName).join(", ")));
+            }
+            if (res.failed.length > 0) {
+              parts.push(t("wo.batch.failedNote").replace("{list}", res.failed.map(f => f.vesselName).join(", ")));
+            }
+            setBatchOpenSummary(parts.join(" "));
+          }}
         />
       )}
+
+      {batchOpenSummary && <AlertDialog message={batchOpenSummary} onClose={() => setBatchOpenSummary(null)} />}
 
       {createPrefill && (
         <CreateWorkOrderModal

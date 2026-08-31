@@ -16,7 +16,7 @@ import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
 import { findClassInspectionAsset } from "../lib/class-inspection-asset";
 
 type Category = "MAINTENANCE" | "REPAIR" | "CLASS";
-type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind";
+type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind" | "sisterVessels";
 /** Mismos valores que WO_MAINTENANCE_KINDS (wo-form-catalog.ts) para el eje
  *  "reparación" del formulario. */
 type RepairKind = "CORRECTIVO_PROGRAMADO" | "CORRECTIVO_NO_PROGRAMADO" | "EMERGENCIA";
@@ -41,6 +41,38 @@ interface PlanItemCandidate {
   nextDueHours?: number | null;
 }
 
+/** Una embarcación hermana: el mismo ítem del plan en otro buque. */
+export interface SisterPlanRow {
+  vesselCode: string;
+  vesselName: string;
+  vesselType: string | null;
+  planId: string | null;
+  taskCode: string | null;
+  title: string | null;
+  nextDueDate?: string | null;
+  executionStatus?: string | null;
+  matchedBy: "TASK_CODE" | "TITLE" | null;
+  hasOpenWorkOrder: boolean;
+}
+
+export interface OpenBatchResult {
+  batchId: string;
+  created: Array<{ vesselCode: string; vesselName: string; workOrderId: string; workOrderCode: string }>;
+  skipped: Array<{ vesselCode: string; vesselName: string; reason: string }>;
+  failed: Array<{ vesselCode: string; vesselName: string; error: string }>;
+}
+
+/**
+ * Vienen tildadas por defecto las que conviene hacer ahora: la tarea ya venció
+ * o está en ventana de ejecución. Una barcaza que ya tiene la OT abierta queda
+ * destildada aunque esté vencida — abrirle otra sería duplicarla.
+ */
+const DUE_STATUSES = new Set(["DUE", "OVERDUE", "IN_WINDOW", "UPCOMING"]);
+function isPreselected(row: SisterPlanRow): boolean {
+  if (!row.planId || row.hasOpenWorkOrder) return false;
+  return DUE_STATUSES.has(String(row.executionStatus ?? ""));
+}
+
 // Mismo texto oficial del formulario (WO_MAINTENANCE_KINDS, wo-form-catalog.ts) — no se traduce.
 const REPAIR_KIND_OPTIONS: { value: RepairKind; label: string; icon: typeof Wrench }[] = [
   { value: "CORRECTIVO_PROGRAMADO",    label: "Correctivo programado",    icon: Wrench },
@@ -53,9 +85,15 @@ const optionBtnCls = "flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 borde
 interface NewWorkOrderWizardProps {
   onClose: () => void;
   onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
+  /**
+   * Se abrieron varias OT de una vez (la misma tarea en un grupo de barcazas).
+   * Va aparte de `onSaved` porque no hay UNA orden que abrir a continuación:
+   * lo que corresponde es refrescar el tablero y decir cuántas se abrieron.
+   */
+  onBatchSaved?: (result: OpenBatchResult) => void | Promise<void>;
 }
 
-export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose, onSaved }) => {
+export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose, onSaved, onBatchSaved }) => {
   const t = useT();
   const { vessels, selectedVesselCode, isVesselScoped } = useVesselContext();
 
@@ -75,6 +113,11 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
   // hace falta saber cuál pasó para que "Atrás" desde el ítem del plan vuelva
   // al lugar correcto.
   const [assetStepShown, setAssetStepShown] = useState(false);
+  // Apertura en grupo: el ítem elegido y las embarcaciones donde existe la
+  // misma tarea (ver el paso "sisterVessels").
+  const [chosenPlan, setChosenPlan] = useState<PlanItemCandidate | null>(null);
+  const [sisters, setSisters] = useState<SisterPlanRow[]>([]);
+  const [pickedVessels, setPickedVessels] = useState<Set<string>>(new Set());
 
   const loadAssets = useCallback(async (vc: string): Promise<AssetOption[]> => {
     setLoadingAssets(true);
@@ -163,10 +206,10 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
     setResult({ vesselCode, assetId, maintKind: kind, priority: REPAIR_KIND_PRIORITY[kind] });
   };
 
-  // Elegido el ítem del plan, la OT se crea directo (sin pantalla intermedia
-  // de revisión) y se entrega a onSaved, que la abre ya hecha en el editor
-  // real — ahí sí se puede tocar todo (título, asignado a, checklist, etc.).
-  const choosePlanItem = useCallback(async (item: PlanItemCandidate) => {
+  // La OT se crea directo (sin pantalla intermedia de revisión) y se entrega a
+  // onSaved, que la abre ya hecha en el editor real — ahí sí se puede tocar
+  // todo (título, asignado a, checklist, etc.).
+  const openSingle = useCallback(async (item: PlanItemCandidate) => {
     setCreating(true);
     setCreateError(null);
     try {
@@ -181,6 +224,65 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
       setCreating(false);
     }
   }, [onSaved, t]);
+
+  /**
+   * Elegido el ítem del plan, antes de abrir la OT se mira si esa misma tarea
+   * existe en otras embarcaciones. Es el caso de las barcazas: la inspección
+   * semanal del convoy se hace una sola vez para todas, y abrir quince OT a
+   * mano es la fricción que esto saca del medio.
+   *
+   * Si no hay hermanas —lo normal en un remolcador— el paso ni aparece: se abre
+   * la OT como siempre. Si la consulta falla tampoco se traba: se abre la OT
+   * sola, que es lo que el usuario pidió.
+   */
+  const choosePlanItem = useCallback(async (item: PlanItemCandidate) => {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await api.get<{ items: SisterPlanRow[] }>(
+        `/app/pms/maintenance-plans/${item.id}/sister-plans`,
+      );
+      const rows = (res.items ?? []).filter(r => r.planId);
+      if (rows.length === 0) { await openSingle(item); return; }
+      setChosenPlan(item);
+      setSisters(rows);
+      setPickedVessels(new Set(rows.filter(isPreselected).map(r => r.vesselCode)));
+      setStep("sisterVessels");
+    } catch (e) {
+      console.error("[wo-wizard] sister-plans failed:", e);
+      await openSingle(item);
+    } finally {
+      setCreating(false);
+    }
+  }, [openSingle]);
+
+  /** Abre la tarea en el buque del plan elegido y en las tildadas. */
+  const openBatch = useCallback(async () => {
+    if (!chosenPlan) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const result = await api.post<OpenBatchResult>(
+        `/app/pms/maintenance-plans/${chosenPlan.id}/open-work-order-batch`,
+        { vesselCodes: [...pickedVessels] },
+      );
+      if (onBatchSaved) await onBatchSaved(result);
+      else if (result.created[0]) await onSaved(result.created[0].workOrderId, result.created[0].workOrderCode);
+    } catch (e) {
+      console.error("[wo-wizard] open-work-order-batch failed:", e);
+      setCreateError(e instanceof ApiError ? e.message : t("wo.wizard.createFailed"));
+    } finally {
+      setCreating(false);
+    }
+  }, [chosenPlan, pickedVessels, onBatchSaved, onSaved, t]);
+
+  const toggleVessel = (code: string) => {
+    setPickedVessels(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  };
 
   if (result) {
     return (
@@ -206,9 +308,15 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
               {step === "asset"    && t("wo.wizard.assetTitle")}
               {step === "planItem" && t("wo.wizard.planItemTitle")}
               {step === "repairKind" && t("wo.wizard.repairKindTitle")}
+              {step === "sisterVessels" && t("wo.batch.wizardTitle")}
             </h2>
             {step === "planItem" && (
               <p className="text-xs text-text-industrial/50 mt-0.5">{t("wo.wizard.planItemSubtitle")}</p>
+            )}
+            {step === "sisterVessels" && (
+              <p className="text-xs text-text-industrial/50 mt-0.5">
+                {t("wo.batch.wizardSubtitle").replace("{n}", String(sisters.length))}
+              </p>
             )}
           </div>
           <ModalCloseButton onClose={onClose} />
@@ -327,6 +435,107 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
                   >
                     {t("wo.wizard.none")}
                   </button>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Apertura en grupo: la misma tarea en varias embarcaciones. Cada una
+              va a tener SU orden de trabajo — no se comparte una sola. */}
+          {step === "sisterVessels" && (
+            <>
+              <button onClick={() => setStep("planItem")} className="text-xs text-accent hover:text-fg transition-colors">
+                {t("wo.wizard.back")}
+              </button>
+              {creating ? (
+                <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-3">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("wo.wizard.creating")}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-[11px] text-text-industrial/60">
+                    <span>{t("wo.batch.selectedCount").replace("{n}", String(pickedVessels.size + 1))}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setPickedVessels(new Set(sisters.filter(s => !s.hasOpenWorkOrder).map(s => s.vesselCode)))}
+                        className="text-accent hover:text-fg transition-colors"
+                      >
+                        {t("wo.batch.selectAll")}
+                      </button>
+                      <button
+                        onClick={() => setPickedVessels(new Set())}
+                        className="text-accent hover:text-fg transition-colors"
+                      >
+                        {t("wo.batch.selectNone")}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 overflow-y-auto max-h-[45vh] pr-1">
+                    {/* La embarcación de la tarea elegida va siempre: es la OT
+                        que el usuario pidió. Se muestra igual que las otras y
+                        fija, para que el total de la lista coincida con el del
+                        botón y no parezca que falta una. */}
+                    <div className="flex items-start gap-3 px-4 py-2.5 rounded-xl border border-accent/40 bg-accent/10">
+                      <input type="checkbox" checked readOnly disabled className="mt-0.5 w-4 h-4 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-fg truncate">
+                          {vessels.find(v => v.code === vesselCode)?.name ?? vesselCode}
+                        </p>
+                        <p className="text-[10px] text-text-industrial/50 mt-0.5 truncate">
+                          <span className="font-mono">{chosenPlan?.taskCode}</span> · {t("wo.batch.sourceVessel")}
+                        </p>
+                      </div>
+                    </div>
+                    {sisters.map(s => {
+                      const checked = pickedVessels.has(s.vesselCode);
+                      return (
+                        <label
+                          key={s.vesselCode}
+                          className={`flex items-start gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition-all ${
+                            checked ? "bg-accent/10 border-accent/40" : "bg-fg/5 border-fg/10 hover:border-accent/30"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleVessel(s.vesselCode)}
+                            className="mt-0.5 w-4 h-4 accent-current shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            {/* Nombre del buque, no el código: es lo que el
+                                superintendente reconoce. */}
+                            <p className="text-sm font-semibold text-fg truncate">{s.vesselName}</p>
+                            <p className="text-[10px] text-text-industrial/50 mt-0.5 truncate">
+                              <span className="font-mono">{s.taskCode}</span>
+                              {s.nextDueDate && <> · {t("wo.ai.planLink.dueDate")}: {fmtDate(s.nextDueDate)}</>}
+                            </p>
+                            {s.hasOpenWorkOrder && (
+                              <p className="text-[10px] text-amber-500 mt-0.5">{t("wo.batch.alreadyOpen")}</p>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {createError && <p className="text-xs text-red-500">{createError}</p>}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => { if (chosenPlan) void openSingle(chosenPlan); }}
+                      className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold text-text-industrial bg-fg/5 border border-fg/10 hover:text-fg hover:border-accent/30 transition-colors"
+                    >
+                      {t("wo.batch.onlyThisVessel")}
+                    </button>
+                    <button
+                      onClick={() => void openBatch()}
+                      disabled={pickedVessels.size === 0}
+                      className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-accent hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      {t("wo.batch.openForAll").replace("{n}", String(pickedVessels.size + 1))}
+                    </button>
+                  </div>
                 </>
               )}
             </>

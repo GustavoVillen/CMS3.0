@@ -1611,6 +1611,19 @@ model WorkOrder {
   observations            String?
   supportingDocUrl        String?
   runningHoursAtExecution Float?
+  // LOTE DE APERTURA: las OT abiertas en un mismo acto para varias embarcaciones
+  // (la inspección semanal de un convoy de barcazas, que se hace una sola vez para
+  // todo el convoy) comparten este id.
+  //
+  // NO fusiona las OT: cada buque conserva la suya, con su propio historial, su
+  // plan avanzando con su frecuencia y su evidencia individual para clase y
+  // bandera. Una OT es de UN buque (ver PLAN_OTHER_VESSEL en
+  // maintenance-plans-service). El lote es sólo el hermanamiento que permite
+  // crearlas juntas, cerrarlas juntas y plegarlas en una fila en el tablero.
+  //
+  // Sin etiqueta propia: el nombre del grupo se deriva del `title`, que es el
+  // mismo en todas las OT del lote (salen del mismo ítem del PDM clonado).
+  batchId             String?
   createdAt           DateTime          @default(now())
   createdByUserId     String
   updatedAt           DateTime          @updatedAt
@@ -1666,6 +1679,8 @@ model WorkOrder {
   @@index([tenantId, assetId])
   // Historial de ejecuciones por plan (modal Historial): listPlanExecutions({ maintenancePlanId }).
   @@index([tenantId, maintenancePlanId])
+  // OT hermanas de un mismo lote (vista en grupo y cierre en grupo del tablero).
+  @@index([tenantId, batchId])
 }
 
 // PLANES DE MANTENIMIENTO que ejecuta una OT. Una parada de astillero cubre
