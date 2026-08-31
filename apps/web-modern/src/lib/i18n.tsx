@@ -271,6 +271,7 @@ const dict = {
   "wo.tramita.inspectionSsNote":         { es: "Las Solicitudes de Servicio de esta orden sí se aprueban y autorizan desde cada solicitud.", en: "Service Requests on this order are still approved and authorized from each request.", pt: "As Solicitações de Serviço desta ordem são aprovadas e autorizadas em cada solicitação." },
   // ── Dashboard: generar una inspección ────────────────────────────────────────
   "dashboard.generateInspection":   { es: "Nueva Inspección",         en: "New Inspection",           pt: "Nova Inspeção" },
+  "dashboard.newPermit":            { es: "Nuevo Permiso de Trabajo", en: "New Work Permit",          pt: "Nova Permissão de Trabalho" },
   "dashboard.inspection.title":     { es: "Nueva Inspección",         en: "New Inspection",           pt: "Nova Inspeção" },
   "dashboard.inspection.subtitle":  { es: "¿Qué clase de inspección vas a hacer?", en: "What kind of inspection are you doing?", pt: "Que tipo de inspeção você vai fazer?" },
   "dashboard.inspection.byEvent":   { es: "Por evento",               en: "By event",                 pt: "Por evento" },
@@ -1165,7 +1166,7 @@ const dict = {
   "fa.lab":               { es: "Laboratorio",                         en: "Laboratory",                          pt: "Laboratório" },
   "fa.labRef":            { es: "Ref. laboratorio",                    en: "Lab reference",                       pt: "Ref. laboratório" },
   "fa.notes":             { es: "Notas",                               en: "Notes",                               pt: "Notas" },
-  "fa.autoGen":           { es: "Generada automáticamente al cerrar una OT.", en: "Automatically generated on WO close.", pt: "Gerada automaticamente ao fechar uma OT." },
+  "fa.autoGen":           { es: "Generada automáticamente al autorizar una OT.", en: "Automatically generated on WO authorization.", pt: "Gerada automaticamente ao autorizar uma OT." },
   "fa.viewSourceWo":      { es: "Ver OT origen →",                     en: "View source WO →",                    pt: "Ver OT origem →" },
   "fa.statHours":         { es: "Horas",                               en: "Hours",                               pt: "Horas" },
   "fa.hoursEdit":         { es: "Editar horas",                        en: "Edit hours",                          pt: "Editar horas" },
@@ -1430,6 +1431,24 @@ const dict = {
   "pm.attachDeleteConfirm":  { es: "¿Quitar este respaldo del permiso?", en: "Remove this evidence from the permit?", pt: "Remover este comprovante da permissão?" },
   "pm.attachUploadedBy":     { es: "Subido por",            en: "Uploaded by",              pt: "Enviado por" },
 
+  // Origen del permiso: colgado de una OT abierta, u ocasional (sin OT).
+  "pm.origin.title":         { es: "¿De dónde sale este permiso?", en: "Where does this permit come from?", pt: "De onde vem esta permissão?" },
+  "pm.origin.subtitle":      { es: "Elegí si el trabajo ya tiene una OT abierta o si es un trabajo ocasional.", en: "Choose whether the job already has an open work order or is a one-off job.", pt: "Escolha se o trabalho já tem uma OS aberta ou se é um trabalho ocasional." },
+  "pm.origin.fromWo":        { es: "Asignar a una OT ya abierta", en: "Assign to an open work order", pt: "Atribuir a uma OS já aberta" },
+  "pm.origin.fromWoHint":    { es: "El permiso queda vinculado a la OT y se precarga con sus datos.", en: "The permit is linked to the work order and pre-filled with its data.", pt: "A permissão fica vinculada à OS e é pré-carregada com seus dados." },
+  "pm.origin.standalone":    { es: "Ocasional. Sin OT asignada", en: "One-off. No work order", pt: "Ocasional. Sem OS atribuída" },
+  "pm.origin.standaloneHint":{ es: "Permiso suelto: se completa desde cero.", en: "Standalone permit: filled in from scratch.", pt: "Permissão avulsa: preenchida do zero." },
+  "pm.woPicker.title":       { es: "Elegí la OT",           en: "Choose the work order",    pt: "Escolha a OS" },
+  "pm.woPicker.hint":        { es: "Se listan las OTs planificadas, en progreso y en espera del buque.", en: "Planned, in-progress and on-hold work orders of the vessel are listed.", pt: "São listadas as OS planejadas, em andamento e em espera da embarcação." },
+  "pm.woPicker.searchPh":    { es: "Buscar por código, equipo o descripción…", en: "Search by code, equipment or description…", pt: "Buscar por código, equipamento ou descrição…" },
+  "pm.woPicker.empty":       { es: "Sin OTs abiertas para este buque.", en: "No open work orders for this vessel.", pt: "Sem OS abertas para esta embarcação." },
+  "pm.linkedWo":             { es: "OT asociada",           en: "Linked work order",        pt: "OS vinculada" },
+  "pm.noLinkedWo":           { es: "Ocasional — sin OT asignada", en: "One-off — no work order", pt: "Ocasional — sem OS atribuída" },
+  "pm.linkWo":               { es: "Asignar OT",            en: "Link work order",          pt: "Vincular OS" },
+  "pm.changeWo":             { es: "Cambiar OT",            en: "Change work order",        pt: "Alterar OS" },
+  "pm.unlinkWo":             { es: "Quitar",                en: "Unlink",                   pt: "Remover" },
+  "pm.woLockedHint":         { es: "La OT asociada sólo se puede cambiar mientras el permiso está en borrador.", en: "The linked work order can only be changed while the permit is a draft.", pt: "A OS vinculada só pode ser alterada enquanto a permissão for rascunho." },
+
   // Labels (status display)
   "label.approvedBy":           { es: "Aprobado por",                           en: "Approved by",                            pt: "Aprovado por" },
   "label.rejectedBy":           { es: "Rechazado por",                          en: "Rejected by",                            pt: "Rejeitado por" },
@@ -1576,6 +1595,9 @@ const dict = {
   "wo.status.postponedDrydock":    { es: "A varada",                  en: "To drydock",              pt: "Para docagem" },
   "wo.status.overdue":             { es: "Vencida",                   en: "Overdue",                 pt: "Vencida" },
   "wo.status.open":                { es: "Abierta",                   en: "Open",                    pt: "Aberta" },
+  "wo.status.planned":             { es: "Planificada",               en: "Planned",                 pt: "Planejada" },
+  "wo.status.inProgress":          { es: "En progreso",               en: "In progress",             pt: "Em andamento" },
+  "wo.status.onHold":              { es: "En espera",                 en: "On hold",                 pt: "Em espera" },
 
   // Deferral badges (vinculados a WO ON_HOLD)
   "wo.deferral.requested":     { es: "Solicitada",             en: "Requested",            pt: "Solicitada" },

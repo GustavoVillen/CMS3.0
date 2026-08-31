@@ -12,7 +12,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate, sfiGroupDigit } from "../lib/utils";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
@@ -22,6 +22,7 @@ import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
 import { UpcomingTasksModal, type UpcomingTasksResponse } from "../components/UpcomingTasksModal";
+import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
@@ -144,6 +145,10 @@ export const Dashboard: React.FC = () => {
   const locale       = useLocale();
   const { theme }    = useTheme();
   const { user }     = useAuth();
+  const can          = useCan();
+  // El backend exige `permit.manage` para crear un PTW: si el rol no lo tiene,
+  // el acceso grande no se muestra (mismo criterio que el botón de TMSA).
+  const canManagePermits = can("permit.manage");
   // Mismos roles que protegen /tmsa en App.tsx (RequireRole) — se oculta acá
   // para no mostrar un botón que termina en pantalla bloqueada.
   const canSeeTmsaAudit = user ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role) : false;
@@ -168,6 +173,7 @@ export const Dashboard: React.FC = () => {
   // "Nueva Solicitud de Servicio" (null = alta libre, sin preset).
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
   const [showSsChooser, setShowSsChooser] = React.useState(false);
+  const [showNewPermit, setShowNewPermit] = React.useState(false);
   // Cuarto camino del asistente de SS: la OT ya existe. En vez de crear una
   // orden nueva, se elige entre las abiertas y se abre esa OT, que es donde vive
   // el alta de la solicitud.
@@ -479,6 +485,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             if (wasSsFlow) { navigate("/service-requests"); return; }
             navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders");
           }}
+        />
+      )}
+
+      {showNewPermit && (
+        <NewPermitFlow
+          onClose={() => setShowNewPermit(false)}
+          onSaved={() => navigate("/permits")}
         />
       )}
 
@@ -836,8 +849,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
         )}
 
-        {/* Fila 2 — lo que se crea: OT, SS e inspección. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {/* Fila 2 — lo que se crea: OT, SS, inspección y permiso de trabajo. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={() => setShowNewWoWizard(true)}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
@@ -859,6 +872,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
           </button>
+          {canManagePermits && (
+            <button
+              onClick={() => setShowNewPermit(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            >
+              <ShieldAlert className="w-6 h-6 text-accent shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.newPermit")}</span>
+            </button>
+          )}
         </div>
 
         {/* Fila 3 — lo que se consulta: plan, agenda de la semana y estado. */}

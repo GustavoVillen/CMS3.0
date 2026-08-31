@@ -88,6 +88,52 @@ function parseType(value: unknown): PermitType {
   return v as PermitType;
 }
 
+/**
+ * Un permiso puede colgar de una OT. El vínculo se valida contra el tenant y el
+ * buque del permiso: una OT de otra empresa —o de otro buque— nunca puede
+ * quedar asociada. Devuelve el id validado, o null si el permiso es ocasional.
+ */
+async function resolveWorkOrderLink(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  vesselCode: string,
+  workOrderId: string | null,
+): Promise<string | null> {
+  if (!workOrderId) return null;
+  const wo = await prisma.workOrder.findFirst({
+    where: { id: workOrderId, tenantId, deletedAt: null },
+    select: { id: true, vesselCode: true },
+  });
+  if (!wo) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "La OT indicada no existe.");
+  if (wo.vesselCode !== vesselCode) {
+    throw new RouteError(400, "VALIDATION_ERROR", "La OT pertenece a otro buque que el permiso.");
+  }
+  return wo.id;
+}
+
+/**
+ * El listado y la ficha muestran el código de la OT, no su id. `workOrderId` es
+ * un campo suelto (no hay relación en el schema), así que se resuelve aparte y
+ * en lote.
+ */
+async function attachWorkOrderLabels<T extends Record<string, unknown>>(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  rows: T[],
+): Promise<T[]> {
+  const ids = [...new Set(rows.map(r => r.workOrderId).filter(Boolean))] as string[];
+  if (!ids.length) return rows.map(r => ({ ...r, workOrderCode: null, workOrderTitle: null }));
+  const orders = await prisma.workOrder.findMany({
+    where: { id: { in: ids }, tenantId },
+    select: { id: true, workOrderCode: true, title: true },
+  });
+  const byId = new Map(orders.map(o => [o.id, o]));
+  return rows.map(r => {
+    const wo = r.workOrderId ? byId.get(r.workOrderId as string) : null;
+    return { ...r, workOrderCode: wo?.workOrderCode ?? null, workOrderTitle: wo?.title ?? null };
+  });
+}
+
 type PermitRecord = {
   id: string;
   tenantId: string;
@@ -125,7 +171,7 @@ export async function listPermits(session: TenantAccessSession, filters: PermitL
   if (filters.type) where.type = filters.type;
   if (filters.workOrderId) where.workOrderId = filters.workOrderId;
 
-  return permitClient(prisma).permitToWork.findMany({
+  const rows = await permitClient(prisma).permitToWork.findMany({
     where,
     orderBy: [{ createdAt: "desc" }],
     include: {
@@ -133,6 +179,7 @@ export async function listPermits(session: TenantAccessSession, filters: PermitL
       participants: true,
     },
   });
+  return attachWorkOrderLabels(prisma, tenant.id, rows);
 }
 
 export async function getPermit(session: TenantAccessSession, id: string) {
@@ -157,7 +204,8 @@ export async function getPermit(session: TenantAccessSession, id: string) {
       throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel de este permiso.");
     }
   }
-  return row;
+  const [enriched] = await attachWorkOrderLabels(prisma, tenant.id, [row]);
+  return enriched;
 }
 
 async function generatePermitCode(
@@ -202,6 +250,8 @@ export async function createPermit(session: TenantAccessSession, input: PermitWr
     throw new RouteError(400, "VALIDATION_ERROR", "plannedEnd debe ser posterior a plannedStart.");
   }
 
+  const workOrderId = await resolveWorkOrderLink(prisma, tenant.id, vesselCode, normalizeOptional(input.workOrderId));
+
   const code = input.permitCode
     ? normalizeRequired(input.permitCode, "permitCode").toUpperCase()
     : await generatePermitCode(prisma, tenant.id, vesselCode, type);
@@ -219,7 +269,7 @@ export async function createPermit(session: TenantAccessSession, input: PermitWr
       type,
       status: "DRAFT",
       assetId: normalizeOptional(input.assetId),
-      workOrderId: normalizeOptional(input.workOrderId),
+      workOrderId,
       location,
       description,
       plannedStart,
@@ -254,7 +304,9 @@ export async function updatePermit(session: TenantAccessSession, id: string, inp
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
-  const current = await getPermit(session, id) as unknown as PermitRecord & { plannedStart: Date; plannedEnd: Date };
+  const current = await getPermit(session, id) as unknown as PermitRecord & {
+    plannedStart: Date; plannedEnd: Date; workOrderId: string | null;
+  };
 
   if (!EDITABLE_STATUSES.has(current.status)) {
     throw new RouteError(
@@ -267,7 +319,23 @@ export async function updatePermit(session: TenantAccessSession, id: string, inp
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (input.type !== undefined) data.type = parseType(input.type);
   if (input.assetId !== undefined) data.assetId = normalizeOptional(input.assetId);
-  if (input.workOrderId !== undefined) data.workOrderId = normalizeOptional(input.workOrderId);
+  // La OT de la que cuelga el permiso sólo se puede cambiar mientras está en
+  // borrador: una vez solicitado, el permiso ya se leyó como parte de esa OT.
+  if (input.workOrderId !== undefined) {
+    const nextWorkOrderId = await resolveWorkOrderLink(
+      prisma, current.tenantId, current.vesselCode, normalizeOptional(input.workOrderId),
+    );
+    if (nextWorkOrderId !== (current.workOrderId ?? null)) {
+      if (current.status !== "DRAFT") {
+        throw new RouteError(
+          409,
+          "RECORD_LOCKED",
+          "La OT asociada sólo puede cambiarse mientras el permiso está en borrador.",
+        );
+      }
+      data.workOrderId = nextWorkOrderId;
+    }
+  }
   if (input.location !== undefined) data.location = normalizeRequired(input.location, "location");
   if (input.description !== undefined) data.description = normalizeRequired(input.description, "description");
 

@@ -19,6 +19,7 @@ import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { suggestPermitTypesFromText } from "../lib/permit-classifier";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,12 @@ interface Permit {
   controlMeasures: string | null;
   ppeRequired: string | null;
   details: Record<string, unknown>;
+  // OT de la que cuelga el permiso. null = permiso ocasional (sin OT).
+  // El código y el título los resuelve el backend: `workOrderId` es un campo
+  // suelto, no una relación del schema.
+  workOrderId: string | null;
+  workOrderCode: string | null;
+  workOrderTitle: string | null;
   // Override/bypass de alarma crítica — al guardar dispara MOC TEMPORARY
   alarmOverride: boolean;
   requestedAt: string | null;
@@ -162,12 +169,186 @@ function toLocalDateTimeInput(s: string | null): string {
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
+// ─── Origen del permiso (paso previo a crear) ────────────────────────────────
+
+/**
+ * Un permiso puede nacer de dos maneras: colgado de una OT abierta (el caso
+ * normal: el trabajo ya está planificado) o suelto, para un trabajo ocasional
+ * que no tiene OT. Esta ventana obliga a elegir antes de abrir el formulario,
+ * que es lo que hace trazable el vínculo OT ⇄ permiso.
+ */
+const PermitOriginChooser: React.FC<{
+  onFromWorkOrder: () => void;
+  onStandalone: () => void;
+  onClose: () => void;
+}> = ({ onFromWorkOrder, onStandalone, onClose }) => {
+  const t = useT();
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <div className="flex items-center gap-3">
+            <ShieldAlert className="w-4 h-4 text-accent" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.newPermit")}</p>
+              <h2 className="text-sm font-bold text-fg">{t("pm.origin.title")}</h2>
+            </div>
+          </div>
+          <ModalCloseButton onClose={onClose} />
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-xs text-text-industrial/60">{t("pm.origin.subtitle")}</p>
+          <button
+            onClick={onFromWorkOrder}
+            className="w-full text-left px-4 py-3.5 rounded-xl border border-accent/40 bg-accent/5 hover:bg-accent/10 transition-colors flex items-start gap-3"
+          >
+            <FileText className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+            <span>
+              <span className="block text-sm font-bold text-fg">{t("pm.origin.fromWo")}</span>
+              <span className="block text-[11px] text-text-industrial/60 mt-0.5">{t("pm.origin.fromWoHint")}</span>
+            </span>
+          </button>
+          <button
+            onClick={onStandalone}
+            className="w-full text-left px-4 py-3.5 rounded-xl border border-fg/10 bg-fg/5 hover:bg-fg/10 transition-colors flex items-start gap-3"
+          >
+            <ShieldAlert className="w-4 h-4 text-text-industrial/50 shrink-0 mt-0.5" />
+            <span>
+              <span className="block text-sm font-bold text-fg">{t("pm.origin.standalone")}</span>
+              <span className="block text-[11px] text-text-industrial/60 mt-0.5">{t("pm.origin.standaloneHint")}</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Selector de OT abierta ──────────────────────────────────────────────────
+
+/** OTs elegibles: las que siguen abiertas (ni cerradas, ni canceladas, ni diferidas). */
+const PICKABLE_WO_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD"] as const;
+const WO_STATUS_TKEY: Record<string, TranslationKey> = {
+  PLANNED: "wo.status.planned",
+  IN_PROGRESS: "wo.status.inProgress",
+  ON_HOLD: "wo.status.onHold",
+};
+
+export interface PickableWorkOrder {
+  id: string;
+  workOrderCode: string;
+  vesselCode: string;
+  status: string;
+  title: string | null;
+  location: string | null;
+  assetName: string | null;
+  dueDate: string | null;
+}
+
+const WorkOrderPicker: React.FC<{
+  initialVesselCode?: string | null;
+  /** En edición el buque del permiso no se toca: sólo se listan sus OTs. */
+  lockVessel?: boolean;
+  onPick: (wo: PickableWorkOrder) => void;
+  onClose: () => void;
+}> = ({ initialVesselCode, lockVessel = false, onPick, onClose }) => {
+  const t = useT();
+  const { vessels, selectedVesselCode } = useVesselContext();
+  const [vesselCode, setVesselCode] = useState(
+    initialVesselCode ?? selectedVesselCode ?? vessels[0]?.code ?? "",
+  );
+  const [search, setSearch] = useState("");
+
+  // Se pide siempre por buque: el listado de OTs no pagina y traer la flota
+  // entera para elegir una sola OT es traer miles de filas al navegador.
+  const { data, loading } = useFetch<{ items: PickableWorkOrder[] }>(
+    vesselCode ? `/app/pms/work-orders?vesselCode=${encodeURIComponent(vesselCode)}` : null,
+    [vesselCode],
+  );
+
+  const items = useMemo(() => {
+    const open = (data?.items ?? []).filter(w => (PICKABLE_WO_STATUSES as readonly string[]).includes(w.status));
+    const q = search.trim().toLowerCase();
+    if (!q) return open;
+    return open.filter(w =>
+      `${w.workOrderCode} ${w.title ?? ""} ${w.assetName ?? ""} ${w.location ?? ""}`.toLowerCase().includes(q),
+    );
+  }, [data, search]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-2xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
+          <div className="flex items-center gap-3">
+            <FileText className="w-4 h-4 text-accent" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.newPermit")}</p>
+              <h2 className="text-sm font-bold text-fg">{t("pm.woPicker.title")}</h2>
+            </div>
+          </div>
+          <ModalCloseButton onClose={onClose} />
+        </div>
+
+        <div className="px-6 py-3 border-b border-fg/10 shrink-0 space-y-2">
+          <div className="flex gap-2">
+            <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={lockVessel}
+              className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg disabled:opacity-60">
+              {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
+            </select>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("pm.woPicker.searchPh")}
+              className="flex-1 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
+          </div>
+          <p className="text-[10px] text-text-industrial/40">{t("pm.woPicker.hint")}</p>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
+          ) : !items.length ? (
+            <div className="text-center py-10 text-text-industrial/30 text-sm">{t("pm.woPicker.empty")}</div>
+          ) : (
+            <div className="divide-y divide-fg/5">
+              {items.map(w => (
+                <button key={w.id} onClick={() => onPick(w)}
+                  className="w-full text-left px-6 py-3 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="text-[10px] font-mono font-bold text-fg">{w.workOrderCode}</span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full border border-fg/10 bg-fg/5 text-text-industrial/60 font-bold">
+                        {WO_STATUS_TKEY[w.status] ? t(WO_STATUS_TKEY[w.status]) : w.status}
+                      </span>
+                      <VesselLabel code={w.vesselCode} className="text-[10px]" showCode />
+                    </div>
+                    <p className="text-xs text-fg truncate">{w.assetName ?? "—"}</p>
+                    <p className="text-[11px] text-text-industrial/50 truncate">{w.title?.trim() || "—"}</p>
+                  </div>
+                  {w.dueDate && (
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] text-text-industrial/40">{t("wo.col.dueDate")}</p>
+                      <p className="text-[11px] font-mono text-fg">{new Date(w.dueDate).toLocaleDateString("es-AR")}</p>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Permit Modal ────────────────────────────────────────────────────────────
 
 export interface PermitModalPrefill {
   vesselCode?: string;
   type?: PermitType;
   workOrderId?: string;
+  /** Código de la OT, sólo para mostrarlo en la ficha (el vínculo es por id). */
+  workOrderCode?: string;
+  workOrderTitle?: string;
+  /** Abierto desde la hoja de una OT: el permiso queda atado a esa OT. */
+  lockWorkOrder?: boolean;
   location?: string;
   description?: string;
 }
@@ -204,6 +385,22 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   const [controls, setControls]       = useState(permit?.controlMeasures ?? "");
   const [ppe, setPpe]                 = useState(permit?.ppeRequired ?? "");
   const [alarmOverride, setAlarmOverride] = useState(permit?.alarmOverride ?? false);
+
+  // OT de la que cuelga el permiso. Se elige en la ventana previa a crear (o
+  // viene de la hoja de la OT). Después sólo se puede cambiar en borrador: una
+  // vez solicitado, el permiso ya se leyó como parte de esa OT.
+  const [workOrder, setWorkOrder] = useState<{ id: string; code: string | null; title: string | null } | null>(
+    permit?.workOrderId
+      ? { id: permit.workOrderId, code: permit.workOrderCode, title: permit.workOrderTitle }
+      : prefill?.workOrderId
+        ? { id: prefill.workOrderId, code: prefill.workOrderCode ?? null, title: prefill.workOrderTitle ?? null }
+        : null,
+  );
+  const [pickingWorkOrder, setPickingWorkOrder] = useState(false);
+  // El vínculo se guarda mientras el permiso sea nuevo o borrador...
+  const canLinkWorkOrder = isEditable && (isNew || permit!.status === "DRAFT");
+  // ...pero no se ofrece cambiarlo cuando el permiso se abrió desde la OT.
+  const canEditWorkOrder = canLinkWorkOrder && !prefill?.lockWorkOrder;
 
   const [tab, setTab] = useState<"details" | "participants" | "gas" | "attachments">("details");
 
@@ -317,8 +514,10 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
         ppeRequired: ppe.trim() || null,
         alarmOverride: alarmOverride,
       };
-      // Sólo al crear: si vinimos pre-cargados desde una OT, vincular.
-      if (isNew && prefill?.workOrderId) payload.workOrderId = prefill.workOrderId;
+      // El vínculo con la OT viaja mientras sea editable (permiso nuevo o en
+      // borrador). El backend valida que la OT sea del mismo tenant y buque, y
+      // rechaza el cambio si el permiso ya salió de borrador.
+      if (canLinkWorkOrder) payload.workOrderId = workOrder?.id ?? null;
       if (isNew) await api.post("/app/permits", payload);
       else await api.patch(`/app/permits/${permit!.id}`, payload);
 
@@ -350,7 +549,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
     } finally {
       setSaving(false);
     }
-  }, [isNew, permit, prefill, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, vessels, onSaved, onMocTrigger]);
+  }, [isNew, permit, prefill, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, canLinkWorkOrder, workOrder, vessels, onSaved, onMocTrigger]);
 
   const callAction = useCallback(async (action: string, body?: unknown) => {
     if (!permit) return;
@@ -428,7 +627,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   }, [permit]);
 
   // ESC: cerrar / preguntar guardar si hay cambios
-  const isDirty = useDirtyTracker({ vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride });
+  const isDirty = useDirtyTracker({ vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, workOrderId: workOrder?.id ?? null });
   const requestClose = useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? onSave : undefined, onClose });
 
   return (
@@ -463,13 +662,45 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
               {isTerminal && (
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-orange-200">{t("pm.lockedHint").replace("{status}", t(STATUS_TKEY[permit!.status]))}</p>
+                  <p className="text-xs text-orange-800 dark:text-orange-200">{t("pm.lockedHint").replace("{status}", t(STATUS_TKEY[permit!.status]))}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
+                {/* OT asociada: de qué trabajo planificado cuelga este permiso. */}
+                <div className="col-span-2">
+                  <label className={labelCls}>{t("pm.linkedWo")}</label>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10">
+                    {workOrder ? (
+                      <>
+                        <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
+                        <span className="text-xs font-mono font-bold text-fg shrink-0">{workOrder.code ?? "—"}</span>
+                        <span className="text-xs text-text-industrial/60 truncate flex-1">{workOrder.title?.trim() || ""}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-text-industrial/50 flex-1">{t("pm.noLinkedWo")}</span>
+                    )}
+                    {canEditWorkOrder && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button type="button" onClick={() => setPickingWorkOrder(true)}
+                          className="text-[10px] font-bold uppercase tracking-wider text-accent hover:brightness-110">
+                          {workOrder ? t("pm.changeWo") : t("pm.linkWo")}
+                        </button>
+                        {workOrder && (
+                          <button type="button" onClick={() => setWorkOrder(null)}
+                            className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50 hover:text-fg">
+                            {t("pm.unlinkWo")}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {!canLinkWorkOrder && workOrder && (
+                    <p className="text-[10px] text-text-industrial/40 mt-1">{t("pm.woLockedHint")}</p>
+                  )}
+                </div>
                 <div>
                   <label className={labelCls}>{t("pm.vessel")}</label>
-                  <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || !isEditable} className={inputCls}>
+                  <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || !isEditable || !!workOrder} className={inputCls}>
                     {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                   </select>
                 </div>
@@ -554,8 +785,8 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                     className="mt-0.5 accent-orange-400"
                   />
                   <div className="flex-1">
-                    <p className="text-xs font-semibold text-orange-200">{t("pm.overrideBypass")}</p>
-                    <p className="text-[10px] text-orange-200/70 mt-0.5">
+                    <p className="text-xs font-semibold text-orange-800 dark:text-orange-200">{t("pm.overrideBypass")}</p>
+                    <p className="text-[10px] text-orange-800/80 dark:text-orange-200/70 mt-0.5">
                       Marcalo si este permiso requiere anular o by-passear una alarma de safety
                       (fire detection, gas, ESD, etc.). El sistema sugerirá registrar un MOC temporal.
                     </p>
@@ -564,14 +795,14 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
                 <div className="col-span-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
                   <Sparkles className="w-3 h-3 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-blue-200/80 leading-snug">
+                  <p className="text-[10px] text-blue-900/80 dark:text-blue-200/80 leading-snug">
                     Las sugerencias de Peligros / Controles / EPP son orientativas (asistente IA). Cada aseveración cuantitativa debería estar respaldada por la regulación aplicable. Para entrada a espacio confinado, los umbrales son ISGOTT 6 Cap. 11 (O₂ 19.5–23%, LEL &lt;1%, H₂S &lt;10 ppm, CO &lt;50 ppm); el sistema los valida server-side al hacer el gas test.
                   </p>
                 </div>
                 {permit?.rejectionReason && (
                   <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 font-bold mb-1">{t("pm.rejectReason")}</p>
-                    <p className="text-xs text-red-200">{permit.rejectionReason}</p>
+                    <p className="text-xs text-red-800 dark:text-red-200">{permit.rejectionReason}</p>
                   </div>
                 )}
                 {permit?.cancelReason && (
@@ -654,6 +885,20 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
           </div>
         </div>
       </div>
+
+      {pickingWorkOrder && (
+        <WorkOrderPicker
+          initialVesselCode={vesselCode || null}
+          lockVessel={!isNew}
+          onClose={() => setPickingWorkOrder(false)}
+          onPick={wo => {
+            setWorkOrder({ id: wo.id, code: wo.workOrderCode, title: wo.title });
+            // El permiso vive en el buque de su OT: el backend rechaza el cruce.
+            setVesselCode(wo.vesselCode);
+            setPickingWorkOrder(false);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1022,6 +1267,66 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
+/** Pasos del alta de un permiso. */
+type CreateFlow =
+  | { step: "origin" }
+  | { step: "workOrder" }
+  | { step: "form"; prefill?: PermitModalPrefill };
+
+/**
+ * Alta de un permiso en tres pasos: origen (OT abierta / ocasional) → elegir la
+ * OT → formulario. Se monta desde esta pantalla y desde el acceso grande del
+ * Dashboard, para que el flujo sea el mismo desde los dos lados.
+ */
+export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void }> = ({ onClose, onSaved }) => {
+  const [flow, setFlow] = useState<CreateFlow>({ step: "origin" });
+  const mocTrigger = useMocTrigger();
+
+  return (
+    <>
+      {flow.step === "origin" && (
+        <PermitOriginChooser
+          onFromWorkOrder={() => setFlow({ step: "workOrder" })}
+          onStandalone={() => setFlow({ step: "form" })}
+          onClose={onClose}
+        />
+      )}
+
+      {flow.step === "workOrder" && (
+        <WorkOrderPicker
+          onClose={() => setFlow({ step: "origin" })}
+          onPick={wo => setFlow({
+            step: "form",
+            prefill: {
+              vesselCode: wo.vesselCode,
+              workOrderId: wo.id,
+              workOrderCode: wo.workOrderCode,
+              workOrderTitle: wo.title ?? undefined,
+              location: wo.location ?? "",
+              description: wo.title ?? "",
+              // Sugerencia advisory del tipo de permiso según el texto de la OT
+              // (mismo clasificador que usa la hoja de la OT).
+              type: suggestPermitTypesFromText(`${wo.title ?? ""} ${wo.assetName ?? ""}`)[0]?.type,
+            },
+          })}
+        />
+      )}
+
+      {flow.step === "form" && (
+        <PermitModal
+          permit={null}
+          prefill={flow.prefill}
+          onClose={onClose}
+          onSaved={() => { onSaved?.(); onClose(); }}
+          onMocTrigger={mocTrigger.ask}
+        />
+      )}
+
+      <MocTriggerHost controller={mocTrigger} />
+    </>
+  );
+};
+
 export const PermitsPage: React.FC = () => {
   const t = useT();
   // Estado inicial del filtro tomado de la URL (?status=DRAFT) — permite el
@@ -1043,7 +1348,7 @@ export const PermitsPage: React.FC = () => {
   // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
   const tmsaFilter = useTmsaFilter();
   const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, p => p.id), [data, tmsaFilter]);
-  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating]     = useState(false);
   const [editing, setEditing]       = useState<Permit | null>(null);
   const mocTrigger = useMocTrigger();
 
@@ -1051,7 +1356,7 @@ export const PermitsPage: React.FC = () => {
     <div className="p-6 space-y-4">
       <PageHeader icon={ShieldAlert} title="Permisos de Trabajo" total={data?.total} onReload={reload}>
         <ExportExcelButton module="permits" />
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
+        <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
           <Plus className="w-3.5 h-3.5" /> Nuevo permiso
         </button>
       </PageHeader>
@@ -1089,6 +1394,12 @@ export const PermitsPage: React.FC = () => {
                     <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[p.status]}`}>{t(STATUS_TKEY[p.status])}</span>
                     <VesselLabel code={p.vesselCode} className="text-[10px]" showCode />
                     <span className="text-[10px] text-text-industrial/50">{t(TYPE_TKEY[p.type])}</span>
+                    {p.workOrderCode && (
+                      <span title={p.workOrderTitle ?? undefined}
+                        className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-accent/10 border-accent/20 text-accent">
+                        {p.workOrderCode}
+                      </span>
+                    )}
                     {p.type === "ENCLOSED_SPACE_ENTRY" && p.gasTests.length > 0 && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-fg/5 border-fg/10 text-text-industrial/60">
                         {p.gasTests.length} gas test{p.gasTests.length !== 1 ? "s" : ""}
@@ -1109,11 +1420,13 @@ export const PermitsPage: React.FC = () => {
         </div>
       )}
 
-      {(showCreate || editing) && (
+      {creating && <NewPermitFlow onClose={() => setCreating(false)} onSaved={() => { void reload(); }} />}
+
+      {editing && (
         <PermitModal
           permit={editing}
-          onClose={() => { setShowCreate(false); setEditing(null); }}
-          onSaved={() => { setShowCreate(false); setEditing(null); void reload(); }}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); void reload(); }}
           onMocTrigger={mocTrigger.ask}
         />
       )}

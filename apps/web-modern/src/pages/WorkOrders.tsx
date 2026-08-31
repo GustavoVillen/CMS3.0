@@ -136,6 +136,10 @@ interface LinkedPermit {
   rejectionReason: string | null;
   cancelReason: string | null;
   tenantId: string;
+  // OT de la que cuelga el permiso (acá siempre esta OT) — la resuelve el backend.
+  workOrderId: string | null;
+  workOrderCode: string | null;
+  workOrderTitle: string | null;
   gasTests: Array<{ id: string; testedAt: string; testedByName: string; location: string | null; o2Pct: number | null; lelPct: number | null; h2sPpm: number | null; coPpm: number | null; verdict: "PASS" | "FAIL"; notes: string | null }>;
   participants: Array<{ id: string; crewId: string | null; name: string; role: "PERFORMER" | "FIRE_WATCH" | "STAND_BY" | "ATTENDANT" | "SUPERVISOR" }>;
 }
@@ -1524,6 +1528,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     vesselCode: workOrder.vesselCode,
     type: forcedType ?? advisoryMatches[0]?.type ?? "HOT_WORK",
     workOrderId: workOrder.id,
+    workOrderCode: workOrder.workOrderCode,
+    workOrderTitle: workOrder.title ?? undefined,
+    lockWorkOrder: true,
     location: workOrder.location ?? "",
     description: title || description || workOrder.title || workOrder.description || "",
   }), [workOrder, title, description, advisoryMatches]);
