@@ -2593,17 +2593,18 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   )}
                 </div>
               }
+              /* REPUESTOS y MATERIALES: en la hoja sólo va el aviso. El ancho del
+                 papel corta el código del repuesto y no deja ni leer ni cargar el
+                 listado, así que la carga real vive en la sección 3, debajo de la
+                 hoja y a todo el ancho del modal. */
               spares={
-                <PlannedItemsEditor
-                  items={plannedItems}
-                  onChange={v => { touchRegi(); setPlannedItems(v); }}
-                  spares={woSpares}
-                  disabled={!isEditable}
-                />
+                <p className="text-[11px] italic text-text-industrial/50">
+                  Los repuestos se registran más abajo, en la sección 3 “Repuestos y materiales”.
+                </p>
               }
               materials={
                 <p className="text-[11px] italic text-text-industrial/50">
-                  Los materiales se cargan en el mismo listado de arriba, eligiendo el tipo “Material”.
+                  Los materiales se registran más abajo, en la sección 3 “Repuestos y materiales”.
                 </p>
               }
               schedule={
@@ -2900,6 +2901,24 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 ))}
               </div>
             )}
+          </section>
+          )}
+
+          {/* ── 3. REPUESTOS Y MATERIALES ──
+              Sale de la hoja (donde el recuadro quedaba ilegible) y se carga
+              acá, a todo el ancho. Mismos permisos de siempre: se editan con la
+              OT abierta, sin esperar la aprobación. */}
+          {isMercurio && (
+          <section className="space-y-3">
+            <PhaseHeader n={3} label="Repuestos y materiales" dotCls="bg-amber-500/15 text-amber-700 dark:text-amber-400" borderCls="border-amber-500/25" />
+            <div className="bg-fg/[0.03] border border-fg/10 rounded-2xl p-4">
+              <PlannedItemsEditor
+                items={plannedItems}
+                onChange={v => { touchRegi(); setPlannedItems(v); }}
+                spares={woSpares}
+                disabled={!isEditable}
+              />
+            </div>
           </section>
           )}
 
