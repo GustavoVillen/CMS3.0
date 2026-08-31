@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2 } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, ListChecks } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +21,9 @@ import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
+import { SsProgressFlow } from "../components/service-requests/SsProgressFlow";
+import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumptionFlow";
+import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
 import { UpcomingTasksModal, type UpcomingTasksResponse } from "../components/UpcomingTasksModal";
 import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
@@ -61,6 +64,8 @@ interface PendingCounts {
   defectsNew: number;
   deferralsNew: number;
   mocNew: number;
+  /** ISM 10.2.3: cerrados hace 30+ días sin confirmar si la medida funcionó. */
+  defectsToVerify: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +157,12 @@ export const Dashboard: React.FC = () => {
   // Mismos roles que protegen /tmsa en App.tsx (RequireRole) — se oculta acá
   // para no mostrar un botón que termina en pantalla bloqueada.
   const canSeeTmsaAudit = user ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role) : false;
+  // Asentar novedades en la hoja de ruta: cualquiera menos el rol de sólo
+  // lectura (mismo criterio que canManage del backend de SS).
+  const canLogSsProgress = !!user && user.role !== "AUDITOR_READONLY";
+  // El consumo se guarda con un PATCH de la OT: exige `wo.manage`, igual que el
+  // backend (canManageWorkOrders). El tripulante lo carga al cerrar la orden.
+  const canLogSpareUse = can("wo.manage");
   const isDark       = theme === "dark";
   // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
   const chartTooltip = {
@@ -174,6 +185,13 @@ export const Dashboard: React.FC = () => {
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
   const [showSsChooser, setShowSsChooser] = React.useState(false);
   const [showNewPermit, setShowNewPermit] = React.useState(false);
+  // Registrar el avance de una SS ya mandada al taller: elegir la solicitud en
+  // ejecución y asentarle novedades en la hoja de ruta del pedido.
+  const [showSsProgress, setShowSsProgress] = React.useState(false);
+  // Consumo de repuestos sobre una OT abierta: descuenta stock del buque.
+  const [showSpareUse, setShowSpareUse] = React.useState(false);
+  // Completar un checklist: se elige el template y el alta sigue en /checklists.
+  const [showChecklistPicker, setShowChecklistPicker] = React.useState(false);
   // Cuarto camino del asistente de SS: la OT ya existe. En vez de crear una
   // orden nueva, se elige entre las abiertas y se abre esa OT, que es donde vive
   // el alta de la solicitud.
@@ -701,6 +719,22 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         />
       )}
 
+      {showSsProgress && <SsProgressFlow onClose={() => setShowSsProgress(false)} />}
+
+      {showSpareUse && <SpareConsumptionFlow onClose={() => setShowSpareUse(false)} />}
+
+      {showChecklistPicker && (
+        <ChecklistTemplatePicker
+          onClose={() => setShowChecklistPicker(false)}
+          onPick={templateId => {
+            setShowChecklistPicker(false);
+            // El alta vive en /checklists: ahí se completa buque/fecha/puerto y
+            // al crear se abre el checklist para responder los ítems.
+            navigate(`/checklists?new=${encodeURIComponent(templateId)}`);
+          }}
+        />
+      )}
+
       {showMpChooser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowMpChooser(false)}>
           <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -838,7 +872,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             "Horas de Equipos" más abajo (assetHours.data): sólo se ve con buque
             elegido y permiso de carga, igual que ese widget. */}
         {assetHours.data?.canWrite && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <button
               onClick={() => setShowHoursEntry(true)}
               className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
@@ -849,45 +883,81 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
         )}
 
-        {/* Fila 2 — lo que se crea: OT, SS, inspección y permiso de trabajo. */}
+        {/* Fila 2 — lo que se crea: OT, SS, inspección, permiso de trabajo y el
+            registro de avance de una SS que ya está en el taller. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={() => setShowNewWoWizard(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
           >
-            <Wrench className="w-6 h-6 text-accent shrink-0" />
+            <Wrench className="w-6 h-6 text-success-sea shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
           </button>
           <button
             onClick={() => setShowSsChooser(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
           >
-            <Handshake className="w-6 h-6 text-accent shrink-0" />
+            <Handshake className="w-6 h-6 text-success-sea shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
           </button>
           <button
             onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
           >
-            <ShieldCheck className="w-6 h-6 text-accent shrink-0" />
+            <ShieldCheck className="w-6 h-6 text-success-sea shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
           </button>
           {canManagePermits && (
             <button
               onClick={() => setShowNewPermit(true)}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
             >
-              <ShieldAlert className="w-6 h-6 text-accent shrink-0" />
+              <ShieldAlert className="w-6 h-6 text-success-sea shrink-0" />
               <span className="font-bold text-sm text-fg">{t("dashboard.newPermit")}</span>
+            </button>
+          )}
+          {/* Asentar el avance de un pedido al taller. Se oculta al rol de sólo
+              lectura: el backend rechaza la novedad (ver canManage en
+              service-requests-service.ts). */}
+          {canLogSsProgress && (
+            <button
+              onClick={() => setShowSsProgress(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <ClipboardCheck className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.ssProgress.button")}</span>
+            </button>
+          )}
+          {/* Registrar lo que se consumió en una OT. Descuenta stock, así que
+              pide el mismo permiso que editar la orden. */}
+          {canLogSpareUse && (
+            <button
+              onClick={() => setShowSpareUse(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <PackageMinus className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.spareUse.button")}</span>
+            </button>
+          )}
+          {/* Completar un checklist de a bordo. Mismo criterio de permiso que
+              el resto de los registros: todos menos el rol de sólo lectura
+              (canWrite en checklists-service.ts). */}
+          {canLogSsProgress && (
+            <button
+              onClick={() => setShowChecklistPicker(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <ListChecks className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.checklist.button")}</span>
             </button>
           )}
         </div>
 
         {/* Fila 3 — lo que se consulta: plan, agenda de la semana y estado. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets("planList"); setShowMpChooser(true); }}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"
           >
             <ClipboardList className="w-6 h-6 text-accent shrink-0" />
             <span className="font-bold text-sm text-fg">{t("nav.maintenancePlans")}</span>
@@ -897,7 +967,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               se pinta en rojo si hay atrasos. */}
           <button
             onClick={() => setShowUpcoming(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"
           >
             <CalendarClock className="w-6 h-6 text-accent shrink-0" />
             <span className="font-bold text-sm text-fg flex-1 min-w-0">{t("dashboard.upcoming.button")}</span>
@@ -913,7 +983,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </button>
           <button
             onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets("status"); setShowMpChooser(true); }}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"
           >
             <Gauge className="w-6 h-6 text-accent shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.equipmentStatusButton")}</span>
@@ -924,19 +994,19 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             cláusulas del Capítulo 10 del Código ISM, ambas con datos en vivo del
             buque. Mismos roles que protegen /tmsa e /ism. */}
         {canSeeTmsaAudit && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <button
               onClick={() => navigate("/tmsa?tab=checklist")}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-violet-500/10 border border-violet-500/30 hover:border-violet-500/60 hover:bg-violet-500/20 transition-all text-left"
             >
-              <ClipboardCheck className="w-6 h-6 text-accent shrink-0" />
+              <ClipboardCheck className="w-6 h-6 text-violet-600 dark:text-violet-400 shrink-0" />
               <span className="font-bold text-sm text-fg">{t("dashboard.tmsaAudit")}</span>
             </button>
             <button
               onClick={() => navigate("/ism?tab=checklist")}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-violet-500/10 border border-violet-500/30 hover:border-violet-500/60 hover:bg-violet-500/20 transition-all text-left"
             >
-              <LifeBuoy className="w-6 h-6 text-accent shrink-0" />
+              <LifeBuoy className="w-6 h-6 text-violet-600 dark:text-violet-400 shrink-0" />
               <span className="font-bold text-sm text-fg">{t("dashboard.ismAudit")}</span>
             </button>
           </div>
@@ -967,6 +1037,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           { key: "defects",      labelKey: "nav.defects" as TranslationKey,        count: pc.defectsNew,        route: "/defects?status=OPEN" },
           { key: "deferrals",    labelKey: "nav.deferrals" as TranslationKey,      count: pc.deferralsNew,      route: "/deferrals?status=REQUESTED" },
           { key: "moc",          labelKey: "nav.moc" as TranslationKey,            count: pc.mocNew,            route: "/moc?status=REQUESTED" },
+          // ISM 10.2.3: defectos esperando la confirmación de que el problema no volvió.
+          { key: "defectsVerify", labelKey: "def.verify.stripTitle" as TranslationKey, count: pc.defectsToVerify, route: "/defects?verification=DUE" },
         ].filter(i => i.count > 0);
         if (items.length === 0) return null;
         return (

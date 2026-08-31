@@ -40,7 +40,7 @@ function stockCls(s: WoSpareOption): string {
  * Buscador de repuesto con typeahead (mismo patrón que AssetSearchDropdown):
  * escribir filtra por SKU o nombre, y cada opción muestra su stock con semáforo.
  */
-function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel }: {
+export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel }: {
   spares: WoSpareOption[];
   value: string;
   onChange: (id: string) => void;
@@ -50,8 +50,25 @@ function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel 
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // La lista se despliega hacia abajo salvo que no entre: adentro de un modal
+  // con scroll (ej. el consumo de repuestos del Dashboard) quedaba recortada y
+  // no se veían las opciones.
+  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /** Alto que ocupa el panel: buscador + hasta 13rem de opciones. */
+  const PANEL_PX = 250;
+  const abrir = () => {
+    const r = containerRef.current?.getBoundingClientRect();
+    if (r) {
+      const abajo = window.innerHeight - r.bottom;
+      setDropUp(abajo < PANEL_PX && r.top > abajo);
+    }
+    setOpen(true);
+    setQuery("");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
 
   const selected = spares.find(s => s.id === value) ?? null;
 
@@ -76,7 +93,7 @@ function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel 
       <button
         type="button"
         disabled={disabled}
-        onClick={() => { if (disabled) return; setOpen(true); setQuery(""); setTimeout(() => inputRef.current?.focus(), 0); }}
+        onClick={() => { if (disabled) return; abrir(); }}
         className={`${cellCls} w-full flex items-center gap-2 text-left ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-accent/40"}`}
       >
         {selected ? (
@@ -90,7 +107,7 @@ function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel 
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-surface dark:bg-[#111827] border border-fg/10 rounded-xl shadow-xl overflow-hidden">
+        <div className={`absolute z-50 left-0 right-0 bg-surface dark:bg-[#111827] border border-fg/10 rounded-xl shadow-xl overflow-hidden ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           <div className="flex items-center gap-2 px-3 py-2 border-b border-fg/10">
             <Search className="w-3.5 h-3.5 text-fg/30 shrink-0" />
             <input

@@ -74,6 +74,8 @@ const OWN_METRIC_LABEL: Record<string, string> = {
   ismClosedWithAction:         "Con medida registrada",
   ismClosedWithoutAction:      "Sin medida registrada",
   ismCorrectiveWoOpen:         "OT correctivas abiertas",
+  ismEffectivenessVerified:    "Eficacia verificada",
+  ismEffectivenessOverdue:     "Verificación vencida",
   ismCorrectiveActionRate:     "Cobertura de medidas",
   ismWoClosed90d:              "OT cerradas (90 d)",
   ismWorkLogs90d:              "Partes de trabajo (90 d)",

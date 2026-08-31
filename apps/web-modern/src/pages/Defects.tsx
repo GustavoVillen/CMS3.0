@@ -13,7 +13,7 @@ import { AuthedImage } from "../lib/authed-media";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useT, useWoTerms } from "../lib/i18n";
+import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
@@ -24,6 +24,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { AlertDialog } from "../components/AlertDialog";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
@@ -59,6 +60,11 @@ interface Defect {
   rcaApprovedByUserId: string | null;
   capaDescription: string | null;
   repairType: string | null;
+  // ISM 10.2.3 — verificación de eficacia de la medida correctiva.
+  effectivenessDueAt: string | null;
+  effectivenessVerifiedAt: string | null;
+  effectivenessOutcome: "EFFECTIVE" | "PARTIALLY_EFFECTIVE" | "INEFFECTIVE" | null;
+  effectivenessNote: string | null;
   createdAt: string;
 }
 
@@ -111,6 +117,26 @@ async function downloadDefectPdf(defect: Defect) {
   URL.revokeObjectURL(url);
 }
 
+
+// ─── Verificación de eficacia (ISM 10.2.3) ────────────────────────────────────
+// Al cerrar un defecto hay que decir CÓMO se comprobó que quedó resuelto. Son
+// opciones tocables porque la carga la hace la tripulación a bordo: escribir un
+// texto libre en un teléfono es la fricción que hace que nadie lo complete.
+
+type CloseCheckKey = "tested" | "watch" | "chief" | "other";
+
+const CLOSE_CHECK_OPTIONS: { key: CloseCheckKey; labelKey: TranslationKey }[] = [
+  { key: "tested", labelKey: "def.verify.optionTested" },
+  { key: "watch",  labelKey: "def.verify.optionWatch" },
+  { key: "chief",  labelKey: "def.verify.optionChief" },
+  { key: "other",  labelKey: "def.verify.optionOther" },
+];
+
+function effectivenessLabelKey(outcome: string | null): TranslationKey {
+  if (outcome === "INEFFECTIVE") return "def.verify.ineffective";
+  if (outcome === "PARTIALLY_EFFECTIVE") return "def.verify.partial";
+  return "def.verify.effective";
+}
 
 // ─── Origen del defecto ───────────────────────────────────────────────────────
 // El origen se deriva de la clasificación: las clasificaciones generadas por el
@@ -785,6 +811,11 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   const [repairType, setRepairType]           = useState<"TEMPORARIA" | "PERMANENTE" | null>(
     defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null,
   );
+  // ISM 10.2.3 — cómo se comprobó que el problema quedó resuelto. Es obligatorio
+  // para cerrar: viaja como nota de cierre y arranca el reloj de los 30 días
+  // para confirmar que no volvió.
+  const [closeCheck, setCloseCheck]     = useState<CloseCheckKey | null>(null);
+  const [closeCheckOther, setCloseCheckOther] = useState("");
 
   const [saving, setSaving]           = useState(false);
   const [closing, setClosing]         = useState(false);
@@ -1048,7 +1079,27 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     }
   }, [classification, correctiveAction, defect.id, description, immediateAction, operationalState, rcaAnalysis, rcaMethodology, rcaImmediateCause, rcaContributingCause, rcaRootCause, rcaPreventiveActions, repairType, severity, status, t]);
 
-  const closeDefectAndWo = useCallback(async () => {
+  /**
+   * Texto de la comprobación elegida al cerrar, o null si todavía no se eligió
+   * (o se eligió "Otra" y no se escribió nada). El backend lo exige: es la
+   * constancia de que alguien verificó el arreglo, no un comentario opcional.
+   */
+  const closeCheckText = useMemo(() => {
+    if (!closeCheck) return null;
+    if (closeCheck === "other") return closeCheckOther.trim() || null;
+    const opt = CLOSE_CHECK_OPTIONS.find(o => o.key === closeCheck)!;
+    return t(opt.labelKey);
+  }, [closeCheck, closeCheckOther, t]);
+
+  /**
+   * `noteOverride` es para el camino "reparación temporaria + OT permanente":
+   * ahí el defecto se cierra porque el trabajo definitivo sigue en la OT nueva,
+   * no porque alguien haya comprobado el arreglo, así que la constancia de
+   * cierre la escribe el sistema y no se le pide nada más al usuario.
+   */
+  const closeDefectAndWo = useCallback(async (noteOverride?: string) => {
+    const note = noteOverride ?? closeCheckText;
+    if (!note) { setActionError(t("def.verify.required")); return; }
     setClosing(true);
     try {
       // Backend requires RESOLVED before CLOSED
@@ -1061,18 +1112,22 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           observations: `Reparación permanente registrada en defecto ${defect.defectCode}`,
         }).catch(() => {}); // WO might already be closed — ignore
       }
-      await api.post(`/app/pms/defects/${defect.id}/close`, {
-        closeNotes: `Reporte de Defecto cerrado.`,
-      });
+      await api.post(`/app/pms/defects/${defect.id}/close`, { closeNotes: note });
       onSaved();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Error al cerrar el registro.");
     } finally {
       setClosing(false);
     }
-  }, [defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved]);
+  }, [closeCheckText, defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved, t]);
 
   const handleSave = useCallback(async () => {
+    // La comprobación se valida ANTES de guardar: si no, el defecto quedaría
+    // parcheado y el aviso saldría después, con el formulario ya modificado.
+    if (repairType === "PERMANENTE" && !closeCheckText) {
+      setActionError(t("def.verify.required"));
+      return;
+    }
     if (!await patchDefect()) return;
     if (repairType === "PERMANENTE") {
       await closeDefectAndWo();
@@ -1081,7 +1136,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     } else {
       onSaved();
     }
-  }, [closeDefectAndWo, onSaved, patchDefect, repairType]);
+  }, [closeCheckText, closeDefectAndWo, onSaved, patchDefect, repairType, t]);
 
   // ESC guard: dirty si algun campo editable difiere del valor original del defect
   const isDirty = !isClosed && (
@@ -1151,7 +1206,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           // Link new WO to the defect, then close defect + original WO
           await api.patch(`/app/pms/defects/${defect.id}`, { workOrderId: woId });
           setShowCreateWo(false);
-          await closeDefectAndWo();
+          await closeDefectAndWo(t("def.verify.closedIntoWo"));
         }}
       />
     );
@@ -1214,6 +1269,25 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
               <div className="rounded-xl border border-success-sea/20 bg-success-sea/10 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wider text-success-sea mb-1">{t("def.closeNotes")}</p>
                 <p className="text-sm text-success-sea">{closeNotes}</p>
+              </div>
+            )}
+
+            {/* ISM 10.2.3 — resultado de la verificación de eficacia, o cuándo toca. */}
+            {isClosed && (defect.effectivenessVerifiedAt || defect.effectivenessDueAt) && (
+              <div className={`rounded-xl border px-3 py-2 ${
+                !defect.effectivenessVerifiedAt ? "border-amber-500/30 bg-amber-500/10"
+                  : defect.effectivenessOutcome === "INEFFECTIVE" ? "border-red-500/30 bg-red-500/10"
+                  : "border-success-sea/20 bg-success-sea/10"
+              }`}>
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("def.verify.result")}</p>
+                <p className="text-sm text-fg">
+                  {defect.effectivenessVerifiedAt
+                    ? `${t(effectivenessLabelKey(defect.effectivenessOutcome))} · ${fmtDate(defect.effectivenessVerifiedAt)}`
+                    : `${t("def.verify.pendingUntil")} ${fmtDate(defect.effectivenessDueAt)}`}
+                </p>
+                {defect.effectivenessNote && (
+                  <p className="text-xs text-text-industrial/70 mt-1">{defect.effectivenessNote}</p>
+                )}
               </div>
             )}
 
@@ -1468,10 +1542,44 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                 {repairType === "TEMPORARIA" && (
                   <p className="text-[11px] text-yellow-700 dark:text-yellow-400/70">{t("def.saveWillAskWo")}</p>
                 )}
+
+                {/* ISM 10.2.3 — cómo se comprobó que quedó resuelto. Sólo aparece
+                    en la reparación permanente, que es la que cierra el defecto:
+                    en la temporaria el trabajo sigue en otra OT y no hay nada
+                    que verificar todavía. */}
+                {repairType === "PERMANENTE" && (
+                  <div className="pt-3 border-t border-fg/10 space-y-2">
+                    <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def.verify.closeQuestion")}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CLOSE_CHECK_OPTIONS.map(opt => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setCloseCheck(prev => prev === opt.key ? null : opt.key)}
+                          className={`py-2 px-3 rounded-xl border text-xs font-bold text-left transition-all ${
+                            closeCheck === opt.key
+                              ? "bg-accent/15 border-accent/50 text-accent"
+                              : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-fg/20 hover:text-fg"
+                          }`}
+                        >
+                          {t(opt.labelKey)}
+                        </button>
+                      ))}
+                    </div>
+                    {closeCheck === "other" && (
+                      <input
+                        type="text"
+                        value={closeCheckOther}
+                        onChange={e => setCloseCheckOther(e.target.value)}
+                        placeholder={t("def.verify.otherPh")}
+                        className="w-full px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-fg placeholder:text-text-industrial/40 focus:border-accent/40 focus:outline-none"
+                      />
+                    )}
+                    <p className="text-[11px] text-text-industrial/50">{t("def.verify.closeHint")}</p>
+                  </div>
+                )}
               </div>
             )}
-
-            {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
           </div>
 
           <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
@@ -1566,7 +1674,92 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           </div>
         </div>
       )}
+
+      {/* Validaciones y errores de acción: ventanita con OK, no recuadro al pie
+          (en un formulario tan largo el recuadro quedaba fuera de la vista y
+          parecía que el botón no había hecho nada). */}
+      {actionError && <AlertDialog message={actionError} onClose={() => setActionError(null)} />}
     </>
+  );
+};
+
+/**
+ * ISM 10.2.3 — franja "Para revisar".
+ *
+ * Los defectos cerrados hace 30 días o más que todavía no confirmaron si el
+ * problema volvió. Son dos botones y nada más: la tripulación no tiene que
+ * abrir el registro ni escribir nada para dejar la evidencia que pide el
+ * Código. "Volvió a fallar" no re-abre el defecto (eso es exclusivo del
+ * administrador): registra que la medida no fue efectiva y ofrece cargar la
+ * reincidencia como un defecto nuevo, que es el circuito de siempre.
+ */
+const EffectivenessReviewStrip: React.FC<{
+  items: Defect[];
+  onDone: () => void;
+  onRecurrence: (defect: Defect) => void;
+}> = ({ items, onDone, onRecurrence }) => {
+  const t = useT();
+  const { user } = useAuth();
+  const canVerify = user?.role !== "AUDITOR_READONLY";
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const verify = useCallback(async (row: Defect, outcome: "EFFECTIVE" | "INEFFECTIVE") => {
+    setBusyId(row.id);
+    try {
+      await api.post(`/app/pms/defects/${row.id}/verify-effectiveness`, { outcome });
+      if (outcome === "INEFFECTIVE") onRecurrence(row);
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("def.verify.error"));
+    } finally {
+      setBusyId(null);
+    }
+  }, [onDone, onRecurrence, t]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+        <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
+          {t("def.verify.stripTitle")} ({items.length})
+        </span>
+        <span className="text-[11px] text-text-industrial/60">{t("def.verify.stripHint")}</span>
+      </div>
+      <div className="space-y-1.5">
+        {items.map(row => (
+          <div key={row.id} className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg bg-fg/5 border border-fg/10">
+            <span className="font-mono font-bold text-fg text-xs">{row.defectCode}</span>
+            <VesselLabel code={row.vesselCode} className="text-[11px]" />
+            <AssetLabel id={row.assetId} className="text-[11px] text-text-industrial/70 truncate max-w-[220px]" />
+            <span className="text-[11px] text-text-industrial/50 truncate flex-1 min-w-[120px]">{row.description}</span>
+            {canVerify && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  disabled={busyId === row.id}
+                  onClick={() => { void verify(row, "EFFECTIVE"); }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/25 disabled:opacity-50 transition-colors"
+                >
+                  {busyId === row.id ? <Loader2 className="w-3 h-3 animate-spin" /> : t("def.verify.stillOk")}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId === row.id}
+                  onClick={() => { void verify(row, "INEFFECTIVE"); }}
+                  className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 text-[11px] font-bold hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+                >
+                  {t("def.verify.failedAgain")}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {error && <AlertDialog message={error} onClose={() => setError(null)} />}
+    </div>
   );
 };
 
@@ -1597,6 +1790,9 @@ export const DefectsPage: React.FC = () => {
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const severityFilter = (searchParams.get("severity") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
+  // ISM 10.2.3: `?verification=DUE` llega desde el Dashboard y muestra sólo los
+  // defectos que esperan la confirmación de que el problema no volvió.
+  const verificationFilter = (searchParams.get("verification") ?? "").trim();
   // Compat: `?defectId=` (por id) → resuelve el código y redirige a `/defects/:code`.
   //
   // Este redirector es un PUENTE, no un destino: se resuelve con UNA sola
@@ -1643,11 +1839,17 @@ export const DefectsPage: React.FC = () => {
     if (statusFilter) params.set("status", statusFilter);
     if (severityFilter) params.set("severity", severityFilter);
     if (vesselFilter) params.set("vesselCode", vesselFilter);
+    if (verificationFilter) params.set("verification", verificationFilter);
     const query = params.toString();
     return `/app/pms/defects${query ? `?${query}` : ""}`;
-  }, [severityFilter, statusFilter, vesselFilter]);
+  }, [severityFilter, statusFilter, vesselFilter, verificationFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+
+  // Franja "Para revisar": los cerrados hace 30+ días sin confirmar. Se pide
+  // aparte de la lista principal para que aparezca esté como esté filtrada la
+  // pantalla: es la única parte de la app con los botones de confirmación.
+  const reviewDue = useFetch<ListResponse>("/app/pms/defects?verification=DUE", []);
   const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
 
   const openDetail = useCallback(async (row: Defect) => {
@@ -1758,6 +1960,19 @@ export const DefectsPage: React.FC = () => {
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
       {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
+
+      <EffectivenessReviewStrip
+        items={reviewDue.data?.items ?? []}
+        onDone={() => { void reviewDue.reload(); void reload(); }}
+        onRecurrence={row => {
+          setCreatePrefill({
+            vesselCode: row.vesselCode,
+            assetId: row.assetId,
+            detail: `${t("def.verify.recurrence")} ${row.defectCode}: ${row.description}`,
+          });
+          setCreating(true);
+        }}
+      />
 
       <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
       <DataTable columns={columns} data={tmsaItems} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => openLink(row.defectCode)} />

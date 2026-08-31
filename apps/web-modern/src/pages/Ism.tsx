@@ -332,7 +332,7 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
     chips: [{ navKey: "nav.inspections", route: "/inspections" }, { navKey: "nav.checklists", route: "/checklists" }] },
   { clause: "10.2.2", rating: "full", liveGroupKey: "nonConformity",
     chips: [{ navKey: "nav.defects", route: "/defects" }, { navKey: "nav.externalAudits", route: "/external-audits" }] },
-  { clause: "10.2.3", rating: "partial", liveGroupKey: "correctiveAction",
+  { clause: "10.2.3", rating: "full", liveGroupKey: "correctiveAction",
     chips: [{ navKey: "nav.defects", route: "/defects" }, { navKey: "nav.workOrders", route: "/work-orders" }, { navKey: "nav.deferrals", route: "/deferrals" }] },
   { clause: "10.2.4", rating: "full", liveGroupKey: "maintenanceRecords",
     chips: [{ navKey: "nav.workOrders", route: "/work-orders" }, { navKey: "ism.tabs.evidence", tab: true }] },

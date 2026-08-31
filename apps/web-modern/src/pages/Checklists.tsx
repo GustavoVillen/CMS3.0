@@ -16,6 +16,7 @@ import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { useSearchParams } from "react-router-dom";
 
 const TYPE_TKEY: Record<string, TranslationKey> = {
   PRE_ARRIVAL: "cl.type.preArrival",
@@ -93,7 +94,14 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 
 // ─── Execution modal (con responses inline) ──────────────────────────────────
 
-const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templateId: string; vesselCode: string }; onClose: () => void; onSaved: () => void }> = ({ executionId, onCreate, onClose, onSaved }) => {
+const ExecutionModal: React.FC<{
+  executionId: string | null;
+  /** Alta con el template ya elegido (acceso "Completar Check List" del Dashboard). */
+  onCreate?: { templateId: string; vesselCode?: string };
+  onClose: () => void;
+  /** `newId` = el checklist recién creado, para abrirlo y responderlo. */
+  onSaved: (newId?: string) => void;
+}> = ({ executionId, onCreate, onClose, onSaved }) => {
   const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
@@ -107,7 +115,7 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
   // Para creación
   const { data: templatesData } = useFetch<{ items: Template[] }>("/app/checklist-templates");
   const [templateId, setTemplateId]   = useState(onCreate?.templateId ?? "");
-  const [vesselCode, setVesselCode]   = useState(onCreate?.vesselCode ?? vessels[0]?.code ?? "");
+  const [vesselCode, setVesselCode]   = useState(onCreate?.vesselCode || vessels[0]?.code || "");
   const [eventDateTime, setEventDT]   = useState(new Date().toISOString().slice(0, 16));
   const [port, setPort]               = useState("");
   const [voyageRef, setVoyageRef]     = useState("");
@@ -135,14 +143,15 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
     if (!templateId || !vesselCode) { setErr("Vessel y template requeridos."); return; }
     setSaving(true); setErr(null);
     try {
-      await api.post("/app/checklist-executions", {
+      const creado = await api.post<{ id?: string }>("/app/checklist-executions", {
         vesselCode, templateId,
         eventDateTime: new Date(eventDateTime).toISOString(),
         port: port.trim() || null,
         voyageRef: voyageRef.trim() || null,
         performedByName: performedBy.trim() || null,
       });
-      onSaved();
+      // Se abre solo: recién creado, lo que sigue es responder los ítems.
+      onSaved(creado?.id);
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error al crear."); }
     finally { setSaving(false); }
   };
@@ -155,6 +164,28 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
       });
       await reload();
     } catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
+  };
+
+  /**
+   * Marca CONFORME todo lo que todavía está sin responder.
+   *
+   * Sólo toca los PENDIENTES: un ítem ya marcado "No conforme" o "N/A" es una
+   * decisión de quien recorrió el buque, y pisarla borraría el hallazgo. Las
+   * notas ya cargadas se conservan.
+   */
+  const marcarTodoOk = async () => {
+    if (!exec || isLocked) return;
+    const pendientes = (exec.responses ?? []).filter(r => r.status === "PENDING");
+    if (pendientes.length === 0) return;
+    setSaving(true); setErr(null);
+    try {
+      // Una request por ítem (el endpoint responde de a uno), y una sola recarga.
+      await Promise.all(pendientes.map(r => api.post(`/app/checklist-executions/${exec.id}/responses`, {
+        itemCode: r.itemCode, status: "CONFORMING", notes: r.notes ?? null,
+      })));
+      await reload();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
+    finally { setSaving(false); }
   };
 
   const complete = async () => {
@@ -220,6 +251,8 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
   const isCreating = !executionId;
   const isLocked = exec?.status !== "IN_PROGRESS";
+  /** Ítems sin responder: lo que completa el botón "Marcar todo OK". */
+  const pendientes = (exec?.responses ?? []).filter(r => r.status === "PENDING").length;
 
   // ESC: en creación pregunta guardar; en ejecución (respuestas autosave) solo cierra
   const isDirty = useDirtyTracker({ templateId, vesselCode, eventDateTime, port, voyageRef, performedBy, signedByName, notes });
@@ -298,7 +331,22 @@ const ExecutionModal: React.FC<{ executionId: string | null; onCreate?: { templa
 
               {/* Lista de items */}
               <div className="space-y-1.5">
-                <p className={labelCls}>Ítems ({exec.responses?.length ?? 0})</p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className={labelCls}>Ítems ({exec.responses?.length ?? 0})</p>
+                  {/* Atajo para el caso normal a bordo: todo conforme. Sólo
+                      completa lo que falta responder. */}
+                  {!isLocked && pendientes > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { void marcarTodoOk(); }}
+                      disabled={saving}
+                      title={t("cl.markAllOkHint")}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-success-sea/10 border border-success-sea/30 text-success-sea text-[10px] font-bold uppercase tracking-wider hover:bg-success-sea/20 disabled:opacity-40"
+                    >
+                      <CheckCircle2 className="w-3 h-3" /> {t("cl.markAllOk")} ({pendientes})
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-1">
                   {(exec.responses ?? []).map(r => {
                     const item = exec.template?.itemsJson.find(i => i.code === r.itemCode);
@@ -665,6 +713,20 @@ export const ChecklistsPage: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: Execution[] }>("/app/checklist-executions");
   const [showCreate, setShowCreate] = useState(false);
   const [openId, setOpenId]         = useState<string | null>(null);
+  // ?new=<templateId> — llega del acceso "Completar Check List" del Dashboard:
+  // abre el alta con ese template ya elegido. Se limpia de la URL para que un
+  // refresh no vuelva a abrirlo.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [presetTemplateId, setPresetTemplateId] = useState<string | null>(null);
+  useEffect(() => {
+    const tplId = searchParams.get("new");
+    if (!tplId) return;
+    setPresetTemplateId(tplId);
+    setShowCreate(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [showTemplates, setShowTemplates] = useState(false);
   const mocTrigger = useMocTrigger();
 
@@ -729,8 +791,14 @@ export const ChecklistsPage: React.FC = () => {
       {(showCreate || openId) && (
         <ExecutionModal
           executionId={openId}
-          onClose={() => { setShowCreate(false); setOpenId(null); }}
-          onSaved={() => { setShowCreate(false); setOpenId(null); void reload(); }}
+          onCreate={presetTemplateId ? { templateId: presetTemplateId } : undefined}
+          onClose={() => { setShowCreate(false); setOpenId(null); setPresetTemplateId(null); }}
+          onSaved={newId => {
+            setShowCreate(false); setPresetTemplateId(null);
+            // Recién creado: se abre para responder los ítems sin buscarlo en la lista.
+            setOpenId(newId ?? null);
+            void reload();
+          }}
         />
       )}
       {showTemplates && <TemplatesModal onClose={() => setShowTemplates(false)} onMocTrigger={mocTrigger.ask} />}

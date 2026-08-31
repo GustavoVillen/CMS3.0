@@ -17,7 +17,23 @@ export interface DefectListFilters {
   assetId?: string | null;
   /** Defectos abiertos desde una OT concreta (recuadro DEF del modal de OT). */
   workOrderId?: string | null;
+  /**
+   * ISM 10.2.3 — estado de la verificación de eficacia:
+   *  · DUE  = cerrados hace 30+ días y todavía sin confirmar si el problema volvió.
+   *  · DONE = ya verificados.
+   */
+  verification?: "DUE" | "DONE" | null;
 }
+
+/** Resultado de la verificación de eficacia (enum compartido con CapaRecord). */
+export type EffectivenessOutcome = "EFFECTIVE" | "PARTIALLY_EFFECTIVE" | "INEFFECTIVE";
+
+/**
+ * ISM 10.2.3 — a los cuántos días de cerrado se pide confirmar que la medida
+ * correctiva funcionó. Regla única para toda la flota: es lo que se le explica
+ * a la tripulación ("un mes después te va a preguntar si sigue bien").
+ */
+export const EFFECTIVENESS_REVIEW_DAYS = 30;
 
 export interface CreateDefectInput {
   vesselCode: string;
@@ -98,6 +114,11 @@ export interface DefectRecord {
   rcaApprovedByUserId: string | null;
   capaDescription: string | null;
   repairType: string | null;
+  effectivenessDueAt: Date | null;
+  effectivenessVerifiedAt: Date | null;
+  effectivenessOutcome: EffectivenessOutcome | null;
+  effectivenessNote: string | null;
+  effectivenessVerifiedByUserId: string | null;
   createdAt: Date;
   createdByUserId: string;
   updatedAt: Date;
@@ -343,6 +364,15 @@ export async function listDefects(session: TenantAccessSession, filters: DefectL
   if (filters.operationalState) where.operationalState = filters.operationalState;
   if (filters.assetId) where.assetId = filters.assetId;
   if (filters.workOrderId) where.workOrderId = filters.workOrderId;
+  // ISM 10.2.3 — la revisión se calcula al vuelo contra la fecha guardada al
+  // cerrar: no hay tarea programada que la dispare.
+  if (filters.verification === "DUE") {
+    where.status = "CLOSED";
+    where.effectivenessDueAt = { not: null, lte: new Date() };
+    where.effectivenessVerifiedAt = null;
+  } else if (filters.verification === "DONE") {
+    where.effectivenessVerifiedAt = { not: null };
+  }
 
   const items = await defect.findMany({ where, orderBy: { reportedAt: "desc" } });
   // DefectRecord ya tiene workOrderId/classification/sourceType/sourceId, así que los
@@ -628,14 +658,20 @@ export async function closeDefect(session: TenantAccessSession, id: string, payl
     throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo RESOLVED puede pasar a CLOSED (actual: ${current.status}).`);
   }
 
-  const note = normalizeOptionalText(payload.closeNotes);
-  const correctiveAction = note
-    ? (current.correctiveAction ? `${current.correctiveAction}\n[CLOSE] ${note}` : `[CLOSE] ${note}`)
-    : current.correctiveAction;
+  // ISM 10.2.3 — la nota de cierre deja de ser opcional: es la respuesta a "¿cómo
+  // comprobaste que quedó bien?". Sin ella el defecto se cerraba sin ninguna
+  // constancia de verificación, que es justo lo que pide el Código.
+  const note = normalizeRequiredText(payload.closeNotes, "closeNotes");
+  const correctiveAction = current.correctiveAction
+    ? `${current.correctiveAction}\n[CLOSE] ${note}`
+    : `[CLOSE] ${note}`;
+
+  // Fecha en que habrá que confirmar que el problema no volvió.
+  const effectivenessDueAt = new Date(Date.now() + EFFECTIVENESS_REVIEW_DAYS * 86_400_000);
 
   const closed = await defect.update({
     where: { id: current.id },
-    data: { status: "CLOSED", correctiveAction, updatedByUserId: session.user.id },
+    data: { status: "CLOSED", correctiveAction, effectivenessDueAt, updatedByUserId: session.user.id },
   });
   void publishAudit(prismaRaw, {
     tenantId: current.tenantId,
@@ -648,6 +684,68 @@ export async function closeDefect(session: TenantAccessSession, id: string, payl
   // Cascade: cerrar el finding de auditoría externa de origen, si lo hubiera.
   void closeLinkedAuditFinding(prismaRaw, current, session.user.id);
   return closed;
+}
+
+/**
+ * ISM 10.2.3 — confirmación de que la medida correctiva funcionó.
+ *
+ * Es el segundo gesto del circuito: pasados los 30 días del cierre, alguien dice
+ * si el problema volvió o no. Lo puede hacer cualquiera que pueda cerrar un
+ * defecto (todos menos AUDITOR_READONLY): si dependiera sólo de tierra, la
+ * evidencia quedaría pendiente y el panel mostraría un hueco que no es real.
+ *
+ * Un resultado INEFFECTIVE NO re-abre el defecto: `reopenDefect` exige
+ * TENANT_ADMIN y la tripulación no lo tiene. La reincidencia se registra como
+ * un defecto nuevo, que es el flujo que la gente de a bordo ya conoce.
+ */
+export async function verifyDefectEffectiveness(
+  session: TenantAccessSession,
+  id: string,
+  payload: { outcome?: string; note?: string | null },
+) {
+  ensureCanCloseDefect(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const defect = defectDelegate(prismaRaw);
+
+  const outcome = String(payload?.outcome ?? "").trim().toUpperCase();
+  if (outcome !== "EFFECTIVE" && outcome !== "PARTIALLY_EFFECTIVE" && outcome !== "INEFFECTIVE") {
+    throw new RouteError(400, "VALIDATION_ERROR", "outcome debe ser EFFECTIVE, PARTIALLY_EFFECTIVE o INEFFECTIVE.");
+  }
+
+  const current = await getDefect(session, id);
+  if (current.status !== "CLOSED") {
+    throw new RouteError(409, "INVALID_STATUS", `Solo un defecto CLOSED puede verificarse (actual: ${current.status}).`);
+  }
+  if (!current.effectivenessDueAt) {
+    throw new RouteError(409, "NOT_APPLICABLE", "Este defecto se cerró antes de la verificación de eficacia.");
+  }
+  if (current.effectivenessVerifiedAt) {
+    throw new RouteError(409, "ALREADY_VERIFIED", "La eficacia de este defecto ya fue verificada.");
+  }
+
+  const verified = await defect.update({
+    where: { id: current.id },
+    data: {
+      effectivenessOutcome: outcome,
+      effectivenessVerifiedAt: new Date(),
+      effectivenessVerifiedByUserId: session.user.id,
+      effectivenessNote: normalizeOptionalText(payload?.note ?? null),
+      updatedByUserId: session.user.id,
+    },
+  });
+
+  void publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "Defect.effectivenessVerified",
+    entityType: "Defect",
+    entityId: current.id,
+    metadata: { defectCode: current.defectCode, vesselCode: current.vesselCode, outcome },
+  });
+
+  return verified;
 }
 
 export async function reopenDefect(

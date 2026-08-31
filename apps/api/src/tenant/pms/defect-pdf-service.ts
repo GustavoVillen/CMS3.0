@@ -279,6 +279,26 @@ export async function buildDefectPdf(session: TenantAccessSession, id: string): 
       y += 58;
     }
 
+    // ── Verificación de eficacia (ISM 10.2.3) ─────────────────────────────────
+    // Es la evidencia que pide el auditor: no sólo qué se hizo, sino que alguien
+    // confirmó después que el problema no volvió.
+    if (defect.effectivenessVerifiedAt || defect.effectivenessDueAt) {
+      ensureSpace(58);
+      const verified = !!defect.effectivenessVerifiedAt;
+      const outcomeLabel = defect.effectivenessOutcome === "EFFECTIVE" ? "Efectiva"
+        : defect.effectivenessOutcome === "PARTIALLY_EFFECTIVE" ? "Parcialmente efectiva"
+        : defect.effectivenessOutcome === "INEFFECTIVE" ? "No efectiva"
+        : "Pendiente";
+      const boxValue = verified
+        ? `${outcomeLabel} · ${fmt(defect.effectivenessVerifiedAt)}`
+        : `Pendiente · a revisar el ${fmt(defect.effectivenessDueAt)}`;
+      const boxColor = !verified ? "#b45309"
+        : defect.effectivenessOutcome === "INEFFECTIVE" ? "#b91c1c" : "#16a34a";
+      labeledBox(ML, y, W, 44, "Verificación de Eficacia de la Medida Correctiva", boxValue, boxColor);
+      y += 58;
+      if (defect.effectivenessNote) textSection("Observación de la Verificación", val(defect.effectivenessNote));
+    }
+
     // ── Footer (last page) ────────────────────────────────────────────────────
     const footerY = PAGE_H - FOOTER_SIZE;
     doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();

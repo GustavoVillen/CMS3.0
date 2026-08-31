@@ -1967,6 +1967,16 @@ model Defect {
   rcaApprovedByUserId    String?
   capaDescription        String?
   repairType             String?
+  // ISM 10.2.3 — verificación de eficacia de la medida correctiva SIN encender CAPA.
+  // Al cerrar el defecto se fija la fecha de revisión (cierre + 30 d); pasada esa
+  // fecha el defecto pide confirmación de que el problema no volvió. Los defectos
+  // cerrados antes de esta función tienen effectivenessDueAt null y quedan fuera
+  // del circuito (no hay backfill ni fecha mágica de corte).
+  effectivenessDueAt            DateTime?
+  effectivenessVerifiedAt       DateTime?
+  effectivenessOutcome          EffectivenessOutcome?
+  effectivenessNote             String?
+  effectivenessVerifiedByUserId String?
   createdAt              DateTime               @default(now())
   createdByUserId        String
   updatedAt              DateTime               @updatedAt
@@ -1988,6 +1998,7 @@ model Defect {
   @@index([tenantId, reportedAt])
   @@index([tenantId, sourceType, sourceId])
   @@index([tenantId, failureModeId])
+  @@index([tenantId, effectivenessDueAt])
 }
 
 // RCM — modo de falla de un activo: una forma concreta en que puede fallar, con

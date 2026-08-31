@@ -33,6 +33,9 @@ export interface SidebarCounts {
   defectsNew: number;                // /defects (Defect OPEN)
   deferralsNew: number;              // /deferrals (Deferral REQUESTED)
   mocNew: number;                    // /moc (MocRecord REQUESTED)
+  // ISM 10.2.3: defectos cerrados hace 30+ días que todavía no confirmaron si la
+  // medida correctiva funcionó.
+  defectsToVerify: number;           // /defects?verification=DUE
 }
 
 const EMPTY: SidebarCounts = {
@@ -45,7 +48,7 @@ const EMPTY: SidebarCounts = {
   permitsAttention: 0, crewCertsAttention: 0,
   drillsOverdue: 0, sparesCriticalLow: 0, providerNcOpen: 0,
   fluidSamplesDraft: 0, permitsDraft: 0, defectsNew: 0,
-  deferralsNew: 0, mocNew: 0,
+  deferralsNew: 0, mocNew: 0, defectsToVerify: 0,
 };
 
 function vesselWhere(session: TenantAccessSession, requestedVesselCode: string | null, tenantId: string): Record<string, unknown> {
@@ -159,6 +162,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     defectsNew,
     deferralsNew,
     mocNew,
+    defectsToVerify,
   ] = await Promise.all([
     safe(() => p.workOrder.count({ where: { ...base, deletedAt: null, status: { in: ["PLANNED", "IN_PROGRESS"] } } })),
     safe(() => p.defect.count({ where: { ...base, deletedAt: null, status: { notIn: ["RESOLVED", "CLOSED"] } } })),
@@ -243,6 +247,14 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     safe(() => p.defect.count({ where: { ...base, deletedAt: null, status: "OPEN" } })),
     safe(() => p.deferral.count({ where: { ...base, deletedAt: null, status: "REQUESTED" } })),
     safe(() => p.mocRecord.count({ where: { ...base, deletedAt: null, status: "REQUESTED" } })),
+    // ISM 10.2.3: cerrados hace 30+ días sin confirmar si la medida funcionó.
+    safe(() => p.defect.count({
+      where: {
+        ...base, deletedAt: null, status: "CLOSED",
+        effectivenessDueAt: { not: null, lte: now },
+        effectivenessVerifiedAt: null,
+      },
+    })),
   ]);
 
   // Daily reports faltantes: cantidad de buques del scope sin DailyReport de hoy.
@@ -272,6 +284,7 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     permitsAttention, crewCertsAttention,
     drillsOverdue, sparesCriticalLow, providerNcOpen,
     fluidSamplesDraft, permitsDraft, defectsNew, deferralsNew, mocNew,
+    defectsToVerify,
   };
 }
 

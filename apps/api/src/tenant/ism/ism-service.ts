@@ -221,6 +221,7 @@ async function computeOwnGroups(
     planCriteriaRows, inspectionsWithCriteria, itemResults,
     defectsOpen, auditFindingsOpen,
     defectsClosed90d, correctiveWoOpen,
+    effectivenessVerified, effectivenessOverdue,
     woClosed90d, workLogs90d, inspectionExecutions90d, maintenanceAttachments,
     safetyCriticalAssets, activePlans, preDepartureChecks30d,
   ] = await Promise.all([
@@ -293,6 +294,20 @@ async function computeOwnGroups(
       "defectsClosed90d",
     ),
     safe(() => p.workOrder.count({ where: { ...base, type: "CORRECTIVE", status: { in: ["PLANNED", "IN_PROGRESS"] } } }), 0, "correctiveWoOpen"),
+    // 10.2.3 — verificación de eficacia: la medida se confirma 30 días después
+    // del cierre. Sólo entran los defectos cerrados con el circuito vigente
+    // (effectivenessDueAt cargado); los cerrados antes no se cuentan ni a favor
+    // ni en contra, porque nunca se les pidió la confirmación.
+    safe(() => p.defect.count({
+      where: { ...base, status: "CLOSED", effectivenessVerifiedAt: { not: null } },
+    }), 0, "effectivenessVerified"),
+    safe(() => p.defect.count({
+      where: {
+        ...base, status: "CLOSED",
+        effectivenessDueAt: { not: null, lte: now },
+        effectivenessVerifiedAt: null,
+      },
+    }), 0, "effectivenessOverdue"),
     // 10.2.4 — registros de las actividades.
     safe(() => p.workOrder.count({ where: { ...base, status: "CLOSED", completedDate: { gte: d90 } } }), 0, "woClosed90d"),
     safe(() => p.workLog.count({ where: { tenantId, vesselCode, completedAt: { gte: d90 } } }), 0, "workLogs90d"),
@@ -423,10 +438,13 @@ async function computeOwnGroups(
     const withoutAction = closed - withAction;
     const rate = pct(withAction, closed);
 
+    // La medida registrada dice QUÉ se hizo; la verificación de eficacia dice si
+    // SIRVIÓ. Una confirmación vencida es evidencia que el auditor va a pedir y
+    // todavía no existe, así que baja el semáforo a atención.
     const status: IsmStatus =
-      closed === 0 ? "INFO" :
-      rate < 0.5 ? "GAP" :
-      withoutAction > 0 ? "ATTENTION" : "OK";
+      closed === 0 && effectivenessVerified === 0 && effectivenessOverdue === 0 ? "INFO" :
+      closed > 0 && rate < 0.5 ? "GAP" :
+      withoutAction > 0 || effectivenessOverdue > 0 ? "ATTENTION" : "OK";
 
     groups.push({
       key: "correctiveAction", clause: "10.2.3", status, own: true,
@@ -435,6 +453,8 @@ async function computeOwnGroups(
         { key: "ismClosedWithAction", value: withAction, kind: "count" },
         { key: "ismClosedWithoutAction", value: withoutAction, kind: "count" },
         { key: "ismCorrectiveWoOpen", value: correctiveWoOpen, kind: "count" },
+        { key: "ismEffectivenessVerified", value: effectivenessVerified, kind: "count" },
+        { key: "ismEffectivenessOverdue", value: effectivenessOverdue, kind: "count" },
         { key: "ismCorrectiveActionRate", value: rate, kind: "pct" },
       ],
     });
@@ -675,6 +695,26 @@ export async function getIsmMetricDetail(
         : metric === "ismClosedWithoutAction" ? rows.filter(d => !hasAction(d))
         : rows;
       return { items: filtered.slice(0, TAKE).map(asDefect) };
+    }
+    case "ismEffectivenessVerified": {
+      const rows = await p.defect.findMany({
+        where: { ...base, status: "CLOSED", effectivenessVerifiedAt: { not: null } },
+        select: { id: true, defectCode: true, classification: true, status: true, severity: true },
+        orderBy: { effectivenessVerifiedAt: "desc" }, take: TAKE,
+      });
+      return { items: rows.map(asDefect) };
+    }
+    case "ismEffectivenessOverdue": {
+      const rows = await p.defect.findMany({
+        where: {
+          ...base, status: "CLOSED",
+          effectivenessDueAt: { not: null, lte: new Date() },
+          effectivenessVerifiedAt: null,
+        },
+        select: { id: true, defectCode: true, classification: true, status: true, severity: true },
+        orderBy: { effectivenessDueAt: "asc" }, take: TAKE,
+      });
+      return { items: rows.map(asDefect) };
     }
     case "ismCorrectiveWoOpen": {
       const rows = await p.workOrder.findMany({

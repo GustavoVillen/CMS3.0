@@ -65,10 +65,13 @@ function StatusChip({ wo }: { wo: PickerWorkOrder }) {
   );
 }
 
-export function OpenWorkOrdersPicker({ onClose, onPick }: {
+export function OpenWorkOrdersPicker({ onClose, onPick, title, subtitle }: {
   onClose: () => void;
   /** La OT elegida: el que llama decide adónde llevarla. */
   onPick: (wo: { id: string; workOrderCode: string }) => void;
+  /** Encabezado propio del que llama. Sin esto, el de la SS (uso original). */
+  title?: string;
+  subtitle?: string;
 }) {
   const t = useT();
   // useFetch inyecta el buque del contexto: se listan las OT del buque elegido.
@@ -97,8 +100,8 @@ export function OpenWorkOrdersPicker({ onClose, onPick }: {
       >
         <div className="flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-sm font-bold text-fg">{t("dashboard.woPicker.title")}</h2>
-            <p className="text-xs text-text-industrial/50 mt-0.5">{t("dashboard.woPicker.subtitle")}</p>
+            <h2 className="text-sm font-bold text-fg">{title ?? t("dashboard.woPicker.title")}</h2>
+            <p className="text-xs text-text-industrial/50 mt-0.5">{subtitle ?? t("dashboard.woPicker.subtitle")}</p>
           </div>
           <ModalCloseButton onClose={onClose} />
         </div>

@@ -14,6 +14,7 @@ import {
   reopenDefect,
   softDeleteDefect,
   updateDefect,
+  verifyDefectEffectiveness,
 } from "./defects-service";
 import { buildDefectPdf } from "./defect-pdf-service";
 import { suggestImmediateAction, analyzeDefectPhoto, suggestDefectClassification, suggestDefectDescription, findSimilarDefects, parseVoiceReport, detectDeficiencyFromText, suggestDefectRca } from "./defects-ai-suggestions";
@@ -89,6 +90,7 @@ export async function handleQualityRoutes(
       operationalState: url.searchParams.get("operationalState"),
       assetId: url.searchParams.get("assetId"),
       workOrderId: url.searchParams.get("workOrderId"),
+      verification: url.searchParams.get("verification") as "DUE" | "DONE" | null,
     });
     sendJson(response, 200, { items, total: items.length });
     return true;
@@ -162,6 +164,12 @@ export async function handleQualityRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof closeDefect>[2];
     sendJson(response, 200, await closeDefect(session, id, body));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/defects\/[^/]+\/verify-effectiveness$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof verifyDefectEffectiveness>[2];
+    sendJson(response, 200, await verifyDefectEffectiveness(session, id, body));
     return true;
   }
   if (method === "POST" && /^\/app\/pms\/defects\/[^/]+\/reopen$/.test(url.pathname)) {
