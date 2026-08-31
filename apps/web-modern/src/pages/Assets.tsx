@@ -38,6 +38,10 @@ interface Asset {
   replacementDate: string | null;
   trackDailyReport: boolean;
   isSafetyCritical: boolean;
+  /** ISM 10.3 — el equipo no está en uso continuo: está de reserva. */
+  isStandby?: boolean;
+  /** Cuál de sus planes es la prueba periódica de ese equipo de reserva. */
+  standbyTestPlanId?: string | null;
   currentHours: number | null;
   /** Fecha (YYYY-MM-DD) y origen de la última lectura de horómetro. */
   currentHoursDate?: string | null;
@@ -780,6 +784,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [isSafetyCritical, setIsSafetyCritical] = useState(initial?.isSafetyCritical ?? false);
   const [planNotRequired, setPlanNotRequired] = useState(initial?.planNotRequired ?? false);
   const [planNotRequiredReason, setPlanNotRequiredReason] = useState(initial?.planNotRequiredReason ?? "");
+  const [isStandby, setIsStandby] = useState(initial?.isStandby ?? false);
+  const [standbyTestPlanId, setStandbyTestPlanId] = useState(initial?.standbyTestPlanId ?? "");
   const [installationDate, setInstallationDate] = useState(toDateInputValue(initial?.installationDate ?? null));
   const [lastOverhaulDate, setLastOverhaulDate] = useState(toDateInputValue(initial?.lastOverhaulDate ?? null));
   const [replacementDate, setReplacementDate] = useState(toDateInputValue(initial?.replacementDate ?? null));
@@ -804,6 +810,30 @@ const AssetModal: React.FC<AssetModalProps> = ({
       setPlanNotRequiredReason("");
     }
   }, [puedeEximirse, planNotRequired]);
+
+  // ISM 10.3 — "de reserva" y su prueba periódica sólo existen dentro del
+  // universo de equipos críticos para la seguridad. Si se destilda ese flag, las
+  // dos marcas se caen (el backend hace lo mismo, esto es para que el formulario
+  // muestre lo que se va a guardar).
+  useEffect(() => {
+    if (!isSafetyCritical && isStandby) {
+      setIsStandby(false);
+      setStandbyTestPlanId("");
+    }
+  }, [isSafetyCritical, isStandby]);
+
+  // Tareas del equipo, para elegir cuál es la prueba periódica. Sólo se piden
+  // cuando hacen falta: equipo ya existente marcado como de reserva.
+  const standbyPlansFetch = useFetch<{ items: MaintenancePlan[] }>(
+    isEdit && initial?.id && isSafetyCritical && isStandby
+      ? `/app/pms/maintenance-plans?assetId=${encodeURIComponent(initial.id)}`
+      : null,
+    [initial?.id, isEdit, isSafetyCritical, isStandby],
+  );
+  const standbyPlanOptions = useMemo(
+    () => (standbyPlansFetch.data?.items ?? []).filter(pl => pl.status === "ACTIVE"),
+    [standbyPlansFetch.data],
+  );
 
   useCopilotEmitter({
     module: "ASSETS",
@@ -893,6 +923,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
     setIsSafetyCritical(initial?.isSafetyCritical ?? false);
     setPlanNotRequired(initial?.planNotRequired ?? false);
     setPlanNotRequiredReason(initial?.planNotRequiredReason ?? "");
+    setIsStandby(initial?.isStandby ?? false);
+    setStandbyTestPlanId(initial?.standbyTestPlanId ?? "");
     setManufacturer(initial?.manufacturer ?? "");
     setModel(initial?.model ?? "");
     setSerialNumber(initial?.serialNumber ?? "");
@@ -1008,6 +1040,8 @@ const AssetModal: React.FC<AssetModalProps> = ({
         // limpiado todavía.
         planNotRequired: puedeEximirse && planNotRequired,
         planNotRequiredReason: puedeEximirse && planNotRequired ? normalizeOptionalText(planNotRequiredReason) : null,
+        isStandby: isSafetyCritical && isStandby,
+        standbyTestPlanId: isSafetyCritical && isStandby ? (standbyTestPlanId || null) : null,
         manufacturer: normalizeOptionalText(manufacturer),
         model: normalizeOptionalText(model),
         serialNumber: normalizeOptionalText(serialNumber),
@@ -1236,6 +1270,77 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   {t("asset.safetyCritical")} <span className="text-text-industrial/60">(ISM 10.3)</span>
                 </span>
               </label>
+
+              {/* Segunda mitad del 10.3: el Código exige probar periódicamente lo
+                  que NO está en uso continuo. La pregunta se hace en criollo
+                  ("¿cómo trabaja?") y sólo aparece si el equipo es crítico para
+                  la seguridad: en el resto no cambia nada y ensucia la ficha. */}
+              {isSafetyCritical && (
+                <div className="mt-3 pt-3 border-t border-fg/10 space-y-2">
+                  <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.dutyMode")}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {([false, true] as const).map(standbyOption => (
+                      <label
+                        key={String(standbyOption)}
+                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2 cursor-pointer transition-colors ${
+                          isStandby === standbyOption
+                            ? "bg-accent/10 border-accent/40"
+                            : "bg-fg/3 border-fg/10 hover:bg-fg/5"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="assetDutyMode"
+                          checked={isStandby === standbyOption}
+                          onChange={() => {
+                            setIsStandby(standbyOption);
+                            if (!standbyOption) setStandbyTestPlanId("");
+                          }}
+                          className="w-4 h-4 mt-0.5 accent-accent shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm text-fg">{t(standbyOption ? "asset.dutyMode.standby" : "asset.dutyMode.continuous")}</p>
+                          <p className="text-[11px] text-text-industrial/50 leading-snug">
+                            {t(standbyOption ? "asset.dutyMode.standbyHint" : "asset.dutyMode.continuousHint")}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* La prueba periódica no es un registro nuevo: es una de las
+                      tareas del propio equipo. Se designa cuál, y su historial
+                      de ejecuciones queda como la evidencia. */}
+                  {isStandby && (
+                    <div className="space-y-1.5 pt-1">
+                      <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.standbyTestPlan")}</label>
+                      {!isEdit || !initial?.id ? (
+                        <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-2">{t("asset.standbyTestPlanOnSave")}</p>
+                      ) : standbyPlansFetch.loading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                      ) : standbyPlanOptions.length === 0 ? (
+                        <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-2">{t("asset.standbyTestPlanEmpty")}</p>
+                      ) : (
+                        <>
+                          <select
+                            value={standbyTestPlanId}
+                            onChange={e => setStandbyTestPlanId(e.target.value)}
+                            className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
+                          >
+                            <option value="">{t("asset.standbyTestPlanNone")}</option>
+                            {standbyPlanOptions.map(pl => (
+                              <option key={pl.id} value={pl.id}>
+                                {pl.taskCode} · {pl.title}{fmtPlanFreq(pl) ? ` · ${fmtPlanFreq(pl)}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-text-industrial/50 leading-snug">{t("asset.standbyTestPlanHint")}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Excepción declarada: equipo que no lleva plan de mantenimiento. Sin

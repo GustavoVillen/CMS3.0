@@ -66,6 +66,7 @@ const MODULE_BY_METRIC: Record<string, string> = {
   ismDefectsClosed90d: "/defects", ismClosedWithAction: "/defects", ismClosedWithoutAction: "/defects",
   ismCorrectiveWoOpen: "/work-orders", ismWoClosed90d: "/work-orders",
   ismSafetyCriticalTotal: "/assets", ismSafetyCriticalWithPlan: "/assets", ismSafetyCriticalWithoutPlan: "/assets",
+  ismStandbyTotal: "/assets", ismStandbyWithTest: "/assets", ismStandbyWithoutTest: "/assets",
   ismPreDepartureChecks30d: "/checklists",
 };
 

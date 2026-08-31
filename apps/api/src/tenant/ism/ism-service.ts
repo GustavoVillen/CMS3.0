@@ -308,19 +308,21 @@ async function computeOwnGroups(
     safe(
       () => p.asset.findMany({
         where: { ...base, isSafetyCritical: true },
-        select: { id: true },
+        select: { id: true, isStandby: true, standbyTestPlanId: true },
         take: 2000,
-      }) as Promise<Array<{ id: string }>>,
-      [] as Array<{ id: string }>,
+      }) as Promise<Array<{ id: string; isStandby: boolean; standbyTestPlanId: string | null }>>,
+      [] as Array<{ id: string; isStandby: boolean; standbyTestPlanId: string | null }>,
       "safetyCriticalAssets",
     ),
+    // Se trae el id del plan además del asset: la prueba periódica designada
+    // sólo cuenta si ese plan sigue existiendo y ACTIVO en el mismo equipo.
     safe(
       () => p.maintenancePlan.findMany({
         where: { ...base, status: "ACTIVE" },
-        select: { assetId: true },
+        select: { id: true, assetId: true },
         take: 5000,
-      }) as Promise<Array<{ assetId: string }>>,
-      [] as Array<{ assetId: string }>,
+      }) as Promise<Array<{ id: string; assetId: string }>>,
+      [] as Array<{ id: string; assetId: string }>,
       "activePlans",
     ),
     // Verificación previa al zarpe: es donde la tripulación prueba los equipos
@@ -463,15 +465,30 @@ async function computeOwnGroups(
   // ── 10.3 · Fiabilidad del equipo crítico y pruebas periódicas ──────────────
   {
     const planned = new Set(activePlans.map(pl => pl.assetId));
+    // planId → assetId de los planes ACTIVE: sirve para verificar que la prueba
+    // designada siga viva Y siga siendo del mismo equipo (el puntero del Asset
+    // no tiene FK; ver schema.prisma · Asset.standbyTestPlanId).
+    const activePlanOwner = new Map(activePlans.map(pl => [pl.id, pl.assetId]));
     const total = safetyCriticalAssets.length;
     const withPlan = safetyCriticalAssets.filter(a => planned.has(a.id)).length;
     const withoutPlan = total - withPlan;
 
+    // Segunda mitad del 10.3: el equipo que no está en uso continuo hay que
+    // probarlo periódicamente. La prueba no es un registro aparte: es una de las
+    // tareas del propio equipo, designada en su ficha.
+    const standby = safetyCriticalAssets.filter(a => a.isStandby);
+    const hasTest = (a: { id: string; standbyTestPlanId: string | null }) =>
+      !!a.standbyTestPlanId && activePlanOwner.get(a.standbyTestPlanId) === a.id;
+    const standbyTotal = standby.length;
+    const standbyWithTest = standby.filter(hasTest).length;
+    const standbyWithoutTest = standbyTotal - standbyWithTest;
+
     // Un equipo crítico sin plan activo no tiene ninguna medida que promueva su
-    // fiabilidad: eso es brecha directa de 10.3.
+    // fiabilidad, y uno de reserva sin prueba periódica designada no cumple la
+    // exigencia expresa de la cláusula: las dos son brecha directa de 10.3.
     const status: IsmStatus =
       total === 0 ? "INFO" :
-      withoutPlan > 0 ? "GAP" :
+      withoutPlan > 0 || standbyWithoutTest > 0 ? "GAP" :
       preDepartureChecks30d === 0 ? "ATTENTION" : "OK";
 
     groups.push({
@@ -480,6 +497,9 @@ async function computeOwnGroups(
         { key: "ismSafetyCriticalTotal", value: total, kind: "count" },
         { key: "ismSafetyCriticalWithPlan", value: withPlan, kind: "count" },
         { key: "ismSafetyCriticalWithoutPlan", value: withoutPlan, kind: "count" },
+        { key: "ismStandbyTotal", value: standbyTotal, kind: "count" },
+        { key: "ismStandbyWithTest", value: standbyWithTest, kind: "count" },
+        { key: "ismStandbyWithoutTest", value: standbyWithoutTest, kind: "count" },
         { key: "ismPreDepartureChecks30d", value: preDepartureChecks30d, kind: "count" },
       ],
     });
@@ -678,18 +698,30 @@ export async function getIsmMetricDetail(
     // 10.3
     case "ismSafetyCriticalTotal":
     case "ismSafetyCriticalWithPlan":
-    case "ismSafetyCriticalWithoutPlan": {
+    case "ismSafetyCriticalWithoutPlan":
+    case "ismStandbyTotal":
+    case "ismStandbyWithTest":
+    case "ismStandbyWithoutTest": {
       const [assets, plans] = await Promise.all([
         p.asset.findMany({
           where: { ...base, isSafetyCritical: true },
-          select: { id: true, assetCode: true, name: true, criticality: true, status: true },
+          select: {
+            id: true, assetCode: true, name: true, criticality: true, status: true,
+            isStandby: true, standbyTestPlanId: true,
+          },
           orderBy: { assetCode: "asc" }, take: 500,
         }),
-        p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { assetId: true }, take: 5000 }),
+        p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { id: true, assetId: true }, take: 5000 }),
       ]);
       const planned = new Set(plans.map((pl: any) => pl.assetId));
+      const activePlanOwner = new Map(plans.map((pl: any) => [pl.id, pl.assetId]));
+      const hasTest = (a: any) => !!a.standbyTestPlanId && activePlanOwner.get(a.standbyTestPlanId) === a.id;
+      const standby = assets.filter((a: any) => a.isStandby);
       const filtered = metric === "ismSafetyCriticalWithPlan" ? assets.filter((a: any) => planned.has(a.id))
         : metric === "ismSafetyCriticalWithoutPlan" ? assets.filter((a: any) => !planned.has(a.id))
+        : metric === "ismStandbyTotal" ? standby
+        : metric === "ismStandbyWithTest" ? standby.filter(hasTest)
+        : metric === "ismStandbyWithoutTest" ? standby.filter((a: any) => !hasTest(a))
         : assets;
       return { items: filtered.slice(0, TAKE).map(asAsset) };
     }

@@ -1367,6 +1367,19 @@ model Asset {
   // Por qué no lleva plan. Es lo que se le muestra al auditor al lado del equipo
   // sin plan; sin motivo escrito la excepción no se sostiene.
   planNotRequiredReason String?
+  // ISM 10.3 — "prueba periódica de los dispositivos y equipos de reserva o de
+  // los sistemas técnicos que no estén en uso continuo". El equipo que trabaja
+  // continuo evidencia su propia disponibilidad; el de reserva sólo se sabe si
+  // arranca probándolo. Sólo tiene sentido junto a isSafetyCritical: en el resto
+  // de los equipos no cambia nada y el backend lo fuerza a false.
+  isStandby             Boolean       @default(false)
+  // Cuál de los planes del propio equipo ES esa prueba periódica. Puntero suelto
+  // a MaintenancePlan.id (mismo criterio que providerId en MaintenancePlan): sin
+  // FK, se valida al guardar y se re-verifica al leer contra los planes ACTIVE del
+  // equipo, así un plan borrado o dado de baja vuelve a contar como "sin prueba",
+  // que es la lectura correcta. La evidencia de la prueba son las OT y partes
+  // cerrados de ese plan: no se crea un tipo de registro nuevo.
+  standbyTestPlanId     String?
   // PMS extensions
   equipmentClassId String?
   parentAssetId    String?

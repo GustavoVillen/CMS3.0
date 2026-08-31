@@ -83,6 +83,9 @@ const OWN_METRIC_LABEL: Record<string, string> = {
   ismSafetyCriticalTotal:      "Equipos críticos",
   ismSafetyCriticalWithPlan:   "Con plan activo",
   ismSafetyCriticalWithoutPlan: "Sin plan activo",
+  ismStandbyTotal:             "Equipos de reserva",
+  ismStandbyWithTest:          "Con prueba periódica",
+  ismStandbyWithoutTest:       "Sin prueba periódica",
   ismPreDepartureChecks30d:    "Verificaciones de zarpe (30 d)",
 };
 

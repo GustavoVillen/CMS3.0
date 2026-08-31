@@ -27,6 +27,8 @@ export interface CreateAssetInput {
   isSafetyCritical?: boolean;
   planNotRequired?: boolean;
   planNotRequiredReason?: string | null;
+  isStandby?: boolean;
+  standbyTestPlanId?: string | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -49,6 +51,8 @@ export interface UpdateAssetInput {
   isSafetyCritical?: boolean;
   planNotRequired?: boolean;
   planNotRequiredReason?: string | null;
+  isStandby?: boolean;
+  standbyTestPlanId?: string | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -69,6 +73,9 @@ interface AssetRecord {
   criticality: string;
   status: string;
   trackDailyReport: boolean;
+  isSafetyCritical: boolean;
+  isStandby: boolean;
+  standbyTestPlanId: string | null;
   manufacturer: string | null;
   model: string | null;
   serialNumber: string | null;
@@ -97,6 +104,31 @@ function assertNotExemptIfSafetyCritical(): never {
     "SAFETY_CRITICAL_NEEDS_PLAN",
     "Un equipo crítico para la seguridad (ISM 10.3) no puede marcarse como que no requiere plan de mantenimiento.",
   );
+}
+
+/** ISM 10.3 — la prueba periódica de un equipo de reserva es una tarea DEL
+ *  equipo. Apuntar a un plan de otro equipo (o inexistente) haría que el panel
+ *  muestre como probado algo que nunca se probó. */
+async function assertPlanBelongsToAsset(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  assetId: string,
+  planId: string,
+): Promise<void> {
+  const plan = await prisma.maintenancePlan.findFirst({
+    // No se exige que esté ACTIVE: si el plan se da de baja más adelante, el
+    // panel ya lo lee como "sin prueba periódica", y bloquear el guardado del
+    // equipo por eso sería una trampa (no se podría ni editar el nombre).
+    where: { id: planId, tenantId, assetId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!plan) {
+    throw new RouteError(
+      400,
+      "STANDBY_TEST_PLAN_NOT_FOUND",
+      "La tarea elegida como prueba periódica no pertenece a este equipo.",
+    );
+  }
 }
 
 function canManageAssets(session: TenantAccessSession): boolean {
@@ -290,6 +322,12 @@ export async function createTenantAsset(session: TenantAccessSession, payload: C
     // el Código exige mantenerlo y probarlo, no es una decisión de la empresa.
     ...(payload.planNotRequired && payload.isSafetyCritical ? assertNotExemptIfSafetyCritical() : {}),
     planNotRequiredReason: payload.planNotRequired ? normalizeOptionalText(payload.planNotRequiredReason) : null,
+    // ISM 10.3: "de reserva" es una precisión sobre un equipo crítico para la
+    // seguridad; fuera de ese universo no significa nada y no se guarda.
+    isStandby: (payload.isStandby ?? false) && (payload.isSafetyCritical ?? false),
+    // La prueba periódica se elige entre los planes del equipo, y un equipo
+    // recién creado todavía no tiene ninguno: se designa al editarlo.
+    standbyTestPlanId: null,
     manufacturer: normalizeOptionalText(payload.manufacturer),
     model: normalizeOptionalText(payload.model),
     serialNumber: normalizeOptionalText(payload.serialNumber),
@@ -357,6 +395,28 @@ export async function updateTenantAsset(
   }
   if (payload.planNotRequiredReason !== undefined && payload.planNotRequired !== false) {
     data.planNotRequiredReason = normalizeOptionalText(payload.planNotRequiredReason);
+  }
+  // ISM 10.3 — equipo de reserva y cuál de sus tareas es la prueba periódica.
+  // Las dos marcas cuelgan de isSafetyCritical: si el equipo deja de ser crítico
+  // para la seguridad, se caen (si no, el panel contaría un equipo de reserva
+  // que ya no pertenece al universo del 10.3).
+  const safetyCriticalAfter = payload.isSafetyCritical
+    ?? (current as unknown as { isSafetyCritical?: boolean }).isSafetyCritical
+    ?? false;
+  const standbyAfter = (payload.isStandby
+    ?? (current as unknown as { isStandby?: boolean }).isStandby
+    ?? false) && safetyCriticalAfter;
+  if (payload.isStandby !== undefined || payload.isSafetyCritical !== undefined) {
+    data.isStandby = standbyAfter;
+  }
+  if (!standbyAfter) {
+    // Sin equipo de reserva no hay prueba periódica que designar: dejar el
+    // puntero colgado mostraría una prueba que el panel ya no lee.
+    if (payload.isStandby !== undefined || payload.isSafetyCritical !== undefined) data.standbyTestPlanId = null;
+  } else if (payload.standbyTestPlanId !== undefined) {
+    const planId = normalizeOptionalText(payload.standbyTestPlanId);
+    if (planId) await assertPlanBelongsToAsset(prisma, current.tenantId, current.id, planId);
+    data.standbyTestPlanId = planId;
   }
   if (payload.manufacturer !== undefined) data.manufacturer = normalizeOptionalText(payload.manufacturer);
   if (payload.model !== undefined) data.model = normalizeOptionalText(payload.model);
