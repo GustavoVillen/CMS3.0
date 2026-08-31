@@ -789,6 +789,22 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [expanded,    setExpanded]    = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
+  // La excepción "no requiere plan" sólo tiene sentido en un equipo de criticidad
+  // C que además no sea crítico para la seguridad. En un equipo A o B la decisión
+  // de no hacerle preventivo no es defendible ante una auditoría, y en uno ISM
+  // 10.3 el Código directamente no la admite (el backend la rechaza).
+  const puedeEximirse = criticality === "C" && !isSafetyCritical;
+
+  // Si el equipo deja de ser exceptuable (lo reclasifican a A/B o lo marcan ISM
+  // 10.3), la excepción se cae con su motivo. Si no, quedaría marcada sin verse
+  // en el formulario y el equipo seguiría fuera del cálculo de cobertura.
+  useEffect(() => {
+    if (!puedeEximirse && planNotRequired) {
+      setPlanNotRequired(false);
+      setPlanNotRequiredReason("");
+    }
+  }, [puedeEximirse, planNotRequired]);
+
   useCopilotEmitter({
     module: "ASSETS",
     screen: isEdit ? "ASSET_EDIT" : "ASSET_CREATE",
@@ -952,7 +968,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     }
     // Un equipo sin plan tiene que decir por qué: la excepción sin motivo es
     // exactamente lo que un auditor lee como olvido.
-    if (planNotRequired && !planNotRequiredReason.trim()) {
+    if (puedeEximirse && planNotRequired && !planNotRequiredReason.trim()) {
       setActionError(t("asset.planNotRequiredReasonRequired"));
       return;
     }
@@ -987,8 +1003,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
         status,
         trackDailyReport,
         isSafetyCritical,
-        planNotRequired,
-        planNotRequiredReason: planNotRequired ? normalizeOptionalText(planNotRequiredReason) : null,
+        // `puedeEximirse` de nuevo acá: si el equipo dejó de ser exceptuable en el
+        // mismo guardado, no se manda la excepción aunque el estado no se haya
+        // limpiado todavía.
+        planNotRequired: puedeEximirse && planNotRequired,
+        planNotRequiredReason: puedeEximirse && planNotRequired ? normalizeOptionalText(planNotRequiredReason) : null,
         manufacturer: normalizeOptionalText(manufacturer),
         model: normalizeOptionalText(model),
         serialNumber: normalizeOptionalText(serialNumber),
@@ -1221,30 +1240,34 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
             {/* Excepción declarada: equipo que no lleva plan de mantenimiento. Sin
                 esta marca, un equipo sin plan se cuenta como brecha de cobertura
-                (TMSA 4.1.1 / ISM 10.1) aunque la decisión esté tomada. */}
-            <div className="space-y-1.5 col-span-2 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={planNotRequired}
-                  onChange={e => setPlanNotRequired(e.target.checked)}
-                  className="w-4 h-4 accent-accent"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-fg">{t("asset.planNotRequired")}</p>
-                  <p className="text-xs text-text-industrial/50">{t("asset.planNotRequiredHint")}</p>
-                </div>
-              </label>
-              {planNotRequired && (
-                <AutoTextArea
-                  value={planNotRequiredReason}
-                  onChange={e => setPlanNotRequiredReason(e.target.value)}
-                  rows={2}
-                  placeholder={t("asset.planNotRequiredReasonPh")}
-                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
-                />
-              )}
-            </div>
+                (TMSA 4.1.1 / ISM 10.1) aunque la decisión esté tomada.
+                Sólo se ofrece en equipos de criticidad C que no sean ISM 10.3:
+                en el resto no corresponde y sólo ensucia el formulario. */}
+            {puedeEximirse && (
+              <div className="space-y-1.5 col-span-2 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={planNotRequired}
+                    onChange={e => setPlanNotRequired(e.target.checked)}
+                    className="w-4 h-4 accent-accent"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-fg">{t("asset.planNotRequired")}</p>
+                    <p className="text-xs text-text-industrial/50">{t("asset.planNotRequiredHint")}</p>
+                  </div>
+                </label>
+                {planNotRequired && (
+                  <AutoTextArea
+                    value={planNotRequiredReason}
+                    onChange={e => setPlanNotRequiredReason(e.target.value)}
+                    rows={2}
+                    placeholder={t("asset.planNotRequiredReasonPh")}
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
+                  />
+                )}
+              </div>
+            )}
 
             <div className="space-y-1.5 col-span-2">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.critRationale")}</label>

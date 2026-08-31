@@ -164,7 +164,12 @@ async function main() {
       }
       // La exencion solo se propone: nunca sobre ISM 10.3 ni sobre equipos que
       // ya tienen planes cargados (ahi la decision practica ya esta tomada).
+      // Y solo sobre criticidad C, que es la misma regla que aplica la ficha del
+      // equipo: en un equipo A o B la exencion no es defendible en auditoria, y
+      // si el script la escribiera el formulario la borraria en la proxima
+      // edicion sin que nadie se entere.
       const puedeExento = r.requiresMaintenancePlan === false
+        && a.criticality === "C"
         && !a.isSafetyCritical && !r.isSafetyCritical && !conPlan.has(a.id);
       if (puedeExento) {
         data.planNotRequired = true;
