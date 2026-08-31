@@ -67,6 +67,13 @@ function groupOfSfiCode(sfiCode: string | null | undefined): number | null {
   return /^[0-9]$/.test(d ?? "") ? Number(d) : null;
 }
 
+/** Grupo SFI del plan como dígito (300 → 3), igual que la pantalla de Planes. */
+function groupOfPlanNumber(n: number | null | undefined): number | null {
+  if (n == null) return null;
+  const d = n < 10 ? n : Math.floor(n / 100);
+  return d >= 0 && d <= 9 ? d : null;
+}
+
 function groupBanner(g: number): string {
   return g === NO_GROUP ? "Sin grupo SFI asignado" : `G${g}: ${SFI_GROUP_NAMES[g] ?? ""}`;
 }
@@ -186,25 +193,27 @@ export async function exportMaintenanceSheet(opts: {
     assetById = new Map((res.items ?? []).map(a => [a.id, a]));
   } catch { /* sin catálogo: se muestra sólo el nombre del equipo */ }
 
-  // Agrupar por equipo, respetando el orden alfabético del nombre.
+  // Agrupar por GRUPO SFI DE LA TAREA y, dentro, por equipo — mismo criterio que la
+  // pantalla de Planes de Mantenimiento. El grupo lo declara cada plan; el código SFI
+  // del equipo sólo se usa cuando el plan no trae grupo. Un equipo con tareas de
+  // grupos distintos (una bomba de incendio con tareas de LCI y de auxiliares)
+  // aparece como un bloque en cada banda, igual que en la planilla de papel.
   interface EquipBlock { name: string; subtitle: string; group: number; plans: SheetPlan[] }
   const groups = new Map<string, EquipBlock>();
   for (const p of plans) {
-    const key = p.assetId ?? `__sin__${p.assetName ?? ""}`;
+    const a = p.assetId ? assetById.get(p.assetId) : undefined;
+    const group = groupOfPlanNumber(p.sfiGroupNumber) ?? groupOfSfiCode(a?.sfiCode) ?? NO_GROUP;
+    const key = `${group}__${p.assetId ?? `sin:${p.assetName ?? ""}`}`;
     if (!groups.has(key)) {
-      const a = p.assetId ? assetById.get(p.assetId) : undefined;
       const subtitle = [a?.manufacturer, a?.model].filter(Boolean).join(" ");
       groups.set(key, {
         name: p.assetName ?? a?.name ?? "Sin equipo asignado",
         subtitle,
-        // El grupo del equipo lo manda su código SFI; si no lo tiene, el del plan.
-        group: groupOfSfiCode(a?.sfiCode) ?? p.sfiGroupNumber ?? NO_GROUP,
+        group,
         plans: [],
       });
     }
-    const blk = groups.get(key)!;
-    if (blk.group === NO_GROUP && p.sfiGroupNumber != null) blk.group = p.sfiGroupNumber;
-    blk.plans.push(p);
+    groups.get(key)!.plans.push(p);
   }
   const equipos = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
   equipos.forEach(g => g.plans.sort(sortPlans));
