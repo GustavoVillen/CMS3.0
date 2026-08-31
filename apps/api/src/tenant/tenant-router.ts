@@ -2709,9 +2709,12 @@ export async function handleTenantRoutes(
       throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden ver el parte semanal.");
     }
     const kind = url.searchParams.get("kind") === "WEEKLY_CLOSING" ? "WEEKLY_CLOSING" : "WEEKLY_OPENING";
+    // Buque elegido en el selector de la pantalla. Sin el parametro, el parte
+    // sale de toda la flota, que es como venia funcionando.
+    const vesselCode = (url.searchParams.get("vessel") ?? "").trim() || null;
     const { buildWeeklyFleetReport } = await import("./reports/weekly-fleet-report-service");
     const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") || null;
-    const report = await buildWeeklyFleetReport(session.tenantSlug, kind, new Date(), name, session);
+    const report = await buildWeeklyFleetReport(session.tenantSlug, kind, new Date(), name, session, vesselCode);
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     response.end(report.html);
     return true;

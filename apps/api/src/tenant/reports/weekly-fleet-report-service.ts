@@ -7,6 +7,7 @@
 // pantallas, para que el correo y el sistema nunca digan numeros distintos.
 
 import type { TenantAccessSession } from "../auth/session-store";
+import { RouteError } from "../../http/route-error";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { resolveTenantTime, fmtDate } from "../../common/tenant-time";
 import { listTenantVessels } from "../vessels/vessels-service";
@@ -179,6 +180,7 @@ export async function buildWeeklyFleetReport(
   now: Date = new Date(),
   greetingName: string | null = null,
   viewerSession: TenantAccessSession | null = null,
+  vesselCode: string | null = null,
 ): Promise<BuiltReport> {
   const session = viewerSession ?? buildSystemSession(tenantSlug);
   const { tz, locale } = await resolveTenantTime(tenantSlug);
@@ -186,20 +188,34 @@ export async function buildWeeklyFleetReport(
   const base = appBaseUrl(tenantSlug);
   const logoUrl = await resolveLogo(tenantSlug, base);
 
-  const [vessels, plans, workOrders, defects, certificates] = await Promise.all([
+  // Alcance del parte. `vesselCode` es el buque elegido en el selector de la
+  // pantalla; null significa "toda la flota". Los listados reciben el filtro,
+  // asi que el recorte pasa por `applyAssignedVesselScope`: un buque fuera del
+  // alcance del usuario no devuelve nada en vez de colarse.
+  const only = vesselCode ?? undefined;
+
+  const [allVessels, plans, workOrders, defects, certificates] = await Promise.all([
     listTenantVessels(session),
-    listTenantMaintenancePlans(session),
-    listTenantWorkOrders(session),
-    listTenantDefects(session),
-    listTenantCertificates(session),
+    listTenantMaintenancePlans(session, { vesselCode: only }),
+    listTenantWorkOrders(session, { vesselCode: only }),
+    listTenantDefects(session, { vesselCode: only }),
+    listTenantCertificates(session, { vesselCode: only }),
   ]);
 
   const vesselName = new Map<string, string>();
-  for (const v of vessels as Array<{ code?: string; name?: string }>) {
+  for (const v of allVessels as Array<{ code?: string; name?: string }>) {
     if (v.code) vesselName.set(v.code, v.name || v.code);
   }
   // Regla del proyecto: en documentos va el NOMBRE del buque, nunca el codigo.
   const nameOf = (code: unknown): string => vesselName.get(String(code ?? "")) ?? String(code ?? "—");
+
+  // Si el buque pedido no esta en la lista del usuario, no existe para el: el
+  // parte no se arma a medias con datos de la flota.
+  if (vesselCode && !vesselName.has(vesselCode)) {
+    throw new RouteError(404, "VESSEL_NOT_FOUND", "El buque seleccionado no existe o no está en tu alcance.");
+  }
+  const scopeName = vesselCode ? nameOf(vesselCode) : null;
+  const vessels = vesselCode ? (allVessels as Array<{ code?: string }>).filter(v => v.code === vesselCode) : allVessels;
 
   const today = dayStart(l);
   const activePlans = (plans as Array<Record<string, any>>).filter(p => p.status === "ACTIVE");
@@ -236,8 +252,10 @@ export async function buildWeeklyFleetReport(
       ? `Planes vencidos por buque. Los primeros cuatro concentran el ${Math.round((top4 * 100) / overdue.length)}%.`
       : "";
 
+    // "Buques" solo tiene sentido en el parte de flota: en el de un buque seria
+    // siempre 1 y le robaria el lugar a un dato util.
     const kpis: ReportKpi[] = [
-      { value: vessels.length, label: "Buques" },
+      ...(scopeName ? [] : [{ value: vessels.length, label: "Buques" } as ReportKpi]),
       { value: overdue.length, label: "Planes vencidos", tone: overdue.length > 0 ? "crit" : "ok" },
       { value: dueThisWeek.length, label: "Vencen esta semana", tone: dueThisWeek.length > 0 ? "warn" : "plain" },
       { value: openWos.length, label: "OT abiertas" },
@@ -256,12 +274,13 @@ export async function buildWeeklyFleetReport(
 
     const data = {
       greetingName,
+      scopeName,
       dateline,
       weekLabel: `${fmtDate(today, tz, locale)} al ${fmtDate(dayStart(l, LOOKAHEAD_DAYS - 1), tz, locale)}`,
       kpis, backlogBars: bars, backlogNote, tasks, logoUrl, appUrl: base,
     };
     return {
-      subject: `Estado de flota · ${dueThisWeek.length} ${dueThisWeek.length === 1 ? "tarea vence" : "tareas vencen"} esta semana`,
+      subject: `${scopeName ?? "Estado de flota"} · ${dueThisWeek.length} ${dueThisWeek.length === 1 ? "tarea vence" : "tareas vencen"} esta semana`,
       html: renderOpeningHtml(data),
       text: renderOpeningText(data),
     };
@@ -288,7 +307,7 @@ export async function buildWeeklyFleetReport(
 
   const kpis: ReportKpi[] = [
     { value: closed.length, label: "OT cerradas", tone: closed.length > 0 ? "ok" : "plain" },
-    { value: vesselsTouched, label: "Buques con actividad" },
+    ...(scopeName ? [] : [{ value: vesselsTouched, label: "Buques con actividad" } as ReportKpi]),
     { value: okCount, label: "Sin deficiencias", tone: "ok" },
     { value: newDefects, label: "Defectos nuevos", tone: newDefects > 0 ? "warn" : "plain" },
     { value: openWos.length, label: "OT abiertas" },
@@ -316,11 +335,13 @@ export async function buildWeeklyFleetReport(
   }
   const worst = Array.from(overdueByVessel.entries()).sort((a, b) => b[1] - a[1])[0];
 
+  const ambito = scopeName ? "en el buque" : "en la flota";
   const openItems: string[] = [
     overdue.length > 0
-      ? `<strong style="color:#A32B2B;">${overdue.length} planes vencidos</strong> en la flota.`
-        + (worst ? ` ${nameOf(worst[0])} concentra ${worst[1]}.` : "")
-      : "Ningún plan vencido en la flota.",
+      ? `<strong style="color:#A32B2B;">${overdue.length} planes vencidos</strong> ${ambito}.`
+        // El "quien concentra el atraso" compara buques: sobra si el parte ya es de uno.
+        + (!scopeName && worst ? ` ${nameOf(worst[0])} concentra ${worst[1]}.` : "")
+      : `Ningún plan vencido ${ambito}.`,
     `<strong>${openWos.length} OT abiertas</strong> y <strong>${openDefects.length} defectos</strong> sin cerrar.`,
     expiringCerts.length > 0
       ? `<strong>${expiringCerts.length} ${expiringCerts.length === 1 ? "certificado vence" : "certificados vencen"}</strong> dentro de los próximos ${CERT_WARNING_DAYS} días.`
@@ -329,12 +350,13 @@ export async function buildWeeklyFleetReport(
 
   const data = {
     greetingName,
+    scopeName,
     dateline,
     weekLabel: `${fmtDate(weekStart, tz, locale)} al ${fmtDate(today, tz, locale)}`,
     kpis, done, openItems, logoUrl, appUrl: base,
   };
   return {
-    subject: `Cierre de semana · ${closed.length} ${closed.length === 1 ? "OT cerrada" : "OT cerradas"}`,
+    subject: `${scopeName ? `${scopeName} · cierre de semana` : "Cierre de semana"} · ${closed.length} ${closed.length === 1 ? "OT cerrada" : "OT cerradas"}`,
     html: renderClosingHtml(data),
     text: renderClosingText(data),
   };

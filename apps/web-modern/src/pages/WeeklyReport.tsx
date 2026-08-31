@@ -17,6 +17,7 @@ import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
+import { useVesselContext } from "../lib/vessel-context";
 
 type Kind = "WEEKLY_OPENING" | "WEEKLY_CLOSING";
 
@@ -50,6 +51,9 @@ export const WeeklyReportPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
   const isAdmin = user?.role === "TENANT_ADMIN";
+  // El parte sigue al selector de buque de la barra superior: con uno elegido
+  // sale el parte de esa embarcación, y sin selección el de toda la flota.
+  const { selectedVesselCode } = useVesselContext();
 
   const [kind, setKind] = useState<Kind>("WEEKLY_OPENING");
   const [viewing, setViewing] = useState<HistoryItem | null>(null);
@@ -65,11 +69,24 @@ export const WeeklyReportPage: React.FC = () => {
   const tRef = useRef(t);
   tRef.current = t;
 
+  // Mismo motivo: el efecto que reacciona al cambio de buque no debe depender
+  // de `kind` ni de `viewing`, o se dispararía también al cambiar de pestaña.
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
+  const viewingRef = useRef(viewing);
+  viewingRef.current = viewing;
+
+  // El buque se lee por ref para que `loadCurrent` no cambie de identidad y no
+  // dispare el efecto de abajo dos veces en cada cambio de selección.
+  const vesselRef = useRef(selectedVesselCode);
+  vesselRef.current = selectedVesselCode;
+
   const loadCurrent = useCallback(async (k: Kind) => {
     setLoading(true);
     setViewing(null);
     try {
-      setHtml(await fetchReportHtml(`/app/tenant/weekly-report/preview?kind=${k}`));
+      const vessel = vesselRef.current ? `&vessel=${encodeURIComponent(vesselRef.current)}` : "";
+      setHtml(await fetchReportHtml(`/app/tenant/weekly-report/preview?kind=${k}${vessel}`));
     } catch (e) {
       setAlert(e instanceof ApiError ? e.message : tRef.current("weeklyReport.loadError"));
       setHtml("");
@@ -98,6 +115,15 @@ export const WeeklyReportPage: React.FC = () => {
     if (!isAdmin) { setLoading(false); return; }
     void loadCurrent("WEEKLY_OPENING");
   }, [loadCurrent, isAdmin]);
+
+  // Cambio de buque en la barra superior: se rehace el parte del momento. Las
+  // semanas anteriores son copias congeladas de flota, así que no se tocan.
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    if (!isAdmin || viewingRef.current) return;
+    void loadCurrent(kindRef.current);
+  }, [selectedVesselCode, isAdmin, loadCurrent]);
 
   useEffect(() => {
     if (!isAdmin) return;

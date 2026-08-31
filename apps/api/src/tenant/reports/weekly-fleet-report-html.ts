@@ -191,6 +191,8 @@ function shell(title: string, preheader: string, body: string): string {
 
 export interface OpeningReportData {
   greetingName: string | null;
+  /** Nombre del buque cuando el parte es de UNO solo; null = flota completa. */
+  scopeName: string | null;
   dateline: string;
   weekLabel: string;
   kpis: ReportKpi[];
@@ -204,13 +206,19 @@ export interface OpeningReportData {
 export function renderOpeningHtml(d: OpeningReportData): string {
   const hola = d.greetingName ? `Buen d&iacute;a, ${esc(d.greetingName)}.` : "Buen d&iacute;a.";
   const maxBar = d.backlogBars.reduce((m, b) => Math.max(m, b.value), 0);
+  // El parte puede ser de toda la flota o de un solo buque: cambia el titulo y
+  // el sujeto de los textos ("en la flota" / "en el buque").
+  const ambito = d.scopeName ? "en el buque" : "en la flota";
+  const titulo = d.scopeName
+    ? `${d.scopeName} — estado y tareas de la semana`
+    : "Estado de flota y tareas de la semana";
 
   const bars = d.backlogBars.length > 0
     ? `<tr><td style="padding:10px 28px 0;">`
       + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">`
       + d.backlogBars.map(b => barRow(b.label, b.value, maxBar)).join("")
       + `</table></td></tr>`
-    : emptyNote("No hay planes vencidos en la flota.");
+    : emptyNote(`No hay planes vencidos ${ambito}.`);
 
   const taskRows = d.tasks.map(t =>
     `<tr>${td(esc(t.vesselName), "left", INK, "600")}`
@@ -226,26 +234,32 @@ export function renderOpeningHtml(d: OpeningReportData): string {
       + taskRows + `</table></td></tr>`
     : emptyNote("No hay tareas con vencimiento en esta semana.");
 
+  // El grafico de atraso compara buques entre si: con uno solo seleccionado es
+  // una barra sola, que no dice nada. Se omite la seccion entera.
+  const backlogBlock = d.scopeName
+    ? ""
+    : section("Dónde está el atraso", d.backlogNote) + bars;
+
   const body = masthead("Resumen semanal &middot; Mantenimiento",
-                        "Estado de flota y tareas de la semana", d.dateline, d.logoUrl)
+                        titulo, d.dateline, d.logoUrl)
     + `<tr><td style="padding:24px 28px 0;font:400 14px/1.6 ${SANS};color:${INK};">`
     + `${hola} As&iacute; arranca la semana del <strong>${esc(d.weekLabel)}</strong>.</td></tr>`
-    + section("Estado de la flota", "Foto de hoy, al momento del envío.")
+    + section(d.scopeName ? `Estado de ${d.scopeName}` : "Estado de la flota", "Foto de hoy, al momento del envío.")
     + kpiGrid(d.kpis)
-    + section("Dónde está el atraso", d.backlogNote)
-    + bars
+    + backlogBlock
     + section("Tareas de esta semana", `${d.tasks.length} ${d.tasks.length === 1 ? "plan vence" : "planes vencen"} en los próximos 7 días.`)
     + tasksBlock
     + footer("Se envía automáticamente los lunes a las 07:00.", d.appUrl);
 
-  return shell("Estado de flota y tareas de la semana",
-               `${d.tasks.length} tareas vencen esta semana`, body);
+  return shell(titulo, `${d.tasks.length} tareas vencen esta semana`, body);
 }
 
 // ── Viernes: cierre de semana ───────────────────────────────────────────────
 
 export interface ClosingReportData {
   greetingName: string | null;
+  /** Nombre del buque cuando el parte es de UNO solo; null = flota completa. */
+  scopeName: string | null;
   dateline: string;
   weekLabel: string;
   kpis: ReportKpi[];
@@ -257,6 +271,9 @@ export interface ClosingReportData {
 
 export function renderClosingHtml(d: ClosingReportData): string {
   const hola = d.greetingName ? `${esc(d.greetingName)}, esto` : "Esto";
+  const titulo = d.scopeName
+    ? `${d.scopeName} — lo que se ejecutó esta semana`
+    : "Lo que se ejecutó esta semana";
 
   const doneRows = d.done.map(r =>
     `<tr>${td(`${codeSpan(r.workOrderCode)}<br><strong>${esc(r.vesselName)}</strong>`)}`
@@ -276,7 +293,7 @@ export function renderClosingHtml(d: ClosingReportData): string {
     : emptyNote("No se cerró ninguna orden de trabajo esta semana.");
 
   const body = masthead("Cierre de semana &middot; Mantenimiento",
-                        "Lo que se ejecutó esta semana", d.dateline, d.logoUrl)
+                        titulo, d.dateline, d.logoUrl)
     + `<tr><td style="padding:24px 28px 0;font:400 14px/1.6 ${SANS};color:${INK};">`
     + `${hola} es lo que qued&oacute; hecho entre el <strong>${esc(d.weekLabel)}</strong>.</td></tr>`
     + section("La semana en números")
@@ -287,8 +304,7 @@ export function renderClosingHtml(d: ClosingReportData): string {
     + bullets(d.openItems)
     + footer("Se envía automáticamente los viernes a las 17:00.", d.appUrl);
 
-  return shell("Lo que se ejecuto esta semana",
-               `${d.done.length} OT cerradas esta semana`, body);
+  return shell(titulo, `${d.done.length} OT cerradas esta semana`, body);
 }
 
 // ── Alternativa en texto plano ──────────────────────────────────────────────
@@ -297,17 +313,21 @@ export function renderClosingHtml(d: ClosingReportData): string {
 
 export function renderOpeningText(d: OpeningReportData): string {
   const lines = [
-    `ESTADO DE FLOTA Y TAREAS DE LA SEMANA - ${d.dateline}`,
+    d.scopeName
+      ? `${d.scopeName.toUpperCase()} - ESTADO Y TAREAS DE LA SEMANA - ${d.dateline}`
+      : `ESTADO DE FLOTA Y TAREAS DE LA SEMANA - ${d.dateline}`,
     `Semana del ${d.weekLabel}`,
     "",
-    "ESTADO DE LA FLOTA",
+    d.scopeName ? `ESTADO DE ${d.scopeName.toUpperCase()}` : "ESTADO DE LA FLOTA",
     ...d.kpis.map(k => `  ${k.value} - ${k.label}`),
     "",
-    "DONDE ESTA EL ATRASO",
-    ...(d.backlogBars.length
-      ? d.backlogBars.map(b => `  ${b.label}: ${b.value}`)
-      : ["  Sin planes vencidos."]),
-    "",
+    ...(d.scopeName ? [] : [
+      "DONDE ESTA EL ATRASO",
+      ...(d.backlogBars.length
+        ? d.backlogBars.map(b => `  ${b.label}: ${b.value}`)
+        : ["  Sin planes vencidos."]),
+      "",
+    ]),
     `TAREAS DE ESTA SEMANA (${d.tasks.length})`,
     ...(d.tasks.length
       ? d.tasks.map(t => `  ${t.dueLabel} - ${t.vesselName} - ${t.taskCode} - ${t.title} (${t.assetName})`)
@@ -321,7 +341,9 @@ export function renderOpeningText(d: OpeningReportData): string {
 
 export function renderClosingText(d: ClosingReportData): string {
   const lines = [
-    `LO QUE SE EJECUTO ESTA SEMANA - ${d.dateline}`,
+    d.scopeName
+      ? `${d.scopeName.toUpperCase()} - LO QUE SE EJECUTO ESTA SEMANA - ${d.dateline}`
+      : `LO QUE SE EJECUTO ESTA SEMANA - ${d.dateline}`,
     `Semana del ${d.weekLabel}`,
     "",
     "LA SEMANA EN NUMEROS",
