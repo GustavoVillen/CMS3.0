@@ -160,6 +160,24 @@ export async function listTenantSpares(session: TenantAccessSession, filters: Sp
   return enriched.filter(i => i.onHand <= i.reorderPoint);
 }
 
+/**
+ * Agrega el stock calculado (onHand/reserved/available) a un registro suelto.
+ * El listado ya lo hace; sin esto, la respuesta de alta o edición vuelve sin
+ * existencias y la pantalla queda mostrando el stock en blanco (y el ajuste
+ * manual falla, porque calcula la diferencia contra un valor indefinido).
+ */
+async function conStock<T extends { id: string }>(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  record: T,
+) {
+  const onHandMap   = await getOnHandMap(prisma, [record.id]);
+  const reservedMap = await getReservedMapFromCalc(prisma, tenantId, [record.id]);
+  const onHand   = onHandMap.get(record.id) ?? 0;
+  const reserved = reservedMap.get(record.id) ?? 0;
+  return { ...record, onHand, reserved, available: getAvailableQty(onHand, reserved) };
+}
+
 export async function getTenantSpare(session: TenantAccessSession, id: string) {
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -170,7 +188,7 @@ export async function getTenantSpare(session: TenantAccessSession, id: string) {
 
   const record = await prisma.spare.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Spare no encontrado.");
-  return record;
+  return conStock(prisma, tenantId, record);
 }
 
 export async function createTenantSpare(session: TenantAccessSession, payload: CreateSpareInput) {
@@ -218,7 +236,7 @@ export async function createTenantSpare(session: TenantAccessSession, payload: C
       entityId: created.id,
       metadata: { sku: created.sku, name: created.name, vesselCode: created.vesselCode },
     });
-    return created;
+    return conStock(prisma, tenantId, created);
   } catch (error: unknown) {
     if (isP2002(error)) {
       throw new RouteError(409, "DUPLICATE_SKU", "Ya existe un spare con ese SKU para el vessel.");
@@ -270,7 +288,7 @@ export async function updateTenantSpare(session: TenantAccessSession, id: string
       entityId: updated.id,
       metadata: { sku: updated.sku, name: updated.name, vesselCode: updated.vesselCode, changes },
     });
-    return updated;
+    return conStock(prisma, updated.tenantId, updated);
   } catch (error: unknown) {
     if (isP2002(error)) {
       throw new RouteError(409, "DUPLICATE_SKU", "Ya existe un spare con ese SKU para el vessel.");
