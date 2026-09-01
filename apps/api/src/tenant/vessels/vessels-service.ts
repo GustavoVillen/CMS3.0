@@ -54,12 +54,31 @@ export async function listTenantVessels(session: TenantAccessSession) {
     orderBy: { code: "asc" },
   });
 
+  // Equipos cargados por buque. Una embarcación sin equipos no puede recibir una
+  // OT de mantenimiento planeado —la OT cuelga de un equipo—, y sin este dato la
+  // pantalla se entera recién al llegar al paso del equipo y quedarse en blanco.
+  // Un solo groupBy para toda la flota; el listado ya se pide una vez por sesión.
+  const counts = new Map<string, number>();
+  try {
+    const grouped: Array<{ vesselCode: string; _count: { _all: number } }> =
+      await (prisma as any).asset.groupBy({
+        by: ["vesselCode"],
+        where: { tenantId: tenant.id, deletedAt: null },
+        _count: { _all: true },
+      });
+    for (const g of grouped) counts.set(g.vesselCode, g._count._all);
+  } catch { /* no bloqueante: sin el conteo el listado sigue sirviendo */ }
+
   // `uncrewed` derivado: ¿es una embarcación sin dotación (barcaza)? El dato sale
   // de isCrewed o, si no está declarado, del vesselType (texto libre). Se
   // resuelve acá y no en cada pantalla para que la regla exista en un solo lugar
   // (vessels/vessel-crewing.ts) — de eso depende, por ejemplo, qué
   // embarcaciones se pueden atender juntas en un convoy.
-  return rows.map((v) => ({ ...v, uncrewed: isUncrewedVessel(v) }));
+  return rows.map((v) => ({
+    ...v,
+    uncrewed: isUncrewedVessel(v),
+    assetCount: counts.get(v.code) ?? 0,
+  }));
 }
 
 export async function getTenantVesselById(session: TenantAccessSession, id: string) {

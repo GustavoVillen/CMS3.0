@@ -107,28 +107,40 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
   const extraVessels = React.useMemo(() => pickedList.slice(1), [pickedList]);
 
   /**
-   * Qué NO se puede sumar a lo ya tildado.
+   * Qué NO se puede tildar, y por qué. Dos motivos distintos:
    *
-   * El grupo es para embarcaciones sin dotación: las barcazas van amarradas en
-   * convoy, no llevan gente a bordo y la recorrida se hace de una pasada sobre
-   * todas. Un remolcador se mantiene por su cuenta —tiene su tripulación y sus
-   * propias horas de motor—, así que va solo: tildarlo junto a otros daría por
-   * ejecutado un trabajo que en los demás no se hizo.
+   * 1. SIN EQUIPOS CARGADOS. Una OT cuelga de un equipo, así que una embarcación
+   *    sin equipos no puede recibir ninguna. Antes se descubría tarde: se la
+   *    elegía, se pasaba al paso siguiente y la lista de equipos aparecía vacía
+   *    con un "Sin resultados" que no explicaba nada.
+   *
+   * 2. NO SE PUEDE ABRIR EN GRUPO con lo ya tildado. El grupo es para
+   *    embarcaciones sin dotación: las barcazas van amarradas en convoy y la
+   *    recorrida se hace de una pasada sobre todas. Un remolcador se mantiene
+   *    por su cuenta —tiene su tripulación y sus propias horas de motor—, así
+   *    que va solo: tildarlo junto a otros daría por ejecutado un trabajo que en
+   *    los demás no se hizo.
    *
    * Las que no se pueden tildar quedan a la vista pero apagadas: esconderlas
    * dejaría al usuario buscando un buque que estaba ahí hace un segundo.
    */
-  const disabledVesselCodes = React.useMemo(() => {
-    const out = new Set<string>();
-    if (!primaryVessel) return out;
-    const primary = vessels.find(v => v.code === primaryVessel);
+  const disabledVessels = React.useMemo(() => {
+    const out = new Map<string, { title: string; note?: string }>();
+    const primary = primaryVessel ? vessels.find(v => v.code === primaryVessel) : null;
     const groupable = primary?.uncrewed === true;
     for (const v of vessels) {
       if (pickedVessels.has(v.code)) continue;
-      if (!groupable || v.uncrewed !== true) out.add(v.code);
+      // El conteo puede no venir (backend viejo): sólo se bloquea si dice 0.
+      if (v.assetCount === 0) {
+        out.set(v.code, { title: t("wo.batch.noAssets").replace("{vessel}", v.name), note: t("wo.batch.noAssetsShort") });
+        continue;
+      }
+      if (primary && (!groupable || v.uncrewed !== true)) {
+        out.set(v.code, { title: t("wo.batch.onlyBarges") });
+      }
     }
     return out;
-  }, [vessels, pickedVessels, primaryVessel]);
+  }, [vessels, pickedVessels, primaryVessel, t]);
 
   const loadAssets = useCallback(async (vc: string): Promise<AssetOption[]> => {
     setLoadingAssets(true);
@@ -349,8 +361,7 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
                   title={t("wo.batch.allVessels")}
                   selected={pickedVessels}
                   onToggle={toggleVessel}
-                  disabledCodes={disabledVesselCodes}
-                  disabledTitle={t("wo.batch.onlyBarges")}
+                  disabled={disabledVessels}
                   primaryCode={extraVessels.length > 0 ? primaryVessel : null}
                   primaryLabel={t("wo.batch.primaryVessel")}
                   emptyMessage={t("wo.modal.selectVessel")}
@@ -385,6 +396,17 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
                 <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-3">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
                 </div>
+              ) : assets.length === 0 ? (
+                // Red de seguridad: el paso anterior ya bloquea las embarcaciones
+                // sin equipos, pero si el conteo no llegó (backend viejo, o los
+                // equipos se borraron mientras tanto) el usuario tiene que leer
+                // QUÉ pasa y con QUÉ buque, no un "Sin resultados" mudo.
+                <p className="text-xs text-text-industrial/60 bg-fg/5 border border-fg/10 rounded-xl px-3 py-3 leading-relaxed">
+                  {t("wo.batch.noAssets").replace(
+                    "{vessel}",
+                    vessels.find(v => v.code === primaryVessel)?.name ?? primaryVessel,
+                  )}
+                </p>
               ) : (
                 <AssetSearchDropdown
                   assets={assets}

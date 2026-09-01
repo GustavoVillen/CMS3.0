@@ -16,6 +16,12 @@ interface VesselOption {
    * las pantallas no repitan esa heurística cada una a su manera.
    */
   uncrewed?: boolean;
+  /**
+   * Cuántos equipos tiene cargados. En 0 la embarcación no puede recibir una OT
+   * de mantenimiento planeado: la orden cuelga de un equipo. Se usa para avisarlo
+   * ANTES de elegirla, en vez de dejar la lista de equipos vacía sin explicación.
+   */
+  assetCount?: number;
 }
 
 /**

@@ -25,12 +25,14 @@ interface Props {
   /** Por defecto, los buques del alcance del usuario (VesselContext). */
   vessels?: VesselPickerOption[];
   /**
-   * Embarcaciones que no se pueden tildar en este momento. Siguen a la vista
-   * —esconderlas dejaría al usuario preguntándose dónde está su buque— pero
-   * apagadas, con el motivo en el tooltip.
+   * Embarcaciones que no se pueden tildar en este momento, por código.
+   * Siguen a la vista —esconderlas dejaría al usuario preguntándose dónde está
+   * su buque— pero apagadas: `note` se lee en la tarjeta misma y `title` da el
+   * motivo completo al pasar el mouse. Los motivos son varios (un remolcador no
+   * se abre en grupo; una embarcación sin equipos no puede recibir una OT), así
+   * que cada una trae el suyo.
    */
-  disabledCodes?: Set<string>;
-  disabledTitle?: string;
+  disabled?: Map<string, { title: string; note?: string }>;
   /** Se marca aparte: es la embarcación de la que salen equipo y tarea. */
   primaryCode?: string | null;
   primaryLabel?: string;
@@ -41,7 +43,7 @@ interface Props {
 const labelCls = "block text-[10px] font-semibold text-text-industrial/60 uppercase tracking-wider";
 
 export const VesselPickerGrid: React.FC<Props> = ({
-  selected, onToggle, title, vessels, disabledCodes, disabledTitle,
+  selected, onToggle, title, vessels, disabled,
   primaryCode, primaryLabel, emptyMessage,
 }) => {
   const ctx = useVesselContext();
@@ -58,19 +60,19 @@ export const VesselPickerGrid: React.FC<Props> = ({
         <div className="grid grid-cols-2 gap-1.5">
           {items.map(v => {
             const active = selected.has(v.code);
-            const disabled = !active && !!disabledCodes?.has(v.code);
+            const block = active ? undefined : disabled?.get(v.code);
             const isPrimary = primaryCode === v.code;
             return (
               <button
                 key={v.code}
                 type="button"
-                disabled={disabled}
-                title={disabled ? disabledTitle : `${v.code} — ${v.name}`}
+                disabled={!!block}
+                title={block ? block.title : `${v.code} — ${v.name}`}
                 onClick={() => onToggle(v.code)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
                   active
                     ? "bg-accent/15 border-accent/40 text-accent"
-                    : disabled
+                    : block
                       ? "bg-fg/3 border-fg/10 text-text-industrial/25 opacity-50 cursor-not-allowed"
                       : "bg-fg/3 border-fg/10 text-text-industrial/50 hover:bg-fg/8 hover:text-fg"
                 }`}
@@ -83,6 +85,9 @@ export const VesselPickerGrid: React.FC<Props> = ({
                   <p className="text-[10px] text-text-industrial/40 leading-tight truncate max-w-[80px]">{v.name}</p>
                   {isPrimary && primaryLabel && (
                     <p className="text-[9px] text-accent/80 leading-tight truncate max-w-[90px]">{primaryLabel}</p>
+                  )}
+                  {block?.note && (
+                    <p className="text-[9px] text-text-industrial/40 leading-tight truncate max-w-[90px]">{block.note}</p>
                   )}
                 </div>
               </button>
