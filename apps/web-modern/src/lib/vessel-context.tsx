@@ -8,6 +8,14 @@ interface VesselOption {
   status: string;
   /** Ej. "Remolcador", "Barcaza Tanque - Rake". Puede faltar en buques viejos. */
   vesselType?: string | null;
+  /**
+   * ¿Es una embarcación SIN dotación a bordo (una barcaza)? Lo resuelve el
+   * backend (vessels/vessel-crewing.ts) a partir de `isCrewed` o, si no está
+   * declarado, del `vesselType` — que es texto libre y en la flota real dice
+   * "Barcaza Tanque - Rake", no "BARCAZA". Viene calculado justamente para que
+   * las pantallas no repitan esa heurística cada una a su manera.
+   */
+  uncrewed?: boolean;
 }
 
 /**

@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 import { invalidateVesselAiContext } from "../ai/vessel-ai-context";
+import { isUncrewedVessel } from "./vessel-crewing";
 
 const VESSEL_SELECT = {
   id: true,
@@ -47,11 +48,18 @@ export async function listTenantVessels(session: TenantAccessSession) {
       : { in: session.user.assignedVesselCodes };
   }
 
-  return prisma.vessel.findMany({
+  const rows = await prisma.vessel.findMany({
     where: where as any,
     select: VESSEL_SELECT,
     orderBy: { code: "asc" },
   });
+
+  // `uncrewed` derivado: ¿es una embarcación sin dotación (barcaza)? El dato sale
+  // de isCrewed o, si no está declarado, del vesselType (texto libre). Se
+  // resuelve acá y no en cada pantalla para que la regla exista en un solo lugar
+  // (vessels/vessel-crewing.ts) — de eso depende, por ejemplo, qué
+  // embarcaciones se pueden atender juntas en un convoy.
+  return rows.map((v) => ({ ...v, uncrewed: isUncrewedVessel(v) }));
 }
 
 export async function getTenantVesselById(session: TenantAccessSession, id: string) {

@@ -4290,7 +4290,7 @@ export const WorkOrdersPage: React.FC = () => {
             {/* Abierta en grupo con otras embarcaciones: en la tabla plana no se
                 pliega nada, pero se avisa que no es una orden suelta. */}
             {r.batchId && (
-              <span title={t("wo.batch.wizardTitle")} className="shrink-0 leading-none">
+              <span title={t("wo.batch.allVessels")} className="shrink-0 leading-none">
                 <Ship className="w-3 h-3 text-accent" />
               </span>
             )}

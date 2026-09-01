@@ -9,6 +9,7 @@ import { DataTable, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { RolePermissionsModal } from "../components/RolePermissionsModal";
+import { VesselPickerGrid } from "../components/VesselPickerGrid";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
 
@@ -283,56 +284,25 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
 };
 
 // ─── Fleet Assignment Panel ───────────────────────────────────────────────────
+// La grilla vive en components/VesselPickerGrid: la comparte con el asistente
+// de Nueva OT, donde se eligen las barcazas de un convoy con el mismo gesto.
 
-interface FleetAssignmentPanelProps {
-  selected: Set<string>;
-  onToggle: (code: string) => void;
-}
-
-const FleetAssignmentPanel: React.FC<FleetAssignmentPanelProps> = ({ selected, onToggle }) => {
-  // Reuse VesselContext instead of re-fetching /app/vessels.
-  const { vessels } = useVesselContext();
-
-  return (
-    <div className="space-y-3">
-      <p className={labelCls + " flex items-center gap-1.5"}><Anchor className="w-3 h-3 text-accent" />Asignación de Flota</p>
-      {vessels.length === 0 ? (
-        <p className="text-xs text-text-industrial/30">
-          No hay buques configurados. Agregue buques en{" "}
-          <a href="/vessels" className="text-accent underline underline-offset-2 hover:text-accent/80 transition-colors">
-            Gestión de Flota
-          </a>{" "}
-          para poder asignarlos.
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 gap-1.5">
-          {vessels.map(v => {
-            const active = selected.has(v.code);
-            return (
-              <button
-                key={v.code}
-                onClick={() => onToggle(v.code)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
-                  active
-                    ? "bg-accent/15 border-accent/40 text-accent"
-                    : "bg-fg/3 border-fg/10 text-text-industrial/50 hover:bg-fg/8 hover:text-fg"
-                }`}
-              >
-                <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${active ? "bg-accent border-accent" : "border-fg/20"}`}>
-                  {active && <Check className="w-2.5 h-2.5 text-accent-fg" />}
-                </div>
-                <div>
-                  <p className="text-[10px] font-mono font-bold leading-none">{v.code}</p>
-                  <p className="text-[10px] text-text-industrial/40 leading-tight truncate max-w-[80px]">{v.name}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
+const FleetAssignmentPanel: React.FC<{ selected: Set<string>; onToggle: (code: string) => void }> = ({ selected, onToggle }) => (
+  <VesselPickerGrid
+    title="Asignación de Flota"
+    selected={selected}
+    onToggle={onToggle}
+    emptyMessage={
+      <>
+        No hay buques configurados. Agregue buques en{" "}
+        <a href="/vessels" className="text-accent underline underline-offset-2 hover:text-accent/80 transition-colors">
+          Gestión de Flota
+        </a>{" "}
+        para poder asignarlos.
+      </>
+    }
+  />
+);
 
 // ─── Member Credentials Section ───────────────────────────────────────────────
 
