@@ -22,21 +22,22 @@ const isHoursTT = (tt: string) => tt === "HOURS" || tt === "RUNNING_HOURS";
 // Columnas en orden de render. Anchos ajustables (drag en el borde del encabezado),
 // persistidos en localStorage.
 const COL_IDS = [
-  "open", "sfi", "taskCode", "equipo", "title", "criteriaSource", "freqType", "freqValue",
+  "bundle", "open", "sfi", "taskCode", "equipo", "title", "criteriaSource", "freqType", "freqValue",
   "estimatedHours", "lastExecution", "nextDue", "status", "actions",
 ] as const;
 type ColId = (typeof COL_IDS)[number];
 const DEFAULT_WIDTHS: Record<ColId, number> = {
-  open: 34, sfi: 64, taskCode: 132, equipo: 200, title: 260, criteriaSource: 150, freqType: 112,
+  bundle: 34, open: 34, sfi: 64, taskCode: 132, equipo: 200, title: 260, criteriaSource: 150, freqType: 112,
   freqValue: 80, estimatedHours: 80, lastExecution: 140, nextDue: 150, status: 124, actions: 150,
 };
 const MIN_WIDTHS: Record<ColId, number> = {
-  open: 34, sfi: 44, taskCode: 90, equipo: 110, title: 120, criteriaSource: 100, freqType: 90,
+  bundle: 34, open: 34, sfi: 44, taskCode: 90, equipo: 110, title: 120, criteriaSource: 100, freqType: 90,
   freqValue: 56, estimatedHours: 56, lastExecution: 96, nextDue: 96, status: 96, actions: 110,
 };
-// Se versiona la clave porque los anchos guardados son de un layout sin la
-// columna "Origen": reusarlos dejaba la planilla desalineada al actualizar.
-const COL_WIDTHS_LS_KEY = "mp.grid.colWidths.v2";
+// Se versiona la clave con cada cambio de layout: los anchos guardados son de la
+// grilla anterior y reusarlos la deja desalineada. v2 agregó "Origen"; v3, la
+// casilla para juntar ítems en una sola OT.
+const COL_WIDTHS_LS_KEY = "mp.grid.colWidths.v3";
 
 interface Asset { id: string; assetCode: string; name: string | null }
 
@@ -49,6 +50,14 @@ interface Props {
   statusValue: (row: MaintenancePlan) => string;
   onOpenDetail: (row: MaintenancePlan) => void;
   emptyText: string;
+  // ── Juntar ítems del PDM en UNA sola OT ────────────────────────────────────
+  // Mismo mecanismo que la vista lista; el estado vive en el padre para que la
+  // selección sobreviva al cambio de vista. Sin `onToggleBundle` la columna no
+  // se dibuja: la planilla sigue sirviendo igual sin esto.
+  bundleIds?: string[];
+  /** Buque del primer ítem marcado: una OT no mezcla buques. */
+  bundleVessel?: string | null;
+  onToggleBundle?: (row: MaintenancePlan) => void;
 }
 
 type SortKey =
@@ -267,6 +276,7 @@ const BulkCriteriaSourceDialog: React.FC<{
 
 export const MaintenancePlansGrid: React.FC<Props> = ({
   plans, isAdmin, vesselNameMap, renderStatus, renderActions, statusValue, onOpenDetail, emptyText,
+  bundleIds, bundleVessel, onToggleBundle,
 }) => {
   const t = useT();
   const [rows, setRows] = useState<MaintenancePlan[]>(plans);
@@ -397,7 +407,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
         ) : (
           <span className="truncate block">{label}</span>
         )}
-        {id !== "open" && (
+        {id !== "open" && id !== "bundle" && (
           <div
             onMouseDown={startResize(id)}
             onClick={e => e.stopPropagation()}
@@ -443,6 +453,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
           </colgroup>
           <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-fg/10">
+              {onToggleBundle && renderHeader("bundle", "OT")}
               {renderHeader("open", "")}
               {renderHeader("sfi", t("mp.grid.sfi"), "sfi")}
               {renderHeader("taskCode", t("mp.grid.taskCode"), "taskCode")}
@@ -475,6 +486,25 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
                   title={err ?? undefined}
                   className={`border-l-2 ${borderCls} hover:bg-fg/[0.03] align-top`}
                 >
+                  {/* Marcar para juntarlo con otros ítems en UNA sola OT. */}
+                  {onToggleBundle && (() => {
+                    const checked = (bundleIds ?? []).includes(row.id);
+                    const blocked = !!bundleVessel && bundleVessel !== row.vesselCode && !checked;
+                    return (
+                      <td className="px-1 py-1 align-middle">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={blocked}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => { e.stopPropagation(); onToggleBundle(row); }}
+                          title={blocked ? t("mp.bundle.otherVessel") : t("mp.bundle.mark")}
+                          className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                        />
+                      </td>
+                    );
+                  })()}
+
                   {/* open detail */}
                   <td className="px-1 py-1 align-middle">
                     <button

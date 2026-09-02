@@ -3394,9 +3394,7 @@ export const MaintenancePlansPage: React.FC = () => {
             disabled={blocked}
             onClick={e => e.stopPropagation()}
             onChange={e => { e.stopPropagation(); toggleBundle(row); }}
-            title={blocked
-              ? "Es de otro buque: una orden de trabajo no puede mezclar buques."
-              : "Marcar para incluirlo en una sola OT junto con otros ítems"}
+            title={blocked ? t("mp.bundle.otherVessel") : t("mp.bundle.mark")}
             className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           />
         );
@@ -3850,6 +3848,9 @@ export const MaintenancePlansPage: React.FC = () => {
             statusValue={statusValue}
             onOpenDetail={openFromRow}
             emptyText={t("empty.maintenancePlans")}
+            bundleIds={bundleIds}
+            bundleVessel={bundleVessel}
+            onToggleBundle={toggleBundle}
           />
         )
       ) : (

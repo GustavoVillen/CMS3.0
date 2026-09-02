@@ -510,6 +510,8 @@ const dict = {
   "mp.modal.openExpressWO": { es: "Abrir {abbr} Express", en: "Open Express {abbr}", pt: "Abrir {abbr} Express" },
   // Mismo acto desde la fila del listado (columna ACCIONES).
   "mp.col.executeExpressWO": { es: "EJECUTAR {abbr} EXPRESS", en: "RUN EXPRESS {abbr}", pt: "EXECUTAR {abbr} EXPRESS" },
+  "mp.bundle.mark":          { es: "Marcar para incluirlo en una sola OT junto con otros ítems", en: "Mark it to include in a single WO together with other items", pt: "Marcar para incluir em uma única OS junto com outros itens" },
+  "mp.bundle.otherVessel":   { es: "Es de otro buque: una orden de trabajo no puede mezclar buques.", en: "It belongs to another vessel: a work order cannot mix vessels.", pt: "É de outra embarcação: uma ordem de serviço não pode misturar embarcações." },
   "mp.express.hint":         { es: "Abre una OT ya autorizada, sin aprobación ni autorización", en: "Opens a WO already authorized, with no approval or authorization", pt: "Abre uma OS já autorizada, sem aprovação nem autorização" },
   "mp.express.providerHint": { es: "El trabajo es de un taller externo: la OT se abre y pasa por aprobación y autorización, como cualquier otra", en: "The work goes to an external shop: the WO opens and goes through approval and authorization, like any other", pt: "O trabalho é de uma oficina externa: a OS abre e passa por aprovação e autorização, como qualquer outra" },
   "mp.trm.AUTO_WO":      { es: "Requiere OT",      en: "Requires WO",        pt: "Requer OT" },
