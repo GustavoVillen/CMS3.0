@@ -72,9 +72,26 @@ export interface UpdateResultInput extends Partial<CreateResultInput> {}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-export function ensureAdminOrManager(session: TenantAccessSession): void {
+/**
+ * Quién administra los análisis: cargar el resultado del laboratorio, corregir
+ * una muestra, vincularla a su OT o darla de baja.
+ *
+ * Los tres roles que siguen el mantenimiento del buque de punta a punta:
+ *   · TENANT_ADMIN          — DPA / Director de Operaciones
+ *   · FLEET_SUPERINTENDENT  — Superintendente técnico (tierra)
+ *   · MAINTENANCE_MANAGER   — Capitán / Jefe de Máquinas (a bordo)
+ *
+ * El superintendente se sumó en sep 2026 a pedido del usuario: es quien recibe
+ * los informes del laboratorio desde tierra, y sin esto tenía que pedirle a
+ * otro que los cargara.
+ *
+ * Los UMBRALES no entran acá: los sigue tocando sólo TENANT_ADMIN (ver
+ * upsertThreshold). Mover un umbral cambia el veredicto de todos los análisis
+ * del tenant, no de uno.
+ */
+export function ensureCanManageFluidAnalyses(session: TenantAccessSession): void {
   const role = session.user.role;
-  const ok = role === "TENANT_ADMIN" || role === "MAINTENANCE_MANAGER";
+  const ok = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
   if (!ok) throw new RouteError(403, "FORBIDDEN", "Sin permiso para gestionar análisis de fluidos.");
 }
 
@@ -290,7 +307,7 @@ export async function getFluidSample(session: TenantAccessSession, id: string) {
 // ── Create / update / delete sample ──────────────────────────────────────────
 
 export async function createFluidSample(session: TenantAccessSession, input: CreateFluidSampleInput) {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
@@ -341,7 +358,7 @@ export async function createFluidSample(session: TenantAccessSession, input: Cre
 }
 
 export async function updateFluidSample(session: TenantAccessSession, id: string, input: UpdateFluidSampleInput) {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
@@ -378,7 +395,7 @@ export async function linkFluidSampleToWorkOrder(
   sampleId: string,
   input: { workOrderId: string; planId: string },
 ) {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
@@ -476,7 +493,7 @@ export async function updateFluidSampleRunningHours(
 }
 
 export async function deleteFluidSample(session: TenantAccessSession, id: string) {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
@@ -493,7 +510,7 @@ export async function deleteFluidSample(session: TenantAccessSession, id: string
 // ── Create / update result ───────────────────────────────────────────────────
 
 export async function upsertFluidResult(session: TenantAccessSession, sampleId: string, input: CreateResultInput) {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);

@@ -25,7 +25,7 @@ import { saveFluidReportFile } from "./fluid-uploads-service";
 import { extractFluidReport } from "./fluid-analyses-ai-extractor";
 import { matchAssetByAi, loadVesselAssets, type AssetCandidate } from "../ai/asset-ai-match";
 import {
-  ensureAdminOrManager, createFluidSample, updateFluidSample, upsertFluidResult,
+  ensureCanManageFluidAnalyses, createFluidSample, updateFluidSample, upsertFluidResult,
   linkFluidSampleToWorkOrder,
   FLUID_TYPES, VERDICTS, type FluidType, type Verdict,
 } from "./fluid-analyses-service";
@@ -123,7 +123,7 @@ export async function scanFluidReportForBatch(
   session: TenantAccessSession,
   input: { buffer: Buffer; originalName: string; vesselCodeHint?: string | null },
 ): Promise<BatchScanRow> {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
@@ -261,7 +261,7 @@ export async function commitFluidBatch(
   session: TenantAccessSession,
   rows: BatchCommitRow[],
 ): Promise<{ items: BatchCommitResult[] }> {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -426,7 +426,7 @@ export async function openWorkOrderForFluidBatch(
   session: TenantAccessSession,
   input: { sampleIds: string[] },
 ): Promise<BatchWorkOrderResult> {
-  ensureAdminOrManager(session);
+  ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);

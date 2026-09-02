@@ -166,8 +166,11 @@ export const Dashboard: React.FC = () => {
   // backend (canManageWorkOrders). El tripulante lo carga al cerrar la orden.
   const canLogSpareUse = can("wo.manage");
   // Cargar análisis de laboratorio en lote: mismos roles que exige el backend
-  // del módulo (ensureAdminOrManager en fluid-analyses-service.ts).
-  const canLoadFluidBatch = user ? ["TENANT_ADMIN", "MAINTENANCE_MANAGER"].includes(user.role) : false;
+  // del módulo (ensureCanManageFluidAnalyses en fluid-analyses-service.ts) —
+  // DPA, superintendente técnico y capitán / jefe de máquinas.
+  const canLoadFluidBatch = user
+    ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role)
+    : false;
   const isDark       = theme === "dark";
   // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
   const chartTooltip = {

@@ -62,7 +62,9 @@ async function uploadAndExtract(file: File, vesselCode: string | null, reference
 export const FluidAnalysesPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
-  const canManage = user?.role === "TENANT_ADMIN" || user?.role === "MAINTENANCE_MANAGER";
+  // Mismos tres roles que el backend (ensureCanManageFluidAnalyses): DPA,
+  // superintendente técnico y capitán / jefe de máquinas.
+  const canManage = !!user && ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role);
 
   const navigate = useNavigate();
 
