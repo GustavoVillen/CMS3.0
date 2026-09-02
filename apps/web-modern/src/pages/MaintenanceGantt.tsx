@@ -4,8 +4,6 @@ import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, ChevronRight, 
 import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
-import { useAuth } from "../lib/auth";
-import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { useT } from "../lib/i18n";
 import { sfiGroupDigit } from "../lib/utils";
 
@@ -238,26 +236,8 @@ export function MaintenanceGanttPage() {
   const [pxPerMonth, setPxPerMonth] = useState<number>(64);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Planilla de mantenimiento (.xlsx) del buque elegido en el selector del header.
-  const { selectedVesselCode, selectedVessel } = useVesselContext();
-  const { tenant } = useAuth();
-  const [exporting, setExporting] = useState(false);
-  const exportSheet = async () => {
-    if (exporting || !selectedVesselCode) return;
-    setExporting(true);
-    try {
-      await exportMaintenanceSheet({
-        vesselCode: selectedVesselCode,
-        vesselName: selectedVessel?.name ?? selectedVesselCode,
-        // La planilla va a papel/impresión: siempre el logo para fondo blanco.
-        logoUrl: tenant?.logoUrl || tenant?.logoUrlLight || null,
-      });
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "No se pudo exportar la planilla.");
-    } finally {
-      setExporting(false);
-    }
-  };
+  // La exportación de la Planilla de Mantenimiento se mudó a la pantalla de
+  // Plan de Mantenimiento (sep 2026, pedido del usuario). Acá ya no está.
 
   function toggleStatus(s: string) {
     setActiveStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
@@ -450,21 +430,6 @@ export function MaintenanceGanttPage() {
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
-
-        {/* La planilla es del buque elegido arriba: sin buque no se puede armar. */}
-        <button
-          onClick={() => { void exportSheet(); }}
-          disabled={exporting || !selectedVesselCode}
-          title={selectedVesselCode
-            ? `Exportar la planilla de mantenimiento completa de ${selectedVessel?.name ?? selectedVesselCode} a Excel`
-            : "Elegí un buque en el selector de arriba para exportar su planilla"}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {exporting
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-            : <FileSpreadsheet className="w-3.5 h-3.5" />}
-          {exporting ? "Generando…" : "Planilla Excel"}
-        </button>
 
         <div className="flex-1" />
 

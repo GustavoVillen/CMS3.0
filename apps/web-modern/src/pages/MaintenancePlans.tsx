@@ -36,6 +36,7 @@ import { api, ApiError } from "../lib/api";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
+import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
@@ -3117,8 +3118,30 @@ export const MaintenancePlansPage: React.FC = () => {
   );
   const baseItems = useMemo(() => rawData?.items ?? [], [rawData]);
   // Reuse VesselContext (already loaded for the header selector) to avoid a duplicate /app/vessels fetch.
-  const { vessels, selectedVesselCode } = useVesselContext();
+  const { vessels, selectedVesselCode, selectedVessel } = useVesselContext();
   const vesselNameMap = useMemo(() => new Map(vessels.map(v => [v.code, v.name])), [vessels]);
+
+  // ── Planilla de Mantenimiento (.xlsx) ──
+  // La arma el cliente con los planes COMPLETOS del buque (la exportación pide
+  // su propia lista, no la que está filtrada en pantalla).
+  const { tenant } = useAuth();
+  const [exportingSheet, setExportingSheet] = useState(false);
+  const exportSheet = useCallback(async () => {
+    if (exportingSheet || !selectedVesselCode) return;
+    setExportingSheet(true);
+    try {
+      await exportMaintenanceSheet({
+        vesselCode: selectedVesselCode,
+        vesselName: selectedVessel?.name ?? selectedVesselCode,
+        // La planilla va a papel: siempre el logo para fondo blanco.
+        logoUrl: tenant?.logoUrl || tenant?.logoUrlLight || null,
+      });
+    } catch (err) {
+      setPageError(err instanceof Error ? err.message : t("mp.page.exportSheetFailed"));
+    } finally {
+      setExportingSheet(false);
+    }
+  }, [exportingSheet, selectedVesselCode, selectedVessel, tenant, t]);
 
   // ── Client-side filters: SFI tab + overdue toggle + SFI text ──────────────
   const data = useMemo(() => {
@@ -3629,7 +3652,30 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        {/* Toggle vista Excel (planilla compacta editable) ↔ tarjetas — solo icono */}
+        {/* Planilla de Mantenimiento (.xlsx) del buque elegido en el header.
+            Vivía en el Gantt; se movió acá (sep 2026, pedido del usuario): la
+            planilla ES el plan de mantenimiento en papel, y se busca donde está
+            el plan. El Gantt ya no la ofrece. */}
+        <button
+          onClick={() => { void exportSheet(); }}
+          disabled={exportingSheet || !selectedVesselCode}
+          title={selectedVesselCode
+            ? t("mp.page.exportSheetHint").replace("{vessel}", selectedVessel?.name ?? selectedVesselCode)
+            : t("mp.page.exportSheetNoVessel")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {exportingSheet
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+            : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />}
+          {exportingSheet ? t("mp.page.exportSheetBusy") : t("mp.page.exportSheet")}
+        </button>
+
+        {/* ── Vista Planilla y Vista Matriz — OCULTAS por pedido del usuario
+            (sep 2026). El código de las dos queda intacto y montado más abajo:
+            para recuperarlas alcanza con descomentar estos dos botones. Mismo
+            criterio que los módulos dormantes del Sidebar: se saca el acceso,
+            no la funcionalidad. */}
+        {/*
         <button
           onClick={() => { const nv = !gridView; setGridView(nv); if (nv) setShowMatrix(false); }}
           title={t("mp.page.gridView")}
@@ -3643,7 +3689,6 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <Table2 className="w-4 h-4" />
         </button>
-        {/* Matriz de vencimientos por equipo (periodicidad × equipo) — vista del área central */}
         <button
           onClick={() => { const nv = !showMatrix; setShowMatrix(nv); if (nv) setGridView(false); }}
           title={t("mp.matrix.title")}
@@ -3656,6 +3701,7 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <CalendarRange className="w-3.5 h-3.5" /> {t("mp.page.matrixView")}
         </button>
+        */}
         {/* Agrupar por equipo + expandir/colapsar todo (solo en la lista default) */}
         {!showMatrix && !gridView && (
           <>

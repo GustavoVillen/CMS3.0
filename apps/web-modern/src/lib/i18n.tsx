@@ -510,6 +510,11 @@ const dict = {
   "mp.modal.openExpressWO": { es: "Abrir {abbr} Express", en: "Open Express {abbr}", pt: "Abrir {abbr} Express" },
   // Mismo acto desde la fila del listado (columna ACCIONES).
   "mp.col.executeExpressWO": { es: "EJECUTAR {abbr} EXPRESS", en: "RUN EXPRESS {abbr}", pt: "EXECUTAR {abbr} EXPRESS" },
+  "mp.page.exportSheet":     { es: "Planilla Excel", en: "Excel sheet", pt: "Planilha Excel" },
+  "mp.page.exportSheetBusy": { es: "Generando…",     en: "Generating…", pt: "Gerando…" },
+  "mp.page.exportSheetHint": { es: "Exportar la planilla de mantenimiento completa de {vessel} a Excel", en: "Export the full maintenance sheet for {vessel} to Excel", pt: "Exportar a planilha de manutenção completa de {vessel} para Excel" },
+  "mp.page.exportSheetNoVessel": { es: "Elegí un buque en el selector de arriba para exportar su planilla", en: "Pick a vessel in the selector above to export its sheet", pt: "Escolha uma embarcação no seletor acima para exportar sua planilha" },
+  "mp.page.exportSheetFailed":   { es: "No se pudo exportar la planilla.", en: "The sheet could not be exported.", pt: "Não foi possível exportar a planilha." },
   "mp.bundle.mark":          { es: "Marcar para incluirlo en una sola OT junto con otros ítems", en: "Mark it to include in a single WO together with other items", pt: "Marcar para incluir em uma única OS junto com outros itens" },
   "mp.bundle.otherVessel":   { es: "Es de otro buque: una orden de trabajo no puede mezclar buques.", en: "It belongs to another vessel: a work order cannot mix vessels.", pt: "É de outra embarcação: uma ordem de serviço não pode misturar embarcações." },
   "mp.express.hint":         { es: "Abre una OT ya autorizada, sin aprobación ni autorización", en: "Opens a WO already authorized, with no approval or authorization", pt: "Abre uma OS já autorizada, sem aprovação nem autorização" },
