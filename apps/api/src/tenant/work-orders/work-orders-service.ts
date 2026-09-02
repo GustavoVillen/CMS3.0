@@ -13,7 +13,7 @@ import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from 
 import { log } from "../../common/logger";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
-import { isInspectionWorkOrder, inspectionApprovalStamps } from "./wo-inspection-flow";
+import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "./wo-inspection-flow";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -677,7 +677,13 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         status: "PLANNED",
         // Inspección: nace autorizada, sin aprobación ni autorización manual
         // (ver wo-inspection-flow). Sus SS siguen su propia tramitación.
-        ...(isInspectionWorkOrder(woType) ? inspectionApprovalStamps(woOpenDate) : {}),
+        // Excepción: si el trabajo se terceriza hay gasto, y entonces la orden
+        // recorre la tramitación completa como cualquier otra. Misma señal que
+        // gobierna `providerId` unas líneas más abajo.
+        ...(inspectionSkipsApproval(
+          woType,
+          payload.assignedToArea === "TERCERIZADO" || payload.department === "PROVEEDOR",
+        ) ? inspectionApprovalStamps(woOpenDate) : {}),
         priority: payload.priority ?? "MEDIUM",
         criticality: payload.criticality ?? "B",
         openDate: woOpenDate,

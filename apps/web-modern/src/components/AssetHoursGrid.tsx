@@ -48,12 +48,24 @@ const MAX_HOURS_PER_DAY = 24;
 const COL_IDS = ["equipo", "sfi", "last", "date", "stale", "input", "delta", "rpm", "source"] as const;
 type ColId = (typeof COL_IDS)[number];
 const DEFAULT_WIDTHS: Record<ColId, number> = {
-  equipo: 240, sfi: 70, last: 110, date: 104, stale: 96, input: 130, delta: 100, rpm: 100, source: 120,
+  equipo: 240, sfi: 70, last: 110, date: 104, stale: 96, input: 150, delta: 100, rpm: 110, source: 120,
 };
 const MIN_WIDTHS: Record<ColId, number> = {
-  equipo: 120, sfi: 50, last: 80, date: 84, stale: 70, input: 90, delta: 80, rpm: 70, source: 80,
+  equipo: 120, sfi: 50, last: 80, date: 84, stale: 70, input: 110, delta: 80, rpm: 90, source: 80,
 };
 const COL_WIDTHS_LS_KEY = "assetHours.grid.colWidths";
+
+/**
+ * Los dos campos que la tripulación ESCRIBE (horas y RPM) van más grandes que
+ * el resto de la grilla, a propósito: son el único dato que se carga acá, se
+ * tipean muchas veces desde un celular o con la sala de máquinas encima, y un
+ * dígito de más corre el vencimiento de todos los planes por horas del equipo.
+ * Escrito una vez y compartido para que los dos no se separen con el tiempo.
+ */
+const READING_INPUT_CLS =
+  "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-base font-mono font-semibold " +
+  "text-fg text-right placeholder:font-normal placeholder:text-sm placeholder-text-industrial/30 " +
+  "focus:outline-none focus:border-accent/60 disabled:opacity-50";
 
 type SortKey = "equipo" | "sfi" | "last" | "date" | "stale";
 
@@ -450,7 +462,7 @@ export const AssetHoursGrid: React.FC<Props> = ({
                         value={drafts[row.assetId] ?? ""}
                         onChange={(e) => setDraft(row.assetId, e.target.value)}
                         placeholder={row.lastReading ? fmtHours(row.lastReading.runningHours) : "0"}
-                        className="w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] font-mono text-fg text-right placeholder-text-industrial/25 focus:outline-none focus:border-accent/60 disabled:opacity-50"
+                        className={READING_INPUT_CLS}
                       />
                     </td>
                   )}
@@ -487,7 +499,7 @@ export const AssetHoursGrid: React.FC<Props> = ({
                         value={rpmDrafts[row.assetId] ?? ""}
                         onChange={(e) => setRpmDraft(row.assetId, e.target.value)}
                         placeholder={t("assetHours.rpmPlaceholder")}
-                        className="w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] font-mono text-fg text-right placeholder-text-industrial/25 focus:outline-none focus:border-accent/60 disabled:opacity-50"
+                        className={READING_INPUT_CLS}
                       />
                     </td>
                   )}

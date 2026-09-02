@@ -9,6 +9,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { AlertDialog } from "../components/AlertDialog";
 import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
@@ -144,6 +145,7 @@ export const FluidAnalysesPage: React.FC = () => {
       if (sortKey === "assetId")     { av = assetLabel(a.assetId, assets); bv = assetLabel(b.assetId, assets); }
       if (sortKey === "fluidType")   { av = a.fluidType;   bv = b.fluidType; }
       if (sortKey === "sampledAt")   { av = a.sampledAt;   bv = b.sampledAt; }
+      if (sortKey === "createdAt")   { av = a.createdAt;   bv = b.createdAt; }
       if (sortKey === "runningHours"){ av = a.runningHours ?? -1; bv = b.runningHours ?? -1; }
       if (sortKey === "status")      { av = a.status;      bv = b.status; }
       if (sortKey === "verdict")     { av = a.result?.verdict ?? ""; bv = b.result?.verdict ?? ""; }
@@ -155,8 +157,28 @@ export const FluidAnalysesPage: React.FC = () => {
     return items;
   }, [data?.items, sortKey, sortDir, assets, statusParam, tmsaFilter]);
 
+  // Borrado desde la propia fila (mismo endpoint y mismo permiso que el botón
+  // del detalle: baja lógica, sólo admin/manager).
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const removeSample = async (s: FluidSample) => {
+    if (!confirm(`${t("confirm.deleteSample")}\n\n${s.sampleCode}`)) return;
+    setDeletingId(s.id);
+    try {
+      await api.delete(`/app/fluid-analyses/${s.id}`);
+      reload();
+    } catch (e) {
+      setDeleteError(e instanceof ApiError ? e.message : t("common.error"));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-5">
+      {deleteError && <AlertDialog message={deleteError} onClose={() => setDeleteError(null)} />}
+
       {creatingSample && canManage && (
         <SampleFormModal
           mode="create"
@@ -232,10 +254,12 @@ export const FluidAnalysesPage: React.FC = () => {
                 <SortTh label="Equipo"    col="assetId"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Tipo"      col="fluidType"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Toma"      col="sampledAt"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <SortTh label={t("col.createdAt")} col="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Horas"     col="runningHours" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" />
                 <SortTh label="Estado"    col="status"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="Veredicto" col="verdict"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <SortTh label="OT origen" col="sourceWo"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                {canManage && <th className="px-4 py-3 font-semibold text-right w-10"><span className="sr-only">{t("common.actions")}</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -251,6 +275,7 @@ export const FluidAnalysesPage: React.FC = () => {
                       : SAMPLE_KIND_LABELS[s.kind] ?? s.kind}
                   </td>
                   <td className="px-4 py-3 text-text-industrial/60">{fmtDate(s.sampledAt)}</td>
+                  <td className="px-4 py-3 text-text-industrial/60">{fmtDate(s.createdAt)}</td>
                   <td className="px-4 py-3 text-right text-text-industrial/60 font-mono">{s.runningHours ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span className="inline-block px-2 py-0.5 rounded-full bg-fg/5 border border-fg/10 text-[10px] font-bold text-text-industrial/60">
@@ -273,6 +298,22 @@ export const FluidAnalysesPage: React.FC = () => {
                       )
                       : <span className="text-text-industrial/20">—</span>}
                   </td>
+                  {canManage && (
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        title={t("common.delete")}
+                        aria-label={t("common.delete")}
+                        disabled={deletingId === s.id}
+                        onClick={e => { e.stopPropagation(); void removeSample(s); }}
+                        className="inline-flex items-center justify-center p-1.5 rounded-lg text-text-industrial/40 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                      >
+                        {deletingId === s.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

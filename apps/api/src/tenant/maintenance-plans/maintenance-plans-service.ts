@@ -8,7 +8,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
-import { isInspectionWorkOrder, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
+import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
 
 /**
  * ISM 10.1 — origen normativo de la tarea. Mismo enum que usan los ítems de
@@ -1954,34 +1954,10 @@ export async function openFormalWorkOrder(
     }
   }
 
-  // OT Express: se firma sola a nombre de quien la abre. Sin esto la OT quedaría
-  // AUTORIZADA con las firmas en blanco, que es peor que no tenerla autorizada:
-  // el papel saldría diciendo que alguien la habilitó sin decir quién.
   // Tipo de la OT según el ítem del PDM: un plan de inspección abre una OT de
   // INSPECCIÓN. De ahí sale la regla de tramitación (ver wo-inspection-flow).
   const woType = plan.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE";
   const isInspection = isInspectionWorkOrder(woType);
-  // La inspección ya nace autorizada, así que el atajo "OT express" no aplica:
-  // si se aplicara, arrastraría las SS a AUTORIZADA y las solicitudes de
-  // servicio SÍ tienen que aprobarse y autorizarse.
-  const isExpress = payload.express === true && !isInspection;
-  const expressSigner = normalizeOptionalText(payload.signerName) ?? null;
-  const expressStamps = isExpress
-    ? {
-        // Incluye el envío a aprobar: sin esto la OT express quedaría marcada
-        // como autorizada pero nunca enviada, y la etapa (que se deduce de
-        // estas fechas) saldría incoherente.
-        enviadoAprobacionByName:   expressSigner,
-        enviadoAprobacionByUserId: woCreatorId,
-        enviadoAprobacionAt:       woOpenDate,
-        aprobadoByName:   expressSigner,
-        aprobadoByUserId: woCreatorId,
-        aprobadoAt:       woOpenDate,
-        autorizadoByName:   expressSigner,
-        autorizadoByUserId: woCreatorId,
-        autorizadoAt:       woOpenDate,
-      }
-    : {};
 
   // Proveedores de los planes → SS al abrir la OT. Solo aplica cuando el área es
   // PROVEEDOR; la lista sale del helper canónico (providerRequests o el legacy
@@ -2011,6 +1987,39 @@ export async function openFormalWorkOrder(
   /** Un pedido por taller; `entries` son los ítems del PDM que le tocan. */
   const providerRequests = [...byProvider.entries()].map(([providerId, entries]) => ({ providerId, entries }));
   const woProviderId = collapseProviderId(providerRequests.map(r => ({ providerId: r.providerId, purpose: null })));
+
+  // ── OT Express ──────────────────────────────────────────────────────────────
+  // El atajo: la orden se firma sola a nombre de quien la abre. Sin las firmas
+  // quedaría AUTORIZADA en blanco, que es peor que no tenerla autorizada — el
+  // papel diría que alguien la habilitó sin decir quién.
+  //
+  // NO aplica en dos casos, y por el mismo motivo de fondo: la tramitación
+  // existe para controlar lo que se compromete.
+  //   · Inspección — ya nace autorizada por su propia regla.
+  //   · TRABAJO SUBCONTRATADO (regla del usuario, sep 2026) — hay una SS a un
+  //     taller, o sea dinero. El express arrastraría esa SS a AUTORIZADA de una,
+  //     dejando el gasto aprobado sin que nadie lo firme. Con proveedor, la OT
+  //     es una OT normal: se envía a aprobar, se aprueba y se autoriza.
+  // Por eso el bloque vive acá abajo y no arriba: necesita saber si hay
+  // proveedores, que recién se resuelve con `providerRequests`.
+  const isExpress = payload.express === true && !isInspection && providerRequests.length === 0;
+  const expressSigner = normalizeOptionalText(payload.signerName) ?? null;
+  const expressStamps = isExpress
+    ? {
+        // Incluye el envío a aprobar: sin esto la OT express quedaría marcada
+        // como autorizada pero nunca enviada, y la etapa (que se deduce de
+        // estas fechas) saldría incoherente.
+        enviadoAprobacionByName:   expressSigner,
+        enviadoAprobacionByUserId: woCreatorId,
+        enviadoAprobacionAt:       woOpenDate,
+        aprobadoByName:   expressSigner,
+        aprobadoByUserId: woCreatorId,
+        aprobadoAt:       woOpenDate,
+        autorizadoByName:   expressSigner,
+        autorizadoByUserId: woCreatorId,
+        autorizadoAt:       woOpenDate,
+      }
+    : {};
 
   // El ÁREA/RESPONSABLE del plan (department) se hereda al "ASIGNADO A" de la OT:
   //   Proveedor              → Tercerizado (lo hace un tercero)
@@ -2059,7 +2068,11 @@ export async function openFormalWorkOrder(
         ...expressStamps,
         // Inspección: enviada + aprobada + autorizada de entrada. Sus SS nacen
         // DRAFT igual que siempre y se firman desde la solicitud.
-        ...(isInspection ? inspectionApprovalStamps(woOpenDate) : {}),
+        // Inspección propia: nace autorizada. Con taller/laboratorio de por
+        // medio (providerRequests → SS) tramita como cualquier otra OT.
+        ...(inspectionSkipsApproval(woType, providerRequests.length > 0)
+          ? inspectionApprovalStamps(woOpenDate)
+          : {}),
         priority: payload.priority ?? "MEDIUM",
         openDate: woOpenDate,
         // createdAt alineado a la fecha de apertura: así en el PDF coinciden la

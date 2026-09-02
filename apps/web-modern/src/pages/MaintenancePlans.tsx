@@ -166,6 +166,43 @@ function computeStatus(plan: MaintenancePlan): string {
   return plan.executionStatus ?? "FUTURE";
 }
 
+// Vencimientos/ejecuciones por FECHA y por HORAS de equipo no son comparables
+// entre sí (un timestamp contra "860 hs"). Al ordenar, van primero los de
+// calendario en orden cronológico y después los de horas con su propio criterio,
+// en vez de intercalarlos. HOURS_BUCKET es mayor que cualquier fecha en ms.
+const HOURS_BUCKET = 1e15;
+
+function nextDueSort(plan: MaintenancePlan): number {
+  if (plan.nextDueDate) return parseLocalDate(plan.nextDueDate).getTime();
+  // Por horas: lo que ordena es cuánto FALTA, no el contador absoluto.
+  if (plan.nextDueHours != null) return HOURS_BUCKET + (plan.nextDueHours - (plan.assetCurrentHours ?? 0));
+  return Number.POSITIVE_INFINITY;
+}
+
+function lastExecutionSort(plan: MaintenancePlan): number {
+  if (plan.lastExecutionDate) return parseLocalDate(plan.lastExecutionDate).getTime();
+  if (plan.lastExecutionHours != null) return HOURS_BUCKET + plan.lastExecutionHours;
+  return Number.POSITIVE_INFINITY;
+}
+
+function frequencySort(plan: MaintenancePlan): number {
+  if (plan.frequencyMonths != null) return plan.frequencyMonths;
+  if (plan.frequencyHours != null) return HOURS_BUCKET + plan.frequencyHours;
+  return Number.POSITIVE_INFINITY;
+}
+
+// Orden de la columna SITUACIÓN: por URGENCIA, no alfabético. Ordenar
+// "DUE, FUTURE, IN_WINDOW…" por texto no le sirve a nadie; lo que se busca al
+// clickear esa columna es ver primero lo vencido.
+const STATUS_URGENCY: Record<string, number> = {
+  OVERDUE: 0,
+  DUE: 1,
+  NEVER_EXECUTED: 2,
+  IN_WINDOW: 3,
+  UPCOMING: 4,
+  FUTURE: 5,
+};
+
 function StatusBadgeInline({ plan, onOpenWo }: { plan: MaintenancePlan; onOpenWo?: (code: string) => void }) {
   const t = useT();
   const es = computeStatus(plan);
@@ -273,6 +310,20 @@ function sfiTabOf(sfiGroupNumber: number | null | undefined): SfiTab {
   return digit >= 0 && digit <= 9 ? digit as SfiTab : "NONE";
 }
 // Matriz de riesgo: constantes/tipos/helpers → ../lib/risk ; UI → ../components/RiskMatrix
+
+/**
+ * ¿El plan encarga el trabajo a un taller externo?
+ *
+ * Mismo criterio que el backend: los proveedores del plan sólo cuentan cuando el
+ * área es PROVEEDOR (ver openFormalWorkOrder). Con taller hay una SS de por
+ * medio — o sea gasto —, y entonces la OT NO se abre autorizada: tramita como
+ * cualquier otra. El botón tiene que decir eso, no prometer un atajo que el
+ * backend ya no aplica.
+ */
+function planHasProvider(plan: MaintenancePlan): boolean {
+  if (plan.department !== "PROVEEDOR") return false;
+  return (plan.providerRequests?.length ?? 0) > 0 || !!plan.providerId;
+}
 
 function formatFrequency(plan: MaintenancePlan): string {
   const tt = plan.triggerType.toUpperCase();
@@ -1603,6 +1654,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // nace AUTORIZADA. Es trabajo que se resuelve en el momento y la tramitación
   // formal sólo agregaría demora.
   const isExpressMode = !isNew && plan.triggerResultMode === "DUE_ONLY";
+  // Con taller externo cargado en el formulario, el atajo express no corre: la
+  // OT lleva SS y por lo tanto se aprueba y se autoriza (ver openFormalWorkOrder).
+  const expressGoesToProvider = department === "PROVEEDOR" && providerRequests.length > 0;
   const [openingExpress, setOpeningExpress] = useState(false);
 
   const openExpressWorkOrder = async () => {
@@ -2561,12 +2615,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 <button
                   onClick={() => { void openExpressWorkOrder(); }}
                   disabled={openingExpress}
-                  title="Abre una OT ya autorizada, sin pasar por aprobación ni autorización"
+                  title={expressGoesToProvider ? t("mp.express.providerHint") : t("mp.express.hint")}
                   className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:bg-accent/15 disabled:opacity-50 transition-all"
                 >
                   <span className="flex items-center gap-1.5">
                     {openingExpress ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-                    {t("mp.modal.openExpressWO").replace("{abbr}", woTerms.abbr)}
+                    {expressGoesToProvider
+                      ? t("mp.col.executeWO")
+                      : t("mp.modal.openExpressWO").replace("{abbr}", woTerms.abbr)}
                   </span>
                 </button>
               )}
@@ -2982,7 +3038,9 @@ export const MaintenancePlansPage: React.FC = () => {
   const [gridView,      setGridView]      = useState(false);
   const [showMatrix,    setShowMatrix]    = useState(false);
   // Agrupar la lista por equipo (default ON) + estado de grupos colapsados.
-  const [groupByEquipment, setGroupByEquipment] = useState(true);
+  // Si el link ya trae un orden por columna (?sort=), arranca desagrupado: si
+  // no, se abre el link ordenado y la lista se ve agrupada, sin el orden.
+  const [groupByEquipment, setGroupByEquipment] = useState(() => !searchParams.get("sort"));
   const [collapsedGroups,  setCollapsedGroups]  = useState<Set<string>>(new Set());
   const [executing,     setExecuting]     = useState<MaintenancePlan | null>(null);
   const [reporting,     setReporting]     = useState<MaintenancePlan | null>(null);
@@ -3234,6 +3292,30 @@ export const MaintenancePlansPage: React.FC = () => {
     setBundleIds(prev => prev.includes(row.id) ? prev.filter(id => id !== row.id) : [...prev, row.id]);
   }, []);
 
+  /**
+   * Abre el formulario de OT para un ítem del PDM.
+   *
+   * Pide SIEMPRE el detalle: el listado omite los campos de texto pesados
+   * (criterios de aceptación, LOTO, análisis de riesgo, justificación de la
+   * consecuencia y la plantilla de checklist) para aligerar el payload, y esos
+   * son justamente los que la OT hereda del plan. Con el plan de la lista la
+   * orden nacía sin ellos — el trabajo se hacía sin criterio escrito, que es lo
+   * que mira una auditoría. Si el detalle falla se abre igual con lo que hay:
+   * perder campos es peor que no poder abrir la orden, pero no al revés.
+   */
+  const [openingWoId, setOpeningWoId] = useState<string | null>(null);
+  const openWoForPlan = useCallback(async (row: MaintenancePlan) => {
+    setOpeningWoId(row.id);
+    try {
+      const full = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
+      setExecuting(full);
+    } catch {
+      setExecuting(row);
+    } finally {
+      setOpeningWoId(null);
+    }
+  }, []);
+
   const [expressRowId, setExpressRowId] = useState<string | null>(null);
   const openExpressFromRow = useCallback(async (row: MaintenancePlan) => {
     setExpressRowId(row.id);
@@ -3259,30 +3341,26 @@ export const MaintenancePlansPage: React.FC = () => {
     // "Solo Alerta" → OT Express en vez de Reportar, igual que en el detalle.
     if (row.triggerResultMode === "DUE_ONLY") {
       const busy = expressRowId === row.id;
+      // Con taller externo el atajo no corre: la orden tramita igual que el resto.
+      const tercerizado = planHasProvider(row);
       return (
         <button
           onClick={e => { e.stopPropagation(); void openExpressFromRow(row); }}
           disabled={busy}
-          title="Abre una OT ya autorizada, sin aprobación ni autorización"
+          title={tercerizado ? t("mp.express.providerHint") : t("mp.express.hint")}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 disabled:opacity-50 transition-all whitespace-nowrap"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-          {t("mp.col.executeExpressWO").replace("{abbr}", woTerms.abbr)}
+          {tercerizado
+            ? t("mp.col.executeWO")
+            : t("mp.col.executeExpressWO").replace("{abbr}", woTerms.abbr)}
         </button>
       );
     }
     return needsWO ? (
       !hasActiveWo ? (
         <button
-          onClick={async e => {
-            e.stopPropagation();
-            try {
-              const full = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
-              setExecuting(full);
-            } catch {
-              setExecuting(row);
-            }
-          }}
+          onClick={e => { e.stopPropagation(); void openWoForPlan(row); }}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 transition-all whitespace-nowrap"
         >
           <Zap className="w-3 h-3" /> {t("mp.col.executeWO")}
@@ -3296,7 +3374,7 @@ export const MaintenancePlansPage: React.FC = () => {
         <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
       </button>
     );
-  }, [t, woTerms, expressRowId, openExpressFromRow]);
+  }, [t, woTerms, expressRowId, openExpressFromRow, openWoForPlan]);
 
   const columns: Column<MaintenancePlan>[] = useMemo(() => [
     // ── Col 0: marcar para juntar en UNA sola OT (parada de astillero) ──────
@@ -3304,6 +3382,7 @@ export const MaintenancePlansPage: React.FC = () => {
       key: "bundle",
       header: "OT",
       width: "34px",
+      sortable: false,
       render: row => {
         const checked = bundleIds.includes(row.id);
         // Distinto buque que el primero marcado: no se puede juntar en la misma OT.
@@ -3421,7 +3500,7 @@ export const MaintenancePlansPage: React.FC = () => {
       key: "frequency",
       header: t("mp.col.frequency"),
       width: "150px",
-      sortValue: row => row.frequencyMonths ?? row.frequencyHours ?? 0,
+      sortValue: row => frequencySort(row),
       render: row => (
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-xs text-text-industrial/80 whitespace-nowrap">{formatFrequency(row)}</span>
@@ -3443,7 +3522,7 @@ export const MaintenancePlansPage: React.FC = () => {
       key: "lastExecutionDate",
       header: t("mp.col.lastExecution"),
       width: "130px",
-      sortValue: row => row.lastExecutionDate ?? row.lastExecutionHours ?? null,
+      sortValue: row => lastExecutionSort(row),
       render: row => {
         if (needsHours(row.triggerType)) {
           return row.lastExecutionHours != null
@@ -3460,7 +3539,7 @@ export const MaintenancePlansPage: React.FC = () => {
       key: "nextDueDate",
       header: t("mp.col.nextDue"),
       width: "140px",
-      sortValue: row => row.nextDueDate ?? row.nextDueHours ?? null,
+      sortValue: row => nextDueSort(row),
       render: row => {
         const isOverdue = row.executionStatus === "OVERDUE";
         if (needsHours(row.triggerType)) {
@@ -3478,7 +3557,7 @@ export const MaintenancePlansPage: React.FC = () => {
       key: "situacion",
       header: t("mp.col.status"),
       width: "120px",
-      sortValue: row => computeStatus(row),
+      sortValue: row => STATUS_URGENCY[computeStatus(row)] ?? 99,
       render: row => renderStatus(row),
     },
     // ── Col 8: ACCIONES ─────────────────────────────────────────────────────
@@ -3717,9 +3796,11 @@ export const MaintenancePlansPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { if (bundlePlans[0]) setExecuting(bundlePlans[0]); }}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 transition-colors"
+              disabled={!bundlePlans[0] || openingWoId !== null}
+              onClick={() => { if (bundlePlans[0]) void openWoForPlan(bundlePlans[0]); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 disabled:opacity-50 transition-colors"
             >
+              {openingWoId !== null && <Loader2 className="w-3 h-3 animate-spin" />}
               Generar una sola {woTerms.abbr}
             </button>
           </div>
@@ -3787,6 +3868,10 @@ export const MaintenancePlansPage: React.FC = () => {
           groupBy={planGroupBy}
           collapsedGroups={collapsedGroups}
           onToggleGroup={toggleGroup}
+          // Agrupación y orden por columna se pisan: si el usuario ordena por
+          // una columna estando agrupado por equipo, gana el orden y la lista
+          // pasa a verse de corrido.
+          onSortUngroup={() => setGroupByEquipment(false)}
         />
       )}
 

@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, ListChecks } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, ListChecks, FlaskConical, NotebookPen } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -22,8 +22,10 @@ import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
 import { SsProgressFlow } from "../components/service-requests/SsProgressFlow";
+import { WoProgressFlow } from "../components/work-orders/WoProgressFlow";
 import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumptionFlow";
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
+import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
 import { UpcomingTasksModal, type UpcomingTasksResponse } from "../components/UpcomingTasksModal";
 import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
@@ -163,6 +165,9 @@ export const Dashboard: React.FC = () => {
   // El consumo se guarda con un PATCH de la OT: exige `wo.manage`, igual que el
   // backend (canManageWorkOrders). El tripulante lo carga al cerrar la orden.
   const canLogSpareUse = can("wo.manage");
+  // Cargar análisis de laboratorio en lote: mismos roles que exige el backend
+  // del módulo (ensureAdminOrManager en fluid-analyses-service.ts).
+  const canLoadFluidBatch = user ? ["TENANT_ADMIN", "MAINTENANCE_MANAGER"].includes(user.role) : false;
   const isDark       = theme === "dark";
   // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
   const chartTooltip = {
@@ -175,6 +180,7 @@ export const Dashboard: React.FC = () => {
   };
   const [showInsights, setShowInsights] = React.useState(false);
   const [showHoursEntry, setShowHoursEntry] = React.useState(false);
+  const [showFluidBatch, setShowFluidBatch] = React.useState(false);
   const [showCreateWo, setShowCreateWo] = React.useState(false);
   // "Nueva OT" en blanco (botón chico "Generar OT" y el grande "Nueva Orden de
   // Trabajo") pasa por el asistente categoría → equipo → ítem del plan. La SS
@@ -187,6 +193,7 @@ export const Dashboard: React.FC = () => {
   const [showNewPermit, setShowNewPermit] = React.useState(false);
   // Registrar el avance de una SS ya mandada al taller: elegir la solicitud en
   // ejecución y asentarle novedades en la hoja de ruta del pedido.
+  const [showWoProgress, setShowWoProgress] = React.useState(false);
   const [showSsProgress, setShowSsProgress] = React.useState(false);
   // Consumo de repuestos sobre una OT abierta: descuenta stock del buque.
   const [showSpareUse, setShowSpareUse] = React.useState(false);
@@ -719,6 +726,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         />
       )}
 
+      {showWoProgress && <WoProgressFlow onClose={() => setShowWoProgress(false)} />}
       {showSsProgress && <SsProgressFlow onClose={() => setShowSsProgress(false)} />}
 
       {showSpareUse && <SpareConsumptionFlow onClose={() => setShowSpareUse(false)} />}
@@ -916,6 +924,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <span className="font-bold text-sm text-fg">{t("dashboard.newPermit")}</span>
             </button>
           )}
+          {/* Asentar lo que se hizo en una OT abierta sin abrir el formulario
+              entero. Mismo criterio de permiso que el resto de los registros:
+              todos menos el rol de sólo lectura. */}
+          {canLogSsProgress && (
+            <button
+              onClick={() => setShowWoProgress(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <NotebookPen className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.woProgress.button")}</span>
+            </button>
+          )}
           {/* Asentar el avance de un pedido al taller. Se oculta al rol de sólo
               lectura: el backend rechaza la novedad (ver canManage en
               service-requests-service.ts). */}
@@ -949,6 +969,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             >
               <ListChecks className="w-6 h-6 text-success-sea shrink-0" />
               <span className="font-bold text-sm text-fg">{t("dashboard.checklist.button")}</span>
+            </button>
+          )}
+          {/* Subir todos los PDF de análisis de laboratorio juntos. El sistema
+              los lee, descarta los que ya estaban cargados y pide confirmación
+              antes de guardar (ver FluidBatchUploadModal). */}
+          {canLoadFluidBatch && (
+            <button
+              onClick={() => setShowFluidBatch(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <FlaskConical className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.fluidBatch.button")}</span>
             </button>
           )}
         </div>
@@ -1073,6 +1105,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           vesselName={selectedVessel?.name ?? null}
           onSaved={() => { void assetHours.reload(); }}
           onClose={() => setShowHoursEntry(false)}
+        />
+      )}
+
+      {/* Carga masiva de análisis de laboratorio (botón verde de arriba). */}
+      {showFluidBatch && (
+        <FluidBatchUploadModal
+          vessels={contextVessels.map(v => ({ code: v.code, name: v.name ?? null }))}
+          onClose={() => setShowFluidBatch(false)}
+          onGoToModule={() => { setShowFluidBatch(false); navigate("/fluid-analyses"); }}
         />
       )}
 

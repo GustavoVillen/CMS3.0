@@ -5,6 +5,12 @@
  * excepción de negocio: NO requiere aprobación ni autorización. Nace AUTORIZADA
  * y queda lista para ejecutarse.
  *
+ * LÍMITE DE ESA EXCEPCIÓN (regla del usuario, sep 2026): la inspección se
+ * autoriza sola porque la hace la propia tripulación y no compromete gasto. Si
+ * el trabajo se SUBCONTRATA —un laboratorio, un taller—, hay dinero de por
+ * medio y la orden vuelve al camino normal: se envía a aprobar, se aprueba y se
+ * autoriza como cualquier otra. La inspección tercerizada NO nace autorizada.
+ *
  * Lo que NO cambia: las Solicitudes de Servicio colgadas de esa OT sí requieren
  * aprobación y autorización, y siguen su propia tramitación (nacen DRAFT y se
  * firman desde la SS). Por eso la inspección no usa el camino "OT express", que
@@ -20,6 +26,22 @@ export const INSPECTION_AUTO_SIGNER = "Sistema";
 /** ¿El tipo de OT es una inspección? */
 export function isInspectionWorkOrder(type: string | null | undefined): boolean {
   return type === "INSPECTION";
+}
+
+/**
+ * ¿Esta OT se salta la aprobación y la autorización por ser una inspección?
+ *
+ * Sólo la inspección hecha con recursos propios. Con subcontratado la respuesta
+ * es no: hay gasto que alguien tiene que aprobar y autorizar.
+ *
+ * `hasSubcontractor` es la señal de que el trabajo se terceriza — un plan con
+ * proveedor (que abre su SS), el área PROVEEDOR, o "Asignado a: TERCERIZADO".
+ */
+export function inspectionSkipsApproval(
+  type: string | null | undefined,
+  hasSubcontractor: boolean,
+): boolean {
+  return isInspectionWorkOrder(type) && !hasSubcontractor;
 }
 
 /**

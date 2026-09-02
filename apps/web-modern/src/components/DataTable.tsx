@@ -43,9 +43,15 @@ interface DataTableProps<T> {
   groupBy?: GroupBy<T>;
   collapsedGroups?: Set<string>;
   onToggleGroup?: (key: string) => void;
+  // Orden por columna ESTANDO agrupado: la agrupación y el orden por columna se
+  // pisan, así que cuando el padre pasa este callback los encabezados siguen
+  // siendo clickeables y el primer clic apaga la agrupación (el padre baja su
+  // flag) para ordenar la lista de corrido. Sin este callback, con groupBy el
+  // orden por columna queda desactivado como antes.
+  onSortUngroup?: () => void;
 }
 
-export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup, onSortUngroup }: DataTableProps<T>) {
   const [searchParams, setSearchParams] = useSearchParams();
   const validSortKeys = useMemo(() => columns.map(col => col.key), [columns]);
 
@@ -134,10 +140,19 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
     return arr;
   }, [groupBy, data]);
 
+  // sortingEnabled: si el orden por columna se APLICA (y se muestra la flecha
+  // activa). Con groupBy manda la agrupación.
   const sortingEnabled = !groupBy;
+  // headerSortable: si el encabezado responde al clic. Con onSortUngroup sigue
+  // respondiendo aunque esté agrupado, porque el clic desagrupa.
+  const headerSortable = (column: Column<T>) =>
+    (sortingEnabled || !!onSortUngroup) && column.sortable !== false && !!column.header.trim();
 
   const onHeaderClick = (column: Column<T>) => {
-    if (!sortingEnabled || column.sortable === false || !column.header.trim()) return;
+    if (!headerSortable(column)) return;
+    // Agrupado: el clic primero desagrupa (el padre apaga su flag) y recién
+    // entonces el orden por columna tiene efecto sobre toda la lista.
+    if (!sortingEnabled) onSortUngroup?.();
 
     const params = new URLSearchParams(searchParams);
 
@@ -192,15 +207,15 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
             {columns.map(col => (
               <th
                 key={col.key}
-                className={`px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider ${!sortingEnabled || col.sortable === false || !col.header.trim() ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
+                className={`px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider ${!headerSortable(col) ? "text-fg/50" : "text-fg/60 hover:text-fg cursor-pointer select-none"} ${col.className ?? ""}`}
                 onClick={() => onHeaderClick(col)}
                 aria-sort={sortingEnabled && sortKey === col.key ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.header}
-                  {sortingEnabled && col.sortable !== false && col.header.trim() && sortKey !== col.key && <ChevronsUpDown className="w-3 h-3 opacity-50" />}
-                  {sortingEnabled && col.sortable !== false && col.header.trim() && sortKey === col.key && sortDirection === "asc" && <ChevronUp className="w-3 h-3 text-accent" />}
-                  {sortingEnabled && col.sortable !== false && col.header.trim() && sortKey === col.key && sortDirection === "desc" && <ChevronDown className="w-3 h-3 text-accent" />}
+                  {headerSortable(col) && (!sortingEnabled || sortKey !== col.key) && <ChevronsUpDown className="w-3 h-3 opacity-50" />}
+                  {headerSortable(col) && sortingEnabled && sortKey === col.key && sortDirection === "asc" && <ChevronUp className="w-3 h-3 text-accent" />}
+                  {headerSortable(col) && sortingEnabled && sortKey === col.key && sortDirection === "desc" && <ChevronDown className="w-3 h-3 text-accent" />}
                 </span>
               </th>
             ))}

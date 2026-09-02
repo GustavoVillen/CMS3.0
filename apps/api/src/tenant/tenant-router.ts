@@ -154,6 +154,7 @@ import {
 } from "./fluid-analyses/fluid-analyses-service";
 import { saveFluidReportFile } from "./fluid-analyses/fluid-uploads-service";
 import { extractFluidReport } from "./fluid-analyses/fluid-analyses-ai-extractor";
+import { scanFluidReportForBatch, commitFluidBatch, openWorkOrderForFluidBatch } from "./fluid-analyses/fluid-batch-service";
 import { buildFluidAnalysisPdf } from "./fluid-analyses/fluid-analyses-pdf-service";
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
@@ -1244,6 +1245,38 @@ export async function handleTenantRoutes(
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
     const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode, referenceDate, sampleNumber });
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
+    return true;
+  }
+  // Carga masiva de reportes de laboratorio (botón del Dashboard).
+  // Un archivo por llamada: el frontend los manda de a uno para mostrar el
+  // avance y para que un PDF ilegible no tire abajo todo el lote.
+  if (method === "POST" && url.pathname === "/app/fluid-analyses/batch-scan") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-extract:${session.user.id}`, { maxRequests: 60, windowMs: 60_000 });
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "reporte");
+    const rawVessel = request.headers["x-vessel-code"];
+    const vesselCodeHint = (Array.isArray(rawVessel) ? rawVessel[0] : rawVessel) ?? null;
+    const buffer = await readBinaryBody(request);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    sendJson(response, 200, await scanFluidReportForBatch(session, { buffer, originalName, vesselCodeHint }));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/fluid-analyses/batch-commit") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as { rows?: unknown };
+    sendJson(response, 200, await commitFluidBatch(session, (body?.rows ?? []) as any));
+    return true;
+  }
+  // Una sola OT (con su SS al laboratorio) para las rutinas de muestreo de los
+  // análisis recién cargados. Se llama sólo si el usuario lo confirma: la SS
+  // compromete gasto.
+  if (method === "POST" && url.pathname === "/app/fluid-analyses/batch-open-work-order") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as { sampleIds?: unknown };
+    sendJson(response, 201, await openWorkOrderForFluidBatch(session, {
+      sampleIds: Array.isArray(body?.sampleIds) ? (body.sampleIds as string[]) : [],
+    }));
     return true;
   }
   if (method === "GET" && url.pathname === "/app/fluid-analyses-trend") {

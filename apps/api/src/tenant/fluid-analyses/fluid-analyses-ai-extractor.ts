@@ -26,6 +26,7 @@ export interface ExtractedReport {
   labReference: ExtractedField<string>;
   fluidProduct: ExtractedField<string>;
   assetReferenceText: ExtractedField<string>; // texto crudo del equipo (ej: "Motor Principal Babor")
+  vesselReferenceText: ExtractedField<string>; // texto crudo del buque (ej: "REMOLCADOR LA TERE")
   assetIdSuggestion: { id: string; name: string; score: number } | null;
   verdict: ExtractedField<"NORMAL" | "CAUTION" | "CRITICAL" | "ACTION_REQUIRED">;
   summary: ExtractedField<string>;
@@ -53,6 +54,7 @@ CAMPOS A EXTRAER (esquema exacto):
   "labReference":      { value: string|null, confidence },              // protocolo o referencia interna del lab
   "fluidProduct":      { value: string|null, confidence },              // marca/grado del fluido (ej: "Mobilgard M312 SAE 30")
   "assetReferenceText":{ value: string|null, confidence },              // texto que identifica al equipo en el reporte (ej: "ME PORT", "Generador 1")
+  "vesselReferenceText":{ value: string|null, confidence },             // texto que identifica al buque/embarcación en el reporte (ej: "REMOLCADOR LA TERE", "MAO 01")
   "verdict":           { value: "NORMAL"|"CAUTION"|"CRITICAL"|"ACTION_REQUIRED"|null, confidence }, // veredicto final del lab
   "summary":           { value: string|null, confidence },              // recomendación textual del lab si aparece
   "parameters":        { <param_key>: { value, unit, confidence }, ... },
@@ -66,6 +68,13 @@ REGLAS:
 - Para parámetros: usar siempre nombres en minúsculas y abreviados estándar (fe, cu, cr, pb, al, sn, si, water, fuel, tbn, tan, viscosity40, viscosity100, ph, alkalinity, hardness, nitrites, chlorides, freeChlorine, sediment, sulfur, density, iso, particles, etc.)
 - Devolvé EXCLUSIVAMENTE JSON válido — sin texto antes, sin markdown, sin comentarios, sin trailing comma.
 - Si la imagen es ilegible o no es un reporte de análisis, devolvé un JSON con todos los value en null y notes explicando por qué.
+- VEREDICTO — traducir la escala del laboratorio, sin reinterpretarla:
+  "NORMAL" / "SATISFACTORIO" / "OK"            → NORMAL
+  "PRECAUCIÓN" / "PRECAUCION" / "CAUTION"      → CAUTION
+  "ANORMAL" / "ABNORMAL" / "ACCIÓN REQUERIDA"  → ACTION_REQUIRED
+  "SEVERO" / "SEVERA" / "CRÍTICO" / "CRITICAL" → CRITICAL
+  Si el reporte trae la palabra del laboratorio, usá ESA correspondencia. No subas
+  ni bajes el nivel por tu propia lectura de los parámetros.
 
 IMPORTANTE — reportes con historial de varias muestras:
 Algunos laboratorios entregan una tabla con el HISTORIAL de varias muestras del mismo equipo, cada una con su propia fecha de muestreo (ej: una fila de 2025 y otra de 2026). En ese caso NO combines ni promedies datos de distintas filas.
@@ -194,6 +203,7 @@ export async function extractFluidReport(
     labReference:       shapeField(parsed.labReference, (v) => normStr(v)),
     fluidProduct:       shapeField(parsed.fluidProduct, (v) => normStr(v)),
     assetReferenceText: shapeField(parsed.assetReferenceText, (v) => normStr(v)),
+    vesselReferenceText: shapeField(parsed.vesselReferenceText, (v) => normStr(v)),
     assetIdSuggestion:  null,
     verdict:            shapeField(parsed.verdict, (v) => ["NORMAL","CAUTION","CRITICAL","ACTION_REQUIRED"].includes(String(v)) ? String(v) as any : null),
     summary:            shapeField(parsed.summary, (v) => normStr(v)),

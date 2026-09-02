@@ -2075,10 +2075,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 </p>
               )}
 
-              {tramitaPhase === "AUTORIZADA" && workOrder.type === "INSPECTION" ? (
-                /* Inspección: no pasa por aprobación ni autorización, nace
-                   autorizada. Mostrar "Aprobó: Sistema" confundiría — se explica
-                   la regla. Las SS de esta OT sí se aprueban y autorizan. */
+              {tramitaPhase === "AUTORIZADA" && workOrder.type === "INSPECTION"
+                && workOrder.autorizadoByName === "Sistema" ? (
+                /* Inspección propia: no pasa por aprobación ni autorización,
+                   nace autorizada. Mostrar "Aprobó: Sistema" confundiría — se
+                   explica la regla. Las SS de esta OT sí se aprueban y autorizan.
+                   La firma "Sistema" es la marca de que se autorizó sola
+                   (INSPECTION_AUTO_SIGNER en wo-inspection-flow.ts): una
+                   inspección SUBCONTRATADA tramita como cualquier otra OT y
+                   lleva firmas humanas, así que cae en la rama de abajo y se
+                   muestra quién aprobó y quién autorizó. */
                 <div className="text-xs text-emerald-700 dark:text-emerald-300 space-y-0.5">
                   <p className="normal-case">{t("wo.tramita.inspectionAutoAuthorized")}</p>
                   <p className="text-text-industrial/60 normal-case">{t("wo.tramita.inspectionSsNote")}</p>
@@ -2935,13 +2941,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {isApproved && (
           <div className="space-y-6">
 
-          {/* ── AVANCES — OCULTA por pedido del usuario (2026-08-29): "al menos
-              por ahora sacarlo, quizás luego la recuperemos". Se deja el
-              montaje comentado y TODO lo demás intacto (ProgressNotesPanel, el
-              modal ProgressNoteSheet, el análisis de deficiencias del avance):
-              volver a activarla es descomentar este bloque. Mismo patrón que
-              los módulos dormantes del Sidebar. */}
-          {/*
+          {/* ── AVANCES ──
+              Registro del trabajo mientras se ejecuta: texto, fotos, videos,
+              audio y documentos. Estuvo oculta entre el 2026-08-29 y el
+              2026-09-02 por pedido del usuario ("quizás luego la recuperemos");
+              se recuperó tal cual estaba. */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
             <section className="space-y-3">
               <PhaseHeader n={isMercurio ? 4 : 6} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
@@ -2956,7 +2960,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               />
             </section>
           )}
-          */}
 
           {/* Programación de trabajo, repuestos/materiales y tarea concluida son
               recuadros de la hoja de arriba (ver WoPaperForm). */}
@@ -2965,7 +2968,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                  "Programación de trabajo", "Repuestos y materiales" y
                  "Tarea concluida") ── */}
           <section className="space-y-4">
-            <PhaseHeader n={isMercurio ? 4 : 6} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={isMercurio ? 5 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             {/* Con el formulario controlado, RESULTADO se marca en la hoja. */}

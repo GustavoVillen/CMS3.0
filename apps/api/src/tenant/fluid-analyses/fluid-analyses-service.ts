@@ -72,7 +72,7 @@ export interface UpdateResultInput extends Partial<CreateResultInput> {}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function ensureAdminOrManager(session: TenantAccessSession): void {
+export function ensureAdminOrManager(session: TenantAccessSession): void {
   const role = session.user.role;
   const ok = role === "TENANT_ADMIN" || role === "MAINTENANCE_MANAGER";
   if (!ok) throw new RouteError(403, "FORBIDDEN", "Sin permiso para gestionar análisis de fluidos.");
@@ -395,8 +395,21 @@ export async function linkFluidSampleToWorkOrder(
 
   const workOrder = await (prisma as any).workOrder.findFirst({ where: { id: workOrderId, tenantId, deletedAt: null } });
   if (!workOrder) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Orden de trabajo no encontrada.");
+  // El equipo tiene que ser el de la OT o el de alguno de los ítems del PDM que
+  // la OT cubre: una sola orden puede ejecutar varias rutinas de equipos
+  // distintos (parada de astillero, o el muestreo de toda la sala de máquinas
+  // mandado junto al laboratorio). Comparar sólo contra workOrder.assetId
+  // rechazaba todas las muestras menos la del ítem principal.
   if (workOrder.assetId !== sample.assetId) {
-    throw new RouteError(409, "ASSET_MISMATCH", "La orden de trabajo no corresponde al mismo equipo que la muestra.");
+    const linkedAssets: Array<{ maintenancePlan: { assetId: string | null } | null }> =
+      await (prisma as any).workOrderMaintenancePlan.findMany({
+        where: { tenantId, workOrderId },
+        select: { maintenancePlan: { select: { assetId: true } } },
+      });
+    const covered = linkedAssets.some(l => l.maintenancePlan?.assetId === sample.assetId);
+    if (!covered) {
+      throw new RouteError(409, "ASSET_MISMATCH", "La orden de trabajo no corresponde al mismo equipo que la muestra.");
+    }
   }
 
   const updated = await (prisma as any).fluidSample.update({
