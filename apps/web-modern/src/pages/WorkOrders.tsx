@@ -2018,6 +2018,37 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
             </div>
             <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} toNextDrydock={deferralToDrydock} />
+            {/* VENCIMIENTO. Con el formulario controlado, la grilla de recuadros
+                de la sección INFORMACIÓN está oculta y el vencimiento no tenía
+                dónde vivir: se veía sólo como "Vencida" en el badge de al lado,
+                sin la fecha y sin poder corregirla. Va acá y no adentro del
+                formulario porque REGI-OPE-26.3 es documento controlado: no se le
+                agregan recuadros que el papel no tiene. En los demás tenants
+                sigue estando en la grilla, así que acá no se repite. */}
+            {isMercurio && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 whitespace-nowrap">
+                  {t("wo.modal.dueDate")}
+                </span>
+                {(tramitaPhase === "SOLICITADA" || isAdmin) && isEditable ? (
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    title={tramitaPhase === "AUTORIZADA" ? t("wo.modal.dueDateAuthorizedHint") : undefined}
+                    className="bg-transparent text-xs text-fg border border-fg/15 rounded-md px-1.5 py-0.5 focus:outline-none focus:border-accent/50"
+                  />
+                ) : (
+                  <span className={`text-xs font-mono ${
+                    workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date()
+                      ? "text-red-700 dark:text-red-400 font-semibold"
+                      : "text-fg"
+                  }`}>
+                    {fmtDate(workOrder.dueDate) || "—"}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <CopyLinkButton />
