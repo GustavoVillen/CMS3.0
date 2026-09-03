@@ -22,6 +22,7 @@
  *   DRY=1 ...            solo lista lo que falta, sin llamar a la IA
  *   VESSEL=M01 ...       limita a un buque
  *   LIMIT=5 ...          corta despues de N planes (prueba)
+ *   CODES=A-01,A-02 ...  limita a esos taskCode (una carga puntual)
  *   CONCURRENCY=3 ...    planes en paralelo (default 3)
  */
 import { PrismaClient } from "../generated/prisma";
@@ -42,6 +43,7 @@ const SLUG = process.env.TENANT_SLUG ?? "mercurio";
 const VESSEL = process.env.VESSEL ?? "";
 const DRY = process.env.DRY === "1";
 const LIMIT = Number(process.env.LIMIT ?? 0);
+const CODES = (process.env.CODES ?? "").split(",").map(c => c.trim()).filter(Boolean);
 const CONCURRENCY = Math.max(1, Number(process.env.CONCURRENCY ?? 3));
 
 const empty = (v: unknown) => !String(v ?? "").trim();
@@ -66,6 +68,7 @@ async function main() {
       tenantId,
       deletedAt: null,
       ...(VESSEL ? { vesselCode: VESSEL } : {}),
+      ...(CODES.length ? { taskCode: { in: CODES } } : {}),
       OR: [
         { acceptanceCriteria: null }, { acceptanceCriteria: "" },
         { loto: null }, { loto: "" },
