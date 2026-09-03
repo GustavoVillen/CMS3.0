@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FileDown, FileSpreadsheet, LayoutGrid, List, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
+import { FileDown, FileSpreadsheet, LayoutGrid, List, ListTree, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
@@ -1667,6 +1667,41 @@ export const AssetsPage: React.FC = () => {
     return counts;
   }, [data]);
 
+  // ── Agrupado por grupo SFI ───────────────────────────────────────────────
+  // El inventario se lee por sistema (propulsión, eléctrico, LCI…), no por
+  // orden alfabético de código. Arranca agrupado salvo que se llegue con un
+  // orden por columna en la URL, que manda sobre la agrupación.
+  const [groupBySfi, setGroupBySfi] = useState(() => !searchParams.get("sort"));
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
+  const sfiGroupLabel = useCallback((tab: SfiTab) => {
+    if (tab === "NONE" || tab === "ALL" || tab === "ISM") return t("gantt.noSfiGroup");
+    return `G${tab} · ${t(`sfi.g.${tab}` as Parameters<typeof t>[0])}`;
+  }, [t]);
+  const assetGroupBy = useMemo(
+    () => groupBySfi
+      ? {
+          keyFn: (a: Asset) => String(sfiTabOfCode(a.sfiCode)),
+          labelFn: (a: Asset) => sfiGroupLabel(sfiTabOfCode(a.sfiCode)),
+          sortRows: (a: Asset, b: Asset) =>
+            (a.sfiCode ?? "").localeCompare(b.sfiCode ?? "", "es", { numeric: true })
+            || (a.name ?? "").localeCompare(b.name ?? "", "es", { numeric: true }),
+          // "NONE" (equipos sin código SFI) va al final; el resto por número.
+          sortGroups: (x: { key: string }, y: { key: string }) => {
+            const rank = (k: string) => (k === "NONE" ? 99 : Number(k));
+            return rank(x.key) - rank(y.key);
+          },
+        }
+      : undefined,
+    [groupBySfi, sfiGroupLabel],
+  );
+
   const columns: Column<Asset>[] = useMemo(() => [
     { key: "assetCode", header: t("col.code"), render: row => <span className="font-mono font-bold text-fg text-xs">{row.assetCode}</span> },
     {
@@ -1744,6 +1779,21 @@ export const AssetsPage: React.FC = () => {
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         </div>
+        {viewMode === "list" && (
+          <button
+            type="button"
+            onClick={() => setGroupBySfi(v => !v)}
+            title={t("asset.groupBySfi")}
+            aria-pressed={groupBySfi}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+              groupBySfi
+                ? "bg-accent/20 border-accent/40 text-accent"
+                : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
+            }`}
+          >
+            <ListTree className="w-3.5 h-3.5" /> {t("asset.groupBySfi")}
+          </button>
+        )}
         <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
           <Plus className="w-3.5 h-3.5" /> {t("common.new")}
         </button>
@@ -1834,7 +1884,21 @@ export const AssetsPage: React.FC = () => {
       <TmsaFilterBanner filter={tmsaFilter} shown={filteredAssets?.length ?? 0} total={data?.items?.length ?? 0} />
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del asset...</div>}
       {viewMode === "list"
-        ? <DataTable columns={columns} data={filteredAssets} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.assets")} onRowClick={row => { void openEdit(row); }} />
+        ? <DataTable
+            columns={columns}
+            data={filteredAssets}
+            loading={loading}
+            error={error}
+            keyFn={row => row.id}
+            emptyText={t("empty.assets")}
+            onRowClick={row => { void openEdit(row); }}
+            groupBy={assetGroupBy}
+            collapsedGroups={collapsedGroups}
+            onToggleGroup={toggleGroup}
+            // Ordenar por una columna y agrupar se pisan: al ordenar, la lista
+            // pasa a verse de corrido (mismo criterio que Plan de Mantenimiento).
+            onSortUngroup={() => setGroupBySfi(false)}
+          />
         : <AssetsBoard assets={filteredAssets} loading={loading} onOpen={row => { void openEdit(row); }} t={t} />}
     </div>
   );

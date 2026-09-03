@@ -1,5 +1,27 @@
 HISTORY.txt
 
+[2026-09-03] Gantt y Equipos: columna ajustable y orden por grupo SFI
+Agent: Claude Opus 5
+- Pedidos del usuario, los tres sobre lo mismo: leer la planilla sin pelearse con
+  el ancho ni con el orden alfabetico.
+- Gantt: la columna EQUIPO / PLAN ahora se ensancha o angosta arrastrando su
+  borde derecho (entre 160 y 720 px). El ancho queda guardado por navegador
+  (localStorage gantt.leftColumnWidth) y con doble clic vuelve al original.
+  Detalle que costo una vuelta: los listeners del arrastre van en la ventana, no
+  en la manija — la manija se mueve con el puntero y siempre queda atras, asi
+  que el arrastre se cortaba a mitad de camino.
+- Gantt: las filas pasan a ordenarse por grupo SFI. Queda buque → grupo →
+  equipo → planes, cada nivel colapsable. El grupo lo declara cada PLAN, no el
+  equipo, y un equipo puede tener tareas en mas de un grupo: se lo ubica en el
+  que mas se repite (empate: el menor) para no partirlo en dos lugares.
+- Equipos (Inventario de Activos): la lista arranca agrupada por grupo SFI, con
+  encabezado colapsable por grupo y los equipos sin codigo SFI al final. El
+  boton "Agrupar por grupo SFI" la vuelve a la lista de corrido, y ordenar por
+  una columna tambien (mismo criterio que Plan de Mantenimiento). Reusa el
+  groupBy que ya tenia DataTable; no se toco el backend.
+- Verificado en el navegador contra la base local: arrastre 1:1, ancho que
+  sobrevive a la recarga, doble clic que resetea, y las dos pantallas agrupadas.
+
 [2026-09-03] Gantt: primero la tarea, despues el codigo
 Agent: Claude Opus 5
 - Pedido del usuario: en el Gantt de mantenimiento interesa mas LA TAREA que el

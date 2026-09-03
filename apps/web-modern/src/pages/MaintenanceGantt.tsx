@@ -197,8 +197,36 @@ const PX_MAX = 300;  // un mes ocupa casi un cuarto de pantalla
 /** Cuánto cambia el ancho por cada toque de los botones − / +. */
 const ZOOM_STEP = 1.15;
 
-const LEFT_W = 300;   // px — columna izquierda (nombre + fechas), fija
+/** Columna izquierda (equipo / plan). Ajustable arrastrando su borde derecho;
+ *  el ancho elegido queda guardado en este navegador. */
+const LEFT_W_DEFAULT = 300;  // px
+const LEFT_W_MIN = 160;      // px — abajo de esto no entra ni el titulo
+const LEFT_W_MAX = 720;      // px — arriba de esto no queda diagrama para ver
+const LEFT_W_KEY = "gantt.leftColumnWidth";
 const ROW_H = 36;     // px — alto de fila
+
+function clampLeftW(w: number): number {
+  return Math.min(LEFT_W_MAX, Math.max(LEFT_W_MIN, Math.round(w)));
+}
+
+/** Grupo SFI de un equipo dentro del Gantt. El grupo lo declara cada PLAN, no
+ *  el equipo, y un mismo equipo puede tener tareas cargadas en más de un grupo:
+ *  se toma el que más se repite (y ante empate, el menor) para que el equipo no
+ *  se parta en dos lugares del diagrama. Sin grupo en ningún plan → null. */
+function assetSfiGroup(plans: MaintenancePlan[]): number | null {
+  const counts = new Map<number, number>();
+  for (const p of plans) {
+    const d = sfiGroupDigit(p.sfiGroupNumber);
+    if (d === null) continue;
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let bestCount = 0;
+  for (const [d, n] of [...counts.entries()].sort((a, b) => a[0] - b[0])) {
+    if (n > bestCount) { best = d; bestCount = n; }
+  }
+  return best;
+}
 
 // ─── Filtro de vista ──────────────────────────────────────────────────────────
 
@@ -215,6 +243,7 @@ function matchesView(p: MaintenancePlan, view: ViewFilter): boolean {
 
 type Row =
   | { kind: "vessel"; key: string; label: string }
+  | { kind: "group"; key: string; label: string; count: number }
   | { kind: "asset"; key: string; label: string; count: number }
   | { kind: "plan"; key: string; plan: MaintenancePlan };
 
@@ -235,6 +264,49 @@ export function MaintenanceGanttPage() {
   // de forma continua, los botones − / + de la toolbar.
   const [pxPerMonth, setPxPerMonth] = useState<number>(64);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Ancho de la columna de la izquierda. Se arrastra desde su borde derecho y
+  // queda guardado por navegador: los titulos de los planes no miden lo mismo
+  // en todas las flotas, y cada uno decide cuanto quiere leer del titulo.
+  const [leftW, setLeftW] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(LEFT_W_KEY));
+      if (Number.isFinite(saved) && saved > 0) return clampLeftW(saved);
+    } catch { /* navegador sin storage: queda el ancho por defecto */ }
+    return LEFT_W_DEFAULT;
+  });
+  const [resizing, setResizing] = useState(false);
+
+  // Arrastre del borde. Los listeners van en la VENTANA, no en la manija: la
+  // manija se mueve con el puntero y siempre queda algo atrás, así que si los
+  // eventos dependieran de estar encima de ella el arrastre se cortaba solo a
+  // mitad de camino (pasó al probarlo). Se guarda recién al soltar.
+  function startResize(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = leftW;
+    setResizing(true);
+    let finalW = startW;
+    const onMove = (ev: PointerEvent) => {
+      finalW = clampLeftW(startW + (ev.clientX - startX));
+      setLeftW(finalW);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      setResizing(false);
+      try { localStorage.setItem(LEFT_W_KEY, String(finalW)); } catch { /* sin storage */ }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  // Doble clic en el borde: vuelve al ancho original.
+  function resetLeftW() {
+    setLeftW(LEFT_W_DEFAULT);
+    try { localStorage.setItem(LEFT_W_KEY, String(LEFT_W_DEFAULT)); } catch { /* sin storage */ }
+  }
 
   // La exportación de la Planilla de Mantenimiento se mudó a la pantalla de
   // Plan de Mantenimiento (sep 2026, pedido del usuario). Acá ya no está.
@@ -295,7 +367,9 @@ export function MaintenanceGanttPage() {
   }
   const xToday = xOf(new Date());
 
-  // ── Filas: buque → equipo → planes (con colapso) ──
+  // ── Filas: buque → grupo SFI → equipo → planes (con colapso) ──
+  // El grupo ordena el diagrama: los equipos de un mismo sistema (propulsión,
+  // eléctrico, LCI…) quedan juntos en vez de repartidos por orden alfabético.
   const rows = useMemo<Row[]>(() => {
     const byVessel = new Map<string, Map<string, MaintenancePlan[]>>();
     for (const p of filtered) {
@@ -310,14 +384,38 @@ export function MaintenanceGanttPage() {
       const vKey = `v:${vessel}`;
       out.push({ kind: "vessel", key: vKey, label: vessel });
       if (collapsed.has(vKey)) continue;
-      for (const [asset, aplans] of [...assets.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-        const aKey = `e:${vessel}:${asset}`;
-        out.push({ kind: "asset", key: aKey, label: asset, count: aplans.length });
-        if (collapsed.has(aKey)) continue;
-        for (const plan of aplans) out.push({ kind: "plan", key: plan.id, plan });
+
+      // Equipos repartidos por grupo SFI; los que no declaran grupo van al final.
+      const byGroup = new Map<number | null, Array<[string, MaintenancePlan[]]>>();
+      for (const entry of [...assets.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const g = assetSfiGroup(entry[1]);
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g)!.push(entry);
+      }
+      const groupOrder = [...byGroup.keys()].sort((a, b) => {
+        if (a === null) return 1;
+        if (b === null) return -1;
+        return a - b;
+      });
+
+      for (const g of groupOrder) {
+        const entries = byGroup.get(g)!;
+        const gKey = `g:${vessel}:${g ?? "none"}`;
+        const label = g === null
+          ? t("gantt.noSfiGroup")
+          : `G${g} · ${t(`sfi.g.${g}` as Parameters<typeof t>[0])}`;
+        out.push({ kind: "group", key: gKey, label, count: entries.reduce((n, [, ps]) => n + ps.length, 0) });
+        if (collapsed.has(gKey)) continue;
+        for (const [asset, aplans] of entries) {
+          const aKey = `e:${vessel}:${asset}`;
+          out.push({ kind: "asset", key: aKey, label: asset, count: aplans.length });
+          if (collapsed.has(aKey)) continue;
+          for (const plan of aplans) out.push({ kind: "plan", key: plan.id, plan });
+        }
       }
     }
     return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, collapsed]);
 
   // ── Eje de meses (con bandas de año) ──
@@ -336,7 +434,7 @@ export function MaintenanceGanttPage() {
 
   /** scrollLeft que deja una posición del eje (en meses) en el medio del diagrama. */
   function scrollLeftToCenter(el: HTMLDivElement, months: number, px: number): number {
-    return Math.max(0, months * px - (el.clientWidth - LEFT_W) / 2);
+    return Math.max(0, months * px - (el.clientWidth - leftW) / 2);
   }
 
   // ── Scroll: centrar HOY al abrir (y cuando cambia el rango del eje) ──
@@ -443,7 +541,7 @@ export function MaintenanceGanttPage() {
       <GanttLegend />
 
       {/* Timeline */}
-      <div className="flex-1 min-h-0 rounded-xl border border-fg/10 overflow-hidden bg-surface dark:bg-[#0a0f1e]">
+      <div className="relative flex-1 min-h-0 rounded-xl border border-fg/10 overflow-hidden bg-surface dark:bg-[#0a0f1e]">
         {loading ? (
           <div className="flex items-center justify-center h-full gap-3 text-text-industrial/40"><Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Cargando planes de mantenimiento…</span></div>
         ) : error ? (
@@ -451,11 +549,26 @@ export function MaintenanceGanttPage() {
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-text-industrial/20"><CalendarRange className="w-12 h-12" /><p className="text-sm">No hay planes para los filtros seleccionados.</p></div>
         ) : (
-          <div ref={scrollRef} className="h-full overflow-auto">
-            <div style={{ width: LEFT_W + timelineW, minWidth: "100%" }}>
+          <>
+          {/* Manija para ensanchar/angostar la columna de la izquierda. Va acá y
+              no adentro del scroll porque la columna es sticky en left:0: su
+              borde derecho cae siempre en x = leftW, se haya scrolleado o no. */}
+          <div
+            onPointerDown={startResize}
+            onDoubleClick={resetLeftW}
+            title={t("gantt.resizeHint")}
+            role="separator"
+            aria-orientation="vertical"
+            className={`absolute inset-y-0 z-40 cursor-col-resize group/resize ${resizing ? "" : "hover:bg-accent/10"}`}
+            style={{ left: leftW - 3, width: 7 }}
+          >
+            <span className={`absolute inset-y-0 left-[3px] w-px transition-colors ${resizing ? "bg-accent" : "bg-transparent group-hover/resize:bg-accent/60"}`} />
+          </div>
+          <div ref={scrollRef} className={`h-full overflow-auto ${resizing ? "select-none" : ""}`}>
+            <div style={{ width: leftW + timelineW, minWidth: "100%" }}>
               {/* Header (sticky top) */}
               <div className="sticky top-0 z-30 flex bg-surface dark:bg-[#0a0f1e] border-b border-fg/10">
-                <div className="sticky left-0 z-10 flex items-center px-3 text-[10px] font-semibold uppercase tracking-wider text-text-industrial/40 bg-surface dark:bg-[#0a0f1e] border-r border-fg/10 shrink-0" style={{ width: LEFT_W, minWidth: LEFT_W }}>
+                <div className="sticky left-0 z-10 flex items-center px-3 text-[10px] font-semibold uppercase tracking-wider text-text-industrial/40 bg-surface dark:bg-[#0a0f1e] border-r border-fg/10 shrink-0" style={{ width: leftW, minWidth: leftW }}>
                   Equipo / Plan
                 </div>
                 <div className="relative shrink-0" style={{ width: timelineW, height: 44 }}>
@@ -484,19 +597,29 @@ export function MaintenanceGanttPage() {
 
               {/* Rows */}
               {rows.map((row) => {
-                if (row.kind === "vessel" || row.kind === "asset") {
+                if (row.kind === "vessel" || row.kind === "group" || row.kind === "asset") {
                   const isVessel = row.kind === "vessel";
+                  const isGroup = row.kind === "group";
                   const isCollapsed = collapsed.has(row.key);
+                  // Tres niveles: buque, grupo SFI y equipo. Cada uno con su
+                  // sangría y su gris, para leer la jerarquía de un vistazo.
+                  const bg = isVessel ? "bg-fg/[0.05] hover:bg-fg/[0.08]"
+                    : isGroup ? "bg-fg/[0.035] hover:bg-fg/[0.06]"
+                    : "bg-fg/[0.02] hover:bg-fg/[0.05]";
+                  const pad = isVessel ? 12 : isGroup ? 22 : 34;
+                  const labelCls = isVessel ? "text-[11px] font-bold text-fg/80"
+                    : isGroup ? "text-[11px] font-bold uppercase tracking-wide text-text-industrial/60"
+                    : "text-[11px] font-semibold text-fg/70";
                   return (
                     <div key={row.key} className="flex border-b border-fg/[0.06]" style={{ height: ROW_H }}>
                       <button
                         onClick={() => toggleCollapse(row.key)}
-                        className={`sticky left-0 z-10 flex items-center gap-1.5 px-3 border-r border-fg/10 shrink-0 text-left transition-colors ${isVessel ? "bg-fg/[0.05] hover:bg-fg/[0.08]" : "bg-fg/[0.02] hover:bg-fg/[0.05]"}`}
-                        style={{ width: LEFT_W, minWidth: LEFT_W, paddingLeft: isVessel ? 12 : 24 }}
+                        className={`sticky left-0 z-10 flex items-center gap-1.5 px-3 border-r border-fg/10 shrink-0 text-left transition-colors ${bg}`}
+                        style={{ width: leftW, minWidth: leftW, paddingLeft: pad }}
                       >
                         {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />}
-                        <span className={`truncate ${isVessel ? "text-[11px] font-bold text-fg/80" : "text-[11px] font-semibold text-fg/70"}`}>{row.label}</span>
-                        {row.kind === "asset" && <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/8 rounded-full px-1.5 tabular-nums shrink-0">{row.count}</span>}
+                        <span className={`truncate ${labelCls}`}>{row.label}</span>
+                        {!isVessel && <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/8 rounded-full px-1.5 tabular-nums shrink-0">{row.count}</span>}
                       </button>
                       <div className="relative shrink-0 track-bg" style={{ width: timelineW, "--px": `${pxPerMonth}px` } as React.CSSProperties}>
                         <span className="absolute top-0 bottom-0 border-l border-dashed border-accent/50" style={{ left: xToday }} />
@@ -524,7 +647,7 @@ export function MaintenanceGanttPage() {
                     className="flex border-b border-fg/[0.04] hover:bg-fg/[0.02] group cursor-pointer"
                     style={{ height: ROW_H }}
                   >
-                    <div className="sticky left-0 z-10 flex flex-col justify-center px-3 border-r border-fg/10 shrink-0 bg-surface dark:bg-[#0a0f1e] group-hover:bg-fg/[0.02]" style={{ width: LEFT_W, minWidth: LEFT_W, paddingLeft: 36 }}>
+                    <div className="sticky left-0 z-10 flex flex-col justify-center px-3 border-r border-fg/10 shrink-0 bg-surface dark:bg-[#0a0f1e] group-hover:bg-fg/[0.02]" style={{ width: leftW, minWidth: leftW, paddingLeft: 46 }}>
                       {/* Primero LA TAREA y después el código: en el Gantt se busca por lo que
                           hay que hacer, no por el código. Con el ancho justo el que se corta es
                           el código, no el título (el tooltip muestra los dos completos). */}
@@ -590,6 +713,7 @@ export function MaintenanceGanttPage() {
               })}
             </div>
           </div>
+          </>
         )}
       </div>
 
