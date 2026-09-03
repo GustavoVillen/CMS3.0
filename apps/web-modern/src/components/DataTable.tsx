@@ -25,6 +25,15 @@ export interface GroupBy<T> {
   labelFn: (row: T) => string;
   sortRows?: (a: T, b: T) => number;
   sortGroups?: (a: { key: string; label: string; count: number }, b: { key: string; label: string; count: number }) => number;
+  /**
+   * Columna bajo la cual se alinea el título del grupo. Por defecto el título
+   * arranca en el borde izquierdo de la tabla, y cuando lo agrupado es el
+   * contenido de una columna del medio (el equipo, sobre la columna de tareas)
+   * queda lejos de aquello a lo que titula: se lee la tarea sin saber de qué
+   * equipo es. Con esta clave el título se corre hasta esa columna y queda
+   * justo encima de sus filas.
+   */
+  labelColumnKey?: string;
 }
 
 interface DataTableProps<T> {
@@ -143,6 +152,14 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
   // sortingEnabled: si el orden por columna se APLICA (y se muestra la flecha
   // activa). Con groupBy manda la agrupación.
   const sortingEnabled = !groupBy;
+
+  // Columna bajo la que se alinea el título del grupo. -1 (no encontrada) o sin
+  // labelColumnKey ⇒ 0, o sea el borde izquierdo, como era antes.
+  const labelColIndex = useMemo(() => {
+    if (!groupBy?.labelColumnKey) return 0;
+    const i = columns.findIndex(c => c.key === groupBy.labelColumnKey);
+    return i > 0 ? i : 0;
+  }, [groupBy, columns]);
   // headerSortable: si el encabezado responde al clic. Con onSortUngroup sigue
   // respondiendo aunque esté agrupado, porque el clic desagrupa.
   const headerSortable = (column: Column<T>) =>
@@ -228,7 +245,12 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                 return (
                   <React.Fragment key={g.key}>
                     <tr className="bg-fg/[0.05] border-y border-border">
-                      <td colSpan={columns.length} className="px-3 py-1.5">
+                      {/* Las celdas vacías corren el título hasta la columna que
+                          agrupa (labelColumnKey); sin ella arranca a la izquierda. */}
+                      {labelColIndex > 0 && Array.from({ length: labelColIndex }, (_, i) => (
+                        <td key={columns[i].key} className={`px-4 py-1.5 ${columns[i].className ?? ""}`} />
+                      ))}
+                      <td colSpan={columns.length - labelColIndex} className={`${labelColIndex > 0 ? "px-4" : "px-3"} py-1.5`}>
                         <button
                           type="button"
                           onClick={() => onToggleGroup?.(g.key)}

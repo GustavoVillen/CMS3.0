@@ -3671,6 +3671,10 @@ export const MaintenancePlansPage: React.FC = () => {
           keyFn: (r: MaintenancePlan) => r.assetId,
           labelFn: (r: MaintenancePlan) => r.assetName ?? r.assetId,
           sortRows: (a: MaintenancePlan, b: MaintenancePlan) => freqRank(a) - freqRank(b),
+          // El nombre del equipo va sobre la columna EQUIPO / TAREA: agrupado,
+          // la celda muestra sólo la tarea, y con el título en el borde
+          // izquierdo quedaba lejos de las tareas que encabeza.
+          labelColumnKey: "title",
         }
       : undefined,
     [groupByEquipment],
