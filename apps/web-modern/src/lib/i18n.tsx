@@ -1587,6 +1587,13 @@ const dict = {
   "wo.modal.criticality":      { es: "Criticidad",             en: "Criticality",          pt: "Criticidade" },
   "wo.modal.openDate":         { es: "F. Apertura",            en: "Open date",            pt: "Data abertura" },
   "wo.modal.dueDate":          { es: "F. Vencimiento",         en: "Due date",             pt: "Data vencimento" },
+  // Aviso al corregir el vencimiento de una OT ya autorizada: posponer trabajo
+  // comprometido tiene su propio circuito, que deja constancia.
+  "wo.modal.dueDateAuthorizedHint": {
+    es: "La OT ya está autorizada. Corregí acá una fecha mal cargada; para posponer el trabajo usá Diferir OT, que deja el motivo y la aprobación.",
+    en: "This work order is already authorized. Use this to fix a mistyped date; to postpone the work use Defer, which records the reason and the approval.",
+    pt: "A OT já está autorizada. Use aqui para corrigir uma data errada; para adiar o trabalho use Adiar, que registra o motivo e a aprovação.",
+  },
   "wo.modal.openedBy":         { es: "Abierta por (en nombre de)", en: "Opened by (on behalf of)", pt: "Aberta por (em nome de)" },
   "wo.modal.openedBySelf":     { es: "Yo (actual)",            en: "Me (current)",         pt: "Eu (atual)" },
   "wo.modal.nextDueDate":      { es: "Próx. vencimiento",      en: "Next due",             pt: "Próx. vencimento" },

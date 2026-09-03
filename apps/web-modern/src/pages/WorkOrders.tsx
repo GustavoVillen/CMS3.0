@@ -2716,9 +2716,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
                         className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
                     : undefined],
+                // Vencimiento: editable en preparación/solicitada, y por el
+                // administrador en cualquier etapa — mismo criterio que la fecha
+                // de apertura de al lado. Corregir una fecha mal cargada no
+                // debería exigir reabrir el circuito. Para POSPONER un trabajo
+                // ya autorizado, en cambio, está Diferir OT: eso deja el motivo,
+                // quién lo aprobó y cuántos días se corrió; mover la fecha a mano
+                // no deja nada de eso.
                 [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
-                  tramitaPhase === "SOLICITADA" && isEditable
+                  (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
                     ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                        title={tramitaPhase === "AUTORIZADA" ? t("wo.modal.dueDateAuthorizedHint") : undefined}
                         className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
                     : undefined],
               ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
