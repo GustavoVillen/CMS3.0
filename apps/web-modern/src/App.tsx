@@ -96,6 +96,7 @@ const PlatformCopilotQuestionsPage = React.lazy(() => import("./pages/platform/P
 const PlatformPromptsPage = React.lazy(() => import("./pages/platform/PlatformPrompts").then(m => ({ default: m.PlatformPromptsPage })));
 const PlatformVesselMapPage = React.lazy(() => import("./pages/platform/PlatformVesselMap").then(m => ({ default: m.PlatformVesselMapPage })));
 const PlatformAccessPage = React.lazy(() => import("./pages/platform/PlatformAccess").then(m => ({ default: m.PlatformAccessPage })));
+const PlatformUserActivityPage = React.lazy(() => import("./pages/platform/PlatformUserActivity").then(m => ({ default: m.PlatformUserActivityPage })));
 
 // ---------------------------------------------------------------------------
 // Guards
@@ -206,6 +207,7 @@ export default function App() {
               <Route path="tenants" element={<PlatformTenantsPage />} />
               <Route path="users"   element={<PlatformUsersPage />} />
               <Route path="access"  element={<PlatformAccessPage />} />
+              <Route path="user-activity" element={<PlatformUserActivityPage />} />
               <Route path="audit"   element={<PlatformAuditPage />} />
               <Route path="usage"      element={<PlatformUsagePage />} />
               <Route path="copilot-questions" element={<PlatformCopilotQuestionsPage />} />

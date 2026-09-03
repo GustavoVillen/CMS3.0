@@ -36,6 +36,7 @@ export default defineConfig({
       // lugar de la respuesta de la API y las pantallas quedan vacías en local.
       '/platform/copilot-questions': { target: 'http://localhost:3106', changeOrigin: true, bypass: apiOnly },
       '/platform/vessel-positions':  { target: 'http://localhost:3106', changeOrigin: true, bypass: apiOnly },
+      '/platform/user-activity':     { target: 'http://localhost:3106', changeOrigin: true, bypass: apiOnly },
     },
   },
 })

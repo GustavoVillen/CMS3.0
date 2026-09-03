@@ -32,6 +32,7 @@ import {
 } from "./users/platform-users-service";
 import { listCopilotQuestions } from "./copilot-questions/platform-copilot-questions-service";
 import { getActiveUsers, getLoginHistory } from "./access/platform-access-service";
+import { getUserActivity, searchUsers, type ActivityEventType } from "./access/platform-user-activity-service";
 
 export async function handlePlatformRoutes(
   method: string,
@@ -326,6 +327,45 @@ export async function handlePlatformRoutes(
       offset: Number(url.searchParams.get("offset") ?? 0),
     });
     sendJson(response, 200, { items, total });
+    return true;
+  }
+
+  // ── Auditoría profunda de un usuario ──────────────────────────────────────
+  // Búsqueda de usuarios para el selector.
+  if (method === "GET" && url.pathname === "/platform/user-activity/search") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const items = await searchUsers(url.searchParams.get("q") ?? "");
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+  // Actividad consolidada + alertas de un usuario puntual.
+  if (method === "GET" && url.pathname === "/platform/user-activity") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const userId = url.searchParams.get("userId");
+    if (!userId) {
+      throw new RouteError(400, "USER_ID_REQUIRED", "userId es obligatorio.");
+    }
+    const fromRaw = url.searchParams.get("from");
+    const toRaw = url.searchParams.get("to");
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    const typesRaw = url.searchParams.get("types");
+    const types = typesRaw
+      ? (typesRaw.split(",").map((t) => t.trim()).filter(Boolean) as ActivityEventType[])
+      : null;
+    const result = await getUserActivity({
+      userId,
+      from: from && !isNaN(from.getTime()) ? from : null,
+      to:   to   && !isNaN(to.getTime())   ? to   : null,
+      types,
+      limit: Number(url.searchParams.get("limit") ?? 400),
+    });
+    if (!result) {
+      throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+    }
+    sendJson(response, 200, result);
     return true;
   }
 
