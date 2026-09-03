@@ -1,0 +1,3028 @@
+{
+ "fuente": "08- PMP DON CHICUETO - AGOSTO.xlsm (31/08/2026)",
+ "horometros": {
+  "DCH-MP-BR": 40187,
+  "DCH-MP-ER": 40099,
+  "DCH-MA-BR": 40851,
+  "DCH-MA-ER": 39056,
+  "DCH-MA-PTO": 21188
+ },
+ "planes": [
+  {
+   "taskCode": "DCH-6-ED-001-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-6-ED-001-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar funcionamiento de alarma/lectura en panel plc"
+  },
+  {
+   "taskCode": "DCH-6-ED-001-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Visual, acústica y sus presostatos, comprobar funcionamiento"
+  },
+  {
+   "taskCode": "DCH-6-ED-001-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-6-ED-001-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Verificar la no existencia de fugas de aire"
+  },
+  {
+   "taskCode": "DCH-6-ED-001-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-29",
+   "proximo": "2026-09-29",
+   "hoja": "ENGRASE",
+   "trabajo": "Engrasar , cojinetes de apoyo, prensa ejes helice. Rodamient"
+  },
+  {
+   "taskCode": "DCH-AA-SPLIT-03",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-28",
+   "proximo": "2026-10-28",
+   "hoja": "AIRE ACOND. CENTRAL",
+   "trabajo": "Limpieza condensador del equipo, verificacion capacitor"
+  },
+  {
+   "taskCode": "DCH-AA-SPLIT-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-18",
+   "proximo": "2026-09-18",
+   "hoja": "AIRE ACOND. CENTRAL",
+   "trabajo": "Limpieza de filtros de entrada aire Evaporador"
+  },
+  {
+   "taskCode": "DCH-AA-SPLIT-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-08",
+   "proximo": "2026-10-08",
+   "hoja": "AIRE ACOND. CENTRAL",
+   "trabajo": "Control visual de estado de ventiladores del consensador"
+  },
+  {
+   "taskCode": "DCH-AIS-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-02-09",
+   "proximo": "2027-02-09",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Prueba de transmision y Recepcion (TX/RX) Verificacion de da"
+  },
+  {
+   "taskCode": "DCH-ALARM-SENT-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-ALARM-TK-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-24",
+   "proximo": "2026-08-24",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-ALARM-TK-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-02",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-14",
+   "proximo": "2031-09-14",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Rotor y estator – limpiar, cambiar rodamiento"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-03",
+   "tipo": "HORAS",
+   "ultimo": 35884,
+   "proximo": 53884,
+   "hoja": "ALTERNADORES",
+   "trabajo": "Recorrido general"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-2",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-14",
+   "proximo": "2026-09-14",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Aislación – tomar"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-30",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-14",
+   "proximo": "2026-09-14",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Manchón de acoplamiento – inspección visual y control de apr"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-31",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-14",
+   "proximo": "2026-09-14",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Conexiones de borneras – control de apriete"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-10",
+   "proximo": "2027-01-10",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Caja de borneras. Control de estado de excitación y estanque"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-14",
+   "proximo": "2031-09-14",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Protocolo de ensayo de interruptor principal – realizar"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-10",
+   "proximo": "2027-01-10",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Filtro de aire – limpiar"
+  },
+  {
+   "taskCode": "DCH-ALT-BR-35",
+   "tipo": "HORAS",
+   "ultimo": 35884,
+   "proximo": 53884,
+   "hoja": "ALTERNADORES",
+   "trabajo": "Limpieza con electro cleaner"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-02",
+   "tipo": "FECHA",
+   "ultimo": "2025-07-17",
+   "proximo": "2031-07-17",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Rotor y estator – limpiar, cambiar rodamiento"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-03",
+   "tipo": "HORAS",
+   "ultimo": 35953,
+   "proximo": 53953,
+   "hoja": "ALTERNADORES",
+   "trabajo": "Recorrido general"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-2",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-29",
+   "proximo": "2027-06-29",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Aislación – tomar"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-28",
+   "proximo": "2027-07-28",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Manchón de acoplamiento – inspección visual y control de apr"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2027-08-28",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Conexiones de borneras – control de apriete"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-28",
+   "proximo": "2027-01-28",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Caja de borneras. Control de estado de excitación y estanque"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-07-17",
+   "proximo": "2031-07-17",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Protocolo de ensayo de interruptor principal – realizar"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-10",
+   "proximo": "2027-01-10",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Filtro de aire – limpiar"
+  },
+  {
+   "taskCode": "DCH-ALT-ER-35",
+   "tipo": "HORAS",
+   "ultimo": 35953,
+   "proximo": 53953,
+   "hoja": "ALTERNADORES",
+   "trabajo": "Limpieza con electro cleaner"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-29",
+   "proximo": "2027-08-29",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Aislación – tomar"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-02",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-25",
+   "proximo": "2031-08-25",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Rotor y estator – limpiar, cambiar rodamiento"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-03",
+   "tipo": "HORAS",
+   "ultimo": 21142,
+   "proximo": 39142,
+   "hoja": "ALTERNADORES",
+   "trabajo": "Recorrido general"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2027-08-26",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Manchón de acoplamiento – inspección visual y control de apr"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2027-08-26",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Conexiones de borneras – control de apriete"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-15",
+   "proximo": "2027-01-15",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Caja de borneras. Control de estado de excitación y estanque"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-25",
+   "proximo": "2031-08-25",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Protocolo de ensayo de interruptor principal – realizar"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-10",
+   "proximo": "2027-01-10",
+   "hoja": "ALTERNADORES",
+   "trabajo": "Filtro de aire – limpiar"
+  },
+  {
+   "taskCode": "DCH-ALT-PTO-35",
+   "tipo": "HORAS",
+   "ultimo": 21142,
+   "proximo": 39142,
+   "hoja": "ALTERNADORES",
+   "trabajo": "Limpieza con electro cleaner"
+  },
+  {
+   "taskCode": "DCH-BAROM-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-19",
+   "proximo": "2027-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Verificacion de Parametros  Desarme, lubricacion y calibraci"
+  },
+  {
+   "taskCode": "DCH-BAT-EGA-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2026-08-20",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Controlar densidades, nivel electrolito, cargador, reg. Dens"
+  },
+  {
+   "taskCode": "DCH-BAT-EGA-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-BAT-EGA-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba luz ega/radio"
+  },
+  {
+   "taskCode": "DCH-BBA-HID-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba funcionamiento"
+  },
+  {
+   "taskCode": "DCH-BBA-INC-EM-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-BBA-INC-EM-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2026-10-20",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico control  apriete conexiones estanqueidad de "
+  },
+  {
+   "taskCode": "DCH-BBA-INC-EM-32",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-BBA-INC-EM-33",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Verificar/cambiar- sello mecanico(5 años)."
+  },
+  {
+   "taskCode": "DCH-BOT-AIRE-AUX-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2027-08-24",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Botellón de aire auxiliar n°1 y n°2 – válvulas de seguridad "
+  },
+  {
+   "taskCode": "DCH-BOT-AIRE-AUX-30",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-22",
+   "proximo": "2031-08-22",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Botellón de aire auxiliar n°1 y n°2 – cabezales – recorrido "
+  },
+  {
+   "taskCode": "DCH-BOT-AIRE-P-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2027-08-24",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Botellón de aire principal n°1 y n°2 – válvulas de seguridad"
+  },
+  {
+   "taskCode": "DCH-BOT-AIRE-P-30",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-22",
+   "proximo": "2031-08-22",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Botellón de aire principal n°1 y n°2 – cabezales – recorrido"
+  },
+  {
+   "taskCode": "DCH-CABR-BR-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-25",
+   "proximo": "2026-09-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Comando a distancia – verificar funcionamiento de botonera d"
+  },
+  {
+   "taskCode": "DCH-CABR-BR-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-CABR-BR-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2026-09-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-CABR-BR-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-10",
+   "proximo": "2031-06-10",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-CABR-BR-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-25",
+   "proximo": "2026-09-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Procedimiento lubricacion"
+  },
+  {
+   "taskCode": "DCH-CABR-ER-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-25",
+   "proximo": "2026-09-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Comando a distancia – verificar funcionamiento de botonera d"
+  },
+  {
+   "taskCode": "DCH-CABR-ER-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-CABR-ER-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2026-09-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-CABR-ER-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-10",
+   "proximo": "2031-06-10",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-CABR-ER-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-25",
+   "proximo": "2026-09-25",
+   "hoja": "CABRESTANTE",
+   "trabajo": "Procedimiento lubricacion"
+  },
+  {
+   "taskCode": "DCH-CABR-POPA-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-29",
+   "proximo": "2026-09-29",
+   "hoja": "ENGRASE",
+   "trabajo": "Engrase"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-03",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-13",
+   "proximo": "2027-06-13",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Aceite y filtro – realizar el cambio"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-29",
+   "proximo": "2026-09-29",
+   "hoja": "ENGRASE",
+   "trabajo": "Engrasar valvulas, guinches hidraulico, pluma. Registrar nov"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Válvulas de 2 vías -  verificar accionamiento"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Mangueras y conexiones - inspección visual de ausencia de pé"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-14",
+   "proximo": "2031-06-14",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-CENT-HID-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-21",
+   "proximo": "2027-01-21",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Tanque de centralina - limpieza"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-26",
+   "proximo": "2027-06-26",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-CENT-HID-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-23",
+   "proximo": "2026-09-23",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-CENT-HID-37",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-14",
+   "proximo": "2031-06-14",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-CO2-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-COMP-1-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Cambio aceite y filtro de aire,  verificar correas"
+  },
+  {
+   "taskCode": "DCH-COMP-1-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-29",
+   "proximo": "2027-06-29",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-COMP-1-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-29",
+   "proximo": "2026-10-29",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-COMP-1-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-29",
+   "proximo": "2026-11-29",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Sistema de descompresion – verificar funcionamiento"
+  },
+  {
+   "taskCode": "DCH-COMP-1-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2027-02-24",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Válvulas de seguridad y de retención – verificar funcionamie"
+  },
+  {
+   "taskCode": "DCH-COMP-1-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2027-01-18",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Cabezal de alta y baja p° - control de válvulas y apriete de"
+  },
+  {
+   "taskCode": "DCH-COMP-1-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2027-02-24",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Presostato – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-COMP-1-37",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-25",
+   "proximo": "2031-08-25",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Recorrido general flappers, valv. Alivio, rodamientos, aros "
+  },
+  {
+   "taskCode": "DCH-COMP-2-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Cambio aceite y filtro de aire,  verificar correas"
+  },
+  {
+   "taskCode": "DCH-COMP-2-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-29",
+   "proximo": "2027-08-29",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-COMP-2-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-22",
+   "proximo": "2026-10-22",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-COMP-2-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2027-01-20",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Sistema de descompresion – verificar funcionamiento"
+  },
+  {
+   "taskCode": "DCH-COMP-2-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2027-01-20",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Válvulas de seguridad y de retención – verificar funcionamie"
+  },
+  {
+   "taskCode": "DCH-COMP-2-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2027-01-20",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Cabezal de alta y baja p° - control de válvulas y apriete de"
+  },
+  {
+   "taskCode": "DCH-COMP-2-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2027-01-20",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Presostato – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-COMP-2-37",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-25",
+   "proximo": "2031-08-25",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Recorrido general flappers, valv. Alivio, rodamientos, aros "
+  },
+  {
+   "taskCode": "DCH-COMP-NK40-30",
+   "tipo": "FECHA",
+   "ultimo": "2025-12-27",
+   "proximo": "2026-12-27",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Cambio de filtros de aceite, aceite, aire y verificar correa"
+  },
+  {
+   "taskCode": "DCH-COMP-NK40-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2026-09-24",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Verificar nivel de acite"
+  },
+  {
+   "taskCode": "DCH-COMP-NK40-32",
+   "tipo": "FECHA",
+   "ultimo": "2025-02-27",
+   "proximo": "2031-02-27",
+   "hoja": "COMPRESORES Y BOTELLONES",
+   "trabajo": "Recorrido gral."
+  },
+  {
+   "taskCode": "DCH-COMPAS-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-19",
+   "proximo": "2027-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Verificacion de curvas de desvios de Compas patron Certifica"
+  },
+  {
+   "taskCode": "DCH-CORTES-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-CORTES-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Comprobar el buen funcionamiento"
+  },
+  {
+   "taskCode": "DCH-CR-BR-02",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-21",
+   "proximo": "2027-01-21",
+   "hoja": "CAJAS",
+   "trabajo": "Aceite – cambiar."
+  },
+  {
+   "taskCode": "DCH-CR-BR-03",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2027-02-26",
+   "hoja": "CAJAS",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-CR-BR-05",
+   "tipo": "FECHA",
+   "ultimo": "2023-11-13",
+   "proximo": "2029-11-13",
+   "hoja": "CAJAS",
+   "trabajo": "Inspeccion por pna - inspeccion abierta y limpia (renovacion"
+  },
+  {
+   "taskCode": "DCH-CR-BR-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "CAJAS",
+   "trabajo": "Presión de encloche – controlar manometría y ausencia de pér"
+  },
+  {
+   "taskCode": "DCH-CR-BR-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "CAJAS",
+   "trabajo": "Manchón – inspección visual y control de apriete de bulonerí"
+  },
+  {
+   "taskCode": "DCH-CR-BR-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "CAJAS",
+   "trabajo": "Alarmas de temperatura y presión de aceite – probar funciona"
+  },
+  {
+   "taskCode": "DCH-CR-BR-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-11-28",
+   "hoja": "CAJAS",
+   "trabajo": "Tapas de observación – inspección visual de engranajes."
+  },
+  {
+   "taskCode": "DCH-CR-BR-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "CAJAS",
+   "trabajo": "Válvula rotativa deublin – control de ausencia de pérdidas"
+  },
+  {
+   "taskCode": "DCH-CR-BR-35",
+   "tipo": "FECHA",
+   "ultimo": "2024-09-25",
+   "proximo": "2030-09-25",
+   "hoja": "CAJAS",
+   "trabajo": "Bomba de aceite – recorrer o reemplazar."
+  },
+  {
+   "taskCode": "DCH-CR-BR-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-10-18",
+   "hoja": "CAJAS",
+   "trabajo": "Filtros de aceite – limpiar."
+  },
+  {
+   "taskCode": "DCH-CR-BR-37",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-12",
+   "proximo": "2026-08-12",
+   "hoja": "CAJAS",
+   "trabajo": "Enfriador de aceite – inspeccionar cámaras de agua y haz de "
+  },
+  {
+   "taskCode": "DCH-CR-ER-02",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-21",
+   "proximo": "2027-01-21",
+   "hoja": "CAJAS",
+   "trabajo": "Aceite – cambiar."
+  },
+  {
+   "taskCode": "DCH-CR-ER-03",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-26",
+   "proximo": "2026-12-26",
+   "hoja": "CAJAS",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-CR-ER-05",
+   "tipo": "FECHA",
+   "ultimo": "2023-11-13",
+   "proximo": "2029-11-13",
+   "hoja": "CAJAS",
+   "trabajo": "Inspeccion abierta y limpia"
+  },
+  {
+   "taskCode": "DCH-CR-ER-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "CAJAS",
+   "trabajo": "Presión de encloche– controlar manometría y ausencia de pérd"
+  },
+  {
+   "taskCode": "DCH-CR-ER-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "CAJAS",
+   "trabajo": "Manchón – inspección visual y control de apriete de bulonerí"
+  },
+  {
+   "taskCode": "DCH-CR-ER-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "CAJAS",
+   "trabajo": "Presión de encloche - alarmas de temperatura y presión de ac"
+  },
+  {
+   "taskCode": "DCH-CR-ER-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-10-18",
+   "hoja": "CAJAS",
+   "trabajo": "Tapas de observación – inspección visual de engranajes."
+  },
+  {
+   "taskCode": "DCH-CR-ER-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "CAJAS",
+   "trabajo": "Válvula rotativa deublin – control de ausencia de pérdidas"
+  },
+  {
+   "taskCode": "DCH-CR-ER-35",
+   "tipo": "FECHA",
+   "ultimo": "2024-09-25",
+   "proximo": "2030-09-25",
+   "hoja": "CAJAS",
+   "trabajo": "Bomba de aceite – recorrer o reemplazar."
+  },
+  {
+   "taskCode": "DCH-CR-ER-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-10-18",
+   "hoja": "CAJAS",
+   "trabajo": "Filtros de aceite – limpiar."
+  },
+  {
+   "taskCode": "DCH-CR-ER-37",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-21",
+   "proximo": "2027-01-21",
+   "hoja": "CAJAS",
+   "trabajo": "Enfriador de aceite – inspeccionar cámaras de agua y haz de "
+  },
+  {
+   "taskCode": "DCH-DET-HUMO-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-22",
+   "proximo": "2026-08-22",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Inspeccion y prueba mensual de Detectores Humo/Calor"
+  },
+  {
+   "taskCode": "DCH-EB-ACH-SENT-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-19",
+   "proximo": "2026-08-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-EB-ACH-SENT-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-20",
+   "proximo": "2026-09-20",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – inspección visual y limpieza de impulsor y carcaza"
+  },
+  {
+   "taskCode": "DCH-EB-ACH-SENT-32",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-20",
+   "proximo": "2031-06-20",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-ACH-SENT-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-14",
+   "proximo": "2026-08-14",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-ACH-SENT-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-20",
+   "proximo": "2026-08-20",
+   "hoja": "BOMBAS",
+   "trabajo": "Tablero de pem – verificar conexiones"
+  },
+  {
+   "taskCode": "DCH-EB-AP1-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "26.01 – bomba – verificar funcionamiento y estado de manómet"
+  },
+  {
+   "taskCode": "DCH-EB-AP1-31",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "26.02 – bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-AP1-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "26.03 – motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-AP1-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-26",
+   "proximo": "2026-08-26",
+   "hoja": "BOMBAS",
+   "trabajo": "26.04 – motor eléctrico – control de apriete conexiones y es"
+  },
+  {
+   "taskCode": "DCH-EB-AP1-34",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "26.05 – motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-AP2-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "26.01 – bomba – verificar funcionamiento y estado de manómet"
+  },
+  {
+   "taskCode": "DCH-EB-AP2-31",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "26.02 – bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-AP2-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "26.03 – motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-AP2-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-26",
+   "proximo": "2026-08-26",
+   "hoja": "BOMBAS",
+   "trabajo": "26.04 – motor eléctrico – control de apriete conexiones y es"
+  },
+  {
+   "taskCode": "DCH-EB-AP2-34",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "26.05 – motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-17",
+   "proximo": "2026-08-17",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – control de empaquetadura"
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-17",
+   "proximo": "2026-08-17",
+   "hoja": "BOMBAS",
+   "trabajo": "Manchones de acoplamiento – engrase y control de estado."
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-33",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-19",
+   "proximo": "2030-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-17",
+   "proximo": "2026-10-17",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-EB-INC-P-36",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-19",
+   "proximo": "2030-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-26",
+   "proximo": "2026-09-26",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba de  funcionamiento"
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-17",
+   "proximo": "2026-08-17",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba –  control de empaquetadura"
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-17",
+   "proximo": "2026-08-17",
+   "hoja": "BOMBAS",
+   "trabajo": "Manchones de acoplamiento – engrase y control de estado."
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-33",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-22",
+   "proximo": "2026-09-22",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico control de apriete conexiones y estanqueidad"
+  },
+  {
+   "taskCode": "DCH-EB-LASTRE-36",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-19",
+   "proximo": "2030-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-LODOS-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2026-08-20",
+   "hoja": "BOMBAS",
+   "trabajo": "28.01 – bomba – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-EB-LODOS-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-20",
+   "proximo": "2026-08-20",
+   "hoja": "BOMBAS",
+   "trabajo": "28.02 – bomba manchón verificar estado y control de apriete "
+  },
+  {
+   "taskCode": "DCH-EB-LODOS-32",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "28.03 – bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-LODOS-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-22",
+   "proximo": "2026-08-22",
+   "hoja": "BOMBAS",
+   "trabajo": "28.04 – motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-LODOS-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "28.05 – motor eléctrico control  apriete conexiones estanque"
+  },
+  {
+   "taskCode": "DCH-EB-LODOS-35",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "28.06 – motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-PRELUB-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-EB-PRELUB-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2026-08-18",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – manchón – verificar estado y control de apriete de t"
+  },
+  {
+   "taskCode": "DCH-EB-PRELUB-32",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-PRELUB-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-PRELUB-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2026-09-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – control de apriete conexiones y estanqueid"
+  },
+  {
+   "taskCode": "DCH-EB-PRELUB-35",
+   "tipo": "FECHA",
+   "ultimo": "2022-12-20",
+   "proximo": "2028-12-20",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-REF-BOC-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – verificar funcionamiento y estado de manometría"
+  },
+  {
+   "taskCode": "DCH-EB-REF-BOC-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – manchón – verificar estado y control de apriete de t"
+  },
+  {
+   "taskCode": "DCH-EB-REF-BOC-32",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-15",
+   "proximo": "2031-06-15",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-REF-BOC-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-REF-BOC-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2026-09-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico control de apriete conexiones y estanqueidad"
+  },
+  {
+   "taskCode": "DCH-EB-REF-BOC-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-19",
+   "proximo": "2032-01-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-REF1-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-EB-REF1-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-30",
+   "proximo": "2026-08-30",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – inspección visual de sello mecánico"
+  },
+  {
+   "taskCode": "DCH-EB-REF1-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – manchón – verificar estado y control de apriete de t"
+  },
+  {
+   "taskCode": "DCH-EB-REF1-33",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-REF1-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-REF1-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico control de apriete conexiones estanqueidad d"
+  },
+  {
+   "taskCode": "DCH-EB-REF1-36",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-REF2-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-EB-REF2-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-30",
+   "proximo": "2026-08-30",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – inspección visual de sello mecánico"
+  },
+  {
+   "taskCode": "DCH-EB-REF2-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – manchón – verificar estado y control de apriete de t"
+  },
+  {
+   "taskCode": "DCH-EB-REF2-33",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-REF2-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-REF2-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico control de apriete conexiones estanqueidad d"
+  },
+  {
+   "taskCode": "DCH-EB-REF2-36",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-SANID-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "27.01 – bomba – verificar funcionamiento y estado de manómet"
+  },
+  {
+   "taskCode": "DCH-EB-SANID-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-05-30",
+   "proximo": "2026-08-30",
+   "hoja": "BOMBAS",
+   "trabajo": "27.02 – pulmón – control de presión de trabajo"
+  },
+  {
+   "taskCode": "DCH-EB-SANID-32",
+   "tipo": "FECHA",
+   "ultimo": "2022-10-12",
+   "proximo": "2028-10-12",
+   "hoja": "BOMBAS",
+   "trabajo": "27.03 – bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-SANID-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-22",
+   "proximo": "2026-08-22",
+   "hoja": "BOMBAS",
+   "trabajo": "27.04 – motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-SANID-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-26",
+   "proximo": "2026-09-26",
+   "hoja": "BOMBAS",
+   "trabajo": "27.05 – motor eléctrico – control apriete conexiones estanqu"
+  },
+  {
+   "taskCode": "DCH-EB-SANID-35",
+   "tipo": "FECHA",
+   "ultimo": "2022-11-19",
+   "proximo": "2028-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "27.06 – motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – verificar funcionamiento."
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – empaquetadura– control de estado."
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Verificar filtro"
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – manchón – verificar estado y control de apriete de t"
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-34",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-14",
+   "proximo": "2031-06-14",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general."
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-35",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-22",
+   "proximo": "2026-08-22",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – tomar aislación."
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-10-25",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – control apriete conexiones estanqueidad de"
+  },
+  {
+   "taskCode": "DCH-EB-TRASV-37",
+   "tipo": "FECHA",
+   "ultimo": "2025-06-14",
+   "proximo": "2031-06-14",
+   "hoja": "BOMBAS",
+   "trabajo": "Motor eléctrico – recorrido general."
+  },
+  {
+   "taskCode": "DCH-ECO-BR-01",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-19",
+   "proximo": "2026-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Limpieza del Panel,revision de conectores Test de patrones p"
+  },
+  {
+   "taskCode": "DCH-ECO-ER-01",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-19",
+   "proximo": "2026-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Limpieza del Panel,revision de conectores Test de patrones p"
+  },
+  {
+   "taskCode": "DCH-ECO-REMOL-01",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-19",
+   "proximo": "2026-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Limpieza del Panel,revision de conectores Test de patrones p"
+  },
+  {
+   "taskCode": "DCH-EJE-BR-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2026-09-24",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Cojinete de soporte - engrasar."
+  },
+  {
+   "taskCode": "DCH-EJE-BR-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Empaquetadura de bocina – controlar estado y engrase de ser "
+  },
+  {
+   "taskCode": "DCH-EJE-BR-32",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Empaquetadura de bocina – cambiar."
+  },
+  {
+   "taskCode": "DCH-EJE-BR-33",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Bujes de tubo portahélice – recorrer o reemplazar."
+  },
+  {
+   "taskCode": "DCH-EJE-BR-34",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahélice – recorrer, cambiar camisas."
+  },
+  {
+   "taskCode": "DCH-EJE-BR-35",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahelice - desmonte del eje (es obligatorio desmonte "
+  },
+  {
+   "taskCode": "DCH-EJE-BR-36",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahelice - limpiar y controlar el eje en cuanto a det"
+  },
+  {
+   "taskCode": "DCH-EJE-BR-37",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahelice - tomar huelgos línea ejes. (en dique seco)."
+  },
+  {
+   "taskCode": "DCH-EJE-ER-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-24",
+   "proximo": "2026-09-24",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Cojinete de soporte - engrasar."
+  },
+  {
+   "taskCode": "DCH-EJE-ER-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Empaquetadura de bocina – controlar estado y engrase de ser "
+  },
+  {
+   "taskCode": "DCH-EJE-ER-32",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Empaquetadura de bocina – cambiar."
+  },
+  {
+   "taskCode": "DCH-EJE-ER-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Bujes de tubo portahélice – recorrer o reemplazar."
+  },
+  {
+   "taskCode": "DCH-EJE-ER-34",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahélice – recorrer, cambiar camisas."
+  },
+  {
+   "taskCode": "DCH-EJE-ER-35",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahelice - desmonte del eje (es obligatorio desmonte "
+  },
+  {
+   "taskCode": "DCH-EJE-ER-36",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahelice - limpiar y controlar el eje en cuanto a det"
+  },
+  {
+   "taskCode": "DCH-EJE-ER-37",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "Eje portahelice - tomar huelgos línea ejes. (en dique seco)."
+  },
+  {
+   "taskCode": "DCH-FILT-MAR-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-22",
+   "proximo": "2026-09-22",
+   "hoja": "TOMAS DE MAR",
+   "trabajo": "Limpiar"
+  },
+  {
+   "taskCode": "DCH-FILT-MAR-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-22",
+   "proximo": "2026-09-22",
+   "hoja": "TOMAS DE MAR",
+   "trabajo": "Control del estado de rejilla/canasto"
+  },
+  {
+   "taskCode": "DCH-FILT-MAR-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-22",
+   "proximo": "2026-09-22",
+   "hoja": "TOMAS DE MAR",
+   "trabajo": "Control de estanqueidad y prensa de vástago"
+  },
+  {
+   "taskCode": "DCH-FILT-MAR-32",
+   "tipo": "FECHA",
+   "ultimo": "2024-10-30",
+   "proximo": "2030-10-30",
+   "hoja": "TOMAS DE MAR",
+   "trabajo": "Recorrido general"
+  },
+  {
+   "taskCode": "DCH-GUINCHE-BR-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-30",
+   "proximo": "2026-09-30",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Mangueras y conexiones - inspección visual de ausencia de pé"
+  },
+  {
+   "taskCode": "DCH-GUINCHE-BR-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-30",
+   "proximo": "2026-09-30",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Engrase"
+  },
+  {
+   "taskCode": "DCH-GUINCHE-ER-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-30",
+   "proximo": "2026-09-30",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Mangueras y conexiones - inspección visual de ausencia de pé"
+  },
+  {
+   "taskCode": "DCH-GUINCHE-ER-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-30",
+   "proximo": "2026-09-30",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Engrase"
+  },
+  {
+   "taskCode": "DCH-HELICE-BR-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-04-09",
+   "proximo": "2032-04-09",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.01 - limpieza de la hélice."
+  },
+  {
+   "taskCode": "DCH-HELICE-BR-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-04-09",
+   "proximo": "2032-04-09",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.02 - controlar hélice en cuanto a daños mecánicos, cavita"
+  },
+  {
+   "taskCode": "DCH-HELICE-BR-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-04-09",
+   "proximo": "2032-04-09",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.03 - comprobar formación de fisuras en hélice  mediante p"
+  },
+  {
+   "taskCode": "DCH-HELICE-BR-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-04-09",
+   "proximo": "2032-04-09",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.04 - balancear hélice."
+  },
+  {
+   "taskCode": "DCH-HELICE-ER-30",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.01 - limpieza de la hélice."
+  },
+  {
+   "taskCode": "DCH-HELICE-ER-31",
+   "tipo": "FECHA",
+   "ultimo": "2025-10-30",
+   "proximo": "2031-10-30",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.02 - controlar hélice en cuanto a daños mecánicos, cavita"
+  },
+  {
+   "taskCode": "DCH-HELICE-ER-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-04-09",
+   "proximo": "2032-04-09",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.03 - comprobar formación de fisuras en hélice  mediante p"
+  },
+  {
+   "taskCode": "DCH-HELICE-ER-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-04-09",
+   "proximo": "2032-04-09",
+   "hoja": "LINEA DE EJE Y HELICE",
+   "trabajo": "20.04 - balancear hélice."
+  },
+  {
+   "taskCode": "DCH-HID-GOB-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Control nivel aceite Avance,Retroceso-EGA"
+  },
+  {
+   "taskCode": "DCH-HID-GOB-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-24",
+   "proximo": "2026-08-24",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Prueba de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-HID-GOB-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-29",
+   "proximo": "2026-09-29",
+   "hoja": "ENGRASE",
+   "trabajo": "Engrasar cañas y mechas registrar novedades"
+  },
+  {
+   "taskCode": "DCH-MA-BR-06",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-18",
+   "proximo": "2027-01-14",
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-MA-BR-08",
+   "tipo": "HORAS",
+   "ultimo": 38950,
+   "proximo": 40950,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Luz de valvulas y timing de inyectores - verificar luz 0,40y"
+  },
+  {
+   "taskCode": "DCH-MA-BR-11",
+   "tipo": "HORAS",
+   "ultimo": 37672,
+   "proximo": 58672,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Cambio por recorridos con elementos nuevos"
+  },
+  {
+   "taskCode": "DCH-MA-BR-2",
+   "tipo": "HORAS",
+   "ultimo": 40851,
+   "proximo": 41301,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Cambio de filtro y  aceite del carter"
+  },
+  {
+   "taskCode": "DCH-MA-BR-20",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-19",
+   "proximo": "2027-07-18",
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Reemplazo de bateria"
+  },
+  {
+   "taskCode": "DCH-MA-BR-30",
+   "tipo": "HORAS",
+   "ultimo": 40851,
+   "proximo": 41751,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Cambio o limpeza del filtro"
+  },
+  {
+   "taskCode": "DCH-MA-BR-31",
+   "tipo": "HORAS",
+   "ultimo": 38950,
+   "proximo": 40950,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Verificacion de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-MA-BR-32",
+   "tipo": "HORAS",
+   "ultimo": 37648,
+   "proximo": 40648,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Limpiar el enfriador de agua de mar"
+  },
+  {
+   "taskCode": "DCH-MA-BR-33",
+   "tipo": "HORAS",
+   "ultimo": 21500,
+   "proximo": 42500,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Recorrido,culata,piston,bielas, mediciones,cojinetes biela y"
+  },
+  {
+   "taskCode": "DCH-MA-BR-34",
+   "tipo": "HORAS",
+   "ultimo": 21500,
+   "proximo": 42500,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Damping - chequeo y cambio de damper antivibratorio de cigüe"
+  },
+  {
+   "taskCode": "DCH-MA-BR-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-11-26",
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Verificar el correcto funcionamiento mediante simulación de "
+  },
+  {
+   "taskCode": "DCH-MA-BR-4",
+   "tipo": "HORAS",
+   "ultimo": 40851,
+   "proximo": 41751,
+   "hoja": "MM.AA. Nº1 Bb",
+   "trabajo": "Cambio de filtros de gas-oil"
+  },
+  {
+   "taskCode": "DCH-MA-ER-01",
+   "tipo": "HORAS",
+   "ultimo": 38861,
+   "proximo": 39311,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Cambio de filtro y  aceite del carter"
+  },
+  {
+   "taskCode": "DCH-MA-ER-06",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-08",
+   "proximo": "2027-01-04",
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-MA-ER-08",
+   "tipo": "HORAS",
+   "ultimo": 37488,
+   "proximo": 39488,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Luz de valvulas y timing de inyectores - verificar luz 0,40y"
+  },
+  {
+   "taskCode": "DCH-MA-ER-11",
+   "tipo": "HORAS",
+   "ultimo": 37488,
+   "proximo": 58488,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Cambio por recorridos con elementos nuevos"
+  },
+  {
+   "taskCode": "DCH-MA-ER-20",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-19",
+   "proximo": "2027-07-18",
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Reemplazo de bateria"
+  },
+  {
+   "taskCode": "DCH-MA-ER-30",
+   "tipo": "HORAS",
+   "ultimo": 38452,
+   "proximo": 39352,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Cambio o limpeza del filtro"
+  },
+  {
+   "taskCode": "DCH-MA-ER-31",
+   "tipo": "HORAS",
+   "ultimo": 37488,
+   "proximo": 39488,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Verificacion de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-MA-ER-32",
+   "tipo": "HORAS",
+   "ultimo": 37488,
+   "proximo": 40488,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Limpiar el enfriador de agua de mar"
+  },
+  {
+   "taskCode": "DCH-MA-ER-33",
+   "tipo": "HORAS",
+   "ultimo": 37488,
+   "proximo": 58488,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Recorrido,culata,piston,bielas, mediciones,cojinetes biela y"
+  },
+  {
+   "taskCode": "DCH-MA-ER-34",
+   "tipo": "HORAS",
+   "ultimo": 37488,
+   "proximo": 58488,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Damping - chequeo y cambio de damper antivibratorio de cigüe"
+  },
+  {
+   "taskCode": "DCH-MA-ER-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-11-26",
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Verificar el correcto funcionamiento mediante simulación de "
+  },
+  {
+   "taskCode": "DCH-MA-ER-4",
+   "tipo": "HORAS",
+   "ultimo": 38861,
+   "proximo": 39761,
+   "hoja": "MM.AA. Nº2 Eb.",
+   "trabajo": "Cambio de filtros de gas-oil"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-01",
+   "tipo": "HORAS",
+   "ultimo": 21090,
+   "proximo": 21540,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Cambio de filtro y  aceite del carter"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-03",
+   "tipo": "HORAS",
+   "ultimo": 21090,
+   "proximo": 21990,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Cambio de filtros de gas-oil"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-06",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-26",
+   "proximo": "2026-12-23",
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-08",
+   "tipo": "HORAS",
+   "ultimo": 21090,
+   "proximo": 23090,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Luz de valvulas y timing de inyectores - verificar luz 0,40y"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-11",
+   "tipo": "HORAS",
+   "ultimo": 16880,
+   "proximo": 37880,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Cambio por recorridos con elementos nuevos"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-20",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-19",
+   "proximo": "2027-07-18",
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Reemplazo de bateria"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-30",
+   "tipo": "HORAS",
+   "ultimo": 21090,
+   "proximo": 23386,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Cambio o limpeza del filtro"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-31",
+   "tipo": "HORAS",
+   "ultimo": 21090,
+   "proximo": 23090,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Verificacion de funcionamiento"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-32",
+   "tipo": "HORAS",
+   "ultimo": 21090,
+   "proximo": 24090,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Limpiar el enfriador de agua de mar"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-33",
+   "tipo": "HORAS",
+   "ultimo": 16880,
+   "proximo": 37880,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Recorrido,culata,piston,bielas, mediciones,cojinetes biela y"
+  },
+  {
+   "taskCode": "DCH-MA-PTO-34",
+   "tipo": "HORAS",
+   "ultimo": 16880,
+   "proximo": 37880,
+   "hoja": "MM.AA. Nº3 Puerto",
+   "trabajo": "Damping - chequeo y cambio de damper antivibratorio de cigüe"
+  },
+  {
+   "taskCode": "DCH-MBBA-PORT-02",
+   "tipo": "FECHA",
+   "ultimo": "2025-11-10",
+   "proximo": "2026-11-10",
+   "hoja": "BOMBAS",
+   "trabajo": "Cambio de aceite, filtro de aire y combustible"
+  },
+  {
+   "taskCode": "DCH-MBBA-PORT-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-24",
+   "proximo": "2026-08-24",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Verificar funcionamiento"
+  },
+  {
+   "taskCode": "DCH-MBBA-PORT-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-25",
+   "proximo": "2026-08-25",
+   "hoja": "EQUIPOS CRITICOS",
+   "trabajo": "Control de niveles  y filtros motobomba"
+  },
+  {
+   "taskCode": "DCH-MBBA-PORT-32",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-19",
+   "proximo": "2030-11-19",
+   "hoja": "BOMBAS",
+   "trabajo": "Bomba – recorrido general. (eje, impulsor, voluta, sello mec"
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-04",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Aceite y filtro de aceite de motor – cambiar."
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-05",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Bateria de lancha- control"
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Prueba de funcionamiento."
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Filtro de combustible – limpieza"
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Tanque de combustible – inspección visual, limpieza."
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Bomba de agua – verificar funcionamiento (salida de agua por"
+  },
+  {
+   "taskCode": "DCH-MOTOR-LANCHA-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "MOTOR LANCHA DE TRABAJO",
+   "trabajo": "Bujias- inspeccion color / cambio (huelgo 0,8-0,9 mm)"
+  },
+  {
+   "taskCode": "DCH-MP-BR-01",
+   "tipo": "HORAS",
+   "ultimo": 39441,
+   "proximo": 42441,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Realizar el cambio del aceite, limpieza de carter y filtro c"
+  },
+  {
+   "taskCode": "DCH-MP-BR-07",
+   "tipo": "HORAS",
+   "ultimo": 39441,
+   "proximo": 40941,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Cambio de filtros de combustible"
+  },
+  {
+   "taskCode": "DCH-MP-BR-08",
+   "tipo": "HORAS",
+   "ultimo": 38697,
+   "proximo": 46697,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Inspeccion visual elementos culata"
+  },
+  {
+   "taskCode": "DCH-MP-BR-10",
+   "tipo": "HORAS",
+   "ultimo": 26000,
+   "proximo": 42000,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Efectuar cambio de inyectores por recorridos, chequear la no"
+  },
+  {
+   "taskCode": "DCH-MP-BR-16",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido culatas, camisas y pistones mediciones registrar n"
+  },
+  {
+   "taskCode": "DCH-MP-BR-18",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-26",
+   "proximo": "2026-12-23",
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-MP-BR-20",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-19",
+   "proximo": "2027-07-18",
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Reemplazo de baterias"
+  },
+  {
+   "taskCode": "DCH-MP-BR-24",
+   "tipo": "HORAS",
+   "ultimo": 21450,
+   "proximo": 45450,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido general, regist. Novedades"
+  },
+  {
+   "taskCode": "DCH-MP-BR-30",
+   "tipo": "HORAS",
+   "ultimo": 39441,
+   "proximo": 42441,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Cambio filtro y limpieza de canasto"
+  },
+  {
+   "taskCode": "DCH-MP-BR-31",
+   "tipo": "HORAS",
+   "ultimo": 39441,
+   "proximo": 42441,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Cambio filtros"
+  },
+  {
+   "taskCode": "DCH-MP-BR-32",
+   "tipo": "HORAS",
+   "ultimo": 37531,
+   "proximo": 40531,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Cambio de filtros aire y limpieza de porta filtro"
+  },
+  {
+   "taskCode": "DCH-MP-BR-33",
+   "tipo": "HORAS",
+   "ultimo": 40100,
+   "proximo": 40460,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Control de nivel de aceite de recipiente"
+  },
+  {
+   "taskCode": "DCH-MP-BR-34",
+   "tipo": "HORAS",
+   "ultimo": 39002,
+   "proximo": 43002,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Apriete de buloneria del colector"
+  },
+  {
+   "taskCode": "DCH-MP-BR-35",
+   "tipo": "HORAS",
+   "ultimo": 38954,
+   "proximo": 46954,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Verificar apriete de cabeza de biela estado de cojinete vez "
+  },
+  {
+   "taskCode": "DCH-MP-BR-36",
+   "tipo": "HORAS",
+   "ultimo": 38954,
+   "proximo": 46954,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Verificar apriete culatas"
+  },
+  {
+   "taskCode": "DCH-MP-BR-37",
+   "tipo": "HORAS",
+   "ultimo": 38954,
+   "proximo": 46954,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Verificar apriete de tuercas"
+  },
+  {
+   "taskCode": "DCH-MP-BR-38",
+   "tipo": "HORAS",
+   "ultimo": 38613,
+   "proximo": 46613,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido y limpieza de enfriadores de aire de  barrido"
+  },
+  {
+   "taskCode": "DCH-MP-BR-39",
+   "tipo": "HORAS",
+   "ultimo": 38570,
+   "proximo": 46570,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Apriete buloneria frente y basamento"
+  },
+  {
+   "taskCode": "DCH-MP-BR-40",
+   "tipo": "HORAS",
+   "ultimo": 21006,
+   "proximo": 53006,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Cambio de botadores hidraulicos"
+  },
+  {
+   "taskCode": "DCH-MP-BR-41",
+   "tipo": "HORAS",
+   "ultimo": 34749,
+   "proximo": 50749,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido de balancines"
+  },
+  {
+   "taskCode": "DCH-MP-BR-42",
+   "tipo": "HORAS",
+   "ultimo": 34749,
+   "proximo": 50749,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Inspeccion des sist de refrig. Pistones"
+  },
+  {
+   "taskCode": "DCH-MP-BR-43",
+   "tipo": "HORAS",
+   "ultimo": 34749,
+   "proximo": 59749,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido completo, regist.novedades"
+  },
+  {
+   "taskCode": "DCH-MP-BR-44",
+   "tipo": "HORAS",
+   "ultimo": 21450,
+   "proximo": 45450,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido del enfriador"
+  },
+  {
+   "taskCode": "DCH-MP-BR-45",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Cambio de coj de bancada, inf.y cab. De biela sup. E inf."
+  },
+  {
+   "taskCode": "DCH-MP-BR-46",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido general, regist. Novedades"
+  },
+  {
+   "taskCode": "DCH-MP-BR-47",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido general, regist. Novedades"
+  },
+  {
+   "taskCode": "DCH-MP-BR-48",
+   "tipo": "HORAS",
+   "ultimo": 15734,
+   "proximo": 40734,
+   "hoja": "MM.PP Bb.",
+   "trabajo": "Recorrido del burro neumatico registrar  novedades"
+  },
+  {
+   "taskCode": "DCH-MP-ER-01",
+   "tipo": "HORAS",
+   "ultimo": 39359,
+   "proximo": 42359,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Realizar el cambio del aceite, limpieza de carter y filtro c"
+  },
+  {
+   "taskCode": "DCH-MP-ER-07",
+   "tipo": "HORAS",
+   "ultimo": 39359,
+   "proximo": 40859,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Cambio de filtros de combustible"
+  },
+  {
+   "taskCode": "DCH-MP-ER-08",
+   "tipo": "HORAS",
+   "ultimo": 33130,
+   "proximo": 41130,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Inspeccion visual elementos culata"
+  },
+  {
+   "taskCode": "DCH-MP-ER-10",
+   "tipo": "HORAS",
+   "ultimo": 38500,
+   "proximo": 54500,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Efectuar cambio de inyectores por recorridos, chequear la no"
+  },
+  {
+   "taskCode": "DCH-MP-ER-16",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido culatas, camisas y pistones mediciones registrar n"
+  },
+  {
+   "taskCode": "DCH-MP-ER-18",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2026-12-22",
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Muestreo de aceites para analisis en Laboratorio"
+  },
+  {
+   "taskCode": "DCH-MP-ER-20",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-19",
+   "proximo": "2027-07-18",
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Reemplazo de baterias"
+  },
+  {
+   "taskCode": "DCH-MP-ER-24",
+   "tipo": "HORAS",
+   "ultimo": 21450,
+   "proximo": 45450,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido general, regist. Novedades"
+  },
+  {
+   "taskCode": "DCH-MP-ER-30",
+   "tipo": "HORAS",
+   "ultimo": 39359,
+   "proximo": 42359,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Cambio filtro y limpieza de canasto"
+  },
+  {
+   "taskCode": "DCH-MP-ER-31",
+   "tipo": "HORAS",
+   "ultimo": 39359,
+   "proximo": 42359,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Cambio filtros"
+  },
+  {
+   "taskCode": "DCH-MP-ER-32",
+   "tipo": "HORAS",
+   "ultimo": 39359,
+   "proximo": 42359,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Cambio de filtros aire y limpieza de porta filtro"
+  },
+  {
+   "taskCode": "DCH-MP-ER-33",
+   "tipo": "HORAS",
+   "ultimo": 40020,
+   "proximo": 40380,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Control de nivel de aceite de recipiente"
+  },
+  {
+   "taskCode": "DCH-MP-ER-34",
+   "tipo": "HORAS",
+   "ultimo": 38867,
+   "proximo": 42867,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Apriete de buloneria del colector"
+  },
+  {
+   "taskCode": "DCH-MP-ER-35",
+   "tipo": "HORAS",
+   "ultimo": 34670,
+   "proximo": 42670,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Verificar apriete de cabeza de biela estado de cojinete vez "
+  },
+  {
+   "taskCode": "DCH-MP-ER-36",
+   "tipo": "HORAS",
+   "ultimo": 34670,
+   "proximo": 42670,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Verificar apriete culatas"
+  },
+  {
+   "taskCode": "DCH-MP-ER-37",
+   "tipo": "HORAS",
+   "ultimo": 38867,
+   "proximo": 46867,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Verificar apriete de tuercas"
+  },
+  {
+   "taskCode": "DCH-MP-ER-38",
+   "tipo": "HORAS",
+   "ultimo": 38867,
+   "proximo": 46867,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido y limpieza de enfriadores de aire de  barrido"
+  },
+  {
+   "taskCode": "DCH-MP-ER-39",
+   "tipo": "HORAS",
+   "ultimo": 38867,
+   "proximo": 46867,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Apriete buloneria frente y basamento"
+  },
+  {
+   "taskCode": "DCH-MP-ER-40",
+   "tipo": "HORAS",
+   "ultimo": 21006,
+   "proximo": 53006,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Cambio de botadores hidraulicos"
+  },
+  {
+   "taskCode": "DCH-MP-ER-41",
+   "tipo": "HORAS",
+   "ultimo": 34670,
+   "proximo": 50670,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido de balancines"
+  },
+  {
+   "taskCode": "DCH-MP-ER-42",
+   "tipo": "HORAS",
+   "ultimo": 34670,
+   "proximo": 50670,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Inspeccion des sist de refrig. Pistones"
+  },
+  {
+   "taskCode": "DCH-MP-ER-43",
+   "tipo": "HORAS",
+   "ultimo": 34670,
+   "proximo": 59670,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido completo, regist.novedades"
+  },
+  {
+   "taskCode": "DCH-MP-ER-44",
+   "tipo": "HORAS",
+   "ultimo": 21450,
+   "proximo": 45450,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido del enfriador"
+  },
+  {
+   "taskCode": "DCH-MP-ER-45",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Cambio de coj de bancada, inf.y cab. De biela sup. E inf."
+  },
+  {
+   "taskCode": "DCH-MP-ER-46",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido general, regist. Novedades"
+  },
+  {
+   "taskCode": "DCH-MP-ER-47",
+   "tipo": "HORAS",
+   "ultimo": 0,
+   "proximo": 40000,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido general, regist. Novedades"
+  },
+  {
+   "taskCode": "DCH-MP-ER-48",
+   "tipo": "HORAS",
+   "ultimo": 15734,
+   "proximo": 40734,
+   "hoja": "MM.PP Eb.",
+   "trabajo": "Recorrido del burro neumatico registrar  novedades"
+  },
+  {
+   "taskCode": "DCH-PLUMA-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-30",
+   "proximo": "2026-09-30",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Mangueras y conexiones - inspección visual de ausencia de pé"
+  },
+  {
+   "taskCode": "DCH-PLUMA-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-30",
+   "proximo": "2026-09-30",
+   "hoja": " CTRAL HIDRAULICA guinche-pluma",
+   "trabajo": "Engrase"
+  },
+  {
+   "taskCode": "DCH-RADAR-BR-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-02-26",
+   "proximo": "2026-08-26",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Verificacion de conexiones, limpieza interior de procesador "
+  },
+  {
+   "taskCode": "DCH-RADAR-ER-01",
+   "tipo": "FECHA",
+   "ultimo": "2026-02-26",
+   "proximo": "2026-08-26",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Verificacion de conexiones, limpieza interior de procesador "
+  },
+  {
+   "taskCode": "DCH-TERMOTQ-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-31",
+   "proximo": "2026-09-30",
+   "hoja": "TERMOTANQUES",
+   "trabajo": "Inspeccion visual"
+  },
+  {
+   "taskCode": "DCH-TERMOTQ-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-31",
+   "proximo": "2026-09-30",
+   "hoja": "TERMOTANQUES",
+   "trabajo": "Extraccion de fondo"
+  },
+  {
+   "taskCode": "DCH-TERMOTQ-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "TERMOTANQUES",
+   "trabajo": "Toma de aislación"
+  },
+  {
+   "taskCode": "DCH-TERMOTQ-33",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-22",
+   "proximo": "2026-09-22",
+   "hoja": "TERMOTANQUES",
+   "trabajo": "Control y/o cambio de anodo."
+  },
+  {
+   "taskCode": "DCH-TERMOTQ-34",
+   "tipo": "FECHA",
+   "ultimo": "2025-09-22",
+   "proximo": "2026-09-22",
+   "hoja": "TERMOTANQUES",
+   "trabajo": "Control y/o cambio de termostato de corte"
+  },
+  {
+   "taskCode": "DCH-TIM-AV-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Mecanismos – Engrase."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "BOMBA-Flexibles Hidráulicos,Conexiones  y sello – Verificar "
+  },
+  {
+   "taskCode": "DCH-TIM-AV-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Empaquetadura de Limera – Controlar estado."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2026-09-27",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Angulo de Pala – Verificar sincronismo entre Axiómetros de P"
+  },
+  {
+   "taskCode": "DCH-TIM-AV-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-21",
+   "proximo": "2027-01-21",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Tanque-Filtro de Aceite y aceite -Cambiar."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Tablero de PEM – Verificar conexiones y funcionamiento de lu"
+  },
+  {
+   "taskCode": "DCH-TIM-AV-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-27",
+   "proximo": "2027-02-27",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Empaquetadura de Limera – Controlar"
+  },
+  {
+   "taskCode": "DCH-TIM-AV-37",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Motores Eléctricos – Tomar Aislación."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-38",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-03",
+   "proximo": "2026-10-03",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Motores Eléctricos – Control de apriete conexiones y estanqu"
+  },
+  {
+   "taskCode": "DCH-TIM-AV-39",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Motores Eléctricos – Recorrido general."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-40",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Tanque Centralina – Limpiar."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-41",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Pala de Timón – Recorrido general, prueba de estanqueidad."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-42",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Empaquetadura de Limera – Cambiar."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-43",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Mecha – Recorrido general."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-44",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Bujes de Mecha y Tintero – Cambiar."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-45",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Bombas – Recorrido general."
+  },
+  {
+   "taskCode": "DCH-TIM-AV-46",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Válvula 3 Vías – Recorrido General."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-30",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Mecanismos – Engrase."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-31",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "BOMBA-Flexibles Hidráulicos,Conexiones  y sello – Verificar "
+  },
+  {
+   "taskCode": "DCH-TIM-RE-32",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Empaquetadura de Limera – Controlar estado."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-33",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Angulo de Pala – Verificar sincronismo entre Axiómetros de P"
+  },
+  {
+   "taskCode": "DCH-TIM-RE-34",
+   "tipo": "FECHA",
+   "ultimo": "2026-01-21",
+   "proximo": "2027-01-21",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Tanque-Filtro de Aceite y aceite -Cambiar."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-35",
+   "tipo": "FECHA",
+   "ultimo": "2026-08-28",
+   "proximo": "2026-09-28",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Tablero de PEM – Verificar conexiones y funcionamiento de lu"
+  },
+  {
+   "taskCode": "DCH-TIM-RE-36",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-15",
+   "proximo": "2027-01-15",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Empaquetadura de Limera – Controlar"
+  },
+  {
+   "taskCode": "DCH-TIM-RE-37",
+   "tipo": "FECHA",
+   "ultimo": "2026-06-25",
+   "proximo": "2027-06-25",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Motores Eléctricos – Tomar Aislación."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-38",
+   "tipo": "FECHA",
+   "ultimo": "2026-07-15",
+   "proximo": "2026-10-15",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Motores Eléctricos – Control de apriete conexiones y estanqu"
+  },
+  {
+   "taskCode": "DCH-TIM-RE-39",
+   "tipo": "FECHA",
+   "ultimo": "2024-09-30",
+   "proximo": "2030-09-30",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Motores Eléctricos – Recorrido general."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-40",
+   "tipo": "FECHA",
+   "ultimo": "2024-01-01",
+   "proximo": "2030-01-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Tanque Centralina – Limpiar."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-41",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Pala de Timón – Recorrido general, prueba de estanqueidad."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-42",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Empaquetadura de Limera – Cambiar."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-43",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Mecha – Recorrido general."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-44",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Bujes de Mecha y Tintero – Cambiar."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-45",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Bombas – Recorrido general."
+  },
+  {
+   "taskCode": "DCH-TIM-RE-46",
+   "tipo": "FECHA",
+   "ultimo": "2024-11-01",
+   "proximo": "2030-11-01",
+   "hoja": "SIST DE GOBIERNO ",
+   "trabajo": "Válvula 3 Vías – Recorrido General."
+  },
+  {
+   "taskCode": "DCH-VHF-BR-01",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-19",
+   "proximo": "2026-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Prueba de Transmision y Recepcion  Verificar estado del Disp"
+  },
+  {
+   "taskCode": "DCH-VHF-ER-01",
+   "tipo": "FECHA",
+   "ultimo": "2025-08-19",
+   "proximo": "2026-08-19",
+   "hoja": "EQ NAVEGACION",
+   "trabajo": "Prueba de Transmision y Recepcion  Verificar estado del Disp"
+  }
+ ]
+}
