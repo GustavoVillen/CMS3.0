@@ -260,7 +260,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                       ))}
                       <td
                         colSpan={columns.length - labelColIndex}
-                        className={`${labelColIndex > 0 ? "px-4" : "px-3"} ${quietHeader ? "pt-5 pb-1" : "py-1.5"}`}
+                        className={`px-4 ${quietHeader ? "pt-5 pb-1" : "py-1.5"}`}
                       >
                         <button
                           type="button"
