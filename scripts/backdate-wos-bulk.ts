@@ -93,7 +93,11 @@ async function main() {
     );
     workLogs += Number(
       await prisma.$executeRawUnsafe(
-        `UPDATE "WorkLog" SET "createdAt" = $1, "performedAt" = $1 WHERE "workOrderId" = $2`,
+        // WorkLog fecha el trabajo con startedAt/completedAt (no existe performedAt).
+        `UPDATE "WorkLog"
+         SET "createdAt" = $1::timestamptz, "startedAt" = $1::timestamptz,
+             "completedAt" = CASE WHEN "completedAt" IS NULL THEN NULL ELSE $1::timestamptz END
+         WHERE "workOrderId" = $2`,
         target,
         e.woId,
       ),
