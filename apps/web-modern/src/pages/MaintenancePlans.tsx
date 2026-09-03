@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
+  Ban,
   CalendarRange,
   CheckCircle2,
   ChevronsDownUp,
@@ -202,13 +203,41 @@ const STATUS_URGENCY: Record<string, number> = {
   IN_WINDOW: 3,
   UPCOMING: 4,
   FUTURE: 5,
+  // Va último: sobre una máquina parada no hay nada que ejecutar, así que no
+  // compite por atención con lo que sí está vencido y en uso.
+  OUT_OF_SERVICE: 6,
 };
 
-function StatusBadgeInline({ plan, onOpenWo }: { plan: MaintenancePlan; onOpenWo?: (code: string) => void }) {
+/**
+ * Situación que se MUESTRA en la lista.
+ *
+ * Un plan sobre un equipo fuera de servicio sigue venciendo, pero mostrarlo como
+ * "VENCIDA" lo hace leer como un incumplimiento cuando en realidad la máquina
+ * está parada. `computeStatus` NO se toca: tiene que seguir coincidiendo con
+ * deriveDashboardStatus del backend para que el donut del Dashboard y esta lista
+ * cuenten lo mismo. La distinción es sólo de presentación y de orden.
+ */
+function displayStatus(plan: MaintenancePlan, assetOutOfService: boolean): string {
+  return assetOutOfService ? "OUT_OF_SERVICE" : computeStatus(plan);
+}
+
+function StatusBadgeInline(
+  { plan, onOpenWo, assetOutOfService = false }:
+  { plan: MaintenancePlan; onOpenWo?: (code: string) => void; assetOutOfService?: boolean },
+) {
   const t = useT();
-  const es = computeStatus(plan);
+  const es = displayStatus(plan, assetOutOfService);
 
   const pill = (() => {
+    if (es === "OUT_OF_SERVICE")
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 whitespace-nowrap"
+          title={t("mp.statusBadge.outOfServiceHint")}
+        >
+          <Ban className="w-2.5 h-2.5" /> {t("mp.statusBadge.outOfService")}
+        </span>
+      );
     if (es === "OVERDUE")
       return (
         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 whitespace-nowrap">
@@ -3290,10 +3319,17 @@ export const MaintenancePlansPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<MaintenancePlan | null>(null);
 
   // Reutilizables por la tabla normal y la planilla Excel (evita duplicar lógica).
-  const statusValue = useCallback((row: MaintenancePlan) => computeStatus(row), []);
+  const statusValue = useCallback(
+    (row: MaintenancePlan) => displayStatus(row, oosAssetIds.has(row.assetId)),
+    [oosAssetIds],
+  );
   const renderStatus = useCallback((row: MaintenancePlan) => (
-    <StatusBadgeInline plan={row} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />
-  ), [navigate]);
+    <StatusBadgeInline
+      plan={row}
+      assetOutOfService={oosAssetIds.has(row.assetId)}
+      onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)}
+    />
+  ), [navigate, oosAssetIds]);
 
   /**
    * UNA SOLA OT PARA VARIOS ÍTEMS DEL PDM. Una parada de astillero cubre varios
@@ -3578,7 +3614,7 @@ export const MaintenancePlansPage: React.FC = () => {
       key: "situacion",
       header: t("mp.col.status"),
       width: "120px",
-      sortValue: row => STATUS_URGENCY[computeStatus(row)] ?? 99,
+      sortValue: row => STATUS_URGENCY[displayStatus(row, oosAssetIds.has(row.assetId))] ?? 99,
       render: row => renderStatus(row),
     },
     // ── Col 8: ACCIONES ─────────────────────────────────────────────────────

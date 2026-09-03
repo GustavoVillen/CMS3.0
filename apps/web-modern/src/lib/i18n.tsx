@@ -2105,6 +2105,14 @@ const dict = {
   "mp.statusBadge.neverExecuted":{ es: "SIN EJECUTAR",         en: "NOT EXECUTED",          pt: "SEM EXECUTAR" },
   "mp.statusBadge.upcoming":   { es: "PRÓXIMO",                en: "UPCOMING",              pt: "PRÓXIMO" },
   "mp.statusBadge.valid":      { es: "VÁLIDO",                 en: "VALID",                 pt: "VÁLIDO" },
+  // Equipo fuera de servicio: el plan sigue venciendo, pero mostrarlo como
+  // VENCIDA lo hace leer como incumplimiento cuando la máquina está parada.
+  "mp.statusBadge.outOfService": { es: "FUERA DE SERVICIO",     en: "OUT OF SERVICE",        pt: "FORA DE SERVIÇO" },
+  "mp.statusBadge.outOfServiceHint": {
+    es: "El equipo está fuera de servicio: la tarea no se puede ejecutar hasta que vuelva a estar operativo.",
+    en: "The equipment is out of service: the task cannot be carried out until it is operational again.",
+    pt: "O equipamento está fora de serviço: a tarefa não pode ser executada até voltar a operar.",
+  },
   "mp.sfiTab.all":             { es: "TODOS",                  en: "ALL",                   pt: "TODOS" },
 
   // Dashboard — chart titles and subtitles
