@@ -15,6 +15,9 @@
  *   - NUNCA retrocede. Si el sistema tiene una fecha (u hora) más nueva que la
  *     planilla —porque se cerró una OT después del 31/08— se deja como está y se
  *     lista aparte. La planilla es de papel; una OT cerrada es evidencia.
+ *     FORZAR=1 invierte esta regla: manda la planilla. Se usa cuando el pedido es
+ *     que el sistema quede idéntico al papel, sabiendo que eso pisa fechas
+ *     respaldadas por OT cerradas.
  *   - No mezcla unidades: un plan que vence por horas sólo se toca con horas, y
  *     uno que vence por fecha sólo con fechas. Lo que no coincide se reporta.
  *
@@ -23,7 +26,8 @@
  *
  * Uso:
  *   pnpm exec tsx --env-file .env scripts/sync-dch-agosto-2026.ts
- *   DRY=1 ...   lista todo lo que cambiaría, sin escribir
+ *   DRY=1 ...     lista todo lo que cambiaría, sin escribir
+ *   FORZAR=1 ...  la planilla manda aunque el sistema tenga algo más nuevo
  */
 import { PrismaClient } from "../generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -37,6 +41,11 @@ const prisma = new PrismaClient({
 const SLUG = process.env.TENANT_SLUG ?? "mercurio";
 const VESSEL = "DCH";
 const DRY = process.env.DRY === "1";
+/**
+ * FORZAR=1 — la planilla manda aunque el sistema tenga algo más nuevo.
+ * Sin el flag rige la regla por defecto (nunca retroceder).
+ */
+const FORZAR = process.env.FORZAR === "1";
 const FUENTE = "scripts/data/dch-agosto-2026-estado.json";
 const CIERRE = new Date("2026-08-31T00:00:00.000Z"); // fecha de cierre de la planilla
 
@@ -51,6 +60,33 @@ type Entrada = {
 
 const d = (s: string | null) => (s ? new Date(`${s}T00:00:00.000Z`) : null);
 const iso = (v: Date | null) => (v ? String(v.toISOString()).slice(0, 10) : "-");
+
+/** Texto comparable: sin acentos, sin puntuación y en minúsculas. */
+const norm = (s: string) =>
+  String(s ?? "")
+    .normalize("NFD").replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim().toLowerCase();
+
+/**
+ * Un mismo taskCode puede tener DOS planes vivos: la carga del 04/08 duplicó
+ * los equipos de DCH y volvió a numerar desde cero sobre el equipo gemelo, así
+ * que el código se repite entre tareas que no son la misma (p. ej. DCH-ALT-BR-02
+ * es "Rotor y estator – limpiar" en la planilla y "Limpieza de estator y rotor"
+ * en el gemelo, con otra frecuencia). Escribirle a cualquiera de los dos era una
+ * moneda al aire: se elige por el TEXTO de la tarea y, si no se puede decidir,
+ * se reporta y no se toca.
+ */
+function elegirPlan(cands: any[], trabajo: string): { plan: any | null; motivo?: string } {
+  if (cands.length === 1) return { plan: cands[0] };
+  const t = norm(trabajo);
+  const hit = cands.filter((c) => {
+    const titulo = norm(c.title);
+    return titulo.includes(t) || t.includes(titulo);
+  });
+  if (hit.length === 1) return { plan: hit[0] };
+  return { plan: null, motivo: hit.length === 0 ? "ningún título coincide" : "coinciden varios títulos" };
+}
 
 async function main() {
   const tenant = await prisma.tenant.findUnique({ where: { slug: SLUG }, select: { id: true } });
@@ -78,17 +114,24 @@ async function main() {
       lastExecutionHours: true, nextDueHours: true,
     },
   });
-  const byCode = new Map<string, any>(plans.map((p: any) => [p.taskCode, p]));
+  const byCode = new Map<string, any[]>();
+  for (const p of plans as any[]) {
+    const arr = byCode.get(p.taskCode);
+    if (arr) arr.push(p); else byCode.set(p.taskCode, [p]);
+  }
 
   const cambios: any[] = [];
   const adelantados: any[] = [];
   const desajustes: any[] = [];
+  const ambiguos: any[] = [];
   const ausentes: string[] = [];
   let iguales = 0;
 
   for (const e of doc.planes) {
-    const p = byCode.get(e.taskCode);
-    if (!p) { ausentes.push(e.taskCode); continue; }
+    const cands = byCode.get(e.taskCode);
+    if (!cands?.length) { ausentes.push(e.taskCode); continue; }
+    const { plan: p, motivo } = elegirPlan(cands, e.trabajo);
+    if (!p) { ambiguos.push({ e, cands, motivo }); continue; }
 
     if (e.tipo === "HORAS") {
       if (p.triggerType !== "HOURS") { desajustes.push({ e, p, por: "el plan vence por fecha" }); continue; }
@@ -97,7 +140,7 @@ async function main() {
       const bruto = Number(e.ultimo);
       const ult = bruto === 0 ? null : bruto;
       const pro = Number(e.proximo);
-      if (ult != null && p.lastExecutionHours != null && p.lastExecutionHours > ult) {
+      if (!FORZAR && ult != null && p.lastExecutionHours != null && p.lastExecutionHours > ult) {
         adelantados.push({ e, p, sis: `${p.lastExecutionHours} hs`, pla: `${ult} hs` });
         continue;
       }
@@ -114,7 +157,7 @@ async function main() {
       const ult = d(e.ultimo as string), pro = d(e.proximo as string)!;
       // Se compara por día, no por instante: hay fechas guardadas con hora
       // (12:00) que si no serían "más nuevas" que el mismo día a medianoche.
-      if (p.lastExecutionDate && ult && iso(p.lastExecutionDate) > iso(ult)) {
+      if (!FORZAR && p.lastExecutionDate && ult && iso(p.lastExecutionDate) > iso(ult)) {
         adelantados.push({ e, p, sis: iso(p.lastExecutionDate), pla: iso(ult) });
         continue;
       }
@@ -143,7 +186,7 @@ async function main() {
       orderBy: { readingDate: "desc" },
       select: { readingDate: true, runningHours: true },
     });
-    if (previa && previa.runningHours > hs) {
+    if (!FORZAR && previa && previa.runningHours > hs) {
       adelantados.push({ e: { taskCode: `horómetro ${a.assetCode}`, hoja: "horas", trabajo: a.name },
         p: {}, sis: `${previa.runningHours} hs (${iso(previa.readingDate)})`, pla: `${hs} hs` });
       continue;
@@ -153,18 +196,28 @@ async function main() {
   }
 
   console.log("── DON CHICUETO · estado según la planilla de agosto 2026 ──");
-  console.log(`Fuente: ${doc.fuente}\n`);
+  console.log(`Fuente: ${doc.fuente}`);
+  console.log(FORZAR ? "Modo: FORZADO — manda la planilla\n" : "Modo: normal — nunca retrocede\n");
   console.log(`Renglones en el archivo: ${doc.planes.length}`);
   console.log(`  ya coincidían:        ${iguales}`);
   console.log(`  se actualizan:        ${cambios.length}`);
-  console.log(`  sistema más nuevo:    ${adelantados.length}  (no se tocan)`);
+  if (!FORZAR) console.log(`  sistema más nuevo:    ${adelantados.length}  (no se tocan)`);
   console.log(`  unidad que no encaja: ${desajustes.length}`);
+  console.log(`  no se pudo decidir:   ${ambiguos.length}`);
   console.log(`  plan inexistente:     ${ausentes.length}`);
   console.log(`Lecturas de horómetro a cargar: ${lecturas.length}\n`);
 
   if (adelantados.length) {
     console.log("── El sistema tiene algo MÁS NUEVO que la planilla (se respeta) ──");
     for (const a of adelantados) console.log(`  ${a.e.taskCode.padEnd(20)}${String(a.e.trabajo).slice(0, 44).padEnd(46)}sistema ${a.sis}  ·  planilla ${a.pla}`);
+    console.log();
+  }
+  if (ambiguos.length) {
+    console.log("── Código repetido y no se pudo decidir a cuál escribirle (se saltean) ──");
+    for (const x of ambiguos) {
+      console.log(`  ${x.e.taskCode.padEnd(20)}planilla: ${String(x.e.trabajo).slice(0, 52)}   [${x.motivo}]`);
+      for (const c of x.cands) console.log(`  ${"".padEnd(20)}  candidato: ${String(c.title).slice(0, 62)}`);
+    }
     console.log();
   }
   if (desajustes.length) {
