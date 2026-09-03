@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# Salida de un build manual de preview. Es codigo compilado, no fuente: no va al
+# repo. Ademas, versionarlo rompe el `git pull` del VPS, donde ese directorio ya
+# existe sin trackear.
+dist-preview
 *.local
 
 # Editor directories and files
