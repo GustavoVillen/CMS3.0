@@ -181,12 +181,6 @@ function nextDueSort(plan: MaintenancePlan): number {
   return Number.POSITIVE_INFINITY;
 }
 
-function lastExecutionSort(plan: MaintenancePlan): number {
-  if (plan.lastExecutionDate) return parseLocalDate(plan.lastExecutionDate).getTime();
-  if (plan.lastExecutionHours != null) return HOURS_BUCKET + plan.lastExecutionHours;
-  return Number.POSITIVE_INFINITY;
-}
-
 function frequencySort(plan: MaintenancePlan): number {
   if (plan.frequencyMonths != null) return plan.frequencyMonths;
   if (plan.frequencyHours != null) return HOURS_BUCKET + plan.frequencyHours;
@@ -222,13 +216,18 @@ function displayStatus(plan: MaintenancePlan, assetOutOfService: boolean): strin
 }
 
 function StatusBadgeInline(
-  { plan, onOpenWo, assetOutOfService = false }:
-  { plan: MaintenancePlan; onOpenWo?: (code: string) => void; assetOutOfService?: boolean },
+  { plan, onOpenWo, assetOutOfService = false, hideWhenValid = false }:
+  { plan: MaintenancePlan; onOpenWo?: (code: string) => void; assetOutOfService?: boolean; hideWhenValid?: boolean },
 ) {
   const t = useT();
   const es = displayStatus(plan, assetOutOfService);
 
   const pill = (() => {
+    // En la lista, lo que está al día no lleva cartel: si una fila no dice nada,
+    // es porque no necesita nada. Marcar 111 tareas como "válidas" gasta la
+    // atención que tienen que llevarse las 7 vencidas. En la ficha del plan sí
+    // se muestra, porque ahí el estado es la información principal.
+    if (hideWhenValid && (es === "FUTURE" || es === "COMPLETED")) return null;
     if (es === "OUT_OF_SERVICE")
       return (
         <span
@@ -2831,9 +2830,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         *      después puede volver a guardar el plan */}
       {showMocPrompt && !isNew && plan !== null && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-yellow-500/40 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-orange-500/40 rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2">
-              <GitBranch className="w-5 h-5 text-yellow-700 dark:text-yellow-300" />
+              <GitBranch className="w-5 h-5 text-orange-700 dark:text-orange-300" />
               <h2 className="text-sm font-bold text-fg">¿Gestionar MOC para este cambio?</h2>
             </div>
             <p className="text-sm text-text-industrial leading-relaxed">
@@ -2846,7 +2845,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               un <strong>MOC (PROCEDURE_CHANGE)</strong> formal — con análisis de riesgo, aprobación
               de Gerencia Técnica y revisión post-implementación.
             </p>
-            <div className="rounded-lg bg-yellow-500/[0.08] border border-yellow-500/30 px-3 py-2 text-[11px] text-yellow-200/90 leading-relaxed">
+            {/* El texto tenía un solo tono (yellow-200), pensado para el fondo
+                oscuro: sobre el claro quedaba casi invisible. Ahora el color se
+                declara para los dos temas. */}
+            <div className="rounded-lg bg-orange-500/[0.08] border border-orange-500/30 px-3 py-2 text-[11px] text-orange-800 dark:text-orange-200/90 leading-relaxed">
               <strong>Recomendado</strong>: abrir el MOC primero, esperar la aprobación,
               y después guardar el cambio al plan. Así la trazabilidad queda limpia para auditoría.
             </div>
@@ -3146,6 +3148,15 @@ export const MaintenancePlansPage: React.FC = () => {
     [oosAssetsData],
   );
   const baseItems = useMemo(() => rawData?.items ?? [], [rawData]);
+  // Con un solo buque en la lista, repetir su nombre en las 193 filas no informa
+  // nada: ya está elegido en el selector de arriba. La columna se saca sola y el
+  // código de tarea y el SFI se mudan debajo del nombre de la tarea. Sale de los
+  // datos y no del filtro, así vale igual si la lista quedó con un solo buque
+  // por cualquier otro camino.
+  const singleVessel = useMemo(() => {
+    const codes = new Set(baseItems.map(p => p.vesselCode));
+    return codes.size === 1;
+  }, [baseItems]);
   // Reuse VesselContext (already loaded for the header selector) to avoid a duplicate /app/vessels fetch.
   const { vessels, selectedVesselCode, selectedVessel } = useVesselContext();
   const vesselNameMap = useMemo(() => new Map(vessels.map(v => [v.code, v.name])), [vessels]);
@@ -3332,6 +3343,7 @@ export const MaintenancePlansPage: React.FC = () => {
     <StatusBadgeInline
       plan={row}
       assetOutOfService={oosAssetIds.has(row.assetId)}
+      hideWhenValid
       onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)}
     />
   ), [navigate, oosAssetIds]);
@@ -3402,6 +3414,18 @@ export const MaintenancePlansPage: React.FC = () => {
     if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
     const needsWO = row.triggerResultMode === "AUTO_WO" || row.triggerResultMode === "APPROVAL_WO";
     const hasActiveWo = !!row.activeWorkOrderCode && row.executionStatus === "IN_WINDOW";
+    // El botón sigue estando en todas las filas —siempre se puede adelantar una
+    // tarea—, pero sólo se pinta con el color de acción donde efectivamente hay
+    // algo que hacer. Con 193 botones idénticos, ninguno destaca; apagando los
+    // que están al día, los que quedan encendidos señalan solos.
+    const st = displayStatus(row, oosAssetIds.has(row.assetId));
+    const quiet = st === "FUTURE" || st === "UPCOMING" || st === "OUT_OF_SERVICE";
+    const btn = quiet
+      ? "border-border bg-transparent text-text-industrial/60 hover:text-fg hover:border-fg/30"
+      : "border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 hover:border-accent/50";
+    const btnOk = quiet
+      ? "border-border bg-transparent text-text-industrial/60 hover:text-fg hover:border-fg/30"
+      : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50";
     // "Solo Alerta" → OT Express en vez de Reportar, igual que en el detalle.
     if (row.triggerResultMode === "DUE_ONLY") {
       const busy = expressRowId === row.id;
@@ -3412,7 +3436,7 @@ export const MaintenancePlansPage: React.FC = () => {
           onClick={e => { e.stopPropagation(); void openExpressFromRow(row); }}
           disabled={busy}
           title={tercerizado ? t("mp.express.providerHint") : t("mp.express.hint")}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 disabled:opacity-50 transition-all whitespace-nowrap"
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold disabled:opacity-50 transition-all whitespace-nowrap ${btn}`}
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
           {tercerizado
@@ -3425,7 +3449,7 @@ export const MaintenancePlansPage: React.FC = () => {
       !hasActiveWo ? (
         <button
           onClick={e => { e.stopPropagation(); void openWoForPlan(row); }}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[11px] font-bold hover:bg-accent/20 hover:border-accent/50 transition-all whitespace-nowrap"
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all whitespace-nowrap ${btn}`}
         >
           <Zap className="w-3 h-3" /> {t("mp.col.executeWO")}
         </button>
@@ -3433,12 +3457,12 @@ export const MaintenancePlansPage: React.FC = () => {
     ) : (
       <button
         onClick={e => { e.stopPropagation(); setReporting(row); }}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all whitespace-nowrap"
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all whitespace-nowrap ${btnOk}`}
       >
         <CheckCircle2 className="w-3 h-3" /> {t("mp.col.report")}
       </button>
     );
-  }, [t, woTerms, expressRowId, openExpressFromRow, openWoForPlan]);
+  }, [t, woTerms, expressRowId, openExpressFromRow, openWoForPlan, oosAssetIds]);
 
   const columns: Column<MaintenancePlan>[] = useMemo(() => [
     // ── Col 0: marcar para juntar en UNA sola OT (parada de astillero) ──────
@@ -3464,27 +3488,18 @@ export const MaintenancePlansPage: React.FC = () => {
         );
       },
     },
-    // ── Col 1: EMBARCACIÓN / TASKID / SFI ──────────────────────────────────
-    {
+    // ── Col 1: EMBARCACIÓN — sólo si hay más de un buque en la lista ───────
+    ...(!singleVessel ? [{
       key: "vesselCode",
-      header: t("mp.col.vesselTaskSfi"),
-      width: "180px",
+      header: t("mp.col.vessel"),
+      width: "110px",
       sortValue: row => `${row.vesselCode} ${row.taskCode}`,
       render: row => (
-        <div className="flex flex-col gap-0.5 min-w-[130px]">
-          <span className="text-[11px] font-bold text-accent leading-tight">{vesselNameMap.get(row.vesselCode) ?? row.vesselCode}</span>
-          <span className="text-[11px] font-bold text-fg font-mono leading-tight">{row.taskCode}</span>
-          {row.sfiGroupNumber != null && (
-            <span className="text-[10px] text-text-industrial/50 font-mono leading-tight">
-              SFI: G{row.sfiGroupNumber}
-              {row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL" ? (
-                <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-500/20 text-red-700 dark:text-red-400 text-[8px] font-bold border border-red-500/30">!</span>
-              ) : null}
-            </span>
-          )}
-        </div>
+        <span className="text-[11px] font-bold text-accent leading-tight whitespace-nowrap">
+          {vesselNameMap.get(row.vesselCode) ?? row.vesselCode}
+        </span>
       ),
-    },
+    }] : []),
     // ── Col 2: EQUIPO / TAREA ───────────────────────────────────────────────
     {
       key: "title",
@@ -3532,27 +3547,40 @@ export const MaintenancePlansPage: React.FC = () => {
             <FlaskConical className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
           </span>
         );
+        // Identificación de la tarea (código + grupo SFI + aviso de riesgo alto).
+        // Vive acá desde que se sacó la columna de embarcación: es un dato de
+        // referencia, no de lectura, así que va en gris chico debajo del título
+        // y no compitiendo con él en su propia columna.
+        const idLine = (
+          <span className="flex items-center gap-1.5 text-[10px] font-mono text-text-industrial/45 leading-tight whitespace-nowrap">
+            <span>{row.taskCode}</span>
+            {row.sfiGroupNumber != null && <span>· G{row.sfiGroupNumber}</span>}
+            {(row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL") && (
+              <span
+                title={t("mp.col.highRisk")}
+                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-500/20 text-red-700 dark:text-red-400 text-[8px] font-bold border border-red-500/30"
+              >!</span>
+            )}
+          </span>
+        );
+        const titleLine = (
+          <span className="flex items-center gap-1.5 min-w-0">
+            {taskTypeIcon}
+            {labIcon}
+            <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
+            {oosBadge}
+          </span>
+        );
         if (groupByEquipment) {
-          return (
-            <span className="flex items-center gap-1.5 min-w-0">
-              {taskTypeIcon}
-              {labIcon}
-              <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
-              {oosBadge}
-            </span>
-          );
+          return <div className="flex flex-col gap-0.5">{titleLine}{idLine}</div>;
         }
         // Lista plana: la TAREA manda (negrita arriba) y el equipo va debajo,
         // como referencia. Es lo que se lee primero: qué hay que hacer.
         return (
           <div className="flex flex-col gap-0.5">
-            <span className="flex items-center gap-1.5 min-w-0">
-              {taskTypeIcon}
-              {labIcon}
-              <span className="text-[12px] font-bold text-fg leading-tight line-clamp-2">{row.title}</span>
-              {oosBadge}
-            </span>
+            {titleLine}
             <span className="text-[11px] text-text-industrial/60 leading-tight line-clamp-1">{assetName}</span>
+            {idLine}
           </div>
         );
       },
@@ -3579,39 +3607,41 @@ export const MaintenancePlansPage: React.FC = () => {
         </div>
       ),
     },
-    // ── Col 5: ÚLTIMA EJECUCIÓN ─────────────────────────────────────────────
-    {
-      key: "lastExecutionDate",
-      header: t("mp.col.lastExecution"),
-      width: "130px",
-      sortValue: row => lastExecutionSort(row),
-      render: row => {
-        if (needsHours(row.triggerType)) {
-          return row.lastExecutionHours != null
-            ? <span className="font-mono text-xs text-fg whitespace-nowrap">{row.lastExecutionHours.toLocaleString()} hs</span>
-            : <span className="text-text-industrial/30 text-xs">0 hs</span>;
-        }
-        return row.lastExecutionDate
-          ? <span className="font-mono text-xs text-fg whitespace-nowrap">{fmtDate(row.lastExecutionDate)}</span>
-          : <span className="text-text-industrial/30 text-xs">—</span>;
-      },
-    },
-    // ── Col 6: PRÓXIMO VENCIMIENTO ──────────────────────────────────────────
+    // ── Col 5: VENCE ────────────────────────────────────────────────────────
+    // Las dos fechas van juntas y con pesos distintos. Antes eran dos columnas
+    // con el mismo formato y el mismo peso, y había que subir al encabezado para
+    // saber cuál era cuál. Arriba va el vencimiento —lo único sobre lo que se
+    // decide algo— y debajo, en chico, cuándo se hizo por última vez. El color
+    // aparece sólo cuando hay un problema; si está al día, va en negro.
     {
       key: "nextDueDate",
-      header: t("mp.col.nextDue"),
-      width: "140px",
+      header: t("mp.col.due"),
+      width: "150px",
       sortValue: row => nextDueSort(row),
       render: row => {
-        const isOverdue = row.executionStatus === "OVERDUE";
-        if (needsHours(row.triggerType)) {
-          return row.nextDueHours != null
-            ? <span className={`font-mono text-xs whitespace-nowrap ${isOverdue ? "text-red-700 dark:text-red-400 font-bold" : "text-fg"}`}>{row.nextDueHours.toLocaleString()} hs</span>
-            : <span className="text-text-industrial/30 text-xs">—</span>;
-        }
-        return row.nextDueDate
-          ? <span className={`font-mono text-xs whitespace-nowrap ${isOverdue ? "text-red-700 dark:text-red-400 font-bold" : "text-fg"}`}>{fmtDate(row.nextDueDate)}</span>
-          : <span className="text-text-industrial/30 text-xs">—</span>;
+        const st = displayStatus(row, oosAssetIds.has(row.assetId));
+        const tone =
+          st === "OVERDUE" ? "text-red-700 dark:text-red-400"
+          : st === "DUE" ? "text-orange-700 dark:text-orange-400"
+          : st === "OUT_OF_SERVICE" ? "text-text-industrial/50"
+          : "text-fg";
+        const byHours = needsHours(row.triggerType);
+        const next = byHours
+          ? (row.nextDueHours != null ? `${row.nextDueHours.toLocaleString()} hs` : null)
+          : (row.nextDueDate ? fmtDate(row.nextDueDate) : null);
+        const last = byHours
+          ? (row.lastExecutionHours != null ? `${row.lastExecutionHours.toLocaleString()} hs` : null)
+          : (row.lastExecutionDate ? fmtDate(row.lastExecutionDate) : null);
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className={`font-mono text-xs font-bold tabular-nums whitespace-nowrap ${tone}`}>
+              {next ?? <span className="text-text-industrial/30 font-normal">—</span>}
+            </span>
+            <span className="font-mono text-[10px] text-text-industrial/45 tabular-nums whitespace-nowrap">
+              {t("mp.col.lastShort")}: {last ?? "—"}
+            </span>
+          </div>
+        );
       },
     },
     // ── Col 7: STATUS ───────────────────────────────────────────────────────
@@ -3675,6 +3705,7 @@ export const MaintenancePlansPage: React.FC = () => {
           // la celda muestra sólo la tarea, y con el título en el borde
           // izquierdo quedaba lejos de las tareas que encabeza.
           labelColumnKey: "title",
+          headerStyle: "quiet" as const,
         }
       : undefined,
     [groupByEquipment],

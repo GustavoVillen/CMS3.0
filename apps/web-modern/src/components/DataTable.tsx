@@ -34,6 +34,13 @@ export interface GroupBy<T> {
    * justo encima de sus filas.
    */
   labelColumnKey?: string;
+  /**
+   * "band" (default) — el título va sobre una banda gris a todo el ancho.
+   * "quiet" — sin fondo, con aire arriba y una barra de color al costado. La
+   * banda ocupa el mismo alto, el mismo ancho y el mismo gris que una fila, así
+   * que en una lista larga se lee como una fila más en vez de como un título.
+   */
+  headerStyle?: "band" | "quiet";
 }
 
 interface DataTableProps<T> {
@@ -160,6 +167,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
     const i = columns.findIndex(c => c.key === groupBy.labelColumnKey);
     return i > 0 ? i : 0;
   }, [groupBy, columns]);
+  const quietHeader = groupBy?.headerStyle === "quiet";
   // headerSortable: si el encabezado responde al clic. Con onSortUngroup sigue
   // respondiendo aunque esté agrupado, porque el clic desagrupa.
   const headerSortable = (column: Column<T>) =>
@@ -244,20 +252,25 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                 const collapsed = collapsedGroups?.has(g.key) ?? false;
                 return (
                   <React.Fragment key={g.key}>
-                    <tr className="bg-fg/[0.05] border-y border-border">
+                    <tr className={quietHeader ? "" : "bg-fg/[0.05] border-y border-border"}>
                       {/* Las celdas vacías corren el título hasta la columna que
                           agrupa (labelColumnKey); sin ella arranca a la izquierda. */}
                       {labelColIndex > 0 && Array.from({ length: labelColIndex }, (_, i) => (
-                        <td key={columns[i].key} className={`px-4 py-1.5 ${columns[i].className ?? ""}`} />
+                        <td key={columns[i].key} className={`px-4 ${quietHeader ? "pt-5 pb-1" : "py-1.5"} ${columns[i].className ?? ""}`} />
                       ))}
-                      <td colSpan={columns.length - labelColIndex} className={`${labelColIndex > 0 ? "px-4" : "px-3"} py-1.5`}>
+                      <td
+                        colSpan={columns.length - labelColIndex}
+                        className={`${labelColIndex > 0 ? "px-4" : "px-3"} ${quietHeader ? "pt-5 pb-1" : "py-1.5"}`}
+                      >
                         <button
                           type="button"
                           onClick={() => onToggleGroup?.(g.key)}
-                          className="flex items-center gap-1.5 text-left text-fg hover:text-accent transition-colors select-none"
+                          className={`flex items-center gap-1.5 text-left text-fg hover:text-accent transition-colors select-none ${
+                            quietHeader ? "border-l-2 border-accent/60 pl-2.5" : ""
+                          }`}
                         >
                           {collapsed ? <ChevronRight className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
-                          <span className="text-xs font-bold">{g.label}</span>
+                          <span className={quietHeader ? "text-[13px] font-bold tracking-tight" : "text-xs font-bold"}>{g.label}</span>
                           <span className="text-[10px] text-text-industrial/50 font-semibold">({g.rows.length})</span>
                         </button>
                       </td>

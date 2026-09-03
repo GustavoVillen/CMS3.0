@@ -2030,7 +2030,13 @@ const dict = {
   "mp.modal.deleteText3":      { es: "Es un Plan de Mantenimiento registrado del buque, no un trabajo puntual. Al eliminarlo se pierde la tarea y su programación. ¿Seguro que querés eliminarlo?", en: "It is a maintenance plan registered for the vessel, not a one-off job. Deleting it removes the task and its scheduling. Are you sure you want to delete it?", pt: "É um Plano de Manutenção registrado do navio, não um trabalho pontual. Ao excluí-lo, perde-se a tarefa e sua programação. Tem certeza de que deseja excluí-lo?" },
 
   // MaintenancePlans page — columnas + acciones de tabla
-  "mp.col.vesselTaskSfi":      { es: "EMBARCACIÓN / TASKID / SFI", en: "VESSEL / TASKID / SFI", pt: "EMBARCAÇÃO / TASKID / SFI" },
+  // Columna de buque sola: el código de tarea y el SFI se mudaron debajo del
+  // nombre de la tarea, y la columna sólo aparece con más de un buque en lista.
+  "mp.col.vessel":             { es: "EMBARCACIÓN",            en: "VESSEL",                pt: "EMBARCAÇÃO" },
+  // Vencimiento y última ejecución en una sola columna, con pesos distintos.
+  "mp.col.due":                { es: "VENCE",                  en: "DUE",                   pt: "VENCE" },
+  "mp.col.lastShort":          { es: "última",                 en: "last",                  pt: "última" },
+  "mp.col.highRisk":           { es: "Riesgo alto",            en: "High risk",             pt: "Risco alto" },
   "mp.col.equipmentTask":      { es: "EQUIPO / TAREA",         en: "EQUIPMENT / TASK",      pt: "EQUIPAMENTO / TAREFA" },
   "mp.col.frequency":          { es: "FRECUENCIA (HS / MES)",  en: "FREQUENCY (HRS / MO)",  pt: "FREQUÊNCIA (HS / MÊS)" },
   "mp.col.lastExecution":      { es: "ÚLTIMA EJECUCIÓN",       en: "LAST EXECUTION",        pt: "ÚLTIMA EXECUÇÃO" },
