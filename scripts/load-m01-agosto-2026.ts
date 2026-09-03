@@ -131,6 +131,25 @@ async function api<T = any>(method: string, path: string, body?: unknown): Promi
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Firma un paso del circuito tolerando que ya esté firmado.
+ *
+ * Una OT de INSPECCION nace enviada, aprobada y autorizada a nombre de "Sistema"
+ * por regla de negocio (apps/api/src/tenant/work-orders/wo-inspection-flow.ts):
+ * la inspeccion la hace la propia tripulacion y no compromete gasto. En esas no
+ * hay nada que firmar y el 409 ALREADY_* es la respuesta correcta, no un error.
+ */
+async function firmar(woId: string, step: "ENVIA" | "APRUEBA" | "AUTORIZA", name: string, fecha: string): Promise<"firmado" | "ya estaba"> {
+  try {
+    await api("POST", `/app/pms/work-orders/${woId}/approval`, { step, name, actionDate: fecha });
+    return "firmado";
+  } catch (err: any) {
+    const msg = String(err?.message ?? err);
+    if (/ALREADY_SUBMITTED|ALREADY_APPROVED|ALREADY_AUTHORIZED/.test(msg)) return "ya estaba";
+    throw err;
+  }
+}
+
 interface ApiPlan extends PlanLike {
   id: string;
   assetName?: string;
@@ -163,7 +182,16 @@ interface FireResult {
   woId: string;
   workOrderCode: string;
   simDay: string;
+  firmas?: string;
 }
+
+/**
+ * Toda OT que se llegó a abrir, aunque después falle un paso. Sin esto, una
+ * corrida cortada a la mitad deja OT sueltas en la base y ningún registro de
+ * cuáles son. Se vuelca a wo_results.json para poder limpiarlas con
+ * scripts/delete-wos-by-id.ts.
+ */
+const creadas: { taskCode: string; woId: string; workOrderCode: string }[] = [];
 
 async function fire(plan: ApiPlan, e: Entrada, occ: number): Promise<FireResult> {
   // Todos los campos de la OT: los que el plan ya trae se heredan, los que faltan
@@ -172,11 +200,14 @@ async function fire(plan: ApiPlan, e: Entrada, occ: number): Promise<FireResult>
   const exec = buildExecutionContent(plan, open.riskLevel, occ);
   const horas = e.horas ?? baseHours(plan, open.riskLevel);
 
+  // `openDate` retro-fecha la apertura (solo TENANT_ADMIN): la OT nace con la
+  // fecha real del trabajo, sin necesidad de corregir timestamps despues.
   const wo = await api<{ id: string; workOrderCode: string }>(
     "POST",
     `/app/pms/maintenance-plans/${plan.id}/open-work-order`,
     {
       title: plan.title,
+      openDate: e.fecha,
       dueDate: e.fecha,
       estimatedHours: horas,
       assignedToUserId: RESPONSIBLE,
@@ -189,6 +220,7 @@ async function fire(plan: ApiPlan, e: Entrada, occ: number): Promise<FireResult>
       consequenceRationale: open.consequenceRationale,
     },
   );
+  creadas.push({ taskCode: plan.taskCode, woId: wo.id, workOrderCode: wo.workOrderCode });
   await sleep(SLEEP_MS);
 
   await api("POST", `/app/pms/work-orders/${wo.id}/progress-notes?kind=TEXT`, {
@@ -196,11 +228,16 @@ async function fire(plan: ApiPlan, e: Entrada, occ: number): Promise<FireResult>
   });
   await sleep(SLEEP_MS);
 
-  await api("POST", `/app/pms/work-orders/${wo.id}/approval`, { step: "APRUEBA", name: APPROVER });
+  // Circuito completo: ENVIA -> APRUEBA -> AUTORIZA, cada firma con su fecha real.
+  const f1 = await firmar(wo.id, "ENVIA", EXECUTOR, e.fecha);
   await sleep(SLEEP_MS);
-
-  await api("POST", `/app/pms/work-orders/${wo.id}/approval`, { step: "AUTORIZA", name: AUTHORIZER });
+  const f2 = await firmar(wo.id, "APRUEBA", APPROVER, e.fecha);
   await sleep(SLEEP_MS);
+  const f3 = await firmar(wo.id, "AUTORIZA", AUTHORIZER, e.fecha);
+  await sleep(SLEEP_MS);
+  const firmas = [f1, f2, f3].every((x) => x === "ya estaba")
+    ? "autofirmada por regla de inspeccion"
+    : `${EXECUTOR} / ${APPROVER} / ${AUTHORIZER}`;
 
   await api("POST", `/app/pms/work-orders/${wo.id}/close`, {
     woResult: e.resultado ?? "SATISFACTORY",
@@ -210,7 +247,7 @@ async function fire(plan: ApiPlan, e: Entrada, occ: number): Promise<FireResult>
     observations: e.observaciones ?? exec.observations,
   });
 
-  return { taskCode: plan.taskCode, planId: plan.id, woId: wo.id, workOrderCode: wo.workOrderCode, simDay: e.fecha };
+  return { taskCode: plan.taskCode, planId: plan.id, woId: wo.id, workOrderCode: wo.workOrderCode, simDay: e.fecha, firmas };
 }
 
 // ── main ────────────────────────────────────────────────────────────────────────
@@ -312,7 +349,7 @@ async function main() {
     try {
       const r = await fire(plan, e, occ);
       results.ok.push(r);
-      console.log(`  OK  ${e.fecha}  ${e.taskCode.padEnd(18)} ${r.workOrderCode}`);
+      console.log(`  OK  ${e.fecha}  ${e.taskCode.padEnd(18)} ${r.workOrderCode}  firmas: ${r.firmas}`);
     } catch (err: any) {
       if (err instanceof TokenError) {
         console.error(`\nToken vencido o invalido. Se cortó acá; lo hecho hasta ahora quedó en ${OUT_FILE}.`);
@@ -323,10 +360,16 @@ async function main() {
     }
   }
 
-  writeFileSync(OUT_FILE, JSON.stringify(results, null, 2), "utf8");
-  console.log(`\nOT creadas: ${results.ok.length} · errores: ${results.errors.length}`);
+  writeFileSync(OUT_FILE, JSON.stringify({ ...results, creadas }, null, 2), "utf8");
+  console.log(`\nOT completas: ${results.ok.length} · errores: ${results.errors.length}`);
   console.log(`Resultado en ${OUT_FILE}.`);
-  console.log(`Falta retro-fechar los timestamps:  npx tsx scripts/backdate-wos-bulk.ts ${OUT_FILE}`);
+  if (results.errors.length) {
+    const aMedias = creadas.filter((c) => !results.ok.some((o) => o.woId === c.woId));
+    if (aMedias.length) {
+      console.log(`\nOT que quedaron a medio crear (${aMedias.length}). Para borrarlas:`);
+      console.log(`  npx tsx scripts/delete-wos-by-id.ts ${aMedias.map((c) => c.woId).join(" ")}`);
+    }
+  }
 }
 
 main().catch((e) => {
