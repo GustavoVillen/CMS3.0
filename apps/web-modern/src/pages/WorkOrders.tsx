@@ -2018,14 +2018,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
             </div>
             <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} toNextDrydock={deferralToDrydock} />
-            {/* VENCIMIENTO. Con el formulario controlado, la grilla de recuadros
-                de la sección INFORMACIÓN está oculta y el vencimiento no tenía
-                dónde vivir: se veía sólo como "Vencida" en el badge de al lado,
-                sin la fecha y sin poder corregirla. Va acá y no adentro del
-                formulario porque REGI-OPE-26.3 es documento controlado: no se le
-                agregan recuadros que el papel no tiene. En los demás tenants
-                sigue estando en la grilla, así que acá no se repite. */}
-            {isMercurio && (
+            {/* VENCIMIENTO, a la derecha del badge de estado. Es su único lugar:
+                se sacó de la grilla de recuadros de INFORMACIÓN, que además está
+                oculta entera en los tenants con formulario controlado — ahí el
+                vencimiento no se veía en ningún lado, sólo como "Vencida" en el
+                badge de al lado, sin la fecha y sin poder corregirla.
+                No va adentro del formulario porque REGI-OPE-26.3 es documento
+                controlado: no se le agregan recuadros que el papel no tiene. */}
+            {(
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 whitespace-nowrap">
                   {t("wo.modal.dueDate")}
@@ -2747,19 +2747,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
                         className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
                     : undefined],
-                // Vencimiento: editable en preparación/solicitada, y por el
-                // administrador en cualquier etapa — mismo criterio que la fecha
-                // de apertura de al lado. Corregir una fecha mal cargada no
-                // debería exigir reabrir el circuito. Para POSPONER un trabajo
-                // ya autorizado, en cambio, está Diferir OT: eso deja el motivo,
-                // quién lo aprobó y cuántos días se corrió; mover la fecha a mano
-                // no deja nada de eso.
-                [t("wo.modal.dueDate"),    fmtDate(workOrder.dueDate),      workOrder.dueDate && !isClosed && parseLocalDate(workOrder.dueDate) < new Date() ? "text-red-700 dark:text-red-400 font-semibold" : "text-fg",
-                  (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
-                    ? <input key="dd" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                        title={tramitaPhase === "AUTORIZADA" ? t("wo.modal.dueDateAuthorizedHint") : undefined}
-                        className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
-                    : undefined],
+                // El VENCIMIENTO ya no está acá: vive al lado del badge de estado,
+                // en el encabezado, que es donde se lo busca y donde se ve
+                // siempre (esta grilla está oculta con formulario controlado).
               ] as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
                 <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
                   <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
