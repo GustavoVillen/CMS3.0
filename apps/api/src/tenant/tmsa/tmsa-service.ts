@@ -97,6 +97,8 @@ const PMS_COVERAGE_ATTENTION = 0.98;  // por debajo → ATTENTION
 export const WO_COMPLIANCE_GAP = 0.75;       // % OT en plazo por debajo → GAP
 export const WO_COMPLIANCE_ATTENTION = 0.85; // por debajo → ATTENTION
 const CRITICAL_OVERDUE_DAYS = 30;     // OT crítica vencida hace +N días
+/** OT todavía sin cerrar. Mismo criterio que las métricas de 4.3. */
+const OPEN_WO_STATUSES = ["PLANNED", "IN_PROGRESS"];
 // Tope del detalle por métrica (/app/tmsa/maintenance/detail). Lo consume el
 // filtro de las planillas (web: lib/tmsa-filter.tsx): si se corta, la planilla
 // mostraría menos filas de las que dice la tarjeta, así que el cartel lo avisa.
@@ -321,12 +323,18 @@ async function computeOne(
       () => p.certificate.findMany({ where: { ...base }, select: { expiryDate: true, status: true } }) as Promise<Array<{ expiryDate: Date; status: string }>>,
       [] as Array<{ expiryDate: Date; status: string }>,
     ),
+    // Una inspección del PMS es una ORDEN DE TRABAJO de tipo INSPECTION,
+    // abierta desde un ítem del plan (es lo que lista la pantalla Inspecciones,
+    // ver pages/Inspections.tsx). El modelo `Inspection` pertenece al motor de
+    // plantillas de checklist, que está dormido por decisión de producto: leerlo
+    // acá hacía que el panel dijera "no hay inspecciones cargadas" con veinte
+    // inspecciones hechas en pantalla.
     safe(
-      () => p.inspection.findMany({
-        where: { ...base },
-        select: { status: true, scheduledAt: true },
-      }) as Promise<Array<{ status: string; scheduledAt: Date | null }>>,
-      [] as Array<{ status: string; scheduledAt: Date | null }>,
+      () => p.workOrder.findMany({
+        where: { ...base, type: "INSPECTION" },
+        select: { status: true, dueDate: true },
+      }) as Promise<Array<{ status: string; dueDate: Date | null }>>,
+      [] as Array<{ status: string; dueDate: Date | null }>,
     ),
     safe(() => p.defect.count({ where: { ...base } }), 0),
     safe(() => p.defect.count({ where: { ...base, status: "OPEN", reportedAt: { lt: d60 } } }), 0),
@@ -367,7 +375,7 @@ async function computeOne(
   const certificatesExpiringSoon = certificateRows.filter(c => resolveComputedStatus(c.expiryDate, c.status) === "EXPIRING_SOON").length;
   const inspectionsTotal = inspectionRows.length;
   const inspectionsOverdue = inspectionRows.filter(
-    i => (i.status === "SCHEDULED" || i.status === "IN_PROGRESS") && i.scheduledAt && new Date(i.scheduledAt) < now,
+    i => OPEN_WO_STATUSES.includes(i.status) && i.dueDate && new Date(i.dueDate) < now,
   ).length;
 
   // ── 4.1 · Cobertura del PMS ────────────────────────────────────────────────
@@ -829,6 +837,7 @@ export async function getTmsaMetricDetail(
     ({ id: m.id, code: m.mocCode, label: m.title, sublabel: m.status, entityType: "moc" });
   const asCertificate = (c: any): TmsaDetailItem =>
     ({ id: c.id, code: c.certificateCode, label: c.name, sublabel: c.expiryDate ? `Vence ${isoDateOnly(c.expiryDate)}` : null, entityType: "certificate" });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- queda para cuando se habilite el motor de plantillas
   const asInspection = (i: any): TmsaDetailItem =>
     ({ id: i.id, code: i.inspectionCode, label: i.type, sublabel: i.scheduledAt ? `Programada ${isoDateOnly(i.scheduledAt)}` : i.status, entityType: "inspection" });
   const asPermit = (pw: any): TmsaDetailItem =>
@@ -1015,16 +1024,23 @@ export async function getTmsaMetricDetail(
       const filtered = rows.filter((c: any) => resolveComputedStatus(c.expiryDate, c.status) === wanted);
       return { items: filtered.map(asCertificate) };
     }
+    // Las inspecciones son OT de tipo INSPECTION (ver el grupo 4.2 arriba): el
+    // detalle abre la orden, que es donde se ejecuta y se cierra.
     case "inspectionsTotal": {
-      const rows = await p.inspection.findMany({ where: { ...base }, select: { id: true, inspectionCode: true, type: true, status: true, scheduledAt: true }, orderBy: { scheduledAt: "desc" } });
-      return { items: rows.map(asInspection) };
+      const rows = await p.workOrder.findMany({
+        where: { ...base, type: "INSPECTION" },
+        select: { id: true, workOrderCode: true, title: true, status: true, dueDate: true },
+        orderBy: { openDate: "desc" },
+      });
+      return { items: rows.map(asWorkOrder) };
     }
     case "inspectionsOverdue": {
-      const rows = await p.inspection.findMany({
-        where: { ...base, status: { in: ["SCHEDULED", "IN_PROGRESS"] }, scheduledAt: { lt: now } },
-        select: { id: true, inspectionCode: true, type: true, status: true, scheduledAt: true }, orderBy: { scheduledAt: "asc" },
+      const rows = await p.workOrder.findMany({
+        where: { ...base, type: "INSPECTION", status: { in: OPEN_WO_STATUSES }, dueDate: { lt: now } },
+        select: { id: true, workOrderCode: true, title: true, status: true, dueDate: true },
+        orderBy: { dueDate: "asc" },
       });
-      return { items: rows.map(asInspection) };
+      return { items: rows.map(asWorkOrder) };
     }
     // Auditorías de ingeniería: mismo filtro que el grupo, para que la tarjeta
     // y su detalle no se desalineen.

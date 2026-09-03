@@ -342,7 +342,12 @@ async function computeOwnGroups(
     // 10.2.4 — registros de las actividades.
     safe(() => p.workOrder.count({ where: { ...base, status: "CLOSED", completedDate: { gte: d90 } } }), 0, "woClosed90d"),
     safe(() => p.workLog.count({ where: { tenantId, vesselCode, completedAt: { gte: d90 } } }), 0, "workLogs90d"),
-    safe(() => p.inspectionExecution.count({ where: { ...base, status: "COMPLETED", completedAt: { gte: d90 } } }), 0, "inspectionExecutions90d"),
+    // Inspecciones ejecutadas: las OT de tipo INSPECTION cerradas. Es lo que
+    // usa la flota (el motor de plantillas de checklist está dormido), y es lo
+    // que lista la pantalla Inspecciones.
+    safe(() => p.workOrder.count({
+      where: { ...base, type: "INSPECTION", status: "CLOSED", completedDate: { gte: d90 } },
+    }), 0, "inspectionExecutions90d"),
     safe(() => p.attachment.count({
       where: {
         tenantId, vesselCode, deletedAt: null, status: "ACTIVE",

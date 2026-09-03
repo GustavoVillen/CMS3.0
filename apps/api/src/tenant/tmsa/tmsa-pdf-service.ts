@@ -183,12 +183,12 @@ const FIX_TEXT: Record<string, { title: string; what: string; how: string }> = {
   inspectionsNone: {
     title: "Todavía no hay inspecciones cargadas",
     what: "No hay ninguna inspección registrada para este buque: ni de tanques y lastre, ni las visitas del superintendente. Sin registros no hay con qué probar la frecuencia.",
-    how: "Abrí Inspecciones.\nCreá la inspección con su plantilla, su periodicidad y su ventana.\nEl sistema calcula solo la próxima fecha y avisa cuando se vence.\nLos checklists de a bordo se completan en Check Lists.",
+    how: "En Inicio usá el botón verde «Nueva Inspección» y elegí el ítem del plan que corresponda.\nSi la rutina todavía no existe, creala en Plan de Mantenimiento con tipo de tarea Inspección y su periodicidad.\nLa inspección nace como una orden de trabajo autorizada, y al cerrarla se le carga el resultado y el inspector.\nLos checklists de a bordo se completan en Check Lists.",
   },
   inspectionsOverdue: {
     title: "Inspecciones vencidas sin hacer",
     what: "Hay inspecciones cuya fecha ya pasó y siguen sin ejecutarse. La frecuencia declarada es la que el inspector va a verificar contra los registros.",
-    how: "Abrí Inspecciones y entrá a las vencidas.\nEjecutalas y cerralas con su resultado.\nSi no se pueden hacer ahora, cargá el diferimiento con su riesgo.\nSi la periodicidad no es realista, revisala en vez de acumular vencidas.",
+    how: "Abrí Inspecciones y entrá a las vencidas: cada renglón es su orden de trabajo.\nEjecutalas y cerralas con su resultado y su inspector.\nSi no se pueden hacer ahora, cargá el diferimiento con su riesgo.\nSi la periodicidad no es realista, revisá el plan que las genera en vez de acumular vencidas.",
   },
   mocPendingImpl: {
     title: "Cambios aprobados sin implementar",

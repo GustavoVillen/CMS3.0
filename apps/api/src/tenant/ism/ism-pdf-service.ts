@@ -135,12 +135,12 @@ const FIX_TEXT: Record<string, { title: string; what: string; how: string }> = {
   inspectionsNone: {
     title: "Todavía no hay inspecciones cargadas",
     what: "No hay ninguna inspección registrada para este buque. La cláusula pide inspecciones a intervalos apropiados, y sin registros no hay con qué probarlo.",
-    how: "Abrí Inspecciones.\nCreá la inspección con su plantilla y su periodicidad.\nEl sistema calcula solo la próxima fecha y avisa cuando se vence.\nLos checklists de a bordo (zarpe, arribo, espacios confinados) se cargan en Check Lists.",
+    how: "En Inicio usá el botón verde «Nueva Inspección» y elegí el ítem del plan que corresponda.\nSi esa rutina todavía no existe, creala en Plan de Mantenimiento con tipo de tarea Inspección y su periodicidad.\nLa inspección nace como una orden de trabajo autorizada: no necesita aprobación.\nAl cerrarla, cargá el resultado y quién la hizo; los checklists de a bordo van en Check Lists.",
   },
   inspectionsOverdue: {
     title: "Inspecciones vencidas sin hacer",
     what: "Hay inspecciones cuya fecha ya pasó y siguen sin ejecutarse. Es la falta más directa contra «intervalos apropiados» y la primera que mira un auditor.",
-    how: "Abrí Inspecciones.\nEntrá a las que figuran vencidas.\nEjecutalas y cerralas con su resultado.\nSi ahora no se pueden hacer a bordo, dejá registrado el diferimiento con su análisis de riesgo en vez de dejarlas vencidas en silencio.",
+    how: "Abrí Inspecciones: cada renglón es la orden de trabajo de esa inspección.\nEntrá a las que figuran vencidas.\nEjecutalas y cerralas con su resultado y su inspector.\nSi ahora no se pueden hacer a bordo, dejá registrado el diferimiento con su análisis de riesgo en vez de dejarlas vencidas en silencio.",
   },
   ncNoCause: {
     title: "No conformidades abiertas y ninguna con causa",
