@@ -1,11 +1,16 @@
 // Seed idempotente — formularios controlados del tenant Mercurio.
-//   - WORK_ORDER     → REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025)
+//   - WORK_ORDER     → REGI-MAN-02.3 "Orden de trabajo" (rev 0, 29.12.2025)
 //   - SERVICE_REQUEST→ REGI-LOG-01.3 "Solicitud de servicios" (logo propio LogoMercurio.png)
 //   - Footer editable del documento controlado en TenantSetting.
 //
-// REGI-OPE-26.3 reemplaza a REGI-MAN-02.4 "Orden Interna de Trabajo" (jul-2026).
-// Son documentos distintos: la OT es el trabajo de mantenimiento; la SS es el
-// pedido de un servicio externo que cuelga de una OT abierta.
+// El codigo del formulario de OT paso de REGI-OPE-26.3 a REGI-MAN-02.3 (sep-2026),
+// para alinearlo con el juego de procedimientos rev. 3 del 29.12.2025, donde
+// PROC-MAN-02 §5 y PROC-MAN-03 §5 lo listan asi. El formulario en si no cambio.
+// Pendiente de definir con Mercurio: si REGI-MAN-02.4 "Orden Interna de Trabajo"
+// sigue vivo como registro separado o si la OT lo absorbe.
+//
+// OT y SS son documentos distintos: la OT es el trabajo de mantenimiento; la SS es
+// el pedido de un servicio externo que cuelga de una OT abierta.
 //
 // Uso (desde la raiz del repo, DATABASE_URL exportada):
 //   npx tsx scripts/seed-mercurio-forms.ts
@@ -20,7 +25,7 @@ const SLUG = process.env.TENANT_SLUG ?? "mercurio";
 const DRY = process.env.DRY === "1";
 
 // Cada documento controlado trae SU pie de firmas (literal del papel).
-const WORK_ORDER_FOOTER = {        // REGI-OPE-26.3
+const WORK_ORDER_FOOTER = {        // REGI-MAN-02.3
   preparedBy: "Mercurio Group",
   reviewedBy: "Persona Designada en Tierra",
   approvedBy: "Gerente General",
@@ -31,7 +36,7 @@ const SERVICE_REQUEST_FOOTER = {   // REGI-LOG-01.3
   approvedBy: "Gerente General",
 };
 
-// Formulario de OT. El orden replica el papel REGI-OPE-26.3.
+// Formulario de OT. El orden replica el papel REGI-MAN-02.3.
 const WORK_ORDER_CONFIG = {
   sections: [
     "header", "requestedBy", "assignedTo", "priorityKindSystem", "permits",
@@ -74,11 +79,11 @@ async function main() {
       type: "WORK_ORDER" as const,
       create: {
         tenantId, type: "WORK_ORDER" as const, style: "MERCURIO" as const,
-        formCode: "REGI-OPE-26.3", title: "Orden de trabajo", revision: 0,
+        formCode: "REGI-MAN-02.3", title: "Orden de trabajo", revision: 0,
         effectiveFrom: "29.12.2025", codePattern: null, config: WORK_ORDER_CONFIG, enabled: true,
       },
       update: {
-        style: "MERCURIO" as const, formCode: "REGI-OPE-26.3", title: "Orden de trabajo",
+        style: "MERCURIO" as const, formCode: "REGI-MAN-02.3", title: "Orden de trabajo",
         revision: 0, effectiveFrom: "29.12.2025", config: WORK_ORDER_CONFIG,
       },
     },

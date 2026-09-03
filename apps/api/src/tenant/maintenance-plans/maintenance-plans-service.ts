@@ -188,7 +188,7 @@ export interface OpenFormalWorkOrderInput {
   riskAnalysisResult?: string | null;
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
-  // Recuadros del formulario REGI-OPE-26.3 que el plan no define (a diferencia
+  // Recuadros del formulario REGI-MAN-02.3 que el plan no define (a diferencia
   // de tipo/prioridad/talleres, que sí vienen del plan): los completa quien
   // abre la OT.
   requestedByArea?: string | null;

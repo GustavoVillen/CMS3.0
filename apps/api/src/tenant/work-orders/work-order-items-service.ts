@@ -1,5 +1,5 @@
 // REPUESTOS / MATERIALES planificados de una OT (recuadros del formulario
-// REGI-OPE-26.3). Se cargan al abrir la OT, antes de ejecutar.
+// REGI-MAN-02.3). Se cargan al abrir la OT, antes de ejecutar.
 //
 // No confundir con:
 //   · StockMovement ISSUE → lo que se consumió realmente (se registra al cerrar).

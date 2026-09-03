@@ -1,5 +1,5 @@
 // Provisiona un tenant COMPLETO (idempotente): Tenant + Settings + formularios
-// controlados (WORK_ORDER REGI-MAN-02.4, SERVICE_REQUEST REGI-LOG-01.3) + usuario
+// controlados (WORK_ORDER REGI-MAN-02.3, SERVICE_REQUEST REGI-LOG-01.3) + usuario
 // admin. Pensado para correr en produccion contra la DATABASE_URL de prod.
 //
 // Uso:
@@ -34,7 +34,7 @@ const TZ       = process.env.TZ_NAME || "America/Asuncion";
 const CURRENCY = process.env.CURRENCY || "PYG";
 
 // Cada documento controlado trae SU pie de firmas (literal del papel).
-const WORK_ORDER_FOOTER = {        // REGI-OPE-26.3
+const WORK_ORDER_FOOTER = {        // REGI-MAN-02.3
   preparedBy: "Mercurio Group",
   reviewedBy: "Persona Designada en Tierra",
   approvedBy: "Gerente General",
@@ -45,7 +45,7 @@ const SERVICE_REQUEST_FOOTER = {   // REGI-LOG-01.3
   approvedBy: "Gerente General",
 };
 
-// Formulario de OT (REGI-OPE-26.3). El orden replica el papel.
+// Formulario de OT (REGI-MAN-02.3). El orden replica el papel.
 const WORK_ORDER_CONFIG = {
   sections: [
     "header", "requestedBy", "assignedTo", "priorityKindSystem", "permits",
@@ -97,7 +97,7 @@ async function main() {
 
   // 2) Formularios controlados
   const forms = [
-    { type: "WORK_ORDER", data: { style: "MERCURIO", formCode: "REGI-OPE-26.3", title: "Orden de trabajo", revision: 0, effectiveFrom: "29.12.2025", codePattern: null, config: WORK_ORDER_CONFIG } },
+    { type: "WORK_ORDER", data: { style: "MERCURIO", formCode: "REGI-MAN-02.3", title: "Orden de trabajo", revision: 0, effectiveFrom: "29.12.2025", codePattern: null, config: WORK_ORDER_CONFIG } },
     { type: "SERVICE_REQUEST", data: { style: "MERCURIO", formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2, effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png", codePattern: null, config: SERVICE_REQUEST_CONFIG } },
   ];
   for (const f of forms) {

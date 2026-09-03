@@ -8,8 +8,8 @@
 // La pantalla completa (/asset-hours) sigue siendo la de siempre: otras fechas,
 // historial por equipo, equipos sin seguimiento y export a Excel.
 
-import React from "react";
-import { Gauge } from "lucide-react";
+import React, { useState } from "react";
+import { Check, Copy, Gauge } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
@@ -28,6 +28,19 @@ export const AssetHoursQuickModal: React.FC<Props> = ({
 }) => {
   const t = useT();
   const navigate = useNavigate();
+
+  // Link a la pantalla completa CON el buque de esta planilla: es lo que se
+  // manda por chat. Sin el código, el que lo abre cae en el buque que tenga
+  // elegido él, que no tiene por qué ser el mismo.
+  const fullPath = `/asset-hours?vesselCode=${encodeURIComponent(sheet.vesselCode)}`;
+  const [copied, setCopied] = useState(false);
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${fullPath}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* sin portapapeles: queda el botón de abrir la pantalla completa */ }
+  };
 
   return (
     <div
@@ -63,10 +76,22 @@ export const AssetHoursQuickModal: React.FC<Props> = ({
           />
         </div>
 
-        <div className="px-5 py-3 border-t border-fg/10 flex justify-end">
+        <div className="px-5 py-3 border-t border-fg/10 flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={() => { onClose(); navigate("/asset-hours"); }}
+            onClick={() => { void copyLink(); }}
+            title={t("assetHours.copyLinkHint")}
+            className={`flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${
+              copied ? "text-success-sea" : "text-text-industrial/60 hover:text-fg"
+            }`}
+          >
+            {copied
+              ? <><Check className="w-3.5 h-3.5" />{t("common.copied")}</>
+              : <><Copy className="w-3.5 h-3.5" />{t("common.copyLink")}</>}
+          </button>
+          <button
+            type="button"
+            onClick={() => { onClose(); navigate(fullPath); }}
             className="text-[11px] font-semibold text-accent hover:underline"
           >
             {t("assetHours.openFull")}

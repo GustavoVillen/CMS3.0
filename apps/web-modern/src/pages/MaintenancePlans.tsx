@@ -1453,6 +1453,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-acceptance-criteria", {
         assetLabel: resolveAssetLabel(),
         taskDesc: description || title || null,
+        taskType,
         vesselCode: vesselCode || null,
       });
       setAcceptanceCriteria(res.text || prev);
@@ -1461,7 +1462,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     } finally {
       setLoadingCriteria(false);
     }
-  }, [readOnly, acceptanceCriteria, description, title, loadingCriteria, resolveAssetLabel, t]);
+  }, [readOnly, acceptanceCriteria, description, title, taskType, loadingCriteria, resolveAssetLabel, t]);
 
   const handleLotoClick = useCallback(async () => {
     if (readOnly || loadingLoto) return;

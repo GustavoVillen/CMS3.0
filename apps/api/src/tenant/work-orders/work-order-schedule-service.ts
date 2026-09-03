@@ -1,4 +1,4 @@
-// PROGRAMACION DE TRABAJO de una OT (recuadro del formulario REGI-OPE-26.3):
+// PROGRAMACION DE TRABAJO de una OT (recuadro del formulario REGI-MAN-02.3):
 // una fila por jornada — fecha, técnico, lugar, empresa y horario.
 //
 // Antes el PDF derivaba estas filas de los WorkLog, que sólo nacen del cierre

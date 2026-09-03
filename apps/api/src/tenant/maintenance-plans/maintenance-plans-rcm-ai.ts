@@ -33,6 +33,11 @@ Las 4 categorías RCM:
 - OPERATIONAL: la falla detiene o degrada operación (paro, retraso, pérdida de carga). Ej: motor principal sin cambio de filtros → derate.
 - NON_OPERATIONAL: la falla solo genera costo de reparación, sin impacto en seguridad/ambiente/operación. Ej: pintura de bandejas, cambio de ojos de buey rotos.
 
+ALCANCE — juzgá la tarea que está escrita, no la que podría existir (regla dura):
+- Clasificá la consecuencia de no ejecutar ESTA tarea, tal como está descripta. No la reinterpretes como una intervención mayor ni le atribuyas la prevención de fallas que la tarea no cubre.
+- Una inspección general (de Clase, de bandera, de la Compañía, ronda de rutina) no previene la falla de un componente puntual: lo que se pierde si no se hace es la detección temprana del deterioro y la evidencia de cumplimiento. Clasificá por eso, no por la peor falla imaginable del equipo.
+- El fundamento lo lee la tripulación: lenguaje simple y directo, sin tecnicismos innecesarios.
+
 La consecuencia debe ser la PEOR plausible si el plan no se hace. Si un mismo plan previene falla con consecuencias múltiples, elegí la más severa: SAFETY > ENVIRONMENTAL > OPERATIONAL > NON_OPERATIONAL.
 
 REGLAS DE CONCISIÓN para el rationale:

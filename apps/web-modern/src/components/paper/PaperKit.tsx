@@ -1,7 +1,7 @@
 // Piezas de los formularios controlados dibujados como el papel.
 //
 // Las usan la Solicitud de Servicio (REGI-LOG-01.3) y la Orden de Trabajo
-// (REGI-OPE-26.3): los dos documentos comparten el mismo lenguaje visual —
+// (REGI-MAN-02.3): los dos documentos comparten el mismo lenguaje visual —
 // franja azul marino de seccion, celda-etiqueta blanca sobre azul, casillero
 // cuadrado, tablas de borde fino y bloques de firma. Si el impreso cambia de
 // estilo, se cambia aca y cambian los dos.

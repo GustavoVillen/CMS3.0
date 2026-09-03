@@ -1207,7 +1207,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const team = Array.isArray(teamData) ? teamData : [];
 
   // TALLER QUE CONCURRE — se elige del catálogo de proveedores (mismo patrón que
-  // el "Tercerizado" del formulario REGI-OPE-26.3 en la OT). Escribirlo a mano
+  // el "Tercerizado" del formulario REGI-MAN-02.3 en la OT). Escribirlo a mano
   // dejaba el dato suelto: no se podía filtrar por taller ni evaluar al
   // proveedor. El texto libre sigue existiendo para el taller que todavía no
   // está en el catálogo, pero ahora es la excepción y no la única opción.

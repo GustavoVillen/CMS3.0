@@ -349,7 +349,7 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
-  // Definicion del formulario controlado de OT (REGI-OPE-26.3 en Mercurio).
+  // Definicion del formulario controlado de OT (REGI-MAN-02.3 en Mercurio).
   // La pantalla de la OT dibuja el MISMO papel que imprime el PDF: mismas
   // secciones, en el mismo orden, con las mismas etiquetas. Sin esto, la
   // pantalla tendria una copia hardcodeada del formulario y divergiria del
@@ -397,21 +397,21 @@ export async function handleMaintenanceRoutes(
 
   if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-acceptance-criteria") {
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
-    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string }>(request);
+    const body = await readJsonBody<Parameters<typeof suggestAcceptanceCriteria>[1]>(request);
     sendJson(response, 200, await suggestAcceptanceCriteria(session, body));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-loto") {
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
-    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string }>(request);
+    const body = await readJsonBody<Parameters<typeof suggestLoto>[1]>(request);
     sendJson(response, 200, await suggestLoto(session, body));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/app/pms/work-orders/suggest-risk") {
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
-    const body = await readJsonBody<{ assetLabel?: string; taskDesc?: string; acceptanceCriteria?: string; loto?: string }>(request);
+    const body = await readJsonBody<Parameters<typeof suggestRisk>[1]>(request);
     sendJson(response, 200, await suggestRisk(session, body));
     return true;
   }

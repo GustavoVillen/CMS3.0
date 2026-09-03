@@ -202,7 +202,7 @@ async function main() {
       dueDate: null,              // la fecha de varada la fija la Naviera con el astillero
       title: WO_TITLE,
       description: TAREA,
-      // Formulario REGI-OPE-26.3
+      // Formulario REGI-MAN-02.3
       requestedByArea: "MAQUINAS",
       assignedToArea: "TERCERIZADO",
       systemArea: "MAQUINAS",

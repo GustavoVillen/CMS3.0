@@ -1,4 +1,4 @@
-// Formulario de Orden de Trabajo dibujado como el papel (REGI-OPE-26.3).
+// Formulario de Orden de Trabajo dibujado como el papel (REGI-MAN-02.3).
 //
 // La pantalla de la OT ES el formulario: mismas secciones, en el mismo orden,
 // con las mismas etiquetas que imprime el PDF. El orden y los rótulos NO se
@@ -44,7 +44,7 @@ export interface WoFormDoc {
 /** Si el endpoint no responde, la hoja se dibuja igual con el default Mercurio. */
 export const WO_FORM_FALLBACK: WoFormDoc = {
   meta: {
-    formCode: "REGI-OPE-26.3", title: "Orden de trabajo", revision: 0,
+    formCode: "REGI-MAN-02.3", title: "Orden de trabajo", revision: 0,
     effectiveFrom: "29.12.2025",
     preparedBy: "Mercurio Group", reviewedBy: "Persona Designada en Tierra", approvedBy: "Gerente General",
   },

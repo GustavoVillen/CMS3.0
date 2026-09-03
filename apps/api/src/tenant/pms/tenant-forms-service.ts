@@ -58,7 +58,7 @@ const MERCURIO_FOOTER: FormFooterDefaults = {
 
 // Cada documento controlado trae SU pie de firmas — no son intercambiables.
 // Literal de los formularios del cliente.
-const WORK_ORDER_FOOTER: FormFooterDefaults = {        // REGI-OPE-26.3
+const WORK_ORDER_FOOTER: FormFooterDefaults = {        // REGI-MAN-02.3
   preparedBy: "Mercurio Group",
   reviewedBy: "Persona Designada en Tierra",
   approvedBy: "Gerente General",
@@ -140,7 +140,7 @@ const PERMIT_UNDERWATER_SECTIONS = [
   "specialComments", "completion", "additionalComments", "generatedBy",
 ];
 
-// Formulario de OT REGI-OPE-26.3 "Orden de trabajo" (rev 0, 29.12.2025).
+// Formulario de OT REGI-MAN-02.3 "Orden de trabajo" (rev 0, 29.12.2025).
 // El orden de `sections` replica el papel. Las listas de opciones de los
 // recuadros (SOLICITADO POR / ASIGNADO A / TIPO / SISTEMA / autorizaciones)
 // son enums del schema, no config: cambiarlas es un cambio de dominio.
@@ -165,7 +165,7 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
   // malentendido OT=SS: son dos documentos distintos del cliente.
   WORK_ORDER: {
     style: "MERCURIO",
-    formCode: "REGI-OPE-26.3",
+    formCode: "REGI-MAN-02.3",
     title: "Orden de trabajo",
     revision: 0,
     effectiveFrom: "29.12.2025",

@@ -8,7 +8,8 @@
 // buques que no usan el M2.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gauge, Loader2, Plus, X } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Check, Copy, Gauge, Loader2, Plus, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -35,7 +36,8 @@ function todayIso(): string {
 
 export const AssetHoursPage: React.FC = () => {
   const t = useT();
-  const { vessels, selectedVesselCode } = useVesselContext();
+  const { vessels, selectedVesselCode, setSelectedVesselCode } = useVesselContext();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vesselCode, setVesselCode] = useState(selectedVesselCode ?? vessels[0]?.code ?? "");
   const [readingDate, setReadingDate] = useState(todayIso());
   const [includeUntracked, setIncludeUntracked] = useState(false);
@@ -57,11 +59,53 @@ export const AssetHoursPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vessels]);
 
+  // ── Link compartible ──────────────────────────────────────────────────────
+  // La pantalla se comparte pegando la URL: `?vesselCode=` manda sobre el buque
+  // que tenga elegido quien abre el link, así llega a la planilla del buque que
+  // el que compartió estaba mirando. Se aplica UNA sola vez y recién cuando se
+  // sabe qué buques ve el usuario: un buque fuera de su alcance se ignora (el
+  // contexto ya sanea el selector global contra su lista real).
+  const [urlApplied, setUrlApplied] = useState(false);
+  useEffect(() => {
+    if (urlApplied || vessels.length === 0) return;
+    setUrlApplied(true);
+    const fromUrl = searchParams.get("vesselCode")?.toUpperCase();
+    if (!fromUrl || !vessels.some(v => v.code === fromUrl)) return;
+    setVesselCode(fromUrl);
+    setSelectedVesselCode(fromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vessels, urlApplied]);
+
+  // …y de ahí en más la URL sigue al selector, para que lo que se copia de la
+  // barra de direcciones sea siempre lo que se está viendo. `replace` para no
+  // llenar el historial del navegador con un paso por cada cambio de buque.
+  useEffect(() => {
+    if (!urlApplied || !vesselCode) return;
+    if (searchParams.get("vesselCode") === vesselCode) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("vesselCode", vesselCode);
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlApplied, vesselCode]);
+
   // useT() devuelve una función NUEVA en cada render, así que no puede ir en las
   // dependencias de `reload`: con `useEffect(..., [reload])` cada carga provocaba
   // otra carga (bucle infinito de requests y spinner eterno). Se accede por ref.
   const tRef = useRef(t);
   tRef.current = t;
+
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Navegador sin permiso de portapapeles: la URL ya es la correcta, se
+      // copia a mano desde la barra de direcciones.
+      setError(tRef.current("assetHours.copyLinkFailed"));
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     if (!vesselCode) { setSheet(null); return; }
@@ -104,6 +148,20 @@ export const AssetHoursPage: React.FC = () => {
         total={sheet?.rows.length ?? 0}
         onReload={reload}
       >
+        <button
+          type="button"
+          onClick={() => { void copyLink(); }}
+          title={t("assetHours.copyLinkHint")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            linkCopied
+              ? "bg-success-sea/20 border-success-sea/40 text-success-sea"
+              : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/40 hover:text-fg"
+          }`}
+        >
+          {linkCopied
+            ? <><Check className="w-3.5 h-3.5" />{t("common.copied")}</>
+            : <><Copy className="w-3.5 h-3.5" />{t("common.copyLink")}</>}
+        </button>
         <ExportExcelButton module="asset_hours" filters={vesselCode ? { vesselCode } : undefined} />
         {staleCount > 0 && (
           <span className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-bold">

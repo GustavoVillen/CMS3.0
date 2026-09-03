@@ -1089,8 +1089,10 @@ const AssetModal: React.FC<AssetModalProps> = ({
     tenantAssets,
     trackDailyReport,
     isSafetyCritical,
+    isStandby,
     planNotRequired,
     planNotRequiredReason,
+    standbyTestPlanId,
     vesselCode,
   ]);
 

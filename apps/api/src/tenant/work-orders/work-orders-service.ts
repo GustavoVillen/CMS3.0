@@ -50,7 +50,7 @@ export interface CreateWorkOrderInput {
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
-  // Formulario controlado REGI-OPE-26.3 (ver WoFormFields).
+  // Formulario controlado REGI-MAN-02.3 (ver WoFormFields).
   voyageNumber?: string | null;
   operatingCondition?: WorkOrderOperatingCondition | null;
   requestedByArea?: WorkOrderRequestedByArea | null;
@@ -63,7 +63,7 @@ export interface CreateWorkOrderInput {
 
 export type WorkOrderDepartment = "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS";
 
-// ── Formulario controlado REGI-OPE-26.3 "Orden de trabajo" ───────────────────
+// ── Formulario controlado REGI-MAN-02.3 "Orden de trabajo" ───────────────────
 export type WorkOrderRequestedByArea = "CUBIERTA" | "MAQUINAS" | "TECNICA" | "OPS_SSMA";
 export type WorkOrderAssignedToArea  = "TRIPULACION" | "TERCERIZADO" | "TECNICA" | "OPS_SSMA";
 export type WorkOrderSystemArea      = "MAQUINAS" | "RE_CUBIERTA" | "BARCAZAS";
@@ -126,7 +126,7 @@ export interface UpdateWorkOrderInput {
   location?: string | null;
   communicationMethod?: string[];
   distribution?: string[];
-  // Formulario controlado REGI-OPE-26.3
+  // Formulario controlado REGI-MAN-02.3
   voyageNumber?: string | null;
   operatingCondition?: WorkOrderOperatingCondition | null;
   requestedByArea?: WorkOrderRequestedByArea | null;
@@ -404,7 +404,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       estimatedHours: true, actualHours: true, taskMasterId: true,
       riskLevel: true, checklistDocUrl: true, consequenceCategory: true,
       department: true, providerId: true, location: true, communicationMethod: true, distribution: true,
-      // Formulario REGI-OPE-26.3 — sólo los campos livianos; `pendingDetail`
+      // Formulario REGI-MAN-02.3 — sólo los campos livianos; `pendingDetail`
       // es texto largo y queda para el detalle (getTenantWorkOrder).
       voyageNumber: true, operatingCondition: true, requestedByArea: true, assignedToArea: true,
       systemArea: true, maintenanceKind: true, taskCompleted: true,
@@ -421,7 +421,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
 
   const assetIds = [...new Set(orders.map(o => o.assetId).filter(Boolean))];
   // Se resuelven juntos el asignado y el creador: "GENERADO POR" es un recuadro
-  // del formulario controlado (REGI-OPE-26.3) y sale de createdByUserId.
+  // del formulario controlado (REGI-MAN-02.3) y sale de createdByUserId.
   const userIds  = [...new Set(orders.flatMap(o => [
     (o as unknown as { assignedToUserId?: string | null }).assignedToUserId,
     (o as unknown as { createdByUserId?: string | null }).createdByUserId,
@@ -703,14 +703,14 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         department: payload.department ?? null,
         // providerId solo aplica cuando el área es PROVEEDOR; en otros casos se descarta.
         // El taller sólo aplica si el trabajo se terceriza: "Asignado a:
-        // TERCERIZADO" (REGI-OPE-26.3) o área PROVEEDOR (formulario anterior).
+        // TERCERIZADO" (REGI-MAN-02.3) o área PROVEEDOR (formulario anterior).
         providerId: (payload.assignedToArea === "TERCERIZADO" || payload.department === "PROVEEDOR")
           ? normalizeOptionalText(payload.providerId)
           : null,
         location: normalizeOptionalText(payload.location),
         communicationMethod: payload.communicationMethod ?? [],
         distribution: payload.distribution ?? [],
-        // Formulario REGI-OPE-26.3 — nullable, sólo se llenan si vienen.
+        // Formulario REGI-MAN-02.3 — nullable, sólo se llenan si vienen.
         voyageNumber: normalizeOptionalText(payload.voyageNumber),
         operatingCondition: payload.operatingCondition ?? null,
         requestedByArea: payload.requestedByArea ?? null,
@@ -846,7 +846,7 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.department !== undefined) data.department = payload.department ?? null;
 
   // ¿El trabajo queda en manos de un tercero? Hay dos ejes según el formulario
-  // del tenant: "Asignado a: TERCERIZADO" (REGI-OPE-26.3) o el área PROVEEDOR
+  // del tenant: "Asignado a: TERCERIZADO" (REGI-MAN-02.3) o el área PROVEEDOR
   // (formulario anterior). El taller sólo se guarda si alguno aplica, y se
   // limpia si el trabajo deja de estar tercerizado.
   //
@@ -878,7 +878,7 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.location !== undefined) data.location = normalizeOptionalText(payload.location);
   if (payload.communicationMethod !== undefined) data.communicationMethod = payload.communicationMethod;
   if (payload.distribution !== undefined) data.distribution = payload.distribution;
-  // ── Formulario REGI-OPE-26.3 ──
+  // ── Formulario REGI-MAN-02.3 ──
   if (payload.voyageNumber !== undefined) data.voyageNumber = normalizeOptionalText(payload.voyageNumber);
   if (payload.operatingCondition !== undefined) data.operatingCondition = payload.operatingCondition ?? null;
   if (payload.requestedByArea !== undefined) data.requestedByArea = payload.requestedByArea ?? null;

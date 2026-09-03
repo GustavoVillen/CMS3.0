@@ -9,19 +9,28 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { cleanAiText } from "../ai/ai-text";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
+import { SCOPE_RULES, CREW_LEVEL_RULES, TASK_TYPE_RULES } from "../ai/task-scope-guidance";
 
 const MODEL = AI_MODEL.fast;
 
 const PROMPT_ACCEPTANCE = `Sos experto en mantenimiento de máquinas navales. Generá el siguiente contenido para esta tarea:
 
-1. Criterios de aceptación verificables, específicos y técnicos (cuándo el trabajo está correctamente completado, con rangos y tolerancias aplicables).
+1. Criterios de aceptación verificables: cómo se sabe que el trabajo quedó bien hecho.
 
-2. Una sección con las herramientas, equipos de medición e instrumentos requeridos.
+2. Una sección con las herramientas e instrumentos necesarios (los de a bordo).
+
+${SCOPE_RULES}
+
+${CREW_LEVEL_RULES}
+
+${TASK_TYPE_RULES}
 
 REGLAS DE CONCISIÓN (importante):
-- Sé breve: solo lo crítico y medible. Máximo 6-8 criterios, un bullet corto por criterio con su valor/tolerancia clave.
+- Sé breve: máximo 6 criterios, un bullet corto por criterio.
+- Poné valor o tolerancia SOLO cuando sea un dato conocido del equipo (placa, manual, indicador propio) y medible a bordo. Si no, el criterio es un estado observable claro: "sin fugas después de 10 minutos en marcha", "sin ruidos ni vibraciones anormales", "válvula abre y cierra en todo su recorrido".
+- Nada de bullets vagos tipo "verificar correcto funcionamiento": tiene que decir QUÉ se mira y CUÁL es la condición aceptable.
 - Sin redundancia, sin obviedades, sin explicaciones largas.
-- Herramientas: solo las específicas o de medición relevantes (no genéricas como trapos, guantes o llaves comunes); máximo 6.
+- Herramientas: solo las que la tarea realmente necesita, disponibles a bordo; máximo 5. No listes genéricos (trapos, guantes, llaves comunes).
 
 Usá exactamente este formato (sin introducción ni explicación adicional): primero los
 criterios de aceptación, un bullet por línea; después una línea en blanco; después el
@@ -34,8 +43,15 @@ TENÉ EN CUENTA EL TIPO DE TAREA (si se indica):
 - INSPECCIÓN: verificación/medición sin desarmar ni intervenir el equipo. El LOTO suele ser más acotado: aislar solo las energías necesarias para acercarse con seguridad. Si la inspección exige el equipo en marcha (p. ej. control de nivel a temperatura de operación), indicalo en lugar de bloquear todo.
 - MANTENIMIENTO: intervención física (desarme, cambio de componentes, ajuste). El LOTO debe ser completo: bloqueo y verificación de energía cero de TODAS las fuentes (eléctrica, mecánica, hidráulica, neumática, térmica, presión y fluidos residuales) antes de intervenir.
 
+${SCOPE_RULES}
+
+NIVEL — escribí para una tripulación, no para un taller (regla dura):
+- Lo ejecuta la tripulación del buque con lo que hay a bordo: candado y tarjeta, breaker o llave de corte, válvulas de bloqueo, purgas y drenajes del propio sistema, y verificación con el instrumento simple que corresponda (multímetro, manómetro del equipo).
+- Bloqueá solo las energías que esta tarea realmente pone en juego. Aislar de más una tarea simple hace que nadie siga el procedimiento.
+- Nada de dispositivos, permisos ni procedimientos que el buque no tiene.
+
 REGLAS DE CONCISIÓN (importante):
-- Sé breve: solo las energías a bloquear y las verificaciones críticas. Máximo ~8 puntos, un paso corto por línea.
+- Sé breve: solo las energías a bloquear y las verificaciones críticas. Máximo 6 puntos, un paso corto por línea.
 - Directo y accionable. Sin justificaciones, sin teoría, sin redundancia.
 
 Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
@@ -53,6 +69,17 @@ TENÉ EN CUENTA EL TIPO DE TAREA (si se indica):
 - INSPECCIÓN: verificación/medición sin intervenir el equipo; menor exposición (a veces con el equipo en marcha → cuidado con partes móviles y superficies calientes, pero sin desarme). Tiende a riesgo más bajo.
 - MANTENIMIENTO: intervención física (desarme, cambio de partes, ajuste); mayor exposición a energías liberadas, atrapamiento, presión/fluidos residuales y manipulación de cargas. Tiende a riesgo más alto.
 Ajustá NIVEL, PROBABILIDAD y CONSECUENCIA de forma coherente con el tipo de tarea, sin sobredimensionar una inspección ni subestimar un mantenimiento.
+
+${SCOPE_RULES}
+
+NIVEL — escribí para una tripulación, no para un taller (regla dura):
+- Analizá los peligros de ESTA tarea tal como la hace la tripulación a bordo. No inventes peligros de un trabajo mayor que nadie va a hacer.
+- Los controles tienen que ser ejecutables a bordo con los medios del buque (bloqueo y tarjeta, ventilación, standby, detector de gases, arnés, andamio o guindola). Si un control exige medios que el buque no tiene, decilo en una línea en lugar de darlo por hecho.
+- Simplificar el control no es bajar la guardia: si la tarea es realmente peligrosa (espacio confinado, hot work, altura), el nivel y el control van igual.
+
+REGLAS DE CONCISIÓN (importante):
+- Solo los 3-5 peligros principales. Un bullet corto por peligro: "peligro → control clave". Sin párrafos largos ni redundancia.
+- EPP: solo el específico de esta tarea (máximo 5); no listes el genérico de rutina.
 
 Niveles de riesgo (operacional):
 - LOW: tarea rutinaria sin energías peligrosas, espacio normal, EPP básico.
@@ -73,10 +100,6 @@ CONSECUENCIA — severidad de la lesión más grave razonablemente plausible al 
 - MAJOR: lesiones importantes (incapacitantes / hospitalización)
 - MINOR: lesiones leves (primeros auxilios)
 - NEGLIGIBLE: lesiones insignificantes
-
-REGLAS DE CONCISIÓN (importante):
-- Solo los 3-5 peligros principales. Un bullet corto por peligro: "peligro → control clave". Sin párrafos largos ni redundancia.
-- EPP: solo el específico de esta tarea (máximo 5); no listes el genérico de rutina.
 
 Respondé ÚNICAMENTE con este formato exacto (sin JSON, sin markdown, sin introducción):
 

@@ -188,7 +188,7 @@ interface WorkOrder {
   checklistDocUrl: string | null;
   consequenceCategory: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale: string | null;
-  // Formulario controlado REGI-OPE-26.3 (nullable: las OT anteriores no lo tienen)
+  // Formulario controlado REGI-MAN-02.3 (nullable: las OT anteriores no lo tienen)
   voyageNumber?: string | null;
   operatingCondition?: string | null;
   requestedByArea?: string | null;
@@ -961,13 +961,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const navigate = useNavigate();
   const { tenant, user } = useAuth();
   // Tenants con el formulario controlado de Mercurio. "MERCURIO_OT" es el
-  // formulario vigente (REGI-OPE-26.3) y "MERCURIO" el anterior, que se
+  // formulario vigente (REGI-MAN-02.3) y "MERCURIO" el anterior, que se
   // conserva para poder volver atrás: los dos usan estos campos.
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
 
-  // ── Hoja del formulario controlado (REGI-OPE-26.3) ──
+  // ── Hoja del formulario controlado (REGI-MAN-02.3) ──
   // Las secciones y los rótulos salen del tenant, igual que el PDF: pantalla y
   // papel no pueden divergir. Sólo se pide con el formulario de Mercurio activo.
   const { data: woFormDoc } = useFetch<WoFormDoc>(
@@ -1037,11 +1037,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [commMethod, setCommMethod]         = useState<string[]>(workOrder.communicationMethod ?? []);
   const [distribution, setDistribution]     = useState<string[]>(workOrder.distribution ?? []);
 
-  // Prioridad de la OT. En el formulario REGI-OPE-26.3 se elige por plazo
+  // Prioridad de la OT. En el formulario REGI-MAN-02.3 se elige por plazo
   // (Inmediato / 24hs / Semana / Mes) — es el mismo dato con otro nombre.
   const [priority, setPriority] = useState<string>(workOrder.priority ?? "MEDIUM");
 
-  // ── Formulario controlado REGI-OPE-26.3 ──
+  // ── Formulario controlado REGI-MAN-02.3 ──
   // Nullable en la base: las OT anteriores al formulario abren con los recuadros
   // vacíos y siguen siendo válidas.
   const [regiForm, setRegiForm] = useState<WoRegiForm>({
@@ -1071,7 +1071,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     });
   }, [plannedItemsData]);
 
-  // Estado del auto-guardado del bloque REGI-OPE-26.3 (ver saveRegiBlock).
+  // Estado del auto-guardado del bloque REGI-MAN-02.3 (ver saveRegiBlock).
   const [regiSaving, setRegiSaving] = useState(false);
   const [regiSaved, setRegiSaved] = useState(false);
   const [regiErr, setRegiErr] = useState<string | null>(null);
@@ -1081,7 +1081,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const touchRegi = useCallback(() => { regiTouched.current = true; }, []);
 
   // Talleres del buque. Se piden cuando el trabajo se le da a un tercero:
-  // "Asignado a: Tercerizado" en el formulario REGI-OPE-26.3, o el área
+  // "Asignado a: Tercerizado" en el formulario REGI-MAN-02.3, o el área
   // PROVEEDOR en los tenants que siguen con el formulario anterior.
   const [providers, setProviders] = useState<Array<{ id: string; name: string; providerCode: string }>>([]);
   // Empresa tercerizada fuera del catálogo (alternativa a providerId).
@@ -1422,6 +1422,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     finally { setLoadingTask(false); }
   }, [isEditable, loadingTask, workOrder.assetName, title, description]);
 
+  // Inspección vs mantenimiento: la IA calibra con esto el alcance de criterios,
+  // LOTO, riesgo y RCM (una inspección general no se analiza como un desarme).
+  const aiTaskType: "INSPECTION" | "MAINTENANCE" = type === "INSPECTION" ? "INSPECTION" : "MAINTENANCE";
+
   const handleAcceptanceCriteriaClick = useCallback(async () => {
     if (!isEditable || loadingCriteria) return;
     setLoadingCriteria(true);
@@ -1430,11 +1434,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance-criteria", {
         assetLabel: workOrder.assetName ?? null,
         taskDesc: description || title || null,
+        taskType: aiTaskType,
+        vesselCode: workOrder.vesselCode,
       });
       setAcceptanceCriteria(res.text || "");
     } catch { setAcceptanceCriteria(""); }
     finally { setLoadingCriteria(false); }
-  }, [isEditable, loadingCriteria, workOrder.assetName, description, title]);
+  }, [isEditable, loadingCriteria, workOrder.assetName, workOrder.vesselCode, aiTaskType, description, title]);
 
   const handleLotoClick = useCallback(async () => {
     if (!isEditable || loadingLoto) return;
@@ -1444,12 +1450,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-loto", {
         assetLabel: workOrder.assetName ?? null,
         taskDesc: description || title || null,
+        taskType: aiTaskType,
+        vesselCode: workOrder.vesselCode,
         acceptanceCriteria: acceptanceCriteria || null,
       });
       setLoto(res.text || "");
     } catch { setLoto(""); }
     finally { setLoadingLoto(false); }
-  }, [isEditable, loadingLoto, workOrder.assetName, description, title, acceptanceCriteria]);
+  }, [isEditable, loadingLoto, workOrder.assetName, workOrder.vesselCode, aiTaskType, description, title, acceptanceCriteria]);
 
   const handleRiskClick = useCallback(async () => {
     if (!isEditable || loadingRisk) return;
@@ -1458,6 +1466,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       const res = await api.post<{ level: string; analysis: string }>("/app/pms/work-orders/suggest-risk", {
         assetLabel: workOrder.assetName ?? null,
         taskDesc: description || title || null,
+        taskType: aiTaskType,
+        vesselCode: workOrder.vesselCode,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,
       });
@@ -1465,7 +1475,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       if (res.analysis) setRiskAnalysisResult(res.analysis);
     } catch { /* noop */ }
     finally { setLoadingRisk(false); }
-  }, [isEditable, loadingRisk, workOrder.assetName, description, title, acceptanceCriteria, loto]);
+  }, [isEditable, loadingRisk, workOrder.assetName, workOrder.vesselCode, aiTaskType, description, title, acceptanceCriteria, loto]);
 
   const handleConsequenceClick = useCallback(async () => {
     if (!isEditable || loadingConsequence) return;
@@ -1478,6 +1488,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           assetSfiCode: null,
           planTitle: title || null,
           planDescription: description || null,
+          taskType: aiTaskType,
+          vesselCode: workOrder.vesselCode,
         },
       );
       if (res.category && ["SAFETY","ENVIRONMENTAL","OPERATIONAL","NON_OPERATIONAL"].includes(res.category)) {
@@ -1486,7 +1498,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       if (res.rationale) setConsequenceRationale(res.rationale);
     } catch { /* noop */ }
     finally { setLoadingConsequence(false); }
-  }, [isEditable, loadingConsequence, workOrder.assetName, workOrder.assetId, title, description]);
+  }, [isEditable, loadingConsequence, workOrder.assetName, workOrder.assetId, workOrder.vesselCode, aiTaskType, title, description]);
 
   const handleRewriteDeficiencies = useCallback(async () => {
     if (!isEditable || loadingRewrite) return;
@@ -1713,7 +1725,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       location: normalizeOptionalText(location),
       communicationMethod: commMethod,
       distribution,
-      // Formulario REGI-OPE-26.3. Sólo se manda en los tenants que lo usan;
+      // Formulario REGI-MAN-02.3. Sólo se manda en los tenants que lo usan;
       // en el resto los campos no existen en el modal y quedarían en null.
       ...(isMercurio ? {
         voyageNumber: normalizeOptionalText(regiForm.voyageNumber),
@@ -1756,7 +1768,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       woResult, executedByName, executionDate, runningHoursAtExecution, actualHours, observations, spareUsages,
       isMercurio, needsProvider, regiForm, plannedItems, plannedItemsData, workOrder.id]);
 
-  // ── Auto-guardado del formulario REGI-OPE-26.3 ────────────────────────────
+  // ── Auto-guardado del formulario REGI-MAN-02.3 ────────────────────────────
   // El bloque son casi todos tildes: obligar a acordarse del botón "Guardar" es
   // una invitación a perder el dato. Peor: el dirty-tracker de abajo NO mira
   // estos campos, así que al salir se perdían EN SILENCIO, sin siquiera avisar.
@@ -2023,7 +2035,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 oculta entera en los tenants con formulario controlado — ahí el
                 vencimiento no se veía en ningún lado, sólo como "Vencida" en el
                 badge de al lado, sin la fecha y sin poder corregirla.
-                No va adentro del formulario porque REGI-OPE-26.3 es documento
+                No va adentro del formulario porque REGI-MAN-02.3 es documento
                 controlado: no se le agregan recuadros que el papel no tiene. */}
             {(
               <div className="flex items-center gap-1.5 shrink-0">
@@ -2199,7 +2211,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             />
 
             {/* ── Área / responsable ── */}
-            {/* En los tenants con el formulario REGI-OPE-26.3 esto vive arriba,
+            {/* En los tenants con el formulario REGI-MAN-02.3 esto vive arriba,
                 en el bloque del formulario: el área son los recuadros del papel
                 (Solicitado por / Asignado a / Sistema) y la ubicación va en su
                 cabecera. Repetirlos acá confundía. El taller se elige junto a
@@ -2460,7 +2472,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </section>
 
-          {/* ── LA HOJA: la OT tal como se imprime (REGI-OPE-26.3) ──
+          {/* ── LA HOJA: la OT tal como se imprime (REGI-MAN-02.3) ──
               Completar la OT es completar el formulario. Lo que la pantalla
               tiene y el papel no (asistentes de IA, adjuntos, avances, planes,
               permisos, diferimientos) queda debajo, en su propia zona. */}

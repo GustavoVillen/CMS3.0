@@ -126,7 +126,7 @@ export interface WorkOrderSpareUsage {
   unit: string;
 }
 
-/** Repuesto o material PLANIFICADO (recuadros del formulario REGI-OPE-26.3). */
+/** Repuesto o material PLANIFICADO (recuadros del formulario REGI-MAN-02.3). */
 export interface WorkOrderPlannedItem {
   kind: "SPARE" | "MATERIAL";
   description: string;
@@ -199,7 +199,7 @@ export interface WorkOrderPdfContext {
   /** Ejes de la matriz de riesgo, tomados del plan de mantenimiento vinculado. */
   riskProbability: string | null;
   riskConsequence: string | null;
-  // ── Formulario REGI-OPE-26.3 ──
+  // ── Formulario REGI-MAN-02.3 ──
   /** REPUESTOS / MATERIALES planificados (WorkOrderItem). */
   plannedItems: WorkOrderPlannedItem[];
   /** Filas de PROGRAMACION DE TRABAJO, derivadas de los WorkLog de la OT. */

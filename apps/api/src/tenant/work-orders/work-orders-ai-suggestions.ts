@@ -8,16 +8,24 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { cleanAiText } from "../ai/ai-text";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
+import { SCOPE_RULES, CREW_LEVEL_RULES, TASK_TYPE_RULES } from "../ai/task-scope-guidance";
 
 const MODEL = AI_MODEL.fast;
 
-const PROMPT_ACCEPTANCE = `Sos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables, específicos y técnicos para esta tarea.
+const PROMPT_ACCEPTANCE = `Sos experto en mantenimiento de máquinas navales. Definí criterios de aceptación verificables para esta tarea: cómo se sabe que el trabajo quedó bien hecho.
+
+${SCOPE_RULES}
+
+${CREW_LEVEL_RULES}
+
+${TASK_TYPE_RULES}
 
 REGLAS DE CONCISIÓN:
 - Máximo 5 criterios (los MÁS importantes, no listado exhaustivo).
 - Cada criterio en una sola línea como bullet "- ".
-- Cada criterio debe ser MEDIBLE: incluir valor numérico, rango, tolerancia, o estado verificable. Ej: "- Presión de descarga 4-6 bar" / "- Sin fugas visibles tras 10 min de operación" / "- Torque de bridas 80 Nm ±5%".
-- Si no podés definir un valor medible, omitilo (no incluyas bullets vagos como "verificar correcto funcionamiento").
+- Cada criterio tiene que ser verificable a bordo: un valor que se lea en el indicador del propio equipo, o un estado observable claro. Ej: "- Presión de descarga 4-6 bar" / "- Sin fugas visibles tras 10 min de operación" / "- Sin juego lateral perceptible en el eje".
+- Poné número o tolerancia solo si es un dato conocido del equipo (placa, manual, indicador propio). No inventes valores.
+- Nada de bullets vagos como "verificar correcto funcionamiento": tiene que decir QUÉ se mira y CUÁL es la condición aceptable.
 
 Responde ÚNICAMENTE con los bullets, en texto plano, sin introducción, sin numeración, sin explicación adicional.`;
 
@@ -71,6 +79,13 @@ REGLAS DE CONCISIÓN:
 - Específicos: en LOTO indicá qué bloquear y cómo (ej. "Desconectar breaker X, candado + tarjeta, verificar tensión cero con multímetro"). En instrumentos indicá tipo y rango (ej. "Multímetro 600V CAT III"). En EPP indicá tipo y nivel (ej. "Guantes anticorte nivel 4").
 - Si una sección no aplica (ej. tarea sin energía a aislar), escribí "- No aplica" — pero MANTENÉ las 3 secciones siempre.
 
+${SCOPE_RULES}
+
+NIVEL — escribí para una tripulación, no para un taller (regla dura):
+- Lo ejecuta la tripulación con lo que hay a bordo: candado y tarjeta, breaker o llave de corte, válvulas de bloqueo, purgas y drenajes del propio sistema, verificación con multímetro o con el manómetro del equipo.
+- Bloqueá solo las energías que esta tarea realmente pone en juego. Aislar de más una tarea simple hace que nadie siga el procedimiento.
+- Instrumentos y EPP: los que hay a bordo. Nada de equipamiento de taller, laboratorio o certificación externa.
+
 Responde ÚNICAMENTE con las 3 secciones en texto plano, sin introducción, sin explicación.`;
 
 const PROMPT_RISK = `Sos experto en HSE / Job Safety Analysis (JSA) para mantenimiento de máquinas navales.
@@ -81,6 +96,18 @@ Este análisis evalúa el riesgo PARA EL OPERARIO al EJECUTAR la tarea. Es decir
 NO confundir con RCM (otra herramienta del sistema). RCM pregunta lo opuesto: "¿qué pasa si la tarea NO se hace?". RCM mira la consecuencia de la falla en el equipo. Vos NO tenés que pensar en eso.
 
 Vos pensás en: espacio confinado, energías peligrosas, hot work, caídas, atrapamiento, exposición química, ruido, atmósferas explosivas, partes móviles, cargas suspendidas, presión residual, temperatura, electricidad. Cosas que pueden lastimar AL TRIPULANTE durante la ejecución.
+
+TENÉ EN CUENTA EL TIPO DE TAREA (si se indica):
+- INSPECCIÓN: verificación/medición sin desarmar; menor exposición (a veces con el equipo en marcha → partes móviles y superficies calientes). Tiende a riesgo más bajo.
+- MANTENIMIENTO: intervención física (desarme, cambio de partes, ajuste); mayor exposición a energías liberadas, atrapamiento y presión/fluidos residuales. Tiende a riesgo más alto.
+Ajustá el nivel de forma coherente con el tipo de tarea, sin sobredimensionar una inspección ni subestimar un mantenimiento.
+
+${SCOPE_RULES}
+
+NIVEL — escribí para una tripulación, no para un taller (regla dura):
+- Analizá los peligros de ESTA tarea tal como la hace la tripulación a bordo. No inventes peligros de un trabajo mayor que nadie va a hacer.
+- Los controles tienen que ser ejecutables a bordo con los medios del buque (bloqueo y tarjeta, ventilación, standby, detector de gases, arnés, andamio o guindola). Si un control exige medios que el buque no tiene, decilo en vez de darlo por hecho.
+- Simplificar el control no es bajar la guardia: si la tarea es realmente peligrosa (espacio confinado, hot work, altura), el nivel y el control van igual.
 
 Niveles de riesgo (operacional):
 - LOW: tarea rutinaria sin energías peligrosas, espacio normal, EPP básico.
@@ -187,8 +214,18 @@ export interface SuggestPlanLinkResult {
 interface BaseInput {
   assetLabel?: string | null;
   taskDesc?: string | null;
+  /** Inspección o mantenimiento: la OT lo trae en su `type` (INSPECTION vs
+   *  PREVENTIVE/CORRECTIVE). Sin esto la IA trata toda OT como intervención y
+   *  le exige a una inspección general cosas de un desarme. */
+  taskType?: "INSPECTION" | "MAINTENANCE" | null;
   /** Buque de la OT, para resolver qué clase de embarcación es. */
   vesselCode?: string | null;
+}
+
+function taskTypeLabel(taskType?: "INSPECTION" | "MAINTENANCE" | null): string | null {
+  if (taskType === "INSPECTION") return "Inspección (verificación/medición; normalmente sin desarmar ni intervenir el equipo)";
+  if (taskType === "MAINTENANCE") return "Mantenimiento (intervención física: desarme, cambio de componentes, ajuste)";
+  return null;
 }
 
 interface TaskInput extends BaseInput {
@@ -220,6 +257,8 @@ function buildContext(
     `Tarea: ${(input.taskDesc ?? "").trim() || "tarea no especificada"}`,
   ];
   if (vesselFacts) lines.push(`Sobre el buque: ${vesselFacts}`);
+  const tt = taskTypeLabel(input.taskType);
+  if (tt) lines.push(`Tipo de tarea: ${tt}`);
   for (const [k, v] of Object.entries(extras)) {
     if (v && v.trim()) lines.push(`${k}: ${v.trim()}`);
   }

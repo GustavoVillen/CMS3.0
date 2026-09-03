@@ -1,5 +1,58 @@
 HISTORY.txt
 
+[2026-09-03] Los analisis con IA, al nivel de la tripulacion y dentro del alcance
+Agent: Claude Opus 5
+- Pedido del usuario: que los cuatro analisis que genera la IA (criterios de
+  aceptacion, LOTO, nivel de riesgo/JSA y consecuencia RCM) salgan BASICOS —
+  ejecutables por una tripulacion sin conocimiento especializado ni herramientas
+  de taller — y siempre acotados al tipo de tarea. El caso que lo disparo: a una
+  "Inspeccion de Clase" la IA le exigia deflexion de cigueñal. Es una inspeccion
+  general de clase, no un control del cigueñal.
+- Dos reglas nuevas, comunes a los cuatro prompts y a las dos pantallas (Planes y
+  OT): (1) ALCANCE — contestar solo por el trabajo que la tarea describe; una
+  inspeccion general (clase, bandera, compañia, ronda) es verificacion de estado y
+  no puede pedir ensayos especializados salvo que la tarea los nombre; (2) NIVEL —
+  escribir para la tripulacion con lo que hay a bordo (herramientas comunes,
+  multimetro, manometros del equipo, termometro IR, calibre), nada de laboratorio,
+  banco de pruebas, torquimetro certificado, END ni alineacion laser, salvo que la
+  tarea la ejecute un proveedor externo.
+- En el analisis de riesgo se dejo la salvaguarda explicita: simplificar el control
+  no baja la guardia; espacio confinado, hot work o altura mantienen nivel y
+  controles.
+- Las reglas viven en un solo lugar: apps/api/src/tenant/ai/task-scope-guidance.ts
+  (SCOPE_RULES / CREW_LEVEL_RULES / TASK_TYPE_RULES), importadas por
+  maintenance-plans-ai-suggestions.ts, maintenance-plans-rcm-ai.ts y
+  work-orders-ai-suggestions.ts. Todo prompt nuevo de este tipo las reusa.
+- Ademas la IA ahora recibe SIEMPRE si es inspeccion o mantenimiento: faltaba en
+  criterios de aceptacion de Planes y en las tres sugerencias de OT (ahi se deriva
+  del type de la OT: INSPECTION o, si es PREVENTIVE/CORRECTIVE, MAINTENANCE).
+- Solo prompts y payloads: sin cambios de schema, de permisos ni de i18n. No se
+  probaron las salidas reales de la IA (hay que apretar los botones en pantalla).
+
+[2026-09-03] La OT pasa a llamarse REGI-MAN-02.3
+Agent: Claude Opus 5
+- Salió de una auditoría del sistema contra los procedimientos de Mercurio
+  (MisDocs\Manuales PROC-MAN, todos rev. 3 del 29.12.2025): el sistema imprimía la
+  Orden de Trabajo como REGI-OPE-26.3, pero PROC-MAN-02 §5 y PROC-MAN-03 §5 la
+  listan como REGI-MAN-02.3, y así viene el registro en papel. Decisión del
+  usuario: manda el manual.
+- Cambia SÓLO el código impreso. Formulario idéntico: mismos recuadros, mismo
+  layout, revisión 0 y vigencia 29.12.2025 sin tocar (el papel REGI-MAN-02.3 no
+  trae recuadro de revisión; no se inventa un número).
+- Sitios funcionales: FORM_DEFAULTS.WORK_ORDER en pms/tenant-forms-service.ts,
+  WO_FORM_FALLBACK en WoPaperForm.tsx, la etiqueta visible de WoRegiSections.tsx,
+  y el formCode de seed-mercurio-forms.ts + provision-tenant.ts. El resto son
+  comentarios, que se renombraron para que no queden apuntando a un código
+  inexistente. NO se tocó la migración 20260717_wo_regi_ope_26_3 (ya aplicada) ni
+  la clave interna WorkOrderPdfTemplate.MERCURIO_OT.
+- Aplicado a la base local con seed-mercurio-forms.ts (upsert idempotente): la
+  fila TenantForm WORK_ORDER de mercurio quedó en REGI-MAN-02.3, codeSeq intacto,
+  numeración de OT sin cambios. Falta correrlo en el VPS al desplegar.
+- Pendiente de definir con Mercurio: REGI-MAN-02.4 "Orden Interna de Trabajo"
+  sigue figurando como registro vivo en los manuales, aunque el sistema lo daba
+  por absorbido por la OT desde jul-2026.
+- Del resto de la auditoría no se implementó nada: quedó como informe.
+
 [2026-08-17] Horas de equipos: una sola fuente, y una planilla para cargarlas
 Agent: Claude Opus 5
 - Pedido del usuario: que las horas de los equipos no queden congeladas y sean

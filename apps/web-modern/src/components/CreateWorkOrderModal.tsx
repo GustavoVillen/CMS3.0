@@ -240,7 +240,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [resolvedAssetName, setResolvedAssetName] = useState(prefill?.assetName ?? null);
   const [type, setType]               = useState(prefill?.type ?? "PREVENTIVE");
-  // Mercurio elige el tipo FINO del REGI-OPE-26.3 (5 opciones) en vez del grueso
+  // Mercurio elige el tipo FINO del REGI-MAN-02.3 (5 opciones) en vez del grueso
   // (Preventivo/Correctivo/Inspección): es el que dice su formulario. El backend
   // deriva el grueso desde éste, así MTTR / OT→Defecto / reportes no se enteran.
   // "Inspección" no está en el papel pero se mantiene: la empresa la usa a mano
@@ -248,7 +248,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [maintKind, setMaintKind]     = useState(prefill ? kindFromType(prefill.type) : (initialMaintKind ?? kindFromType(prefill?.type)));
   const [priority, setPriority]       = useState(prefill?.priority ?? initialPriority ?? "MEDIUM");
   const [criticality, setCriticality] = useState(prefill?.criticality ?? "B");
-  // Recuadros del formulario REGI-OPE-26.3 (Mercurio), modo standalone.
+  // Recuadros del formulario REGI-MAN-02.3 (Mercurio), modo standalone.
   // assignedToArea arranca en TERCERIZADO cuando el flujo ya exige proveedor
   // (ej. "Nueva Solicitud de Servicio"), para no pedir un clic de más.
   const [requestedByArea, setRequestedByArea] = useState("");
@@ -403,6 +403,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     ?? assets.find(a => a.id === assetId)?.name
     ?? null;
   const aiTaskDesc = description.trim() || title.trim() || null;
+  // Inspección vs mantenimiento: la IA calibra con esto el alcance de criterios,
+  // LOTO y riesgo (una inspección general no se analiza como un desarme).
+  const aiTaskType: "INSPECTION" | "MAINTENANCE" = type === "INSPECTION" ? "INSPECTION" : "MAINTENANCE";
 
   // Sugerir las tareas a ejecutar. A diferencia del resto de las sugerencias,
   // ésta parte del TÍTULO (la tarea todavía está vacía: es lo que se completa).
@@ -472,6 +475,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         assetLabel: aiAssetLabel,
         vesselCode: vesselCode || null,
         taskDesc: aiTaskDesc,
+        taskType: aiTaskType,
       });
       if (res.text) setAcceptanceCriteria(res.text);
       else setErr(t("wo.ai.noText"));
@@ -480,7 +484,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       setErr(e instanceof ApiError ? `${t("wo.ai.criteriaPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingCriteria(false); }
-  }, [loadingCriteria, aiAssetLabel, aiTaskDesc, t]);
+  }, [loadingCriteria, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, t]);
 
   const handleLotoClick = useCallback(async () => {
     if (loadingLoto) return;
@@ -495,6 +499,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         assetLabel: aiAssetLabel,
         vesselCode: vesselCode || null,
         taskDesc: aiTaskDesc,
+        taskType: aiTaskType,
         acceptanceCriteria: acceptanceCriteria || null,
       });
       if (res.text) setLoto(res.text);
@@ -504,7 +509,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       setErr(e instanceof ApiError ? `${t("wo.ai.lotoPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingLoto(false); }
-  }, [loadingLoto, aiAssetLabel, aiTaskDesc, acceptanceCriteria, t]);
+  }, [loadingLoto, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, acceptanceCriteria, t]);
 
   const handleRiskClick = useCallback(async () => {
     if (loadingRisk) return;
@@ -519,6 +524,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         assetLabel: aiAssetLabel,
         vesselCode: vesselCode || null,
         taskDesc: aiTaskDesc,
+        taskType: aiTaskType,
         acceptanceCriteria: acceptanceCriteria || null,
         loto: loto || null,
       });
@@ -529,7 +535,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       setErr(e instanceof ApiError ? `${t("wo.ai.riskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingRisk(false); }
-  }, [loadingRisk, aiAssetLabel, aiTaskDesc, acceptanceCriteria, loto, t]);
+  }, [loadingRisk, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, acceptanceCriteria, loto, t]);
 
   const handleConsequenceClick = useCallback(async () => {
     if (loadingConsequence) return;
@@ -544,6 +550,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         assetName: aiAssetLabel ?? "",
         planTitle: title.trim() || null,
         planDescription: description.trim() || null,
+        taskType: aiTaskType,
+        vesselCode: vesselCode || null,
       });
       if (res.category) setConsequenceCategory(res.category);
       if (res.rationale) setConsequenceRationale(res.rationale);
@@ -552,7 +560,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       setErr(e instanceof ApiError ? `${t("wo.ai.consequencePrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
     }
     finally { setLoadingConsequence(false); }
-  }, [loadingConsequence, aiAssetLabel, aiTaskDesc, title, description, t]);
+  }, [loadingConsequence, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, title, description, t]);
 
   // IA: detecta el activo que mejor corresponde a la deficiencia (solo modo audit-finding,
   // donde el origen no trae activo). Elige entre los equipos ya cargados del buque.
@@ -932,7 +940,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
           // Solo admin: abrir en nombre de otro usuario (SOLICITA). openDate ya va arriba.
           createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
-          // Recuadros del formulario REGI-OPE-26.3 (Mercurio). "Asignado a" es lo
+          // Recuadros del formulario REGI-MAN-02.3 (Mercurio). "Asignado a" es lo
           // que gatilla el proveedor — mismo eje que usa el editor completo de la
           // OT. Tenants sin ese formulario preservan el criterio anterior: sólo
           // se manda TERCERIZADO si se cargó algún proveedor libre.
@@ -1136,7 +1144,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     </div>
                   ))}
                 </div>
-                {/* Mismos recuadros del formulario REGI-OPE-26.3 que el alta
+                {/* Mismos recuadros del formulario REGI-MAN-02.3 que el alta
                     libre. Tipo/Prioridad ya vienen fijados por el plan (cajas
                     de arriba); acá sólo lo que el papel pide y el plan no
                     define: viaje, ubicación, quién solicita/asigna y sistema. */}
@@ -1215,7 +1223,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 </div>
                 {isMercurio ? (
                   <>
-                    {/* Mismo orden que el papel REGI-OPE-26.3: nro de viaje/
+                    {/* Mismo orden que el papel REGI-MAN-02.3: nro de viaje/
                         ubicación, solicitado por, asignado a (+ proveedor si
                         corresponde), y los 3 recuadros con casillero. */}
                     <div className="grid grid-cols-2 gap-3">

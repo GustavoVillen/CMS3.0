@@ -50,7 +50,7 @@ const WO_OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
 
 /**
  * DEPARTAMENTO de la SS (Cubierta/Máquinas/Barcaza/Otros) a partir del SISTEMA
- * de la OT (Máquinas / R-E Cubierta / Barcazas). REGI-OPE-26.3 no tiene
+ * de la OT (Máquinas / R-E Cubierta / Barcazas). REGI-MAN-02.3 no tiene
  * "departamento": el eje equivalente del papel es el sistema sobre el que se
  * trabaja, y es el que mejor describe a qué área va el servicio.
  */

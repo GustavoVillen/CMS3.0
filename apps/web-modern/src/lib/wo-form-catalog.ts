@@ -1,4 +1,4 @@
-// Catálogo del formulario controlado de Orden de Trabajo (REGI-OPE-26.3).
+// Catálogo del formulario controlado de Orden de Trabajo (REGI-MAN-02.3).
 //
 // El texto está en español porque es el redactado oficial del documento
 // controlado del cliente: se imprime tal cual en el papel y no se traduce.

@@ -1,4 +1,4 @@
-// PROGRAMACION DE TRABAJO de la OT (recuadro del formulario REGI-OPE-26.3):
+// PROGRAMACION DE TRABAJO de la OT (recuadro del formulario REGI-MAN-02.3):
 // una fila por jornada — fecha, técnico, lugar, empresa y horario.
 //
 // Antes esta tabla del papel salía siempre vacía: se derivaba de los registros

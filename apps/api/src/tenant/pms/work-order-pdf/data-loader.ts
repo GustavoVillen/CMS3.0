@@ -267,7 +267,7 @@ export async function loadWorkOrderPdfContext(
     } catch { /* non-blocking */ }
   }
 
-  // ── Formulario REGI-OPE-26.3 ──────────────────────────────────────────────
+  // ── Formulario REGI-MAN-02.3 ──────────────────────────────────────────────
   // REPUESTOS / MATERIALES planificados.
   let plannedItems: WorkOrderPlannedItem[] = [];
   if (prismaRaw) {
