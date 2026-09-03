@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-03] Gantt: primero la tarea, despues el codigo
+Agent: Claude Opus 5
+- Pedido del usuario: en el Gantt de mantenimiento interesa mas LA TAREA que el
+  codigo. La fila decia "DCH-ALARM-SENT-30 . ALARMAS SENTINAS: ..." y con el
+  ancho de la columna el titulo se cortaba siempre.
+- Ahora va el titulo primero (en negrita) y el codigo despues, en mono y gris:
+  el que se corta pasa a ser el codigo. El tooltip sigue mostrando los dos
+  completos. Un solo lugar: MaintenanceGantt.tsx, la etiqueta de la fila.
+
 [2026-09-03] Los analisis con IA, al nivel de la tripulacion y dentro del alcance
 Agent: Claude Opus 5
 - Pedido del usuario: que los cuatro analisis que genera la IA (criterios de

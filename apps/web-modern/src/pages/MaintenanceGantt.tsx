@@ -525,9 +525,12 @@ export function MaintenanceGanttPage() {
                     style={{ height: ROW_H }}
                   >
                     <div className="sticky left-0 z-10 flex flex-col justify-center px-3 border-r border-fg/10 shrink-0 bg-surface dark:bg-[#0a0f1e] group-hover:bg-fg/[0.02]" style={{ width: LEFT_W, minWidth: LEFT_W, paddingLeft: 36 }}>
-                      <span className="text-[11px] leading-tight truncate text-fg/80" title={`${p.taskCode} · ${p.title}`}>
-                        <span className="font-mono font-semibold text-accent">{p.taskCode}</span>
-                        <span className="text-text-industrial/60"> · {p.title}</span>
+                      {/* Primero LA TAREA y después el código: en el Gantt se busca por lo que
+                          hay que hacer, no por el código. Con el ancho justo el que se corta es
+                          el código, no el título (el tooltip muestra los dos completos). */}
+                      <span className="text-[11px] leading-tight truncate text-fg/80" title={`${p.title} · ${p.taskCode}`}>
+                        <span className="font-semibold">{p.title}</span>
+                        <span className="font-mono text-text-industrial/50"> · {p.taskCode}</span>
                       </span>
                       {/* Antes esta línea era "última → próxima", que se leía como si
                           la barra fuera todo el ciclo. Ahora dice explícitamente cuál
