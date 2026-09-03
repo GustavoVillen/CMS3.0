@@ -48,7 +48,7 @@ export interface SheetPlan {
   providerRequests?: Array<{ providerId: string; providerName?: string | null }> | null;
 }
 
-interface AssetInfo { id: string; name: string | null; manufacturer?: string | null; model?: string | null; sfiCode?: string | null }
+interface AssetInfo { id: string; name: string | null; manufacturer?: string | null; model?: string | null; sfiCode?: string | null; status?: string | null }
 
 const isHours = (t: string) => t === "HOURS" || t === "RUNNING_HOURS";
 const isMonths = (t: string) => t === "MONTHS" || t === "CALENDAR";
@@ -270,7 +270,7 @@ export async function buildMaintenanceSheet(o: {
   // del equipo sólo se usa cuando el plan no trae grupo. Un equipo con tareas de
   // grupos distintos (una bomba de incendio con tareas de LCI y de auxiliares)
   // aparece como un bloque en cada banda, igual que en la planilla de papel.
-  interface EquipBlock { name: string; subtitle: string; group: number; plans: SheetPlan[] }
+  interface EquipBlock { name: string; subtitle: string; group: number; outOfService: boolean; plans: SheetPlan[] }
   const groups = new Map<string, EquipBlock>();
   for (const p of plans) {
     const a = p.assetId ? assetById.get(p.assetId) : undefined;
@@ -282,6 +282,9 @@ export async function buildMaintenanceSheet(o: {
         name: p.assetName ?? a?.name ?? "Sin equipo asignado",
         subtitle,
         group,
+        // Equipo parado: sus tareas siguen venciendo, pero no se ejecutan. Sin
+        // esta marca, la planilla impresa muestra rojos que nadie puede cerrar.
+        outOfService: a?.status === "OUT_OF_SERVICE",
         plans: [],
       });
     }
@@ -315,8 +318,9 @@ export async function buildMaintenanceSheet(o: {
     "Ítem", "Descripción", "Tarea a realizar", "Realizar cada: Hs/lapso",
     "Última verificación", "Próximo recorrido",
     "Muestreo", "Inspección", "Mantenimiento", "Proveedor",
+    "Fuera de servicio",
   ];
-  const LAST_COL = HEADERS.length;   // J
+  const LAST_COL = HEADERS.length;   // K
 
   const NAVY = "FF1F3864";        // texto azul oscuro de la planilla de papel
   const PEACH = "FFF8CBAD";       // franja del equipo
@@ -438,10 +442,24 @@ export async function buildMaintenanceSheet(o: {
       desc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PEACH } };
       desc.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
 
+      // K: fuera de servicio. Es una condición del EQUIPO, no de cada tarea, así
+      // que va combinada sobre todo el bloque igual que el ítem y la descripción.
+      // Vacía cuando la máquina está en uso: una columna con "NO" en cada fila
+      // tapa el dato que importa.
+      ws.mergeCells(first, LAST_COL, lastRow, LAST_COL);
+      const oos = ws.getCell(first, LAST_COL);
+      if (e.outOfService) {
+        oos.value = "FUERA DE SERVICIO";
+        oos.font = { bold: true, size: 9, color: { argb: "FFC00000" } };
+        oos.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0E0" } };
+      }
+      oos.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
       // Bordes en cada celda del bloque combinado (Excel no los hereda del merge).
       for (let i = first; i <= lastRow; i++) {
         ws.getCell(i, 1).border = border;
         ws.getCell(i, 2).border = border;
+        ws.getCell(i, LAST_COL).border = border;
       }
     }
   }
@@ -489,6 +507,7 @@ export async function buildMaintenanceSheet(o: {
   ws.getColumn(8).width = 11;
   ws.getColumn(9).width = 14;
   ws.getColumn(10).width = 26;
+  ws.getColumn(11).width = 14;
   ws.autoFilter = { from: { row: 2, column: 3 }, to: { row: lastDataRow, column: LAST_COL } };
 
   return wb;
