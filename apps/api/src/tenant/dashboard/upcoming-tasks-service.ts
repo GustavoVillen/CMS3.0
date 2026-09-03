@@ -127,7 +127,32 @@ export async function getUpcomingTasks(
 
   // ── Planes de mantenimiento ────────────────────────────────────────────────
   const duePlans = await listDueItems(session, { vesselCode: filters.vesselCode ?? null });
+
+  // Equipos parados: sus planes NO entran en el listado. Esto es lo que hay que
+  // hacer esta semana, y sobre una máquina fuera de servicio no hay nada que
+  // hacer hasta que vuelva a operar. El plan sigue venciendo y se sigue viendo
+  // en el Plan de Mantenimiento, rotulado como fuera de servicio; lo que no
+  // corresponde es que aparezca en la lista de trabajo ni en su PDF, donde se
+  // lee como una tarea pendiente más.
+  //
+  // Las ÓRDENES DE TRABAJO abiertas sí se mantienen, aunque el equipo esté
+  // parado: una OT la abrió una persona y sigue siendo un compromiso que hay
+  // que cerrar o cancelar a mano. Sacarla escondería trabajo real.
+  const oosAssetIds = new Set<string>();
+  const planAssetIds = [...new Set(duePlans.map(p => p.assetId).filter(Boolean))];
+  if (planAssetIds.length > 0) {
+    const assetDelegate = (prismaRaw as unknown as {
+      asset: { findMany(args: unknown): Promise<{ id: string }[]> };
+    }).asset;
+    const oos = await assetDelegate.findMany({
+      where: { tenantId: tenant.id, deletedAt: null, status: "OUT_OF_SERVICE", id: { in: planAssetIds } },
+      select: { id: true },
+    });
+    for (const a of oos) oosAssetIds.add(a.id);
+  }
+
   for (const plan of duePlans) {
+    if (oosAssetIds.has(plan.assetId)) continue;
     const due = plan.nextDueDate ? new Date(plan.nextDueDate) : null;
     const isHours = plan.triggerType === "HOURS" || plan.triggerType === "RUNNING_HOURS";
 
