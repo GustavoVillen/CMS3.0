@@ -12,10 +12,10 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo, sanitizePdfText } from "../pms/pdf-helpers";
+import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, renderLabeledTextBox } from "../pms/pdf-helpers";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 import { GROUP_TITLE as TMSA_GROUP_TITLE, METRIC_LABEL as TMSA_METRIC_LABEL } from "../tmsa/tmsa-pdf-service";
-import { getIsmChapter10Evidence, type IsmStatus, type IsmMetric } from "./ism-service";
+import { getIsmChapter10Evidence, type IsmStatus, type IsmMetric, type IsmFinding } from "./ism-service";
 
 /** Texto del Código para cada cláusula (resumen fiel, no cita literal completa). */
 const CLAUSE_TEXT: Record<string, { title: string; text: string }> = {
@@ -90,6 +90,147 @@ const OWN_METRIC_LABEL: Record<string, string> = {
   ismStandbyWithoutTest:       "Sin prueba periódica",
   ismPreDepartureChecks30d:    "Verificaciones de zarpe (30 d)",
 };
+
+/**
+ * Qué está mal y cómo se arregla, por hallazgo. Es el MISMO texto que muestra
+ * la pantalla al tocar el badge de una cláusula: son las claves `ism.fix.*` del
+ * diccionario de web-modern (lib/i18n.tsx), en español, que es el idioma de
+ * este PDF. Si cambia el texto de la pantalla, cambiar también acá — igual que
+ * ya pasa con los rótulos de grupos y métricas de arriba.
+ *
+ * Los pasos van en un solo texto separados por saltos de línea; se numeran al
+ * imprimirlos.
+ */
+const FIX_TEXT: Record<string, { title: string; what: string; how: string }> = {
+  auditFindingsOpen: {
+    title: "Hallazgos de auditoría externa abiertos",
+    what: "Hay hallazgos de auditoría externa todavía abiertos. No son no conformidades del buque, pero el auditor los va a cruzar con lo que se corrigió.",
+    how: "Abrí Auditorías Externas.\nEntrá a cada hallazgo abierto.\nRegistrá qué se hizo y cerralo.\nSi el hallazgo exige un trabajo a bordo, abrí la OT correctiva desde el defecto.",
+  },
+  caEffectivenessOverdue: {
+    title: "Verificaciones de eficacia vencidas",
+    what: "A los 30 días de cerrar un defecto el sistema pide confirmar si el problema volvió. Hay confirmaciones vencidas sin firmar: la medida está registrada, pero no se sabe si sirvió.",
+    how: "Abrí Defectos.\nEntrá a los cerrados que piden verificación.\nCompletá la Verificación de eficacia diciendo si el problema volvió o no.\nQueda firmada con usuario y fecha: eso es lo que mira el auditor.",
+  },
+  caLowRate: {
+    title: "La mayoría de los defectos cerrados no dice qué se hizo",
+    what: "Menos de la mitad de los defectos cerrados en los últimos 90 días tiene registrada la medida correctiva. Cerrar sin decir cómo se resolvió deja a la cláusula 10.2.3 sin evidencia.",
+    how: "Abrí Defectos y mirá los cerrados en los últimos 90 días.\nEntrá a los que no tienen Acción correctiva y escribí qué se hizo.\nSumá las Acciones preventivas cuando el problema pueda repetirse.\nDe acá en adelante, completá la medida ANTES de cerrar el defecto.",
+  },
+  caNothing: {
+    title: "Todavía no hay medidas correctivas registradas",
+    what: "En los últimos 90 días no se cerró ningún defecto ni se verificó ninguna eficacia. No es un incumplimiento, pero tampoco hay evidencia de que las no conformidades terminen en una medida.",
+    how: "Abrí Defectos.\nAl cerrar cada defecto, completá la Acción correctiva: qué se hizo para resolverlo.\nSi la corrección exige trabajo a bordo, abrí la OT correctiva desde el propio defecto.\nA los 30 días el sistema te va a pedir confirmar si el problema volvió.",
+  },
+  caWithoutAction: {
+    title: "Defectos cerrados sin medida registrada",
+    what: "Hay defectos cerrados en los últimos 90 días que no dicen qué se hizo para resolverlos. Al auditor le falta justo el eslabón entre el problema y la solución.",
+    how: "Abrí Defectos.\nEntrá a los cerrados sin Acción correctiva.\nEscribí qué se hizo, con una línea concreta: qué se cambió, reparó o ajustó.\nSi hubo trabajo a bordo, enlazá la OT correctiva que lo ejecutó.",
+  },
+  certificatesWithoutPlan: {
+    title: "Certificados sin plan que los renueve",
+    what: "Ningún certificado del buque está enlazado al plan que lo mantiene vigente. El certificado prueba el estado, pero no muestra qué mantenimiento lo sostiene.",
+    how: "Abrí Certificados.\nEntrá al certificado y buscá el campo «Se renueva con el plan».\nElegí la tarea del plan que lo mantiene vigente: la inspección o el servicio que lo renueva.\nRepetí con cada certificado que dependa de un mantenimiento.",
+  },
+  inspectionsNone: {
+    title: "Todavía no hay inspecciones cargadas",
+    what: "No hay ninguna inspección registrada para este buque. La cláusula pide inspecciones a intervalos apropiados, y sin registros no hay con qué probarlo.",
+    how: "Abrí Inspecciones.\nCreá la inspección con su plantilla y su periodicidad.\nEl sistema calcula solo la próxima fecha y avisa cuando se vence.\nLos checklists de a bordo (zarpe, arribo, espacios confinados) se cargan en Check Lists.",
+  },
+  inspectionsOverdue: {
+    title: "Inspecciones vencidas sin hacer",
+    what: "Hay inspecciones cuya fecha ya pasó y siguen sin ejecutarse. Es la falta más directa contra «intervalos apropiados» y la primera que mira un auditor.",
+    how: "Abrí Inspecciones.\nEntrá a las que figuran vencidas.\nEjecutalas y cerralas con su resultado.\nSi ahora no se pueden hacer a bordo, dejá registrado el diferimiento con su análisis de riesgo en vez de dejarlas vencidas en silencio.",
+  },
+  ncNoCause: {
+    title: "No conformidades abiertas y ninguna con causa",
+    what: "Hay varias no conformidades abiertas y ninguna tiene causa registrada. El Código pide notificarlas indicando su posible causa; hoy no hay ninguna cargada.",
+    how: "Abrí Defectos.\nEntrá a cada no conformidad abierta.\nCompletá la Causa inmediata y, si se conoce, la Causa contribuyente y la Causa raíz.\nCon eso la no conformidad queda notificada como pide 10.2.2.",
+  },
+  ncWithoutCause: {
+    title: "No conformidades sin causa registrada",
+    what: "Quedan no conformidades abiertas sin ninguna causa cargada. El Código pide la causa «si se conoce», así que la que falta hay que completarla o dejar dicho por qué todavía no se sabe.",
+    how: "Abrí Defectos y filtrá las abiertas.\nEntrá a las que no tienen causa.\nCompletá la Causa inmediata; si el caso lo amerita, sumá Causa contribuyente y Causa raíz.\nSi la causa todavía no se conoce, dejalo escrito en el análisis: eso también es notificar.",
+  },
+  plansWithoutCriteria: {
+    title: "Tareas sin origen declarado",
+    what: "Quedan tareas del plan con el campo Origen del criterio vacío. La trazabilidad regla → mantenimiento está empezada pero incompleta, y el auditor suele pedir justo las que faltan.",
+    how: "Abrí Plan de Mantenimiento y pasá a Vista Planilla.\nOrdená por la columna Origen para juntar las que están vacías.\nSeleccionalas y usá «Asignar origen del criterio».\nSi la tarea sale del manual del equipo, elegí Manual del fabricante; si la puso la empresa, Estándar de la Compañía.",
+  },
+  preDepartureMissing: {
+    title: "Sin verificaciones de zarpe en el último mes",
+    what: "No hay ningún checklist de zarpe completado en los últimos 30 días. Es la evidencia más simple de que el equipo crítico se prueba antes de salir a navegar.",
+    how: "Abrí Check Lists.\nCompletá el checklist Pre-Departure antes de zarpar.\nQueda registrado con usuario, fecha y firma.\nSi el buque no navegó en el mes, no hay nada que corregir: el número vuelve solo en el próximo zarpe.",
+  },
+  recLowCoverage: {
+    title: "Pocas órdenes cerradas tienen parte de trabajo",
+    what: "Menos del 80% de las órdenes cerradas tiene un parte que cuente qué se hizo. La evidencia existe, pero con huecos: el auditor va a caer justo en una orden sin registro.",
+    how: "Tomá la costumbre de asentar el avance el mismo día del trabajo.\nUsá el botón verde «Nuevo registro de Avance de OT» en Inicio: no hace falta abrir el formulario entero.\nUna foto del antes y el después vale más que tres renglones.\nAcordate de que la orden cerrada ya no admite avances: cargalo antes de cerrar.",
+  },
+  recNoWorkLogs: {
+    title: "Órdenes cerradas sin ningún parte de trabajo",
+    what: "Se cerraron órdenes de trabajo sin un solo parte que cuente qué se hizo. Hay mantenimiento ejecutado del que no quedó registro: es exactamente lo que busca un auditor.",
+    how: "En Inicio usá el botón verde «Nuevo registro de Avance de OT».\nElegí la orden y asentá qué se hizo: texto, foto, video o documento.\nCargá el avance ANTES de cerrar la orden: una vez cerrada ya no admite avances.\nAl cerrar, completá además el resultado del trabajo.",
+  },
+  recNothing: {
+    title: "No hay órdenes cerradas en los últimos 90 días",
+    what: "No se cerró ninguna orden de trabajo en los últimos 90 días, así que no hay registros de mantenimiento recientes que mostrar.",
+    how: "Abrí Órdenes de Trabajo y revisá qué hay abierto.\nCerrá las que ya se ejecutaron, con su resultado.\nSi el trabajo se hizo y nadie lo cargó, registralo con su fecha real de ejecución.\nEl parte de trabajo se carga con «Nuevo registro de Avance de OT», desde Inicio o desde la propia orden.",
+  },
+  regulatoryNothing: {
+    title: "Todavía no hay nada cargado",
+    what: "Este buque no tiene planes de mantenimiento, ni inspecciones reglamentarias, ni certificados cargados. Sin eso no hay con qué mostrar de dónde sale el mantenimiento que se hace a bordo.",
+    how: "Abrí Plan de Mantenimiento.\nCargá los equipos y sus tareas, o cloná el plan de un buque hermano.\nCargá los certificados del buque en Certificados.\nVolvé a esta pantalla: los números se actualizan solos.",
+  },
+  regulatoryUndeclared: {
+    title: "Ninguna tarea declara de qué regla nace",
+    what: "Ninguna tarea del plan tiene declarado su Origen del criterio y tampoco hay inspecciones reglamentarias cargadas. Delante de un auditor no se puede explicar por qué se mantiene lo que se mantiene.",
+    how: "Abrí Plan de Mantenimiento y pasá a Vista Planilla.\nSeleccioná varias tareas juntas y usá «Asignar origen del criterio».\nElegí de dónde nace cada una: requisito de clase, estatutario, manual del fabricante, estándar de la Compañía o criterio de ingeniería.\nLo que nace de una inspección de clase o bandera se carga además en Inspecciones.",
+  },
+  scNothing: {
+    title: "Ningún equipo marcado como crítico",
+    what: "Este buque no tiene ningún equipo marcado como crítico para la seguridad. La cláusula pide identificar aquellos cuyo fallo repentino pueda crear una situación peligrosa.",
+    how: "Abrí Equipos.\nEntrá al equipo y marcá «Equipo crítico para seguridad».\nDeclará si trabaja en uso continuo o está De reserva.\nEmpezá por los obvios: gobierno, contra incendio, generación de emergencia, achique.",
+  },
+  scWithoutPlan: {
+    title: "Equipos críticos sin plan activo",
+    what: "Hay equipos marcados como críticos que no tienen ninguna tarea activa en el plan. Sin plan no hay ninguna medida que promueva su fiabilidad, que es lo que pide la cláusula.",
+    how: "Abrí Equipos y mirá cuáles están marcados como críticos.\nEn Plan de Mantenimiento creá al menos una tarea activa para cada uno.\nPonele periodicidad y origen del criterio (normalmente el manual del fabricante).\nSi el equipo está fuera de uso y no lleva plan, dejalo escrito en la excepción del propio equipo.",
+  },
+  standbyWithoutTest: {
+    title: "Equipos de reserva sin prueba periódica designada",
+    what: "Hay equipos de reserva sin declarar cuál de sus tareas es la prueba periódica. La cláusula lo exige expresamente: al equipo que no se usa de forma continua hay que probarlo cada tanto.",
+    how: "Abrí Equipos.\nEntrá a cada equipo marcado De reserva.\nEn «¿Cuál de sus tareas es la prueba periódica?» elegí la tarea con la que se prueba que arranca.\nSi todavía no tiene esa tarea, creala en el plan y después volvé a elegirla acá.",
+  },
+  woComplianceLow: {
+    title: "Cumplimiento en plazo por debajo del objetivo",
+    what: "El porcentaje de órdenes cerradas dentro de su fecha está por debajo del 85% esperado; por debajo del 75% se cuenta como brecha. Dice que el plan se cumple tarde, no que no se cumple.",
+    how: "Abrí Órdenes de Trabajo y mirá las vencidas.\nCerrá primero las más viejas: son las que más bajan el porcentaje.\nSi una tarea nunca llega a tiempo, revisá su periodicidad en el plan: puede que el intervalo no sea realista.\nLo que no se pueda cumplir va como diferimiento aprobado, no como vencido.",
+  },
+  woCriticalOverdue: {
+    title: "Órdenes de equipo crítico vencidas",
+    what: "Hay órdenes de trabajo vencidas sobre equipo crítico. Es la peor combinación posible: el equipo cuyo fallo crea una situación peligrosa es justo el que está esperando mantenimiento.",
+    how: "Abrí Órdenes de Trabajo.\nAtendé primero las de equipo crítico vencidas.\nEjecutalas y cerralas con su resultado y su parte de trabajo.\nLo que no se pueda hacer ahora va como diferimiento, con análisis de riesgo y aprobación de tierra.",
+  },
+  woOverdue: {
+    title: "Órdenes de trabajo vencidas",
+    what: "Hay órdenes de trabajo cuya fecha ya pasó y siguen abiertas. Mientras el atraso no se explique, el mantenimiento planificado no se ve integrado en la operación del buque.",
+    how: "Abrí Órdenes de Trabajo y ordená por vencimiento.\nCerrá primero las más viejas.\nSi el trabajo ya se hizo, cerrala con la fecha real de ejecución.\nSi no se puede hacer a tiempo, cargá el diferimiento: vencida en silencio es lo único que no sirve.",
+  },
+};
+
+/** Fondo y borde de la caja del hallazgo, según su peso. */
+const FIX_TONE: Record<string, { bg: string; border: string }> = {
+  GAP:       { bg: "#fef2f2", border: "#fecaca" },
+  ATTENTION: { bg: "#fffbeb", border: "#fde68a" },
+  INFO:      { bg: "#f8fafc", border: "#e2e8f0" },
+};
+
+/** El número del hallazgo. Un cero no dice nada: en ese caso no se muestra. */
+function findingValue(f: IsmFinding): string {
+  if (f.kind === "pct") return `${Math.round(f.value * 100)}%`;
+  return f.value > 0 ? String(f.value) : "";
+}
 
 const STATUS_TEXT: Record<IsmStatus, string> = { OK: "OK", ATTENTION: "ATENCIÓN", GAP: "BRECHA", INFO: "INFO" };
 const STATUS_COLOR: Record<IsmStatus, string> = { OK: "#16a34a", ATTENTION: "#b45309", GAP: "#b91c1c", INFO: "#64748b" };
@@ -252,6 +393,37 @@ export async function buildIsmChapter10Pdf(
         });
 
         y += BLOCK_H + 6;
+
+        // Diagnóstico del bloque: qué está mal y cómo se arregla. Va en cajas
+        // paginadas (renderLabeledTextBox), que es lo obligatorio para texto
+        // libre: si la lista de pasos cruza de página, el recuadro la sigue.
+        for (const f of g.findings ?? []) {
+          const fx = FIX_TEXT[f.key];
+          if (!fx) continue;
+          const steps = fx.how
+            .split("\n")
+            .map(line => line.trim())
+            .filter(Boolean)
+            .map((line, i) => `${i + 1}. ${line}`)
+            .join("\n");
+          const value = findingValue(f);
+          const tone = FIX_TONE[f.status] ?? FIX_TONE.INFO;
+          y = renderLabeledTextBox(doc, {
+            label: `${STATUS_TEXT[f.status]} · ${fx.title}${value ? ` · ${value}` : ""}`,
+            text: `**Qué está mal:** ${fx.what}\n\n**Cómo se arregla:**\n${steps}`,
+            x: ML,
+            y,
+            width: W,
+            pageBottom: CONTENT_BOTTOM,
+            pageTop: MARGIN_V,
+            labelPosition: "above",
+            labelColor: STATUS_COLOR[f.status],
+            fontSize: 8.5,
+            bg: tone.bg,
+            border: tone.border,
+            markdown: true,
+          });
+        }
       }
       y += 10;
     }

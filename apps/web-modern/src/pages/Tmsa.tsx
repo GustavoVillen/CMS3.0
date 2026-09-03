@@ -16,11 +16,13 @@ import { useVesselContext } from "../lib/vessel-context";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { moduleListLink } from "../lib/tmsa-filter";
+import { ComplianceFixModal, FixBlock, fixSteps, findingValue, type ComplianceFinding, type FixChip } from "../components/compliance/FixModal";
 
 // ─── Types (espejo de tmsa-service.ts) ──────────────────────────────────────────
 type TmsaStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
 interface TmsaMetric { key: string; value: number; kind: "count" | "pct"; }
-interface TmsaGroup { key: string; element: string; status: TmsaStatus; metrics: TmsaMetric[]; }
+type TmsaFinding = ComplianceFinding;
+interface TmsaGroup { key: string; element: string; status: TmsaStatus; metrics: TmsaMetric[]; findings?: TmsaFinding[]; }
 interface TmsaVesselEvidence {
   /** "" cuando el item consolida toda la flota. */
   vesselCode: string;
@@ -90,6 +92,7 @@ interface GroupAssessTarget {
   element: string;
   status: TmsaStatus;
   metrics: TmsaMetric[];
+  findings: TmsaFinding[];
 }
 
 interface TmsaAssessment {
@@ -202,6 +205,18 @@ const TmsaGroupAssessmentModal: React.FC<{ target: GroupAssessTarget; onClose: (
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Qué está mal y cómo se arregla, antes de las métricas: el mismo
+              diagnóstico que da el badge del checklist (ver TmsaFixModal). */}
+          {target.findings.map(f => (
+            <FixBlock
+              key={f.key}
+              pill={STATUS_META[f.status].pill}
+              title={t(`tmsa.fix.${f.key}.title` as TranslationKey)}
+              value={findingValue(f)}
+              what={t(`tmsa.fix.${f.key}.what` as TranslationKey)}
+              steps={fixSteps(t(`tmsa.fix.${f.key}.how` as TranslationKey))}
+            />
+          ))}
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1.5">{t("tmsa.assess.metrics")}</p>
             <dl className="space-y-1">
@@ -329,9 +344,13 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
     chips: [{ navKey: "nav.maintenanceGantt", route: "/maintenance-gantt" }, { navKey: "tmsa.tabs.evidence", tab: true }] },
   { id: "4-2-1", stage: 2, element: "4", rating: "full", liveGroupKey: "certificates",
     chips: [{ navKey: "nav.certificates", route: "/certificates" }] },
-  { id: "4-2-2", stage: 2, element: "4", rating: "partial", liveGroupKey: "inspections",
-    chips: [{ navKey: "nav.inspections", route: "/inspections" }] },
-  { id: "4-2-3", stage: 2, element: "4", rating: "full", liveGroupKey: "inspections",
+  // 4-2-2 / 4-2-3 / 4-3-4 no llevan liveGroupKey: el grupo "inspections" cuenta
+  // filas de la tabla Inspection, que pertenece al motor de plantillas dormante
+  // y no tiene ningún endpoint que la escriba. Apuntar la evidencia ahí sugería
+  // que cargando inspecciones el semáforo cambia, y no puede cambiar.
+  { id: "4-2-2", stage: 2, element: "4", rating: "partial",
+    chips: [{ navKey: "nav.maintenancePlans", route: "/maintenance-plans" }, { navKey: "nav.inspections", route: "/inspections" }] },
+  { id: "4-2-3", stage: 2, element: "4", rating: "partial",
     chips: [{ navKey: "nav.inspections", route: "/inspections" }, { navKey: "tmsa.tabs.evidence", tab: true }] },
   { id: "4-2-4", stage: 2, element: "4", rating: "full", liveGroupKey: "drydockSpec",
     chips: [{ navKey: "nav.drydockSpecs", route: "/drydock-specs" }, { navKey: "nav.deferrals", route: "/deferrals" }] },
@@ -341,9 +360,11 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
     chips: [{ navKey: "nav.spares", route: "/spares" }] },
   { id: "4-3-3", stage: 3, element: "4", rating: "full", liveGroupKey: "plannedMaintenance",
     chips: [{ navKey: "tmsa.tabs.evidence", tab: true }] },
-  { id: "4-3-4", stage: 3, element: "4", rating: "partial", liveGroupKey: "inspections",
-    chips: [{ navKey: "nav.inspections", route: "/inspections" }] },
-  { id: "4-4-1", stage: 4, element: "4", rating: "full", liveGroupKey: "criticalSpares",
+  { id: "4-3-4", stage: 3, element: "4", rating: "partial",
+    chips: [{ navKey: "nav.maintenancePlans", route: "/maintenance-plans" }] },
+  // "Parcial" y no "Cumple": la integración plan → OT → stock es automática,
+  // pero la Solicitud de Repuestos por faltante se carga a mano.
+  { id: "4-4-1", stage: 4, element: "4", rating: "partial", liveGroupKey: "criticalSpares",
     chips: [{ navKey: "nav.spares", route: "/spares" }, { navKey: "nav.spareRequests", route: "/spare-requests" }] },
   { id: "4-4-2", stage: 4, element: "4", rating: "full", liveGroupKey: "drydockSpec",
     chips: [{ navKey: "nav.deferrals", route: "/deferrals" }, { navKey: "nav.drydockSpecs", route: "/drydock-specs" }] },
@@ -351,7 +372,9 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
     chips: [{ navKey: "tmsa.tabs.evidence", tab: true }] },
   { id: "4-4-4", stage: 4, element: "4", rating: "full", liveGroupKey: "conditionMonitoring",
     chips: [{ navKey: "nav.fluidAnalyses", route: "/fluid-analyses" }] },
-  { id: "4-4-5", stage: 4, element: "4", rating: "full", liveGroupKey: "engineeringAudit",
+  // "Parcial": el indicador depende de que el plan anual lleve "-AUD-ING" en el
+  // código; un plan de auditoría cargado con otro código no se cuenta.
+  { id: "4-4-5", stage: 4, element: "4", rating: "partial", liveGroupKey: "engineeringAudit",
     chips: [{ navKey: "nav.workOrders", route: "/work-orders" }, { navKey: "nav.team", route: "/team" },
             { navKey: "tmsa.tabs.evidence", tab: true }] },
 
@@ -370,9 +393,82 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
   { id: "4a-3-1", stage: 3, element: "4a", rating: "partial", chips: [] },
   { id: "4a-3-2", stage: 3, element: "4a", rating: "full", liveGroupKey: "conditionMonitoring",
     chips: [{ navKey: "nav.fluidAnalyses", route: "/fluid-analyses" }] },
-  { id: "4a-4-1", stage: 4, element: "4a", rating: "full", liveGroupKey: "criticalEquipment",
+  // "Parcial": la alerta de vencidos sí distingue el equipo crítico, pero el
+  // monitoreo por condición no se separa por criticidad.
+  { id: "4a-4-1", stage: 4, element: "4a", rating: "partial", liveGroupKey: "criticalEquipment",
     chips: [{ navKey: "tmsa.tabs.evidence", tab: true }] },
 ];
+
+// ─── Ventana "qué está mal / cómo se arregla" ───────────────────────────────
+// El marco y los bloques son los compartidos con el panel ISM
+// (components/compliance/FixModal): acá sólo se resuelve el texto del Elemento
+// 4 (`tmsa.fix.*`) y qué explica cada badge.
+
+interface FixTarget {
+  /** Qué badge se apretó: el estado del buque o la capacidad del sistema. */
+  kind: "usage" | "capacity";
+  itemId: string;
+  status: TmsaStatus;
+  /** Rótulo del badge de capacidad (Cumple / Parcial / No cubre). */
+  ratingLabel?: string;
+  findings: TmsaFinding[];
+  chips: ChecklistChip[];
+  /** Sin buque elegido no hay estado en vivo que explicar. */
+  hasVessel: boolean;
+}
+
+const TmsaFixModal: React.FC<{
+  target: FixTarget;
+  onClose: () => void;
+  onGoEvidence: () => void;
+}> = ({ target, onClose, onGoEvidence }) => {
+  const t = useT();
+  const navigate = useNavigate();
+  const meta = STATUS_META[target.status];
+  const isCapacity = target.kind === "capacity";
+
+  const chips: FixChip[] = target.chips.map(chip => ({
+    label: t(chip.navKey),
+    onClick: () => { onClose(); chip.tab ? onGoEvidence() : navigate(chip.route!); },
+  }));
+
+  return (
+    <ComplianceFixModal
+      eyebrow={target.itemId.toUpperCase().replace(/-/g, ".")}
+      title={t(`tmsa.checklist.item.${target.itemId}.q` as TranslationKey)}
+      statusPill={meta.pill}
+      StatusIcon={meta.icon}
+      statusLabel={isCapacity ? (target.ratingLabel ?? "") : t(`tmsa.status.${target.status}` as TranslationKey)}
+      chips={chips}
+      onClose={onClose}
+    >
+      {isCapacity ? (
+        // La capacidad no depende del buque: se explica qué cubre el sistema.
+        <FixBlock
+          pill={STATUS_META.INFO.pill}
+          title={t("fix.capacityTitle")}
+          what={t("fix.capacityWhat")}
+          extra={t(`tmsa.checklist.item.${target.itemId}.expl` as TranslationKey)}
+        />
+      ) : !target.hasVessel ? (
+        <p className="text-xs text-text-industrial/60">{t("fix.noVessel")}</p>
+      ) : target.findings.length === 0 ? (
+        <FixBlock pill={STATUS_META.OK.pill} title={t("fix.noneTitle")} what={t("fix.noneWhat")} />
+      ) : (
+        target.findings.map(f => (
+          <FixBlock
+            key={f.key}
+            pill={STATUS_META[f.status].pill}
+            title={t(`tmsa.fix.${f.key}.title` as TranslationKey)}
+            value={findingValue(f)}
+            what={t(`tmsa.fix.${f.key}.what` as TranslationKey)}
+            steps={fixSteps(t(`tmsa.fix.${f.key}.how` as TranslationKey))}
+          />
+        ))
+      )}
+    </ComplianceFixModal>
+  );
+};
 
 function findLiveGroup(items: TmsaVesselEvidence[], groupKey?: string): TmsaGroup | null {
   if (!groupKey || items.length !== 1) return null;
@@ -382,6 +478,8 @@ function findLiveGroup(items: TmsaVesselEvidence[], groupKey?: string): TmsaGrou
 const TmsaChecklistCard: React.FC<{ item: ChecklistItem; items: TmsaVesselEvidence[]; onGoEvidence: () => void }> = ({ item, items, onGoEvidence }) => {
   const t = useT();
   const navigate = useNavigate();
+  // Los dos badges abren la misma ventana; cambia qué explica (ver FixTarget).
+  const [fix, setFix] = useState<FixTarget | null>(null);
   const capMeta = STATUS_META[RATING_STATUS[item.rating]];
   const CapIcon = capMeta.icon;
   const group = findLiveGroup(items, item.liveGroupKey);
@@ -402,19 +500,44 @@ const TmsaChecklistCard: React.FC<{ item: ChecklistItem; items: TmsaVesselEviden
       <div className="grid grid-cols-2 gap-2 mt-2.5">
         <div>
           <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("tmsa.checklist.capacityLabel")}</p>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${capMeta.pill}`}>
+          <button
+            type="button"
+            onClick={() => setFix({
+              kind: "capacity",
+              itemId: item.id,
+              status: RATING_STATUS[item.rating],
+              ratingLabel: t(`tmsa.checklist.rating.${item.rating}` as TranslationKey),
+              findings: [],
+              chips: item.chips,
+              hasVessel: !!group,
+            })}
+            title={t("fix.capacityTitle")}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer hover:brightness-110 transition-all ${capMeta.pill}`}
+          >
             <CapIcon className="w-3 h-3" />
             {t(`tmsa.checklist.rating.${item.rating}` as TranslationKey)}
-          </span>
+          </button>
         </div>
         <div>
           <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("tmsa.checklist.usageLabel")}</p>
           {item.liveGroupKey ? (
             group && usageMeta && UsageIcon ? (
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${usageMeta.pill}`}>
+              <button
+                type="button"
+                onClick={() => setFix({
+                  kind: "usage",
+                  itemId: item.id,
+                  status: group.status,
+                  findings: group.findings ?? [],
+                  chips: item.chips,
+                  hasVessel: true,
+                })}
+                title={t("fix.title")}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer hover:brightness-110 transition-all ${usageMeta.pill}`}
+              >
                 <UsageIcon className="w-3 h-3" />
                 {t(`tmsa.status.${group.status}` as TranslationKey)}
-              </span>
+              </button>
             ) : (
               <span className="text-[10px] text-text-industrial/40 italic">{t("tmsa.checklist.noVessel")}</span>
             )
@@ -463,6 +586,8 @@ const TmsaChecklistCard: React.FC<{ item: ChecklistItem; items: TmsaVesselEviden
           })}
         </dl>
       )}
+
+      {fix && <TmsaFixModal target={fix} onClose={() => setFix(null)} onGoEvidence={onGoEvidence} />}
 
       {item.chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-fg/10">
@@ -662,6 +787,7 @@ export const TmsaPage: React.FC = () => {
                           element: g.element,
                           status: g.status,
                           metrics: g.metrics,
+                          findings: g.findings ?? [],
                         })}
                         title={t("tmsa.assess.hint")}
                         className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer hover:brightness-110 hover:ring-1 hover:ring-fg/20 transition-all ${meta.pill}`}

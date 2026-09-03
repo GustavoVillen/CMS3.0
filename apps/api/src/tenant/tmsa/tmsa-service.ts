@@ -36,6 +36,38 @@ export interface TmsaGroup {
   element: string;
   status: TmsaStatus;
   metrics: TmsaMetric[];
+  /** Lo que falta, en orden de gravedad. Vacío = nada pendiente. */
+  findings: TmsaFinding[];
+}
+
+/**
+ * Qué es exactamente lo que falta en un grupo de evidencia.
+ *
+ * El semáforo dice "hay una brecha"; el hallazgo dice CUÁL, y con eso la
+ * pantalla arma la ventana de "qué está mal / cómo se arregla" y el PDF su
+ * bloque de diagnóstico. Se emite acá, junto al cálculo del estado, para que el
+ * texto y el color no puedan contradecirse: son la misma condición.
+ *
+ * El backend manda la clave; el texto y los pasos son i18n (`tmsa.fix.<key>.*`
+ * en web-modern). El panel ISM reusa tal cual los hallazgos de los grupos que
+ * hereda, con su propio texto (`ism.fix.<key>.*`).
+ */
+export interface TmsaFinding {
+  key: string;
+  /** Cuántos registros lo tienen, o el porcentaje según `kind`. */
+  value: number;
+  kind: "count" | "pct";
+  status: Exclude<TmsaStatus, "OK">;
+}
+
+/** Azúcar para armar la lista de hallazgos sin repetir el objeto entero. */
+function finding(
+  key: string,
+  value: number,
+  status: Exclude<TmsaStatus, "OK">,
+  kind: "count" | "pct" = "count",
+): TmsaFinding {
+  return { key, value, kind, status };
 }
 
 export interface TmsaVesselEvidence {
@@ -60,8 +92,10 @@ export type TmsaEvidenceMode = "fleet" | "perVessel";
 // ── Thresholds (ajustables) ──────────────────────────────────────────────────
 const PMS_COVERAGE_GAP = 0.90;        // cobertura de PMS por debajo → GAP
 const PMS_COVERAGE_ATTENTION = 0.98;  // por debajo → ATTENTION
-const WO_COMPLIANCE_GAP = 0.75;       // % OT en plazo por debajo → GAP
-const WO_COMPLIANCE_ATTENTION = 0.85; // por debajo → ATTENTION
+// Exportados: el panel ISM arma con ellos el diagnóstico de la cláusula 10.4
+// (qué está mal / cómo se arregla). Un solo umbral para el semáforo y el texto.
+export const WO_COMPLIANCE_GAP = 0.75;       // % OT en plazo por debajo → GAP
+export const WO_COMPLIANCE_ATTENTION = 0.85; // por debajo → ATTENTION
 const CRITICAL_OVERDUE_DAYS = 30;     // OT crítica vencida hace +N días
 // Tope del detalle por métrica (/app/tmsa/maintenance/detail). Lo consume el
 // filtro de las planillas (web: lib/tmsa-filter.tsx): si se corta, la planilla
@@ -125,6 +159,35 @@ export async function getTmsaMaintenanceEvidence(
   return { items };
 }
 
+/**
+ * Filtro "esta OT es de equipo crítico".
+ *
+ * La criticidad que manda es la del ACTIVO. `WorkOrder.criticality` es un campo
+ * propio de la orden, de carga manual y con default "B": las OT que genera un
+ * plan nunca lo completan, así que filtrar sólo por él dejaba fuera la mayor
+ * parte del mantenimiento vencido sobre equipo crítico. Cuenta la OT marcada A
+ * a mano Y la que cuelga de un activo de criticidad A.
+ *
+ * Se usa igual en la tarjeta y en el detalle: si divergen, el número del panel
+ * deja de coincidir con la lista que abre.
+ */
+function criticalWoWhere(criticalAssetIds: string[]): Record<string, unknown> {
+  if (criticalAssetIds.length === 0) return { criticality: "A" };
+  return { OR: [{ criticality: "A" }, { assetId: { in: criticalAssetIds } }] };
+}
+
+/** Ids de los activos de criticidad A del alcance, para `criticalWoWhere`. */
+async function criticalAssetIdsOf(
+  p: { asset: { findMany(a: unknown): Promise<unknown[]> } },
+  base: Record<string, unknown>,
+): Promise<string[]> {
+  const rows = await safe(
+    () => p.asset.findMany({ where: { ...base, criticality: "A" }, select: { id: true } }) as Promise<Array<{ id: string }>>,
+    [] as Array<{ id: string }>,
+  );
+  return rows.map(a => a.id);
+}
+
 async function computeOne(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenantId: string,
@@ -176,6 +239,11 @@ async function computeOne(
     [] as Array<{ id: string }>,
   )).map(pl => pl.id);
 
+  // Ids de los activos de criticidad A del alcance. Hacen falta antes del resto
+  // por la misma razón que los planes de auditoría: las métricas de "equipo
+  // crítico" filtran por ellos.
+  const criticalAssetIds = await criticalAssetIdsOf(p, base);
+
   // Todas las consultas son independientes entre sí: se disparan juntas y se
   // espera una sola vez (antes eran ~20 idas a la base en serie POR BUQUE).
   const [
@@ -196,7 +264,7 @@ async function computeOne(
     safe(() => p.asset.count({ where: { ...base, isSafetyCritical: true } }), 0),
     // OTs abiertas de criticidad A vencidas (mantenimiento de equipo crítico sin ejecutar).
     safe(() => p.workOrder.count({
-      where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: now } },
+      where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, ...criticalWoWhere(criticalAssetIds), dueDate: { lt: now } },
     }), 0),
     // % OT cerradas en plazo (últimos 90d) — misma lógica que compliance-service.
     safe(
@@ -208,7 +276,7 @@ async function computeOne(
     ),
     safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] } } }), 0),
     safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, dueDate: { lt: now } } }), 0),
-    safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: dCritical } } }), 0),
+    safe(() => p.workOrder.count({ where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, ...criticalWoWhere(criticalAssetIds), dueDate: { lt: dCritical } } }), 0),
     safe(() => p.maintenancePlan.count({ where: { ...base, status: "OVERDUE" } }), 0),
     safe(
       () => p.deferral.findMany({
@@ -317,8 +385,14 @@ async function computeOne(
       assetsTotal === 0 ? "INFO" :
       coverage < PMS_COVERAGE_GAP ? "GAP" :
       coverage < PMS_COVERAGE_ATTENTION ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (assetsTotal === 0) findings.push(finding("pmsNothing", 0, "INFO"));
+    else if (coverage < PMS_COVERAGE_ATTENTION) {
+      findings.push(finding("assetsWithoutPlan", assetsWithoutPlan, coverage < PMS_COVERAGE_GAP ? "GAP" : "ATTENTION"));
+    }
+
     groups.push({
-      key: "pmsCoverage", element: "4.1", status,
+      key: "pmsCoverage", element: "4.1", status, findings,
       metrics: [
         { key: "assetsTotal", value: assetsTotal, kind: "count" },
         { key: "assetsWithPlan", value: assetsWithPlan, kind: "count" },
@@ -334,8 +408,12 @@ async function computeOne(
     const status: TmsaStatus =
       criticalAssets === 0 && safetyCritical === 0 ? "INFO" :
       criticalOverdueWo > 0 ? "GAP" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (criticalAssets === 0 && safetyCritical === 0) findings.push(finding("criticalNothing", 0, "INFO"));
+    else if (criticalOverdueWo > 0) findings.push(finding("criticalOverdueWo", criticalOverdueWo, "GAP"));
+
     groups.push({
-      key: "criticalEquipment", element: "4.2", status,
+      key: "criticalEquipment", element: "4.2", status, findings,
       metrics: [
         { key: "criticalAssets", value: criticalAssets, kind: "count" },
         { key: "safetyCritical", value: safetyCritical, kind: "count" },
@@ -353,8 +431,16 @@ async function computeOne(
       woComplianceRate < WO_COMPLIANCE_ATTENTION ? "ATTENTION" : "OK";
     if (woCriticalOverdue > 0) status = "GAP";
     else if (woOverdue > 0) status = count("ATTENTION", status);
+    // Estos tres hallazgos los reusa el panel ISM en su cláusula 10.4.
+    const findings: TmsaFinding[] = [];
+    if (woCriticalOverdue > 0) findings.push(finding("woCriticalOverdue", woCriticalOverdue, "GAP"));
+    if (woOverdue > 0) findings.push(finding("woOverdue", woOverdue, "ATTENTION"));
+    if (woComplianceRate < WO_COMPLIANCE_ATTENTION) {
+      findings.push(finding("woComplianceLow", clamp01(woComplianceRate), woComplianceRate < WO_COMPLIANCE_GAP ? "GAP" : "ATTENTION", "pct"));
+    }
+
     groups.push({
-      key: "plannedMaintenance", element: "4.3", status,
+      key: "plannedMaintenance", element: "4.3", status, findings,
       metrics: [
         { key: "woComplianceRate", value: clamp01(woComplianceRate), kind: "pct" },
         { key: "woOpen", value: woOpen, kind: "count" },
@@ -377,8 +463,13 @@ async function computeOne(
       total === 0 ? "OK" :
       (withRisk < total || withApproval < total) ? "GAP" :
       expiredStillActive > 0 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (withRisk < total) findings.push(finding("deferralsWithoutRisk", total - withRisk, "GAP"));
+    if (withApproval < total) findings.push(finding("deferralsWithoutApproval", total - withApproval, "GAP"));
+    if (expiredStillActive > 0) findings.push(finding("deferralsExpired", expiredStillActive, "ATTENTION"));
+
     groups.push({
-      key: "deferralControl", element: "4.3", status,
+      key: "deferralControl", element: "4.3", status, findings,
       metrics: [
         { key: "deferralsActive", value: total, kind: "count" },
         { key: "deferralsWithRisk", value: withRisk, kind: "count" },
@@ -405,8 +496,14 @@ async function computeOne(
     // todavía en REQUESTED o UNDER_REVIEW no es trabajo diferido: es un pedido.
     // Contándolo, el panel encendía una brecha roja que nadie podía apagar,
     // porque la pantalla de varada no lo ofrecía para importar.
+    //
+    // Y un renglón RECHAZADO no cubre nada: el trabajo quedó afuera de la
+    // varada. Contándolo, un diferimiento rechazado apagaba la brecha como si
+    // ya tuviera dónde ejecutarse.
     const deferralIdsInSpec = new Set(
-      allItems.filter(i => i.sourceType === "DEFERRAL" && i.sourceId).map(i => i.sourceId as string),
+      allItems
+        .filter(i => i.sourceType === "DEFERRAL" && i.sourceId && i.itemStatus !== "REJECTED")
+        .map(i => i.sourceId as string),
     );
     const granted = active.filter(d => DEFERRAL_GRANTED.includes(d.status));
     const deferralsNotInSpec = granted.filter(d => !deferralIdsInSpec.has(d.id)).length;
@@ -416,8 +513,15 @@ async function computeOne(
       deferralsNotInSpec > 0 ? "GAP" :
       itemsTotal === 0 ? "ATTENTION" : "OK";
 
+    const findings: TmsaFinding[] = [];
+    if (drydockSpecs.length === 0 && active.length === 0) findings.push(finding("drydockNothing", 0, "INFO"));
+    else {
+      if (deferralsNotInSpec > 0) findings.push(finding("deferralsNotInSpec", deferralsNotInSpec, "GAP"));
+      if (itemsTotal === 0) findings.push(finding("drydockNoItems", 0, "ATTENTION"));
+    }
+
     groups.push({
-      key: "drydockSpec", element: "4.2", status,
+      key: "drydockSpec", element: "4.2", status, findings,
       metrics: [
         { key: "drydockSpecsOpen", value: specsOpen, kind: "count" },
         { key: "drydockItemsTotal", value: itemsTotal, kind: "count" },
@@ -438,9 +542,17 @@ async function computeOne(
         sparesCriticalLow = sparesCriticalA.filter(s => (onHand.get(s.id) ?? 0) < s.minStock).length;
       }
     } catch { sparesCriticalLow = 0; }
-    const status: TmsaStatus = sparesCriticalLow > 0 ? "GAP" : "OK";
+    // Sin repuestos críticos cargados no hay inventario que evaluar: informa,
+    // no aprueba. Un buque recién dado de alta salía en verde sin tener nada.
+    const status: TmsaStatus =
+      sparesCriticalA.length === 0 ? "INFO" :
+      sparesCriticalLow > 0 ? "GAP" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (sparesCriticalA.length === 0) findings.push(finding("sparesNothing", 0, "INFO"));
+    else if (sparesCriticalLow > 0) findings.push(finding("sparesCriticalLow", sparesCriticalLow, "GAP"));
+
     groups.push({
-      key: "criticalSpares", element: "4.4", status,
+      key: "criticalSpares", element: "4.4", status, findings,
       metrics: [
         { key: "sparesCriticalLow", value: sparesCriticalLow, kind: "count" },
         { key: "spareRequestsPending", value: requestsPending, kind: "count" },
@@ -453,8 +565,12 @@ async function computeOne(
     const status: TmsaStatus =
       plansWithSampling === 0 ? "INFO" :
       analysesOutOfRange > 0 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (plansWithSampling === 0) findings.push(finding("cbmNothing", 0, "INFO"));
+    else if (analysesOutOfRange > 0) findings.push(finding("analysesOutOfRange", analysesOutOfRange, "ATTENTION"));
+
     groups.push({
-      key: "conditionMonitoring", element: "4.5", status,
+      key: "conditionMonitoring", element: "4.5", status, findings,
       metrics: [
         { key: "plansWithSampling", value: plansWithSampling, kind: "count" },
         { key: "analysesOutOfRange", value: analysesOutOfRange, kind: "count" },
@@ -465,9 +581,23 @@ async function computeOne(
   // ── 4.6 / Elem 8 · Análisis de fallas y feedback ───────────────────────────
   {
     const recurringAssets = defectsGrouped.filter(g => g.assetId).length;
-    const status: TmsaStatus = recurringAssets > 0 ? "ATTENTION" : "OK";
+    // Sin defectos cargados no hay análisis de fallas que evaluar: es "sin
+    // evidencia", no "impecable". Mismo criterio que defectReporting, que mira
+    // la misma tabla — antes las dos tarjetas leían distinto el mismo vacío.
+    // Y si hay defectos pero ninguno con causa raíz, tampoco es OK.
+    const status: TmsaStatus =
+      defectsTotal === 0 ? "INFO" :
+      recurringAssets > 0 ? "ATTENTION" :
+      defectsWithRca === 0 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (defectsTotal === 0) findings.push(finding("rcaNothing", 0, "INFO"));
+    else {
+      if (recurringAssets > 0) findings.push(finding("recurringAssets", recurringAssets, "ATTENTION"));
+      if (defectsWithRca === 0) findings.push(finding("noRca", defectsTotal, "ATTENTION"));
+    }
+
     groups.push({
-      key: "failureAnalysis", element: "8", status,
+      key: "failureAnalysis", element: "8", status, findings,
       metrics: [
         { key: "defectsWithRca", value: defectsWithRca, kind: "count" },
         { key: "recurringAssets", value: recurringAssets, kind: "count" },
@@ -477,8 +607,11 @@ async function computeOne(
 
   // ── Elem 7 · Gestión del cambio (MOC) ──────────────────────────────────────
   {
+    const findings: TmsaFinding[] = [];
+    if (mocPendingImpl > 0) findings.push(finding("mocPendingImpl", mocPendingImpl, "INFO"));
+
     groups.push({
-      key: "managementOfChange", element: "7", status: "INFO",
+      key: "managementOfChange", element: "7", status: "INFO", findings,
       metrics: [
         { key: "mocOpen", value: mocOpen, kind: "count" },
         { key: "mocPendingImpl", value: mocPendingImpl, kind: "count" },
@@ -492,8 +625,12 @@ async function computeOne(
   // incluye un análisis de causa raíz.
   {
     const status: TmsaStatus = defectsTotal === 0 ? "INFO" : defectsStaleOpen > 0 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (defectsTotal === 0) findings.push(finding("defectsNothing", 0, "INFO"));
+    else if (defectsStaleOpen > 0) findings.push(finding("defectsStaleOpen", defectsStaleOpen, "ATTENTION"));
+
     groups.push({
-      key: "defectReporting", element: "4.1", status,
+      key: "defectReporting", element: "4.1", status, findings,
       metrics: [
         { key: "defectsTotal", value: defectsTotal, kind: "count" },
         { key: "defectsStaleOpen", value: defectsStaleOpen, kind: "count" },
@@ -506,8 +643,15 @@ async function computeOne(
   // no reinventa el umbral de vencimiento.
   {
     const status: TmsaStatus = certificatesTotal === 0 ? "INFO" : certificatesExpired > 0 ? "GAP" : certificatesExpiringSoon > 0 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (certificatesTotal === 0) findings.push(finding("certificatesNothing", 0, "INFO"));
+    else {
+      if (certificatesExpired > 0) findings.push(finding("certificatesExpired", certificatesExpired, "GAP"));
+      if (certificatesExpiringSoon > 0) findings.push(finding("certificatesExpiringSoon", certificatesExpiringSoon, "ATTENTION"));
+    }
+
     groups.push({
-      key: "certificates", element: "4.2", status,
+      key: "certificates", element: "4.2", status, findings,
       metrics: [
         { key: "certificatesTotal", value: certificatesTotal, kind: "count" },
         { key: "certificatesExpired", value: certificatesExpired, kind: "count" },
@@ -519,8 +663,12 @@ async function computeOne(
   // ── 4.2 · Inspecciones (tanques/lastre, visitas) ───────────────────────────
   {
     const status: TmsaStatus = inspectionsTotal === 0 ? "INFO" : inspectionsOverdue > 0 ? "GAP" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (inspectionsTotal === 0) findings.push(finding("inspectionsNone", 0, "INFO"));
+    else if (inspectionsOverdue > 0) findings.push(finding("inspectionsOverdue", inspectionsOverdue, "GAP"));
+
     groups.push({
-      key: "inspections", element: "4.2", status,
+      key: "inspections", element: "4.2", status, findings,
       metrics: [
         { key: "inspectionsTotal", value: inspectionsTotal, kind: "count" },
         { key: "inspectionsOverdue", value: inspectionsOverdue, kind: "count" },
@@ -542,11 +690,16 @@ async function computeOne(
       auditPlanIds.length === 0 ? "INFO" :
       auditsAtSea === 0 ? "GAP" :
       auditsAtSea < 2 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (auditPlanIds.length === 0) findings.push(finding("auditNoPlan", 0, "INFO"));
+    else if (auditsAtSea === 0) findings.push(finding("auditNoneAtSea", 0, "GAP"));
+    else if (auditsAtSea < 2) findings.push(finding("auditBelowTwo", auditsAtSea, "ATTENTION"));
+
     groups.push({
       // El requisito que cubre este grupo es el 4.4.5 de la lista OCIMF (etapa 4
       // del elemento 4), no el 4.1: con la etiqueta vieja el panel de evidencia
       // y la pestaña Checklist numeraban distinto el mismo requisito.
-      key: "engineeringAudit", element: "4.4", status,
+      key: "engineeringAudit", element: "4.4", status, findings,
       metrics: [
         { key: "auditsLast12m", value: auditsLast12m, kind: "count" },
         { key: "auditsAtSea", value: auditsAtSea, kind: "count" },
@@ -557,8 +710,12 @@ async function computeOne(
   // ── 4A.2 · Permisos de Trabajo en equipo crítico ───────────────────────────
   {
     const status: TmsaStatus = permitsTotal === 0 ? "INFO" : permitsDraftStuck > 0 ? "ATTENTION" : "OK";
+    const findings: TmsaFinding[] = [];
+    if (permitsTotal === 0) findings.push(finding("permitsNothing", 0, "INFO"));
+    else if (permitsDraftStuck > 0) findings.push(finding("permitsDraftStuck", permitsDraftStuck, "ATTENTION"));
+
     groups.push({
-      key: "permits", element: "4A.2", status,
+      key: "permits", element: "4A.2", status, findings,
       metrics: [
         { key: "permitsTotal", value: permitsTotal, kind: "count" },
         { key: "permitsDraftStuck", value: permitsDraftStuck, kind: "count" },
@@ -708,7 +865,7 @@ export async function getTmsaMetricDetail(
     }
     case "criticalOverdueWo": {
       const rows = await p.workOrder.findMany({
-        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: now } },
+        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, ...criticalWoWhere(await criticalAssetIdsOf(p, base)), dueDate: { lt: now } },
         select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" },
       });
       return { items: rows.map(asWorkOrder) };
@@ -729,7 +886,7 @@ export async function getTmsaMetricDetail(
     }
     case "woCriticalOverdue": {
       const rows = await p.workOrder.findMany({
-        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, criticality: "A", dueDate: { lt: dCritical } },
+        where: { ...base, status: { in: ["PLANNED", "IN_PROGRESS"] }, ...criticalWoWhere(await criticalAssetIdsOf(p, base)), dueDate: { lt: dCritical } },
         select: { id: true, workOrderCode: true, title: true, dueDate: true }, orderBy: { dueDate: "asc" },
       });
       return { items: rows.map(asWorkOrder) };
@@ -936,12 +1093,14 @@ export async function getTmsaMetricDetail(
         }),
         p.drydockSpec.findMany({
           where: { ...base, status: { not: "CANCELLED" } },
-          select: { items: { select: { sourceType: true, sourceId: true } } },
+          select: { items: { select: { itemStatus: true, sourceType: true, sourceId: true } } },
         }),
       ]);
+      // Mismo criterio que la tarjeta: el renglón rechazado no cubre el
+      // diferimiento (ver deferralsNotInSpec en computeOne).
       const inSpec = new Set(
         specs.flatMap((s: any) => s.items)
-          .filter((i: any) => i.sourceType === "DEFERRAL" && i.sourceId)
+          .filter((i: any) => i.sourceType === "DEFERRAL" && i.sourceId && i.itemStatus !== "REJECTED")
           .map((i: any) => i.sourceId as string),
       );
       return { items: active.filter((d: any) => !inSpec.has(d.id)).map(asDeferral) };

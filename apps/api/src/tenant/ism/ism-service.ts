@@ -45,11 +45,32 @@ import {
 export type IsmStatus = TmsaStatus;
 export type IsmMetric = TmsaMetric;
 
+/**
+ * Qué es exactamente lo que falta en un bloque de evidencia.
+ *
+ * El semáforo dice "hay una brecha"; el hallazgo dice CUÁL, y con eso la
+ * pantalla arma la ventana de "qué está mal / cómo se arregla". Se emite acá y
+ * no en el frontend a propósito: los umbrales que prenden el semáforo son estos
+ * mismos, y si el texto los repitiera por su cuenta un día dirían cosas
+ * distintas. El backend manda la clave; el texto y los pasos son i18n.
+ */
+export interface IsmFinding {
+  /** Identifica el problema. Tiene su texto en `ism.fix.<key>.*` (web). */
+  key: string;
+  /** Cuántos registros lo tienen (o el porcentaje, según `kind`). */
+  value: number;
+  kind: "count" | "pct";
+  /** Peso del hallazgo. OK nunca genera hallazgos. */
+  status: Exclude<IsmStatus, "OK">;
+}
+
 export interface IsmGroup extends Omit<TmsaGroup, "element"> {
   /** Cláusula del Capítulo 10 que respalda este grupo (ej. "10.2.2"). */
   clause: string;
   /** true = el grupo se calcula acá; false = viene de la evidencia TMSA. */
   own: boolean;
+  /** Lo que falta, en orden de gravedad. Vacío = nada pendiente. */
+  findings: IsmFinding[];
 }
 
 export interface IsmVesselEvidence {
@@ -82,6 +103,15 @@ const INHERITED_CLAUSE: Record<string, string> = {
   plannedMaintenance:  "10.4",
   drydockSpec:         "10.4",
 };
+
+/**
+ * Bloques heredados cuyos hallazgos muestra el Capítulo 10. Los calcula
+ * tmsa-service junto a su semáforo y viajan con la misma clave, así que acá se
+ * toman tal cual y sólo cambia el texto (`ism.fix.*` en vez de `tmsa.fix.*`).
+ * Los demás grupos heredados pertenecen a otras cláusulas y se dejan sin
+ * diagnóstico para no mostrar un texto que no es el de este marco.
+ */
+const INHERITED_WITH_FINDINGS = new Set(["inspections", "plannedMaintenance"]);
 
 /** Orden de cláusulas para presentar los grupos en la pantalla y el PDF. */
 const CLAUSE_ORDER = ["10.1", "10.2.1", "10.2.2", "10.2.3", "10.2.4", "10.3", "10.4"];
@@ -160,6 +190,7 @@ export async function getIsmChapter10Evidence(
         status: g.status,
         metrics: g.metrics,
         own: false,
+        findings: INHERITED_WITH_FINDINGS.has(g.key) ? g.findings : [],
       }));
 
     const own = await computeOwnGroups(prisma, tenant.id, b.codes);
@@ -388,8 +419,23 @@ async function computeOwnGroups(
       plansWithoutCriteria > 0 ? "ATTENTION" :
       certificatesTotal > 0 && certificatesWithPlan === 0 ? "ATTENTION" : "OK";
 
+    // Qué falta, con el mismo criterio que prendió el semáforo de arriba.
+    const findings: IsmFinding[] = [];
+    if (nothingLoaded) {
+      findings.push({ key: "regulatoryNothing", value: 0, kind: "count", status: "INFO" });
+    } else {
+      if (declared === 0 && regulatoryInspections === 0) {
+        findings.push({ key: "regulatoryUndeclared", value: plansWithoutCriteria, kind: "count", status: "GAP" });
+      } else if (plansWithoutCriteria > 0) {
+        findings.push({ key: "plansWithoutCriteria", value: plansWithoutCriteria, kind: "count", status: "ATTENTION" });
+      }
+      if (certificatesTotal > 0 && certificatesWithPlan === 0) {
+        findings.push({ key: "certificatesWithoutPlan", value: certificatesTotal, kind: "count", status: "ATTENTION" });
+      }
+    }
+
     groups.push({
-      key: "regulatoryBasis", clause: "10.1", status, own: true,
+      key: "regulatoryBasis", clause: "10.1", status, own: true, findings,
       metrics: [
         { key: "ismRuleBasedCriteria", value: planRuleBased, kind: "count" },
         { key: "ismCompanyCriteria", value: planCompanyBased, kind: "count" },
@@ -417,8 +463,20 @@ async function computeOwnGroups(
       ncOpen >= 3 && withCause === 0 ? "GAP" :
       withoutCause > 0 ? "ATTENTION" : "OK";
 
+    const findings: IsmFinding[] = [];
+    if (ncOpen >= 3 && withCause === 0) {
+      findings.push({ key: "ncNoCause", value: ncOpen, kind: "count", status: "GAP" });
+    } else if (withoutCause > 0) {
+      findings.push({ key: "ncWithoutCause", value: withoutCause, kind: "count", status: "ATTENTION" });
+    }
+    // No mueve el semáforo (el hallazgo de auditoría se gestiona en su módulo),
+    // pero es un pendiente del buque y el auditor lo va a cruzar con las NC.
+    if (auditFindingsOpen > 0) {
+      findings.push({ key: "auditFindingsOpen", value: auditFindingsOpen, kind: "count", status: "INFO" });
+    }
+
     groups.push({
-      key: "nonConformity", clause: "10.2.2", status, own: true,
+      key: "nonConformity", clause: "10.2.2", status, own: true, findings,
       metrics: [
         { key: "ismNcOpen", value: ncOpen, kind: "count" },
         { key: "ismNcWithCause", value: withCause, kind: "count" },
@@ -446,8 +504,22 @@ async function computeOwnGroups(
       closed > 0 && rate < 0.5 ? "GAP" :
       withoutAction > 0 || effectivenessOverdue > 0 ? "ATTENTION" : "OK";
 
+    const findings: IsmFinding[] = [];
+    if (closed === 0 && effectivenessVerified === 0 && effectivenessOverdue === 0) {
+      findings.push({ key: "caNothing", value: 0, kind: "count", status: "INFO" });
+    } else {
+      if (closed > 0 && rate < 0.5) {
+        findings.push({ key: "caLowRate", value: rate, kind: "pct", status: "GAP" });
+      } else if (withoutAction > 0) {
+        findings.push({ key: "caWithoutAction", value: withoutAction, kind: "count", status: "ATTENTION" });
+      }
+      if (effectivenessOverdue > 0) {
+        findings.push({ key: "caEffectivenessOverdue", value: effectivenessOverdue, kind: "count", status: "ATTENTION" });
+      }
+    }
+
     groups.push({
-      key: "correctiveAction", clause: "10.2.3", status, own: true,
+      key: "correctiveAction", clause: "10.2.3", status, own: true, findings,
       metrics: [
         { key: "ismDefectsClosed90d", value: closed, kind: "count" },
         { key: "ismClosedWithAction", value: withAction, kind: "count" },
@@ -470,8 +542,17 @@ async function computeOwnGroups(
       workLogs90d === 0 ? "GAP" :
       coverage < 0.8 ? "ATTENTION" : "OK";
 
+    const findings: IsmFinding[] = [];
+    if (woClosed90d === 0) {
+      findings.push({ key: "recNothing", value: 0, kind: "count", status: "INFO" });
+    } else if (workLogs90d === 0) {
+      findings.push({ key: "recNoWorkLogs", value: woClosed90d, kind: "count", status: "GAP" });
+    } else if (coverage < 0.8) {
+      findings.push({ key: "recLowCoverage", value: coverage, kind: "pct", status: "ATTENTION" });
+    }
+
     groups.push({
-      key: "maintenanceRecords", clause: "10.2.4", status, own: true,
+      key: "maintenanceRecords", clause: "10.2.4", status, own: true, findings,
       metrics: [
         { key: "ismWoClosed90d", value: woClosed90d, kind: "count" },
         { key: "ismWorkLogs90d", value: workLogs90d, kind: "count" },
@@ -511,8 +592,23 @@ async function computeOwnGroups(
       withoutPlan > 0 || standbyWithoutTest > 0 ? "GAP" :
       preDepartureChecks30d === 0 ? "ATTENTION" : "OK";
 
+    const findings: IsmFinding[] = [];
+    if (total === 0) {
+      findings.push({ key: "scNothing", value: 0, kind: "count", status: "INFO" });
+    } else {
+      if (withoutPlan > 0) {
+        findings.push({ key: "scWithoutPlan", value: withoutPlan, kind: "count", status: "GAP" });
+      }
+      if (standbyWithoutTest > 0) {
+        findings.push({ key: "standbyWithoutTest", value: standbyWithoutTest, kind: "count", status: "GAP" });
+      }
+      if (preDepartureChecks30d === 0) {
+        findings.push({ key: "preDepartureMissing", value: 0, kind: "count", status: "ATTENTION" });
+      }
+    }
+
     groups.push({
-      key: "standbyTesting", clause: "10.3", status, own: true,
+      key: "standbyTesting", clause: "10.3", status, own: true, findings,
       metrics: [
         { key: "ismSafetyCriticalTotal", value: total, kind: "count" },
         { key: "ismSafetyCriticalWithPlan", value: withPlan, kind: "count" },

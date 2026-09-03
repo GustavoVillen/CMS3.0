@@ -5,13 +5,13 @@
 // cual — misma fuente de datos, sin duplicar).
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, ChevronRight, Clock, Loader2 } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Clock, Loader2 } from "lucide-react";
 import { api } from "../lib/api";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AssetHistory } from "../pages/Assets";
-import { worstSeverity, SEVERITY_RANK, SEVERITY_STYLE, type Severity, type PlanForStatus } from "../lib/maintenance-severity";
+import { assetSeverity, SEVERITY_RANK, SEVERITY_STYLE, type Severity, type PlanForStatus } from "../lib/maintenance-severity";
 
 interface Props {
   assetId: string;
@@ -33,7 +33,7 @@ interface PlanRow extends PlanForStatus {
 export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onClose }) => {
   const t = useT();
   const navigate = useNavigate();
-  const [assetLabel, setAssetLabel] = useState<{ name: string | null; assetCode: string } | null>(null);
+  const [assetLabel, setAssetLabel] = useState<{ name: string | null; assetCode: string; status?: string | null } | null>(null);
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [severity, setSeverity] = useState<Severity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,14 +45,16 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
     setAssetLabel(null);
     setPlans([]);
     Promise.all([
-      api.get<{ name: string | null; assetCode: string }>(`/app/pms/assets/${encodeURIComponent(assetId)}`),
+      api.get<{ name: string | null; assetCode: string; status?: string | null }>(`/app/pms/assets/${encodeURIComponent(assetId)}`),
       api.get<{ items: PlanRow[] }>(`/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=200`),
     ])
       .then(([asset, plansRes]) => {
         if (cancelled) return;
-        setAssetLabel({ name: asset.name, assetCode: asset.assetCode });
+        setAssetLabel({ name: asset.name, assetCode: asset.assetCode, status: asset.status });
         setPlans(plansRes.items ?? []);
-        setSeverity(worstSeverity(plansRes.items ?? []));
+        // La condición del equipo manda sobre sus planes: uno fuera de servicio
+        // no está "vencido", está parado (ver assetSeverity).
+        setSeverity(assetSeverity(asset.status, plansRes.items ?? []));
       })
       .catch(() => { if (!cancelled) setSeverity("OK"); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -77,7 +79,7 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
   }, [plans]);
 
   const sev: Severity = severity ?? "OK";
-  const icon = { OVERDUE: AlertTriangle, UPCOMING: Clock, OK: CheckCircle2 }[sev];
+  const icon = { OVERDUE: AlertTriangle, UPCOMING: Clock, OK: CheckCircle2, OUT_OF_SERVICE: Ban }[sev];
   const badge = {
     icon,
     cls: SEVERITY_STYLE[sev].badge,
@@ -146,9 +148,16 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
           </div>
         ) : (
-          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border font-bold text-sm shrink-0 ${badge.cls}`}>
+          <div className={`flex items-start gap-2 px-4 py-3 rounded-xl border font-bold text-sm shrink-0 ${badge.cls}`}>
             <badge.icon className="w-5 h-5 shrink-0" />
-            {badge.label}
+            <div className="min-w-0">
+              {badge.label}
+              {/* Las tareas siguen listándose abajo (son un hecho), pero el
+                  cartel explica por qué no son un atraso de la tripulación. */}
+              {sev === "OUT_OF_SERVICE" && (
+                <p className="font-normal text-xs opacity-80 mt-0.5">{t("eqStatus.outOfServiceHint")}</p>
+              )}
+            </div>
           </div>
         )}
 

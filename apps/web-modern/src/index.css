@@ -4,6 +4,23 @@
    para que el toggle/persistencia la controle por completo. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ─── Puntero de mano en todo lo clickeable ──────────────────────────────────
+   Tailwind 4 dejó los <button> con la flecha (en v3 el navegador mostraba la
+   manito). Sin esto, un badge que abre una ventana no se distingue de un
+   cartel: el usuario no sabe que se puede tocar. Va en @layer base para que
+   cualquier utilidad puntual (cursor-not-allowed, cursor-col-resize,
+   cursor-default) siga ganando donde se la pone a propósito. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
 /* ─── Tokens semánticos ──────────────────────────────────────────────────────
    LIGHT es el default (regla del PMS: lectura prolongada, tablas densas).
    DARK = el navy + glassmorphism original, conservado tal cual.

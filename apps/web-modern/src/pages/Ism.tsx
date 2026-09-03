@@ -18,11 +18,13 @@ import { useVesselContext } from "../lib/vessel-context";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { moduleListLink } from "../lib/tmsa-filter";
+import { ComplianceFixModal, FixBlock, fixSteps, findingValue, type ComplianceFinding, type FixChip } from "../components/compliance/FixModal";
 
 // ─── Types (espejo de ism-service.ts) ───────────────────────────────────────
 type IsmStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
 interface IsmMetric { key: string; value: number; kind: "count" | "pct"; }
-interface IsmGroup { key: string; clause: string; status: IsmStatus; own: boolean; metrics: IsmMetric[]; }
+type IsmFinding = ComplianceFinding;
+interface IsmGroup { key: string; clause: string; status: IsmStatus; own: boolean; metrics: IsmMetric[]; findings?: IsmFinding[]; }
 interface IsmVesselEvidence {
   /** "" cuando el item consolida toda la flota. */
   vesselCode: string;
@@ -107,6 +109,7 @@ interface GroupAssessTarget {
   clause: string;
   status: IsmStatus;
   metrics: IsmMetric[];
+  findings: IsmFinding[];
 }
 
 interface IsmAssessment {
@@ -217,6 +220,18 @@ const IsmGroupAssessmentModal: React.FC<{ target: GroupAssessTarget; onClose: ()
           <p className="text-xs text-text-industrial/70 italic leading-relaxed">
             {t(`ism.clause.${clauseKey(target.clause)}.text` as TranslationKey)}
           </p>
+          {/* Qué está mal y cómo se arregla, antes de las métricas: el mismo
+              diagnóstico que da el badge del checklist (ver IsmFixModal). */}
+          {target.findings.map(f => (
+            <FixBlock
+              key={f.key}
+              pill={STATUS_META[f.status].pill}
+              title={t(`ism.fix.${f.key}.title` as TranslationKey)}
+              value={findingValue(f)}
+              what={t(`ism.fix.${f.key}.what` as TranslationKey)}
+              steps={fixSteps(t(`ism.fix.${f.key}.how` as TranslationKey))}
+            />
+          ))}
           <div>
             <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1.5">{t("tmsa.assess.metrics")}</p>
             <dl className="space-y-1">
@@ -309,6 +324,78 @@ const IsmDrillDownModal: React.FC<{ target: DrillDownTarget; onClose: () => void
   );
 };
 
+// ─── Ventana "qué está mal / cómo se arregla" ───────────────────────────────
+// El marco y los bloques son los compartidos con el panel TMSA
+// (components/compliance/FixModal): acá sólo se resuelve el texto del Capítulo
+// 10 (`ism.fix.*`) y qué explica cada badge.
+
+interface FixTarget {
+  /** Qué badge se apretó: el estado del buque o la capacidad del sistema. */
+  kind: "usage" | "capacity";
+  clause: Clause;
+  status: IsmStatus;
+  /** Rótulo del badge de capacidad (Cumple / Parcial / No cubre). */
+  ratingLabel?: string;
+  findings: IsmFinding[];
+  chips: ChecklistChip[];
+  /** Sin buque elegido no hay estado en vivo que explicar. */
+  hasVessel: boolean;
+}
+
+const IsmFixModal: React.FC<{
+  target: FixTarget;
+  onClose: () => void;
+  onGoEvidence: () => void;
+}> = ({ target, onClose, onGoEvidence }) => {
+  const t = useT();
+  const navigate = useNavigate();
+  const meta = STATUS_META[target.status];
+  const ck = clauseKey(target.clause);
+  const isCapacity = target.kind === "capacity";
+
+  const chips: FixChip[] = target.chips.map(chip => ({
+    label: t(chip.navKey),
+    onClick: () => { onClose(); chip.tab ? onGoEvidence() : navigate(chip.route!); },
+  }));
+
+  return (
+    <ComplianceFixModal
+      eyebrow={`ISM ${target.clause}`}
+      title={t(`ism.clause.${ck}.title` as TranslationKey)}
+      statusPill={meta.pill}
+      StatusIcon={meta.icon}
+      statusLabel={isCapacity ? (target.ratingLabel ?? "") : t(`tmsa.status.${target.status}` as TranslationKey)}
+      chips={chips}
+      onClose={onClose}
+    >
+      {isCapacity ? (
+        // La capacidad no depende del buque: se explica qué cubre el sistema.
+        <FixBlock
+          pill={STATUS_META.INFO.pill}
+          title={t("fix.capacityTitle")}
+          what={t("fix.capacityWhat")}
+          extra={t(`ism.clause.${ck}.expl` as TranslationKey)}
+        />
+      ) : !target.hasVessel ? (
+        <p className="text-xs text-text-industrial/60">{t("fix.noVessel")}</p>
+      ) : target.findings.length === 0 ? (
+        <FixBlock pill={STATUS_META.OK.pill} title={t("fix.noneTitle")} what={t("fix.noneWhat")} />
+      ) : (
+        target.findings.map(f => (
+          <FixBlock
+            key={f.key}
+            pill={STATUS_META[f.status].pill}
+            title={t(`ism.fix.${f.key}.title` as TranslationKey)}
+            value={findingValue(f)}
+            what={t(`ism.fix.${f.key}.what` as TranslationKey)}
+            steps={fixSteps(t(`ism.fix.${f.key}.how` as TranslationKey))}
+          />
+        ))
+      )}
+    </ComplianceFixModal>
+  );
+};
+
 // ─── Checklist del Capítulo 10 ──────────────────────────────────────────────
 // Una tarjeta por cláusula, con el texto del Código y qué tan bien la respalda
 // el sistema. El rating es una propiedad de CMS3 (no cambia por buque); el dato
@@ -350,6 +437,8 @@ function findLiveGroup(items: IsmVesselEvidence[], groupKey?: string): IsmGroup 
 const IsmChecklistCard: React.FC<{ item: ChecklistItem; items: IsmVesselEvidence[]; onGoEvidence: () => void }> = ({ item, items, onGoEvidence }) => {
   const t = useT();
   const navigate = useNavigate();
+  // Los dos badges abren la misma ventana; cambia qué explica (ver FixTarget).
+  const [fix, setFix] = useState<FixTarget | null>(null);
   const capMeta = STATUS_META[RATING_STATUS[item.rating]];
   const CapIcon = capMeta.icon;
   const group = findLiveGroup(items, item.liveGroupKey);
@@ -375,18 +464,43 @@ const IsmChecklistCard: React.FC<{ item: ChecklistItem; items: IsmVesselEvidence
       <div className="grid grid-cols-2 gap-2 mt-2.5">
         <div>
           <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("tmsa.checklist.capacityLabel")}</p>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${capMeta.pill}`}>
+          <button
+            type="button"
+            onClick={() => setFix({
+              kind: "capacity",
+              clause: item.clause,
+              status: RATING_STATUS[item.rating],
+              ratingLabel: t(`tmsa.checklist.rating.${item.rating}` as TranslationKey),
+              findings: [],
+              chips: item.chips,
+              hasVessel: !!group,
+            })}
+            title={t("fix.capacityTitle")}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold hover:brightness-110 transition-all ${capMeta.pill}`}
+          >
             <CapIcon className="w-3 h-3" />
             {t(`tmsa.checklist.rating.${item.rating}` as TranslationKey)}
-          </span>
+          </button>
         </div>
         <div>
           <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("tmsa.checklist.usageLabel")}</p>
           {group && usageMeta && UsageIcon ? (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${usageMeta.pill}`}>
+            <button
+              type="button"
+              onClick={() => setFix({
+                kind: "usage",
+                clause: item.clause,
+                status: group.status,
+                findings: group.findings ?? [],
+                chips: item.chips,
+                hasVessel: true,
+              })}
+              title={t("fix.title")}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold hover:brightness-110 transition-all ${usageMeta.pill}`}
+            >
               <UsageIcon className="w-3 h-3" />
               {t(`tmsa.status.${group.status}` as TranslationKey)}
-            </span>
+            </button>
           ) : (
             <span className="text-[10px] text-text-industrial/40 italic">{t("tmsa.checklist.noVessel")}</span>
           )}
@@ -429,6 +543,8 @@ const IsmChecklistCard: React.FC<{ item: ChecklistItem; items: IsmVesselEvidence
           })}
         </dl>
       )}
+
+      {fix && <IsmFixModal target={fix} onClose={() => setFix(null)} onGoEvidence={onGoEvidence} />}
 
       {item.chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-fg/10">
@@ -621,6 +737,7 @@ export const IsmPage: React.FC = () => {
                                     clause: g.clause,
                                     status: g.status,
                                     metrics: g.metrics,
+                                    findings: g.findings ?? [],
                                   })}
                                   title={t("tmsa.assess.hint")}
                                   className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer hover:brightness-110 hover:ring-1 hover:ring-fg/20 transition-all ${meta.pill}`}

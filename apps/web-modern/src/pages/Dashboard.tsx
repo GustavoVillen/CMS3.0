@@ -32,11 +32,11 @@ import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
 // (MaintenancePlans.tsx). Los nombres salen de i18n `sfi.g.<n>`.
-import { worstSeverity, worstOf, SEVERITY_STYLE, type Severity } from "../lib/maintenance-severity";
+import { assetSeverity, worstOf, SEVERITY_STYLE, type Severity } from "../lib/maintenance-severity";
 
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-interface MpAsset { id: string; assetCode: string; name: string | null; sfiCode: string | null; }
+interface MpAsset { id: string; assetCode: string; name: string | null; sfiCode: string | null; status?: string | null; }
 
 // ---------------------------------------------------------------------------
 // Types (minimal — only fields we render)
@@ -396,8 +396,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           const list = byAsset.get(pl.assetId);
           if (list) list.push(pl); else byAsset.set(pl.assetId, [pl]);
         }
+        // Se recorren los EQUIPOS y no los planes: uno fuera de servicio se
+        // marca como tal aunque no tenga ningún plan cargado, y nunca en rojo.
         const sev = new Map<string, Severity>();
-        for (const [assetId, list] of byAsset) sev.set(assetId, worstSeverity(list));
+        for (const a of res.items ?? []) {
+          const list = byAsset.get(a.id);
+          if (a.status !== "OUT_OF_SERVICE" && !list) continue;  // sin planes y en uso: sin color
+          sev.set(a.id, assetSeverity(a.status, list ?? []));
+        }
         setMpSeverityByAsset(sev);
       }
     } catch {
@@ -857,7 +863,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                           }`}
                         >
                           <span className="font-bold text-xs text-fg truncate">{a.name ?? a.assetCode}</span>
-                          <span className="font-mono text-[10px] text-text-industrial/40 shrink-0">{a.assetCode}</span>
+                          {/* El gris solo no alcanza: en los equipos parados el
+                              texto lo dice, igual que en los grupos. */}
+                          {sev === "OUT_OF_SERVICE" ? (
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-text-industrial">
+                              {t("dashboard.equipmentStatus.outOfService")}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-[10px] text-text-industrial/40 shrink-0">{a.assetCode}</span>
+                          )}
                         </button>
                       );
                     })}
