@@ -70,12 +70,15 @@ async function main() {
       // se deduce de las tres fechas, y dejar el envio en "hoy" con la aprobacion
       // retro-fechada da una OT aprobada antes de haber sido enviada a aprobar.
       // Solo se toca si ya tenia valor: una OT sin enviar debe seguir sin enviar.
+      // El CAST explicito es obligatorio: sin el, Postgres ve $1 como timestamp
+      // suelto y dentro de un CASE, y aborta con "inconsistent types deduced".
       `UPDATE "WorkOrder"
-       SET "openDate" = $1, "startDate" = $1, "dueDate" = $1, "completedDate" = $1,
-           "enviadoAprobacionAt" = CASE WHEN "enviadoAprobacionAt" IS NULL THEN NULL ELSE $1 END,
-           "aprobadoAt" = CASE WHEN "aprobadoAt" IS NULL THEN NULL ELSE $1 END,
-           "autorizadoAt" = CASE WHEN "autorizadoAt" IS NULL THEN NULL ELSE $1 END,
-           "createdAt" = $1, "updatedAt" = $1
+       SET "openDate" = $1::timestamptz, "startDate" = $1::timestamptz,
+           "dueDate" = $1::timestamptz, "completedDate" = $1::timestamptz,
+           "enviadoAprobacionAt" = CASE WHEN "enviadoAprobacionAt" IS NULL THEN NULL ELSE $1::timestamptz END,
+           "aprobadoAt" = CASE WHEN "aprobadoAt" IS NULL THEN NULL ELSE $1::timestamptz END,
+           "autorizadoAt" = CASE WHEN "autorizadoAt" IS NULL THEN NULL ELSE $1::timestamptz END,
+           "createdAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
        WHERE id = $2`,
       target,
       e.woId,
