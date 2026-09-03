@@ -66,9 +66,16 @@ async function main() {
     }
 
     await prisma.$executeRawUnsafe(
+      // enviadoAprobacionAt entra igual que las otras dos firmas: la etapa de la OT
+      // se deduce de las tres fechas, y dejar el envio en "hoy" con la aprobacion
+      // retro-fechada da una OT aprobada antes de haber sido enviada a aprobar.
+      // Solo se toca si ya tenia valor: una OT sin enviar debe seguir sin enviar.
       `UPDATE "WorkOrder"
        SET "openDate" = $1, "startDate" = $1, "dueDate" = $1, "completedDate" = $1,
-           "aprobadoAt" = $1, "autorizadoAt" = $1, "createdAt" = $1, "updatedAt" = $1
+           "enviadoAprobacionAt" = CASE WHEN "enviadoAprobacionAt" IS NULL THEN NULL ELSE $1 END,
+           "aprobadoAt" = CASE WHEN "aprobadoAt" IS NULL THEN NULL ELSE $1 END,
+           "autorizadoAt" = CASE WHEN "autorizadoAt" IS NULL THEN NULL ELSE $1 END,
+           "createdAt" = $1, "updatedAt" = $1
        WHERE id = $2`,
       target,
       e.woId,
