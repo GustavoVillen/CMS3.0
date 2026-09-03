@@ -3184,7 +3184,12 @@ export const MaintenancePlansPage: React.FC = () => {
       items = items.filter(p => sfiTabOf(p.sfiGroupNumber) === sfiTab);
     }
     if (executionFilter) {
-      items = items.filter(p => computeStatus(p) === executionFilter);
+      // El donut del Panel puede mandar VARIAS situaciones en una (ej.
+      // "DUE,UPCOMING", que ahí van en un solo gajo). Y se compara contra la
+      // situación MOSTRADA, para que al clickear "Fuera de servicio" salgan
+      // justo las filas que la lista rotula así.
+      const wanted = new Set(executionFilter.split(",").map(s => s.trim()).filter(Boolean));
+      items = items.filter(p => wanted.has(displayStatus(p, oosAssetIds.has(p.assetId))));
     } else if (overdueOnly) {
       items = items.filter(p => { const s = computeStatus(p); return s === "OVERDUE" || s === "DUE" || s === "IN_WINDOW"; });
     }
@@ -3206,7 +3211,7 @@ export const MaintenancePlansPage: React.FC = () => {
       items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
     return { items, total: items.length };
-  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter]);
+  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {

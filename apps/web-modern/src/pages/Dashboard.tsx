@@ -43,7 +43,8 @@ interface MpAsset { id: string; assetCode: string; name: string | null; sfiCode:
 // ---------------------------------------------------------------------------
 
 interface WorkOrder { id: string; status: string; criticality?: string; dueDate?: string; }
-interface MpSummary { counts: { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number }; total: number; }
+// OUT_OF_SERVICE es opcional: un backend anterior a este cambio no lo manda.
+interface MpSummary { counts: { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number; OUT_OF_SERVICE?: number }; total: number; }
 interface Defect { id: string; status: string; severity: string; }
 interface Certificate { id: string; status: string; expiryDate?: string; }
 interface Deferral   { id: string; status: string; sourceId: string; }
@@ -328,13 +329,19 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   // from /app/dashboard/mp-summary (server-side computation). ~50 bytes vs
   // 755 KB of the full plan list.
   const mpStatusCounts = React.useMemo(() => {
-    const map = mpSummary.data?.counts ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
+    const map = mpSummary.data?.counts
+      ?? { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0, OUT_OF_SERVICE: 0 };
     return [
       { key: "NEVER_EXECUTED", name: t("dashboard.mp.neverExecuted"), value: map.NEVER_EXECUTED, fill: "#64748b" },
       { key: "OVERDUE",        name: t("dashboard.mp.overdue"),        value: map.OVERDUE,        fill: "#EF4444" },
-      { key: "DUE",            name: t("dashboard.mp.due"),            value: map.DUE,            fill: "#F97316" },
+      // Equipo parado: no es un incumplimiento, no hay nada que ejecutar hasta
+      // que vuelva a servicio. Va en gris, fuera de la escala de urgencia.
+      { key: "OUT_OF_SERVICE", name: t("dashboard.mp.outOfService"),   value: map.OUT_OF_SERVICE ?? 0, fill: "#94A3B8" },
       { key: "IN_WINDOW",      name: t("dashboard.mp.inWindow"),       value: map.IN_WINDOW,      fill: "#EAB308" },
-      { key: "UPCOMING",       name: t("dashboard.mp.upcoming"),       value: map.UPCOMING,       fill: "#F97316" },
+      // "Por vencer" (≤7 días) y "Próximas" (8–30) van juntas: las dos son lo
+      // mismo para quien planifica —trabajo que hay que preparar— y separarlas
+      // partía el mismo mes en dos porciones del mismo color naranja.
+      { key: "DUE,UPCOMING",   name: t("dashboard.mp.due"),            value: map.DUE + map.UPCOMING, fill: "#F97316" },
       { key: "FUTURE",         name: t("dashboard.mp.future"),         value: map.FUTURE,         fill: "#06D6A0" },
     ].filter(s => s.value > 0);
   }, [mpSummary.data, t]);

@@ -831,6 +831,13 @@ export interface MaintenancePlansSummary {
     IN_WINDOW: number;
     UPCOMING: number;
     FUTURE: number;
+    /**
+     * Planes sobre un equipo FUERA DE SERVICIO. El plan sigue venciendo, pero
+     * contarlo como vencido lo hace leer como un incumplimiento cuando la
+     * máquina está parada y no hay nada que ejecutar. Se saca de su bucket y
+     * se cuenta acá; el total no cambia.
+     */
+    OUT_OF_SERVICE: number;
   };
   total: number;
 }
@@ -839,7 +846,7 @@ export async function getTenantMaintenancePlansSummary(
   session: TenantAccessSession,
   filters: { vesselCode?: string | null } = {},
 ): Promise<MaintenancePlansSummary> {
-  const counts = { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0 };
+  const counts = { NEVER_EXECUTED: 0, OVERDUE: 0, DUE: 0, IN_WINDOW: 0, UPCOMING: 0, FUTURE: 0, OUT_OF_SERVICE: 0 };
   const prismaRaw = getPrismaClient();
 
   if (!prismaRaw) {
@@ -901,7 +908,29 @@ export async function getTenantMaintenancePlansSummary(
   const hoursPlanAssetIds = [...new Set(plans.filter(p => p.nextDueHours != null).map(p => p.assetId))];
   const assetCurrentHoursMap = await loadCurrentHoursNumberByAsset(prismaRaw, tenantId, hoursPlanAssetIds);
 
+  // Equipos parados: sus planes salen del bucket que les tocaría por fecha y se
+  // cuentan aparte. Se consultan SÓLO los OUT_OF_SERVICE (son pocos) y sólo
+  // entre los equipos que efectivamente tienen plan, en vez de traer el
+  // catálogo entero. Mismo criterio que la lista de planes en el front.
+  const assetDelegate = (prismaRaw as unknown as {
+    asset: { findMany(args: unknown): Promise<{ id: string }[]> };
+  }).asset;
+  const oosAssets = await assetDelegate.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      status: "OUT_OF_SERVICE",
+      id: { in: [...new Set(plans.map(p => p.assetId))] },
+    },
+    select: { id: true },
+  });
+  const oosAssetIds = new Set(oosAssets.map(a => a.id));
+
   for (const p of plans) {
+    if (oosAssetIds.has(p.assetId)) {
+      counts.OUT_OF_SERVICE++;
+      continue;
+    }
     const status = deriveDashboardStatus({
       executionStatus: p.executionStatus,
       lastExecutionDate: p.lastExecutionDate,

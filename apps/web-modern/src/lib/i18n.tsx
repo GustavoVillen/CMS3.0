@@ -2161,6 +2161,9 @@ const dict = {
   "dashboard.mp.inWindow":     { es: "En Proceso",             en: "In Window",            pt: "Em Andamento" },
   "dashboard.mp.upcoming":     { es: "Próximas",               en: "Upcoming",             pt: "Próximas" },
   "dashboard.mp.future":       { es: "Al Día",                 en: "On Track",             pt: "Em Dia" },
+  // Planes sobre un equipo parado: no hay nada que ejecutar hasta que vuelva a
+  // servicio, así que no se cuentan como vencidos.
+  "dashboard.mp.outOfService": { es: "Fuera de Servicio",      en: "Out of Service",       pt: "Fora de Serviço" },
 
   // Donut de Solicitudes de Servicio — estados de la tramitación de la SS.
   // Rechazadas y Canceladas van en un solo ítem: operativamente son lo mismo.
