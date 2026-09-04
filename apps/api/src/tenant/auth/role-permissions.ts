@@ -123,12 +123,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // Tripulante: opera la OT, no la habilita. Carga horómetros (es quien los lee a bordo).
   TECHNICIAN_OPERATOR: [
     "wo.operate", "assetHours.write", "defect.write", "permit.manage", "crew.manage", "certificate.manage",
-    "spareRequest.manage",
+    "spareRequest.manage", "stock.manage",
   ],
 
   INSPECTOR_COMPLIANCE: [
     "defect.write", "externalAudit.manage", "inspection.execute",
-    "crew.manage", "certificate.manage",
+    "crew.manage", "certificate.manage", "stock.manage",
   ],
 
   PROCUREMENT_STORE: [
@@ -140,7 +140,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // checklists. No autoriza OT ni toca planes/repuestos: el admin lo tilda si quiere.
   HSE_MANAGER: [
     "permit.authorize", "permit.manage", "externalAudit.manage", "inspection.execute",
-    "checklist.manageTemplates", "drill.manage", "certificate.manage",
+    "checklist.manageTemplates", "drill.manage", "certificate.manage", "stock.manage",
   ],
 
   AUDITOR_READONLY: [],

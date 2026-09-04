@@ -10,7 +10,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
-import { useAuth } from "../lib/auth";
+import { useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
@@ -179,9 +179,12 @@ async function downloadSparePdf(spare: { id: string; sku: string; vesselCode: st
 
 const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocTrigger }) => {
   const isNew = spare === null;
-  const { user } = useAuth();
+  const can = useCan();
   const t = useT();
-  const canAdjustStock = !isNew && (user?.role === "TENANT_ADMIN" || user?.role === "FLEET_SUPERINTENDENT");
+  // El ajuste manual lo habilita el permiso "stock.manage" (Equipo → Permisos),
+  // el mismo que valida el backend al registrar el movimiento. Antes estaba
+  // atado a dos roles fijos y la tripulación no podía cargar el inventario.
+  const canAdjustStock = !isNew && can("stock.manage");
 
   const [vesselCode,              setVesselCode]              = useState(spare?.vesselCode              ?? "");
   const [sku,                     setSku]                     = useState(spare?.sku                     ?? "");
@@ -479,7 +482,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
             </div>
           </div>
 
-          {/* Manual stock adjustment — ADMIN / FLEET_SUPERINTENDENT only */}
+          {/* Manual stock adjustment — requiere el permiso stock.manage */}
           {canAdjustStock && (
             <div className="border border-yellow-500/20 rounded-xl p-4 space-y-3 bg-yellow-500/5">
               <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400/70 uppercase tracking-wider">Ajuste manual de stock</p>
