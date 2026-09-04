@@ -134,7 +134,18 @@ export async function loginPlatformUser(
   }
 }
 
-export async function refreshPlatformSession(request: PlatformRefreshRequest): Promise<PlatformLoginResponse["session"]> {
+/**
+ * Resultado del refresh: ademas de los tokens nuevos devuelve el usuario, para
+ * que el router pueda re-registrar la sesion en el Map en memoria. Sin eso el
+ * access token recien emitido no resuelve y todo endpoint /platform/* responde
+ * "Access token is invalid." hasta volver a loguearse.
+ */
+export interface PlatformRefreshResult {
+  session: PlatformLoginResponse["session"];
+  user: PlatformLoginResponse["user"] | null;
+}
+
+export async function refreshPlatformSession(request: PlatformRefreshRequest): Promise<PlatformRefreshResult> {
   const prisma = getPrismaClient();
   if (!prisma) {
     if (isDevelopmentMode()) {
@@ -142,7 +153,7 @@ export async function refreshPlatformSession(request: PlatformRefreshRequest): P
         throw new RouteError(401, "AUTH_REFRESH_INVALID", "Refresh token is invalid or expired.");
       }
 
-      return issueOpaqueSessionTokens();
+      return { session: issueOpaqueSessionTokens(), user: null };
     }
 
     throw new RouteError(503, "DATABASE_NOT_CONFIGURED", "Platform auth requires a configured database connection.");
@@ -178,14 +189,22 @@ export async function refreshPlatformSession(request: PlatformRefreshRequest): P
       }),
     ]);
 
-    return tokens;
+    const user = await prisma.platformUser.findUnique({ where: { id: existing.platformUserId } });
+    if (!user || user.status !== "ACTIVE") {
+      throw new RouteError(401, "AUTH_REFRESH_INVALID", "Refresh token is invalid or expired.");
+    }
+
+    return {
+      session: tokens,
+      user: { id: user.id, email: user.email, role: user.role },
+    };
   } catch (error) {
     if (isDevelopmentMode()) {
       if (!String(request.refreshToken || "").trim()) {
         throw new RouteError(401, "AUTH_REFRESH_INVALID", "Refresh token is invalid or expired.");
       }
 
-      return issueOpaqueSessionTokens();
+      return { session: issueOpaqueSessionTokens(), user: null };
     }
 
     throw error;

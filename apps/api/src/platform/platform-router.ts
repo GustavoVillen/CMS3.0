@@ -65,7 +65,20 @@ export async function handlePlatformRoutes(
     enforceRateLimit(request, "auth:platform-refresh", { maxRequests: 30, windowMs: 60_000 });
     const payload = await readJsonBody<{ refreshToken: string }>(request);
     const result = await refreshPlatformSession(payload);
-    sendJson(response, 200, result);
+
+    // Re-registrar la sesion en el Map en memoria para que el nuevo access token
+    // resuelva en getPlatformAccessSession (el Map se vacia con cada restart del API)
+    if (result.user) {
+      registerPlatformAccessSession({
+        kind: "platform",
+        accessToken: result.session.accessToken,
+        refreshToken: result.session.refreshToken,
+        accessTokenExpiresAt: result.session.accessTokenExpiresAt,
+        user: result.user,
+      });
+    }
+
+    sendJson(response, 200, result.session);
     return true;
   }
 
