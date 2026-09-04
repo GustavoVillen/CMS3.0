@@ -39,7 +39,7 @@ import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
+import { compareSfiGroup, dominantSfiGroup, FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
@@ -3696,19 +3696,41 @@ export const MaintenancePlansPage: React.FC = () => {
   const toggleAllGroups = useCallback(() => {
     setCollapsedGroups(allCollapsed ? new Set<string>() : new Set(allGroupKeys));
   }, [allCollapsed, allGroupKeys]);
+  // Grupo SFI de cada equipo (el que más declaran sus tareas). Se calcula acá
+  // porque el grupo lo trae el PLAN, no el equipo, y la tabla ordena los grupos
+  // sólo con su clave (= assetId).
+  const assetSfiGroups = useMemo(() => {
+    const nums = new Map<string, Array<number | null | undefined>>();
+    for (const p of data?.items ?? []) {
+      const arr = nums.get(p.assetId);
+      if (arr) arr.push(p.sfiGroupNumber); else nums.set(p.assetId, [p.sfiGroupNumber]);
+    }
+    const out = new Map<string, number | null>();
+    for (const [assetId, list] of nums) out.set(assetId, dominantSfiGroup(list));
+    return out;
+  }, [data]);
+
   const planGroupBy = useMemo(
     () => groupByEquipment
       ? {
           keyFn: (r: MaintenancePlan) => r.assetId,
           labelFn: (r: MaintenancePlan) => r.assetName ?? r.assetId,
           sortRows: (a: MaintenancePlan, b: MaintenancePlan) => freqRank(a) - freqRank(b),
+          // Los equipos van por grupo SFI (G0, G1, G2… y al final los que no
+          // tienen grupo) y, dentro de cada grupo, alfabéticos: así los equipos
+          // de un mismo sistema quedan juntos en vez de repartidos por nombre.
+          sortGroups: (a: { key: string; label: string }, b: { key: string; label: string }) => {
+            const cmp = compareSfiGroup(assetSfiGroups.get(a.key) ?? null, assetSfiGroups.get(b.key) ?? null);
+            if (cmp !== 0) return cmp;
+            return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+          },
           // El nombre del equipo arranca en el borde izquierdo de la tabla, con
           // su barra vertical en la misma columna que los casilleros de las
           // tareas: así se lee de corrido quién encabeza a quién.
           headerStyle: "quiet" as const,
         }
       : undefined,
-    [groupByEquipment],
+    [groupByEquipment, assetSfiGroups],
   );
 
   return (

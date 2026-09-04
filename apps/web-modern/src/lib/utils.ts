@@ -89,3 +89,33 @@ export function sfiGroupDigit(sfiGroupNumber?: number | null): number | null {
   const digit = sfiGroupNumber < 10 ? sfiGroupNumber : Math.floor(sfiGroupNumber / 100);
   return digit >= 0 && digit <= 9 ? digit : null;
 }
+
+/**
+ * Grupo SFI de un EQUIPO a partir de los grupos que declaran sus planes. El
+ * grupo lo declara cada plan, no el equipo, y un mismo equipo puede tener
+ * tareas cargadas en más de un grupo: se toma el que más se repite (y ante
+ * empate, el menor) para que el equipo no se parta en dos lugares de la lista.
+ * Devuelve null si ningún plan trae grupo.
+ */
+export function dominantSfiGroup(sfiGroupNumbers: Array<number | null | undefined>): number | null {
+  const counts = new Map<number, number>();
+  for (const n of sfiGroupNumbers) {
+    const d = sfiGroupDigit(n);
+    if (d === null) continue;
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let bestCount = 0;
+  for (const [d, n] of [...counts.entries()].sort((a, b) => a[0] - b[0])) {
+    if (n > bestCount) { best = d; bestCount = n; }
+  }
+  return best;
+}
+
+/** Orden de grupos SFI para listados: G0…G9 y, al final, lo que no tiene grupo. */
+export function compareSfiGroup(a: number | null, b: number | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a - b;
+}

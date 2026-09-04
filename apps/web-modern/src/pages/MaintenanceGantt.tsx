@@ -5,7 +5,7 @@ import { useFetch } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
 import { useT } from "../lib/i18n";
-import { sfiGroupDigit } from "../lib/utils";
+import { compareSfiGroup, dominantSfiGroup, sfiGroupDigit } from "../lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,25 +209,6 @@ function clampLeftW(w: number): number {
   return Math.min(LEFT_W_MAX, Math.max(LEFT_W_MIN, Math.round(w)));
 }
 
-/** Grupo SFI de un equipo dentro del Gantt. El grupo lo declara cada PLAN, no
- *  el equipo, y un mismo equipo puede tener tareas cargadas en más de un grupo:
- *  se toma el que más se repite (y ante empate, el menor) para que el equipo no
- *  se parta en dos lugares del diagrama. Sin grupo en ningún plan → null. */
-function assetSfiGroup(plans: MaintenancePlan[]): number | null {
-  const counts = new Map<number, number>();
-  for (const p of plans) {
-    const d = sfiGroupDigit(p.sfiGroupNumber);
-    if (d === null) continue;
-    counts.set(d, (counts.get(d) ?? 0) + 1);
-  }
-  let best: number | null = null;
-  let bestCount = 0;
-  for (const [d, n] of [...counts.entries()].sort((a, b) => a[0] - b[0])) {
-    if (n > bestCount) { best = d; bestCount = n; }
-  }
-  return best;
-}
-
 // ─── Filtro de vista ──────────────────────────────────────────────────────────
 
 type ViewFilter = "ALL" | "MAINTENANCE" | "INSPECTION" | "CLASS";
@@ -388,15 +369,11 @@ export function MaintenanceGanttPage() {
       // Equipos repartidos por grupo SFI; los que no declaran grupo van al final.
       const byGroup = new Map<number | null, Array<[string, MaintenancePlan[]]>>();
       for (const entry of [...assets.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-        const g = assetSfiGroup(entry[1]);
+        const g = dominantSfiGroup(entry[1].map(p => p.sfiGroupNumber));
         if (!byGroup.has(g)) byGroup.set(g, []);
         byGroup.get(g)!.push(entry);
       }
-      const groupOrder = [...byGroup.keys()].sort((a, b) => {
-        if (a === null) return 1;
-        if (b === null) return -1;
-        return a - b;
-      });
+      const groupOrder = [...byGroup.keys()].sort(compareSfiGroup);
 
       for (const g of groupOrder) {
         const entries = byGroup.get(g)!;

@@ -1,5 +1,19 @@
 HISTORY.txt
 
+[2026-09-04] Planes de Mantenimiento: equipos ordenados por grupo SFI
+Agent: Claude Opus 5
+- Pedido del usuario: en la lista de Planes de Mantenimiento los equipos venian
+  en orden alfabetico y los queria por grupo SFI (G0, G1, G2...).
+- Los encabezados siguen siendo el nombre del equipo (sin fila nueva de grupo,
+  decision del usuario): lo que cambia es el ORDEN de los grupos — primero G0,
+  despues G1... y al final los equipos sin grupo. Dentro de cada grupo, orden
+  alfabetico. Ordenar por una columna sigue desagrupando como antes.
+- El grupo lo declara cada PLAN, no el equipo, y un equipo puede tener tareas en
+  mas de un grupo: se lo ubica en el que mas se repite (empate: el menor), mismo
+  criterio que el Gantt. Esa logica salio de MaintenanceGantt.tsx a lib/utils.ts
+  (dominantSfiGroup + compareSfiGroup) y ahora la usan las dos pantallas.
+- Solo frontend: no se toco backend, schema ni i18n. Deploy = pull + build web.
+
 [2026-09-03] Gantt y Equipos: columna ajustable y orden por grupo SFI
 Agent: Claude Opus 5
 - Pedidos del usuario, los tres sobre lo mismo: leer la planilla sin pelearse con
