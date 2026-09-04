@@ -159,7 +159,7 @@ export const Dashboard: React.FC = () => {
   const canManagePermits = can("permit.manage");
   // Mismos roles que protegen /tmsa en App.tsx (RequireRole) — se oculta acá
   // para no mostrar un botón que termina en pantalla bloqueada.
-  const canSeeTmsaAudit = user ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role) : false;
+  const canSeeTmsaAudit = user?.role === "TENANT_ADMIN";
   // Asentar novedades en la hoja de ruta: cualquiera menos el rol de sólo
   // lectura (mismo criterio que canManage del backend de SS).
   const canLogSsProgress = !!user && user.role !== "AUDITOR_READONLY";

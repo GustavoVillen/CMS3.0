@@ -47,12 +47,13 @@ export const NAV: NavSection[] = [
     titleKey: "nav.section.operation",
     items: [
       { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
+      // Paneles de auditoría (TMSA e ISM): sólo el administrador del tenant.
       { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",
-        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
+        roles: ["TENANT_ADMIN"] },
       // Hermano del panel TMSA: misma evidencia de mantenimiento, leída contra
       // el Capítulo 10 del Código ISM en vez del Elemento 4 de OCIMF.
       { icon: LifeBuoy,        labelKey: "nav.ism",              path: "/ism",
-        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
+        roles: ["TENANT_ADMIN"] },
       { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
       { icon: CalendarRange,   labelKey: "nav.maintenanceGantt", path: "/maintenance-gantt" },
       // DORMANTE — Carga de Mantenimiento: módulo oculto a pedido del usuario. Reactivar:

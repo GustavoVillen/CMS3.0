@@ -9,6 +9,7 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getTmsaMaintenanceEvidence, type TmsaStatus, type TmsaMetric, type TmsaFinding } from "./tmsa-service";
+import { requireAuditPanelAccess } from "./tmsa-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, renderLabeledTextBox } from "../pms/pdf-helpers";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
@@ -282,6 +283,7 @@ export async function buildTmsaMaintenancePdf(
   session: TenantAccessSession,
   vesselCode: string | null,
 ): Promise<Buffer> {
+  requireAuditPanelAccess(session);
   // Fechas y horas del documento en la hora de la EMPRESA: el servidor
   // corre en UTC y sin esto el papel salía con la hora del servidor.
   const { tz, locale } = await resolveTenantTime(session.tenantSlug);

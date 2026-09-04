@@ -19,6 +19,7 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { getIsmChapter10Evidence, getIsmMetricDetail } from "./ism-service";
+import { requireAuditPanelAccess } from "../tmsa/tmsa-service";
 
 const MODEL = AI_MODEL.fast;
 
@@ -73,6 +74,7 @@ export async function suggestIsmAssessment(
   session: TenantAccessSession,
   input: IsmAssessmentInput,
 ): Promise<IsmAssessment> {
+  requireAuditPanelAccess(session);
   const vesselCode = String(input.vesselCode ?? "").trim();
   const groupKey = String(input.groupKey ?? "").trim();
   const metricKey = String(input.metricKey ?? "").trim();

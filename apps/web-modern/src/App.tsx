@@ -262,8 +262,8 @@ export default function App() {
               <Route path="/service-requests"  element={<ServiceRequestsPage />} />
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/reports"           element={<MonthlyReportsPage />} />
-              <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]}><TmsaPage /></RequireRole>} />
-              <Route path="/ism"               element={<RequireRole roles={["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"]}><IsmPage /></RequireRole>} />
+              <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN"]}><TmsaPage /></RequireRole>} />
+              <Route path="/ism"               element={<RequireRole roles={["TENANT_ADMIN"]}><IsmPage /></RequireRole>} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />

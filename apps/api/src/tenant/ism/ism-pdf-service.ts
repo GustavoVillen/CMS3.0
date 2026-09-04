@@ -16,6 +16,7 @@ import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, renderLabeledTextBox } f
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 import { GROUP_TITLE as TMSA_GROUP_TITLE, METRIC_LABEL as TMSA_METRIC_LABEL } from "../tmsa/tmsa-pdf-service";
 import { getIsmChapter10Evidence, type IsmStatus, type IsmMetric, type IsmFinding } from "./ism-service";
+import { requireAuditPanelAccess } from "../tmsa/tmsa-service";
 
 /** Texto del Código para cada cláusula (resumen fiel, no cita literal completa). */
 const CLAUSE_TEXT: Record<string, { title: string; text: string }> = {
@@ -253,6 +254,7 @@ export async function buildIsmChapter10Pdf(
   session: TenantAccessSession,
   vesselCode: string | null,
 ): Promise<Buffer> {
+  requireAuditPanelAccess(session);
   const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const fmtDateTime = (d: Date | string | null | undefined) => fmtDateTimeTz(d, tz, locale);
   const fmt = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);

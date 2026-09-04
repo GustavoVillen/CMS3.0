@@ -18,6 +18,16 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import { resolveComputedStatus } from "../certificates/certificates-service";
+import { RouteError } from "../../http/route-error";
+
+/** Los paneles de auditoría (TMSA Elemento 4 e ISM Cap. 10) son sólo del
+ *  administrador del tenant. Mismo criterio que la ruta /tmsa y /ism del
+ *  frontend: si se abre a otro rol, hay que abrirlo en los dos lados. */
+export function requireAuditPanelAccess(session: TenantAccessSession): void {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede ver los paneles de auditoría.");
+  }
+}
 
 export type TmsaStatus = "OK" | "ATTENTION" | "GAP" | "INFO";
 
@@ -133,6 +143,7 @@ export async function getTmsaMaintenanceEvidence(
   vesselCode: string | null,
   mode: TmsaEvidenceMode = "fleet",
 ): Promise<{ items: TmsaVesselEvidence[] }> {
+  requireAuditPanelAccess(session);
   const prisma = getPrismaClient();
   if (!prisma) return { items: [] };
   // El nombre visible de la empresa vive en TenantSetting.displayName; titula el
@@ -777,6 +788,7 @@ export async function getTmsaMetricDetail(
   vesselCode: string,
   metric: string,
 ): Promise<{ items: TmsaDetailItem[] }> {
+  requireAuditPanelAccess(session);
   const prisma = getPrismaClient();
   if (!prisma) return { items: [] };
   const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });

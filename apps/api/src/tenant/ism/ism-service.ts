@@ -32,6 +32,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { log } from "../../common/logger";
 import { listVesselsInScope } from "../compliance/compliance-service";
+import { requireAuditPanelAccess } from "../tmsa/tmsa-service";
 import {
   getTmsaMaintenanceEvidence,
   type TmsaEvidenceMode,
@@ -157,6 +158,7 @@ export async function getIsmChapter10Evidence(
   vesselCode: string | null,
   mode: TmsaEvidenceMode = "fleet",
 ): Promise<{ items: IsmVesselEvidence[] }> {
+  requireAuditPanelAccess(session);
   const prisma = getPrismaClient();
   if (!prisma) return { items: [] };
   // displayName titula el bloque de flota (CLAUDE.md: nombres, no códigos).
@@ -638,6 +640,7 @@ export async function getIsmMetricDetail(
   vesselCode: string,
   metric: string,
 ): Promise<{ items: TmsaDetailItem[] }> {
+  requireAuditPanelAccess(session);
   if (!metric.startsWith("ism")) return getTmsaMetricDetail(session, vesselCode, metric);
 
   const prisma = getPrismaClient();
