@@ -528,9 +528,13 @@ export async function createServiceRequestForWorkOrder(
       ?? departmentFromSystemArea((wo as any).systemArea)
       ?? (wo as any).department
       ?? null,
-    // DETALLE DE LAS CAUSAS = por qué se pide el servicio. La falla que motivó
-    // la OT es exactamente eso, así que arranca de ahí y se puede editar.
-    causes: payload.causes ?? (wo as any).description ?? null,
+    // DETALLE DEL SERVICIO: nace VACÍO a propósito (pedido del usuario, sep 2026).
+    // Antes se copiaba la descripción de la OT, pero son dos cosas distintas: la
+    // OT describe el trabajo completo (a veces varias pantallas de alcance
+    // redactado con IA) y la SS pide UN servicio puntual al taller. Heredar ese
+    // texto obligaba a borrar párrafos enteros antes de escribir lo que se pide.
+    // Si el que carga la SS quiere ese detalle, lo manda en el payload.
+    causes: payload.causes ?? null,
     // Si el trabajo de la OT ya se terceriza, el taller viene elegido.
     providerId: payload.providerId ?? (wo as any).providerId ?? null,
   };

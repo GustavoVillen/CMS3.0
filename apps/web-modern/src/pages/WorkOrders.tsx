@@ -953,9 +953,16 @@ interface WorkOrderModalProps {
    * plan renueva un certificado, el ofrecimiento tiene que sobrevivir a eso.
    */
   onPlanExecuted?: (maintenancePlanId: string, completedAt: string | null) => void;
+  /**
+   * Abrir la OT ya con el formulario de "Nueva SS" arriba. Lo usa el atajo del
+   * Dashboard ("Nueva Solicitud de Servicio" → de una OT ya abierta): el usuario
+   * eligió la orden justamente para pedirle un servicio al taller, no para
+   * mirarla, así que no tiene que buscar el botón dentro de la ficha.
+   */
+  autoOpenNewSs?: boolean;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted, autoOpenNewSs }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1578,20 +1585,25 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // SS autorizada). Ya no se exige que la OT esté autorizada de antemano.
   const canOpenServiceRequest = WO_OPEN_STATUSES_FOR_SS.includes(workOrder.status);
   const [creatingSr, setCreatingSr] = useState(false);
-  const [newSrOpen, setNewSrOpen] = useState(false);
+  // Con el atajo del Dashboard el formulario de la SS ya nace abierto, salvo que
+  // la OT no admita SS (cerrada o cancelada), donde no habría botón que apretar.
+  const [newSrOpen, setNewSrOpen] = useState(!!autoOpenNewSs && canOpenServiceRequest);
   // Lo único que no se puede heredar: qué servicio se le pide al tercero. El
   // resto (buque, equipo, departamento, causas, taller) lo completa el backend
   // desde la OT — ver createServiceRequestForWorkOrder.
-  const handleCreateServiceRequest = useCallback(async (servicio: string) => {
+  // Devuelve el id de la SS creada: el llamador la abre para que se complete el
+  // formulario (REGI-LOG-01.3) sin tener que buscarla en la lista.
+  const handleCreateServiceRequest = useCallback(async (servicio: string): Promise<string | null> => {
     setCreatingSr(true);
     try {
-      await api.post(`/app/pms/work-orders/${workOrder.id}/service-requests`, {
+      const created = await api.post<{ id?: string }>(`/app/pms/work-orders/${workOrder.id}/service-requests`, {
         title: servicio,
         description: servicio,
         priority: workOrder.priority,
       });
       reloadServiceRequests();
       setNewSrOpen(false);
+      return created?.id ?? null;
     } finally {
       setCreatingSr(false);
     }
@@ -2395,7 +2407,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 busy={creatingSr}
                 defaultValue={title || workOrder.title || ""}
                 onClose={() => setNewSrOpen(false)}
-                onConfirm={handleCreateServiceRequest}
+                // Creada la SS se va derecho a su formulario: escribir el nombre
+                // del servicio es el primer paso del pedido, no el último. Si la
+                // OT tiene cambios sin guardar, saveThenNavigate los guarda antes
+                // de salir (y si el guardado falla, se queda acá con el error).
+                onConfirm={async (servicio) => {
+                  const id = await handleCreateServiceRequest(servicio);
+                  if (id) await saveThenNavigate(`/service-requests?openId=${id}`);
+                }}
               />
             )}
 
@@ -4052,6 +4071,18 @@ export const WorkOrdersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/work-orders");
 
+  // Puente del Dashboard: "Nueva Solicitud de Servicio" → "de una OT ya abierta"
+  // llega con `?newSs=1` y la OT tiene que abrirse con el formulario de la SS
+  // arriba. Es un puente, no un filtro: se saca de la URL apenas se lee (si
+  // quedara, recargar o volver con el botón Atrás reabriría el formulario).
+  const [autoNewSs, setAutoNewSs] = useState(() => searchParams.get("newSs") === "1");
+  useEffect(() => {
+    if (searchParams.get("newSs") !== "1") return;
+    const p = new URLSearchParams(searchParams);
+    p.delete("newSs");
+    setSearchParams(p, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Al cerrar una OT que viene de un plan, si ese plan renueva un certificado se
   // ofrece cargar la vigencia nueva. Vive en la página porque el modal de la OT
   // ya se desmontó. Nunca se actualiza solo: lo confirma el usuario con el
@@ -4436,7 +4467,8 @@ export const WorkOrdersPage: React.FC = () => {
         <WorkOrderModal
           workOrder={editing}
           canManage={canManage}
-          onClose={() => closeLink()}
+          autoOpenNewSs={autoNewSs}
+          onClose={() => { setAutoNewSs(false); closeLink(); }}
           onSaved={() => { closeLink(); void reload(); }}
           onReload={() => { void reload(); }}
           onOpenAction={openActionModal}

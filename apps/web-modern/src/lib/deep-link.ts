@@ -48,6 +48,7 @@ export function useDeepLink(basePath: string): DeepLink {
     // apertura y duplican la entrada del historial).
     p.delete("autoCode");
     p.delete("openId");
+    p.delete("newSs");
     const qs = p.toString();
     return qs ? `?${qs}` : "";
   };

@@ -741,9 +741,12 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           onClose={() => setShowWoPicker(false)}
           onPick={wo => {
             setShowWoPicker(false);
-            // La OT se abre en su pantalla: ahí está el recuadro de Solicitudes
-            // de Servicio, que es donde se carga el pedido al taller.
-            navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}`);
+            // La OT se abre en su pantalla YA con el formulario de la SS arriba
+            // (`?newSs=1`): el usuario entró por "Nueva Solicitud de Servicio" y
+            // eligió la orden para pedirle un servicio al taller, no para
+            // mirarla. El recuadro de Solicitudes de Servicio queda detrás, con
+            // el resto de los datos que la SS hereda de la OT.
+            navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}?newSs=1`);
           }}
         />
       )}
