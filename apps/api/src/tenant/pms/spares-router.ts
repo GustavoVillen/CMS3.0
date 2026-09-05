@@ -17,6 +17,13 @@ import {
 } from "../spares/spares-service";
 import { createStockMovement, listTenantStockMovements } from "../stock-movements/stock-movements-service";
 import {
+  commitGoodsReceipt,
+  listGoodsReceipts,
+  scanGoodsReceipt,
+  searchSpares,
+} from "../spares/goods-receipts-service";
+import { readBinaryBody } from "../../http/read-binary-body";
+import {
   createStockLocation,
   deleteStockLocation,
   getStockLocation,
@@ -64,6 +71,7 @@ export async function handleSparesRoutes(
   if (
     !url.pathname.startsWith("/app/pms/spares") &&
     !url.pathname.startsWith("/app/pms/stock-movements") &&
+    !url.pathname.startsWith("/app/pms/goods-receipts") &&
     !url.pathname.startsWith("/app/pms/stock-locations") &&
     !url.pathname.startsWith("/app/pms/spare-requests") &&
     !url.pathname.startsWith("/app/pms/stock-reservations") &&
@@ -99,7 +107,63 @@ export async function handleSparesRoutes(
     return true;
   }
 
+  // ── Recepción de repuestos contra remito ────────────────────────────────────
+  // Buscador tolerante (nombre, código, descripción y part numbers) para elegir
+  // el repuesto al que se le suma el stock sin crear uno repetido.
+  if (method === "GET" && url.pathname === "/app/pms/spares/search") {
+    const items = await searchSpares(
+      session,
+      url.searchParams.get("vesselCode") ?? "",
+      url.searchParams.get("q") ?? "",
+    );
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  // Lee el remito (PDF o foto) y devuelve las líneas ya emparejadas contra el
+  // catálogo del buque. No escribe nada: la confirmación es el POST de abajo.
+  if (method === "POST" && url.pathname === "/app/pms/goods-receipts/scan") {
+    enforceRateLimit(request, `ai-extract:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0]! : rawName ?? "remito");
+    const rawVessel = request.headers["x-vessel-code"];
+    const vesselCode = (Array.isArray(rawVessel) ? rawVessel[0] : rawVessel) ?? "";
+    const buffer = await readBinaryBody(request);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    sendJson(response, 200, await scanGoodsReceipt(session, { buffer, originalName, vesselCode }));
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/app/pms/goods-receipts") {
+    const items = await listGoodsReceipts(session, { vesselCode: url.searchParams.get("vesselCode") });
+    sendJson(response, 200, { items, total: items.length });
+    return true;
+  }
+
+  if (method === "POST" && url.pathname === "/app/pms/goods-receipts") {
+    const body = await readJsonBody(request) as Parameters<typeof commitGoodsReceipt>[1];
+    sendJson(response, 201, await commitGoodsReceipt(session, body));
+    return true;
+  }
+
   // ── Reportes (Inventario / Consumo Mensual) ──────────────────────────────────
+
+  // Impresión de la lista que el usuario tiene en pantalla (Repuestos & Stock).
+  // Va por POST porque los ids de las filas visibles no entran en una URL.
+  if (method === "POST" && url.pathname === "/app/pms/reports/spare-list/pdf") {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const { buildSpareListPdf } = await import("./spare-list-pdf-service");
+    const body = await readJsonBody(request) as Parameters<typeof buildSpareListPdf>[1];
+    const buffer = await buildSpareListPdf(session, body);
+    const filename = `repuestos-${new Date().toISOString().slice(0, 10)}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
 
   if (method === "GET" && url.pathname === "/app/pms/reports/spare-inventory") {
     const { getSpareInventoryReport } = await import("./spare-reports-service");

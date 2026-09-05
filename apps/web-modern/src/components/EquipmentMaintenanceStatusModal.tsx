@@ -5,8 +5,10 @@
 // cual — misma fuente de datos, sin duplicar).
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Clock, Loader2 } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Clock, FileDown, Loader2 } from "lucide-react";
 import { api } from "../lib/api";
+import { downloadAuthedFile } from "../lib/authed-media";
+import { AlertDialog } from "./AlertDialog";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
@@ -37,6 +39,25 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [severity, setSeverity] = useState<Severity | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  /** Sólo el historial de esta ventana, en PDF. Lo arma el backend. */
+  const downloadPdf = async () => {
+    setPdfBusy(true);
+    try {
+      const code = assetLabel?.assetCode ?? "equipo";
+      const dateStr = new Date().toISOString().slice(0, 10);
+      await downloadAuthedFile(
+        `/app/pms/assets/${encodeURIComponent(assetId)}/maintenance-history/pdf`,
+        `historial-mantenimiento-${code}-${dateStr}.pdf`,
+      );
+    } catch {
+      setPdfError(t("eqStatus.pdfError"));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -129,9 +150,11 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between shrink-0">
+    // Ventana casi a pantalla completa: la tabla del historial tiene 6 columnas
+    // y en un modal angosto quedaban cortadas.
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-none h-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4 flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 shrink-0">
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-fg truncate">
               {assetLabel?.name ?? assetLabel?.assetCode ?? t("common.loading")}
@@ -140,7 +163,18 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
               <p className="text-[10px] font-mono text-text-industrial/40">{assetLabel.assetCode}</p>
             )}
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void downloadPdf()}
+              disabled={pdfBusy || loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs font-bold text-accent hover:bg-accent/20 transition-all disabled:opacity-40"
+            >
+              {pdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+              {t("eqStatus.pdf")}
+            </button>
+            <ModalCloseButton onClose={onClose} />
+          </div>
         </div>
 
         {loading ? (
@@ -169,6 +203,8 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
           <AssetHistory asset={{ id: assetId }} />
         </div>
       </div>
+
+      {pdfError && <AlertDialog message={pdfError} onClose={() => setPdfError(null)} />}
     </div>
   );
 };

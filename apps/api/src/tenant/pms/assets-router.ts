@@ -24,7 +24,9 @@ function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
 
 function enforceAuditorListOnly(method: string, path: string, role: string): void {
   if (role !== "AUDITOR_READONLY") return;
-  const canListOnly = method === "GET" && (path === "/app/pms/assets" || /^\/app\/pms\/assets\/[^/]+$/.test(path) || /^\/app\/pms\/assets\/[^/]+\/pdf$/.test(path));
+  // El historial en PDF es lectura pura (es justamente lo que un auditor viene
+  // a pedir), así que entra en lo que el rol de sólo lectura puede bajar.
+  const canListOnly = method === "GET" && (path === "/app/pms/assets" || /^\/app\/pms\/assets\/[^/]+$/.test(path) || /^\/app\/pms\/assets\/[^/]+\/pdf$/.test(path) || /^\/app\/pms\/assets\/[^/]+\/maintenance-history\/pdf$/.test(path));
   if (!canListOnly) {
     throw new RouteError(403, "FORBIDDEN", "AUDITOR_READONLY solo puede listar.");
   }
@@ -68,6 +70,25 @@ export async function handleAssetRoutes(
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
     sendJson(response, 200, await suggestAssetCriticality(session, body));
+    return true;
+  }
+
+  // Historial de mantenimientos e inspecciones del equipo (el mismo que muestra
+  // la ventana del Dashboard), completo y paginado.
+  if (method === "GET" && /^\/app\/pms\/assets\/[^/]+\/maintenance-history\/pdf$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const { buildAssetMaintenanceHistoryPdf } = await import("./asset-maintenance-pdf-service");
+    const asset = await getTenantAsset(session, id);
+    const buffer = await buildAssetMaintenanceHistoryPdf(session, id);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `historial-mantenimiento-${asset.assetCode}-${dateStr}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
     return true;
   }
 

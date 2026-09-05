@@ -21,6 +21,7 @@ import { serveCertificateUpload } from "../certificates/cert-uploads-service";
 import { serveChecklistUpload } from "../pms/checklist-uploads-service";
 import { serveFluidReportUpload } from "../fluid-analyses/fluid-uploads-service";
 import { serveWorkOrderScanUpload } from "../work-orders/work-order-scan-uploads-service";
+import { serveGoodsReceiptUpload } from "../spares/goods-receipt-uploads-service";
 import { serveAttachment } from "../attachments/attachment-uploads-service";
 import { sendJson } from "../../http/json-response";
 
@@ -95,6 +96,14 @@ export async function handleFilesRoutes(
     const [, pathSlug, filename] = woScanMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     return serveWorkOrderScanUpload(response, tenantSlug, filename!) || notFound(response);
+  }
+
+  // /app/files/goods-receipts/{tenantSlug}/{filename}
+  const receiptMatch = url.pathname.match(/^\/app\/files\/goods-receipts\/([^/]+)\/([^/]+)$/);
+  if (receiptMatch) {
+    const [, pathSlug, filename] = receiptMatch;
+    if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    return serveGoodsReceiptUpload(response, tenantSlug, filename!) || notFound(response);
   }
 
   // /app/files/attachments/{tenantSlug}/{entityType}/{filename}

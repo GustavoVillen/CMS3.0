@@ -2,7 +2,7 @@ import React from "react";
 import {
   LayoutDashboard, Ship, SlidersHorizontal, ClipboardList, Wrench,
   // FileText,  // DORMANTE: icono de Reportes Diarios — reactivar junto con la ruta
-  AlertTriangle, Clock, ShieldCheck, Package, Truck,
+  AlertTriangle, Clock, ShieldCheck, Package, PackagePlus, Truck,
   UsersRound, ScrollText, Gauge, Bot, Handshake,
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, CalendarRange, Fuel,
@@ -101,6 +101,9 @@ export const NAV: NavSection[] = [
       { icon: ShieldCheck,     labelKey: "nav.certificates",     path: "/certificates" },
       { icon: FlaskConical,    labelKey: "nav.fluidAnalyses",    path: "/fluid-analyses" },
       { icon: Gauge,           labelKey: "nav.spareRequests",    path: "/spare-requests" },
+      // Lo que llegó al buque (remito + proveedor). Va pegado a Solicitudes:
+      // es el otro extremo del mismo circuito.
+      { icon: PackagePlus,     labelKey: "nav.spareReceipts",    path: "/spare-receipts" },
       { icon: GitBranch,       labelKey: "nav.moc",              path: "/moc" },
       { icon: AlertOctagon,    labelKey: "nav.nearMiss",         path: "/near-miss" },
       { icon: ClipboardCheck,  labelKey: "nav.externalAudits",   path: "/external-audits" },

@@ -554,6 +554,9 @@ enum MovementRefType {
   ADJUSTMENT
   SPARE_REQUEST
   WORK_LOG
+  // Recepción contra remito: el movimiento cuelga de un GoodsReceipt
+  // (referenceId = GoodsReceipt.id), que guarda proveedor, nº y el archivo.
+  GOODS_RECEIPT
 }
 
 enum EvaluationStatus {
@@ -1318,6 +1321,7 @@ model Vessel {
   dailyReports     DailyReport[]
   spares           Spare[]
   stockMovements   StockMovement[]
+  goodsReceipts    GoodsReceipt[]
   providerEvals    ProviderEvaluation[]
   providerNcs      ProviderNonconformity[]
   attachments      Attachment[]
@@ -2738,6 +2742,7 @@ model Provider {
   evaluations      ProviderEvaluation[]
   nonconformities  ProviderNonconformity[]
   inspections      Inspection[]
+  goodsReceipts    GoodsReceipt[]
 
   @@unique([tenantId, providerCode])
   @@index([tenantId])
@@ -2817,6 +2822,39 @@ model StockMovement {
   // (getTenantWorkOrder). Sin este índice la búsqueda escaneaba todos los
   // movimientos del tenant filtrando referenceType/referenceId en memoria.
   @@index([tenantId, referenceType, referenceId])
+}
+
+// Recepción de repuestos contra remito. Es la cabecera: proveedor, número de
+// remito, fecha y el archivo escaneado/fotografiado. Las líneas NO se duplican
+// acá — cada una es un StockMovement RECEIPT con referenceType GOODS_RECEIPT y
+// referenceId = este id, así el stock se sigue calculando de una sola fuente.
+model GoodsReceipt {
+  id               String    @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  receiptCode      String
+  /** Número de remito del proveedor, tal como figura en el papel. */
+  documentNumber   String?
+  providerId       String?
+  /** Nombre libre cuando el proveedor no está dado de alta en Proveedores. */
+  providerName     String?
+  receivedAt       DateTime
+  /** Archivo del remito (PDF o foto). Se sirve por /app/files/goods-receipts/... */
+  fileUrl          String?
+  fileName         String?
+  fileMime         String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  createdByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel    @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider         Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, receiptCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
 }
 
 model SpareRequest {

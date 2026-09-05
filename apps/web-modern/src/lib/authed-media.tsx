@@ -132,7 +132,7 @@ export const AuthedDocLink: React.FC<{ src: string; label?: string; className?: 
  * Trigger una descarga del archivo protegido. Fetcha autenticado, crea
  * blob URL, dispara <a download>, revoca. Usar desde un onClick.
  */
-export async function downloadAuthedFile(src: string, filename?: string): Promise<void> {
+export async function downloadAuthedFile(src: string, filename?: string, body?: unknown): Promise<void> {
   if (!src) return;
   const path = toAuthedFilePath(src);
   const token = localStorage.getItem("gpms_token");
@@ -141,7 +141,13 @@ export async function downloadAuthedFile(src: string, filename?: string): Promis
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (slug)  headers["X-Tenant-Slug"] = slug;
 
-  const res = await fetch(path, { headers });
+  // Con `body` se manda por POST: lo usan los PDF que dependen de lo que el
+  // usuario está viendo (la lista filtrada en pantalla), demasiado largo para
+  // meterlo en la URL.
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, body === undefined
+    ? { headers }
+    : { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

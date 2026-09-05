@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, ListChecks, FlaskConical, NotebookPen } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical, NotebookPen } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +26,7 @@ import { WoProgressFlow } from "../components/work-orders/WoProgressFlow";
 import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumptionFlow";
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
 import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
+import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
 import { UpcomingTasksModal, type UpcomingTasksResponse } from "../components/UpcomingTasksModal";
 import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
@@ -172,6 +173,10 @@ export const Dashboard: React.FC = () => {
   const canLoadFluidBatch = user
     ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role)
     : false;
+  // Registrar lo que llegó al buque: mismo permiso que el ajuste manual de
+  // stock, que es lo que valida el backend (requireReceivePermission en
+  // goods-receipts-service.ts).
+  const canReceiveSpares = can("stock.manage");
   const isDark       = theme === "dark";
   // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
   const chartTooltip = {
@@ -185,6 +190,7 @@ export const Dashboard: React.FC = () => {
   const [showInsights, setShowInsights] = React.useState(false);
   const [showHoursEntry, setShowHoursEntry] = React.useState(false);
   const [showFluidBatch, setShowFluidBatch] = React.useState(false);
+  const [showSpareReceipt, setShowSpareReceipt] = React.useState(false);
   const [showCreateWo, setShowCreateWo] = React.useState(false);
   // "Nueva OT" en blanco (botón chico "Generar OT" y el grande "Nueva Orden de
   // Trabajo") pasa por el asistente categoría → equipo → ítem del plan. La SS
@@ -1007,6 +1013,17 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <span className="font-bold text-sm text-fg">{t("dashboard.fluidBatch.button")}</span>
             </button>
           )}
+          {/* Registrar lo que llegó al buque. La ventana busca primero en el
+              stock existente para no duplicar el repuesto (ver SpareReceiptModal). */}
+          {canReceiveSpares && (
+            <button
+              onClick={() => setShowSpareReceipt(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <PackagePlus className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.spareReceipt.button")}</span>
+            </button>
+          )}
         </div>
 
         {/* Fila 3 — lo que se consulta: plan, agenda de la semana y estado. */}
@@ -1129,6 +1146,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           vesselName={selectedVessel?.name ?? null}
           onSaved={() => { void assetHours.reload(); }}
           onClose={() => setShowHoursEntry(false)}
+        />
+      )}
+
+      {/* Recepción de repuestos contra remito (botón verde de arriba). */}
+      {showSpareReceipt && (
+        <SpareReceiptModal
+          vessels={contextVessels.map(v => ({ code: v.code, name: v.name ?? null }))}
+          defaultVesselCode={selectedVesselCode}
+          onClose={() => setShowSpareReceipt(false)}
         />
       )}
 

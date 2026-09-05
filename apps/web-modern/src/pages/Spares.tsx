@@ -16,6 +16,9 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { downloadAuthedFile } from "../lib/authed-media";
+import { AlertDialog } from "../components/AlertDialog";
+import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -641,6 +644,13 @@ export const SparesPage: React.FC = () => {
   const [searchText,       setSearchText]        = useState("");
   const [showExcel,        setShowExcel]         = useState(false);
   const [selected,         setSelected]          = useState<Spare | null | "new">(null);
+  // "Nuevo repuesto" abre la Recepción: el repuesto se da de alta desde lo que
+  // llegó al buque, después de que la ventana busca los parecidos. Es lo que
+  // evita que el mismo filtro entre dos veces con nombres distintos.
+  const [showReceipt,      setShowReceipt]       = useState(false);
+  const [pdfBusy,          setPdfBusy]           = useState(false);
+  const [pdfError,         setPdfError]          = useState<string | null>(null);
+  const { vessels, selectedVesselCode } = useVesselContext();
 
   const buildPath = () => {
     const p = new URLSearchParams();
@@ -691,6 +701,36 @@ export const SparesPage: React.FC = () => {
   const handleSaved = (s: Spare) => { reload(); setSelected(s); };
   const mocTrigger = useMocTrigger();
 
+  /**
+   * PDF de la lista tal como se ve: se mandan los ids de las filas visibles (y
+   * en su orden), porque búsqueda, categoría y semáforo de stock se filtran en
+   * el navegador y el backend no los conoce.
+   */
+  const exportPdf = async () => {
+    const items = filteredItems ?? [];
+    if (items.length === 0) return;
+    setPdfBusy(true);
+    try {
+      const parts = [
+        vesselFilter ? vesselFilter : null,
+        criticalityFilter ? `${t("col.criticality")} ${criticalityFilter}` : null,
+        statusFilter ? statusFilter : null,
+        categoryFilter || null,
+        belowReorder ? t("sp.reorderAlerts") : null,
+        searchText.trim() ? `"${searchText.trim()}"` : null,
+      ].filter(Boolean);
+      await downloadAuthedFile(
+        "/app/pms/reports/spare-list/pdf",
+        `repuestos-${new Date().toISOString().slice(0, 10)}.pdf`,
+        { ids: items.map(s => s.id), filterLabel: parts.length ? parts.join(" · ") : null },
+      );
+    } catch {
+      setPdfError(t("sp.pdfError"));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const COLUMNS: Column<Spare>[] = [
     { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-fg text-xs">{r.sku}</span> },
     { key: "name",         header: t("col.name"),          render: r => <span className="font-medium text-fg text-xs">{r.name}</span> },
@@ -722,6 +762,17 @@ export const SparesPage: React.FC = () => {
         />
       )}
 
+      {showReceipt && (
+        <SpareReceiptModal
+          vessels={vessels.map(v => ({ code: v.code, name: v.name ?? null }))}
+          defaultVesselCode={vesselFilter || selectedVesselCode}
+          onClose={() => setShowReceipt(false)}
+          onSaved={reload}
+        />
+      )}
+
+      {pdfError && <AlertDialog message={pdfError} onClose={() => setPdfError(null)} />}
+
       <MocTriggerHost controller={mocTrigger} />
 
       <PageHeader icon={Package} title={t("page.spares")} total={data?.total} onReload={reload}>
@@ -744,6 +795,16 @@ export const SparesPage: React.FC = () => {
         {/* Excel */}
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+        </button>
+
+        {/* PDF de lo que se está viendo: mismas filas, mismo orden, mismos filtros. */}
+        <button
+          onClick={() => void exportPdf()}
+          disabled={pdfBusy || !filteredItems || filteredItems.length === 0}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40"
+        >
+          {pdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
+          {t("sp.generatePdf")}
         </button>
 
         {/* Criticality filter */}
@@ -790,9 +851,9 @@ export const SparesPage: React.FC = () => {
           Alertas reorden
         </button>
 
-        {/* Create */}
-        <button onClick={() => setSelected("new")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all font-semibold">
-          <Plus className="w-3.5 h-3.5" /> Nuevo repuesto
+        {/* Alta: pasa por la Recepción (busca primero, crea después). */}
+        <button onClick={() => setShowReceipt(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all font-semibold">
+          <Plus className="w-3.5 h-3.5" /> {t("sp.newSpareTitle")}
         </button>
       </PageHeader>
 
