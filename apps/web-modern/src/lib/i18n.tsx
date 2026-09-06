@@ -12,6 +12,10 @@ export type Locale = "es" | "en" | "pt";
 // ─── Dictionary ───────────────────────────────────────────────────────────────
 
 const dict = {
+  // Modo práctica (solo instancia demo)
+  "demo.banner.title":     { es: "Modo práctica",       en: "Practice mode",       pt: "Modo prática" },
+  "demo.banner.detail":    { es: "Todo lo que cargues acá se borra cada noche. No es el sistema real.", en: "Everything you enter here is wiped every night. This is not the real system.", pt: "Tudo o que você carregar aqui é apagado toda noite. Não é o sistema real." },
+
   // Sidebar nav
   "nav.dashboard":         { es: "Dashboard",          en: "Dashboard",           pt: "Dashboard" },
   "nav.dueItems":          { es: "Items Vencidos",     en: "Due Items",           pt: "Itens Vencidos" },

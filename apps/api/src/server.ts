@@ -155,6 +155,19 @@ setInterval(evictExpiredRateLimitBuckets, 10 * 60 * 1000).unref();
 // Sweep expired login-lockout entries every 10 minutes.
 setInterval(evictExpiredLockouts, 10 * 60 * 1000).unref();
 
+// ── Trabajos automaticos de fondo ───────────────────────────────
+//
+// La instancia de practica (demo) corre EXACTAMENTE el mismo codigo que
+// produccion, pero no debe generar insights con IA cada 6 h ni disparar el
+// parte semanal por su cuenta: nadie lee esos resultados y el gasto de IA es
+// real. `DISABLE_BACKGROUND_JOBS=1` en su .env los apaga. Sin la variable
+// (produccion) el comportamiento es identico al de antes de este cambio.
+// El copiloto a pedido y las purgas de memoria NO dependen de esta bandera.
+const BACKGROUND_JOBS_DISABLED = String(process.env.DISABLE_BACKGROUND_JOBS || "").trim() === "1";
+if (BACKGROUND_JOBS_DISABLED) {
+  process.stdout.write("[background-jobs] insights y parte semanal APAGADOS (DISABLE_BACKGROUND_JOBS=1)\n");
+}
+
 // ── Background insight scheduler — every 6 hours for all active tenants ───────
 //
 // Anti-overlap: si una corrida tarda más que el intervalo (improbable hoy con
@@ -193,8 +206,10 @@ async function runInsightScheduler(): Promise<void> {
 }
 
 // First run 30 s after startup, then every 6 h
-setTimeout(() => { runInsightScheduler().catch(() => {}); }, 30_000);
-setInterval(() => { runInsightScheduler().catch(() => {}); }, 6 * 60 * 60 * 1_000);
+if (!BACKGROUND_JOBS_DISABLED) {
+  setTimeout(() => { runInsightScheduler().catch(() => {}); }, 30_000);
+  setInterval(() => { runInsightScheduler().catch(() => {}); }, 6 * 60 * 60 * 1_000);
+}
 
 // ── Retención de UsageEvent — purga diaria ──────────────────────────────────
 // La tabla crece 1 fila por cada request HTTP autenticado. purgeOldUsageEvents()
@@ -311,7 +326,9 @@ async function runWeeklyReportScheduler(): Promise<void> {
   }
 }
 
-setTimeout(() => { runWeeklyReportScheduler().catch(() => {}); }, 90_000);
-setInterval(() => { runWeeklyReportScheduler().catch(() => {}); }, 15 * 60 * 1_000).unref();
+if (!BACKGROUND_JOBS_DISABLED) {
+  setTimeout(() => { runWeeklyReportScheduler().catch(() => {}); }, 90_000);
+  setInterval(() => { runWeeklyReportScheduler().catch(() => {}); }, 15 * 60 * 1_000).unref();
+}
 
 // restart: 1776615000000

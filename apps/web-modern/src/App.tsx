@@ -11,6 +11,7 @@ import { Layout } from "./components/Layout";
 import { PlatformLayout } from "./components/PlatformLayout";
 import { Login } from "./pages/Login";
 import { PageLoader } from "./components/PageLoader";
+import { DemoBanner } from "./components/DemoBanner";
 
 // ---------------------------------------------------------------------------
 // Páginas cargadas BAJO DEMANDA (code-splitting por ruta).
@@ -308,6 +309,7 @@ function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
       <VesselProvider>
         <NotificationsProvider>
           <EscapeGuardProvider>
+            <DemoBanner />
             {children}
           </EscapeGuardProvider>
         </NotificationsProvider>
