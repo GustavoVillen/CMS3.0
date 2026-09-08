@@ -6,6 +6,7 @@ import { fmtDate } from "../lib/utils";
 import { FormModal } from "./FormModal";
 import { AlertDialog } from "./AlertDialog";
 import { CRITERIA_SOURCES, type CriteriaSource } from "../lib/criteria-source";
+import { cellCls, DateCell, NumberCell } from "./InlineCells";
 import type { MaintenancePlan } from "../pages/MaintenancePlans";
 
 // Planilla compacta estilo Excel para Plan de Mantenimiento.
@@ -72,11 +73,10 @@ function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
   return out;
 }
 
-const cellCls =
-  "w-full bg-transparent text-[11px] text-fg px-1.5 py-1 rounded border border-transparent " +
-  "hover:border-fg/15 focus:border-accent/60 focus:bg-fg/5 focus:outline-none transition-colors";
-
 // ─── Editable cells ─────────────────────────────────────────────────────────
+// NumberCell / DateCell / cellCls viven en `InlineCells.tsx`: los comparte la
+// Planilla de a bordo (pages/MaintenanceSheet.tsx), que edita las mismas dos
+// fechas con la misma mecánica.
 
 const TextCell: React.FC<{
   value: string | null;
@@ -103,53 +103,6 @@ const TextCell: React.FC<{
         if (e.key === "Enter") e.currentTarget.blur();
         if (e.key === "Escape") { setDraft(value ?? ""); e.currentTarget.blur(); }
       }}
-    />
-  );
-};
-
-const NumberCell: React.FC<{
-  value: number | null;
-  onCommit: (v: number | null) => void;
-  resetKey: number;
-}> = ({ value, onCommit, resetKey }) => {
-  const [draft, setDraft] = useState(value == null ? "" : String(value));
-  useEffect(() => setDraft(value == null ? "" : String(value)), [value, resetKey]);
-  const commit = () => {
-    const trimmed = draft.trim();
-    const nv = trimmed === "" ? null : Number(trimmed);
-    if (nv != null && Number.isNaN(nv)) { setDraft(value == null ? "" : String(value)); return; }
-    if (nv !== (value ?? null)) onCommit(nv);
-  };
-  return (
-    <input
-      type="number"
-      className={cellCls + " font-mono"}
-      value={draft}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => {
-        if (e.key === "Enter") e.currentTarget.blur();
-        if (e.key === "Escape") { setDraft(value == null ? "" : String(value)); e.currentTarget.blur(); }
-      }}
-    />
-  );
-};
-
-const DateCell: React.FC<{
-  value: string | null;
-  onCommit: (v: string | null) => void;
-  resetKey: number;
-}> = ({ value, onCommit, resetKey }) => {
-  const cur = value ? value.slice(0, 10) : "";
-  const [draft, setDraft] = useState(cur);
-  useEffect(() => setDraft(cur), [cur, resetKey]);
-  return (
-    <input
-      type="date"
-      className={cellCls + " font-mono"}
-      value={draft}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={() => { if (draft !== cur) onCommit(draft || null); }}
     />
   );
 };

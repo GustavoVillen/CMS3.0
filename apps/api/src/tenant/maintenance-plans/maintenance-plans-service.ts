@@ -1382,7 +1382,18 @@ export async function updateTenantMaintenancePlan(
     entityId: current.id,
     metadata: { title: current.title, taskCode: current.taskCode, vesselCode: current.vesselCode },
   });
-  return updated;
+
+  // El semáforo (vencido / por vencer / al día) NO se lee de la columna: se
+  // deriva de las fechas, igual que en el listado. Guardar una última ejecución
+  // o un vencimiento nuevo lo cambia, así que la respuesta tiene que traerlo ya
+  // recalculado — si no, quien editó la celda ve la fila con el color viejo
+  // hasta que recargue la pantalla.
+  let currentHours: number | null = null;
+  if (updated.nextDueHours != null) {
+    const cur = await loadCurrentHoursForAsset(prismaRaw, updated.tenantId, updated.assetId);
+    currentHours = cur?.runningHours ?? null;
+  }
+  return { ...updated, executionStatus: deriveExecutionStatus(updated as MaintenancePlanRecord, currentHours) };
 }
 
 /**

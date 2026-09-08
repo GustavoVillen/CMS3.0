@@ -45,6 +45,7 @@ const AiInsightsPage = React.lazy(() => import("./pages/AiInsights").then(m => (
 const AiDocumentsPage = React.lazy(() => import("./pages/AiDocuments").then(m => ({ default: m.AiDocumentsPage })));
 const FluidAnalysesPage = React.lazy(() => import("./pages/FluidAnalyses").then(m => ({ default: m.FluidAnalysesPage })));
 const MaintenancePlansPage = React.lazy(() => import("./pages/MaintenancePlans").then(m => ({ default: m.MaintenancePlansPage })));
+const MaintenanceSheetPage = React.lazy(() => import("./pages/MaintenanceSheet").then(m => ({ default: m.MaintenanceSheetPage })));
 const MaintenanceGanttPage = React.lazy(() => import("./pages/MaintenanceGantt").then(m => ({ default: m.MaintenanceGanttPage })));
 const WeeklyReportPage = React.lazy(() => import("./pages/WeeklyReport").then(m => ({ default: m.WeeklyReportPage })));
 // DORMANTE — Carga de Mantenimiento: reactivar descomentando esta línea, la ruta de abajo
@@ -234,6 +235,7 @@ export default function App() {
               <Route path="/assets"            element={<AssetsPage />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
+              <Route path="/maintenance-sheet" element={<MaintenanceSheetPage />} />
               <Route path="/maintenance-gantt" element={<MaintenanceGanttPage />} />
               <Route path="/weekly-report" element={<WeeklyReportPage />} />
               {/* DORMANTE — Carga de Mantenimiento: reactivar descomentando (y el import arriba + Sidebar). */}

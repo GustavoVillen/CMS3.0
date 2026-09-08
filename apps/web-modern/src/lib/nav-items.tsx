@@ -7,6 +7,7 @@ import {
   FlaskConical, FileBarChart, Users, CalendarCheck, ShieldAlert,
   ClipboardCheck, AlertOctagon, ListChecks, Grid3x3, GitBranch, BadgeCheck, CalendarRange, Fuel,
   SearchCheck,
+  Table2,
   Timer,
   Anchor,
   LifeBuoy,
@@ -55,6 +56,9 @@ export const NAV: NavSection[] = [
       { icon: LifeBuoy,        labelKey: "nav.ism",              path: "/ism",
         roles: ["TENANT_ADMIN"] },
       { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
+      // La planilla de papel del armador, en pantalla: se marcan varias tareas y
+      // se abre UNA sola OT (con sus SS). Pensada para el Jefe de Máquinas.
+      { icon: Table2,          labelKey: "nav.maintenanceSheet", path: "/maintenance-sheet" },
       { icon: CalendarRange,   labelKey: "nav.maintenanceGantt", path: "/maintenance-gantt" },
       // DORMANTE — Carga de Mantenimiento: módulo oculto a pedido del usuario. Reactivar:
       // descomentar la línea de abajo + el import de `Activity` + la ruta en App.tsx.

@@ -1034,6 +1034,17 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
         {/* Fila 3 — lo que se consulta: plan, agenda de la semana y estado. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* La misma información del plan, en el formato de la planilla de papel
+              que usan a bordo. Va primera y en naranja: es la puerta de entrada
+              para el Jefe de Máquinas, y así se distingue del botón de al lado
+              (no es otro dato, es otra manera de mirar el mismo). */}
+          <button
+            onClick={() => navigate("/maintenance-sheet")}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:border-orange-500/60 hover:bg-orange-500/20 transition-all text-left"
+          >
+            <Table2 className="w-6 h-6 text-orange-600 dark:text-orange-400 shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("nav.maintenanceSheet")}</span>
+          </button>
           <button
             onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets("planList"); setShowMpChooser(true); }}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"

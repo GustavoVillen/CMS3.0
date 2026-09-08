@@ -1,8 +1,8 @@
 // "Estado de mantenimiento de equipos" (acceso del Dashboard): semáforo con
-// el peor estado entre los planes activos del equipo, el detalle de QUÉ tareas
-// están vencidas o por vencer, y el mismo historial de mantenimientos e
-// inspecciones que ya se ve en la ficha del equipo (AssetHistory, reusado tal
-// cual — misma fuente de datos, sin duplicar).
+// el peor estado entre los planes activos del equipo, el plan vigente completo
+// abierto en tres bloques (vencidas / próximas a vencer / al día) y el mismo
+// historial de mantenimientos e inspecciones que ya se ve en la ficha del
+// equipo (AssetHistory, reusado tal cual — misma fuente de datos, sin duplicar).
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Clock, FileDown, Loader2 } from "lucide-react";
@@ -42,7 +42,7 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
-  /** Sólo el historial de esta ventana, en PDF. Lo arma el backend. */
+  /** El plan vigente y el historial de esta ventana, en PDF. Lo arma el backend. */
   const downloadPdf = async () => {
     setPdfBusy(true);
     try {
@@ -50,7 +50,7 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
       const dateStr = new Date().toISOString().slice(0, 10);
       await downloadAuthedFile(
         `/app/pms/assets/${encodeURIComponent(assetId)}/maintenance-history/pdf`,
-        `historial-mantenimiento-${code}-${dateStr}.pdf`,
+        `estado-mantenimiento-${code}-${dateStr}.pdf`,
       );
     } catch {
       setPdfError(t("eqStatus.pdfError"));
@@ -83,20 +83,23 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
   }, [assetId]);
 
   // Se clasifican con el MISMO mapa que pinta el semáforo (SEVERITY_RANK), así
-  // el cartel de arriba y la lista de abajo no pueden contradecirse.
-  const { overdue, upcoming } = useMemo(() => {
+  // el cartel de arriba y la lista de abajo no pueden contradecirse. Los tres
+  // grupos juntos son el plan vigente del equipo: nada queda afuera.
+  const { overdue, upcoming, onTrack } = useMemo(() => {
     const o: PlanRow[] = [];
     const u: PlanRow[] = [];
+    const k: PlanRow[] = [];
     for (const p of plans) {
       if (p.status !== "ACTIVE") continue;
       const sev = SEVERITY_RANK[p.executionStatus] ?? "OK";
       if (sev === "OVERDUE") o.push(p);
       else if (sev === "UPCOMING") u.push(p);
+      else k.push(p);
     }
     // Lo más vencido primero; los que vencen por horas y no por fecha, al final.
     const byDue = (a: PlanRow, b: PlanRow) =>
       (a.nextDueDate ?? "9999").localeCompare(b.nextDueDate ?? "9999");
-    return { overdue: o.sort(byDue), upcoming: u.sort(byDue) };
+    return { overdue: o.sort(byDue), upcoming: u.sort(byDue), onTrack: k.sort(byDue) };
   }, [plans]);
 
   const sev: Severity = severity ?? "OK";
@@ -107,7 +110,7 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
     label: t(SEVERITY_STYLE[sev].labelKey as TranslationKey),
   };
 
-  /** Un bloque de tareas (vencidas o próximas). Vacío = no se dibuja nada. */
+  /** Un bloque de tareas (vencidas, próximas o al día). Vacío = no se dibuja nada. */
   const taskList = (rows: PlanRow[], rowSev: Severity, titleKey: TranslationKey) => {
     if (rows.length === 0) return null;
     const style = SEVERITY_STYLE[rowSev];
@@ -200,6 +203,9 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
               hay forma de saber cuáles ni de ir a resolverlas. */}
           {!loading && taskList(overdue, "OVERDUE", "eqStatus.overdueTasks")}
           {!loading && taskList(upcoming, "UPCOMING", "eqStatus.upcomingTasks")}
+          {/* El resto del plan vigente: lo que está al día. Va último para no
+              empujar hacia abajo lo que sí requiere acción. */}
+          {!loading && taskList(onTrack, "OK", "eqStatus.okTasks")}
           <AssetHistory asset={{ id: assetId }} />
         </div>
       </div>

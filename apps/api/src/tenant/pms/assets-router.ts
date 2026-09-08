@@ -73,8 +73,8 @@ export async function handleAssetRoutes(
     return true;
   }
 
-  // Historial de mantenimientos e inspecciones del equipo (el mismo que muestra
-  // la ventana del Dashboard), completo y paginado.
+  // Estado de mantenimiento del equipo (lo mismo que muestra la ventana del
+  // Dashboard): plan vigente en tres bloques + historial, completo y paginado.
   if (method === "GET" && /^\/app\/pms\/assets\/[^/]+\/maintenance-history\/pdf$/.test(url.pathname)) {
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
@@ -82,7 +82,7 @@ export async function handleAssetRoutes(
     const asset = await getTenantAsset(session, id);
     const buffer = await buildAssetMaintenanceHistoryPdf(session, id);
     const dateStr = new Date().toISOString().slice(0, 10);
-    const filename = `historial-mantenimiento-${asset.assetCode}-${dateStr}.pdf`;
+    const filename = `estado-mantenimiento-${asset.assetCode}-${dateStr}.pdf`;
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
