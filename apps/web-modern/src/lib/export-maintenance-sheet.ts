@@ -26,7 +26,7 @@ import { api } from "./api";
 import {
   type SheetPlan, type AssetInfo,
   ICON_SAMPLING, ICON_INSPECTION, ICON_MAINTENANCE, ICON_PROVIDER,
-  buildSheetGroups, everyLabel, isSampling, milestone, providerLabel, severityOf,
+  buildSheetGroups, everyLabel, isSampling, milestone, providerLabel, severityOfRow,
 } from "./maintenance-sheet-model";
 
 export type { SheetPlan } from "./maintenance-sheet-model";
@@ -149,6 +149,9 @@ export async function buildMaintenanceSheet(o: {
   const HEADER_BG = "FFD9E2E3";   // gris del encabezado
   const YELLOW = "FFFFFF00";      // próximo a vencer
   const RED = "FFFF0000";         // vencido
+  // Equipo fuera de servicio: el mismo rosa claro que ya usaba la celda
+  // "FUERA DE SERVICIO" de la última columna, ahora en toda la fila.
+  const PINK = "FFFFE0E0";
 
   // ── Banda de título: logo del armador a la izquierda, buque a la derecha ──
   const titleRow = ws.getRow(1);
@@ -199,7 +202,7 @@ export async function buildMaintenanceSheet(o: {
       const first = r;
       for (const p of e.plans) {
         const row = ws.getRow(r);
-        const sev = severityOf(p);
+        const sev = severityOfRow(p, e.outOfService);
 
         const task = row.getCell(3);
         task.value = p.title;
@@ -232,9 +235,13 @@ export async function buildMaintenanceSheet(o: {
         const provider = row.getCell(10);
         provider.value = providerLabel(p);
 
-        // Semáforo: rojo = vencida, amarillo = próxima a vencer, sin relleno = al día.
-        const fill = sev === "overdue" ? RED : sev === "soon" ? YELLOW : null;
-        const fontColor = sev === "overdue" ? "FFFFFFFF" : sev === "soon" ? "FF7F6000" : NAVY;
+        // Semáforo: rojo = vencida, amarillo = próxima a vencer, rosa = el equipo
+        // está fuera de servicio (no es un atraso), sin relleno = al día.
+        const fill = sev === "outOfService" ? PINK : sev === "overdue" ? RED : sev === "soon" ? YELLOW : null;
+        const fontColor = sev === "outOfService" ? "FFC00000"
+          : sev === "overdue" ? "FFFFFFFF"
+          : sev === "soon" ? "FF7F6000"
+          : NAVY;
         [task, every, last, next, sampling, inspection, maintenance, provider].forEach((c, i) => {
           if (fill) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
           c.font = { size: 10, color: { argb: fontColor }, bold: sev !== "none" };
@@ -305,7 +312,11 @@ export async function buildMaintenanceSheet(o: {
   });
   r++;
 
-  ([[RED, "Vencido"], [YELLOW, "Próximo a vencer"]] as const).forEach(([argb, label]) => {
+  ([
+    [RED, "Vencido"],
+    [YELLOW, "Próximo a vencer"],
+    [PINK, "Equipo fuera de servicio"],
+  ] as const).forEach(([argb, label]) => {
     const swatch = ws.getCell(r, 2);
     swatch.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
     swatch.border = border;

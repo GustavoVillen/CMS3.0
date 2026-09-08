@@ -31,7 +31,7 @@ import {
   type AssetInfo, type SheetPlan, type SheetGroup,
   ICON_PROVIDER,
   NO_GROUP, buildSheetGroups, isHours, isMonths,
-  providerIdsOf, providerNamesOf, severityOf, fmtDate,
+  providerIdsOf, providerNamesOf, severityOf, severityOfRow, fmtDate,
 } from "../lib/maintenance-sheet-model";
 
 /** Lo que agrega la lista de planes por encima de lo que usa la planilla. */
@@ -341,12 +341,15 @@ export function MaintenanceSheetPage() {
                   </tr>
                   {g.blocks.map(b => b.plans.map((plan, i) => {
                     const p = plan as SheetRow;
-                    const sev = severityOf(p);
-                    // Semáforo de la planilla de papel: rojo vencida, amarillo por vencer.
+                    const sev = severityOfRow(p, b.outOfService);
+                    // Semáforo de la planilla de papel: rojo vencida, amarillo por
+                    // vencer, rosa el equipo fuera de servicio (no es un atraso: no
+                    // hay nada que ejecutar hasta que la máquina vuelva).
                     // En las filas de color, las celdas editables tienen que tomar el
                     // color de la fila: con su color normal, la fecha sobre rojo no se lee.
                     const rowCls =
-                      sev === "overdue" ? "bg-red-600 text-white [&_input]:text-inherit"
+                      sev === "outOfService" ? "bg-[#FFE0E0] text-[#C00000] [&_input]:text-inherit"
+                      : sev === "overdue" ? "bg-red-600 text-white [&_input]:text-inherit"
                       : sev === "soon" ? "bg-yellow-300 text-yellow-950 [&_input]:text-inherit"
                       : "text-fg/90 hover:bg-fg/5";
                     const hasWo = !!p.activeWorkOrderCode;
@@ -427,7 +430,7 @@ export function MaintenanceSheetPage() {
                           <td
                             rowSpan={b.plans.length}
                             className={td + " text-center text-[9px] font-bold " +
-                              (b.outOfService ? "bg-red-100 text-red-700" : "bg-surface")}
+                              (b.outOfService ? "bg-[#FFE0E0] text-[#C00000]" : "bg-surface")}
                           >
                             {b.outOfService ? t("msheet.outOfService") : ""}
                           </td>
@@ -451,6 +454,9 @@ export function MaintenanceSheetPage() {
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-yellow-300 border border-border" /> {t("msheet.legend.soon")}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-[#FFE0E0] border border-border" /> {t("msheet.legend.outOfService")}
           </span>
         </div>
       )}

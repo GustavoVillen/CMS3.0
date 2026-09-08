@@ -204,7 +204,19 @@ function cycleDays(p: SheetPlan): number | null {
   return null;
 }
 
-export type Severity = "overdue" | "soon" | "none";
+export type Severity = "overdue" | "soon" | "none" | "outOfService";
+
+/**
+ * Color de la fila tal como se pinta en la planilla.
+ *
+ * El equipo FUERA DE SERVICIO manda sobre el vencimiento: sus tareas siguen
+ * venciendo, pero no hay nada que ejecutar hasta que la máquina vuelva. Pintarlas
+ * de rojo las mezcla con los incumplimientos reales — mismo criterio con el que
+ * el Dashboard las cuenta aparte y no como vencidas.
+ */
+export function severityOfRow(p: SheetPlan, outOfService: boolean): Severity {
+  return outOfService ? "outOfService" : severityOf(p);
+}
 
 export function severityOf(p: SheetPlan): Severity {
   const status = (p.executionStatus ?? "").toUpperCase();

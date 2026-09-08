@@ -2129,6 +2129,7 @@ const dict = {
   "msheet.legend.provider":    { es: "Lo ejecuta un taller externo", en: "Done by an external workshop", pt: "Executado por oficina externa" },
   "msheet.legend.overdue":     { es: "Vencido",                en: "Overdue",               pt: "Vencido" },
   "msheet.legend.soon":        { es: "Próximo a vencer",       en: "Due soon",              pt: "A vencer" },
+  "msheet.legend.outOfService": { es: "Equipo fuera de servicio", en: "Equipment out of service", pt: "Equipamento fora de serviço" },
   "msheet.every.month":        { es: "mes",                    en: "month",                 pt: "mês" },
   "msheet.every.months":       { es: "meses",                  en: "months",                pt: "meses" },
   "msheet.every.day":          { es: "día",                    en: "day",                   pt: "dia" },
