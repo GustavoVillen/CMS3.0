@@ -144,7 +144,10 @@ export const Dashboard: React.FC = () => {
   // Lecturas de horómetro del buque seleccionado (widget "Horas de Equipos").
   // Sólo con buque elegido: la planilla de horas es siempre por buque. useFetch
   // inyecta el vesselCode del contexto, así que el path no lo lleva.
-  const hoursDate         = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Fecha a la que se imputan las horas. Arranca en hoy, pero el modal de carga
+  // rápida deja moverla para asentar una lectura de un día anterior (la guardia
+  // que carga al otro día). Vuelve a hoy al cerrar el modal.
+  const [hoursDate, setHoursDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const assetHours        = useFetch<HoursSheet>(
     selectedVesselCode ? `/app/pms/asset-hours?date=${hoursDate}` : null,
     [selectedVesselCode, hoursDate],
@@ -1146,9 +1149,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <AssetHoursQuickModal
           sheet={assetHours.data}
           readingDate={hoursDate}
+          onDateChange={setHoursDate}
+          loading={assetHours.loading}
           vesselName={selectedVessel?.name ?? null}
           onSaved={() => { void assetHours.reload(); }}
-          onClose={() => setShowHoursEntry(false)}
+          onClose={() => {
+            setShowHoursEntry(false);
+            setHoursDate(new Date().toISOString().slice(0, 10));
+          }}
         />
       )}
 

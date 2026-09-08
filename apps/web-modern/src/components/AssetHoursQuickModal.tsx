@@ -5,11 +5,14 @@
 // <AssetHoursGrid>. Va en modal y no dentro de la tarjeta porque los widgets
 // tienen alto fijo (172px) y una planilla no entra sin romper la grilla.
 //
-// La pantalla completa (/asset-hours) sigue siendo la de siempre: otras fechas,
+// La fecha se puede mover acá mismo (la guardia que carga la lectura al otro
+// día): cambiarla recarga la planilla del padre y las horas se imputan a ese día.
+//
+// La pantalla completa (/asset-hours) sigue siendo la de siempre: otro buque,
 // historial por equipo, equipos sin seguimiento y export a Excel.
 
 import React, { useState } from "react";
-import { Check, Copy, Gauge } from "lucide-react";
+import { Check, Copy, Gauge, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
@@ -18,13 +21,21 @@ import { AssetHoursGrid, type HoursSheet } from "./AssetHoursGrid";
 interface Props {
   sheet: HoursSheet;
   readingDate: string;
+  /** Cambia la fecha de la planilla (el padre recarga la hoja de ese día). */
+  onDateChange: (date: string) => void;
+  /** La hoja de la fecha nueva todavía está viniendo del servidor. */
+  loading?: boolean;
   vesselName: string | null;
   onSaved: () => void;
   onClose: () => void;
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export const AssetHoursQuickModal: React.FC<Props> = ({
-  sheet, readingDate, vesselName, onSaved, onClose,
+  sheet, readingDate, onDateChange, loading, vesselName, onSaved, onClose,
 }) => {
   const t = useT();
   const navigate = useNavigate();
@@ -59,15 +70,30 @@ export const AssetHoursQuickModal: React.FC<Props> = ({
             <div className="min-w-0">
               <h2 className="text-base font-bold text-fg">{t("assetHours.pageTitle")}</h2>
               {/* Nombre del buque, no el código. */}
-              <p className="text-xs text-text-industrial/50">
-                {vesselName ?? sheet.vesselCode} · {readingDate}
-              </p>
+              <p className="text-xs text-text-industrial/50">{vesselName ?? sheet.vesselCode}</p>
             </div>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Fecha editable: sin ella sólo se podía cargar el día de hoy. No
+                se permiten fechas futuras (mismo tope que la pantalla completa). */}
+            <label className="flex items-center gap-1.5 text-[11px] text-text-industrial/60">
+              {t("assetHours.readingDate")}
+              <input
+                type="date"
+                value={readingDate}
+                max={todayIso()}
+                onChange={(e) => onDateChange(e.target.value || todayIso())}
+                className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-xs text-fg"
+              />
+            </label>
+            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />}
+            <ModalCloseButton onClose={onClose} />
+          </div>
         </div>
 
-        <div className="overflow-y-auto p-5">
+        {/* Mientras viene la hoja de la fecha nueva la planilla queda bloqueada:
+            si no, se editaría la lectura de un día y se guardaría contra otro. */}
+        <div className={`overflow-y-auto p-5 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
           <AssetHoursGrid
             sheet={sheet}
             readingDate={readingDate}
