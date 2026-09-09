@@ -17,12 +17,13 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardList, Loader2, Search, Wrench, X } from "lucide-react";
+import { ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
 import { CreateWorkOrderModal, buildWoPrefillFromPlan, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { api, ApiError } from "../lib/api";
+import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { useFetch } from "../lib/hooks";
 import { useAuth, useCan } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
@@ -64,7 +65,7 @@ export function MaintenanceSheetPage() {
   // vencimiento a mano pisa el cálculo automático y el backend lo reserva al rol
   // literal TENANT_ADMIN: la celda se muestra editable sólo a quien va a poder
   // guardarla, para no ofrecer un campo que después rebota con un error.
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const canEdit = can("plan.manage");
   const canEditNextDue = user?.role === "TENANT_ADMIN";
 
@@ -200,6 +201,28 @@ export function MaintenanceSheetPage() {
     }
   }, [t]);
 
+  // Bajar la MISMA planilla en Excel, para imprimirla y llevarla a la máquina.
+  // Es el mismo botón (y la misma función) que Plan de Mantenimiento: la
+  // exportación trae su propia lista completa del buque, sin los filtros de
+  // pantalla — lo que se imprime es la planilla entera, como el papel.
+  const [exportingSheet, setExportingSheet] = useState(false);
+  const exportSheet = useCallback(async () => {
+    if (exportingSheet || !selectedVesselCode) return;
+    setExportingSheet(true);
+    try {
+      await exportMaintenanceSheet({
+        vesselCode: selectedVesselCode,
+        vesselName: selectedVessel?.name ?? selectedVesselCode,
+        // La planilla va a papel: siempre el logo para fondo blanco.
+        logoUrl: tenant?.logoUrl || tenant?.logoUrlLight || null,
+      });
+    } catch (err) {
+      setAlert(err instanceof Error ? err.message : t("mp.page.exportSheetFailed"));
+    } finally {
+      setExportingSheet(false);
+    }
+  }, [exportingSheet, selectedVesselCode, selectedVessel, tenant, t]);
+
   /** El plan de mantenimiento del equipo: la lista ya filtrada por ese equipo. */
   const openAssetPlans = useCallback((p: SheetRow) => {
     const vessel = p.vesselCode ?? selectedVesselCode ?? "";
@@ -265,6 +288,19 @@ export function MaintenanceSheetPage() {
           }`}
         >
           {t("msheet.onlyDue")}
+        </button>
+        <button
+          onClick={() => { void exportSheet(); }}
+          disabled={exportingSheet || !selectedVesselCode}
+          title={selectedVesselCode
+            ? t("mp.page.exportSheetHint").replace("{vessel}", selectedVessel?.name ?? selectedVesselCode)
+            : t("mp.page.exportSheetNoVessel")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {exportingSheet
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+            : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />}
+          {exportingSheet ? t("mp.page.exportSheetBusy") : t("mp.page.exportSheet")}
         </button>
         <button
           onClick={() => { void createWorkOrder(); }}
