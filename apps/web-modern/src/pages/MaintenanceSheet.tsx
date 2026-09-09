@@ -401,10 +401,17 @@ export function MaintenanceSheetPage() {
                     const hb = isHours(p.triggerType);
                     const providers = providerNamesOf(p);
                     const isProvider = p.department === "PROVEEDOR";
+                    // Línea azul de cierre del bloque: separa un equipo del
+                    // siguiente. Va en la última fila del equipo y, además, en las
+                    // celdas combinadas (ítem / descripción / fuera de servicio),
+                    // que viven en la PRIMERA fila pero llegan hasta el final del
+                    // bloque — sin esto el separador quedaba cortado a la izquierda.
+                    const sep = " border-b-2 border-b-[#1F3864]";
+                    const tdLast = td + (i === b.plans.length - 1 ? sep : "");
 
                     return (
                       <tr key={p.id} className={rowCls}>
-                        <td className={td + " text-center"}>
+                        <td className={tdLast + " text-center"}>
                           {hasWo ? (
                             <button
                               onClick={() => navigate(`/work-orders/${encodeURIComponent(p.activeWorkOrderCode!)}`)}
@@ -428,14 +435,14 @@ export function MaintenanceSheetPage() {
                         {/* Ítem, descripción del equipo y fuera de servicio: una
                             sola celda por bloque, como en la planilla de papel. */}
                         {i === 0 && (
-                          <td rowSpan={b.plans.length} className={td + " text-center font-bold text-fg bg-surface"}>
+                          <td rowSpan={b.plans.length} className={td + sep + " text-center font-bold text-fg bg-surface"}>
                             {b.itemNumber}
                           </td>
                         )}
                         {/* El equipo lleva a SU plan de mantenimiento: la lista ya
                             filtrada por ese equipo, que es donde se lo administra. */}
                         {i === 0 && (
-                          <td rowSpan={b.plans.length} className={td + " text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
+                          <td rowSpan={b.plans.length} className={td + sep + " text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
                             <button
                               type="button"
                               onClick={() => openAssetPlans(b.plans[0]!)}
@@ -450,7 +457,7 @@ export function MaintenanceSheetPage() {
 
                         {/* La tarea lleva a la ficha de ESE plan (mismo deep-link
                             que usa el Gantt). */}
-                        <td className={td + " p-0"}>
+                        <td className={tdLast + " p-0"}>
                           <button
                             type="button"
                             onClick={() => navigate(`/maintenance-plans?openId=${encodeURIComponent(p.id)}`)}
@@ -460,9 +467,9 @@ export function MaintenanceSheetPage() {
                             {p.title}
                           </button>
                         </td>
-                        <td className={td + " text-center font-mono"}>{everyText(p)}</td>
+                        <td className={tdLast + " text-center font-mono"}>{everyText(p)}</td>
 
-                        <td className={td + " text-center font-mono"}>
+                        <td className={tdLast + " text-center font-mono"}>
                           {canEdit ? (
                             hb
                               ? <NumberCell value={p.lastExecutionHours ?? null} resetKey={resetTick}
@@ -471,7 +478,7 @@ export function MaintenanceSheetPage() {
                                   onCommit={v => void patchPlan(p, { lastExecutionDate: v })} />
                           ) : milestoneText(p, "last")}
                         </td>
-                        <td className={td + " text-center font-mono"}>
+                        <td className={tdLast + " text-center font-mono"}>
                           {canEditNextDue ? (
                             hb
                               ? <NumberCell value={p.nextDueHours ?? null} resetKey={resetTick}
@@ -482,7 +489,7 @@ export function MaintenanceSheetPage() {
                           {savingId === p.id && <Loader2 className="w-3 h-3 animate-spin inline ml-1" />}
                         </td>
 
-                        <td className={td}>
+                        <td className={tdLast}>
                           {isProvider && (
                             <span className="text-[10px]">
                               {ICON_PROVIDER} {providers.join(", ")}
@@ -493,7 +500,7 @@ export function MaintenanceSheetPage() {
                         {i === 0 && (
                           <td
                             rowSpan={b.plans.length}
-                            className={td + " text-center text-[9px] font-bold " +
+                            className={td + sep + " text-center text-[9px] font-bold " +
                               (b.outOfService ? "bg-[#FFE0E0] text-[#C00000]" : "bg-surface")}
                           >
                             {b.outOfService ? t("msheet.outOfService") : ""}
