@@ -1277,10 +1277,19 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, vesselCode, sfiGroupNumber, taskCodeAuto]);
 
+  // Buque del render anterior: sirve para distinguir "el usuario cambió de buque"
+  // del primer render.
+  const prevVesselRef = useRef<string | null>(null);
   useEffect(() => {
     const vc = isNew ? vesselCode : plan?.vesselCode;
     if (!vc) return;
-    if (isNew && !lockAsset) { setAssetId(""); setAssets([]); }
+    // Cambiar de buque invalida el activo elegido (es de otro buque). Pero NO en
+    // el primer render: ahí el activo puede venir precargado por el contexto
+    // (alta desde la ficha del equipo, o desde la lista filtrada por equipo), y
+    // limpiarlo dejaba el campo vacío justo cuando ya se sabía cuál era.
+    const vesselChanged = prevVesselRef.current !== null && prevVesselRef.current !== vc;
+    prevVesselRef.current = vc;
+    if (isNew && !lockAsset && vesselChanged) { setAssetId(""); setAssets([]); }
     if (vesselDebounce.current) clearTimeout(vesselDebounce.current);
     vesselDebounce.current = setTimeout(async () => {
       setLoadingAssets(true);
@@ -3733,6 +3742,29 @@ export const MaintenancePlansPage: React.FC = () => {
     [groupByEquipment, assetSfiGroups],
   );
 
+  // ── Alta de tarea con el contexto del filtro ya puesto ────────────────────
+  // Si la pantalla está filtrada por buque / equipo / grupo SFI, esos campos ya
+  // están decididos: repetirlos a mano en el formulario es trabajo al pedo y la
+  // fuente de que la tarea nazca colgada del equipo equivocado. El código lo
+  // sigue proponiendo el backend (`suggest-code`), que ya numera sin repetir.
+  const newPlanDefaults = useMemo(() => {
+    const vessel = vesselFilter || selectedVesselCode || undefined;
+    const asset = assetFilter || undefined;
+    // El grupo sale de la pestaña SFI si hay una elegida; si no, del grupo que
+    // comparten las tareas del equipo filtrado (un equipo suele vivir en uno).
+    let group: number | null | undefined;
+    if (typeof sfiTab === "number") {
+      group = sfiTab;
+    } else if (asset) {
+      const groups = new Set(
+        (data?.items ?? []).filter(p => p.assetId === asset && p.sfiGroupNumber != null)
+          .map(p => p.sfiGroupNumber as number),
+      );
+      if (groups.size === 1) group = [...groups][0];
+    }
+    return { vessel, asset, group };
+  }, [vesselFilter, selectedVesselCode, assetFilter, sfiTab, data]);
+
   return (
     <div className="space-y-4">
       <PageHeader icon={ClipboardList} title={t("page.maintenancePlans")} total={data?.total} onReload={reload}>
@@ -4078,6 +4110,10 @@ export const MaintenancePlansPage: React.FC = () => {
           canEditNextDue={user?.role === "TENANT_ADMIN"}
           setRequestMessage={setRequestMessageFromContext}
           deepLinked={!!linkCode}
+          // Sólo en el alta: al editar, los valores salen del plan.
+          defaultVesselCode={editing ? undefined : newPlanDefaults.vessel}
+          defaultAssetId={editing ? undefined : newPlanDefaults.asset}
+          defaultSfiGroupNumber={editing ? undefined : newPlanDefaults.group}
           // NO hacer setEditing(null) acá: al quedar `editing` en null con el :code
           // todavía en la URL, el resolver re-abría el plan con un fetch asíncrono.
           // Lo nulifica el propio resolver cuando la URL se queda sin code.
