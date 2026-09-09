@@ -13,6 +13,7 @@ import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { textMatches } from "../lib/text-search";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -354,7 +355,7 @@ if (loadingItems) return <p className="text-xs text-fg/30 py-4 text-center">{t("
                   {(() => {
                     const q = search.toLowerCase();
                     const filtered = q
-                      ? spares.filter(s => s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+                      ? spares.filter(s => textMatches(s.sku, q) || textMatches(s.name, q))
                       : spares.slice(0, 30);
                     if (filtered.length === 0)
                       return <p className="px-3 py-2 text-xs text-fg/30">{t("sr.noResults")}{!vesselCode ? ` — ${t("sr.selectVesselFirst")}` : ""}</p>;

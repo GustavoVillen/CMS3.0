@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, Search, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { textMatches } from "../lib/text-search";
 
 interface Spare {
   id: string;
@@ -61,8 +62,8 @@ export const MobileSpares: React.FC<MobileSparesProps> = ({ initialFilter }) => 
     if (filter === "low") items = items.filter(s => s.currentStock <= s.reorderPoint);
     const q = query.toLowerCase().trim();
     if (q) items = items.filter(s =>
-      (s.name ?? "").toLowerCase().includes(q) ||
-      (s.sku  ?? "").toLowerCase().includes(q),
+      textMatches(s.name ?? "", q) ||
+      textMatches(s.sku  ?? "", q),
     );
     return items;
   }, [data, query, filter]);

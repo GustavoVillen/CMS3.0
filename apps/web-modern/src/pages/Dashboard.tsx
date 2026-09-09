@@ -34,6 +34,7 @@ import { type HoursSheet } from "../components/AssetHoursGrid";
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
 // (MaintenancePlans.tsx). Los nombres salen de i18n `sfi.g.<n>`.
 import { assetSeverity, worstOf, SEVERITY_STYLE, type Severity } from "../lib/maintenance-severity";
+import { textMatches } from "../lib/text-search";
 
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
@@ -718,7 +719,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                         .filter(p => {
                           const q = inspSearch.trim().toLowerCase();
                           if (!q) return true;
-                          return `${p.taskCode} ${p.title} ${p.assetName ?? ""}`.toLowerCase().includes(q);
+                          return textMatches(`${p.taskCode} ${p.title} ${p.assetName ?? ""}`, q);
                         })
                         .map(p => (
                           <button

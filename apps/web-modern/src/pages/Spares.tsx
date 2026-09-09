@@ -19,6 +19,7 @@ import { AutoTextArea } from "../components/AutoTextArea";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { AlertDialog } from "../components/AlertDialog";
 import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
+import { textMatches } from "../lib/text-search";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -686,13 +687,13 @@ export const SparesPage: React.FC = () => {
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       items = items.filter(s =>
-        s.sku.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        s.vesselCode.toLowerCase().includes(q) ||
-        (s.sfiCode?.toLowerCase().includes(q) ?? false) ||
-        (s.manufacturer?.toLowerCase().includes(q) ?? false) ||
-        (s.manufacturerPartNumber?.toLowerCase().includes(q) ?? false) ||
-        (s.internalPartNumber?.toLowerCase().includes(q) ?? false)
+        textMatches(s.sku, q) ||
+        textMatches(s.name, q) ||
+        textMatches(s.vesselCode, q) ||
+        textMatches(s.sfiCode, q) ||
+        textMatches(s.manufacturer, q) ||
+        textMatches(s.manufacturerPartNumber, q) ||
+        textMatches(s.internalPartNumber, q)
       );
     }
     return items;

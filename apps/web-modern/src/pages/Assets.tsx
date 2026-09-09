@@ -17,6 +17,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { MaintenancePlanModal, type MaintenancePlan } from "./MaintenancePlans";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { textMatches } from "../lib/text-search";
 
 interface Asset {
   id: string;
@@ -1645,14 +1646,14 @@ export const AssetsPage: React.FC = () => {
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       items = items.filter(a =>
-        a.assetCode?.toLowerCase().includes(q) ||
-        a.name?.toLowerCase().includes(q) ||
-        a.vesselCode?.toLowerCase().includes(q) ||
-        a.sfiCode?.toLowerCase().includes(q) ||
-        (a as any).description?.toLowerCase().includes(q) ||
-        (a as any).manufacturer?.toLowerCase().includes(q) ||
-        (a as any).model?.toLowerCase().includes(q) ||
-        (a as any).serialNumber?.toLowerCase().includes(q)
+        textMatches(a.assetCode, q) ||
+        textMatches(a.name, q) ||
+        textMatches(a.vesselCode, q) ||
+        textMatches(a.sfiCode, q) ||
+        textMatches((a as any).description, q) ||
+        textMatches((a as any).manufacturer, q) ||
+        textMatches((a as any).model, q) ||
+        textMatches((a as any).serialNumber, q)
       );
     }
     return items;

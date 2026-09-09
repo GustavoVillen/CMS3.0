@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import { useT } from "../lib/i18n";
+import { textMatches } from "../lib/text-search";
 
 export interface AssetOption { id: string; assetCode: string; name: string | null; }
 
@@ -29,7 +30,7 @@ export function AssetSearchDropdown({ assets, value, onChange, disabled, placeho
     const q = query.toLowerCase();
     if (!q) return assets;
     return assets.filter(a =>
-      a.assetCode.toLowerCase().includes(q) || (a.name ?? "").toLowerCase().includes(q)
+      textMatches(a.assetCode, q) || textMatches(a.name ?? "", q)
     );
   }, [assets, query]);
 

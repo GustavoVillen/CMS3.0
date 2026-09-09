@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardList, Loader2, Plus, Search, X } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
+import { textMatches } from "../../lib/text-search";
 
 export interface WoPlanRow {
   id: string;
@@ -72,9 +73,9 @@ export function WoPlansPanel({ workOrderId, vesselCode, plans, canEdit, onChange
     const q = query.trim().toLowerCase();
     if (!q) return list.slice(0, 50);
     return list.filter(o =>
-      o.taskCode.toLowerCase().includes(q) ||
-      o.title.toLowerCase().includes(q) ||
-      (o.assetName ?? "").toLowerCase().includes(q)
+      textMatches(o.taskCode, q) ||
+      textMatches(o.title, q) ||
+      textMatches(o.assetName ?? "", q)
     ).slice(0, 50);
   }, [options, included, query]);
 

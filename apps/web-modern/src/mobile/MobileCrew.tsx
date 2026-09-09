@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { textMatches } from "../lib/text-search";
 
 interface CrewCert { id: string; type: string; expiryDate: string | null; status: string; }
 interface Crew {
@@ -61,8 +62,8 @@ export const MobileCrew: React.FC<MobileCrewProps> = ({ onBack }) => {
     const items = data?.items ?? [];
     if (!q) return items;
     return items.filter(c =>
-      fullName(c).toLowerCase().includes(q) ||
-      (c.crewCode ?? "").toLowerCase().includes(q),
+      textMatches(fullName(c), q) ||
+      textMatches(c.crewCode ?? "", q),
     );
   }, [data, query]);
 

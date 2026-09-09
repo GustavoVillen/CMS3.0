@@ -67,6 +67,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { CRITERIA_SOURCES, type CriteriaSource } from "../lib/criteria-source";
+import { textMatches } from "../lib/text-search";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -3217,13 +3218,13 @@ export const MaintenancePlansPage: React.FC = () => {
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       items = items.filter(p =>
-        (p.vesselCode ?? "").toLowerCase().includes(q) ||
-        (p.taskCode ?? "").toLowerCase().includes(q) ||
-        (p.title ?? "").toLowerCase().includes(q) ||
-        (p.description ?? "").toLowerCase().includes(q) ||
-        (p.responsible ?? "").toLowerCase().includes(q) ||
+        textMatches(p.vesselCode ?? "", q) ||
+        textMatches(p.taskCode ?? "", q) ||
+        textMatches(p.title ?? "", q) ||
+        textMatches(p.description ?? "", q) ||
+        textMatches(p.responsible ?? "", q) ||
         String(p.sfiGroupNumber ?? "").includes(q) ||
-        (p.assetName ?? "").toLowerCase().includes(q)
+        textMatches(p.assetName ?? "", q)
       );
     }
     // Filtro por semana: planes con ocurrencia proyectada esa semana (IDs del backend).

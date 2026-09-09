@@ -34,6 +34,7 @@ import {
   NO_GROUP, buildSheetGroups, isHours, isMonths,
   providerIdsOf, providerNamesOf, severityOf, severityOfRow, fmtDate,
 } from "../lib/maintenance-sheet-model";
+import { textMatches } from "../lib/text-search";
 
 /** Lo que agrega la lista de planes por encima de lo que usa la planilla. */
 type SheetRow = SheetPlan & {
@@ -122,7 +123,7 @@ export function MaintenanceSheetPage() {
               // el Dashboard las cuenta aparte.
               if (onlyDue && (b.outOfService || severityOf(p) === "none")) return false;
               if (!q) return true;
-              return `${b.name} ${p.title} ${p.taskCode}`.toLowerCase().includes(q);
+              return textMatches(`${b.name} ${p.title} ${p.taskCode}`, q);
             }),
           }))
           .filter(b => b.plans.length > 0),

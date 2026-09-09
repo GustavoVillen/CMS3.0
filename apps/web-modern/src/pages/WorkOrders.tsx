@@ -40,6 +40,7 @@ import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { textMatches } from "../lib/text-search";
 
 // Mini reference data for showing linked permits inside WO modal
 const PTW_STATUS_LABEL: Record<string, string> = {
@@ -3221,7 +3222,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                           {(() => {
                             const q = usageSearch.toLowerCase();
                             const filtered = q
-                              ? woSpares.filter(s => s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+                              ? woSpares.filter(s => textMatches(s.sku, q) || textMatches(s.name, q))
                               : woSpares.slice(0, 30);
                             if (filtered.length === 0) return <p className="px-3 py-2 text-xs text-fg/30">{t("common.noResults")}</p>;
                             return filtered.map(s => (
@@ -4271,11 +4272,11 @@ export const WorkOrdersPage: React.FC = () => {
     const base = data?.items ?? null;
     if (!base) return base;
     return base.filter(w =>
-      (w.workOrderCode ?? "").toLowerCase().includes(q) ||
-      (w.title ?? "").toLowerCase().includes(q) ||
-      (w.assetName ?? "").toLowerCase().includes(q) ||
-      (w.assignedToUserName ?? "").toLowerCase().includes(q) ||
-      (w.vesselCode ?? "").toLowerCase().includes(q),
+      textMatches(w.workOrderCode ?? "", q) ||
+      textMatches(w.title ?? "", q) ||
+      textMatches(w.assetName ?? "", q) ||
+      textMatches(w.assignedToUserName ?? "", q) ||
+      textMatches(w.vesselCode ?? "", q),
     );
   }, [search, visibleItems, data]);
 

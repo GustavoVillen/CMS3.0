@@ -25,6 +25,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { AlertDialog } from "../components/AlertDialog";
+import { textMatches } from "../lib/text-search";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
@@ -192,8 +193,8 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
   const selected = assets.find(a => a.id === value);
   const filtered = query.trim()
     ? assets.filter(a =>
-        a.assetCode.toLowerCase().includes(query.toLowerCase()) ||
-        (a.name ?? "").toLowerCase().includes(query.toLowerCase())
+        textMatches(a.assetCode, query.toLowerCase()) ||
+        textMatches(a.name ?? "", query.toLowerCase())
       )
     : assets;
 

@@ -20,6 +20,7 @@ import { useT, type TranslationKey } from "../lib/i18n";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { suggestPermitTypesFromText } from "../lib/permit-classifier";
+import { textMatches } from "../lib/text-search";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -271,7 +272,7 @@ const WorkOrderPicker: React.FC<{
     const q = search.trim().toLowerCase();
     if (!q) return open;
     return open.filter(w =>
-      `${w.workOrderCode} ${w.title ?? ""} ${w.assetName ?? ""} ${w.location ?? ""}`.toLowerCase().includes(q),
+      textMatches(`${w.workOrderCode} ${w.title ?? ""} ${w.assetName ?? ""} ${w.location ?? ""}`, q),
     );
   }, [data, search]);
 

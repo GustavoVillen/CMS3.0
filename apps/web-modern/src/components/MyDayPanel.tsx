@@ -18,6 +18,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { fmtDate, parseLocalDate } from "../lib/utils";
+import { textMatches } from "../lib/text-search";
 
 interface WorkOrder { id: string; workOrderCode: string; status: string; criticality?: string; dueDate?: string; assignedToUserId?: string | null; assignedToUserName?: string | null; vesselCode: string; title?: string | null; assetName?: string | null }
 interface Drill { id: string; drillCode: string; vesselCode: string; requirementId: string; requirement?: { title: string } | null; status: string; scheduledDate: string }
@@ -135,7 +136,7 @@ const MyWorkOrdersTile: React.FC = () => {
       if (!open) return false;
       const a = w.assignedToUserId ?? "";
       const n = w.assignedToUserName ?? "";
-      return a === myId || a === myEmail || (n && (n === myEmail || (firstName && n.toLowerCase().includes(firstName.toLowerCase()))));
+      return a === myId || a === myEmail || (n && (n === myEmail || (firstName && textMatches(n, firstName.toLowerCase()))));
     });
   }, [data, user]);
 

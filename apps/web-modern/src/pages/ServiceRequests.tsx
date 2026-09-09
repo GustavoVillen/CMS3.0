@@ -32,6 +32,7 @@ import {
 import { downloadDocx } from "../lib/download-docx";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { textMatches } from "../lib/text-search";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -545,11 +546,11 @@ export function ServiceRequestsPage() {
     const q = search.trim().toLowerCase();
     if (!q) return visibleItems;
     return items.filter(sr =>
-      sr.serviceRequestCode.toLowerCase().includes(q) ||
-      (sr.title ?? "").toLowerCase().includes(q) ||
-      (sr.description ?? "").toLowerCase().includes(q) ||
-      sr.vesselCode.toLowerCase().includes(q) ||
-      (sr.workOrder?.workOrderCode ?? "").toLowerCase().includes(q),
+      textMatches(sr.serviceRequestCode, q) ||
+      textMatches(sr.title ?? "", q) ||
+      textMatches(sr.description ?? "", q) ||
+      textMatches(sr.vesselCode, q) ||
+      textMatches(sr.workOrder?.workOrderCode ?? "", q),
     );
   }, [items, visibleItems, search]);
 

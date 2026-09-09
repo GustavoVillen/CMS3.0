@@ -9,6 +9,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, Plus, Search, Trash2, X } from "lucide-react";
+import { textMatches } from "../../lib/text-search";
 
 export interface WoPlannedItem {
   id?: string;
@@ -75,7 +76,7 @@ export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbac
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     if (!q) return spares;
-    return spares.filter(s => s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+    return spares.filter(s => textMatches(s.sku, q) || textMatches(s.name, q));
   }, [spares, query]);
 
   useEffect(() => {
