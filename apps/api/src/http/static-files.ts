@@ -121,7 +121,7 @@ export async function serveWebModernAsset(response: ServerResponse, relativePath
   const size = await fileSize(filePath);
   if (size === null) return false;
 
-  const isImmutable = relativePath.startsWith("assets/");
+  const isImmutable = relativePath.startsWith("static/");
   await streamFile(response, filePath, {
     "Content-Type":   mimeFor(relativePath),
     "Content-Length": size,

@@ -18,6 +18,11 @@ export default defineConfig({
   // tamaño del artefacto de deploy (además de exponer el código fuente).
   build: {
     sourcemap: false,
+    // La carpeta del build NO puede llamarse "assets": colisiona con la ruta
+    // SPA /assets y nginx resuelve el directorio antes de llegar al index.html
+    // (F5 o URL pegada daban 404). Ver check-route-collisions.ts, que falla el
+    // build si alguna ruta de la app vuelve a chocar con un path estatico.
+    assetsDir: 'static',
   },
   server: {
     port: 5174,

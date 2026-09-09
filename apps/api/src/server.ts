@@ -142,7 +142,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   // ── web-modern SPA (React/Vite production build) ───────────────────────────
   // Serve hashed assets (JS/CSS/fonts) with immutable cache.
-  if (method === "GET" && url.pathname.startsWith("/assets/")) {
+  if (method === "GET" && url.pathname.startsWith("/static/")) {
     const served = await serveWebModernAsset(response, url.pathname.slice(1));
     if (served) return;
   }
