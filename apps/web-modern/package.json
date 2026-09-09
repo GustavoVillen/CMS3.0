@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "build": "tsc -p tsconfig.app.json --noEmit && vite build",
+    "build": "node scripts/check-route-collisions.mjs && tsc -p tsconfig.app.json --noEmit && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "tsx --test tests/**/*.test.ts",
