@@ -1241,7 +1241,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-fg">{workOrders.data?.items.length ?? 0}</span>
+                  {/* Las órdenes ABIERTAS, que son las que dibuja el anillo.
+                      Antes acá iba `items.length` —TODAS las órdenes, cerradas
+                      incluidas—: la tarjeta decía "739 TOTAL" y al lado listaba
+                      4 planificadas y 1 en progreso, así que 734 no estaban en
+                      ningún color. Se suman las porciones, igual que las
+                      tarjetas de Solicitudes y de Postergaciones. */}
+                  <span className="text-xl font-bold text-fg">{statusCounts.reduce((a, s) => a + s.value, 0)}</span>
                   <span className="text-[11px] text-text-industrial/40 uppercase tracking-wider">{t("dashboard.totalLabel")}</span>
                 </div>
               </div>

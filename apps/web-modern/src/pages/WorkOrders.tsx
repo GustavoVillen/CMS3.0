@@ -4223,6 +4223,24 @@ export const WorkOrdersPage: React.FC = () => {
     [displayItems, tmsaFilter],
   );
 
+  /**
+   * Cuántas órdenes se están viendo, para el contador del encabezado.
+   *
+   * Antes mostraba `data.total`: TODAS las órdenes que existieron, cerradas
+   * incluidas. Quedaba "739 registros" arriba de un tablero con 5 tarjetas,
+   * porque el tablero sólo tiene columnas de órdenes ABIERTAS — las cerradas y
+   * anuladas caen en "HIDDEN" y no se dibujan en ningún lado.
+   *
+   * Ahora cuenta lo que efectivamente está en pantalla, respetando filtros y
+   * buscador: en el tablero, las tarjetas; en la lista, las filas (que sí puede
+   * incluir cerradas, por ejemplo con el filtro "Cerradas" o buscando).
+   */
+  const shownCount = useMemo(() => {
+    const items = tmsaDisplayItems ?? [];
+    if (viewMode !== "kanban") return items.length;
+    return items.filter(w => woStage(w) !== "HIDDEN").length;
+  }, [tmsaDisplayItems, viewMode]);
+
   // Guard contra clicks rápidos entre dos OT: si mientras cargaba el detalle de
   // A se pidió B, la respuesta de A llega tarde y se descarta (mismo patrón
   // openTokenRef que MaintenancePlans).
@@ -4328,7 +4346,7 @@ export const WorkOrdersPage: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Wrench} title={t("page.workOrders")} total={data?.total} onReload={reload}>
+      <PageHeader icon={Wrench} title={t("page.workOrders")} total={shownCount} onReload={reload}>
         {canCreate && (
           <button onClick={() => setShowNewWoWizard(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}
