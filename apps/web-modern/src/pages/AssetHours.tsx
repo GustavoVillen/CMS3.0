@@ -138,11 +138,15 @@ export const AssetHoursPage: React.FC = () => {
   };
 
   // ── Corregir o borrar una lectura del historial ───────────────────────────
-  // Es reescribir el historial del que salen los planes por horas: el backend lo
-  // reserva al TENANT_ADMIN y acá se muestra sólo a ese rol. Después de cada
-  // cambio se recargan las dos cosas: el historial abierto y la planilla (la
+  // Es reescribir el historial del que salen los planes por horas. Corregirla la
+  // pueden el administrador, el superintendente técnico y el capitán / jefe de
+  // máquinas; BORRARLA sólo el administrador, porque ahí la lectura se va de
+  // verdad. Los dos criterios son los mismos que valida el backend. Después de
+  // cada cambio se recargan las dos cosas: el historial abierto y la planilla (la
   // última lectura del equipo pudo cambiar).
-  const canEditReadings = user?.role === "TENANT_ADMIN";
+  const canEditReadings = !!user
+    && ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role);
+  const canDeleteReadings = user?.role === "TENANT_ADMIN";
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -302,7 +306,7 @@ export const AssetHoursPage: React.FC = () => {
                       <th className="py-2 pr-2">{t("assetHours.col.source")}</th>
                       <th className="py-2 pr-2">{t("assetHours.col.loadedBy")}</th>
                       <th className="py-2">{t("assetHours.col.note")}</th>
-                      {canEditReadings && <th className="py-2 w-24"></th>}
+                      {canDeleteReadings && <th className="py-2 w-24"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-fg/5">
@@ -351,7 +355,7 @@ export const AssetHoursPage: React.FC = () => {
                         </td>
                         <td className="py-1.5 pr-2 text-text-industrial/60">{e.createdByName ?? "—"}</td>
                         <td className="py-1.5 text-text-industrial/50">{e.note ?? ""}</td>
-                        {canEditReadings && (
+                        {canDeleteReadings && (
                           <td className="py-1.5 text-right whitespace-nowrap">
                             {/* Borrar pide confirmación en la misma fila: la lectura
                                 se va de verdad (queda sólo en el registro de auditoría). */}

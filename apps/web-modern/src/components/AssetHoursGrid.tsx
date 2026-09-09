@@ -117,10 +117,12 @@ export const AssetHoursGrid: React.FC<Props> = ({
   const [drafts, setDrafts] = useState<Record<string, string>>(initialDrafts);
   const [rpmDrafts, setRpmDrafts] = useState<Record<string, string>>(initialRpmDrafts);
   // Corregir la FECHA de una lectura ya cargada no es cargar horas: es reescribir
-  // el historial del que dependen los planes por horas. Reservado al TENANT_ADMIN,
-  // igual que en el backend.
+  // el historial del que dependen los planes por horas. Lo pueden el
+  // administrador, el superintendente técnico y el capitán / jefe de máquinas
+  // (mismos tres roles que valida el backend en ensureCanEditHoursReadings).
   const { user } = useAuth();
-  const canEditReadings = user?.role === "TENANT_ADMIN";
+  const canEditReadings = !!user
+    && ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role);
   const [savingDateId, setSavingDateId] = useState<string | null>(null);
   const changeReadingDate = useCallback(async (row: HoursSheetRow, date: string) => {
     const reading = row.lastReading;

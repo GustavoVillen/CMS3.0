@@ -64,8 +64,9 @@ export async function handleAssetHoursRoutes(
     return true;
   }
 
-  // Corregir / borrar una lectura ya cargada: sólo TENANT_ADMIN (lo valida el
-  // service). Es reescribir historial, no cargar horas del día.
+  // Corregir una lectura ya cargada: administrador, superintendente técnico y
+  // capitán / jefe de máquinas. Borrarla: sólo el administrador. Lo valida el
+  // service. Es reescribir historial, no cargar horas del día.
   if (/^\/app\/pms\/asset-hours\/readings\/[^/]+$/.test(url.pathname)) {
     const readingId = url.pathname.split("/")[5]!;
     if (method === "PATCH") {

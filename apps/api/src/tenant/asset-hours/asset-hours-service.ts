@@ -667,14 +667,31 @@ export async function getAssetHoursHistory(
 // ---------------------------------------------------------------------------
 //
 // Cargar horas es una operación de todos los días (permiso `assetHours.write`);
-// CORREGIR una lectura vieja no: reescribe el historial del que dependen el
+// CORREGIR una lectura ya cargada no: reescribe el historial del que dependen el
 // vencimiento de los planes por horas, el promedio horas/día y los reportes de
-// confiabilidad. Por eso queda en el rol literal TENANT_ADMIN, igual que fijar
-// a mano el próximo vencimiento de un plan.
+// confiabilidad.
+//
+// Corregirla (moverla de fecha o arreglar el valor) la pueden los tres roles que
+// responden por el mantenimiento del buque: administrador, superintendente
+// técnico y capitán / jefe de máquinas. Se sumaron los dos últimos en sep 2026 a
+// pedido del usuario: el que carga mal la lectura está a bordo y dependía del
+// administrador para arreglarla. Mismo trío que gestiona los análisis de fluidos
+// (ensureCanManageFluidAnalyses).
+//
+// BORRARLA sigue siendo del administrador: ahí la lectura se va de verdad y sólo
+// queda en el registro de auditoría.
 
 export function ensureCanEditHoursReadings(session: TenantAccessSession): void {
+  const role = session.user.role;
+  const ok = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
+  if (!ok) {
+    throw new RouteError(403, "FORBIDDEN", "Sin permiso para corregir lecturas de horas.");
+  }
+}
+
+export function ensureCanDeleteHoursReading(session: TenantAccessSession): void {
   if (session.user.role !== "TENANT_ADMIN") {
-    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede corregir o borrar lecturas de horas.");
+    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede borrar lecturas de horas.");
   }
 }
 
@@ -837,7 +854,7 @@ export async function deleteHoursReading(
   session: TenantAccessSession,
   readingId: string,
 ): Promise<{ deleted: true }> {
-  ensureCanEditHoursReadings(session);
+  ensureCanDeleteHoursReading(session);
   const { prisma, tenantId, reading } = await loadReadingInScope(session, readingId);
 
   await (prisma as any).assetHoursReading.delete({ where: { id: reading.id } });
