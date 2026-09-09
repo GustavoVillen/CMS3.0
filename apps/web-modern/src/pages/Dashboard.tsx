@@ -43,7 +43,13 @@ interface MpAsset { id: string; assetCode: string; name: string | null; sfiCode:
 // Types (minimal — only fields we render)
 // ---------------------------------------------------------------------------
 
-interface WorkOrder { id: string; status: string; criticality?: string; dueDate?: string; }
+interface WorkOrder {
+  id: string; status: string; criticality?: string; dueDate?: string;
+  // Fechas de firma: definen la etapa de tramitación, igual que en el tablero.
+  enviadoAprobacionAt?: string | null;
+  aprobadoAt?: string | null;
+  autorizadoAt?: string | null;
+}
 // OUT_OF_SERVICE es opcional: un backend anterior a este cambio no lo manda.
 interface MpSummary { counts: { NEVER_EXECUTED: number; OVERDUE: number; DUE: number; IN_WINDOW: number; UPCOMING: number; FUTURE: number; OUT_OF_SERVICE?: number }; total: number; }
 interface Defect { id: string; status: string; severity: string; }
@@ -288,37 +294,47 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
     ? { value: certsExpired,  label: t("dashboard.certificatesExpired") }
     : { value: certsExpiring, label: t("dashboard.certificates") };
 
-  // Donut chart: Planificadas / En Progreso / Vencidas / Postergadas / Posterg. rechazadas
+  // Donut de Órdenes de Trabajo: MISMO reparto que las etiquetas de las tarjetas
+  // del tablero, para que el dashboard y la pantalla cuenten lo mismo.
+  //
+  // Antes mezclaba tres preguntas en un solo anillo —etapa de tramitación,
+  // avance del trabajo y vencimiento— y cada orden entraba en UNA porción, con
+  // "Vencidas" por encima de todo. En un buque con todo atrasado el anillo
+  // quedaba de un solo color: DON CHICUETO, sep 2026, 9 de 9 vencidas → decía
+  // "Vencidas 9" y no se veía que 2 estaban en proceso ni en qué etapa iba el
+  // resto.
+  //
+  // El vencimiento NO es un estado: es una condición que puede tener cualquiera
+  // de ellos. Sigue a la vista donde sirve para actuar — la fecha en rojo de
+  // cada tarjeta del tablero y el filtro "Vencidas" de la lista.
   const statusCounts = React.useMemo(() => {
     const items = workOrders.data?.items ?? [];
-    const now = new Date();
     const CLOSED_STATUSES = new Set(["CLOSED", "CANCELLED"]);
-    const deferralStatusByWo = new Map<string, string>();
-    for (const d of deferrals.data?.items ?? []) {
-      const prev = deferralStatusByWo.get(d.sourceId);
-      if (!prev || prev === "CLOSED") deferralStatusByWo.set(d.sourceId, d.status);
-    }
-    let planificadas = 0, enProgreso = 0, vencidas = 0, postergadas = 0, postergadasRechazadas = 0;
+
+    let enProceso = 0, autorizada = 0, aprobada = 0, pendAprobacion = 0, enPreparacion = 0, diferida = 0;
     for (const w of items) {
       if (CLOSED_STATUSES.has(w.status)) continue;
-      if (w.status === "ON_HOLD") {
-        if (deferralStatusByWo.get(w.id) === "REJECTED") postergadasRechazadas++;
-        else postergadas++;
-        continue;
-      }
-      const overdue = !!w.dueDate && parseLocalDate(w.dueDate) < now;
-      if (overdue) { vencidas++; continue; }
-      if (w.status === "IN_PROGRESS") enProgreso++;
-      else planificadas++;
+      if (w.status === "ON_HOLD")     { diferida++; continue; }
+      // "En proceso" gana sobre la etapa de firma: es lo único que el trámite
+      // no puede decir. Mismo criterio que la etiqueta de la tarjeta.
+      if (w.status === "IN_PROGRESS") { enProceso++; continue; }
+      if (w.autorizadoAt)             { autorizada++; continue; }
+      if (w.aprobadoAt)               { aprobada++; continue; }
+      if (!w.enviadoAprobacionAt)     { enPreparacion++; continue; }
+      pendAprobacion++;
     }
+
+    // Los colores son los de las columnas del tablero. Los dos verdes se
+    // separan por claridad, no por tono: el fuerte es el trabajo en marcha.
     return [
-      { key: "planned",           name: "Planificadas",                      value: planificadas,          fill: "#60A5FA" },
-      { key: "inProgress",        name: "En Progreso",                       value: enProgreso,            fill: "#06D6A0" },
-      { key: "overdue",           name: t("dashboard.wo.overdue"),           value: vencidas,              fill: "#EF4444" },
-      { key: "postponed",         name: t("dashboard.wo.postponed"),         value: postergadas,           fill: "#EAB308" },
-      { key: "postponedRejected", name: t("dashboard.wo.postponedRejected"), value: postergadasRechazadas, fill: "#F97316" },
+      { key: "inProgress",    name: t("wo.stage.inProgress"),    value: enProceso,      fill: "#047857" },
+      { key: "authorized",    name: t("wo.stage.autorizada"),    value: autorizada,     fill: "#6EE7B7" },
+      { key: "toAuthorize",   name: t("wo.stage.aprobada"),      value: aprobada,       fill: "#8B5CF6" },
+      { key: "toApprove",     name: t("wo.stage.solicitada"),    value: pendAprobacion, fill: "#60A5FA" },
+      { key: "inPreparation", name: t("wo.stage.enPreparacion"), value: enPreparacion,  fill: "#94A3B8" },
+      { key: "postponed",     name: t("wo.stage.diferida"),      value: diferida,       fill: "#EAB308" },
     ].filter(s => s.value > 0);
-  }, [workOrders.data, deferrals.data, t]);
+  }, [workOrders.data, t]);
 
   // Donut chart: deferrals by status (excluding CLOSED)
   const deferralCounts = React.useMemo(() => {
@@ -359,6 +375,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   // son los mismos que las columnas del tablero kanban de SS, para que el
   // dashboard y la pantalla se lean igual. Rechazadas y Canceladas van juntas:
   // operativamente son lo mismo (no siguen) y así la leyenda entra en la card.
+  //
+  // Sólo las que están EN TRÁMITE — las mismas cinco columnas del tablero de SS.
+  // Las Completadas, Rechazadas y Canceladas salieron del anillo por el mismo
+  // motivo que las Vencidas salieron del de OT: aplastaban al resto. En
+  // mercurio, sep 2026, había 114 completadas sobre 119 — el 96% del anillo era
+  // trabajo terminado y las 5 que había que mirar quedaban en hilitos.
+  // Se siguen viendo con los chips "Completadas" / "Rechazadas" / "Canceladas"
+  // de la lista de Solicitudes.
   const ssCounts = React.useMemo(() => {
     const items = serviceRequests.data?.items ?? [];
     const map: Record<string, number> = {};
@@ -368,10 +392,9 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       { key: "SOLICITADA",  name: t("dashboard.ss.solicitada"), value: map.SOLICITADA ?? 0,  fill: "#EAB308" },
       { key: "APROBADA",    name: t("dashboard.ss.aprobada"),   value: map.APROBADA ?? 0,    fill: "#3B82F6" },
       { key: "AUTORIZADA",  name: t("dashboard.ss.autorizada"), value: map.AUTORIZADA ?? 0,  fill: "#8B5CF6" },
-      { key: "IN_PROGRESS", name: t("dashboard.ss.inProgress"), value: map.IN_PROGRESS ?? 0, fill: "#F59E0B" },
-      { key: "COMPLETED",   name: t("dashboard.ss.completed"),  value: map.COMPLETED ?? 0,   fill: "#06D6A0" },
-      { key: "REJECTED,CANCELLED", name: t("dashboard.ss.closed"),
-        value: (map.REJECTED ?? 0) + (map.CANCELLED ?? 0), fill: "#EF4444" },
+      // Ámbar más oscuro que el amarillo de "Solicitadas": sin las Completadas
+      // al lado, estas dos quedan pegadas en el anillo y hay que distinguirlas.
+      { key: "IN_PROGRESS", name: t("dashboard.ss.inProgress"), value: map.IN_PROGRESS ?? 0, fill: "#D97706" },
     ].filter(s => s.value > 0);
   }, [serviceRequests.data, t]);
 

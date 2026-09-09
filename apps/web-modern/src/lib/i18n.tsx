@@ -2244,7 +2244,9 @@ const dict = {
   "dashboard.ssTitle":         { es: "Solicitudes de Servicio", en: "Service Requests",    pt: "Solicitações de Serviço" },
   "dashboard.ssSubtitle":      { es: "Estado de tramitación",  en: "Approval status",      pt: "Estado de tramitação" },
   "dashboard.ssKanbanLink":    { es: "Ver tablero Kanban",     en: "View Kanban board",    pt: "Ver quadro Kanban" },
-  "dashboard.ssEmpty":         { es: "Sin solicitudes",        en: "No requests",          pt: "Sem solicitações" },
+  // "en trámite": el anillo ya no cuenta las completadas, así que "sin
+  // solicitudes" a secas sería falso cuando hay cientos terminadas.
+  "dashboard.ssEmpty":         { es: "Sin solicitudes en trámite", en: "No requests in progress", pt: "Sem solicitações em trâmite" },
   "dashboard.ss.draft":        { es: "Borrador",               en: "Draft",                pt: "Rascunho" },
   "dashboard.ss.solicitada":   { es: "Solicitadas",            en: "Requested",            pt: "Solicitadas" },
   "dashboard.ss.aprobada":     { es: "Aprobadas",              en: "Approved",             pt: "Aprovadas" },
@@ -2550,11 +2552,25 @@ const dict = {
   "wo.kanban.solicitada":     { es: "Pendiente de aprobación",    en: "Pending approval",   pt: "Pendente de aprovação" },
   "wo.kanban.aprobada":       { es: "Aprobada. Pendiente de autorización",  en: "Approved. Pending authorization", pt: "Aprovada. Pendente de autorização" },
   "wo.kanban.autorizada":     { es: "Autorizada y en proceso",    en: "Authorized & in progress", pt: "Autorizada e em andamento" },
+
+  // Etiqueta de estado DENTRO de la tarjeta del tablero. Son las mismas etapas
+  // que las columnas, pero cortas: en una tarjeta no entra "Aprobada.
+  // Pendiente de autorización". Familia aparte a propósito — si mañana se
+  // reescribe el título de una columna, la etiqueta de la tarjeta no cambia sola.
+  "wo.stage.inProgress":      { es: "En proceso",               en: "In progress",      pt: "Em andamento" },
+  "wo.stage.enPreparacion":   { es: "En preparación",           en: "In preparation",   pt: "Em preparação" },
+  "wo.stage.solicitada":      { es: "Pendiente de aprobación",  en: "Pending approval", pt: "Pendente de aprovação" },
+  "wo.stage.aprobada":        { es: "Aprobada",                 en: "Approved",         pt: "Aprovada" },
+  "wo.stage.autorizada":      { es: "Autorizada",               en: "Authorized",       pt: "Autorizada" },
+  "wo.stage.diferida":        { es: "Diferida",                 en: "Deferred",         pt: "Adiada" },
   "wo.tramita.send":          { es: "ENVIAR A APROBAR",  en: "SEND FOR APPROVAL", pt: "ENVIAR PARA APROVAÇÃO" },
   "wo.tramita.enPreparacionHint": { es: "Completala y enviala a aprobar cuando esté lista.", en: "Complete it and send it for approval when ready.", pt: "Complete-a e envie para aprovação quando estiver pronta." },
   "wo.kanban.closed":         { es: "Cerradas",          en: "Closed",          pt: "Fechadas" },
   "wo.filter.all":            { es: "Todas",             en: "All",             pt: "Todas" },
+  "wo.filter.inPreparation":  { es: "En preparación",    en: "In preparation",  pt: "Em preparação" },
   "wo.filter.toApprove":      { es: "Para Aprobar",      en: "To Approve",      pt: "Para Aprovar" },
+  "wo.filter.authorized":     { es: "Autorizadas",       en: "Authorized",      pt: "Autorizadas" },
+  "wo.filter.inProgress":     { es: "En proceso",        en: "In progress",     pt: "Em andamento" },
   "wo.filter.toAuthorize":    { es: "Para Autorizar",    en: "To Authorize",    pt: "Para Autorizar" },
   "wo.filter.open":           { es: "Abiertas",          en: "Open",            pt: "Abertas" },
   "wo.filter.overdue":        { es: "Vencidas",          en: "Overdue",         pt: "Vencidas" },

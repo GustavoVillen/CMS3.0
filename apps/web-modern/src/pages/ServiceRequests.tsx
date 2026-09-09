@@ -102,6 +102,17 @@ const STATUS_LABELS: Record<string, string> = {
   AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
   REJECTED: "Rechazada", CANCELLED: "Cancelada",
 };
+/**
+ * Lo mismo que STATUS_LABELS, pero corto: en una tarjeta del tablero no entra
+ * "Aprobada. Pendiente de autorización". El texto largo se sigue usando en la
+ * lista y en el modal, donde hay lugar.
+ */
+const STATUS_SHORT_LABELS: Record<string, string> = {
+  DRAFT: "En preparación", SOLICITADA: "Pendiente de aprobación", APROBADA: "Aprobada",
+  AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
+  REJECTED: "Rechazada", CANCELLED: "Cancelada",
+};
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-fg/5 text-fg/50 border-fg/10",
   SOLICITADA: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
@@ -231,6 +242,28 @@ function ssStage(sr: ServiceRequest): SsStage {
   return SS_KANBAN_COLS.some(c => c.colId === sr.status) ? (sr.status as SsStage) : "HIDDEN";
 }
 
+/**
+ * Estado de la SS dentro de su tarjeta del tablero.
+ *
+ * La columna ya dice la etapa, pero la tarjeta tiene que poder leerse sola:
+ * al agrupar por equipo y colapsar grupos, el encabezado de la columna queda
+ * lejos. Mismo criterio que la tarjeta de la OT.
+ *
+ * "En ejecución" va con relleno pleno —el resto en tono suave— porque es el
+ * único que dice que el trabajo ya arrancó.
+ */
+function SsCardStatusBadge({ status }: { status: string }) {
+  const label = STATUS_SHORT_LABELS[status] ?? status;
+  const cls = status === "IN_PROGRESS"
+    ? "bg-amber-600 text-white border-amber-700"
+    : STATUS_COLORS[status] ?? "bg-fg/5 text-fg/50 border-fg/10";
+  return (
+    <span title={label} className={`inline-block max-w-full truncate text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
   sr: ServiceRequest;
   busy: boolean;
@@ -258,7 +291,11 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
         transition-colors`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-mono font-bold text-fg text-[10px]">{sr.serviceRequestCode}</span>
+        <div className="min-w-0 flex flex-col items-start gap-1">
+          {/* El código nunca se parte: si falta lugar, se recorta la etiqueta. */}
+          <span className="font-mono font-bold text-fg text-[10px] whitespace-nowrap">{sr.serviceRequestCode}</span>
+          <SsCardStatusBadge status={sr.status} />
+        </div>
         <span className="text-[9px] font-bold text-text-industrial/40 shrink-0">{sr.vesselCode}</span>
       </div>
       {srServicio(sr) && (
@@ -516,6 +553,23 @@ export function ServiceRequestsPage() {
     );
   }, [items, visibleItems, search]);
 
+  /**
+   * Cuántas solicitudes se están viendo, para el contador del encabezado.
+   *
+   * Antes mostraba `data.total`: TODAS las que existieron, completadas
+   * incluidas. Quedaba "119 registros" arriba de un tablero con 5 tarjetas,
+   * porque el tablero sólo tiene columnas de solicitudes en trámite — las
+   * completadas, rechazadas y canceladas caen en "HIDDEN" y no se dibujan.
+   *
+   * Ahora cuenta lo que hay en pantalla, respetando chips y buscador: en el
+   * tablero las tarjetas, en la lista las filas (que sí puede incluir
+   * terminales, por ejemplo con el chip "Completadas").
+   */
+  const shownCount = React.useMemo(() => {
+    if (viewMode !== "kanban") return displayItems.length;
+    return displayItems.filter(sr => ssStage(sr) !== "HIDDEN").length;
+  }, [displayItems, viewMode]);
+
   // ?code=SS-3-M02-2026 — para links que sólo conocen el CÓDIGO y no el id
   // interno (típicamente el copiloto, que cita códigos en su respuesta).
   const codeParam = (searchParams.get("code") ?? "").trim().toUpperCase();
@@ -590,7 +644,7 @@ export function ServiceRequestsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader icon={Handshake} title="Solicitudes de Servicio" total={data?.total} onReload={reload}>
+      <PageHeader icon={Handshake} title="Solicitudes de Servicio" total={shownCount} onReload={reload}>
         <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
           <button
             type="button"

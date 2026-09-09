@@ -3612,6 +3612,49 @@ function SrChips({ items }: { items: SrLite[] }) {
   );
 }
 
+/**
+ * Etiqueta de estado de la TARJETA del tablero.
+ *
+ * Hermana de `WoStageBadge`, que es la de la columna "Tramitación" del listado.
+ * Se separan por dos motivos: acá los textos son cortos (en una tarjeta no
+ * entra "Aprobada. Pendiente de autorización") y acá "En proceso" tiene
+ * prioridad — en el listado el avance ya lo muestra la columna "Estado".
+ *
+ * Por qué existe: la COLUMNA del tablero ordena por el trámite (quién firmó),
+ * no por el trabajo. Una orden autorizada puede no haber arrancado nunca, y la
+ * columna "Autorizada y en proceso" las mezcla: se ven tres tarjetas juntas y
+ * sólo una está en marcha. El dashboard, que cuenta por avance real, decía
+ * "1 en progreso" y no había forma de saber cuál era.
+ *
+ * "En proceso" gana sobre la etapa de trámite: es el único dato que la columna
+ * no puede mostrar. Las dos cosas no se pisan — el avance vive en `status` y el
+ * trámite en las fechas de firma.
+ */
+const WO_CARD_STAGE_BADGE: Record<Exclude<WoStage, "HIDDEN">, { key: TranslationKey; cls: string }> = {
+  EN_PREPARACION: { key: "wo.stage.enPreparacion", cls: "bg-fg/10 text-text-industrial/70 border-fg/15" },
+  SOLICITADA:     { key: "wo.stage.solicitada",    cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30" },
+  APROBADA:       { key: "wo.stage.aprobada",      cls: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30" },
+  AUTORIZADA:     { key: "wo.stage.autorizada",    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
+  DIFERIDA:       { key: "wo.stage.diferida",      cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
+};
+
+function WoCardStageBadge({ wo }: { wo: WorkOrder }) {
+  const t = useT();
+  const base = "inline-block max-w-full truncate text-[10px] px-2 py-0.5 rounded-full border font-bold";
+
+  // Relleno pleno, no tono suave: es lo que se busca de un vistazo en el tablero.
+  if (wo.status === "IN_PROGRESS") {
+    const label = t("wo.stage.inProgress");
+    return <span title={label} className={`${base} bg-emerald-600 text-white border-emerald-700`}>{label}</span>;
+  }
+
+  const stage = woStage(wo);
+  if (stage === "HIDDEN") return null;   // cerrada o anulada: no llega al tablero
+  const { key, cls } = WO_CARD_STAGE_BADGE[stage];
+  const label = t(key);
+  return <span title={label} className={`${base} ${cls}`}>{label}</span>;
+}
+
 function KanbanCardContent({ wo, deferralMap, srs }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
@@ -3625,8 +3668,13 @@ function KanbanCardContent({ wo, deferralMap, srs }: {
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <span className="font-mono font-bold text-fg text-[10px]">{wo.workOrderCode}</span>
-        <CategoryBadge type={wo.type} />
+        <div className="min-w-0 flex flex-col items-start gap-1">
+          {/* El código nunca se parte: es lo que se busca a simple vista. Si la
+              columna queda angosta, lo que se recorta es la etiqueta. */}
+          <span className="font-mono font-bold text-fg text-[10px] whitespace-nowrap">{wo.workOrderCode}</span>
+          <WoCardStageBadge wo={wo} />
+        </div>
+        <span className="shrink-0"><CategoryBadge type={wo.type} /></span>
       </div>
       {wo.title && <p className="text-xs text-fg font-medium line-clamp-2">{wo.title}</p>}
       {(wo.dueDate || deferral) && (
@@ -4101,7 +4149,12 @@ export const WorkOrdersPage: React.FC = () => {
   // `createPrefill` (deep-link desde un defecto, etc.) sigue abriendo el
   // formulario directo — ya trae su propio origen resuelto.
   const [showNewWoWizard, setShowNewWoWizard] = useState(false);
-  const [viewMode, setViewMode]       = useState<"list" | "kanban">("kanban");
+  // Por defecto el tablero. Salvo que se llegue con un filtro puesto (los
+  // enlaces del donut del dashboard): ahí conviene la lista, que es la única
+  // vista que muestra el chip del filtro y deja sacarlo.
+  const [viewMode, setViewMode]       = useState<"list" | "kanban">(
+    () => (searchParams.get("view") ?? "").trim() ? "list" : "kanban",
+  );
   const [search, setSearch]           = useState("");
 
   useCopilotEmitter(!editing && !showNewWoWizard && !createPrefill ? { module: "WORK_ORDERS", screen: "WO_LIST" } : null);
@@ -4194,6 +4247,16 @@ export const WorkOrdersPage: React.FC = () => {
     // el filtro coincide 1:1 con lo que el usuario ve en Kanban.
     if (viewFilter === "toApprove")   return items.filter(w => woStage(w) === "SOLICITADA");
     if (viewFilter === "toAuthorize") return items.filter(w => woStage(w) === "APROBADA");
+    // Los tres de abajo son los que abre el donut del dashboard. Aplican el
+    // MISMO reparto que la etiqueta de la tarjeta —"en proceso" gana sobre la
+    // etapa de firma—, así lo que se cuenta y lo que se abre coinciden.
+    if (viewFilter === "inProgress")  return items.filter(w => w.status === "IN_PROGRESS");
+    if (viewFilter === "authorized") {
+      return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "AUTORIZADA");
+    }
+    if (viewFilter === "inPreparation") {
+      return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "EN_PREPARACION");
+    }
     if (viewFilter === "overdue")   return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < now);
     if (viewFilter === "open")      return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !(!!w.dueDate && parseLocalDate(w.dueDate) < now));
     return items;
@@ -4403,8 +4466,11 @@ export const WorkOrdersPage: React.FC = () => {
             que limpia el filtro al cambiar de vista). */}
         {viewMode === "list" && ([
           { key: "",                  labelKey: "wo.filter.all" },
+          { key: "inPreparation",     labelKey: "wo.filter.inPreparation" },
           { key: "toApprove",         labelKey: "wo.filter.toApprove" },
           { key: "toAuthorize",       labelKey: "wo.filter.toAuthorize" },
+          { key: "authorized",        labelKey: "wo.filter.authorized" },
+          { key: "inProgress",        labelKey: "wo.filter.inProgress" },
           { key: "open",              labelKey: "wo.filter.open" },
           { key: "overdue",           labelKey: "wo.filter.overdue" },
           { key: "postponed",         labelKey: "wo.filter.postponed" },
