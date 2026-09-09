@@ -424,7 +424,7 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
   { clause: "10.2.4", rating: "full", liveGroupKey: "maintenanceRecords",
     chips: [{ navKey: "nav.workOrders", route: "/work-orders" }, { navKey: "ism.tabs.evidence", tab: true }] },
   { clause: "10.3", rating: "full", liveGroupKey: "standbyTesting",
-    chips: [{ navKey: "nav.assets", route: "/assets" }, { navKey: "nav.checklists", route: "/checklists" }, { navKey: "nav.spares", route: "/spares" }] },
+    chips: [{ navKey: "nav.assets", route: "/equipment" }, { navKey: "nav.checklists", route: "/checklists" }, { navKey: "nav.spares", route: "/spares" }] },
   { clause: "10.4", rating: "full", liveGroupKey: "plannedMaintenance",
     chips: [{ navKey: "nav.maintenancePlans", route: "/maintenance-plans" }, { navKey: "nav.maintenanceGantt", route: "/maintenance-gantt" }] },
 ];

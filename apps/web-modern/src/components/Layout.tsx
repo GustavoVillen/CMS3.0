@@ -10,7 +10,7 @@ import { useT, type TranslationKey } from "../lib/i18n";
 const TITLE_KEYS: Record<string, TranslationKey> = {
   "/":                  "page.dashboard",
   "/vessels":           "page.vessels",
-  "/assets":            "page.assets",
+  "/equipment":            "page.assets",
   "/maintenance-plans": "page.maintenancePlans",
   "/maintenance-sheet": "page.maintenanceSheet",
   "/maintenance-gantt": "page.maintenanceGantt",

@@ -129,7 +129,7 @@ export const NAV: NavSection[] = [
     titleKey: "nav.section.masters",
     items: [
       { icon: Ship,              labelKey: "nav.vessels",        path: "/vessels" },
-      { icon: SlidersHorizontal, labelKey: "nav.assets",         path: "/assets" },
+      { icon: SlidersHorizontal, labelKey: "nav.assets",         path: "/equipment" },
       { icon: Package,           labelKey: "nav.spares",         path: "/spares" },
       { icon: Truck,             labelKey: "nav.providers",      path: "/providers" },
     ],

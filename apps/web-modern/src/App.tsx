@@ -232,7 +232,10 @@ export default function App() {
               <Route path="/superintendents"   element={<RequireRole roles={["TENANT_ADMIN"]}><VesselSuperintendentsPage /></RequireRole>} />
               <Route path="/team"              element={<RequireRole roles={["TENANT_ADMIN"]}><TeamPage /></RequireRole>} />
               <Route path="/vessels"           element={<VesselsPage />} />
-              <Route path="/assets"            element={<AssetsPage />} />
+              <Route path="/equipment"         element={<AssetsPage />} />
+              {/* Links guardados antes del rename de B-01. La carpeta del build
+                  ya no se llama "assets", asi que nginx deja pasar esta ruta. */}
+              <Route path="/assets"            element={<Navigate to="/equipment" replace />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-sheet" element={<MaintenanceSheetPage />} />

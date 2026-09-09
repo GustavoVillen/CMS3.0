@@ -44,7 +44,7 @@ const ENTITY_ROUTE: Record<string, string> = {
   Certificate:         "/certificates",
   Spare:               "/spares",
   Vessel:              "/vessels",
-  Asset:               "/assets",
+  Asset:               "/equipment",
   InspectionExecution: "/inspections",
 };
 

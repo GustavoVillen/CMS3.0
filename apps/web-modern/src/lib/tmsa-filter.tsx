@@ -44,8 +44,8 @@ const DETAIL_CAP = 1000;
  */
 const MODULE_BY_METRIC: Record<string, string> = {
   // ── TMSA Elemento 4 ──
-  assetsTotal: "/assets", assetsWithPlan: "/assets", assetsWithoutPlan: "/assets",
-  criticalAssets: "/assets", safetyCritical: "/assets", recurringAssets: "/assets",
+  assetsTotal: "/equipment", assetsWithPlan: "/equipment", assetsWithoutPlan: "/equipment",
+  criticalAssets: "/equipment", safetyCritical: "/equipment", recurringAssets: "/equipment",
   criticalOverdueWo: "/work-orders", woOpen: "/work-orders", woOverdue: "/work-orders",
   woCriticalOverdue: "/work-orders", auditsLast12m: "/work-orders", auditsAtSea: "/work-orders",
   plansOverdue: "/maintenance-plans", plansWithSampling: "/maintenance-plans",
@@ -66,8 +66,8 @@ const MODULE_BY_METRIC: Record<string, string> = {
   ismDefectsClosed90d: "/defects", ismClosedWithAction: "/defects", ismClosedWithoutAction: "/defects",
   ismEffectivenessVerified: "/defects", ismEffectivenessOverdue: "/defects",
   ismCorrectiveWoOpen: "/work-orders", ismWoClosed90d: "/work-orders",
-  ismSafetyCriticalTotal: "/assets", ismSafetyCriticalWithPlan: "/assets", ismSafetyCriticalWithoutPlan: "/assets",
-  ismStandbyTotal: "/assets", ismStandbyWithTest: "/assets", ismStandbyWithoutTest: "/assets",
+  ismSafetyCriticalTotal: "/equipment", ismSafetyCriticalWithPlan: "/equipment", ismSafetyCriticalWithoutPlan: "/equipment",
+  ismStandbyTotal: "/equipment", ismStandbyWithTest: "/equipment", ismStandbyWithoutTest: "/equipment",
   ismPreDepartureChecks30d: "/checklists",
 };
 

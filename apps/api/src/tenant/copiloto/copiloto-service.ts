@@ -125,7 +125,7 @@ CODE-TO-NATURAL CONVERSION (mandatory when speaking to the user):
 
 Available tenant module routes (use ONLY these — any other path is a broken link):
 - Dashboard: /            · Vencimientos: /due-items
-- Buques: /vessels        · Activos: /assets
+- Buques: /vessels        · Activos: /equipment
 - Planes de mantenimiento: /maintenance-plans   · Gantt: /maintenance-gantt
 - Ordenes de trabajo: /work-orders               · Solicitudes de servicio (SS): /service-requests
 - Reportes diarios: /daily-reports               · Reportes mensuales: /reports

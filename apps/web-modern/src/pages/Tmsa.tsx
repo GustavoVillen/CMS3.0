@@ -379,7 +379,7 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
             { navKey: "tmsa.tabs.evidence", tab: true }] },
 
   { id: "4a-1-1", stage: 1, element: "4a", rating: "full", liveGroupKey: "criticalEquipment",
-    chips: [{ navKey: "nav.assets", route: "/assets" }] },
+    chips: [{ navKey: "nav.assets", route: "/equipment" }] },
   { id: "4a-1-2", stage: 1, element: "4a", rating: "full", liveGroupKey: "criticalEquipment",
     chips: [{ navKey: "tmsa.tabs.evidence", tab: true }, { navKey: "nav.workOrders", route: "/work-orders" }] },
   { id: "4a-1-3", stage: 1, element: "4a", rating: "full", liveGroupKey: "defectReporting",
