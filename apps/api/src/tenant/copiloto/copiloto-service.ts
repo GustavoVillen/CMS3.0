@@ -36,6 +36,8 @@ import {
 } from "./copilot-tool-utils";
 import { EXTENDED_COPILOT_TOOLS, executeExtendedCopilotTool } from "./copilot-tools";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
+import { loadCurrentHoursNumberByAsset } from "../asset-hours/asset-hours-service";
+import { resolvePlanDueStatus, EXECUTION_STATUSES } from "./plan-due-status";
 
 // ---------------------------------------------------------------------------
 // Immutable guardrails — never exposed to prompt editing
@@ -57,6 +59,9 @@ Immutable rules:
 - Apply the same pattern for other modules when applicable. Examples: [Abrir Ordenes de trabajo](/work-orders?vesselCode=LATERE&status=IN_PROGRESS), [Abrir Defectos abiertos](/defects?vesselCode=LATERE&status=OPEN).
 - When referencing a specific maintenance plan from query results, always include a direct link using its taskCode: [TASKCODE](/maintenance-plans?openId=PLAN_ID). Use the "id" field as PLAN_ID and "taskCode" as the display text.
 - When answering questions about whether a specific task/inspection/procedure is being performed, always use the query_maintenance_plans tool with textSearch to search across title and description fields. Prefer SINGLE KEYWORDS or root forms over full phrases (textSearch matches a substring per word; e.g. search "aceite" or "muestra", not "análisis de aceite" — and beware morphological variants: "análisis" won't match "analizar"). For questions about FLUID/OIL ANALYSIS or SAMPLING ("análisis/muestreo de aceite/lubricante/refrigerante"), the requirement is encoded structurally in the plan's samplingFluidType field (ENGINE_OIL, HYDRAULIC_OIL, COOLING_WATER, etc.), NOT necessarily in the text — filter by samplingFluidType (and/or scope by the equipment's assetId via query_assets) instead of relying only on textSearch. Report: plan taskCode (with link), frequency, and last execution date/hours. If nothing is found, say so explicitly.
+- OVERDUE / VENCIDO — READ THIS BEFORE ANSWERING ANY "que esta vencido" QUESTION: a plan's due state lives in 'executionStatus', computed live. The 'status' column is NOT it: it is frozen at ACTIVE for every plan in the fleet and will never say OVERDUE. To answer "tareas vencidas", "que esta atrasado", "cual es la mas critica vencida", call query_maintenance_plans with executionStatus="OVERDUE" (never status="OVERDUE"). Report the plans themselves — do NOT substitute work orders for plans: they are different records and the user asked about one of them specifically.
+- NEVER ASSERT A NEGATIVE FROM AN EMPTY RESULT: if a tool returns NO_RESULTS or an empty list, that means the query found nothing with THOSE filters — it does NOT prove the thing does not exist. Say "no encontre X con estos criterios" or "no puedo confirmarlo con los datos que tengo aca", say which filters you used, and offer to retry with fewer. Never write "no existen", "no hay ninguna" or "el buque esta al dia" on the strength of an empty result. A wrong "no hay nada vencido" is the worst possible answer: it tells the crew everything is fine when it is not.
+- NEVER PRINT INTERNAL CODES: values like OVERDUE, PLANNED, IN_PROGRESS, MEDIUM, HIGH, CRITICAL, SATISFACTORY_WITH_OBSERVATIONS are internal enums, not words. Never drop them raw into a sentence. Use the human label in the user's language (the tools already return 'executionStatusLabel' resolved — prefer it), e.g. "Vencida", "Planificada", "En curso", "media", "alta". If a tool gives you only the raw code, translate it yourself.
 - IMPORTANT: Before asking the user a question that can be answered by querying the system (e.g. "Does a maintenance plan exist?", "Are there open work orders?"), ALWAYS use the available query tools to look it up yourself first.
 - KNOWLEDGE BASE: The tenant's uploaded manuals, procedures, datasheets and technical documents are NOT included in this prompt — only their names appear under "## Base documental del tenant (índice)". When the user asks about the CONTENT of a manual/procedure/specification (recommended oil/fluid, part number, torque, interval, step of a procedure, etc.), call the search_knowledge_docs tool with relevant keywords (optionally documentName to target a specific manual). Cite the document name in your answer. If the index section is absent or the search returns nothing, say the document/info is not in the knowledge base — do NOT invent manufacturer data.
 - RCA / DEFECT PROACTIVE SEARCH: When you are in DEFECTS or RCA module and you are about to ask the user ANY question about maintenance history, previous work orders, last service date, last fluid/filter/component change, inspection records, or any operational record related to the asset — STOP before asking. First call query_maintenance_plans and query_work_orders using the assetId and vesselCode from the screen context (relatedEntities.assetId). Then in your response: (1) explicitly state what you found — plan name, last execution date/hours, or work orders — or state "No encontré registros de [X] para este activo en el sistema"; (2) only ask the user for additional context if the records were insufficient or absent. Never ask "¿Cuándo fue el último cambio de X?" without first querying the system yourself.
@@ -309,7 +314,11 @@ const CORE_COPILOT_TOOLS: Anthropic.Tool[] = [
         assetId: { type: "string", description: "Filter by asset ID (optional)" },
         status: {
           type: "string",
-          description: "Filter by plan status: ACTIVE | DUE_SOON | OVERDUE | INACTIVE (optional)",
+          description: "Plan lifecycle only: ACTIVE (plan vigente) | INACTIVE (plan dado de baja). DO NOT use this to ask whether a plan is overdue — the stored column is frozen at ACTIVE for the whole fleet and its DUE_SOON/OVERDUE values are never written. Use executionStatus for that. (optional)",
+        },
+        executionStatus: {
+          type: "string",
+          description: `Real due state, computed live from the plan's next due date/hours — the SAME value the Maintenance Plans screen paints as the coloured chip. This is the ONLY correct way to ask for overdue work. Values: ${EXECUTION_STATUSES.join(" | ")}. For "tareas vencidas" / "que esta vencido" pass OVERDUE; for "por vencer" pass DUE. (optional)`,
         },
         textSearch: { type: "string", description: "Case-insensitive search across title AND description/tasks. The query is split into words and matched as an AND of substrings, so word order and filler words don't matter. Prefer SINGLE KEYWORDS or root forms (e.g. 'aceite', 'muestra', 'analizar', 'termografia') over full phrases — morphological variants won't match (e.g. 'análisis' won't match 'analizar'). (optional)" },
         samplingFluidType: { type: "string", description: "Filter to plans that REQUIRE a fluid/oil sample analysis of this type. USE THIS for questions about 'análisis/muestreo de aceite/lubricante/refrigerante' instead of textSearch. Values: ENGINE_OIL, HYDRAULIC_OIL, GEARBOX_OIL, TRANSMISSION_OIL, FUEL_DIESEL, FUEL_GASOIL, COOLING_WATER, BOILER_WATER, POTABLE_WATER, REFRIGERANT (optional)." },
@@ -644,6 +653,9 @@ async function executeCopilotTool(
   input: Record<string, unknown>,
   tenantId: string,
   scope: VesselScope,
+  // B-02: idioma del usuario. Las etiquetas de estado se traducen del lado del
+  // dato para que el modelo no reciba (ni pueda escupir) el enum crudo.
+  locale: string,
 ): Promise<string> {
   const prisma = getPrismaClient();
   if (!prisma) return JSON.stringify({ error: "Database not available in current environment" });
@@ -669,6 +681,9 @@ async function executeCopilotTool(
       const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
       if (!scopeResult.ok) return scopeResult.reason;
       if (input.assetId) where.assetId = input.assetId;
+      // B-02: `status` es el alta/baja del plan. NO dice si esta vencido: la
+      // columna quedo congelada en ACTIVE para toda la flota. El vencimiento se
+      // resuelve abajo con resolvePlanDueStatus.
       if (input.status) where.status = input.status;
       if (input.textSearch) {
         // Tokenizado: cada palabra (>=3 chars) debe aparecer como substring en
@@ -694,9 +709,15 @@ async function executeCopilotTool(
       // codificado en samplingFluidType, no siempre en el texto del plan.
       if (input.samplingFluidType) where.samplingFluidType = input.samplingFluidType;
 
+      // Cuando se filtra por estado de vencimiento hay que derivarlo fila por
+      // fila, asi que no se puede cortar en la base: se trae una ventana amplia
+      // (el buque mas grande tiene 377 planes) y se recorta despues de filtrar.
+      // Sin esto, "los vencidos" se limitaria a los primeros 20 por fecha.
+      const dueFilter = typeof input.executionStatus === "string" ? input.executionStatus : null;
+      const requested = Math.min(Number(input.limit ?? 20), 50);
       const rows = await prisma.maintenancePlan.findMany({
         where,
-        take: Math.min(Number(input.limit ?? 20), 50),
+        take: dueFilter ? 500 : requested,
         orderBy: { nextDueDate: "asc" },
         select: {
           id: true,
@@ -723,10 +744,37 @@ async function executeCopilotTool(
         },
       });
 
-      const namedPlans = await attachAssetNames(prisma, tenantId, rows as any[]);
-      return wrapUntrusted(JSON.stringify(
-        namedPlans.length > 0 ? namedPlans : { message: "No maintenance plans found matching the given criteria." },
-      ));
+      // Horas actuales por equipo: sin esto un plan por horas se evalua contra
+      // 0 y saldria vencido siempre. Mismo helper que usa la pantalla.
+      const hoursAssetIds = [...new Set(
+        (rows as { assetId: string; nextDueHours: number | null }[])
+          .filter((r) => r.nextDueHours != null).map((r) => r.assetId),
+      )];
+      const currentHoursByAsset = hoursAssetIds.length > 0
+        ? await loadCurrentHoursNumberByAsset(prisma, tenantId, hoursAssetIds)
+        : new Map<string, number>();
+
+      const withStatus = resolvePlanDueStatus(rows as any[], currentHoursByAsset, {
+        filter: dueFilter,
+        locale,
+      }).slice(0, requested);
+
+      const namedPlans = await attachAssetNames(prisma, tenantId, withStatus as any[]);
+      if (namedPlans.length > 0) return wrapUntrusted(JSON.stringify(namedPlans));
+
+      // B-02: nunca afirmar el negativo. Se devuelve QUE se busco, para que el
+      // modelo diga "no encontre con estos criterios" y no "no existe ninguna".
+      return wrapUntrusted(JSON.stringify({
+        message: "NO_RESULTS: la busqueda no devolvio filas. Esto significa que NO se encontro nada con estos criterios, NO que el buque no tenga tareas en ese estado. No afirmes que no existen: deci que no pudiste confirmarlo con estos filtros y ofrece reintentar sin alguno.",
+        criteriosAplicados: {
+          vesselCode: input.vesselCode ?? null,
+          assetId: input.assetId ?? null,
+          status: input.status ?? null,
+          executionStatus: dueFilter,
+          textSearch: input.textSearch ?? null,
+          samplingFluidType: input.samplingFluidType ?? null,
+        },
+      }));
     }
 
     if (name === "query_work_orders") {
@@ -1744,6 +1792,7 @@ export async function streamCopilotoChat(
             block.input as Record<string, unknown>,
             req.tenantId,
             scope,
+            req.locale,
           ),
         })),
       );
