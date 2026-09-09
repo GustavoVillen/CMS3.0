@@ -2115,6 +2115,8 @@ const dict = {
   "msheet.willCreateWoAndSr":  { es: "Va a crear 1 OT + {n} SS ({names})", en: "Will create 1 WO + {n} SR ({names})", pt: "Vai criar 1 OS + {n} SS ({names})" },
   "msheet.selectionHasOos":    { es: "Incluye equipos fuera de servicio", en: "Includes out-of-service equipment", pt: "Inclui equipamentos fora de serviço" },
   "msheet.markForWo":          { es: "Marcar para incluir en la orden de trabajo", en: "Mark to include in the work order", pt: "Marcar para incluir na ordem de serviço" },
+  "msheet.openPlan":           { es: "Abrir esta tarea del plan", en: "Open this plan task", pt: "Abrir esta tarefa do plano" },
+  "msheet.openAssetPlans":     { es: "Ver el plan de mantenimiento de este equipo", en: "See this equipment's maintenance plan", pt: "Ver o plano de manutenção deste equipamento" },
   "msheet.alreadyHasWo":       { es: "Ya tiene la orden {code} abierta", en: "Already has work order {code} open", pt: "Já tem a ordem {code} aberta" },
   "msheet.noGroup":            { es: "Sin grupo SFI asignado", en: "No SFI group assigned", pt: "Sem grupo SFI atribuído" },
   "msheet.outOfService":       { es: "FUERA DE SERVICIO",      en: "OUT OF SERVICE",        pt: "FORA DE SERVIÇO" },

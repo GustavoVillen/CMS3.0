@@ -200,6 +200,14 @@ export function MaintenanceSheetPage() {
     }
   }, [t]);
 
+  /** El plan de mantenimiento del equipo: la lista ya filtrada por ese equipo. */
+  const openAssetPlans = useCallback((p: SheetRow) => {
+    const vessel = p.vesselCode ?? selectedVesselCode ?? "";
+    const asset = p.assetId ?? "";
+    if (!vessel || !asset) return;
+    navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(vessel)}&assetId=${encodeURIComponent(asset)}`);
+  }, [navigate, selectedVesselCode]);
+
   const groupTitle = useCallback((g: number): string => {
     if (g === NO_GROUP) return t("msheet.noGroup");
     return `G${g}: ${t(`sfi.g.${g}` as TranslationKey)}`;
@@ -388,14 +396,34 @@ export function MaintenanceSheetPage() {
                             {b.itemNumber}
                           </td>
                         )}
+                        {/* El equipo lleva a SU plan de mantenimiento: la lista ya
+                            filtrada por ese equipo, que es donde se lo administra. */}
                         {i === 0 && (
-                          <td rowSpan={b.plans.length} className={td + " text-center font-bold bg-[#F8CBAD] text-[#1F3864]"}>
-                            <div>{b.name}</div>
-                            {b.subtitle && <div className="text-[10px] font-normal opacity-80">{b.subtitle}</div>}
+                          <td rowSpan={b.plans.length} className={td + " text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
+                            <button
+                              type="button"
+                              onClick={() => openAssetPlans(b.plans[0]!)}
+                              title={t("msheet.openAssetPlans")}
+                              className="w-full h-full px-2 py-1 text-center hover:underline underline-offset-2 cursor-pointer"
+                            >
+                              <div>{b.name}</div>
+                              {b.subtitle && <div className="text-[10px] font-normal opacity-80">{b.subtitle}</div>}
+                            </button>
                           </td>
                         )}
 
-                        <td className={td} title={`${p.taskCode} · ${p.title}`}>{p.title}</td>
+                        {/* La tarea lleva a la ficha de ESE plan (mismo deep-link
+                            que usa el Gantt). */}
+                        <td className={td + " p-0"}>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/maintenance-plans?openId=${encodeURIComponent(p.id)}`)}
+                            title={`${p.taskCode} · ${t("msheet.openPlan")}`}
+                            className="w-full px-2 py-0.5 text-left hover:underline underline-offset-2 cursor-pointer"
+                          >
+                            {p.title}
+                          </button>
+                        </td>
                         <td className={td + " text-center font-mono"}>{everyText(p)}</td>
 
                         <td className={td + " text-center font-mono"}>
