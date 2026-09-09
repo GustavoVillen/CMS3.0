@@ -710,7 +710,7 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
           userId={user?.id ?? null}
           userName={user?.name ?? user?.email ?? ""}
           isAdmin={canManage}
-          canEditNextDue={role === "TENANT_ADMIN"}
+          canEditMilestones={role === "TENANT_ADMIN"}
           overlayZClass="z-[60]"
           defaultVesselCode={asset.vesselCode}
           defaultAssetId={asset.id}

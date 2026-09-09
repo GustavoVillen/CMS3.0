@@ -1096,7 +1096,7 @@ export interface MaintenancePlanModalProps {
   isAdmin: boolean;
   /** Fijar el próximo vencimiento a mano: reservado al rol TENANT_ADMIN literal
    *  (no alcanza con el permiso plan.manage que habilita `isAdmin`). */
-  canEditNextDue: boolean;
+  canEditMilestones: boolean;
   onClose: () => void;
   onSaved: (savedId?: string) => Promise<void>;
   setRequestMessage?: (msg: string | null) => void;
@@ -1116,7 +1116,7 @@ export interface MaintenancePlanModalProps {
   deepLinked?: boolean;
 }
 
-export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canEditNextDue, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
+export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan, userId, userName, isAdmin, canEditMilestones, onClose, onSaved, setRequestMessage: setReqMsg, defaultVesselCode, defaultAssetId, defaultSfiGroupNumber, lockAsset, overlayZClass, deepLinked }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1627,10 +1627,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         // siempre (como antes) hacía que el backend recalculara el próximo
         // vencimiento en CUALQUIER guardado (aunque no se tocaran las fechas),
         // pisando en silencio un vencimiento fijado a mano en un guardado previo.
-        const lastExecDateChanged = isAdmin && !needsHours(triggerType) && lastExecDate !== toDateInput(plan.lastExecutionDate ?? null);
-        const lastExecHoursChanged = isAdmin && needsHours(triggerType) && lastExecHours !== String(plan.lastExecutionHours ?? "");
-        const nextDueDateChanged = canEditNextDue && !needsHours(triggerType) && nextDueDateOverride !== toDateInput(plan.nextDueDate ?? null);
-        const nextDueHoursChanged = canEditNextDue && needsHours(triggerType) && nextDueHoursOverride !== String(plan.nextDueHours ?? "");
+        const lastExecDateChanged = canEditMilestones && !needsHours(triggerType) && lastExecDate !== toDateInput(plan.lastExecutionDate ?? null);
+        const lastExecHoursChanged = canEditMilestones && needsHours(triggerType) && lastExecHours !== String(plan.lastExecutionHours ?? "");
+        const nextDueDateChanged = canEditMilestones && !needsHours(triggerType) && nextDueDateOverride !== toDateInput(plan.nextDueDate ?? null);
+        const nextDueHoursChanged = canEditMilestones && needsHours(triggerType) && nextDueHoursOverride !== String(plan.nextDueHours ?? "");
         await api.patch(`/app/pms/maintenance-plans/${plan.id}`, {
           ...(assetId ? { assetId } : {}),
           ...(isAdmin && taskCode.trim() && taskCode.trim() !== plan.taskCode ? { taskCode: taskCode.trim().toUpperCase() } : {}),
@@ -2096,7 +2096,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.lastExecution")}</p>
-                    {isAdmin ? (
+                    {canEditMilestones ? (
                       needsHours(triggerType) ? (
                         <input
                           type="number" value={lastExecHours}
@@ -2121,7 +2121,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   </div>
                   <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                     <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.nextDueDate")}</p>
-                    {canEditNextDue ? (
+                    {canEditMilestones ? (
                       needsHours(triggerType) ? (
                         <input
                           type="number" value={nextDueHoursOverride}
@@ -2147,7 +2147,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                               : (fmtDate(plan.nextDueDate) ?? "—"))}
                       </p>
                     )}
-                    {canEditNextDue ? (
+                    {canEditMilestones ? (
                       <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueManualHint")}</p>
                     ) : (
                       isAdmin && preview && (
@@ -4018,6 +4018,7 @@ export const MaintenancePlansPage: React.FC = () => {
           <MaintenancePlansGrid
             plans={data?.items ?? []}
             isAdmin={isAdmin}
+            canEditMilestones={user?.role === "TENANT_ADMIN"}
             vesselNameMap={vesselNameMap}
             renderStatus={renderStatus}
             renderActions={renderActions}
@@ -4107,7 +4108,7 @@ export const MaintenancePlansPage: React.FC = () => {
           userId={user?.id ?? null}
           userName={userName}
           isAdmin={can("plan.manage")}
-          canEditNextDue={user?.role === "TENANT_ADMIN"}
+          canEditMilestones={user?.role === "TENANT_ADMIN"}
           setRequestMessage={setRequestMessageFromContext}
           deepLinked={!!linkCode}
           // Sólo en el alta: al editar, los valores salen del plan.

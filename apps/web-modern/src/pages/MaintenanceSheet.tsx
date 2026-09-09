@@ -8,8 +8,8 @@
 //
 //   · marcar varias tareas y abrir UNA sola OT con todas adentro — el backend
 //     crea una SS por taller (no una por tarea) cuando alguna es tercerizada;
-//   · corregir "Última verificación" y "Próximo recorrido" en la misma celda,
-//     si el usuario tiene permiso.
+//   · ver "Última verificación" y "Próximo recorrido" de cada tarea; corregirlas
+//     a mano en la celda es sólo del administrador (ver canEditMilestones).
 //
 // Todo lo que decide (qué OT, qué SS, quién puede qué) lo resuelve el backend en
 // `POST /app/pms/maintenance-plans/:id/open-work-order` y el PATCH del plan.
@@ -25,7 +25,7 @@ import { CreateWorkOrderModal, buildWoPrefillFromPlan, type WoPrefill } from "..
 import { api, ApiError } from "../lib/api";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { useFetch } from "../lib/hooks";
-import { useAuth, useCan } from "../lib/auth";
+import { useAuth } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import {
@@ -70,17 +70,18 @@ function milestoneText(p: SheetRow, which: "last" | "next"): string {
 
 export function MaintenanceSheetPage() {
   const t = useT();
-  const can = useCan();
   const navigate = useNavigate();
   const { selectedVesselCode, selectedVessel } = useVesselContext();
 
-  // Corregir la última verificación es gestión del plan. Fijar el PRÓXIMO
-  // vencimiento a mano pisa el cálculo automático y el backend lo reserva al rol
-  // literal TENANT_ADMIN: la celda se muestra editable sólo a quien va a poder
-  // guardarla, para no ofrecer un campo que después rebota con un error.
+  // Las dos fechas de la planilla —última verificación y próximo recorrido— son
+  // el corazón del vencimiento del plan: tocarlas a mano pisa el cálculo
+  // automático (frecuencia + última ejecución). Por eso quedan en el rol literal
+  // TENANT_ADMIN (decisión del usuario, sep 2026), no en el permiso plan.manage,
+  // que otros roles tienen por defecto. Registrar que la tarea se hizo NO pasa
+  // por acá: eso lo mueve solo el cierre de la OT. El backend valida lo mismo,
+  // así que la celda se muestra editable sólo a quien va a poder guardarla.
   const { user, tenant } = useAuth();
-  const canEdit = can("plan.manage");
-  const canEditNextDue = user?.role === "TENANT_ADMIN";
+  const canEditMilestones = user?.role === "TENANT_ADMIN";
 
   const plansPath = selectedVesselCode ? "/app/pms/maintenance-plans?limit=2000" : null;
   const assetsPath = selectedVesselCode ? "/app/pms/assets?limit=500" : null;
@@ -514,7 +515,7 @@ export function MaintenanceSheetPage() {
                         <td className={tdLast + " text-center font-mono"}>{everyText(p)}</td>
 
                         <td className={tdLast + " text-center font-mono"}>
-                          {canEdit ? (
+                          {canEditMilestones ? (
                             hb
                               ? <NumberCell value={p.lastExecutionHours ?? null} resetKey={resetTick}
                                   onCommit={v => void patchPlan(p, { lastExecutionHours: v })} />
@@ -523,7 +524,7 @@ export function MaintenanceSheetPage() {
                           ) : milestoneText(p, "last")}
                         </td>
                         <td className={tdLast + " text-center font-mono"}>
-                          {canEditNextDue ? (
+                          {canEditMilestones ? (
                             hb
                               ? <NumberCell value={p.nextDueHours ?? null} resetKey={resetTick}
                                   onCommit={v => void patchPlan(p, { nextDueHours: v })} />

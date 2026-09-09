@@ -1219,13 +1219,21 @@ export async function updateTenantMaintenancePlan(
   payload: UpdateMaintenancePlanInput,
 ) {
   ensureCanManagePlans(session);
-  // Fijar el vencimiento a mano pisa el cálculo automático (frecuencia / última
-  // ejecución) — reservado al rol literal TENANT_ADMIN, no al permiso plan.manage
-  // (ese lo tienen por defecto otros roles y es configurable por tenant).
-  if (payload.nextDueDate !== undefined || payload.nextDueHours !== undefined) {
-    if (session.user.role !== "TENANT_ADMIN") {
-      throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede fijar el próximo vencimiento a mano.");
-    }
+  // Las dos fechas que gobiernan el vencimiento —última ejecución y próximo
+  // vencimiento— sólo las toca a mano el rol literal TENANT_ADMIN, no el permiso
+  // plan.manage (ese lo tienen por defecto otros roles y es configurable por
+  // tenant). Escribirlas pisa el cálculo automático: el próximo vencimiento sale
+  // de la frecuencia + la última ejecución, así que mover la última ejecución
+  // corre el vencimiento de la tarea igual que fijarlo a dedo.
+  //
+  // Esto NO afecta cómo se registra el trabajo hecho: cerrar la OT mueve la
+  // última ejecución solo (work-orders-service), y las lecturas de horómetro
+  // avanzan los planes por horas. Acá se corrige un dato mal cargado, y esa
+  // corrección es del administrador (decisión del usuario, sep 2026).
+  const touchesMilestones = payload.nextDueDate !== undefined || payload.nextDueHours !== undefined
+    || payload.lastExecutionDate !== undefined || payload.lastExecutionHours !== undefined;
+  if (touchesMilestones && session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede corregir la última verificación o el próximo vencimiento.");
   }
 
   const prismaRaw = getPrismaClient();

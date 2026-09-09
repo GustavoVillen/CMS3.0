@@ -10,7 +10,9 @@ import { cellCls, DateCell, NumberCell } from "./InlineCells";
 import type { MaintenancePlan } from "../pages/MaintenancePlans";
 
 // Planilla compacta estilo Excel para Plan de Mantenimiento.
-// - Solo lectura para todos; edición inline solo si `isAdmin`.
+// - Solo lectura para todos; edición inline solo si `isAdmin`. Las dos fechas de
+//   hito (última ejecución y próximo vencimiento) van aparte, con
+//   `canEditMilestones`: mueven el vencimiento y son sólo del TENANT_ADMIN.
 // - Cada celda guarda al salir del campo (blur) o al cambiar (selects), vía el
 //   PATCH existente `/app/pms/maintenance-plans/:id`, enviando solo lo cambiado.
 // - `renderStatus` / `renderActions` se reciben del padre para reutilizar
@@ -45,6 +47,10 @@ interface Asset { id: string; assetCode: string; name: string | null }
 interface Props {
   plans: MaintenancePlan[];
   isAdmin: boolean;
+  /** Las dos fechas que gobiernan el vencimiento (última ejecución y próximo
+   *  vencimiento) sólo las corrige a mano el TENANT_ADMIN: el backend rechaza
+   *  el resto, así que la celda se muestra editable sólo a quien puede guardar. */
+  canEditMilestones: boolean;
   vesselNameMap: Map<string, string>;
   renderStatus: (row: MaintenancePlan) => React.ReactNode;
   renderActions: (row: MaintenancePlan) => React.ReactNode;
@@ -228,7 +234,7 @@ const BulkCriteriaSourceDialog: React.FC<{
 // ─── Main grid ──────────────────────────────────────────────────────────────
 
 export const MaintenancePlansGrid: React.FC<Props> = ({
-  plans, isAdmin, vesselNameMap, renderStatus, renderActions, statusValue, onOpenDetail, emptyText,
+  plans, isAdmin, canEditMilestones, vesselNameMap, renderStatus, renderActions, statusValue, onOpenDetail, emptyText,
   bundleIds, bundleVessel, onToggleBundle,
 }) => {
   const t = useT();
@@ -615,7 +621,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
 
                   {/* Última ejecución */}
                   <td className="px-1 py-1 w-32">
-                    {isAdmin ? (
+                    {canEditMilestones ? (
                       hoursBased
                         ? <NumberCell value={row.lastExecutionHours} resetKey={errTick} onCommit={v => patchRow(row, { lastExecutionHours: v })} />
                         : <DateCell value={row.lastExecutionDate} resetKey={errTick} onCommit={v => patchRow(row, { lastExecutionDate: v })} />
@@ -630,7 +636,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
 
                   {/* Próximo vencimiento */}
                   <td className="px-1 py-1 w-32">
-                    {isAdmin ? (
+                    {canEditMilestones ? (
                       hoursBased
                         ? <NumberCell value={row.nextDueHours} resetKey={errTick} onCommit={v => patchRow(row, { nextDueHours: v })} />
                         : <DateCell value={row.nextDueDate} resetKey={errTick} onCommit={v => patchRow(row, { nextDueDate: v })} />
