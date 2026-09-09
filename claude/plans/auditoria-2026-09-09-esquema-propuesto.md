@@ -182,6 +182,11 @@ una decisión de negocio, no se toca sin pedido). Con la consulta vacía, el
 **Riesgo.** Bajo si la consulta de arriba no devuelve nada. Si devuelve, la
 creación del índice falla — no rompe nada, pero no entra hasta limpiarlo.
 
+> **Verificado en producción el 2026-09-09, después del deploy:** la consulta
+> devuelve **0 filas** — el bug no llegó a dejar reservas duplicadas. El índice
+> se puede crear sin limpiar nada. Volver a correrla igual antes de aplicarlo,
+> porque el dato puede cambiar.
+
 ---
 
 ## 6. Índice de apoyo para el cálculo de existencias — sólo con medición
