@@ -10,10 +10,13 @@ import { RouteError } from "../../http/route-error";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
 import {
+  deleteHoursReading,
   getAssetHoursHistory,
   listVesselHoursSheet,
   recordHoursReadings,
+  updateHoursReading,
   type HoursReadingInput,
+  type UpdateHoursReadingInput,
 } from "./asset-hours-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
@@ -59,6 +62,21 @@ export async function handleAssetHoursRoutes(
     const assetId = url.pathname.split("/")[4]!;
     sendJson(response, 200, await getAssetHoursHistory(session, assetId));
     return true;
+  }
+
+  // Corregir / borrar una lectura ya cargada: sólo TENANT_ADMIN (lo valida el
+  // service). Es reescribir historial, no cargar horas del día.
+  if (/^\/app\/pms\/asset-hours\/readings\/[^/]+$/.test(url.pathname)) {
+    const readingId = url.pathname.split("/")[5]!;
+    if (method === "PATCH") {
+      const body = await readJsonBody(request) as UpdateHoursReadingInput;
+      sendJson(response, 200, await updateHoursReading(session, readingId, body));
+      return true;
+    }
+    if (method === "DELETE") {
+      sendJson(response, 200, await deleteHoursReading(session, readingId));
+      return true;
+    }
   }
 
   if (method === "PUT" && url.pathname === "/app/pms/asset-hours") {

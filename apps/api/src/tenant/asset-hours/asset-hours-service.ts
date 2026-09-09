@@ -37,12 +37,15 @@ const SOURCE_PRIORITY_SQL = `CASE "source"
 END`;
 
 export interface CurrentHours {
+  /** Id de la lectura: con esto la planilla puede corregirla o borrarla. */
+  id: string;
   runningHours: number;
   readingDate: string;   // YYYY-MM-DD
   source: HoursReadingSource;
 }
 
 interface CurrentHoursRow {
+  id: string;
   assetId: string;
   runningHours: number;
   readingDate: Date;
@@ -110,9 +113,9 @@ export async function loadCurrentHoursByAsset(
     // ROW_NUMBER no tiene equivalente directo en el ORM. Scope de tenant explícito
     // (defense in depth) además del filtro por assetIds que ya viene scopeado.
     const rows = await prisma.$queryRawUnsafe<CurrentHoursRow[]>(
-      `SELECT "assetId", "runningHours", "readingDate", "source"
+      `SELECT "id", "assetId", "runningHours", "readingDate", "source"
        FROM (
-         SELECT "assetId", "runningHours", "readingDate", "source",
+         SELECT "id", "assetId", "runningHours", "readingDate", "source",
                 ROW_NUMBER() OVER (
                   PARTITION BY "assetId"
                   ORDER BY "readingDate" DESC, ${SOURCE_PRIORITY_SQL} ASC, "createdAt" DESC
@@ -125,6 +128,7 @@ export async function loadCurrentHoursByAsset(
     );
     for (const row of rows) {
       map.set(row.assetId, {
+        id: row.id,
         runningHours: Number(row.runningHours),
         readingDate: toIsoDate(row.readingDate),
         source: row.source,
@@ -157,9 +161,9 @@ export async function loadPreviousHoursByAsset(
     const tenantPlaceholder = `$${ids.length + 1}`;
     const datePlaceholder = `$${ids.length + 2}`;
     const rows = await prisma.$queryRawUnsafe<CurrentHoursRow[]>(
-      `SELECT "assetId", "runningHours", "readingDate", "source"
+      `SELECT "id", "assetId", "runningHours", "readingDate", "source"
        FROM (
-         SELECT "assetId", "runningHours", "readingDate", "source",
+         SELECT "id", "assetId", "runningHours", "readingDate", "source",
                 ROW_NUMBER() OVER (
                   PARTITION BY "assetId"
                   ORDER BY "readingDate" DESC, ${SOURCE_PRIORITY_SQL} ASC, "createdAt" DESC
@@ -173,6 +177,7 @@ export async function loadPreviousHoursByAsset(
     );
     for (const row of rows) {
       map.set(row.assetId, {
+        id: row.id,
         runningHours: Number(row.runningHours),
         readingDate: toIsoDate(row.readingDate),
         source: row.source,
@@ -655,4 +660,218 @@ export async function getAssetHoursHistory(
       createdByName: userMap.get(r.createdByUserId) ?? null,
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// CORREGIR / BORRAR una lectura ya cargada
+// ---------------------------------------------------------------------------
+//
+// Cargar horas es una operación de todos los días (permiso `assetHours.write`);
+// CORREGIR una lectura vieja no: reescribe el historial del que dependen el
+// vencimiento de los planes por horas, el promedio horas/día y los reportes de
+// confiabilidad. Por eso queda en el rol literal TENANT_ADMIN, igual que fijar
+// a mano el próximo vencimiento de un plan.
+
+export function ensureCanEditHoursReadings(session: TenantAccessSession): void {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Solo el administrador del tenant puede corregir o borrar lecturas de horas.");
+  }
+}
+
+interface ReadingRecord {
+  id: string;
+  tenantId: string;
+  vesselCode: string;
+  assetId: string;
+  readingDate: Date;
+  runningHours: number;
+  rpm: number | null;
+  source: HoursReadingSource;
+  note: string | null;
+}
+
+/** Trae la lectura validando tenant Y alcance de buque del usuario. */
+async function loadReadingInScope(
+  session: TenantAccessSession,
+  readingId: string,
+): Promise<{ prisma: PrismaClientLike; tenantId: string; reading: ReadingRecord }> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const tenantId = await resolveTenantId(session);
+  if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const reading = await (prisma as any).assetHoursReading.findFirst({
+    where: { id: readingId, tenantId },
+  }) as ReadingRecord | null;
+  if (!reading) throw new RouteError(404, "NOT_FOUND", "Lectura no encontrada.");
+
+  // El buque de la lectura tiene que estar dentro del alcance del usuario.
+  const assetWhere: Record<string, unknown> = { id: reading.assetId, tenantId, deletedAt: null };
+  applyAssignedVesselScope(session, assetWhere);
+  const asset = await (prisma as any).asset.findFirst({ where: assetWhere, select: { id: true } });
+  if (!asset) throw new RouteError(403, "FORBIDDEN", "El equipo está fuera de tu alcance.");
+
+  return { prisma, tenantId, reading };
+}
+
+export interface UpdateHoursReadingInput {
+  readingDate?: string;
+  runningHours?: number | string | null;
+  rpm?: number | string | null;
+  note?: string | null;
+}
+
+/**
+ * Corrige una lectura. Si la fecha nueva ya tiene una lectura del MISMO origen
+ * para ese equipo, esa se PISA (decisión del usuario, sep 2026): la que se está
+ * moviendo es la buena. La pisada queda en el audit log con sus valores, que es
+ * lo único que permite reconstruirla si el cambio estuvo mal.
+ */
+export async function updateHoursReading(
+  session: TenantAccessSession,
+  readingId: string,
+  input: UpdateHoursReadingInput,
+): Promise<{ id: string; readingDate: string; runningHours: number; rpm: number | null; overwrote: boolean }> {
+  ensureCanEditHoursReadings(session);
+  const { prisma, tenantId, reading } = await loadReadingInScope(session, readingId);
+
+  const data: Record<string, unknown> = { updatedByUserId: session.user.id };
+
+  let newDate = reading.readingDate;
+  if (input.readingDate !== undefined) {
+    newDate = parseReadingDate(input.readingDate);
+    data.readingDate = newDate;
+  }
+  if (input.runningHours !== undefined && input.runningHours !== null) {
+    const hours = Number(input.runningHours);
+    if (!Number.isFinite(hours) || hours < 0) {
+      throw new RouteError(400, "VALIDATION_ERROR", "Las horas deben ser un número mayor o igual a cero.");
+    }
+    data.runningHours = hours;
+  }
+  if (input.rpm !== undefined) {
+    if (input.rpm === null || input.rpm === "") {
+      data.rpm = null;
+    } else {
+      const rpm = Number(input.rpm);
+      if (!Number.isFinite(rpm) || rpm < 0) {
+        throw new RouteError(400, "VALIDATION_ERROR", "El RPM debe ser un número mayor o igual a cero.");
+      }
+      data.rpm = rpm;
+    }
+  }
+  if (input.note !== undefined) data.note = input.note?.trim() || null;
+
+  // Choque de fecha: la restricción es (tenant, equipo, fecha, origen).
+  let overwrote = false;
+  if (data.readingDate !== undefined) {
+    const clash = await (prisma as any).assetHoursReading.findFirst({
+      where: { tenantId, assetId: reading.assetId, readingDate: newDate, source: reading.source, id: { not: reading.id } },
+    }) as ReadingRecord | null;
+    if (clash) {
+      await (prisma as any).assetHoursReading.delete({ where: { id: clash.id } });
+      overwrote = true;
+      void publishAudit(prisma, {
+        tenantId,
+        actorUserId: session.user.id,
+        action: "AssetHoursReading.overwritten",
+        entityType: "AssetHoursReading",
+        entityId: clash.id,
+        metadata: {
+          assetId: clash.assetId,
+          vesselCode: clash.vesselCode,
+          readingDate: toIsoDate(clash.readingDate),
+          runningHours: Number(clash.runningHours),
+          rpm: clash.rpm,
+          source: clash.source,
+          replacedBy: reading.id,
+        },
+      });
+    }
+  }
+
+  const updated = await (prisma as any).assetHoursReading.update({
+    where: { id: reading.id },
+    data,
+  }) as ReadingRecord;
+
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "AssetHoursReading.updated",
+    entityType: "AssetHoursReading",
+    entityId: reading.id,
+    metadata: {
+      assetId: reading.assetId,
+      vesselCode: reading.vesselCode,
+      before: {
+        readingDate: toIsoDate(reading.readingDate),
+        runningHours: Number(reading.runningHours),
+        rpm: reading.rpm,
+      },
+      after: {
+        readingDate: toIsoDate(updated.readingDate),
+        runningHours: Number(updated.runningHours),
+        rpm: updated.rpm,
+      },
+    },
+  });
+
+  // La corrección puede cambiar cuál es la última lectura del equipo (y con eso
+  // las horas actuales), así que se recalcula la ventana de los planes por horas
+  // con el MISMO criterio que usa la carga normal.
+  await refreshHoursPlansAfterEdit(prisma, tenantId, reading.vesselCode, reading.assetId);
+
+  return {
+    id: updated.id,
+    readingDate: toIsoDate(updated.readingDate),
+    runningHours: Number(updated.runningHours),
+    rpm: updated.rpm == null ? null : Number(updated.rpm),
+    overwrote,
+  };
+}
+
+/** Borra una lectura. Queda en el audit log con sus valores. */
+export async function deleteHoursReading(
+  session: TenantAccessSession,
+  readingId: string,
+): Promise<{ deleted: true }> {
+  ensureCanEditHoursReadings(session);
+  const { prisma, tenantId, reading } = await loadReadingInScope(session, readingId);
+
+  await (prisma as any).assetHoursReading.delete({ where: { id: reading.id } });
+
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "AssetHoursReading.deleted",
+    entityType: "AssetHoursReading",
+    entityId: reading.id,
+    metadata: {
+      assetId: reading.assetId,
+      vesselCode: reading.vesselCode,
+      readingDate: toIsoDate(reading.readingDate),
+      runningHours: Number(reading.runningHours),
+      rpm: reading.rpm,
+      source: reading.source,
+    },
+  });
+
+  await refreshHoursPlansAfterEdit(prisma, tenantId, reading.vesselCode, reading.assetId);
+  return { deleted: true };
+}
+
+/** Recalcula la ventana de los planes por horas con las horas actuales del equipo
+ *  después de corregir o borrar una lectura. Si el equipo se quedó sin lecturas,
+ *  no hay nada que recalcular. */
+async function refreshHoursPlansAfterEdit(
+  prisma: PrismaClientLike,
+  tenantId: string,
+  vesselCode: string,
+  assetId: string,
+): Promise<void> {
+  const current = await loadCurrentHoursForAsset(prisma, tenantId, assetId);
+  if (!current) return;
+  await advanceHoursPlansForAsset(prisma, tenantId, vesselCode, assetId, current.runningHours);
 }

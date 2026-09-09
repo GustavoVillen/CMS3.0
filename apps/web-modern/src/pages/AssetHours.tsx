@@ -9,7 +9,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Check, Copy, Gauge, Loader2, Plus, X } from "lucide-react";
+import { Check, Copy, Gauge, Loader2, Plus, Trash2, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -17,6 +17,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { AssetHoursGrid, STALE_DAYS, type HoursSheet, type HoursSheetRow } from "../components/AssetHoursGrid";
 import { useVesselContext } from "../lib/vessel-context";
+import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 
 interface HistoryEntry {
@@ -37,6 +38,7 @@ function todayIso(): string {
 export const AssetHoursPage: React.FC = () => {
   const t = useT();
   const { vessels, selectedVesselCode, setSelectedVesselCode } = useVesselContext();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [vesselCode, setVesselCode] = useState(selectedVesselCode ?? vessels[0]?.code ?? "");
   const [readingDate, setReadingDate] = useState(todayIso());
@@ -134,6 +136,61 @@ export const AssetHoursPage: React.FC = () => {
       setError(err instanceof ApiError ? err.message : t("assetHours.loadFailed"));
     }
   };
+
+  // ── Corregir o borrar una lectura del historial ───────────────────────────
+  // Es reescribir el historial del que salen los planes por horas: el backend lo
+  // reserva al TENANT_ADMIN y acá se muestra sólo a ese rol. Después de cada
+  // cambio se recargan las dos cosas: el historial abierto y la planilla (la
+  // última lectura del equipo pudo cambiar).
+  const canEditReadings = user?.role === "TENANT_ADMIN";
+  const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const refreshAfterEdit = useCallback(async (row: HoursSheetRow) => {
+    await reload();
+    try {
+      const res = await api.get<{ entries: HistoryEntry[] }>(
+        `/app/pms/asset-hours/${row.assetId}/history`,
+      );
+      setHistory({ row, entries: res.entries ?? [] });
+    } catch { /* el historial se puede reabrir; la planilla ya está al día */ }
+  }, [reload]);
+
+  const patchEntry = useCallback(async (
+    row: HoursSheetRow,
+    entryId: string,
+    patch: { readingDate?: string; runningHours?: number },
+  ) => {
+    setBusyEntryId(entryId);
+    try {
+      const res = await api.patch<{ overwrote: boolean }>(
+        `/app/pms/asset-hours/readings/${encodeURIComponent(entryId)}`, patch,
+      );
+      if (res.overwrote && patch.readingDate) {
+        setError(tRef.current("assetHours.dateOverwrote")
+          .replace("{asset}", row.assetName)
+          .replace("{date}", patch.readingDate));
+      }
+      await refreshAfterEdit(row);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tRef.current("assetHours.saveFailed"));
+    } finally {
+      setBusyEntryId(null);
+    }
+  }, [refreshAfterEdit]);
+
+  const deleteEntry = useCallback(async (row: HoursSheetRow, entryId: string) => {
+    setBusyEntryId(entryId);
+    setConfirmDeleteId(null);
+    try {
+      await api.delete(`/app/pms/asset-hours/readings/${encodeURIComponent(entryId)}`);
+      await refreshAfterEdit(row);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tRef.current("assetHours.saveFailed"));
+    } finally {
+      setBusyEntryId(null);
+    }
+  }, [refreshAfterEdit]);
 
   const staleCount = useMemo(
     () => (sheet?.rows ?? []).filter((r) => r.daysSinceReading == null || r.daysSinceReading > STALE_DAYS).length,
@@ -245,13 +302,45 @@ export const AssetHoursPage: React.FC = () => {
                       <th className="py-2 pr-2">{t("assetHours.col.source")}</th>
                       <th className="py-2 pr-2">{t("assetHours.col.loadedBy")}</th>
                       <th className="py-2">{t("assetHours.col.note")}</th>
+                      {canEditReadings && <th className="py-2 w-24"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-fg/5">
                     {history.entries.map((e) => (
-                      <tr key={e.id}>
-                        <td className="py-1.5 pr-2 whitespace-nowrap">{e.readingDate}</td>
-                        <td className="py-1.5 pr-2 font-mono text-right">{e.runningHours.toLocaleString()} h</td>
+                      <tr key={e.id} className={busyEntryId === e.id ? "opacity-50" : ""}>
+                        {/* Fecha y horas editables para el administrador: es la
+                            única forma de corregir una lectura mal cargada. */}
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {canEditReadings ? (
+                            <input
+                              type="date"
+                              defaultValue={e.readingDate}
+                              disabled={busyEntryId === e.id}
+                              onBlur={ev => {
+                                const v = ev.target.value;
+                                if (v && v !== e.readingDate) void patchEntry(history.row, e.id, { readingDate: v });
+                              }}
+                              className="bg-transparent border border-transparent rounded px-1 py-0.5 font-mono text-[11px] text-fg hover:border-fg/20 focus:border-accent/60 focus:outline-none"
+                            />
+                          ) : e.readingDate}
+                        </td>
+                        <td className="py-1.5 pr-2 font-mono text-right">
+                          {canEditReadings ? (
+                            <input
+                              type="number"
+                              defaultValue={e.runningHours}
+                              disabled={busyEntryId === e.id}
+                              onBlur={ev => {
+                                const v = ev.target.value.trim();
+                                const n = Number(v);
+                                if (v !== "" && Number.isFinite(n) && n !== e.runningHours) {
+                                  void patchEntry(history.row, e.id, { runningHours: n });
+                                }
+                              }}
+                              className="w-24 bg-transparent border border-transparent rounded px-1 py-0.5 font-mono text-[11px] text-right text-fg hover:border-fg/20 focus:border-accent/60 focus:outline-none"
+                            />
+                          ) : `${e.runningHours.toLocaleString()} h`}
+                        </td>
                         <td className="py-1.5 pr-2 font-mono text-right text-text-industrial/60">
                           {e.rpm != null ? e.rpm.toLocaleString() : "—"}
                         </td>
@@ -262,6 +351,37 @@ export const AssetHoursPage: React.FC = () => {
                         </td>
                         <td className="py-1.5 pr-2 text-text-industrial/60">{e.createdByName ?? "—"}</td>
                         <td className="py-1.5 text-text-industrial/50">{e.note ?? ""}</td>
+                        {canEditReadings && (
+                          <td className="py-1.5 text-right whitespace-nowrap">
+                            {/* Borrar pide confirmación en la misma fila: la lectura
+                                se va de verdad (queda sólo en el registro de auditoría). */}
+                            {confirmDeleteId === e.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => { void deleteEntry(history.row, e.id); }}
+                                  className="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline"
+                                >
+                                  {t("common.delete")}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="text-[10px] text-text-industrial/60 hover:text-fg"
+                                >
+                                  {t("common.cancel")}
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteId(e.id)}
+                                disabled={busyEntryId === e.id}
+                                title={t("assetHours.deleteReading")}
+                                className="p-1 rounded text-text-industrial/50 hover:text-red-600 dark:hover:text-red-400 hover:bg-fg/5 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

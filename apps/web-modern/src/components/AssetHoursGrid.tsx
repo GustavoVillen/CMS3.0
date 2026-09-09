@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Save, History } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { AlertDialog } from "./AlertDialog";
 
@@ -24,11 +25,11 @@ export interface HoursSheetRow {
   sfiCode: string | null;
   vesselCode: string;
   trackDailyReport: boolean;
-  lastReading: { runningHours: number; readingDate: string; source: string } | null;
+  lastReading: { id: string; runningHours: number; readingDate: string; source: string } | null;
   daysSinceReading: number | null;
   /** Última lectura anterior a la fecha de la planilla: contra ella se calcula
    *  la diferencia de horas de la columna "Dif. horas". */
-  previousReading: { runningHours: number; readingDate: string; source: string } | null;
+  previousReading: { id: string; runningHours: number; readingDate: string; source: string } | null;
   readingOnDate: { runningHours: number; rpm: number | null; source: string; note: string | null } | null;
 }
 
@@ -48,12 +49,14 @@ const MAX_HOURS_PER_DAY = 24;
 const COL_IDS = ["equipo", "sfi", "last", "date", "stale", "input", "delta", "rpm", "source"] as const;
 type ColId = (typeof COL_IDS)[number];
 const DEFAULT_WIDTHS: Record<ColId, number> = {
-  equipo: 240, sfi: 70, last: 110, date: 104, stale: 96, input: 150, delta: 100, rpm: 110, source: 120,
+  equipo: 240, sfi: 70, last: 110, date: 132, stale: 96, input: 150, delta: 100, rpm: 110, source: 120,
 };
 const MIN_WIDTHS: Record<ColId, number> = {
-  equipo: 120, sfi: 50, last: 80, date: 84, stale: 70, input: 110, delta: 80, rpm: 90, source: 80,
+  equipo: 120, sfi: 50, last: 80, date: 120, stale: 70, input: 110, delta: 80, rpm: 90, source: 80,
 };
-const COL_WIDTHS_LS_KEY = "assetHours.grid.colWidths";
+// v2: la columna de fecha pasó a llevar un campo editable y necesita más ancho;
+// los anchos guardados de la versión anterior la dejaban cortada.
+const COL_WIDTHS_LS_KEY = "assetHours.grid.colWidths.v2";
 
 /**
  * Los dos campos que la tripulación ESCRIBE (horas y RPM) van más grandes que
@@ -113,6 +116,35 @@ export const AssetHoursGrid: React.FC<Props> = ({
 
   const [drafts, setDrafts] = useState<Record<string, string>>(initialDrafts);
   const [rpmDrafts, setRpmDrafts] = useState<Record<string, string>>(initialRpmDrafts);
+  // Corregir la FECHA de una lectura ya cargada no es cargar horas: es reescribir
+  // el historial del que dependen los planes por horas. Reservado al TENANT_ADMIN,
+  // igual que en el backend.
+  const { user } = useAuth();
+  const canEditReadings = user?.role === "TENANT_ADMIN";
+  const [savingDateId, setSavingDateId] = useState<string | null>(null);
+  const changeReadingDate = useCallback(async (row: HoursSheetRow, date: string) => {
+    const reading = row.lastReading;
+    if (!reading || !date || date === reading.readingDate) return;
+    setSavingDateId(reading.id);
+    try {
+      const res = await api.patch<{ overwrote: boolean }>(
+        `/app/pms/asset-hours/readings/${encodeURIComponent(reading.id)}`,
+        { readingDate: date },
+      );
+      // Si la fecha destino ya tenía lectura de ese equipo, se pisó: hay que
+      // decirlo, porque se perdió un registro.
+      if (res.overwrote) {
+        setAlert(t("assetHours.dateOverwrote")
+          .replace("{asset}", row.assetName)
+          .replace("{date}", date));
+      }
+      onSaved();
+    } catch (err) {
+      setAlert(err instanceof ApiError ? err.message : t("assetHours.saveFailed"));
+    } finally {
+      setSavingDateId(null);
+    }
+  }, [onSaved, t]);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
   // Confirmación pendiente: el aviso ya se mostró y el usuario decide si sigue.
@@ -437,7 +469,19 @@ export const AssetHoursGrid: React.FC<Props> = ({
                   )}
                   {visibleCols.includes("date") && (
                     <td className="px-2 py-1.5 text-[11px] text-text-industrial/60">
-                      {row.lastReading?.readingDate ?? "—"}
+                      {/* Corregir la fecha de una lectura ya cargada reescribe
+                          historial (de ahí salen los planes por horas), así que
+                          es sólo del administrador; el backend lo revalida. */}
+                      {canEditReadings && row.lastReading ? (
+                        <input
+                          type="date"
+                          value={row.lastReading.readingDate}
+                          disabled={savingDateId === row.lastReading.id}
+                          onChange={e => { void changeReadingDate(row, e.target.value); }}
+                          title={t("assetHours.editDateHint")}
+                          className="w-full bg-transparent border border-transparent rounded px-1 py-0.5 text-[11px] font-mono text-fg hover:border-fg/20 focus:border-accent/60 focus:outline-none disabled:opacity-40"
+                        />
+                      ) : (row.lastReading?.readingDate ?? "—")}
                     </td>
                   )}
                   {visibleCols.includes("stale") && (
