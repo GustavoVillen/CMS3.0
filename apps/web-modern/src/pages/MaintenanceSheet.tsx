@@ -15,7 +15,7 @@
 // `POST /app/pms/maintenance-plans/:id/open-work-order` y el PATCH del plan.
 // Acá no hay reglas de negocio propias, y no debería agregarse ninguna.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
@@ -42,6 +42,19 @@ type SheetRow = SheetPlan & {
   activeWorkOrderCode?: string | null;
   vesselCode?: string;
 };
+
+// El encabezado de columnas va en SU PROPIA tabla, fuera del área que scrollea, y
+// sólo el cuerpo tiene scroll. Así la barra empieza debajo del encabezado en vez de
+// correr por al lado. El precio es tener que alinear dos tablas: se hace con
+// `table-fixed` y este mismo colgroup en las dos, más el ancho de la barra sumado
+// como padding a la del encabezado (se mide en vivo: cambia según el sistema).
+const COL_WIDTHS = [112, 40, 208, null, 96, 128, 128, 160, 96] as const;
+
+const SheetCols: React.FC = () => (
+  <colgroup>
+    {COL_WIDTHS.map((w, i) => <col key={i} style={w == null ? undefined : { width: w }} />)}
+  </colgroup>
+);
 
 const NUM_LOCALE = "es-AR";
 const fmtHours = (n: number) => n.toLocaleString(NUM_LOCALE);
@@ -102,7 +115,11 @@ export function MaintenanceSheetPage() {
           .map(b => ({
             ...b,
             plans: b.plans.filter(p => {
-              if (onlyDue && severityOf(p) === "none") return false;
+              // Un equipo fuera de servicio no entra en "lo que hay que hacer":
+              // sus tareas vencen igual, pero no se pueden ejecutar hasta que la
+              // máquina vuelva. Mismo criterio con el que van en rosa y con el que
+              // el Dashboard las cuenta aparte.
+              if (onlyDue && (b.outOfService || severityOf(p) === "none")) return false;
               if (!q) return true;
               return `${b.name} ${p.title} ${p.taskCode}`.toLowerCase().includes(q);
             }),
@@ -253,6 +270,22 @@ export function MaintenanceSheetPage() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+  // Ancho de la barra de scroll del cuerpo: se le suma como padding a la tabla del
+  // encabezado para que las columnas de las dos queden alineadas. Depende del
+  // sistema (0 en macOS con barras superpuestas, ~15px en Windows) y cambia si la
+  // lista deja de necesitar scroll, así que se mide en vivo.
+  const bodyBoxRef = useRef<HTMLDivElement | null>(null);
+  const [scrollbarW, setScrollbarW] = useState(0);
+  useEffect(() => {
+    const el = bodyBoxRef.current;
+    if (!el) return;
+    const measure = () => setScrollbarW(el.offsetWidth - el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
   // Encabezado gris de la planilla de papel. Color sólido a propósito: es sticky,
   // y con un fondo translúcido las filas rojas se transparentan por debajo.
   const th = "px-2 py-1.5 text-[10px] font-bold text-[#1F3864] border border-border bg-[#D9E2E3] text-center";
@@ -263,6 +296,7 @@ export function MaintenanceSheetPage() {
 
   return (
     <div className="space-y-4">
+      <div className="pb-1">
       <PageHeader
         icon={ClipboardList}
         title={selectedVessel?.name ? `${t("msheet.title")} — ${selectedVessel.name}` : t("msheet.title")}
@@ -312,6 +346,7 @@ export function MaintenanceSheetPage() {
           {t("msheet.create")}
         </button>
       </PageHeader>
+      </div>
 
       {/* Barra de selección: qué se marcó y qué va a pasar al crear. */}
       {selectedPlans.length > 0 && (
@@ -358,23 +393,32 @@ export function MaintenanceSheetPage() {
           {t("msheet.empty")}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 z-10">
-              <tr>
-                {/* Ancha a propósito: cuando la tarea ya tiene una OT abierta,
-                    acá va el número de orden entero, no una casilla. */}
-                <th className={th + " w-28"}></th>
-                <th className={th + " w-10"}>{t("msheet.col.item")}</th>
-                <th className={th + " w-52"}>{t("msheet.col.description")}</th>
-                <th className={th}>{t("msheet.col.task")}</th>
-                <th className={th + " w-24"}>{t("msheet.col.every")}</th>
-                <th className={th + " w-32"}>{t("msheet.col.lastCheck")}</th>
-                <th className={th + " w-32"}>{t("msheet.col.nextDue")}</th>
-                <th className={th + " w-40"}>{t("msheet.col.provider")}</th>
-                <th className={th + " w-24"}>{t("msheet.col.outOfService")}</th>
-              </tr>
-            </thead>
+        <div className="rounded-xl border border-border bg-surface overflow-hidden">
+          {/* Encabezado: tabla aparte, fuera del scroll. El padding derecho reserva
+              el ancho de la barra del cuerpo para que las columnas coincidan. */}
+          <div style={{ paddingRight: scrollbarW }}>
+            <table className="w-full table-fixed border-collapse">
+              <SheetCols />
+              <thead>
+                <tr>
+                  {/* Ancha a propósito: cuando la tarea ya tiene una OT abierta,
+                      acá va el número de orden entero, no una casilla. */}
+                  <th className={th}></th>
+                  <th className={th}>{t("msheet.col.item")}</th>
+                  <th className={th}>{t("msheet.col.description")}</th>
+                  <th className={th}>{t("msheet.col.task")}</th>
+                  <th className={th}>{t("msheet.col.every")}</th>
+                  <th className={th}>{t("msheet.col.lastCheck")}</th>
+                  <th className={th}>{t("msheet.col.nextDue")}</th>
+                  <th className={th}>{t("msheet.col.provider")}</th>
+                  <th className={th}>{t("msheet.col.outOfService")}</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+          <div ref={bodyBoxRef} className="overflow-auto max-h-[calc(100vh-16rem)]">
+          <table className="w-full table-fixed border-collapse">
+            <SheetCols />
             <tbody>
               {visible.map(g => (
                 <React.Fragment key={g.group}>
@@ -513,6 +557,7 @@ export function MaintenanceSheetPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
