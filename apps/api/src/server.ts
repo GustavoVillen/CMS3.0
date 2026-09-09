@@ -117,6 +117,26 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return;
   }
 
+  // ── B-01: navegaciones del navegador a /platform/* → la app, no la API ──────
+  // La consola de plataforma tiene rutas SPA (/platform/tenants, /platform/users,
+  // /platform/usage, /platform/prompts, /platform/user-activity,
+  // /platform/copilot-questions) con el mismo nombre que endpoints de la API.
+  // Sin esta regla el router de plataforma contesta primero y un F5 o una URL
+  // pegada devuelve JSON (401/404) en vez de la pantalla. El proxy de Vite ya
+  // hacia esto en desarrollo (bypass apiOnly); produccion no lo tenia.
+  //
+  // El discriminador es la cabecera Accept: una navegacion del navegador manda
+  // text/html, un fetch nunca. Verificado que ningun /platform/* se abre como
+  // link o descarga directa (usage.xlsx baja por fetch + blob).
+  if (
+    method === "GET" &&
+    url.pathname.startsWith("/platform") &&
+    (request.headers.accept ?? "").includes("text/html")
+  ) {
+    await serveWebModernSpa(response);
+    return;
+  }
+
   // ── Sub-router dispatch ─────────────────────────────────────────────────────
   try {
     // Antes de tocar cualquier ruta: si el request trae una sesion de tenant,
