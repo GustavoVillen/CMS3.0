@@ -69,6 +69,7 @@ import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-servic
 import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments, registerAttachmentRecord, softDeleteTenantAttachment } from "./attachments/attachments-service";
 import { saveAttachment } from "./attachments/attachment-uploads-service";
+import { claimUploadedFile } from "./files/file-access-service";
 import { listTenantCapas } from "./capa/capa-service";
 import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate, renewTenantCertificate } from "./certificates/certificates-service";
 import { saveCertificateSourceFile } from "./certificates/cert-uploads-service";
@@ -634,6 +635,10 @@ export async function handleTenantRoutes(
     const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const result = await saveCertificateSourceFile(session.tenantSlug, originalName, buffer);
+    // El archivo todavia no cuelga de ningun registro: se anota que lo subio
+    // este usuario para que pueda previsualizarlo antes de guardar (ver
+    // file-access-service.ts).
+    claimUploadedFile(session.tenantSlug, session.user.id, result.url);
     sendJson(response, 200, result);
     return true;
   }
@@ -921,6 +926,10 @@ export async function handleTenantRoutes(
     const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const result = await saveAttachment(session.tenantSlug, entityType, originalName, buffer);
+    // El archivo todavia no cuelga de ningun registro: se anota que lo subio
+    // este usuario para que pueda previsualizarlo antes de guardar (ver
+    // file-access-service.ts).
+    claimUploadedFile(session.tenantSlug, session.user.id, result.url);
     // Si el caller dio entityType + entityId, registramos también en tabla Attachment
     // para que después se puedan listar / borrar. Best-effort: si falla, el archivo
     // sigue accesible vía URL pero no aparecerá en /app/attachments.
@@ -1227,6 +1236,10 @@ export async function handleTenantRoutes(
     const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
+    // El archivo todavia no cuelga de ningun registro: se anota que lo subio
+    // este usuario para que pueda previsualizarlo antes de guardar (ver
+    // file-access-service.ts).
+    claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
     sendJson(response, 201, { url: saved.url, name: saved.name, mime: saved.mime });
     return true;
   }
@@ -1243,6 +1256,10 @@ export async function handleTenantRoutes(
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     // Save the file first so the URL is available for later
     const saved = await saveFluidReportFile(session.tenantSlug, originalName, buffer);
+    // El archivo todavia no cuelga de ningun registro: se anota que lo subio
+    // este usuario para que pueda previsualizarlo antes de guardar (ver
+    // file-access-service.ts).
+    claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
     const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode, referenceDate, sampleNumber });
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
     return true;

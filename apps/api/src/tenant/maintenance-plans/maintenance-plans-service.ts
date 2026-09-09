@@ -1857,6 +1857,17 @@ export async function completeChecklistPlan(
 }
 
 /**
+ * Tope de planes por previsualización.
+ *
+ * NO es una regla de negocio: la apertura de la OT no limita cuántos ítems del
+ * PDM se combinan, y una OT de varada puede llevar muchos. Es sólo un techo
+ * para que una petición con una lista desmedida no barra la tabla. Se eligió
+ * bien por encima de cualquier caso real: si alguna vez se alcanza, es que hay
+ * que revisar el flujo, no subir el número a ciegas.
+ */
+export const MERGED_TEXT_MAX_PLANS = 200;
+
+/**
  * Los textos que heredaría una OT abierta sobre estos planes, ya combinados.
  *
  * Existe para que el formulario de "Nueva OT" muestre EXACTAMENTE lo que va a
@@ -1866,10 +1877,56 @@ export async function completeChecklistPlan(
  * separarían sin que nadie se entere.
  */
 export async function previewMergedPlanText(session: TenantAccessSession, planIds: string[]) {
-  // En paralelo (cada get aplica scope tenant/vessel y 404 si no es visible).
-  const fetched = await Promise.all(planIds.map((id) => getTenantMaintenancePlan(session, id)));
+  // DB-001 (auditoría 2026-09-09): esto llamaba a getTenantMaintenancePlan por
+  // cada id. Cada llamada resolvía el tenant otra vez, buscaba el plan, cargaba
+  // sus últimos cinco partes de trabajo y consultaba proveedores: del orden de
+  // 3N-4N consultas para N planes. Ponerlas en paralelo no bajaba la cantidad,
+  // sólo las mandaba todas juntas contra el pool. La previsualización no usa
+  // nada de eso: son nueve campos de texto más el proveedor.
+  //
+  // Ahora: una sola consulta por lote, con los campos que se usan y nada más.
+  // Se conserva el ORDEN pedido (define cómo se combinan los textos) y se
+  // conserva el 404: si un id no existe, es de otra empresa o de un buque que
+  // el usuario no tiene, la previsualización falla entera. NO se devuelve un
+  // resultado parcial: mostraría menos texto del que va a quedar guardado, que
+  // es justo lo que esta función existe para evitar.
+  const ids = [...new Set(planIds.map((v) => String(v ?? "").trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    throw new RouteError(400, "VALIDATION_ERROR", "Se requiere al menos un plan.");
+  }
+  if (ids.length > MERGED_TEXT_MAX_PLANS) {
+    throw new RouteError(
+      400,
+      "TOO_MANY_PLANS",
+      `No se pueden previsualizar más de ${MERGED_TEXT_MAX_PLANS} ítems del PDM a la vez.`,
+    );
+  }
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const prisma = maintenanceClient(prismaRaw);
+
+  const tenantId = await getTenantIdOrThrow(session);
+  const where: Record<string, unknown> = { id: { in: ids }, tenantId, deletedAt: null };
+  applyVesselScope(session, where);  // mismo scope que getTenantMaintenancePlan
+
+  const rows = await prisma.maintenancePlan.findMany({
+    where,
+    select: {
+      id: true, tenantId: true, taskCode: true, title: true, description: true,
+      acceptanceCriteria: true, loto: true, riskLevel: true, riskAnalysisResult: true,
+      consequenceCategory: true, consequenceRationale: true,
+      department: true, providerRequests: true, providerId: true,
+    },
+  } as never) as unknown as (PlanTextSource & { id: string })[];
+
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const faltante = ids.find((id) => !byId.has(id));
+  if (faltante) throw new RouteError(404, "NOT_FOUND", "Maintenance plan no encontrado.");
+
+  const fetched = ids.map((id) => byId.get(id)!);
   const plans: PlanTextSource[] = fetched.map((p) => p as unknown as PlanTextSource);
-  const raw: MaintenancePlanRecord[] = fetched.map((p) => p as MaintenancePlanRecord);
+  const raw: MaintenancePlanRecord[] = fetched.map((p) => p as unknown as MaintenancePlanRecord);
 
   // Talleres a los que va este trabajo, uno por proveedor (misma agrupación que
   // usa la apertura de la OT: una SS por taller). Sirve para que el formulario
@@ -1890,14 +1947,11 @@ export async function previewMergedPlanText(session: TenantAccessSession, planId
   let providers: Array<{ id: string; name: string; purposes: string[]; taskCodes: string[] }> = [];
   const providerIds = [...byProvider.keys()];
   if (providerIds.length > 0) {
-    const prismaRaw = getPrismaClient();
-    const rows = prismaRaw
-      ? await (prismaRaw as any).provider.findMany({
-          where: { id: { in: providerIds }, tenantId: raw[0]!.tenantId },
-          select: { id: true, name: true },
-        })
-      : [];
-    const nameById = new Map<string, string>(rows.map((r: any) => [r.id, r.name]));
+    const providerRows = await (prismaRaw as any).provider.findMany({
+      where: { id: { in: providerIds }, tenantId },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map<string, string>(providerRows.map((r: any) => [r.id, r.name]));
     providers = providerIds.map((id) => ({
       id,
       name: nameById.get(id) ?? id,

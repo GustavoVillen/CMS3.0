@@ -18,6 +18,9 @@ import { RouteError } from "../../http/route-error";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { serializeFileUrl } from "../files/files-router";
+import { claimUploadedFile } from "../files/file-access-service";
+import { withUniqueRetry } from "../../common/unique-retry";
+import { takeAdvisoryXactLock } from "../../common/advisory-lock";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import { saveGoodsReceiptFile } from "./goods-receipt-uploads-service";
 import { extractGoodsReceipt } from "./goods-receipt-ai-extractor";
@@ -195,6 +198,9 @@ export async function scanGoodsReceipt(
   const tenantId = await getTenantIdOrThrow(session);
 
   const saved = await saveGoodsReceiptFile(session.tenantSlug, input.originalName, input.buffer);
+  // El remito se guarda recien al confirmar: hasta entonces solo lo ve quien
+  // lo escaneo (ver file-access-service.ts).
+  claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
   const extracted = await extractGoodsReceipt(session, { buffer: input.buffer, mime: saved.mime, vesselCode });
 
   const catalog = await loadVesselCatalog(prisma, tenantId, vesselCode);
@@ -509,11 +515,22 @@ export async function commitGoodsReceipt(
     merged.push(r);
   }
 
-  const receiptCode = await generateReceiptCode(prisma, tenantId, vesselCode);
   const userId = session.user.id;
-  const now = Date.now();
 
-  const result = await prisma.$transaction(async (tx) => {
+  // AUDITORIA 2026-09-09 — el codigo se calculaba ANTES de abrir la
+  // transaccion: dos recepciones simultaneas del mismo buque leian el mismo
+  // maximo, elegian el mismo RCP-... y la segunda moria contra el indice
+  // unico (tenantId, receiptCode), perdiendo el remito entero.
+  //
+  // Ahora el codigo se asigna DENTRO de la transaccion, detras de un advisory
+  // lock por (tenant, buque, año) que serializa a los que compiten, y el
+  // conjunto va envuelto en withUniqueRetry como el resto del proyecto.
+  // Cabecera, repuestos nuevos y movimientos siguen en la MISMA transaccion:
+  // si el reintento hace falta, lo anterior ya se deshizo y el stock no se
+  // duplica (nunca queda medio remito escrito).
+  const result = await withUniqueRetry((attempt) => prisma.$transaction(async (tx) => {
+    const now = Date.now();
+    const receiptCode = await nextReceiptCode(tx, tenantId, vesselCode, attempt);
     const receipt = await tx.goodsReceipt.create({
       data: {
         tenantId,
@@ -600,7 +617,7 @@ export async function commitGoodsReceipt(
     }
 
     return { id: receipt.id, receiptCode: receipt.receiptCode, lines: out };
-  });
+  }));
 
   void publishAudit(prisma, {
     tenantId,
@@ -621,24 +638,60 @@ export async function commitGoodsReceipt(
   return result;
 }
 
-async function generateReceiptCode(
-  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+/**
+ * Siguiente codigo de remito del buque, calculado DENTRO de la transaccion.
+ *
+ * Se numera por el MAXIMO del secuencial ya usado y no por COUNT: con remitos
+ * anulados o cargados con fecha vieja el conteo no coincide con el maximo real
+ * y se repetian codigos (mismo criterio que las OT, ver work-orders-service).
+ *
+ * @param attempt  intento de withUniqueRetry: corre el secuencial si, aun con
+ *                 el lock, otra transaccion se adelanto (motor sin advisory
+ *                 locks, por ejemplo).
+ */
+export async function nextReceiptCode(
+  tx: unknown,
   tenantId: string,
   vesselCode: string,
+  attempt: number,
 ): Promise<string> {
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
-  const count = await prisma.goodsReceipt.count({
-    where: { tenantId, vesselCode, createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
-  });
-  // Colisión posible si dos recepciones entran en el mismo instante: se busca
-  // el primer código libre en vez de fallar.
-  for (let n = count + 1; n < count + 50; n++) {
-    const code = `RCP-${vesselCode}-${yy}-${String(n).padStart(4, "0")}`;
-    const taken = await prisma.goodsReceipt.findFirst({ where: { tenantId, receiptCode: code }, select: { id: true } });
-    if (!taken) return code;
+  const prefix = `RCP-${vesselCode}-${yy}-`;
+
+  const raw = tx as {
+    $executeRawUnsafe?: (query: string, ...params: unknown[]) => Promise<unknown>;
+    $queryRawUnsafe?: (query: string, ...params: unknown[]) => Promise<unknown>;
+    goodsReceipt: { count(args: { where: Record<string, unknown> }): Promise<number> };
+  };
+
+  // Serializa a las recepciones del mismo buque y año mientras dure la
+  // transaccion: las demas esperan aca en vez de elegir el mismo codigo.
+  await takeAdvisoryXactLock(raw, `goods-receipt|${tenantId}|${vesselCode}|${year}`);
+
+  let maxSeq = 0;
+  if (raw.$queryRawUnsafe) {
+    // El filtro por regex descarta colas no numericas o desmedidas (el codigo
+    // de emergencia viejo usaba Date.now(), 13 digitos, y el CAST reventaba).
+    const from = prefix.length + 1;
+    const rows = (await raw.$queryRawUnsafe(
+      `SELECT MAX(CAST(SUBSTRING("receiptCode", ${from}) AS BIGINT)) AS max_seq
+         FROM "GoodsReceipt"
+        WHERE "tenantId" = $1 AND "vesselCode" = $2
+          AND "receiptCode" LIKE $3
+          AND SUBSTRING("receiptCode", ${from}) ~ $4::text`,
+      tenantId,
+      vesselCode,
+      prefix + "%",
+      "^[0-9]{1,9}$",
+    )) as { max_seq: number | bigint | null }[];
+    maxSeq = Number(rows?.[0]?.max_seq ?? 0) || 0;
+  } else {
+    // Sin SQL crudo (dev/tests): el conteo alcanza, el retry cubre el resto.
+    maxSeq = await raw.goodsReceipt.count({ where: { tenantId, vesselCode } });
   }
-  return `RCP-${vesselCode}-${yy}-${Date.now()}`;
+
+  return `${prefix}${String(maxSeq + 1 + attempt).padStart(4, "0")}`;
 }
 
 // ── Listado ──────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
+import { hashToInt32 } from "../../common/advisory-lock";
 
 export interface CapaListFilters {
   vesselCode?: string | null;
@@ -553,19 +554,8 @@ type CapaCreatorPrisma = {
   $queryRawUnsafe?: (query: string, ...params: unknown[]) => Promise<unknown>;
 };
 
-/**
- * Hash determinístico de un string a un int32 (rango aceptable para
- * pg_advisory_xact_lock). FNV-1a: distribución decente y rápido.
- */
-function hashToInt32(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
-  }
-  // Postgres pg_advisory_xact_lock(int) acepta int32 signed.
-  return h | 0;
-}
+// hashToInt32 vive en common/advisory-lock.ts: lo comparte con la generacion
+// de codigos de remito (goods-receipts-service).
 
 export interface CapaInternalInput {
   tenantId: string;

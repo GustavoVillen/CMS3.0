@@ -1,0 +1,13 @@
+{
+  // Los tests viven fuera de `src` para que no entren en el build de Vite.
+  // Este proyecto los typechequea aparte (mismo criterio que apps/api).
+  //
+  // `types` suma "node" a los de la app: si se reemplazan, `import.meta.env` y
+  // los imports de CSS/imágenes de Vite dejan de tener tipos y falla todo src.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", "tests"]
+}

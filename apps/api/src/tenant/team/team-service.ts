@@ -10,6 +10,8 @@ import {
   createDevInvitation,
 } from "../../platform/data/dev-invitation-store";
 import type { DevTenantUserRecord } from "../../platform/data/dev-tenant-user-store";
+import { assertSoleTenantIdentity } from "./user-identity-scope";
+import { revokeUserTenantCredentials } from "../auth/tenant-auth-service";
 
 const VALID_ROLES = [
   "TENANT_ADMIN",
@@ -220,6 +222,10 @@ export async function updateMemberProfile(
 
   let touched = 0;
   if (Object.keys(data).length > 0) {
+    // formName y signatureUrl viven en User: son la identidad con la que esa
+    // persona firma en TODAS sus empresas. Los campos de la membership
+    // (cargo, matricula, buques, rol) no pasan por este gate: son por empresa.
+    await assertSoleTenantIdentity(prisma, tenantId, userId);
     const result = await prisma.user.updateMany({
       where: { id: userId, memberships: { some: { tenantId } } },
       data,
@@ -412,6 +418,11 @@ export async function deleteMember(session: TenantAccessSession, userId: string)
 
   await (prisma as any).tenantMembership.delete({ where: { id: membership.id } });
 
+  // La baja tiene que valer YA: enforceLiveTenantSession corta el access token
+  // en el request siguiente (relee la membership), y aca ademas se revocan los
+  // refresh tokens para que no pueda renovar desde ninguna instancia.
+  await revokeUserTenantCredentials(session.tenantSlug, userId);
+
   // Si el User no tiene otras memberships activas, liberar su legacyUserId/email
   // para que un admin pueda recrear con el mismo USER. Preservamos el User para
   // mantener referencias históricas en audit logs.
@@ -562,25 +573,31 @@ export async function createDirectMember(session: TenantAccessSession, input: Cr
     const existingMembership = await (prisma as any).tenantMembership.findFirst({
       where: { tenantId, userId: existingByUsername.id },
     });
-    if (existingMembership?.status === "ACTIVE") {
+
+    // AUDITORIA 2026-09-09 — antes, si el User global existia pero NO tenia
+    // membership aca, se le creaba una y se reusaba la cuenta. Como legacyUserId
+    // se deriva del nombre (adivinable), el admin de una empresa podia sumar la
+    // cuenta de alguien de otra y despues cambiarle la clave global. Ahora esa
+    // rama se rechaza: el username global esta tomado y punto. Sumar a alguien
+    // que ya trabaja en otra empresa se hace por invitacion, que la acepta esa
+    // persona con su propia clave.
+    if (!existingMembership) {
+      throw new RouteError(
+        409,
+        "USERNAME_TAKEN",
+        `El usuario "${cleanUsername}" ya existe y no pertenece a esta empresa. Usa otro nombre de usuario, o invita a esa persona por email para que acepte sumarse.`,
+      );
+    }
+
+    if (existingMembership.status === "ACTIVE") {
       throw new RouteError(409, "ALREADY_MEMBER", `"${cleanUsername}" ya es miembro activo de este tenant.`);
     }
-    if (existingMembership?.status === "REVOKED" || existingMembership?.status === "SUSPENDED") {
-      await (prisma as any).tenantMembership.update({
-        where: { id: existingMembership.id },
-        data: { role: input.role, status: "ACTIVE" },
-      });
-    } else if (!existingMembership) {
-      await (prisma as any).tenantMembership.create({
-        data: { tenantId, userId: existingByUsername.id, role: input.role, status: "ACTIVE", joinedAt: new Date() },
-      });
-    } else {
-      // Estado INVITED u otro — promovemos a ACTIVE.
-      await (prisma as any).tenantMembership.update({
-        where: { id: existingMembership.id },
-        data: { role: input.role, status: "ACTIVE" },
-      });
-    }
+
+    // REVOKED / SUSPENDED / INVITED -> reingreso: se reactiva SU membership.
+    await (prisma as any).tenantMembership.update({
+      where: { id: existingMembership.id },
+      data: { role: input.role, status: "ACTIVE" },
+    });
     user = existingByUsername;
   } else {
     // User nuevo: crear globalmente + membership.
@@ -715,6 +732,12 @@ export async function setMemberPassword(session: TenantAccessSession, userId: st
   const { hashPassword } = await import("../../platform/auth/passwords");
   const tenantId = await getTenantId(prisma, session.tenantSlug);
 
+  // La contrasena vive en User y vale para TODAS las empresas de esa persona:
+  // solo se puede cambiar si pertenece exclusivamente a esta. Sin este gate, un
+  // admin podia sumar a su empresa una cuenta ajena y cambiarle la clave global
+  // para entrar a la otra empresa (auditoria 2026-09-09, ver user-identity-scope.ts).
+  await assertSoleTenantIdentity(prisma, tenantId, userId);
+
   // updateMany scoped via membership: only updates if the user has a membership
   // in this tenant. Prevents an admin from another tenant from changing the
   // password of a user that doesn't belong to them.
@@ -728,6 +751,11 @@ export async function setMemberPassword(session: TenantAccessSession, userId: st
   if (result.count === 0) {
     throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
   }
+
+  // Con la clave vieja ya no se entra, pero los tokens emitidos con ella
+  // seguian sirviendo. Se cortan: refresh tokens revocados en la base (vale
+  // para todas las instancias) y sesiones vivas fuera del Map de este proceso.
+  await revokeUserTenantCredentials(session.tenantSlug, userId);
 
   await publishAudit(prisma, {
     tenantId,
@@ -772,6 +800,10 @@ export async function updateMemberEmail(session: TenantAccessSession, userId: st
 
   // updateMany scopeado por membership: solo actualiza si el user pertenece a
   // este tenant — un admin de otro tenant no puede cambiar el email de un user ajeno.
+  // El email es global de User: cambiarlo afecta a todas las empresas de esa
+  // persona y es por donde llegan invitaciones y avisos. Mismo gate que la clave.
+  await assertSoleTenantIdentity(prisma, tenantId, userId);
+
   const result = await prisma.user.updateMany({
     where: { id: userId, memberships: { some: { tenantId } } },
     data: { email },

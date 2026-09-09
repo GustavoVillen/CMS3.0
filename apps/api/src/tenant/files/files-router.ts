@@ -4,6 +4,11 @@
 // con la sesión — así un user de tenant A no puede leer files de tenant B
 // aunque conozca el filename completo.
 //
+// AUDITORÍA 2026-09-09: el tenant NO alcanzaba. Dentro de la misma empresa,
+// cualquiera con la URL se bajaba documentos de buques que no tiene asignados.
+// Cada ruta pasa ahora por `assertFileAccess` (file-access-service.ts), que busca
+// el registro dueño del archivo y le aplica el alcance por buque.
+//
 // Las URLs en DB siguen con prefijo `/uploads/...`. El backend traduce a
 // `/app/files/...` en serializeFileUrl() al devolver al cliente — sin
 // migración de datos.
@@ -24,6 +29,7 @@ import { serveWorkOrderScanUpload } from "../work-orders/work-order-scan-uploads
 import { serveGoodsReceiptUpload } from "../spares/goods-receipt-uploads-service";
 import { serveAttachment } from "../attachments/attachment-uploads-service";
 import { sendJson } from "../../http/json-response";
+import { assertFileAccess } from "./file-access-service";
 
 /**
  * Traduce un path con prefijo legacy `/uploads/...` al equivalente
@@ -71,6 +77,7 @@ export async function handleFilesRoutes(
   if (certMatch) {
     const [, pathSlug, filename] = certMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    await assertFileAccess(session, "certificates", url.pathname);
     return serveCertificateUpload(response, tenantSlug, filename!) || notFound(response);
   }
 
@@ -79,6 +86,7 @@ export async function handleFilesRoutes(
   if (checklistMatch) {
     const [, pathSlug, filename] = checklistMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    await assertFileAccess(session, "checklists", url.pathname);
     return serveChecklistUpload(response, tenantSlug, filename!) || notFound(response);
   }
 
@@ -87,6 +95,7 @@ export async function handleFilesRoutes(
   if (fluidMatch) {
     const [, pathSlug, filename] = fluidMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    await assertFileAccess(session, "fluid-reports", url.pathname);
     return serveFluidReportUpload(response, tenantSlug, filename!) || notFound(response);
   }
 
@@ -95,6 +104,7 @@ export async function handleFilesRoutes(
   if (woScanMatch) {
     const [, pathSlug, filename] = woScanMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    await assertFileAccess(session, "wo-scans", url.pathname);
     return serveWorkOrderScanUpload(response, tenantSlug, filename!) || notFound(response);
   }
 
@@ -103,6 +113,7 @@ export async function handleFilesRoutes(
   if (receiptMatch) {
     const [, pathSlug, filename] = receiptMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    await assertFileAccess(session, "goods-receipts", url.pathname);
     return serveGoodsReceiptUpload(response, tenantSlug, filename!) || notFound(response);
   }
 
@@ -111,6 +122,7 @@ export async function handleFilesRoutes(
   if (attMatch) {
     const [, pathSlug, entityType, filename] = attMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
+    await assertFileAccess(session, "attachments", url.pathname);
     return serveAttachment(response, tenantSlug, entityType!, filename!) || notFound(response);
   }
 

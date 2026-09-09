@@ -70,6 +70,21 @@ async function refreshTenantToken(): Promise<string | null> {
     const refreshToken = localStorage.getItem("gpms_refresh_token");
     const slug = localStorage.getItem("gpms_tenant_slug");
     if (!refreshToken || !slug) return null;
+
+    /**
+     * ¿Sigue siendo la misma sesión que arrancó este refresh?
+     *
+     * BUG-005: si el usuario cierra sesión (o entra otro) mientras el refresh
+     * viaja, al volver escribía `gpms_token` y `gpms_auth` en localStorage y
+     * resucitaba la sesión anterior encima de la nueva. Se compara contra el
+     * refresh token con el que se salió: el logout limpia localStorage, así
+     * que después del cierre esto da false y no se escribe nada.
+     */
+    const mismaSesion = () => {
+      try { return localStorage.getItem("gpms_refresh_token") === refreshToken; }
+      catch { return false; }
+    };
+
     try {
       const res = await fetch(`${BASE}/app/auth/refresh`, {
         method: "POST",
@@ -81,6 +96,7 @@ async function refreshTenantToken(): Promise<string | null> {
       const newAccess  = data.session?.accessToken;
       const newRefresh = data.session?.refreshToken;
       if (!newAccess) return null;
+      if (!mismaSesion()) return null; // se cerró sesión mientras tanto
       localStorage.setItem("gpms_token", newAccess);
       localStorage.setItem("gpms_refresh_token", newRefresh);
       try {

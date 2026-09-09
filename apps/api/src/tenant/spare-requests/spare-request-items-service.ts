@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { assertVesselAccess, assertSpareLinkable } from "./spare-request-scope";
 
 export interface AddRequestItemInput {
   spareId?: string | null;
@@ -30,6 +31,11 @@ async function assertRequestAccess(session: TenantAccessSession, spareRequestId:
     where: { id: spareRequestId, tenantId: tenant.id, deletedAt: null },
   });
   if (!req) throw new RouteError(404, "NOT_FOUND", "Solicitud no encontrada.");
+  // BUG-003: hasta la auditoría 2026-09-09 esto validaba la EMPRESA y nada más.
+  // Con el id de una solicitud de otro buque de la misma empresa se podían
+  // listar, agregar, editar, borrar y entregar sus ítems. Misma regla que ya
+  // aplicaba la pantalla de Solicitudes.
+  assertVesselAccess(session, req.requestedForVesselCode);
   return req;
 }
 
@@ -72,10 +78,16 @@ export async function addRequestItem(session: TenantAccessSession, spareRequestI
   const unit = String(payload.unit ?? "").trim();
   if (!unit) throw new RouteError(400, "VALIDATION_ERROR", "La unidad es requerida.");
 
+  // BUG-001: el spareId venía del cliente y se guardaba sin mirar de quién era.
+  // Con el id de un repuesto de otra empresa o de otro buque, la reserva y el
+  // consumo posteriores movían stock ajeno.
+  const spareId = payload.spareId ?? null;
+  if (spareId) await assertSpareLinkable(prisma, session, req, spareId);
+
   return prisma.spareRequestItem.create({
     data: {
       spareRequestId: req.id,
-      spareId: payload.spareId ?? null,
+      spareId,
       description,
       quantity,
       unit,
@@ -103,7 +115,13 @@ export async function updateRequestItem(
   if (!item) throw new RouteError(404, "NOT_FOUND", "Ítem no encontrado.");
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
-  if (payload.spareId !== undefined)    data.spareId = payload.spareId ?? null;
+  if (payload.spareId !== undefined) {
+    // Mismo control que en el alta (BUG-001): re-apuntar el ítem a un repuesto
+    // ajeno era la vía más directa, porque saltea la validación del alta.
+    const nextSpareId = payload.spareId ?? null;
+    if (nextSpareId) await assertSpareLinkable(prisma, session, req, nextSpareId);
+    data.spareId = nextSpareId;
+  }
   if (payload.description !== undefined) {
     const desc = String(payload.description).trim();
     if (!desc) throw new RouteError(400, "VALIDATION_ERROR", "La descripción es requerida.");
@@ -166,8 +184,39 @@ export async function fulfillItem(
     return dt;
   }
 
+  // Un ítem enlazado a un repuesto de OTRA empresa no mueve stock. No repara
+  // el vínculo (eso es una decisión de datos, no de código): lo rechaza. Sólo
+  // puede existir en filas anteriores al control de alta (BUG-001), porque el
+  // `include: { spare: true }` sigue la clave foránea sin filtrar por empresa.
+  if (item.spare && item.spare.tenantId !== tenant.id) {
+    throw new RouteError(
+      409,
+      "SPARE_OTHER_TENANT",
+      "El ítem está enlazado a un repuesto de otra empresa. Corregí el vínculo antes de registrar la entrega.",
+    );
+  }
+
   await prisma.$transaction(async (tx) => {
-    // Stock movement ISSUE if item has a linked spare
+    // CONC-001 (mismo patrón en fulfillItem): el `status === "FULFILLED"` de
+    // arriba se leyó FUERA de la transacción. Dos entregas simultáneas pasaban
+    // las dos ese control y creaban DOS movimientos de stock por el mismo ítem.
+    // Acá el estado se toma de forma atómica: el `updateMany` con la condición
+    // en el where sólo puede ganarlo uno; el que pierde cuenta 0 y aborta.
+    const claimed = await tx.spareRequestItem.updateMany({
+      where: { id: item.id, spareRequestId: req.id, status: { not: "FULFILLED" } },
+      data: {
+        status: "FULFILLED",
+        quantityFulfilled: item.quantity,
+        receivedAt: payload.receivedAt ? parseLocalDate(payload.receivedAt) : new Date(),
+        receiptNotes: payload.receiptNotes?.trim() || null,
+        updatedByUserId: session.user.id,
+      },
+    });
+    if (claimed.count === 0) {
+      throw new RouteError(409, "ALREADY_FULFILLED", "El ítem ya fue entregado.");
+    }
+
+    // Recién con la entrega tomada se registra el movimiento de stock.
     if (item.spareId && item.spare) {
       const movementCode = `RCP-${item.spare.vesselCode}-${Date.now()}`;
       await tx.stockMovement.create({
@@ -187,18 +236,6 @@ export async function fulfillItem(
         },
       });
     }
-
-    // Mark item fulfilled
-    await tx.spareRequestItem.update({
-      where: { id: item.id },
-      data: {
-        status: "FULFILLED",
-        quantityFulfilled: item.quantity,
-        receivedAt: payload.receivedAt ? parseLocalDate(payload.receivedAt) : new Date(),
-        receiptNotes: payload.receiptNotes?.trim() || null,
-        updatedByUserId: session.user.id,
-      },
-    });
 
     // Sync request status
     const allItems = await tx.spareRequestItem.findMany({ where: { spareRequestId: req.id } });

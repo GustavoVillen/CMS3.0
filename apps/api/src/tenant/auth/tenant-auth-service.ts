@@ -10,6 +10,8 @@ import { TENANT_AUTH_POLICY } from "./auth-policies";
 import { publishAudit, publishSystemAudit } from "../../platform/audit/audit-publisher";
 import { redactEmail } from "../../common/pii";
 import { assertNotLocked, recordLoginFailure, clearLoginFailures } from "../../http/login-lockout";
+import { loadLiveMembership } from "./live-session-guard";
+import { revokeTenantSessionsForUser } from "./session-store";
 
 import { isDevelopmentMode } from "../../common/runtime-mode";
 
@@ -280,6 +282,24 @@ export async function refreshTenantSession(
       throw new RouteError(401, "AUTH_REFRESH_INVALID", "Refresh token is invalid or expired.");
     }
 
+    // AUDITORIA 2026-09-09 - la renovacion no puede devolver accesos revocados.
+    // Antes rotaba el token sin mirar nada mas: alguien dado de baja, suspendido
+    // o con el usuario global deshabilitado seguia renovando indefinidamente.
+    // Ahora se revalida la membership y, si ya no puede operar, se revoca ESE
+    // refresh token (no solo se rechaza) para que la cadena termine aca.
+    const live = await loadLiveMembership(tenantSlug, existing.userId);
+    if (!live) {
+      await prisma.refreshToken.update({
+        where: { id: existing.id },
+        data: { revokedAt: new Date() },
+      });
+      throw new RouteError(
+        401,
+        "AUTH_SESSION_REVOKED",
+        "Tu acceso a esta empresa fue dado de baja o suspendido. Volve a iniciar sesion.",
+      );
+    }
+
     const tokens = issueOpaqueSessionTokens();
 
     await prisma.$transaction([
@@ -357,4 +377,56 @@ export async function logoutTenantSession(
 
 export function getTenantAuthPolicy() {
   return TENANT_AUTH_POLICY;
+}
+
+/**
+ * Corta el acceso de un usuario a un tenant AHORA: revoca todos sus refresh
+ * tokens en la base (efecto en todas las instancias — sin refresh no hay
+ * renovación) y borra sus sesiones vivas del Map de este proceso.
+ *
+ * Se llama al cambiarle la contraseña o al darlo de baja del equipo.
+ *
+ * @param exceptRefreshToken  refresh token en claro que NO hay que revocar.
+ * @param exceptAccessToken   access token que NO hay que sacar del Map.
+ *        Los usa el cambio de contraseña hecho por el propio usuario: cierra
+ *        las demás sesiones sin echarse a sí mismo de la que está usando.
+ * @returns cuántos refresh tokens quedaron revocados.
+ *
+ * LÍMITE: un access token ya emitido en OTRA instancia sigue sirviendo hasta
+ * vencer (15 min como máximo), porque el registro de access tokens es por
+ * proceso. La baja y la suspensión sí cortan de inmediato en todas las
+ * instancias, porque las detecta `enforceLiveTenantSession` contra la base.
+ */
+export async function revokeUserTenantCredentials(
+  tenantSlug: string,
+  userId: string,
+  exceptRefreshToken?: string | null,
+  exceptAccessToken?: string | null,
+): Promise<number> {
+  revokeTenantSessionsForUser(tenantSlug, userId, exceptAccessToken);
+
+  const prisma = getPrismaClient();
+  if (!prisma) return 0;
+
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug }, select: { id: true } });
+    if (!tenant) return 0;
+
+    const keepHash = exceptRefreshToken ? hashOpaqueToken(exceptRefreshToken) : null;
+
+    const result = await prisma.refreshToken.updateMany({
+      where: {
+        tenantId: tenant.id,
+        userId,
+        revokedAt: null,
+        ...(keepHash ? { refreshTokenHash: { not: keepHash } } : {}),
+      },
+      data: { revokedAt: new Date() },
+    });
+    return result.count;
+  } catch {
+    // No bloquear la operación de negocio por un fallo al revocar: la
+    // revalidación por membership sigue siendo la barrera principal.
+    return 0;
+  }
 }

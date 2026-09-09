@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import { api, ApiError } from "./api";
 import { useVesselContext } from "./vessel-context";
-import { fetchCache, inFlight, FETCH_STALE_MS, fetchCacheKey } from "./fetch-cache";
+import {
+  inFlight, FETCH_STALE_MS, fetchCacheKey,
+  cacheGet, cacheSet, getSessionGeneration,
+} from "./fetch-cache";
 
 // Paths where vessel-code injection must be skipped (the vessel list itself,
 // auth endpoints, and any tenant-level resources that are not vessel-scoped).
@@ -64,7 +67,12 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
       return;
     }
     const key = fetchCacheKey(effectivePath);
-    const cached = fetchCache.get(key);
+    // Generación de la sesión al ARRANCAR la request: si mientras viaja se
+    // cierra sesión o entra otra persona, la respuesta no puede guardarse
+    // (BUG-005). El seqRef de abajo cubre lo otro: que una respuesta vieja de
+    // ESTA misma sesión no pise a una más nueva.
+    const generation = getSessionGeneration();
+    const cached = cacheGet(key);
     const showFromCache = !!cached && !force;
 
     if (showFromCache) {
@@ -82,7 +90,7 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
     let promise = force ? undefined : inFlight.get(key);
     if (!promise) {
       const p: Promise<unknown> = api.get<T>(effectivePath)
-        .then((res) => { fetchCache.set(key, { data: res, ts: Date.now() }); return res as unknown; })
+        .then((res) => { cacheSet(key, res, generation); return res as unknown; })
         .finally(() => { if (inFlight.get(key) === p) inFlight.delete(key); });
       promise = p;
       inFlight.set(key, p);
@@ -91,6 +99,8 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
     try {
       const res = await promise as T;
       if (seqRef.current !== seq) return;
+      // Cambió la sesión mientras esto viajaba: no se pinta en pantalla.
+      if (getSessionGeneration() !== generation) return;
       setData(res);
       setError(null);
     } catch (err) {

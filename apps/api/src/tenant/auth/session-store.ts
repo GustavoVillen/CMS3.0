@@ -111,3 +111,31 @@ export function revokeTenantAccessSession(accessToken: string): void {
 export function revokePlatformAccessSession(accessToken: string): void {
   platformSessions.delete(accessToken);
 }
+
+/**
+ * Da de baja TODAS las sesiones vivas de un usuario en un tenant (este proceso).
+ *
+ * Se usa cuando el cambio no lo puede detectar la revalidación por membership
+ * —el caso típico es un cambio de contraseña: la membership sigue igual, pero
+ * los tokens emitidos con la clave vieja no deberían seguir andando.
+ *
+ * LÍMITE CONOCIDO: el Map es de ESTE proceso. Con varias instancias, un access
+ * token emitido en otra sobrevive hasta vencer (15 min). Lo que sí corta en
+ * todas es la revocación de los refresh tokens en la base (ver
+ * `revokeAllRefreshTokensForUser`): sin refresh válido, la sesión no se renueva.
+ */
+export function revokeTenantSessionsForUser(
+  tenantSlug: string,
+  userId: string,
+  exceptAccessToken?: string | null,
+): number {
+  let revoked = 0;
+  for (const [token, s] of tenantSessions) {
+    if (s.tenantSlug !== tenantSlug) continue;
+    if (s.user.id !== userId) continue;
+    if (exceptAccessToken && token === exceptAccessToken) continue;
+    tenantSessions.delete(token);
+    revoked += 1;
+  }
+  return revoked;
+}

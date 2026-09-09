@@ -81,6 +81,7 @@ import {
 import { auditWorkOrderClose } from "../work-orders/work-order-close-audit";
 import { extractWorkOrderScan } from "../work-orders/work-orders-ai-extractor";
 import { saveWorkOrderScanFile } from "../work-orders/work-order-scan-uploads-service";
+import { claimUploadedFile } from "../files/file-access-service";
 import {
   suggestPlanAcceptanceCriteria,
   suggestPlanLoto,
@@ -449,6 +450,9 @@ export async function handleMaintenanceRoutes(
     const buffer = await readBinaryBody(request);
     if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
     const saved = await saveWorkOrderScanFile(session.tenantSlug, originalName, buffer);
+    // El escaneo NUNCA se guarda en una tabla: el claim es su unica via de
+    // acceso posterior, y solo lo puede leer quien lo subio.
+    claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
     const extracted = await extractWorkOrderScan(session, { buffer, mime: saved.mime, vesselCode });
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
     return true;

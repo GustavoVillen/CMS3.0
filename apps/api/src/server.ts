@@ -3,14 +3,15 @@
 import "./config/bootstrap-env";
 
 import { createServer } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { parseAppEnv } from "./config/env";
 import { sendHtml } from "./http/html-response";
 import { sendJson } from "./http/json-response";
 import { toErrorPayload } from "./http/route-error";
-import { getRequestUrl } from "./http/request-url";
+import { parseRequestUrl } from "./http/request-url";
 import { readBinaryBody } from "./http/read-binary-body";
 import { serveStaticFile, serveSpaHtml, serveWebModernAsset, serveWebModernSpa } from "./http/static-files";
-import { buildHealthcheckPayload } from "./health/health-route";
+import { buildHealthcheckPayload, buildReadinessResult } from "./health/health-route";
 import { buildHomePage } from "./platform/home/home-page";
 import { handlePublicBootstrapRequest } from "./tenant/bootstrap/public-bootstrap-route";
 import { generateInsightsForTenant } from "./tenant/ai-insights/insight-generator";
@@ -20,6 +21,9 @@ import { handlePmsRoutes } from "./tenant/pms/pms-router";
 import { handleFilesRoutes } from "./tenant/files/files-router";
 import { resetPrismaClient } from "./platform/data/prisma-client";
 import { evictExpiredSessions } from "./tenant/auth/session-store";
+import { enforceLiveTenantSession } from "./tenant/auth/live-session-guard";
+import { evictExpiredUploadClaims } from "./tenant/files/file-access-service";
+import { claimWeeklyReportRun } from "./tenant/reports/weekly-report-claim";
 import { evictExpiredRateLimitBuckets } from "./http/rate-limiter";
 import { evictExpiredLockouts } from "./http/login-lockout";
 import { attachUsageTracking } from "./http/usage-tracking-middleware";
@@ -28,11 +32,21 @@ import { purgeOldUsageEvents } from "./tenant/usage/usage-service";
 const env = parseAppEnv(process.env as Record<string, string | undefined>);
 const port = Number(process.env.PORT || 3105);
 
-const server = createServer(async (request, response) => {
+async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   attachUsageTracking(request, response);
 
   const method = String(request.method || "GET").toUpperCase();
-  const url = getRequestUrl(request);
+
+  // Host malformado (`Host: a b`, `[oops`, vacío…): antes esto lanzaba
+  // ERR_INVALID_URL fuera de todo try/catch y el unhandled rejection bajaba
+  // el proceso. Ahora es un 400 como cualquier otro request inválido.
+  const url = parseRequestUrl(request);
+  if (!url) {
+    sendJson(response, 400, {
+      error: { code: "INVALID_REQUEST_URL", message: "Malformed request URL or Host header." },
+    });
+    return;
+  }
 
   // ── Unauthenticated / infrastructure routes ─────────────────────────────────
   // Dev-only landing: expone mapa de endpoints, hints de credenciales demo y
@@ -48,6 +62,14 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // Disponibilidad para operar, separada del liveness (BUG-004): 503 si la
+  // conexión a la base está marcada como caída. /health sigue diciendo 200.
+  if (method === "GET" && url.pathname === "/readyz") {
+    const readiness = buildReadinessResult();
+    sendJson(response, readiness.statusCode, readiness.payload);
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/public/bootstrap") {
     const result = await handlePublicBootstrapRequest(request, env);
     sendJson(response, result.statusCode, result.payload);
@@ -56,12 +78,12 @@ const server = createServer(async (request, response) => {
 
   // ── Static asset serving ────────────────────────────────────────────────────
   if (method === "GET" && url.pathname.startsWith("/bundle.js")) {
-    const served = serveStaticFile(response, url.pathname.slice(1));
+    const served = await serveStaticFile(response, url.pathname.slice(1));
     if (served) return;
   }
 
   if (method === "GET" && (url.pathname === "/ui" || url.pathname.startsWith("/ui/"))) {
-    serveSpaHtml(response);
+    await serveSpaHtml(response);
     return;
   }
 
@@ -97,6 +119,11 @@ const server = createServer(async (request, response) => {
 
   // ── Sub-router dispatch ─────────────────────────────────────────────────────
   try {
+    // Antes de tocar cualquier ruta: si el request trae una sesion de tenant,
+    // revalidarla contra la base (baja, suspension, cambio de rol o de buques).
+    // Va DENTRO del try para que el 401 salga como respuesta normal.
+    await enforceLiveTenantSession(request);
+
     if (await handleFilesRoutes(method, url, request, response, env)) return;
     if (await handlePlatformRoutes(method, url, request, response, env)) return;
     if (await handlePmsRoutes(method, url, request, response, env)) return;
@@ -116,20 +143,20 @@ const server = createServer(async (request, response) => {
   // ── web-modern SPA (React/Vite production build) ───────────────────────────
   // Serve hashed assets (JS/CSS/fonts) with immutable cache.
   if (method === "GET" && url.pathname.startsWith("/assets/")) {
-    const served = serveWebModernAsset(response, url.pathname.slice(1));
+    const served = await serveWebModernAsset(response, url.pathname.slice(1));
     if (served) return;
   }
 
   // Serve other Vite static files (favicon, manifest, etc.)
   if (method === "GET" && (url.pathname === "/favicon.ico" || url.pathname === "/manifest.json")) {
-    const served = serveWebModernAsset(response, url.pathname.slice(1));
+    const served = await serveWebModernAsset(response, url.pathname.slice(1));
     if (served) return;
   }
 
   // Catch-all: any GET not matched above → try static asset first, then SPA shell.
   if (method === "GET") {
-    const served = serveWebModernAsset(response, url.pathname.slice(1));
-    if (!served) serveWebModernSpa(response);
+    const served = await serveWebModernAsset(response, url.pathname.slice(1));
+    if (!served) await serveWebModernSpa(response);
     return;
   }
 
@@ -139,6 +166,48 @@ const server = createServer(async (request, response) => {
       message: `No route matches ${method} ${url.pathname}`,
     },
   });
+}
+
+/**
+ * Red de contención de último recurso.
+ *
+ * El callback de `createServer` es async: cualquier excepción que escape de
+ * `handleRequest` (rutas públicas previas al try/catch interno, un throw en
+ * el propio dispatch, un bug nuevo) se convertía en unhandled rejection y
+ * Node baja el proceso. Acá se traduce a una respuesta HTTP controlada.
+ */
+const server = createServer((request, response) => {
+  handleRequest(request, response).catch((error) => {
+    const handled = toErrorPayload(error);
+    try {
+      if (response.headersSent) {
+        response.end();
+        return;
+      }
+      sendJson(response, handled.statusCode, handled.payload);
+    } catch {
+      try { response.destroy(); } catch { /* socket ya cerrado */ }
+    }
+  });
+});
+
+// Requests que ni siquiera llegan a ser un mensaje HTTP válido (parse error,
+// header gigante): Node los emite acá. Sin handler, el default cierra el
+// socket, pero un throw dentro de este path sí voltea el proceso.
+server.on("clientError", (_err, socket) => {
+  try {
+    if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+    else socket.destroy();
+  } catch { /* nada que hacer */ }
+});
+
+// Última barrera para promesas huérfanas: sin este handler Node convierte el
+// rejection en uncaughtException y baja el proceso. Un PMS caído deja a la
+// flota sin OT ni permisos de trabajo. `uncaughtException` SÍ queda con el
+// comportamiento por defecto (crash + restart de pm2): ahí el estado del
+// proceso ya no es confiable.
+process.on("unhandledRejection", (reason) => {
+  process.stderr.write(`[unhandled-rejection] ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}\n`);
 });
 
 server.listen(port, () => {
@@ -148,6 +217,9 @@ server.listen(port, () => {
 // Sweep expired access tokens from the in-memory Map every 5 minutes.
 // Lazy eviction in get*() handles tokens that are queried; this catches the rest.
 setInterval(evictExpiredSessions, 5 * 60 * 1000).unref();
+
+// Sweep de los "claims" de archivos recien subidos (file-access-service).
+setInterval(() => evictExpiredUploadClaims(), 60 * 60 * 1000).unref();
 
 // Sweep stale rate-limit buckets every 10 minutes.
 setInterval(evictExpiredRateLimitBuckets, 10 * 60 * 1000).unref();
@@ -240,6 +312,25 @@ setInterval(() => { runUsagePurge().catch(() => {}); }, 24 * 60 * 60 * 1_000).un
 // vuelve, en vez de perderse hasta la semana siguiente. Lo que impide el doble
 // envío es la fila en ScheduledReportRun con su índice único, que sobrevive a
 // reinicios — un contador en memoria no serviría.
+//
+// AUDITORÍA 2026-09-09 — esa fila se escribía DESPUÉS de mandar el correo, así
+// que sólo servía contra el tick siguiente del mismo proceso: dos instancias
+// (o un reinicio en el medio) leían las dos "todavía no está" y el parte salía
+// dos veces. Ahora la fila se CREA ANTES de mandar nada y el índice único es
+// el que reparte: quien pierde la carrera choca con P2002 y no manda.
+//
+// Estados de la fila mientras dura el envío (sin tocar el schema): se reserva
+// con status FAILED + error PENDING_SEND ("reclamado, todavía sin salir") y al
+// terminar se pisa con el resultado real. Si el proceso se cae en el medio, la
+// fila queda reclamada y una corrida posterior la reintenta UNA vez.
+// El HTML del parte se archiva apenas se arma, ANTES de intentar el correo,
+// así que la copia de la semana no se pierde aunque el SMTP falle.
+//
+// LÍMITE CONOCIDO: si el proceso muere DURANTE el diálogo con el servidor de
+// correo, nadie puede saber si el mensaje llegó a salir. El reintento único
+// puede, en ese caso, mandarlo dos veces; sin reintento, podría no mandarse
+// nunca. Se eligió reintentar una sola vez y dejar la traza en la fila
+// (error PENDING_SEND_RETRY) en lugar de reintentar sin límite.
 
 const WEEKLY_REPORT_SLOTS = [
   { weekday: 1, hour: 7,  kind: "WEEKLY_OPENING" as const },
@@ -273,19 +364,29 @@ async function runWeeklyReportScheduler(): Promise<void> {
         if (!slot) continue;
 
         const periodKey = isoWeekKey(local);
-        const already = await prisma.scheduledReportRun.findUnique({
-          where: { tenantId_reportKind_periodKey: { tenantId: t.id, reportKind: slot.kind, periodKey } },
-          select: { id: true },
-        });
-        if (already) continue;
-
         const recipients = t.settings?.weeklyReportRecipients ?? [];
 
-        // El parte se arma y se ARCHIVA siempre, aunque no haya correo que
-        // mandar: es la copia congelada que despues se consulta en "semanas
-        // anteriores". Regenerarla mas tarde daria los numeros de hoy, no los
-        // de aquella semana. El envio es el paso siguiente, y puede no ocurrir.
+        // Reserva persistente ANTES de armar y mandar nada. El indice unico
+        // (tenantId, reportKind, periodKey) es el que decide: si otra instancia
+        // ya reservo, el create tira P2002 y aca no se manda.
+        // Cast: el helper declara un contrato mínimo (WeeklyReportRunStore) para
+        // poder probarlo con un doble; el cliente Prisma real lo cumple pero sus
+        // firmas genéricas no encajan estructuralmente.
+        const claim = await claimWeeklyReportRun(
+          prisma as unknown as Parameters<typeof claimWeeklyReportRun>[0],
+          t.id, slot.kind, periodKey, recipients, now,
+        );
+        if (!claim) continue;
+
         const report = await buildWeeklyFleetReport(t.slug, slot.kind, now, null);
+
+        // El archivo de la semana se guarda ANTES de intentar el correo: la
+        // copia congelada es lo que despues se consulta en "semanas
+        // anteriores", y no depende de que el SMTP haya andado.
+        await prisma.scheduledReportRun.update({
+          where: { id: claim.id },
+          data: { html: report.html },
+        });
 
         let status = "SENT";
         let error: string | undefined;
@@ -304,17 +405,12 @@ async function runWeeklyReportScheduler(): Promise<void> {
           if (!result.sent) error = result.error || result.reason;
         }
 
-        // La fila se escribe SIEMPRE, salga o no el correo: sin ella el job
-        // reintentaria en cada tick durante todo el dia.
-        await prisma.scheduledReportRun.create({
-          data: {
-            tenantId: t.id, reportKind: slot.kind, periodKey,
-            status: status as any, recipients,
-            error: error ? error.slice(0, 500) : null,
-            html: report.html,
-          },
-        }).catch(() => { /* choque con otro proceso: ya quedó asentado */ });
-        process.stdout.write(`[weekly-report] tenant=${t.slug} ${slot.kind} ${periodKey} ${status}\n`);
+        // Cierre de la reserva con el resultado real.
+        await prisma.scheduledReportRun.update({
+          where: { id: claim.id },
+          data: { status: status as any, error: error ? error.slice(0, 500) : null },
+        });
+        process.stdout.write(`[weekly-report] tenant=${t.slug} ${slot.kind} ${periodKey} ${status}${claim.retry ? " (reintento)" : ""}\n`);
       } catch (err) {
         process.stderr.write(`[weekly-report] tenant=${t.slug} failed: ${err instanceof Error ? err.message : String(err)}\n`);
       }

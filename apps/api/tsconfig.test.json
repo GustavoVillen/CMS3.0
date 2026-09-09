@@ -1,0 +1,10 @@
+{
+  // Los tests viven fuera de `src` para que no entren en el build (`tsc` emite
+  // a dist con el tsconfig principal). Este proyecto los typechequea aparte.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

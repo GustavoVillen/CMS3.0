@@ -312,6 +312,40 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
     });
   }, [rows, sortKey, sortDir, sortVal]);
 
+  // ── Opciones de los desplegables, armadas UNA vez ──────────────────────────
+  // PERF-002 (auditoría 2026-09-09): cada fila editable armaba de nuevo la
+  // lista completa de equipos del buque más las de SFI, origen del criterio y
+  // tipo de frecuencia. Con 1.000 planes y 500 equipos son medio millón de
+  // opciones creadas en cada dibujado de la planilla.
+  //
+  // Los elementos de React son inmutables: el MISMO arreglo puede ser hijo de
+  // todos los <select>, así que se arma una sola vez por buque. La pantalla
+  // queda idéntica —mismo marcado, misma edición, mismo orden— y se deja de
+  // reconstruirlo fila por fila en cada render.
+  //
+  // OJO: esto baja el trabajo de JavaScript, NO la cantidad de nodos del
+  // navegador: cada <select> sigue teniendo sus opciones en el DOM. Si la
+  // planilla sigue pesada, eso es lo que hay que medir y decidir aparte.
+  const sfiOptions = useMemo(
+    () => SFI_GROUPS.map(g => <option key={g} value={g}>G{g}</option>),
+    [],
+  );
+  const triggerOptions = useMemo(
+    () => TRIGGER_TYPES.map(tt => <option key={tt} value={tt}>{tt}</option>),
+    [],
+  );
+  const criteriaOptions = useMemo(
+    () => CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>),
+    [t],
+  );
+  const assetOptionsByVessel = useMemo(() => {
+    const map: Record<string, React.ReactNode[]> = {};
+    for (const [vesselCode, list] of Object.entries(assetsByVessel)) {
+      map[vesselCode] = list.map(a => <option key={a.id} value={a.id}>{a.name ?? a.assetCode}</option>);
+    }
+    return map;
+  }, [assetsByVessel]);
+
   // ── Ancho de columnas ajustable (drag) + persistencia ─────────────────────
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
     let saved: Record<string, number> = {};
@@ -428,6 +462,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
             )}
             {sortedRows.map(row => {
               const assets = assetsByVessel[row.vesselCode] ?? [];
+              const assetOptions = assetOptionsByVessel[row.vesselCode] ?? [];
               const hoursBased = isHoursTT(row.triggerType);
               const err = errById[row.id];
               const borderCls = savingId === row.id
@@ -479,7 +514,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
                         onChange={e => patchRow(row, { sfiGroupNumber: e.target.value === "" ? null : Number(e.target.value) })}
                       >
                         <option value="">—</option>
-                        {SFI_GROUPS.map(g => <option key={g} value={g}>G{g}</option>)}
+                        {sfiOptions}
                       </select>
                     ) : (
                       <span className={roMono}>{row.sfiGroupNumber != null ? `G${row.sfiGroupNumber}` : "—"}</span>
@@ -512,7 +547,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
                         {!assets.some(a => a.id === row.assetId) && (
                           <option value={row.assetId}>{row.assetName ?? row.assetId}</option>
                         )}
-                        {assets.map(a => <option key={a.id} value={a.id}>{a.name ?? a.assetCode}</option>)}
+                        {assetOptions}
                       </select>
                     ) : (
                       <span className={ro}>{row.assetName ?? row.assetId}</span>
@@ -536,7 +571,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
                         onChange={e => patchRow(row, { criteriaSource: (e.target.value || null) as CriteriaSource | null })}
                       >
                         <option value="">{t("mp.cs.none")}</option>
-                        {CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>)}
+                        {criteriaOptions}
                       </select>
                     ) : (
                       <span className={ro + (row.criteriaSource ? "" : " text-amber-600 dark:text-amber-400")}>
@@ -553,7 +588,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
                         value={row.triggerType}
                         onChange={e => patchRow(row, { triggerType: e.target.value })}
                       >
-                        {TRIGGER_TYPES.map(tt => <option key={tt} value={tt}>{tt}</option>)}
+                        {triggerOptions}
                       </select>
                     ) : (
                       <span className={roMono}>{row.triggerType}</span>

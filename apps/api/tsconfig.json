@@ -1,4 +1,18 @@
 {
+  // `ignoreDeprecations: "6.0"` sólo es válido a partir de TypeScript 6.0. Este
+  // paquete declara su propio `typescript` (~6.0.2, ver package.json), así que
+  // `pnpm --filter @cms3/api typecheck` compila con esa versión y el valor es
+  // correcto.
+  //
+  // Antes de la auditoría 2026-09-09 el paquete NO declaraba typescript: usaba
+  // el 6.0.2 que pnpm dejaba en apps/api/node_modules como peer de
+  // @prisma/client. Con esa dependencia accidental, cualquier cambio en el
+  // árbol lo hacía caer al 5.9.3 de la raíz y el typecheck moría con TS5103.
+  //
+  // Ojo: correr el tsc de la RAÍZ contra este proyecto (`./node_modules/.bin/tsc
+  // --project apps/api/tsconfig.json`) sigue fallando, y está bien — ése es
+  // TypeScript 5.9.3, el que usan packages/* con el `ignoreDeprecations: "5.0"`
+  // de tsconfig.base.json. Usar siempre el script del paquete.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "../../",

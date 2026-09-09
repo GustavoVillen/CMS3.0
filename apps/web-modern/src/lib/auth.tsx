@@ -95,6 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
+      // Corta con la sesión anterior ANTES de pedir nada: sube la generación
+      // del cache, así cualquier respuesta que hubiera quedado en vuelo no
+      // puede aterrizar en la sesión nueva (BUG-005).
+      clearFetchCache();
       // Set slug before the call so getHeaders() includes X-Tenant-Slug
       localStorage.setItem("gpms_tenant_slug", tenantSlug);
 
@@ -188,6 +192,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUnauthorizedHandler(() => {
       setState({ token: null, user: null, tenant: null, isAuthenticated: false });
       clearAuthLocalStorage();
+      // Este es el otro camino de cierre de sesión (401 tras fallar el
+      // refresh) y también tiene que vaciar el cache: si no, los datos del
+      // usuario anterior seguían en memoria para el siguiente login.
+      clearFetchCache();
     });
   }, []);
 

@@ -72,6 +72,17 @@ export async function changePassword(
     }
     await prisma.user.update({ where: { id: session.user.id }, data: { passwordHash: hashPassword(input.newPassword) } });
 
+    // Cambiar la clave cierra las DEMAS sesiones (si te la robaron, se corta
+    // ahi). La sesion desde la que se hizo el cambio se conserva: se excluye su
+    // propio refresh token.
+    const { revokeUserTenantCredentials } = await import("../auth/tenant-auth-service");
+    await revokeUserTenantCredentials(
+      session.tenantSlug,
+      session.user.id,
+      session.refreshToken,
+      session.accessToken,
+    );
+
     // Resolve tenantId from slug (session has slug, not id)
     const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug }, select: { id: true } });
     if (tenant) {

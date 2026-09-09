@@ -149,7 +149,7 @@ export async function listTenantSpares(session: TenantAccessSession, filters: Sp
   if (filters.criticality) where.criticality = filters.criticality;
   const items = await prisma.spare.findMany({ where, orderBy: [{ vesselCode: "asc" }, { sku: "asc" }] });
   const ids = items.map(i => i.id);
-  const onHandMap   = await getOnHandMap(prisma, ids);
+  const onHandMap   = await getOnHandMap(prisma, ids, { tenantId });
   const reservedMap = await getReservedMapFromCalc(prisma, tenantId, ids);
   const enriched = items.map(i => {
     const onHand = onHandMap.get(i.id) ?? 0;
@@ -171,7 +171,7 @@ async function conStock<T extends { id: string }>(
   tenantId: string,
   record: T,
 ) {
-  const onHandMap   = await getOnHandMap(prisma, [record.id]);
+  const onHandMap   = await getOnHandMap(prisma, [record.id], { tenantId });
   const reservedMap = await getReservedMapFromCalc(prisma, tenantId, [record.id]);
   const onHand   = onHandMap.get(record.id) ?? 0;
   const reserved = reservedMap.get(record.id) ?? 0;
@@ -332,7 +332,7 @@ export async function listReorderAlerts(session: TenantAccessSession, vesselCode
     orderBy: [{ vesselCode: "asc" }, { criticality: "asc" }, { sku: "asc" }],
   });
   const ids = items.map(i => i.id);
-  const onHandMap   = await getOnHandMap(prisma, ids);
+  const onHandMap   = await getOnHandMap(prisma, ids, { tenantId });
   const reservedMap = await getReservedMapFromCalc(prisma, tenantId, ids);
   return items
     .map(i => {

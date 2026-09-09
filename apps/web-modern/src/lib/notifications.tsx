@@ -5,6 +5,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { api } from "./api";
 import { useAuth } from "./auth";
+import { getSessionGeneration } from "./fetch-cache";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -43,14 +44,26 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(false);
   const mounted = useRef(true);
 
-  useEffect(() => () => { mounted.current = false; }, []);
+  // BUG-006 (auditoría 2026-09-09): el efecto sólo tenía cleanup. React en modo
+  // estricto (desarrollo) monta, desmonta y vuelve a montar cada componente a
+  // propósito, para detectar efectos mal cerrados. En ese segundo montaje la
+  // marca ya estaba en false y nadie la volvía a poner en true: todas las
+  // respuestas de notificaciones se descartaban y el "cargando" quedaba fijo.
+  // El arreglo es hacer simétricos el montaje y la limpieza.
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) return;
+    // Generación de la sesión al pedir: si mientras tanto se cierra sesión o
+    // entra otra persona, estas notificaciones no se pintan (BUG-005).
+    const generation = getSessionGeneration();
     setLoading(true);
     try {
       const res = await api.get<{ items: NotificationDto[]; unreadCount: number; criticalUnreadCount: number }>("/app/notifications");
-      if (!mounted.current) return;
+      if (!mounted.current || getSessionGeneration() !== generation) return;
       setItems(res.items ?? []);
       setUnreadCount(res.unreadCount ?? 0);
       setCriticalUnreadCount(res.criticalUnreadCount ?? 0);

@@ -22,6 +22,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import type { TenantAccessSession } from "../auth/session-store";
 import { saveFluidReportFile } from "./fluid-uploads-service";
+import { claimUploadedFile } from "../files/file-access-service";
 import { extractFluidReport } from "./fluid-analyses-ai-extractor";
 import { matchAssetByAi, loadVesselAssets, type AssetCandidate } from "../ai/asset-ai-match";
 import {
@@ -132,6 +133,8 @@ export async function scanFluidReportForBatch(
   const hints = parseFileNameHints(fileName);
 
   const saved = await saveFluidReportFile(session.tenantSlug, fileName, input.buffer);
+  // Hasta que se confirme el lote no hay fila que reclame el archivo.
+  claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
 
   // El buque se resuelve ANTES de extraer cuando se puede: le da contexto al
   // extractor y evita una segunda pasada.

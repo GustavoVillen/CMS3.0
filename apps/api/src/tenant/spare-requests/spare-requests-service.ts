@@ -3,6 +3,10 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { hasPermission } from "../auth/role-permissions";
 import { NO_ASSIGNED_VESSEL_SENTINEL } from "../auth/vessel-scope";
+// Vessel scope de solicitudes (nullable = general del tenant). Vive en
+// spare-request-scope para que ítems y reservas apliquen EXACTAMENTE la misma
+// regla; antes sólo estaba acá y los otros dos servicios no la miraban.
+import { assertVesselAccess } from "./spare-request-scope";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
 export interface SpareRequestListFilters {
@@ -33,18 +37,6 @@ function canManage(session: TenantAccessSession): boolean {
 
 function canApprove(session: TenantAccessSession): boolean {
   return hasPermission(session, "spareRequest.approve");
-}
-
-// Vessel scope adaptado a requestedForVesselCode (nullable): las solicitudes
-// generales (sin buque) las ve todo el tenant; las de un buque, solo quien lo
-// tiene asignado. TENANT_ADMIN ve todo.
-function assertVesselAccess(session: TenantAccessSession, vesselCode: string | null): void {
-  if (session.user.role === "TENANT_ADMIN") return;
-  if (!vesselCode) return;
-  const assigned = session.user.assignedVesselCodes ?? [];
-  if (!assigned.includes(vesselCode)) {
-    throw new RouteError(404, "NOT_FOUND", "Solicitud no encontrada.");
-  }
 }
 
 async function resolveTenantId(session: TenantAccessSession): Promise<string> {
