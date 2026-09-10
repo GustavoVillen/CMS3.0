@@ -547,13 +547,41 @@ function addDays(date: Date, days: number): Date {
   return next;
 }
 
-function autoInitialNextDueDate(triggerType: string, frequencyMonths: number | null): Date | null {
+/**
+ * Vencimiento de un plan que todavía no tiene uno guardado.
+ *
+ * Se cuenta desde la ÚLTIMA EJECUCIÓN si el plan la tiene. Un plan que dice "se
+ * hizo el 20/01/2026, cada 60 meses" vence en enero de 2031, no dentro de 60
+ * meses contados desde hoy: anclarlo en hoy le regala al buque todo el tiempo
+ * que ya pasó desde el último trabajo. Pasaba al guardar un plan cargado sin
+ * vencimiento (las cargas masivas traen la última ejecución pero no el próximo):
+ * el solo hecho de abrirlo y guardarlo le corría el vencimiento (sep 2026).
+ *
+ * Sin última ejecución —plan nuevo, nunca hecho— sí se cuenta desde hoy, que es
+ * lo único que se sabe.
+ *
+ * La fecha base se ancla a mediodía UTC por el mismo motivo que en el resto del
+ * módulo: una fecha "solo día" es medianoche UTC y sumarle meses en la hora
+ * local del server la corre un día según la zona horaria.
+ */
+export function autoInitialNextDueDate(
+  triggerType: string,
+  frequencyMonths: number | null,
+  lastExecutionDate?: Date | null,
+): Date | null {
   if (!frequencyMonths || frequencyMonths <= 0) return null;
-  const today = new Date();
+  const base = lastExecutionDate
+    ? new Date(Date.UTC(
+        lastExecutionDate.getUTCFullYear(),
+        lastExecutionDate.getUTCMonth(),
+        lastExecutionDate.getUTCDate(),
+        12, 0, 0,
+      ))
+    : new Date();
   const tt = triggerType.toUpperCase();
-  if (tt === "MONTHS" || tt === "CALENDAR") return addMonths(today, frequencyMonths);
-  if (tt === "DAY") return addDays(today, frequencyMonths);
-  if (tt === "WEEK") return addDays(today, frequencyMonths * 7);
+  if (tt === "MONTHS" || tt === "CALENDAR") return addMonths(base, frequencyMonths);
+  if (tt === "DAY") return addDays(base, frequencyMonths);
+  if (tt === "WEEK") return addDays(base, frequencyMonths * 7);
   return null;
 }
 
@@ -1373,11 +1401,14 @@ export async function updateTenantMaintenancePlan(
     data.nextDueHours = rec.nextDueHours;
   }
 
-  // Auto-calculate nextDueDate if it's still null after updates
+  // El plan sigue sin vencimiento después de guardar: se le calcula uno desde la
+  // última ejecución (o desde hoy si nunca se ejecutó). Sin pasarle la última
+  // ejecución, guardar el plan le corría el vencimiento a "hoy + frecuencia".
   if (!data.nextDueDate && !current.nextDueDate) {
     const tt = String((data.triggerType ?? current.triggerType) || "");
     const freq = (data.frequencyMonths as number | null) ?? current.frequencyMonths;
-    const calculated = autoInitialNextDueDate(tt, freq);
+    const lastExec = (data.lastExecutionDate as Date | null | undefined) ?? current.lastExecutionDate ?? null;
+    const calculated = autoInitialNextDueDate(tt, freq, lastExec);
     if (calculated) data.nextDueDate = calculated;
   }
 
