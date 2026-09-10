@@ -1,13 +1,14 @@
 // Seed idempotente — formularios controlados del tenant Mercurio.
-//   - WORK_ORDER     → REGI-MAN-02.3 "Orden de trabajo" (rev 0, 29.12.2025)
-//   - SERVICE_REQUEST→ REGI-LOG-01.3 "Solicitud de servicios" (logo propio LogoMercurio.png)
+//   - WORK_ORDER     → REGI-MAN-02.4 "Orden de trabajo" (rev 3, 29.12.2025)
+//   - SERVICE_REQUEST→ REGI-LOG-01.3 "Solicitud de servicios" (rev 3, 29.12.2025;
+//     logo propio LogoMercurio.png)
 //   - Footer editable del documento controlado en TenantSetting.
 //
-// El codigo del formulario de OT paso de REGI-OPE-26.3 a REGI-MAN-02.3 (sep-2026),
-// para alinearlo con el juego de procedimientos rev. 3 del 29.12.2025, donde
-// PROC-MAN-02 §5 y PROC-MAN-03 §5 lo listan asi. El formulario en si no cambio.
-// Pendiente de definir con Mercurio: si REGI-MAN-02.4 "Orden Interna de Trabajo"
-// sigue vivo como registro separado o si la OT lo absorbe.
+// El codigo del formulario de OT paso de REGI-OPE-26.3 a REGI-MAN-02.3 y de ahi
+// a REGI-MAN-02.4 rev 3 (sep-2026, confirmado por Mercurio contra el papel), para
+// alinearlo con el juego de procedimientos rev. 3 del 29.12.2025. El formulario
+// en si no cambio: la OT absorbe el registro que antes era "Orden Interna de
+// Trabajo". Los dos documentos controlados quedan en rev 3 desde el 29.12.2025.
 //
 // OT y SS son documentos distintos: la OT es el trabajo de mantenimiento; la SS es
 // el pedido de un servicio externo que cuelga de una OT abierta.
@@ -25,7 +26,7 @@ const SLUG = process.env.TENANT_SLUG ?? "mercurio";
 const DRY = process.env.DRY === "1";
 
 // Cada documento controlado trae SU pie de firmas (literal del papel).
-const WORK_ORDER_FOOTER = {        // REGI-MAN-02.3
+const WORK_ORDER_FOOTER = {        // REGI-MAN-02.4
   preparedBy: "Mercurio Group",
   reviewedBy: "Persona Designada en Tierra",
   approvedBy: "Gerente General",
@@ -36,7 +37,7 @@ const SERVICE_REQUEST_FOOTER = {   // REGI-LOG-01.3
   approvedBy: "Gerente General",
 };
 
-// Formulario de OT. El orden replica el papel REGI-MAN-02.3.
+// Formulario de OT. El orden replica el papel REGI-MAN-02.4.
 const WORK_ORDER_CONFIG = {
   sections: [
     "header", "requestedBy", "assignedTo", "priorityKindSystem", "permits",
@@ -79,25 +80,25 @@ async function main() {
       type: "WORK_ORDER" as const,
       create: {
         tenantId, type: "WORK_ORDER" as const, style: "MERCURIO" as const,
-        formCode: "REGI-MAN-02.3", title: "Orden de trabajo", revision: 0,
+        formCode: "REGI-MAN-02.4", title: "Orden de trabajo", revision: 3,
         effectiveFrom: "29.12.2025", codePattern: null, config: WORK_ORDER_CONFIG, enabled: true,
       },
       update: {
-        style: "MERCURIO" as const, formCode: "REGI-MAN-02.3", title: "Orden de trabajo",
-        revision: 0, effectiveFrom: "29.12.2025", config: WORK_ORDER_CONFIG,
+        style: "MERCURIO" as const, formCode: "REGI-MAN-02.4", title: "Orden de trabajo",
+        revision: 3, effectiveFrom: "29.12.2025", config: WORK_ORDER_CONFIG,
       },
     },
     {
       type: "SERVICE_REQUEST" as const,
       create: {
         tenantId, type: "SERVICE_REQUEST" as const, style: "MERCURIO" as const,
-        formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2,
-        effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png",
+        formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 3,
+        effectiveFrom: "29.12.2025", logoUrl: "/LogoMercurio.png",
         codePattern: null, config: SERVICE_REQUEST_CONFIG, enabled: true,
       },
       update: {
         style: "MERCURIO" as const, formCode: "REGI-LOG-01.3", title: "Solicitud de servicios",
-        revision: 2, effectiveFrom: "01.05.2025", logoUrl: "/LogoMercurio.png",
+        revision: 3, effectiveFrom: "29.12.2025", logoUrl: "/LogoMercurio.png",
         codePattern: null, config: SERVICE_REQUEST_CONFIG,
       },
     },

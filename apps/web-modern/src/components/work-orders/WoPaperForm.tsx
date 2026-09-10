@@ -1,4 +1,4 @@
-// Formulario de Orden de Trabajo dibujado como el papel (REGI-MAN-02.3).
+// Formulario de Orden de Trabajo dibujado como el papel (REGI-MAN-02.4).
 //
 // La pantalla de la OT ES el formulario: mismas secciones, en el mismo orden,
 // con las mismas etiquetas que imprime el PDF. El orden y los rótulos NO se
@@ -44,7 +44,7 @@ export interface WoFormDoc {
 /** Si el endpoint no responde, la hoja se dibuja igual con el default Mercurio. */
 export const WO_FORM_FALLBACK: WoFormDoc = {
   meta: {
-    formCode: "REGI-MAN-02.3", title: "Orden de trabajo", revision: 0,
+    formCode: "REGI-MAN-02.4", title: "Orden de trabajo", revision: 3,
     effectiveFrom: "29.12.2025",
     preparedBy: "Mercurio Group", reviewedBy: "Persona Designada en Tierra", approvedBy: "Gerente General",
   },
@@ -505,7 +505,8 @@ export function WoPaperForm({
       </div>
 
       <PaperSheet>
-        <PaperDocHeader meta={meta} logoUrl={logoUrl} tenantName={tenantName} />
+        {/* La hoja en pantalla es la página 1 del papel, igual que el PDF. */}
+        <PaperDocHeader meta={meta} logoUrl={logoUrl} tenantName={tenantName} page={1} />
         {order.map(id => <React.Fragment key={id}>{sections[id]?.()}</React.Fragment>)}
         <PaperDocFooter meta={meta} />
       </PaperSheet>

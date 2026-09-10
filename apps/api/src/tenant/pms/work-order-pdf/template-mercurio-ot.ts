@@ -1,7 +1,7 @@
-// Orden de trabajo — formulario controlado REGI-MAN-02.3 (rev 0, 29.12.2025).
+// Orden de trabajo — formulario controlado REGI-MAN-02.4 (rev 3, 29.12.2025).
 //
 // Renderer puro: recibe un WorkOrderPdfContext ya cargado y devuelve un Buffer.
-// Reemplaza a template-mercurio.ts (REGI-MAN-02.4 "Orden Interna de Trabajo"),
+// Reemplaza a template-mercurio.ts ("Orden Interna de Trabajo", el papel anterior),
 // que se conserva para poder volver atrás con un UPDATE de TenantSetting.
 //
 // Data-driven: el body recorre `ctx.formConfig.sections` (orden e inclusión =
@@ -137,7 +137,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
     /**
      * Recuadros de opciones uno al lado del otro, como en el papel: cada uno
      * con su cabecera y las opciones apiladas, con la casilla a la derecha.
-     * Así van PRIORIDAD / TIPO DE MANTENIMIENTO / SISTEMA en REGI-MAN-02.3.
+     * Así van PRIORIDAD / TIPO DE MANTENIMIENTO / SISTEMA en REGI-MAN-02.4.
      */
     function optionBoxes(
       boxes: Array<{ title: string; opts: { v: string; l: string }[]; selected: string[]; w: number }>,

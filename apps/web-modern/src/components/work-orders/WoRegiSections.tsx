@@ -204,7 +204,7 @@ export function WoRegiSections({
     <div className="space-y-4 bg-fg/5 border border-fg/10 rounded-2xl p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold">
-          Formulario REGI-MAN-02.3
+          Formulario REGI-MAN-02.4
         </p>
         {/* Este bloque se guarda solo; el aviso es la única señal de que pasó. */}
         <span className="text-[10px] font-bold shrink-0" aria-live="polite">

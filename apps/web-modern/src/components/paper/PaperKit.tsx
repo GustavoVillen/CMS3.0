@@ -221,10 +221,12 @@ export interface PaperDocMeta {
 }
 
 /** Cabecera del documento controlado: logo, codigo + titulo, revision. */
-export function PaperDocHeader({ meta, logoUrl, tenantName }: {
+export function PaperDocHeader({ meta, logoUrl, tenantName, page }: {
   meta: PaperDocMeta;
   logoUrl: string | null;
   tenantName: string;
+  /** Nº de página del papel. Si se pasa, la cabecera lo muestra como el PDF. */
+  page?: number;
 }) {
   return (
     <div className="flex divide-x divide-fg/25 border-b border-fg/25">
@@ -246,6 +248,12 @@ export function PaperDocHeader({ meta, logoUrl, tenantName }: {
           <span className="flex-1 px-1.5 py-1 text-text-industrial/60">Desde:</span>
           <span className="w-16 px-1.5 py-1 font-bold text-fg text-center">{meta.effectiveFrom}</span>
         </div>
+        {page != null && (
+          <div className="flex divide-x divide-fg/25">
+            <span className="flex-1 px-1.5 py-1 text-text-industrial/60">Página:</span>
+            <span className="w-16 px-1.5 py-1 font-bold text-fg text-center">{page}</span>
+          </div>
+        )}
         <div className="px-1.5 py-1 text-right font-bold text-accent">Documento Controlado</div>
       </div>
     </div>

@@ -58,7 +58,7 @@ const MERCURIO_FOOTER: FormFooterDefaults = {
 
 // Cada documento controlado trae SU pie de firmas — no son intercambiables.
 // Literal de los formularios del cliente.
-const WORK_ORDER_FOOTER: FormFooterDefaults = {        // REGI-MAN-02.3
+const WORK_ORDER_FOOTER: FormFooterDefaults = {        // REGI-MAN-02.4
   preparedBy: "Mercurio Group",
   reviewedBy: "Persona Designada en Tierra",
   approvedBy: "Gerente General",
@@ -140,7 +140,7 @@ const PERMIT_UNDERWATER_SECTIONS = [
   "specialComments", "completion", "additionalComments", "generatedBy",
 ];
 
-// Formulario de OT REGI-MAN-02.3 "Orden de trabajo" (rev 0, 29.12.2025).
+// Formulario de OT REGI-MAN-02.4 "Orden de trabajo" (rev 3, 29.12.2025).
 // El orden de `sections` replica el papel. Las listas de opciones de los
 // recuadros (SOLICITADO POR / ASIGNADO A / TIPO / SISTEMA / autorizaciones)
 // son enums del schema, no config: cambiarlas es un cambio de dominio.
@@ -165,9 +165,9 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
   // malentendido OT=SS: son dos documentos distintos del cliente.
   WORK_ORDER: {
     style: "MERCURIO",
-    formCode: "REGI-MAN-02.3",
+    formCode: "REGI-MAN-02.4",
     title: "Orden de trabajo",
-    revision: 0,
+    revision: 3,
     effectiveFrom: "29.12.2025",
     codePattern: null, // usa el workOrderCode existente
     footer: WORK_ORDER_FOOTER,
@@ -177,8 +177,8 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     style: "MERCURIO",
     formCode: "REGI-LOG-01.3",
     title: "Solicitud de servicios",
-    revision: 2,
-    effectiveFrom: "01.05.2025",
+    revision: 3,
+    effectiveFrom: "29.12.2025",
     // El código lo genera el service al crear la SS, con el formato del papel
     // (SS-<seq>-<BUQUE>-<AÑO>, correlativo por buque y año). Este patrón emitía
     // un número distinto al imprimir y con otro padding (SS-0074-M01-2026).

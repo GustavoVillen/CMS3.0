@@ -52,8 +52,8 @@ export interface SsFormDoc {
 /** Si el endpoint no responde, el papel se dibuja igual con el default Mercurio. */
 export const SS_FORM_FALLBACK: SsFormDoc = {
   meta: {
-    formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 2,
-    effectiveFrom: "01.05.2025",
+    formCode: "REGI-LOG-01.3", title: "Solicitud de servicios", revision: 3,
+    effectiveFrom: "29.12.2025",
     preparedBy: "Mercurio Group", reviewedBy: "Asesoria Juridica", approvedBy: "Gerente General",
   },
   config: {

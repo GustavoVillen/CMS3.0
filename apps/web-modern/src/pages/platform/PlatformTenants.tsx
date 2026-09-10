@@ -30,7 +30,9 @@ const TIMEZONES  = ["America/Argentina/Buenos_Aires", "America/Asuncion", "Ameri
 const CURRENCIES = ["ARS", "PYG", "BRL", "USD", "EUR"];
 const WO_PDF_TEMPLATES: Array<{ value: "STANDARD" | "MERCURIO"; label: string }> = [
   { value: "STANDARD", label: "Estándar (genérico)" },
-  { value: "MERCURIO", label: "Mercurio Group (REGI-MAN-02.4)" },
+  // El formulario vigente de Mercurio (REGI-MAN-02.4 "Orden de trabajo") es la
+  // plantilla MERCURIO_OT; esta entrada es el papel anterior, que se conserva.
+  { value: "MERCURIO", label: "Mercurio Group (formulario anterior)" },
 ];
 const TENANT_ROLES = [
   "TENANT_ADMIN",

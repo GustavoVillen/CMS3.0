@@ -15,10 +15,10 @@ export type WorkOrderPdfRenderer = (ctx: WorkOrderPdfContext) => Promise<Buffer>
 
 export const WO_PDF_TEMPLATES: Record<string, WorkOrderPdfRenderer> = {
   STANDARD: renderStandardWorkOrderPdf,
-  // Formulario viejo de Mercurio (REGI-MAN-02.4). Se conserva para poder volver
-  // atrás: UPDATE "TenantSetting" SET "workOrderPdfTemplate"='MERCURIO'.
+  // Formulario viejo de Mercurio ("Orden Interna de Trabajo"). Se conserva para
+  // poder volver atrás: UPDATE "TenantSetting" SET "workOrderPdfTemplate"='MERCURIO'.
   MERCURIO: renderMercurioWorkOrderPdf,
-  // REGI-MAN-02.3 "Orden de trabajo" (rev 0, 29.12.2025) — el vigente.
+  // REGI-MAN-02.4 "Orden de trabajo" (rev 3, 29.12.2025) — el vigente.
   MERCURIO_OT: renderMercurioOtPdf,
 };
 
