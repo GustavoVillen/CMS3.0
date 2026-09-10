@@ -166,17 +166,17 @@ const FIX_TEXT: Record<string, { title: string; what: string; how: string }> = {
   recLowCoverage: {
     title: "Pocas órdenes cerradas tienen parte de trabajo",
     what: "Menos del 80% de las órdenes cerradas tiene un parte que cuente qué se hizo. La evidencia existe, pero con huecos: el auditor va a caer justo en una orden sin registro.",
-    how: "Tomá la costumbre de asentar el avance el mismo día del trabajo.\nUsá el botón verde «Nuevo registro de Avance de OT» en Inicio: no hace falta abrir el formulario entero.\nUna foto del antes y el después vale más que tres renglones.\nAcordate de que la orden cerrada ya no admite avances: cargalo antes de cerrar.",
+    how: "Tomá la costumbre de asentar el avance el mismo día del trabajo.\nUsá el botón verde «Registro de Avance» en Inicio: no hace falta abrir el formulario entero.\nUna foto del antes y el después vale más que tres renglones.\nAcordate de que la orden cerrada ya no admite avances: cargalo antes de cerrar.",
   },
   recNoWorkLogs: {
     title: "Órdenes cerradas sin ningún parte de trabajo",
     what: "Se cerraron órdenes de trabajo sin un solo parte que cuente qué se hizo. Hay mantenimiento ejecutado del que no quedó registro: es exactamente lo que busca un auditor.",
-    how: "En Inicio usá el botón verde «Nuevo registro de Avance de OT».\nElegí la orden y asentá qué se hizo: texto, foto, video o documento.\nCargá el avance ANTES de cerrar la orden: una vez cerrada ya no admite avances.\nAl cerrar, completá además el resultado del trabajo.",
+    how: "En Inicio usá el botón verde «Registro de Avance».\nElegí la orden y asentá qué se hizo: texto, foto, video o documento.\nCargá el avance ANTES de cerrar la orden: una vez cerrada ya no admite avances.\nAl cerrar, completá además el resultado del trabajo.",
   },
   recNothing: {
     title: "No hay órdenes cerradas en los últimos 90 días",
     what: "No se cerró ninguna orden de trabajo en los últimos 90 días, así que no hay registros de mantenimiento recientes que mostrar.",
-    how: "Abrí Órdenes de Trabajo y revisá qué hay abierto.\nCerrá las que ya se ejecutaron, con su resultado.\nSi el trabajo se hizo y nadie lo cargó, registralo con su fecha real de ejecución.\nEl parte de trabajo se carga con «Nuevo registro de Avance de OT», desde Inicio o desde la propia orden.",
+    how: "Abrí Órdenes de Trabajo y revisá qué hay abierto.\nCerrá las que ya se ejecutaron, con su resultado.\nSi el trabajo se hizo y nadie lo cargó, registralo con su fecha real de ejecución.\nEl parte de trabajo se carga con «Registro de Avance», desde Inicio o desde la propia orden.",
   },
   regulatoryNothing: {
     title: "Todavía no hay nada cargado",

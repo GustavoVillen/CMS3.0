@@ -17,6 +17,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { AssetHoursGrid, STALE_DAYS, type HoursSheet, type HoursSheetRow } from "../components/AssetHoursGrid";
 import { useVesselContext } from "../lib/vessel-context";
+import { useCopilotEmitter, useCopilotDataRefresh } from "../lib/copilot-context";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 
@@ -195,6 +196,22 @@ export const AssetHoursPage: React.FC = () => {
       setBusyEntryId(null);
     }
   }, [refreshAfterEdit]);
+
+  // ── Copiloto ──────────────────────────────────────────────────────────────
+  // Contexto: qué buque y qué fecha de lectura tiene abiertos, para que no
+  // pregunte lo que ya está en pantalla. Y "reload": cuando el copiloto
+  // registra una lectura, la grilla se refresca sola en vez de quedar mostrando
+  // el valor viejo debajo de un "hecho".
+  useCopilotEmitter(vesselCode ? {
+    module: "ASSET_HOURS",
+    screen: "ASSET_HOURS_SHEET",
+    vesselCode,
+    fieldValues: {
+      readingDate,
+      trackedAssets: String(sheet?.rows.length ?? 0),
+    },
+  } : null);
+  useCopilotDataRefresh(() => { void reload(); });
 
   const staleCount = useMemo(
     () => (sheet?.rows ?? []).filter((r) => r.daysSinceReading == null || r.daysSinceReading > STALE_DAYS).length,

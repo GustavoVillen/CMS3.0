@@ -1494,6 +1494,9 @@ export async function handleTenantRoutes(
           userEmail:      session.user.email,
           userRole:       session.user.role,
           assignedVesselCodes: session.user.assignedVesselCodes,
+          // La necesitan las tools que delegan en un service con control de
+          // acceso propio (cumplimiento, alertas, paneles TMSA / ISM).
+          session,
           screenContext:  body.screenContext ?? null,
           fileAttachment: (body.fileAttachment ?? null) as import("./copiloto/file-parser-service").FileContent | null,
           mode:           body.mode ?? null,

@@ -7,6 +7,11 @@
 // Se listan agrupadas por equipo y plegadas, igual que el tablero de OT
 // (KanbanBoard en pages/WorkOrders.tsx): el mismo golpe de vista para el mismo
 // dato. Si un día el tablero cambia de forma, hay que mirar los dos.
+//
+// El criterio de "OT abierta" (WO_OPEN_STATUSES), el chip de estado y la lista
+// se exportan: el "Registro de Avance" del Dashboard (ProgressFlow) arma su
+// propia lista por equipo mezclando las OT con las SS, y tiene que mostrar
+// exactamente las mismas órdenes y con la misma cara.
 
 import React from "react";
 import { ChevronDown, Wrench, Loader2 } from "lucide-react";
@@ -16,12 +21,13 @@ import { ModalCloseButton } from "../ModalCloseButton";
 import { fmtDate } from "../../lib/utils";
 
 /** Sólo lo que la lista necesita mostrar y agrupar. */
-interface PickerWorkOrder {
+export interface PickerWorkOrder {
   id: string;
   workOrderCode: string;
   title: string | null;
   status: string;
   dueDate: string | null;
+  vesselCode: string;
   assetId: string | null;
   assetName: string | null;
 }
@@ -31,7 +37,7 @@ interface PickerWorkOrder {
  * pages/WorkOrders.tsx, que es lo que gatea el botón dentro de la propia OT:
  * ofrecer acá una orden que después no deja crearla sería un callejón sin salida.
  */
-const OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
+export const WO_OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
 
 function groupByAsset(items: PickerWorkOrder[]) {
   const map = new Map<string, { label: string; items: PickerWorkOrder[] }>();
@@ -47,7 +53,7 @@ function groupByAsset(items: PickerWorkOrder[]) {
 }
 
 /** Chip de estado, con el mismo criterio de colores que el tablero. */
-function StatusChip({ wo }: { wo: PickerWorkOrder }) {
+export function WoStatusChip({ wo }: { wo: PickerWorkOrder }) {
   const t = useT();
   const overdue = !!wo.dueDate && new Date(wo.dueDate) < new Date();
   const cls = wo.status === "ON_HOLD" || wo.status === "DEFERRED"
@@ -65,18 +71,20 @@ function StatusChip({ wo }: { wo: PickerWorkOrder }) {
   );
 }
 
-export function OpenWorkOrdersPicker({ onClose, onPick, title, subtitle }: {
-  onClose: () => void;
+/**
+ * Las OT abiertas del buque, agrupadas por equipo y plegadas. Sin ventana
+ * propia: la pone quien la usa (el picker de la SS o el Registro de Avance).
+ */
+export function OpenWorkOrdersList({ onPick, empty }: {
   /** La OT elegida: el que llama decide adónde llevarla. */
   onPick: (wo: { id: string; workOrderCode: string }) => void;
-  /** Encabezado propio del que llama. Sin esto, el de la SS (uso original). */
-  title?: string;
-  subtitle?: string;
+  /** Texto de "no hay nada". Sin esto, el de la SS (uso original). */
+  empty?: string;
 }) {
   const t = useT();
   // useFetch inyecta el buque del contexto: se listan las OT del buque elegido.
   const { data, loading } = useFetch<{ items: PickerWorkOrder[] }>("/app/work-orders");
-  const abiertas = (data?.items ?? []).filter(w => OPEN_STATUSES.includes(w.status));
+  const abiertas = (data?.items ?? []).filter(w => WO_OPEN_STATUSES.includes(w.status));
   const grupos = groupByAsset(abiertas);
   // Arrancan plegados, como el tablero. Con un solo equipo no tiene sentido
   // esconderlo: se abre solo.
@@ -93,6 +101,72 @@ export function OpenWorkOrdersPicker({ onClose, onPick, title, subtitle }: {
     });
 
   return (
+    <>
+      {loading && abiertas.length === 0 && (
+        <p className="flex items-center gap-2 text-xs text-text-industrial/50 py-6 justify-center">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
+        </p>
+      )}
+
+      {!loading && grupos.length === 0 && (
+        <p className="text-xs text-text-industrial/50 text-center py-8">{empty ?? t("dashboard.woPicker.empty")}</p>
+      )}
+
+      {grupos.map(group => {
+        const plegado = !expandidos.has(group.key);
+        return (
+          <div key={group.key} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
+            <button
+              type="button"
+              onClick={() => toggle(group.key)}
+              className="w-full flex items-center gap-1.5 px-2 py-2 text-left rounded-lg hover:bg-fg/[0.05] transition-colors"
+              title={group.label}
+            >
+              <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 shrink-0 transition-transform duration-150 ${plegado ? "-rotate-90" : ""}`} />
+              <Wrench className="w-3 h-3 text-accent/70 shrink-0" />
+              <span className="text-[12px] font-bold text-fg truncate flex-1">{group.label}</span>
+              <span className="text-[10px] font-bold text-text-industrial/50 bg-fg/10 rounded-full px-1.5 py-0.5 shrink-0">
+                {group.items.length}
+              </span>
+            </button>
+
+            {!plegado && (
+              <div className="flex flex-col gap-1.5 p-2 pt-0">
+                {group.items.map(wo => (
+                  <button
+                    key={wo.id}
+                    type="button"
+                    onClick={() => onPick({ id: wo.id, workOrderCode: wo.workOrderCode })}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-fg/[0.03] border border-fg/10 hover:border-accent/40 hover:bg-fg/[0.07] transition-all text-left"
+                  >
+                    <span className="font-mono text-[11px] font-bold text-accent shrink-0">{wo.workOrderCode}</span>
+                    <span className="flex-1 min-w-0 truncate text-xs text-fg">{wo.title || "—"}</span>
+                    {wo.dueDate && (
+                      <span className="shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(wo.dueDate)}</span>
+                    )}
+                    <WoStatusChip wo={wo} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+export function OpenWorkOrdersPicker({ onClose, onPick, title, subtitle }: {
+  onClose: () => void;
+  /** La OT elegida: el que llama decide adónde llevarla. */
+  onPick: (wo: { id: string; workOrderCode: string }) => void;
+  /** Encabezado propio del que llama. Sin esto, el de la SS (uso original). */
+  title?: string;
+  subtitle?: string;
+}) {
+  const t = useT();
+
+  return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
         className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col"
@@ -107,56 +181,7 @@ export function OpenWorkOrdersPicker({ onClose, onPick, title, subtitle }: {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
-          {loading && abiertas.length === 0 && (
-            <p className="flex items-center gap-2 text-xs text-text-industrial/50 py-6 justify-center">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
-            </p>
-          )}
-
-          {!loading && grupos.length === 0 && (
-            <p className="text-xs text-text-industrial/50 text-center py-8">{t("dashboard.woPicker.empty")}</p>
-          )}
-
-          {grupos.map(group => {
-            const plegado = !expandidos.has(group.key);
-            return (
-              <div key={group.key} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
-                <button
-                  type="button"
-                  onClick={() => toggle(group.key)}
-                  className="w-full flex items-center gap-1.5 px-2 py-2 text-left rounded-lg hover:bg-fg/[0.05] transition-colors"
-                  title={group.label}
-                >
-                  <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 shrink-0 transition-transform duration-150 ${plegado ? "-rotate-90" : ""}`} />
-                  <Wrench className="w-3 h-3 text-accent/70 shrink-0" />
-                  <span className="text-[12px] font-bold text-fg truncate flex-1">{group.label}</span>
-                  <span className="text-[10px] font-bold text-text-industrial/50 bg-fg/10 rounded-full px-1.5 py-0.5 shrink-0">
-                    {group.items.length}
-                  </span>
-                </button>
-
-                {!plegado && (
-                  <div className="flex flex-col gap-1.5 p-2 pt-0">
-                    {group.items.map(wo => (
-                      <button
-                        key={wo.id}
-                        type="button"
-                        onClick={() => onPick({ id: wo.id, workOrderCode: wo.workOrderCode })}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-fg/[0.03] border border-fg/10 hover:border-accent/40 hover:bg-fg/[0.07] transition-all text-left"
-                      >
-                        <span className="font-mono text-[11px] font-bold text-accent shrink-0">{wo.workOrderCode}</span>
-                        <span className="flex-1 min-w-0 truncate text-xs text-fg">{wo.title || "—"}</span>
-                        {wo.dueDate && (
-                          <span className="shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(wo.dueDate)}</span>
-                        )}
-                        <StatusChip wo={wo} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <OpenWorkOrdersList onPick={onPick} />
         </div>
       </div>
     </div>

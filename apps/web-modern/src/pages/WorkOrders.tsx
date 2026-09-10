@@ -29,10 +29,14 @@ import { useTheme } from "../lib/theme";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
+import {
+  WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS,
+  WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS,
+} from "../lib/wo-form-catalog";
 import { useAuth, useCan } from "../lib/auth";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
@@ -1368,6 +1372,75 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }, delay);
   }, [workOrder.id, sparesData]);
 
+  // Vencimiento: mismo permiso que el recuadro de la cabecera. Se comparte para
+  // que el copiloto no ofrezca completar una fecha que la pantalla tiene trabada.
+  const canEditDueDate = (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable;
+
+  /**
+   * Lo que el copiloto ve de esta OT: los recuadros que se completan AL ABRIRLA
+   * — los de arriba de la hoja REGI-MAN-02.3 (o sus equivalentes en los tenants
+   * sin formulario controlado), el técnico y el vencimiento.
+   *
+   * Los recuadros de RESULTADO quedan afuera a propósito: se completan al
+   * cerrar, cuando el trabajo ya se hizo. Una OT recién abierta no tiene
+   * resultado que contar.
+   */
+  const copilotFieldValues: Record<string, string | null> = {
+    title:              title              || null,
+    description:        description        || null,
+    acceptanceCriteria: acceptanceCriteria || null,
+    loto:               loto               || null,
+    riskLevel:          riskLevel          || null,
+    riskAnalysisResult: riskAnalysisResult || null,
+    priority:           priority           || null,
+    location:           location           || null,
+    assignedToUserId:   assignedTo         || null,
+    ...(canEditDueDate ? { dueDate: dueDate || null } : {}),
+    ...(isMercurio
+      ? {
+          voyageNumber:       regiForm.voyageNumber       || null,
+          operatingCondition: regiForm.operatingCondition || null,
+          requestedByArea:    regiForm.requestedByArea    || null,
+          assignedToArea:     regiForm.assignedToArea     || null,
+          systemArea:         regiForm.systemArea         || null,
+          maintenanceKind:    regiForm.maintenanceKind    || null,
+        }
+      : { department: department || null }),
+  };
+
+  /**
+   * Opciones exactas de los recuadros de lista cerrada. Sin esto la IA proponía
+   * texto libre ("máquinas", "urgente") que el formulario no podía aplicar.
+   * Salen del MISMO catálogo que dibuja la hoja, así no se desincronizan.
+   */
+  const copilotFieldOptions = useMemo(() => {
+    const people = Array.isArray(directoryData) ? directoryData : [];
+    const opts: Record<string, Array<{ value: string; label: string }>> = {
+      priority: WO_PRIORITY_OPTIONS,
+      riskLevel: [
+        { value: "LOW",      label: "Bajo" },
+        { value: "MEDIUM",   label: "Medio" },
+        { value: "HIGH",     label: "Alto" },
+        { value: "CRITICAL", label: "Crítico" },
+      ],
+      assignedToUserId: people.map(person => ({ value: person.userId, label: person.name })),
+    };
+    if (isMercurio) {
+      opts.operatingCondition = WO_OPERATING_CONDITIONS.map(c => ({
+        value: c, label: t(`wo.condition.${c}` as TranslationKey),
+      }));
+      opts.requestedByArea = WO_REQUESTED_BY;
+      opts.assignedToArea  = WO_ASSIGNED_TO;
+      opts.systemArea      = WO_SYSTEM_AREAS;
+      opts.maintenanceKind = WO_MAINTENANCE_KINDS;
+    } else {
+      opts.department = ["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"].map(d => ({
+        value: d, label: t(`wo.dept.${d}` as TranslationKey),
+      }));
+    }
+    return opts;
+  }, [isMercurio, directoryData, t]);
+
   useCopilotEmitter({
     module: "WORK_ORDERS",
     screen: "WO_EDIT",
@@ -1376,24 +1449,63 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     vesselCode: workOrder.vesselCode,
     workflowStage: workOrder.status,
     canEdit: isEditable,
-    fieldValues: {
-      title:              title              || null,
-      description:        description        || null,
-      acceptanceCriteria: acceptanceCriteria || null,
-      loto:               loto               || null,
-      riskLevel:          riskLevel          || null,
-      riskAnalysisResult: riskAnalysisResult || null,
-    },
+    fieldValues: copilotFieldValues,
+    fieldOptions: copilotFieldOptions,
   });
 
   useCopilotApplyFields(isEditable ? (fields) => {
+    /** Lista cerrada: sólo entra un valor que exista de verdad en el recuadro. */
+    const pick = (key: string, value: string | undefined): string | null => {
+      if (value === undefined) return null;
+      const opts = copilotFieldOptions[key];
+      if (!opts) return null;
+      return opts.some(o => o.value === value) ? value : null;
+    };
+
+    // -- Texto libre y campos sueltos de la OT (se persisten con "Guardar") --
     if (fields.title              !== undefined) setTitle(fields.title);
     if (fields.description        !== undefined) setDescription(fields.description);
     if (fields.acceptanceCriteria !== undefined) setAcceptanceCriteria(fields.acceptanceCriteria);
     if (fields.loto               !== undefined) setLoto(fields.loto);
     if (fields.riskAnalysisResult !== undefined) setRiskAnalysisResult(fields.riskAnalysisResult);
-    if (fields.riskLevel          !== undefined && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(fields.riskLevel))
-      setRiskLevel(fields.riskLevel);
+    const risk = pick("riskLevel", fields.riskLevel);
+    if (risk) setRiskLevel(risk);
+    const assignee = pick("assignedToUserId", fields.assignedToUserId);
+    if (assignee) setAssignedTo(assignee);
+    if (fields.dueDate !== undefined && canEditDueDate) setDueDate(fields.dueDate);
+
+    // -- Recuadros del formulario controlado (tienen auto-guardado propio) --
+    // Prioridad y ubicación viven en el bloque REGI: tocarlos exige avisarle al
+    // auto-guardado, si no el valor queda sólo en pantalla.
+    const priorityVal = pick("priority", fields.priority);
+    if (priorityVal) { touchRegi(); setPriority(priorityVal); }
+    if (fields.location !== undefined) { touchRegi(); setLocation(fields.location); }
+    if (!isMercurio) {
+      const dept = pick("department", fields.department);
+      if (dept) { setDepartment(dept); if (dept !== "PROVEEDOR") setProviderId(""); }
+    }
+
+    const regiPatch: Partial<WoRegiForm> = {};
+    if (fields.voyageNumber !== undefined) regiPatch.voyageNumber = fields.voyageNumber;
+    const cond  = pick("operatingCondition", fields.operatingCondition);
+    const reqBy = pick("requestedByArea",    fields.requestedByArea);
+    const asgTo = pick("assignedToArea",     fields.assignedToArea);
+    const sysAr = pick("systemArea",         fields.systemArea);
+    const kind  = pick("maintenanceKind",    fields.maintenanceKind);
+    if (cond)  regiPatch.operatingCondition = cond;
+    if (reqBy) regiPatch.requestedByArea    = reqBy;
+    if (asgTo) regiPatch.assignedToArea     = asgTo;
+    if (sysAr) regiPatch.systemArea         = sysAr;
+    if (kind) {
+      regiPatch.maintenanceKind = kind;
+      // Mismo criterio que el recuadro del papel y que deriveTypeFromMaintenanceKind
+      // en el backend: el tipo grueso se deriva, no se pregunta aparte.
+      setType(kind === "PREVENTIVO" || kind === "PREDICTIVO" ? "PREVENTIVE" : "CORRECTIVE");
+    }
+    if (Object.keys(regiPatch).length > 0) {
+      touchRegi();
+      setRegiForm(prev => ({ ...prev, ...regiPatch }));
+    }
   } : null);
 
   // Clic en el rótulo TAREA: la IA arma la lista de tareas desde el equipo y el
@@ -1484,6 +1596,21 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch { /* noop */ }
     finally { setLoadingRisk(false); }
   }, [isEditable, loadingRisk, workOrder.assetName, workOrder.vesselCode, aiTaskType, description, title, acceptanceCriteria, loto]);
+
+  /**
+   * Los mismos asistentes de la chispita, pero disparables desde el copiloto.
+   *
+   * Cuando la OT se abre desde un plan, criterios / LOTO / riesgo llegan
+   * heredados: el copiloto pregunta si se recalculan y, si el usuario acepta,
+   * corre ESTOS handlers. No los redacta el copiloto por su cuenta — así el
+   * texto sale igual venga del rótulo o del chat, con la misma calibración
+   * (alcance de la tarea, nivel tripulación, formato de LOTO).
+   */
+  useCopilotFormActions(isEditable ? {
+    acceptanceCriteria: handleAcceptanceCriteriaClick,
+    loto: handleLotoClick,
+    risk: handleRiskClick,
+  } : null);
 
   const handleConsequenceClick = useCallback(async () => {
     if (!isEditable || loadingConsequence) return;
@@ -4183,6 +4310,9 @@ export const WorkOrdersPage: React.FC = () => {
   }, [priorityFilter, statusFilter, typeFilter, vesselFilter]);
 
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // El copiloto escribe desde el chat: si esta pantalla está abierta mostrando
+  // lo que acaba de cambiar, se recarga sola.
+  useCopilotDataRefresh(reload);
   // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
   const tmsaFilter = useTmsaFilter();
 
@@ -4331,12 +4461,23 @@ export const WorkOrdersPage: React.FC = () => {
   }, [autoCode, openLink]);
 
   // Deep-link: la URL `/work-orders/:code` es la fuente de verdad del detalle.
+  //
+  // Si el código no está en el listado ya cargado, se recarga UNA sola vez por
+  // código. Es el caso de una OT recién creada: el copiloto la abre apenas la
+  // crea y el listado en memoria es anterior a ella, así que sin esto la
+  // pantalla se quedaba en la grilla sin abrir nada y sin decir por qué. El
+  // candado por código evita el bucle cuando la OT de verdad no está (por
+  // ejemplo, filtrada por estado).
+  const reloadedForCodeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!linkCode) { setEditing(null); return; }
     if (editing?.workOrderCode === linkCode) return;
     const match = data?.items?.find(w => w.workOrderCode === linkCode);
-    if (match) void openDetail(match);
-  }, [linkCode, data, editing, openDetail]);
+    if (match) { void openDetail(match); return; }
+    if (!data || reloadedForCodeRef.current === linkCode) return;
+    reloadedForCodeRef.current = linkCode;
+    void reload();
+  }, [linkCode, data, editing, openDetail, reload]);
 
   const openActionModal = useCallback((wo: WorkOrder, type: ActionType) => {
     setActionTarget({ workOrder: wo, type });

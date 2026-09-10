@@ -22,6 +22,10 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import type { TenantAccessSession } from "../auth/session-store";
+import { getComplianceScores, getSmartAlerts } from "../compliance/compliance-service";
+import { getTmsaMaintenanceEvidence } from "../tmsa/tmsa-service";
+import { getIsmChapter10Evidence } from "../ism/ism-service";
 import {
   applyVesselWhereScope,
   applyVesselWhereScopeOn,
@@ -221,7 +225,69 @@ export const EXTENDED_COPILOT_TOOLS: Anthropic.Tool[] = [
     },
   },
 
+  // ── Cumplimiento consolidado y paneles de auditoría ───────────────────────
+  {
+    name: "query_compliance_score",
+    description:
+      "Compliance Score of a vessel (or of every vessel in scope): the 0-100 number the fleet dashboard shows, with the components it is built from (on-time work order closure, drills, valid certificates, open PSC findings, open critical defects, STCW rest-hour violations) and the raw counts behind each one. Use it when the user asks how a vessel is doing overall, why its score dropped, or to compare vessels. The score is computed live from real records — it is NOT an opinion and NOT an ISM/TMSA certification. On barges and unmanned units drills and rest hours do not apply and are excluded (crewedOperation=false).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Vessel code. Omit to get every vessel in the user's scope." },
+      },
+    },
+  },
+  {
+    name: "query_smart_alerts",
+    description:
+      "Prioritised list of things that need attention NOW on a vessel (or across the fleet), detected with deterministic rules over real records — expiring certificates, overdue work, open critical defects, and so on. Each alert carries severity (INFO | WARNING | CRITICAL), a title and a summary. Use it when the user asks what needs attention, what is urgent, or what the vessel is at risk of. Different from query_ai_insights, which returns AI-generated observations.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Vessel code. Omit for the whole scope." },
+      },
+    },
+  },
+  {
+    name: "query_tmsa_evidence",
+    description:
+      "TMSA Element 4 (Reliability & Maintenance) evidence panel: a read-only lens over records that already exist in the PMS, grouped by TMSA reference, each group with a status (OK | ATTENTION | GAP | INFO), its metrics and the findings that explain the status. Use it to prepare or answer questions about a TMSA inspection, or when the user asks where the maintenance evidence is weak. IMPORTANT: it does NOT state a TMSA level and does not certify anything — it shows the objective evidence. ADMIN ONLY: for any other role the tool answers that the panel is restricted.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Vessel code. Omit for the consolidated fleet figure." },
+        mode: { type: "string", description: "\"fleet\" (default, one consolidated item) or \"perVessel\" (one item per vessel)." },
+      },
+    },
+  },
+  {
+    name: "query_ism_chapter10",
+    description:
+      "ISM Code Chapter 10 (Maintenance of the ship and equipment) evidence panel: same read-only idea as query_tmsa_evidence, but grouped by ISM clause (10.1, 10.2.1, 10.2.2, 10.2.3, 10.3…), each group with its status and the findings that are missing. Use it to prepare an internal or external SMS audit, or when the user asks what is missing to back up a clause of Chapter 10. It does NOT declare ISM conformity — that is certified by the Administration or the Recognised Organisation. ADMIN ONLY: for any other role the tool answers that the panel is restricted.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Vessel code. Omit for the consolidated fleet figure." },
+        mode: { type: "string", description: "\"fleet\" (default) or \"perVessel\"." },
+      },
+    },
+  },
+
   // ── Repuestos, compras y proveedores ──────────────────────────────────────
+  {
+    name: "query_provider_evaluations",
+    description:
+      "Performance evaluations of the workshops/providers (evaluación de proveedores): score, rating and the evaluator's summary for each evaluation. Use it when the user asks how a taller performed, which provider to send a job to, or whether a provider has a bad record. Combine with query_providers to resolve the workshop name.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Filter by vessel code (optional)" },
+        status:     { type: "string", description: "Filter by status: DRAFT | SUBMITTED | APPROVED (optional)" },
+        rating:     { type: "string", description: "Filter by rating (optional)" },
+        limit:      { type: "number", description: "Max results (default 20, max 50)" },
+      },
+    },
+  },
   {
     name: "query_spare_requests",
     description:
@@ -402,6 +468,16 @@ export async function executeExtendedCopilotTool(
   input: Record<string, unknown>,
   tenantId: string,
   scope: VesselScope,
+  /**
+   * Sesión del usuario. La necesitan sólo las tools que reusan un service en
+   * vez de consultar Prisma derecho: el puntaje de cumplimiento, las alertas y
+   * los paneles TMSA / ISM son CÁLCULOS, no tablas — reimplementarlos acá sería
+   * duplicar la regla de negocio y garantizar que un día digan cosas distintas
+   * que la pantalla. Es opcional porque el copiloto también corre en llamadas
+   * internas de un solo tiro (analizar una postergación, sugerir un defecto)
+   * que no traen sesión; ahí estas tools contestan que no están disponibles.
+   */
+  session?: TenantAccessSession,
 ): Promise<string | null> {
   if (!HANDLED.has(name)) return null;
 
@@ -1294,6 +1370,69 @@ export async function executeExtendedCopilotTool(
       });
 
       return toolResult(rows, "No AI insights found matching the given criteria.");
+    }
+
+    // ── Evaluaciones de proveedores ────────────────────────────────────────
+    if (name === "query_provider_evaluations") {
+      const limit = cap(input.limit, 20, 50);
+      const where: Record<string, unknown> = { tenantId, deletedAt: null };
+      const scoped = applyVesselWhereScope(where, input.vesselCode, scope);
+      if (!scoped.ok) return scoped.reason;
+      if (input.status) where.status = input.status;
+      if (input.rating) where.rating = input.rating;
+
+      const rows = await prisma.providerEvaluation.findMany({
+        where,
+        take: limit,
+        orderBy: { evaluatedAt: "desc" },
+        select: {
+          evaluationCode: true, vesselCode: true, status: true,
+          score: true, rating: true, evaluatedAt: true, evaluatorName: true,
+          summary: true, notes: true,
+          provider: { select: { name: true, providerCode: true } },
+        },
+      });
+
+      return toolResult(rows, "No provider evaluations found matching the given criteria.");
+    }
+
+    // ── Cumplimiento consolidado y paneles de auditoría ────────────────────
+    // Estas cuatro delegan en su service: el número tiene que ser el MISMO que
+    // muestra la pantalla, y el service ya trae su propio control de acceso.
+    if (name === "query_compliance_score" || name === "query_smart_alerts"
+        || name === "query_tmsa_evidence" || name === "query_ism_chapter10") {
+      if (!session) {
+        return JSON.stringify({
+          error: "This tool is not available in the current context (no user session).",
+        });
+      }
+      const vesselCode = typeof input.vesselCode === "string" && input.vesselCode.trim()
+        ? input.vesselCode.trim()
+        : null;
+      const mode = input.mode === "perVessel" ? "perVessel" as const : "fleet" as const;
+
+      try {
+        if (name === "query_compliance_score") {
+          const { items } = await getComplianceScores(session, vesselCode);
+          return toolResult(items, "No compliance score available for the requested scope.");
+        }
+        if (name === "query_smart_alerts") {
+          const { items } = await getSmartAlerts(session, vesselCode);
+          return toolResult(items, "No open alerts for the requested scope. This means the deterministic rules found nothing — it is not a statement that everything is fine.");
+        }
+        if (name === "query_tmsa_evidence") {
+          const { items } = await getTmsaMaintenanceEvidence(session, vesselCode, mode);
+          return toolResult(items, "No TMSA evidence available for the requested scope.");
+        }
+        const { items } = await getIsmChapter10Evidence(session, vesselCode, mode);
+        return toolResult(items, "No ISM Chapter 10 evidence available for the requested scope.");
+      } catch (err) {
+        // Los paneles de auditoría son sólo del administrador del tenant. Se
+        // devuelve el motivo en claro para que el copiloto se lo pueda explicar
+        // al usuario en vez de escupir un error.
+        const message = err instanceof Error ? err.message : String(err);
+        return JSON.stringify({ error: message });
+      }
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });

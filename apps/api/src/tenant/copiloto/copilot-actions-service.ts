@@ -14,6 +14,7 @@ import { RouteError } from "../../http/route-error";
 import { updateTenantMaintenancePlan, openFormalWorkOrder } from "../maintenance-plans/maintenance-plans-service";
 import { createTenantWorkOrder, type WorkOrderDepartment } from "../work-orders/work-orders-service";
 import { createServiceRequestForWorkOrder } from "../service-requests/service-requests-service";
+import { recordHoursReadings } from "../asset-hours/asset-hours-service";
 import { log } from "../../common/logger";
 
 /**
@@ -43,8 +44,14 @@ const ALLOWED_WO_STANDALONE_FIELDS = new Set([
 /** create_service_request: cuelga de una OT ya existente. */
 const ALLOWED_SERVICE_REQUEST_FIELDS = new Set(["title", "description", "providerId", "priority"]);
 
+/** record_asset_hours: una lectura de horómetro. `runningHours` lo exige applyRecordAssetHours. */
+const ALLOWED_ASSET_HOURS_FIELDS = new Set(["runningHours", "readingDate", "rpm", "note"]);
+
 export interface CopilotAction {
-  /** Tipo de acción: "update_plan" | "create_work_order_from_plan" | "create_work_order" | "create_service_request". */
+  /**
+   * Tipo de acción: "update_plan" | "create_work_order_from_plan" |
+   * "create_work_order" | "create_service_request" | "record_asset_hours".
+   */
   type: string;
   /**
    * Identificador humano del target — el código que el usuario reconoce, NO un
@@ -63,7 +70,19 @@ export interface CopilotAction {
 
 export interface ApplyCopilotActionResult {
   ok: true;
-  applied: { type: string; target: string; entityId: string };
+  applied: {
+    type: string;
+    target: string;
+    entityId: string;
+    /**
+     * Código humano del registro RECIÉN CREADO (workOrderCode, serviceRequestCode…).
+     * El frontend lo usa para abrirlo en pantalla apenas se aplica la acción
+     * (deep-link `/work-orders/<code>`), sin tener que salir a buscarlo.
+     * Ausente en las acciones que no crean nada (update_plan).
+     */
+    entityCode?: string;
+    vesselCode?: string;
+  };
 }
 
 export async function applyCopilotAction(
@@ -84,6 +103,9 @@ export async function applyCopilotAction(
   }
   if (action.type === "create_service_request") {
     return applyCreateServiceRequest(session, action);
+  }
+  if (action.type === "record_asset_hours") {
+    return applyRecordAssetHours(session, action);
   }
   throw new RouteError(400, "UNSUPPORTED_ACTION_TYPE", `Tipo de acción no soportado: "${action.type}".`);
 }
@@ -179,7 +201,16 @@ async function applyCreateWorkOrderFromPlan(
 
   const workOrder = await openFormalWorkOrder(session, plan.id, patch);
 
-  return { ok: true, applied: { type: action.type, target: taskCode, entityId: workOrder.id } };
+  return {
+    ok: true,
+    applied: {
+      type: action.type,
+      target: taskCode,
+      entityId: workOrder.id,
+      entityCode: workOrder.workOrderCode,
+      vesselCode: workOrder.vesselCode,
+    },
+  };
 }
 
 /**
@@ -226,7 +257,16 @@ async function applyCreateWorkOrder(
     ...patch,
   });
 
-  return { ok: true, applied: { type: action.type, target: assetCode, entityId: workOrder.id } };
+  return {
+    ok: true,
+    applied: {
+      type: action.type,
+      target: assetCode,
+      entityId: workOrder.id,
+      entityCode: workOrder.workOrderCode,
+      vesselCode: workOrder.vesselCode,
+    },
+  };
 }
 
 /**
@@ -266,5 +306,79 @@ async function applyCreateServiceRequest(
 
   const serviceRequest = await createServiceRequestForWorkOrder(session, workOrder.id, patch);
 
-  return { ok: true, applied: { type: action.type, target: workOrderCode, entityId: serviceRequest.id } };
+  return {
+    ok: true,
+    applied: {
+      type: action.type,
+      target: workOrderCode,
+      entityId: serviceRequest.id,
+      entityCode: serviceRequest.serviceRequestCode,
+    },
+  };
+}
+
+/**
+ * record_asset_hours: registra una lectura de horómetro dictada al copiloto.
+ *
+ * Reutiliza recordHoursReadings tal cual — el mismo camino que la planilla
+ * "Horas de Equipos". De ahí salen, sin código extra acá: el permiso
+ * (assetHours.write), el alcance de buque, la validación del número, el upsert
+ * idempotente del día y el avance de los planes por horas de ese equipo.
+ *
+ * Va como MANUAL a propósito: la lectura la dictó una persona, el copiloto sólo
+ * la escribió. Así una carga por chat y una por planilla del mismo día son la
+ * MISMA fila (la clave única es tenant+equipo+fecha+origen) en vez de duplicarse
+ * y hacer avanzar los planes dos veces. Quién la cargó queda en el audit log.
+ * `target` = assetCode del equipo (resuelto por la IA vía query_assets).
+ */
+async function applyRecordAssetHours(
+  session: TenantAccessSession,
+  action: CopilotAction,
+): Promise<ApplyCopilotActionResult> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const assetCode = String(action.target ?? "").trim();
+  if (!assetCode) throw new RouteError(400, "MISSING_TARGET", "Falta el código del equipo.");
+
+  const assetWhere: Record<string, unknown> = { tenantId: tenant.id, assetCode, deletedAt: null };
+  if (action.vesselCode) assetWhere.vesselCode = action.vesselCode;
+  const asset = await (prisma as unknown as { asset: { findFirst(a: unknown): Promise<{ id: string; vesselCode: string } | null> } })
+    .asset.findFirst({ where: assetWhere, select: { id: true, vesselCode: true } });
+  if (!asset) {
+    throw new RouteError(404, "ASSET_NOT_FOUND", `No se encontró un equipo con código "${assetCode}".`);
+  }
+
+  const patch = filterPatch(action.patch, ALLOWED_ASSET_HOURS_FIELDS);
+
+  const runningHours = Number(patch.runningHours);
+  if (!Number.isFinite(runningHours)) {
+    throw new RouteError(400, "MISSING_HOURS", "Falta la lectura del horómetro (runningHours).");
+  }
+
+  // Sin fecha, la lectura es de hoy: es el caso normal ("el horómetro marca X").
+  const rawDate = typeof patch.readingDate === "string" ? patch.readingDate.trim() : "";
+  const readingDate = rawDate || new Date().toISOString().slice(0, 10);
+
+  const rawRpm = patch.rpm === undefined || patch.rpm === null || patch.rpm === "" ? undefined : Number(patch.rpm);
+  if (rawRpm !== undefined && !Number.isFinite(rawRpm)) {
+    throw new RouteError(400, "INVALID_RPM", "El RPM tiene que ser un número.");
+  }
+
+  const note = typeof patch.note === "string" && patch.note.trim() ? patch.note.trim() : null;
+
+  log.info(`[copilot-action] record_asset_hours target=${assetCode} hours=${runningHours} date=${readingDate} user=${session.user.email}`);
+
+  await recordHoursReadings(
+    session,
+    [{ assetId: asset.id, runningHours, readingDate, rpm: rawRpm, note }],
+    { source: "MANUAL" },
+  );
+
+  return {
+    ok: true,
+    applied: { type: action.type, target: assetCode, entityId: asset.id, vesselCode: asset.vesselCode },
+  };
 }

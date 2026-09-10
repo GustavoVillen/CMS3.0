@@ -47,6 +47,13 @@ export interface CopilotScreenContext {
   canEdit?: boolean;
   /** Live values of visible/editable form fields (null = empty). */
   fieldValues?: Record<string, string | null>;
+  /**
+   * Opciones válidas de los campos de `fieldValues` que son lista cerrada
+   * (recuadros de tildar, desplegables). La IA tiene que proponer el `value`
+   * exacto — el `label` es sólo para que sepa de qué habla el recuadro.
+   * Sin esto proponía texto libre que el formulario no podía aplicar.
+   */
+  fieldOptions?: Record<string, Array<{ value: string; label: string }>>;
   /** Related entity IDs for cross-module context. */
   relatedEntities?: Record<string, string | null>;
 }
@@ -76,7 +83,21 @@ interface CopilotContextValue {
   unregisterApplyFieldsCallback: () => void;
   /** Call the registered callback with the given field values. No-op when none registered. */
   applyFields: (fields: Record<string, string>) => void;
+  /**
+   * Nombres de los asistentes de IA que el formulario abierto expone para que
+   * el copiloto los dispare (criterios de aceptación, LOTO, análisis de riesgo).
+   * No los genera el copiloto: corre el MISMO generador que el rótulo con la
+   * chispita del formulario, así el texto sale igual venga de donde venga.
+   */
+  formActionNames: string[];
+  registerFormActions: (actions: Record<string, CopilotFormAction>) => void;
+  unregisterFormActions: () => void;
+  /** Corre las acciones pedidas, en orden, esperando cada una. Ignora las que no existan. */
+  runFormActions: (names: string[]) => Promise<void>;
 }
+
+/** Un asistente de IA del formulario abierto (el de la chispita). */
+export type CopilotFormAction = () => void | Promise<void>;
 
 const CopilotContext = createContext<CopilotContextValue>({
   screenContext: null,
@@ -87,6 +108,10 @@ const CopilotContext = createContext<CopilotContextValue>({
   registerApplyFieldsCallback: () => {},
   unregisterApplyFieldsCallback: () => {},
   applyFields: () => {},
+  formActionNames: [],
+  registerFormActions: () => {},
+  unregisterFormActions: () => {},
+  runFormActions: async () => {},
 });
 
 // ---------------------------------------------------------------------------
@@ -115,6 +140,29 @@ export function CopilotContextProvider({ children }: { children: React.ReactNode
     applyFieldsCallbackRef.current?.(fields);
   }, []);
 
+  // Asistentes de IA del formulario abierto — mismo patrón que apply-fields:
+  // el ref guarda las funciones, el state sólo la lista de nombres para que la
+  // UI reaccione.
+  const formActionsRef = useRef<Record<string, CopilotFormAction>>({});
+  const [formActionNames, setFormActionNames] = useState<string[]>([]);
+
+  const registerFormActions = useCallback((actions: Record<string, CopilotFormAction>) => {
+    formActionsRef.current = actions;
+    setFormActionNames(Object.keys(actions));
+  }, []);
+
+  const unregisterFormActions = useCallback(() => {
+    formActionsRef.current = {};
+    setFormActionNames([]);
+  }, []);
+
+  const runFormActions = useCallback(async (names: string[]) => {
+    for (const name of names) {
+      const fn = formActionsRef.current[name];
+      if (fn) await fn();
+    }
+  }, []);
+
   return (
     <CopilotContext.Provider value={{
       screenContext, setScreenContext,
@@ -123,6 +171,10 @@ export function CopilotContextProvider({ children }: { children: React.ReactNode
       registerApplyFieldsCallback,
       unregisterApplyFieldsCallback,
       applyFields,
+      formActionNames,
+      registerFormActions,
+      unregisterFormActions,
+      runFormActions,
     }}>
       {children}
     </CopilotContext.Provider>
@@ -157,6 +209,69 @@ export function useCopilotApplyFields(fn: ((fields: Record<string, string>) => v
     return () => { unregisterApplyFieldsCallback(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fn !== null]); // re-register when nullability changes
+}
+
+/**
+ * Registra los asistentes de IA del formulario abierto para que el copiloto
+ * pueda dispararlos (por ejemplo, recalcular LOTO cuando el usuario acepta).
+ *
+ * Se guarda un envoltorio que siempre llama a la versión FRESCA del handler:
+ * los `useCallback` del formulario cambian de identidad en cada render y, sin
+ * esto, el copiloto correría una versión vieja, con datos viejos.
+ *
+ * @param actions  Mapa nombre → handler, o `null` cuando el formulario es de
+ *                 sólo lectura y no hay nada que disparar.
+ */
+export function useCopilotFormActions(actions: Record<string, CopilotFormAction> | null) {
+  const { registerFormActions, unregisterFormActions } = useContext(CopilotContext);
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+
+  const namesKey = actions ? Object.keys(actions).sort().join(",") : "";
+
+  useEffect(() => {
+    if (!namesKey) return;
+    const wrapped: Record<string, CopilotFormAction> = {};
+    for (const name of namesKey.split(",")) {
+      wrapped[name] = () => actionsRef.current?.[name]?.();
+    }
+    registerFormActions(wrapped);
+    return () => { unregisterFormActions(); };
+  }, [namesKey, registerFormActions, unregisterFormActions]);
+}
+
+/**
+ * El copiloto acaba de escribir algo en la base: las pantallas abiertas que
+ * muestren ese dato tienen que volver a pedirlo.
+ *
+ * Va por evento del navegador y no por un callback registrado en el contexto a
+ * propósito. El registro de asistentes (`useCopilotFormActions`) tiene UN solo
+ * casillero: si una ventana se registra encima de la pantalla, la tapa. Para
+ * refrescar eso no sirve — se necesita que avisen TODOS los que estén
+ * escuchando, sin orden ni prioridad, y que no haya forma de que uno anule al
+ * otro. Un evento hace exactamente eso y no puede quedar "desregistrado" por
+ * accidente.
+ */
+const DATA_CHANGED_EVENT = "cms3:copilot-data-changed";
+
+/** La dispara el panel del copiloto después de que el servidor confirmó la escritura. */
+export function notifyCopilotDataChanged(): void {
+  window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT));
+}
+
+/**
+ * Vuelve a cargar los datos de la pantalla cuando el copiloto escribe algo.
+ * Se puede usar en cualquier página o ventana, todas las veces que haga falta.
+ */
+export function useCopilotDataRefresh(reload: (() => void) | null) {
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+
+  useEffect(() => {
+    const handler = () => { reloadRef.current?.(); };
+    window.addEventListener(DATA_CHANGED_EVENT, handler);
+    return () => { window.removeEventListener(DATA_CHANGED_EVENT, handler); };
+  }, []);
 }
 
 /**

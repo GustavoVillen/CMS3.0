@@ -23,6 +23,7 @@ import { FormModal } from "../components/FormModal";
 import { AlertDialog } from "../components/AlertDialog";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotDataRefresh } from "../lib/copilot-context";
 import { printServiceRequest } from "../lib/print-work-order";
 import { useTheme } from "../lib/theme";
 import {
@@ -524,6 +525,9 @@ export function ServiceRequestsPage() {
   // estados, así que un filtro por estado en la query obligaría a refetchear en
   // cada clic. Mismo criterio que el tablero de OT.
   const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/service-requests", []);
+  // El copiloto escribe desde el chat: si esta pantalla está abierta mostrando
+  // lo que acaba de cambiar, se recarga sola.
+  useCopilotDataRefresh(reload);
   const items = data?.items ?? [];
 
   const visibleItems = React.useMemo(() => {
@@ -1213,6 +1217,72 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const { data: firmas } = useFetch<{ solicita: string | null; aprueba: string | null; autoriza: string | null }>(
     `/app/pms/service-requests/${sr.id}/signatures`, [sr.id, sr.status, sr.aprobadoAt, sr.autorizadoAt]);
   const doc = formDoc ?? SS_FORM_FALLBACK;
+
+  // ── Lo que el copiloto ve y puede completar de esta SS ────────────────────
+  // Mismo trato que la OT: ve los recuadros del formulario, sabe cuáles son de
+  // lista cerrada y puede cargarlos preguntando de a uno. No guarda: el usuario
+  // revisa la hoja y aprieta Guardar.
+  useCopilotEmitter({
+    module: "SERVICE_REQUESTS",
+    screen: "SR_EDIT",
+    entityId: sr.id,
+    entityCode: sr.serviceRequestCode,
+    vesselCode: sr.vesselCode,
+    workflowStage: sr.status,
+    canEdit: editable,
+    fieldValues: {
+      department:    form.department      || null,
+      description:   form.description     || null,
+      causes:        form.causes          || null,
+      purchaseKinds: form.compras.length > 0 ? form.compras.join(", ") : null,
+      tallerNotes:   form.tallerNotes     || null,
+      observations:  form.observations    || null,
+      communication: form.comunicacion.length > 0 ? form.comunicacion.join(", ") : null,
+      distribution:  form.distribucion.length > 0 ? form.distribucion.join(", ") : null,
+      capitan:       form.capitan         || null,
+      jefeMaq:       form.jefeMaq         || null,
+    },
+    // Las opciones salen del formulario controlado del tenant (el mismo que
+    // dibuja la hoja y estampa el PDF), no de una copia acá: si el tenant cambia
+    // su formulario, el copiloto propone las opciones nuevas sin tocar código.
+    fieldOptions: {
+      department:    doc.config.departments.map(v => ({ value: v, label: v })),
+      purchaseKinds: doc.config.purchaseRequest.map(v => ({ value: v, label: v })),
+      communication: doc.config.communicationMethods.map(v => ({ value: v, label: v })),
+      distribution:  doc.config.distribution.map(v => ({ value: v, label: v })),
+    },
+  });
+
+  useCopilotApplyFields(editable ? (fields) => {
+    /** Lista cerrada de una sola opción: sólo entra un valor que exista. */
+    const pickOne = (options: string[], value: string | undefined): string | null =>
+      value !== undefined && options.includes(value) ? value : null;
+    /** Recuadros de tildar varios: se acepta "A, B" y se descartan los inventados. */
+    const pickMany = (options: string[], value: string | undefined): string[] | null => {
+      if (value === undefined) return null;
+      const picked = value.split(",").map(v => v.trim()).filter(v => options.includes(v));
+      return picked.length > 0 ? picked : null;
+    };
+
+    const patch: Partial<SsPaperValues> = {};
+    if (fields.description  !== undefined) patch.description  = fields.description;
+    if (fields.causes       !== undefined) patch.causes       = fields.causes;
+    if (fields.tallerNotes  !== undefined) patch.tallerNotes  = fields.tallerNotes;
+    if (fields.observations !== undefined) patch.observations = fields.observations;
+    if (fields.capitan      !== undefined) patch.capitan      = fields.capitan;
+    if (fields.jefeMaq      !== undefined) patch.jefeMaq      = fields.jefeMaq;
+
+    const dept = pickOne(doc.config.departments, fields.department);
+    if (dept) patch.department = dept;
+    const compras = pickMany(doc.config.purchaseRequest, fields.purchaseKinds);
+    if (compras) patch.compras = compras;
+    const comunicacion = pickMany(doc.config.communicationMethods, fields.communication);
+    if (comunicacion) patch.comunicacion = comunicacion;
+    const distribucion = pickMany(doc.config.distribution, fields.distribution);
+    if (distribucion) patch.distribucion = distribucion;
+
+    if (Object.keys(patch).length > 0) patchForm(patch);
+  } : null);
   // Logo de la cabecera: el propio del formulario (el que estampa el PDF) y, si
   // no hay, el del tenant. En modo oscuro gana el logo claro del tenant — el del
   // papel es oscuro y sobre fondo oscuro no se ve.

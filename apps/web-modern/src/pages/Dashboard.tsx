@@ -21,8 +21,7 @@ import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
-import { SsProgressFlow } from "../components/service-requests/SsProgressFlow";
-import { WoProgressFlow } from "../components/work-orders/WoProgressFlow";
+import { ProgressFlow } from "../components/ProgressFlow";
 import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumptionFlow";
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
 import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
@@ -211,10 +210,9 @@ export const Dashboard: React.FC = () => {
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
   const [showSsChooser, setShowSsChooser] = React.useState(false);
   const [showNewPermit, setShowNewPermit] = React.useState(false);
-  // Registrar el avance de una SS ya mandada al taller: elegir la solicitud en
-  // ejecución y asentarle novedades en la hoja de ruta del pedido.
-  const [showWoProgress, setShowWoProgress] = React.useState(false);
-  const [showSsProgress, setShowSsProgress] = React.useState(false);
+  // Registro de Avance: una sola puerta para asentar lo que se hizo, sobre una
+  // OT abierta o sobre una SS que está en el taller (ver ProgressFlow).
+  const [showProgress, setShowProgress] = React.useState(false);
   // Consumo de repuestos sobre una OT abierta: descuenta stock del buque.
   const [showSpareUse, setShowSpareUse] = React.useState(false);
   // Completar un checklist: se elige el template y el alta sigue en /checklists.
@@ -778,8 +776,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         />
       )}
 
-      {showWoProgress && <WoProgressFlow onClose={() => setShowWoProgress(false)} />}
-      {showSsProgress && <SsProgressFlow onClose={() => setShowSsProgress(false)} />}
+      {showProgress && <ProgressFlow onClose={() => setShowProgress(false)} />}
 
       {showSpareUse && <SpareConsumptionFlow onClose={() => setShowSpareUse(false)} />}
 
@@ -984,28 +981,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <span className="font-bold text-sm text-fg">{t("dashboard.newPermit")}</span>
             </button>
           )}
-          {/* Asentar lo que se hizo en una OT abierta sin abrir el formulario
-              entero. Mismo criterio de permiso que el resto de los registros:
-              todos menos el rol de sólo lectura. */}
+          {/* Asentar lo que se hizo, sin abrir el formulario entero: la ventana
+              muestra las OT abiertas y las SS que están en el taller, y según lo
+              elegido abre el avance de la OT o la hoja de ruta del pedido. Se
+              oculta al rol de sólo lectura: el backend rechaza el registro (ver
+              canManage en service-requests-service.ts). */}
           {canLogSsProgress && (
             <button
-              onClick={() => setShowWoProgress(true)}
+              onClick={() => setShowProgress(true)}
               className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
             >
               <NotebookPen className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.woProgress.button")}</span>
-            </button>
-          )}
-          {/* Asentar el avance de un pedido al taller. Se oculta al rol de sólo
-              lectura: el backend rechaza la novedad (ver canManage en
-              service-requests-service.ts). */}
-          {canLogSsProgress && (
-            <button
-              onClick={() => setShowSsProgress(true)}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-            >
-              <ClipboardCheck className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.ssProgress.button")}</span>
+              <span className="font-bold text-sm text-fg">{t("dashboard.progress.button")}</span>
             </button>
           )}
           {/* Registrar lo que se consumió en una OT. Descuenta stock, así que
@@ -1060,21 +1047,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* La misma información del plan, en el formato de la planilla de papel
               que usan a bordo. Va primera y en naranja: es la puerta de entrada
-              para el Jefe de Máquinas, y así se distingue del botón de al lado
-              (no es otro dato, es otra manera de mirar el mismo). */}
+              para el Jefe de Máquinas. El plan en su forma de lista se abre
+              desde el menú lateral (Plan de Mantenimiento). */}
           <button
             onClick={() => navigate("/maintenance-sheet")}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:border-orange-500/60 hover:bg-orange-500/20 transition-all text-left"
           >
             <Table2 className="w-6 h-6 text-orange-600 dark:text-orange-400 shrink-0" />
             <span className="font-bold text-sm text-fg">{t("nav.maintenanceSheet")}</span>
-          </button>
-          <button
-            onClick={() => { setMpChooserMode("planList"); setMpGroup(null); void loadMpAssets("planList"); setShowMpChooser(true); }}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"
-          >
-            <ClipboardList className="w-6 h-6 text-accent shrink-0" />
-            <span className="font-bold text-sm text-fg">{t("nav.maintenancePlans")}</span>
           </button>
           {/* Qué hay que hacer hasta el domingo que viene: planes que vencen + OT
               abiertas, en una sola lista. El número de la derecha es el total, y

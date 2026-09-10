@@ -15,7 +15,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bot,
   Send,
@@ -46,6 +46,8 @@ import {
 function buildVoiceSummary(text: string): string {
   const clean = text
     .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+    .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
+    .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\[([^\]]+)]\([^\)]+\)/g, "$1")
     .replace(/^#{1,3}\s+/gm, "")
@@ -75,10 +77,10 @@ function getSpanishVoice(): SpeechSynthesisVoice | null {
   return null;
 }
 import { api, ApiError } from "../lib/api";
-import { useCopilotScreenContext, type CopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotScreenContext, notifyCopilotDataChanged, type CopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
-import { useWoTerms, type WoTerms } from "../lib/i18n";
+import { useT, useWoTerms, type WoTerms } from "../lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,6 +104,15 @@ interface ChatMessage {
    * como botones "Aplicar" debajo del bubble del mensaje. */
   actions?: SuggestedAction[];
 }
+
+/** Respuesta de /app/copiloto/apply-action. */
+interface ApplyActionResponse {
+  ok: boolean;
+  applied?: { type: string; target: string; entityId: string; entityCode?: string; vesselCode?: string };
+}
+
+/** Acciones que terminan con una OT nueva: son las que se abren en pantalla. */
+const CREATES_WORK_ORDER = new Set(["create_work_order_from_plan", "create_work_order"]);
 
 interface Suggestion {
   id: string;
@@ -150,9 +161,56 @@ function extractCamposBlock(text: string): Record<string, string> | null {
   return null;
 }
 
-/** Remove [CAMPOS]{...}[/CAMPOS] blocks from display text. */
-function stripCamposBlock(text: string): string {
-  return text.replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "").trim();
+/**
+ * Asistentes del formulario que la IA pide correr:
+ * [RECALCULAR]["acceptanceCriteria","loto","risk"][/RECALCULAR].
+ *
+ * No los redacta el copiloto: dispara el MISMO generador que el rótulo con la
+ * chispita del formulario, para que el texto salga igual venga de donde venga.
+ */
+function extractRecalcBlock(text: string): string[] | null {
+  const match = text.match(/\[RECALCULAR\]([\s\S]*?)\[\/RECALCULAR\]/);
+  if (!match) return null;
+  try {
+    const parsed: unknown = JSON.parse(match[1].trim());
+    if (Array.isArray(parsed)) {
+      const names = parsed.filter((v): v is string => typeof v === "string");
+      return names.length > 0 ? names : null;
+    }
+  } catch { /* invalid JSON */ }
+  return null;
+}
+
+/**
+ * Pantalla que la IA pide abrir: [ABRIR]/asset-hours[/ABRIR].
+ *
+ * Es sólo navegación — la misma que si el usuario tocara el ítem del menú — así
+ * que no pide confirmación: abrir una pantalla no cambia ningún dato. Todo lo
+ * que SÍ escribe sigue pasando por el botón "Aplicar" de las acciones.
+ *
+ * Se acepta únicamente una ruta interna (empieza con "/" y sin "//"): con esto
+ * el modelo no puede mandar al usuario a un sitio de afuera.
+ */
+function extractOpenScreenBlock(text: string): string | null {
+  const match = text.match(/\[ABRIR\]([\s\S]*?)\[\/ABRIR\]/);
+  if (!match) return null;
+  const path = match[1].trim();
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  return path;
+}
+
+/**
+ * Texto que se ve en el globo del chat: sin los bloques de máquina.
+ * También corta un bloque a medio llegar (el chat streamea de a pedazos), para
+ * que el usuario no vea el marcador crudo por un instante.
+ */
+function stripAiBlocks(text: string): string {
+  return text
+    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+    .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
+    .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
+    .replace(/\[(?:CAMPOS|RECALCULAR|ABRIR)\][\s\S]*$/, "")
+    .trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -597,8 +655,14 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 
 export const CopilotoPanel: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const woTerms = useWoTerms();
-  const { screenContext, requestMessage, setRequestMessage, hasApplyFieldsCallback, applyFields } = useCopilotScreenContext();
+  const {
+    screenContext, requestMessage, setRequestMessage,
+    hasApplyFieldsCallback, applyFields,
+    formActionNames, runFormActions,
+  } = useCopilotScreenContext();
+  const t = useT();
   // Buque seleccionado en el header — el copiloto lo usa como contexto de trabajo
   // por defecto para no preguntar "¿de qué buque?" cuando ya hay uno elegido.
   const { selectedVessel } = useVesselContext();
@@ -620,6 +684,27 @@ export const CopilotoPanel: React.FC = () => {
   const [error, setError]         = useState<string | null>(null);
   // Pending field values proposed by the AI — shown as "Aplicar campos" button
   const [pendingFields, setPendingFields] = useState<Record<string, string> | null>(null);
+  /**
+   * Modo "completémoslo juntos": la RUTA que el copiloto abrió en la pantalla
+   * central. Mientras el usuario siga ahí, los campos que propone la IA entran
+   * solos al formulario en vez de esperar el botón "Aplicar" — ya dijo que sí,
+   * no tiene sentido pedirle un click más por cada respuesta. Igual no se
+   * guarda nada: los revisa en pantalla y guarda él.
+   *
+   * Se guarda la ruta y no el código del registro porque esto vale para
+   * CUALQUIER pantalla que el copiloto abra (una OT, una SS, la planilla de
+   * horas), no sólo para las que tienen un código.
+   */
+  const [guidedPath, setGuidedPath] = useState<string | null>(null);
+  const [recalcRunning, setRecalcRunning] = useState(false);
+  /** Aviso momentáneo de "ya lo cargué en el formulario" (modo guiado). */
+  const [fieldsLoadedFlash, setFieldsLoadedFlash] = useState(false);
+  /**
+   * Sólo mientras el usuario siga parado en la pantalla que abrió el copiloto.
+   * Si se va a otro lado —o cierra la ventana del registro, que devuelve la URL
+   * al listado— el modo guiado se apaga solo y vuelve el botón "Aplicar".
+   */
+  const guidedActive = !!guidedPath && location.pathname.startsWith(guidedPath);
 
   // File attachment state
   const [pendingFile, setPendingFile]   = useState<FileContent | null>(null);
@@ -890,10 +975,12 @@ export const CopilotoPanel: React.FC = () => {
             if (parsed.text) {
               assistantContent += parsed.text;
               // Extract [CAMPOS] block if present (may arrive mid-stream)
-              const campos = extractCamposBlock(assistantContent);
+              // En modo guiado no se ofrece el botón: los campos entran solos
+              // al cerrar el stream (ver más abajo), sin que parpadee el botón.
+              const campos = guidedActive ? null : extractCamposBlock(assistantContent);
               if (campos) setPendingFields(campos);
               // Strip the block from what's shown in the chat bubble
-              const displayContent = stripCamposBlock(assistantContent);
+              const displayContent = stripAiBlocks(assistantContent);
               setMessages(prev => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -912,7 +999,7 @@ export const CopilotoPanel: React.FC = () => {
               if (stripText) {
                 assistantContent = assistantContent.replace(stripText, "");
               }
-              const displayContent = stripCamposBlock(assistantContent);
+              const displayContent = stripAiBlocks(assistantContent);
               setMessages(prev => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -927,6 +1014,41 @@ export const CopilotoPanel: React.FC = () => {
           } catch { /* partial SSE line */ }
         }
       }
+
+      // ── Pantalla que la IA pidió abrir ──
+      // Va ANTES de aplicar campos: primero se abre el formulario, después se
+      // carga. Al revés no habría formulario donde escribir.
+      const openPath = extractOpenScreenBlock(assistantContent);
+      if (openPath) {
+        navigate(openPath);
+        setGuidedPath(openPath);
+      }
+
+      // ── Modo guiado: se aplica al final, no de a pedazos ──
+      // El bloque [CAMPOS] recién está completo cuando cerró el stream; hacerlo
+      // adentro del loop lo aplicaría una vez por chunk.
+      // Si la pantalla se abrió recién EN ESTE turno, el formulario todavía no
+      // montó y no hay dónde escribir: los campos quedan en el botón "Aplicar",
+      // que aparece solo apenas el formulario se registra. Desde el turno
+      // siguiente ya entran solos.
+      if (guidedActive) {
+        const finalFields = extractCamposBlock(assistantContent);
+        if (finalFields && hasApplyFieldsCallback) {
+          applyFields(finalFields);
+          setPendingFields(null);
+          setFieldsLoadedFlash(true);
+          window.setTimeout(() => setFieldsLoadedFlash(false), 4000);
+        }
+      }
+
+      // Recálculo pedido por la IA (criterios / LOTO / riesgo): corre los
+      // asistentes que registró el formulario abierto, en orden.
+      const recalc = extractRecalcBlock(assistantContent);
+      if (recalc && formActionNames.length > 0) {
+        setRecalcRunning(true);
+        try { await runFormActions(recalc); }
+        finally { setRecalcRunning(false); }
+      }
     } catch (e: any) {
       setError(e.message ?? "Error al conectar con el copiloto");
       setMessages(prev => {
@@ -938,7 +1060,8 @@ export const CopilotoPanel: React.FC = () => {
       setStreaming(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [buildApiMessages, capability, input, messages, screenContext, streaming, selectedVessel, pendingFile]);
+  }, [buildApiMessages, capability, input, messages, screenContext, streaming, selectedVessel, pendingFile,
+      guidedActive, hasApplyFieldsCallback, applyFields, formActionNames, runFormActions, navigate]);
 
   // Aplica una acción sugerida por la IA. Muta el state del action a
   // applying → applied/failed. POST /app/copiloto/apply-action.
@@ -956,7 +1079,7 @@ export const CopilotoPanel: React.FC = () => {
     });
 
     try {
-      await api.post<{ ok: boolean }>("/app/copiloto/apply-action", {
+      const res = await api.post<ApplyActionResponse>("/app/copiloto/apply-action", {
         type: action.type,
         target: action.target,
         patch: action.patch ?? {},
@@ -969,6 +1092,41 @@ export const CopilotoPanel: React.FC = () => {
         updated[msgIdx] = m;
         return updated;
       });
+
+      // La OT recién creada se abre en la pantalla central y el copiloto ofrece
+      // completarla. Antes quedaba creada pero invisible: había que ir a
+      // buscarla al listado para ver qué había salido.
+      const createdCode = res?.applied?.entityCode;
+      if (createdCode && CREATES_WORK_ORDER.has(action.type)) {
+        const path = `/work-orders/${encodeURIComponent(createdCode)}`;
+        navigate(path);
+        setGuidedPath(path);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `${t("copilot.woOpened")} **${createdCode}**\n\n${t("copilot.woFillOffer")}`,
+        }]);
+      } else {
+        // Confirmación escrita por EL SISTEMA, no por la IA, y sólo después de
+        // que el servidor respondió que sí.
+        //
+        // Es la contracara de la regla dura del prompt: el modelo tiene
+        // prohibido decir "quedó registrado" (llegó a decirlo sin haber emitido
+        // ninguna acción, y el usuario se fue creyendo que el dato estaba). Si
+        // la única frase en pasado del chat la escribe el sistema cuando la
+        // escritura ya ocurrió, esa frase vale. Además queda en el historial,
+        // así que en el turno siguiente el modelo ve que ya está hecho y no lo
+        // vuelve a proponer.
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `${t("copilot.actionDone")} ${action.label ?? action.type}`,
+        }]);
+      }
+
+      // La pantalla abierta puede estar mostrando justo lo que se acaba de
+      // escribir: sin esto el usuario leía "hecho" con la grilla vieja delante
+      // y parecía que no había pasado nada. Se avisa a TODAS las pantallas
+      // abiertas; las que no escuchan, no hacen nada.
+      notifyCopilotDataChanged();
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Error al aplicar la acción";
       setMessages(prev => {
@@ -979,7 +1137,7 @@ export const CopilotoPanel: React.FC = () => {
         return updated;
       });
     }
-  }, [messages]);
+  }, [messages, navigate, t]);
 
   // Auto-send a message requested by an external component (e.g. "Asistir con IA" button)
   const sendMessageRef = useRef(sendMessage);
@@ -1010,6 +1168,7 @@ export const CopilotoPanel: React.FC = () => {
   const clearConversation = () => {
     stopSpeaking();
     setMessages([]); setError(null); setPendingFields(null); setPendingFile(null);
+    setGuidedPath(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -1163,6 +1322,23 @@ export const CopilotoPanel: React.FC = () => {
             <BarChart2 className="w-2.5 h-2.5 shrink-0" />
             Analizar diferimiento
           </button>
+        </div>
+      )}
+
+      {/* ── Recálculo de criterios / LOTO / riesgo pedido por el copiloto ── */}
+      {recalcRunning && (
+        <div className="px-2 py-2 border-b border-border shrink-0">
+          <p className="text-[10px] text-accent font-semibold flex items-center justify-center gap-1.5">
+            <Loader2 className="w-2.5 h-2.5 shrink-0 animate-spin" />
+            {t("copilot.recalculating")}
+          </p>
+        </div>
+      )}
+
+      {/* ── Modo guiado: los campos ya entraron solos al formulario ── */}
+      {fieldsLoadedFlash && (
+        <div className="px-2 py-1.5 border-b border-border shrink-0">
+          <p className="text-[9px] text-text-industrial/40 text-center">{t("copilot.fieldsLoaded")}</p>
         </div>
       )}
 

@@ -116,6 +116,37 @@ export const AssetHoursGrid: React.FC<Props> = ({
 
   const [drafts, setDrafts] = useState<Record<string, string>>(initialDrafts);
   const [rpmDrafts, setRpmDrafts] = useState<Record<string, string>>(initialRpmDrafts);
+
+  // Los borradores se sembraban UNA sola vez, al abrir la planilla. Cuando la
+  // planilla se recarga —el copiloto registró una lectura, otro guardado, un
+  // cambio de fecha— la celda seguía mostrando el valor viejo y parecía que no
+  // había pasado nada.
+  //
+  // Se repone SÓLO la celda que el usuario no tocó: si sigue igual a lo que
+  // trajo el servidor la vez anterior, se actualiza; si la está tipeando, se la
+  // deja en paz. Mismo criterio que Observaciones en la OT.
+  const lastServerDraftsRef = useRef<Record<string, string>>({});
+  const lastServerRpmRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const server = initialDrafts();
+    const serverRpm = initialRpmDrafts();
+    const reponer = (
+      prev: Record<string, string>,
+      fresco: Record<string, string>,
+      anterior: Record<string, string>,
+    ) => {
+      const next = { ...prev };
+      for (const [assetId, value] of Object.entries(fresco)) {
+        const sinTocar = next[assetId] === undefined || next[assetId] === (anterior[assetId] ?? "");
+        if (sinTocar) next[assetId] = value;
+      }
+      return next;
+    };
+    setDrafts(prev => reponer(prev, server, lastServerDraftsRef.current));
+    setRpmDrafts(prev => reponer(prev, serverRpm, lastServerRpmRef.current));
+    lastServerDraftsRef.current = server;
+    lastServerRpmRef.current = serverRpm;
+  }, [initialDrafts, initialRpmDrafts]);
   // Corregir la FECHA de una lectura ya cargada no es cargar horas: es reescribir
   // el historial del que dependen los planes por horas. Lo pueden el
   // administrador, el superintendente técnico y el capitán / jefe de máquinas

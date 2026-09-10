@@ -1,8 +1,8 @@
 // HOJA DE RUTA DEL PEDIDO (REGI-LOG-01.3): FECHA | NOVEDAD | ASIENTA.
 //
 // Vive acá y no en pages/ServiceRequests.tsx porque hay dos entradas al mismo
-// recuadro: el formulario de la SS y el acceso "Nuevo registro de Avance de SS"
-// del Dashboard. Una sola implementación = una sola forma de asentar novedades.
+// recuadro: el formulario de la SS y el "Registro de Avance" del Dashboard
+// (ProgressFlow). Una sola implementación = una sola forma de asentar novedades.
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";

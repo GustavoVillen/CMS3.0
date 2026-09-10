@@ -28,6 +28,7 @@ import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
+import { useCopilotEmitter, useCopilotDataRefresh } from "../lib/copilot-context";
 import {
   type AssetInfo, type SheetPlan, type SheetGroup,
   ICON_PROVIDER,
@@ -173,6 +174,33 @@ export function MaintenanceSheetPage() {
     }
     return false;
   }, [sheet, selectedSet]);
+
+  // El copiloto escribe desde el chat: si esta pantalla está abierta mostrando
+  // lo que acaba de cambiar, se recarga sola.
+  useCopilotDataRefresh(reload);
+
+  // ── Lo que el copiloto ve de esta pantalla ─────────────────────────────────
+  // Sin esto la planilla era una pantalla ciega: el copiloto no sabía qué buque
+  // tenía abierto el usuario ni qué filas estaba mirando, y llegó a contestar
+  // "no encontré ese registro" sobre una tarea que el Jefe de Máquinas tenía
+  // delante de los ojos. Sólo contexto: la planilla no le deja escribir nada.
+  useCopilotEmitter(selectedVesselCode ? {
+    module: "MAINTENANCE_PLANS",
+    screen: "MAINTENANCE_SHEET",
+    vesselCode: selectedVesselCode,
+    canEdit: canEditMilestones,
+    fieldValues: {
+      vesselName:        selectedVessel?.name ?? null,
+      search:            query.trim() || null,
+      onlyDue:           onlyDue ? "true" : "false",
+      visibleTasks:      String(totalTasks),
+      // Lo tildado es lo que el usuario quiere hacer ahora: con esto el copiloto
+      // puede hablar de "estas tareas" sin pedirle que las vuelva a nombrar.
+      selectedTaskCodes: selectedPlans.length > 0
+        ? selectedPlans.slice(0, 20).map(pl => pl.taskCode).join(", ")
+        : null,
+    },
+  } : null);
 
   // ── Crear la OT (+ SS) con lo marcado ──────────────────────────────────────
   const [prefill, setPrefill] = useState<WoPrefill | null>(null);
