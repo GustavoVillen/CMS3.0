@@ -100,6 +100,16 @@ const PlatformVesselMapPage = React.lazy(() => import("./pages/platform/Platform
 const PlatformAccessPage = React.lazy(() => import("./pages/platform/PlatformAccess").then(m => ({ default: m.PlatformAccessPage })));
 const PlatformUserActivityPage = React.lazy(() => import("./pages/platform/PlatformUserActivity").then(m => ({ default: m.PlatformUserActivityPage })));
 
+/**
+ * Alias de la ruta vieja /assets → /equipment, conservando el query string.
+ * Sin esto, un `?open=<id>` (abrir la ficha del equipo desde el plan) se perdía
+ * en la redirección y se caía en la lista, sin abrir nada.
+ */
+function LegacyAssetsRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/equipment${search}`} replace />;
+}
+
 // ---------------------------------------------------------------------------
 // Guards
 // ---------------------------------------------------------------------------
@@ -235,7 +245,7 @@ export default function App() {
               <Route path="/equipment"         element={<AssetsPage />} />
               {/* Links guardados antes del rename de B-01. La carpeta del build
                   ya no se llama "assets", asi que nginx deja pasar esta ruta. */}
-              <Route path="/assets"            element={<Navigate to="/equipment" replace />} />
+              <Route path="/assets"            element={<LegacyAssetsRedirect />} />
               <Route path="/maintenance-plans" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-plans/:code" element={<MaintenancePlansPage />} />
               <Route path="/maintenance-sheet" element={<MaintenanceSheetPage />} />

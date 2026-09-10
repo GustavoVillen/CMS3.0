@@ -2164,7 +2164,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                     {assetId
                       ? <button
                           type="button"
-                          onClick={() => { onClose(); navigate(`/assets?open=${encodeURIComponent(assetId)}`); }}
+                          // A la ficha del equipo, directo. NO se cierra el plan
+                          // antes: cerrar es "volver atrás" y dejaba dos
+                          // navegaciones peleando — basta con navegar, el cambio
+                          // de ruta desmonta este modal (mismo criterio que el
+                          // enlace a la OT, más arriba). La ruta es /equipment:
+                          // /assets es sólo un alias viejo.
+                          onClick={() => navigate(`/equipment?open=${encodeURIComponent(assetId)}`)}
                           className={`${labelCls} hover:text-accent transition-colors cursor-pointer`}
                           title={t("mp.modal.openAsset")}
                         >{t("mp.asset")}</button>
