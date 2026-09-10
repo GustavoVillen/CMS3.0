@@ -497,6 +497,27 @@ export function MaintenanceSheetPage() {
                             >
                               <div>{b.name}</div>
                               {b.subtitle && <div className="text-[10px] font-normal opacity-80">{b.subtitle}</div>}
+                              {/* Horómetro: el mismo número que "Horas de Equipos".
+                                  Va acá porque las tareas por horas se leen contra
+                                  él ("Realizar cada 500 h" no dice nada sin saber en
+                                  cuántas está la máquina).
+                                  Se muestra si hay lectura, y también —como "Sin
+                                  lecturas"— cuando el equipo TIENE tareas por horas
+                                  pero nadie cargó el horómetro: ese es justamente el
+                                  motivo de que esas tareas no venzan nunca, y hay que
+                                  verlo. Los equipos sin horómetro ni tareas por horas
+                                  no muestran nada, para no ensuciar la planilla. */}
+                              {(() => {
+                                const conHoras = b.currentHours != null;
+                                if (!conHoras && !b.plans.some(p => isHours(p.triggerType))) return null;
+                                return (
+                                  <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                                    {conHoras
+                                      ? `${fmtHours(b.currentHours!)} h${b.currentHoursDate ? ` · ${fmtDate(b.currentHoursDate)}` : ""}`
+                                      : t("assetHours.never")}
+                                  </div>
+                                );
+                              })()}
                             </button>
                           </td>
                         )}

@@ -53,6 +53,9 @@ export interface AssetInfo {
   model?: string | null;
   sfiCode?: string | null;
   status?: string | null;
+  /** Ultima lectura de horometro del equipo (viene con la lista de equipos). */
+  currentHours?: number | null;
+  currentHoursDate?: string | null;
 }
 
 export const isHours = (t: string) => t === "HOURS" || t === "RUNNING_HOURS";
@@ -265,6 +268,14 @@ export interface EquipBlock {
   name: string;
   /** Marca y modelo, la segunda línea de la descripción. */
   subtitle: string;
+  /**
+   * Ultima lectura de horometro del equipo, la tercera línea. Es el mismo dato
+   * que muestra "Horas de Equipos": el Jefe de Máquinas necesita verlo acá para
+   * saber contra qué comparar el "Realizar cada" y el "Próximo recorrido" de las
+   * tareas por horas, sin tener que salir de la planilla. `null` = sin lecturas.
+   */
+  currentHours: number | null;
+  currentHoursDate: string | null;
   group: number;
   outOfService: boolean;
   plans: SheetPlan[];
@@ -303,6 +314,8 @@ export function buildSheetGroups(
         itemNumber: 0,                 // se asigna abajo, con el orden final
         name: p.assetName ?? a?.name ?? "Sin equipo asignado",
         subtitle: [a?.manufacturer, a?.model].filter(Boolean).join(" "),
+        currentHours: a?.currentHours ?? null,
+        currentHoursDate: a?.currentHoursDate ?? null,
         group,
         // Equipo parado: sus tareas siguen venciendo, pero no se ejecutan. Sin
         // esta marca, la planilla muestra rojos que nadie puede cerrar.
