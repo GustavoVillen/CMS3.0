@@ -419,7 +419,46 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
     },
   });
 
-  const assetIds = [...new Set(orders.map(o => o.assetId).filter(Boolean))];
+  // ── Equipos de la OT ───────────────────────────────────────────────────────
+  // Una misma OT puede ejecutar varios ítems del PDM, incluso de equipos
+  // distintos (parada de astillero). `assetId` es el del ítem PRINCIPAL: si la
+  // pantalla mostrara sólo ese, una OT de tres equipos figuraría como si fuera
+  // del primero. Se devuelven TODOS sus equipos — mismo criterio que ya usa el
+  // PDF (pms/work-order-pdf/data-loader.ts).
+  const orderIds = orders.map(o => o.id);
+  const planLinks = orderIds.length > 0
+    ? (await (prismaRaw as unknown as {
+        workOrderMaintenancePlan: { findMany(a: unknown): Promise<{ workOrderId: string; maintenancePlanId: string }[]> };
+      }).workOrderMaintenancePlan.findMany({
+        where: { workOrderId: { in: orderIds } },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { workOrderId: true, maintenancePlanId: true },
+      }))
+    : [];
+  const linkedPlanIds = [...new Set(planLinks.map(l => l.maintenancePlanId))];
+  const planAssetRows = linkedPlanIds.length > 0
+    ? (await (prismaRaw as unknown as {
+        maintenancePlan: { findMany(a: unknown): Promise<{ id: string; assetId: string }[]> };
+      }).maintenancePlan.findMany({
+        where: { id: { in: linkedPlanIds }, tenantId },
+        select: { id: true, assetId: true },
+      }))
+    : [];
+  const planAssetMap = new Map(planAssetRows.map(p => [p.id, p.assetId]));
+  // OT → equipos de sus ítems, en orden del papel y sin repetir.
+  const linkedAssetsByWo = new Map<string, string[]>();
+  for (const link of planLinks) {
+    const linkedAssetId = planAssetMap.get(link.maintenancePlanId);
+    if (!linkedAssetId) continue;
+    const list = linkedAssetsByWo.get(link.workOrderId) ?? [];
+    if (!list.includes(linkedAssetId)) list.push(linkedAssetId);
+    linkedAssetsByWo.set(link.workOrderId, list);
+  }
+
+  const assetIds = [...new Set([
+    ...orders.map(o => o.assetId),
+    ...[...linkedAssetsByWo.values()].flat(),
+  ].filter(Boolean))];
   // Se resuelven juntos el asignado y el creador: "GENERADO POR" es un recuadro
   // del formulario controlado (REGI-MAN-02.3) y sale de createdByUserId.
   const userIds  = [...new Set(orders.flatMap(o => [
@@ -449,6 +488,11 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   return orders.map(o => ({
     ...o,
     assetName: assetNameMap.get(o.assetId) ?? null,
+    // Todos los equipos que toca la OT, el principal primero. Con un solo ítem
+    // (el caso normal) queda un único nombre y nada cambia en pantalla.
+    assetNames: [o.assetId, ...(linkedAssetsByWo.get(o.id) ?? [])]
+      .filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i)
+      .map(id => assetNameMap.get(id) ?? id),
     assignedToUserName: userNameMap.get((o as unknown as { assignedToUserId?: string | null }).assignedToUserId ?? "") ?? null,
     createdByName: userNameMap.get((o as unknown as { createdByUserId?: string | null }).createdByUserId ?? "") ?? null,
     // Mismo criterio que getTenantWorkOrder: catálogo, o el escrito a mano.

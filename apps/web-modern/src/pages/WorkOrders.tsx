@@ -183,6 +183,12 @@ interface WorkOrder {
   /** GENERADO POR del formulario: quien creó la OT. */
   createdByName?: string | null;
   assetName: string | null;
+  /**
+   * TODOS los equipos que toca la OT (el principal primero). Una OT puede
+   * ejecutar varios ítems del PDM de equipos distintos: con `assetName` sola
+   * figuraba como si fuera del primero. Con un solo ítem trae un único nombre.
+   */
+  assetNames?: string[] | null;
   estimatedHours: number | null;
   actualHours: number | null;
   // Plan fields
@@ -978,6 +984,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
   const isEditable = canEditStatus(workOrder.status);
   const isAdmin = user?.role === "TENANT_ADMIN";
+  // Equipos que toca la OT. El detalle no trae `assetNames` (el listado sí):
+  // acá salen de los ítems del PDM, que ya vienen con su equipo resuelto.
+  const detailAssetNames = useMemo(() => {
+    const out: string[] = [];
+    for (const name of [workOrder.assetName, ...(workOrder.plans ?? []).map(p => p.assetName)]) {
+      if (name && !out.includes(name)) out.push(name);
+    }
+    return out;
+  }, [workOrder.assetName, workOrder.plans]);
 
   // ── Hoja del formulario controlado (REGI-MAN-02.3) ──
   // Las secciones y los rótulos salen del tenant, igual que el PDF: pantalla y
@@ -2162,9 +2177,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   resuelto, se omite (un cuid no le dice nada a nadie). */}
               <div className="flex items-baseline gap-1.5 min-w-0">
                 <h2 className="text-sm font-bold text-fg font-mono shrink-0">{workOrder.workOrderCode}</h2>
-                {workOrder.assetName && (
-                  <span className="text-sm text-text-industrial/70 truncate" title={workOrder.assetName}>
-                    · {workOrder.assetName}
+                {detailAssetNames.length > 0 && (
+                  <span className="text-sm text-text-industrial/70 truncate" title={detailAssetNames.join(", ")}>
+                    · {detailAssetNames.length > 1
+                        ? t("wo.multiAsset").replace("{n}", String(detailAssetNames.length))
+                        : detailAssetNames[0]}
                   </span>
                 )}
               </div>
@@ -3788,9 +3805,14 @@ function KanbanCardContent({ wo, deferralMap, srs }: {
   deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srs: SrLite[];
 }) {
+  const t = useT();
   const now = new Date();
   const isOverdue = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && parseLocalDate(wo.dueDate) < now;
   const deferral  = deferralMap.get(wo.id);
+  // Equipos de la OT: con uno solo el header del grupo ya lo dice. Con varios,
+  // el título trae una línea por ítem y la tarjeta lo recorta a dos: sin este
+  // chip parecía que la OT era del primer equipo y el resto se había perdido.
+  const assetNames = woAssetNames(wo);
   // Tarjeta compacta: lo que interesa acá es el N° de OT y el Título. El equipo
   // se muestra en el header del grupo; quién aprobó/autorizó no va en esta vista.
   return (
@@ -3805,6 +3827,15 @@ function KanbanCardContent({ wo, deferralMap, srs }: {
         <span className="shrink-0"><CategoryBadge type={wo.type} /></span>
       </div>
       {wo.title && <p className="text-xs text-fg font-medium line-clamp-2">{wo.title}</p>}
+      {assetNames.length > 1 && (
+        <span
+          title={assetNames.join(", ")}
+          className="self-start inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent"
+        >
+          <Wrench className="w-2.5 h-2.5" />
+          {t("wo.multiAsset.count").replace("{n}", String(assetNames.length))}
+        </span>
+      )}
       {(wo.dueDate || deferral) && (
         <div className="flex items-center justify-between gap-2">
           {wo.dueDate ? (
@@ -3862,19 +3893,44 @@ function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDra
   );
 }
 
+/**
+ * Los equipos que toca la OT, sin repetir y con el principal primero.
+ *
+ * Las OT que ejecutan varios ítems del PDM pueden abarcar equipos distintos
+ * (parada de astillero). El listado lo devuelve en `assetNames`; se cae a
+ * `assetName` para cualquier respuesta que todavía no lo traiga.
+ */
+function woAssetNames(wo: { assetNames?: string[] | null; assetName?: string | null }): string[] {
+  const list = (wo.assetNames ?? []).filter((n): n is string => !!n);
+  if (list.length > 0) return list;
+  return wo.assetName ? [wo.assetName] : [];
+}
+
+// Clave del grupo del kanban que junta las OT de varios equipos. No es un
+// assetId: ninguna OT de un solo equipo puede caer acá.
+const MULTI_ASSET_KEY = "__multi__";
+
 // Agrupa las OT de una columna por equipo (asset). Clave por assetId (único por
 // buque) para no fusionar equipos homónimos de distintos buques; label = nombre.
-function groupWosByAsset(items: WorkOrder[]): { key: string; label: string; items: WorkOrder[] }[] {
+// Las OT que abarcan VARIOS equipos no pertenecen a ninguno: van juntas a un
+// grupo propio al final (repetir la tarjeta en cada equipo rompería el arrastre).
+function groupWosByAsset(items: WorkOrder[], multiLabel: string): { key: string; label: string; items: WorkOrder[] }[] {
   const map = new Map<string, { label: string; items: WorkOrder[] }>();
   for (const w of items) {
-    const key = w.assetId ?? w.assetName ?? "—";
-    const label = w.assetName ?? w.assetId ?? "—";
+    const names = woAssetNames(w);
+    const multi = names.length > 1;
+    const key = multi ? MULTI_ASSET_KEY : (w.assetId ?? w.assetName ?? "—");
+    const label = multi ? multiLabel : (w.assetName ?? w.assetId ?? "—");
     const g = map.get(key);
     if (g) g.items.push(w); else map.set(key, { label, items: [w] });
   }
   return [...map.entries()]
     .map(([key, g]) => ({ key, label: g.label, items: g.items }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .sort((a, b) => {
+      if (a.key === MULTI_ASSET_KEY) return 1;
+      if (b.key === MULTI_ASSET_KEY) return -1;
+      return a.label.localeCompare(b.label);
+    });
 }
 
 function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload }: {
@@ -3969,7 +4025,7 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
-                {groupWosByAsset(colItems).map(group => {
+                {groupWosByAsset(colItems, t("wo.multiAsset.group")).map(group => {
                   const gkey = `${col.colId}::${group.key}`;
                   const collapsed = !expandedGroups.has(gkey);
                   return (
@@ -4503,12 +4559,21 @@ export const WorkOrdersPage: React.FC = () => {
     {
       key: "title", header: t("wo.col.equipmentTask"),
       sortValue: r => r.assetName ?? r.title ?? "",
-      render: r => (
-        <div>
-          <div className="text-xs text-fg font-medium">{r.assetName ?? "—"}</div>
-          <div className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{r.title?.trim() || "—"}</div>
-        </div>
-      ),
+      render: r => {
+        // Varios equipos: el nombre del principal solo haría pasar la OT por
+        // una del primer equipo. Los nombres completos van en el tooltip.
+        const names = woAssetNames(r);
+        return (
+          <div>
+            <div className="text-xs text-fg font-medium" title={names.length > 1 ? names.join(", ") : undefined}>
+              {names.length > 1
+                ? t("wo.multiAsset").replace("{n}", String(names.length))
+                : (r.assetName ?? "—")}
+            </div>
+            <div className="text-[10px] text-text-industrial/50 line-clamp-1 mt-0.5">{r.title?.trim() || "—"}</div>
+          </div>
+        );
+      },
     },
     { key: "type",   header: t("wo.col.category"),   render: r => <CategoryBadge type={r.type} /> },
     { key: "assignedToUserId", header: t("wo.col.assignee"), sortValue: r => r.assignedToUserName ?? r.assignedToUserId ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? r.assignedToUserId ?? "—"}</span> },

@@ -155,6 +155,25 @@ export function MaintenanceSheetPage() {
     return out;
   }, [sheet, selectedSet]);
 
+  /**
+   * Lo marcado, agrupado POR EQUIPO y en orden de planilla.
+   *
+   * Una OT es de un equipo: si se marcan tareas del GPS, de la motobomba y del
+   * motor de la lancha, lo natural es abrir tres órdenes. Juntar equipos
+   * distintos en una sola es el caso de la parada de astillero, y ahí el
+   * usuario lo pide a propósito con el otro botón.
+   */
+  const selectedByAsset = useMemo(() => {
+    const map = new Map<string, SheetRow[]>();
+    for (const p of selectedPlans) {
+      const key = p.assetId ?? p.assetName ?? "—";
+      const list = map.get(key) ?? [];
+      list.push(p);
+      map.set(key, list);
+    }
+    return [...map.values()];
+  }, [selectedPlans]);
+
   // Cuántas SS va a abrir la OT: UNA POR TALLER, mismo criterio que el backend.
   const providersOfSelection = useMemo(() => {
     const map = new Map<string, string>();   // providerId → nombre
@@ -207,19 +226,32 @@ export function MaintenanceSheetPage() {
   const [creating, setCreating] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
 
-  const createWorkOrder = useCallback(async () => {
-    if (selectedPlans.length === 0 || creating) return;
+  /**
+   * Tanda de órdenes a crear: un grupo de tareas por cada OT, en orden.
+   *
+   * Con "una sola OT" es un único grupo con todo lo marcado (lo de siempre).
+   * Con "una OT por equipo" son los grupos de `selectedByAsset`: el formulario
+   * se abre una vez por grupo, y al guardar cada uno se pasa al siguiente.
+   */
+  const [queue, setQueue] = useState<SheetRow[][]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+
+  const openGroup = useCallback(async (groups: SheetRow[][], index: number) => {
+    const group = groups[index];
+    if (!group?.[0]) return;
     setCreating(true);
     try {
       // El modal necesita el plan COMPLETO (criterios, LOTO, riesgo): la lista
       // los omite para aligerar el payload.
       const primary = await api.get<Parameters<typeof buildWoPrefillFromPlan>[0]>(
-        `/app/pms/maintenance-plans/${selectedPlans[0]!.id}`,
+        `/app/pms/maintenance-plans/${group[0].id}`,
       );
+      setQueue(groups);
+      setQueueIndex(index);
       setPrefill(buildWoPrefillFromPlan(
         primary,
         t("mp.modal.maintenancePlanLabel"),
-        selectedPlans.slice(1).map(p => ({
+        group.slice(1).map(p => ({
           id: p.id, taskCode: p.taskCode, title: p.title, assetName: p.assetName ?? null,
         })),
       ));
@@ -228,7 +260,19 @@ export function MaintenanceSheetPage() {
     } finally {
       setCreating(false);
     }
-  }, [selectedPlans, creating, t]);
+  }, [t]);
+
+  /** Todo lo marcado en UNA sola orden (parada de astillero). */
+  const createWorkOrder = useCallback(() => {
+    if (selectedPlans.length === 0 || creating) return;
+    void openGroup([selectedPlans], 0);
+  }, [selectedPlans, creating, openGroup]);
+
+  /** Una orden por equipo marcado. */
+  const createWorkOrderPerAsset = useCallback(() => {
+    if (selectedByAsset.length === 0 || creating) return;
+    void openGroup(selectedByAsset, 0);
+  }, [selectedByAsset, creating, openGroup]);
 
   // ── Edición de las dos fechas ──────────────────────────────────────────────
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -366,14 +410,33 @@ export function MaintenanceSheetPage() {
             : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />}
           {exportingSheet ? t("mp.page.exportSheetBusy") : t("mp.page.exportSheet")}
         </button>
+        {/* Lo marcado abarca varios equipos: el camino normal es una OT por
+            equipo. Juntarlos en una sola es la parada de astillero, y queda
+            como segundo botón para que sea una decisión y no un accidente. */}
+        {selectedByAsset.length > 1 && (
+          <button
+            onClick={createWorkOrder}
+            disabled={creating}
+            title={t("msheet.createSingleHint")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("msheet.createSingle")}
+          </button>
+        )}
         <button
-          onClick={() => { void createWorkOrder(); }}
+          onClick={selectedByAsset.length > 1 ? createWorkOrderPerAsset : createWorkOrder}
           disabled={selectedPlans.length === 0 || creating}
-          title={selectedPlans.length === 0 ? t("msheet.createHintEmpty") : t("msheet.createHint")}
+          title={
+            selectedPlans.length === 0 ? t("msheet.createHintEmpty")
+            : selectedByAsset.length > 1 ? t("msheet.createPerAssetHint")
+            : t("msheet.createHint")
+          }
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/40 bg-accent/15 text-accent text-xs font-bold hover:bg-accent/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />}
-          {t("msheet.create")}
+          {selectedByAsset.length > 1
+            ? t("msheet.createPerAsset").replace("{n}", String(selectedByAsset.length))
+            : t("msheet.create")}
         </button>
       </PageHeader>
       </div>
@@ -385,16 +448,29 @@ export function MaintenanceSheetPage() {
             {selectedPlans.length === 1
               ? t("msheet.selectedOne")
               : t("msheet.selectedMany").replace("{n}", String(selectedPlans.length))}
+            {selectedByAsset.length > 1 && (
+              <span className="text-text-industrial/60 font-normal">
+                {" · "}{t("msheet.selectedAssets").replace("{n}", String(selectedByAsset.length))}
+              </span>
+            )}
           </span>
           <span className="text-[11px] text-text-industrial/70 font-mono">
             {selectedPlans.map(p => p.taskCode).join(" / ")}
           </span>
           <span className="text-[11px] font-bold text-fg/80">
-            {providersOfSelection.size === 0
-              ? t("msheet.willCreateWoOnly")
-              : t("msheet.willCreateWoAndSr")
-                  .replace("{n}", String(providersOfSelection.size))
-                  .replace("{names}", [...providersOfSelection.values()].filter(Boolean).join(", "))}
+            {/* Lo que va a pasar con el botón principal. Con varios equipos ese
+                botón abre una OT por equipo: las SS salen de cada orden, así que
+                se nombran los talleres sin prometer una cantidad. */}
+            {selectedByAsset.length > 1
+              ? t("msheet.willCreateWoPerAsset").replace("{n}", String(selectedByAsset.length))
+                + (providersOfSelection.size > 0
+                    ? ` · ${t("msheet.willCreateSrTo").replace("{names}", [...providersOfSelection.values()].filter(Boolean).join(", "))}`
+                    : "")
+              : providersOfSelection.size === 0
+                ? t("msheet.willCreateWoOnly")
+                : t("msheet.willCreateWoAndSr")
+                    .replace("{n}", String(providersOfSelection.size))
+                    .replace("{names}", [...providersOfSelection.values()].filter(Boolean).join(", "))}
           </span>
           {selectionHasOos && (
             <span className="text-[11px] font-bold text-red-600 dark:text-red-400">
@@ -631,12 +707,45 @@ export function MaintenanceSheetPage() {
       {prefill && (
         <CreateWorkOrderModal
           prefill={prefill}
-          onClose={() => setPrefill(null)}
+          // "Equipo 2 de 3" sólo cuando hay tanda: con una sola orden el
+          // encabezado queda como siempre.
+          stepLabel={queue.length > 1
+            ? t("msheet.queueStep")
+                .replace("{i}", String(queueIndex + 1))
+                .replace("{n}", String(queue.length))
+            : undefined}
+          onClose={() => {
+            // Cerrar corta la tanda: las órdenes ya creadas quedan, las que
+            // faltaban no se crean. Se dice cuántas quedaron hechas.
+            const done = queueIndex;
+            const total = queue.length;
+            setPrefill(null);
+            setQueue([]);
+            setQueueIndex(0);
+            if (total > 1 && done > 0) {
+              void reload();
+              setAlert(t("msheet.queueCancelled")
+                .replace("{n}", String(done))
+                .replace("{total}", String(total)));
+            }
+          }}
           onSaved={(_woId, workOrderCode) => {
             setPrefill(null);
+            // Quedan equipos por delante: se abre el formulario del siguiente.
+            if (queueIndex + 1 < queue.length) {
+              void reload();
+              void openGroup(queue, queueIndex + 1);
+              return;
+            }
+            const wasBatch = queue.length > 1;
+            setQueue([]);
+            setQueueIndex(0);
             setSelectedIds([]);
             void reload();
-            if (workOrderCode) navigate(`/work-orders/${encodeURIComponent(workOrderCode)}`);
+            // Con una sola orden se abre la orden creada, como siempre. Con una
+            // tanda no hay "la" orden: se va al listado, donde están todas.
+            if (wasBatch) navigate("/work-orders");
+            else if (workOrderCode) navigate(`/work-orders/${encodeURIComponent(workOrderCode)}`);
           }}
         />
       )}

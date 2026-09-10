@@ -184,6 +184,12 @@ interface CreateWorkOrderModalProps {
   initialPriority?: string;
   /** Exige elegir proveedor para guardar: al crear la OT se abre también la SS a ese proveedor. */
   requireProvider?: boolean;
+  /**
+   * Paso dentro de una tanda de órdenes ("Equipo 2 de 3"). Lo usa la Planilla
+   * cuando lo marcado abarca varios equipos y se abre una OT por cada uno: sin
+   * esto la ventana reaparece igual a la anterior y no se sabe en cuál se está.
+   */
+  stepLabel?: string;
   onClose: () => void;
   onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
 }
@@ -220,7 +226,7 @@ function TypeBadge({ type }: { type: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, onClose, onSaved }) => {
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onClose, onSaved }) => {
   const t = useT();
   const { user, tenant } = useAuth();
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
@@ -1036,7 +1042,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           <div className="flex items-center gap-3">
             <Wrench className="w-4 h-4 text-accent" />
             <div>
-              <h2 className="text-sm font-bold text-fg">{t("wo.modal.title")}</h2>
+              <h2 className="text-sm font-bold text-fg">
+                {t("wo.modal.title")}
+                {stepLabel && (
+                  <span className="ml-2 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent align-middle">
+                    {stepLabel}
+                  </span>
+                )}
+              </h2>
               {prefill && (
                 <p className="text-[10px] text-text-industrial/50 mt-0.5">
                   {t("wo.modal.fromSource")} {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
