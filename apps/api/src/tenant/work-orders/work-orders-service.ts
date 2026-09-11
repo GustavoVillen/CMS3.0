@@ -2,7 +2,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { listDevWorkOrdersForTenant } from "../../platform/data/dev-domain-store";
 import { RouteError } from "../../http/route-error";
-import { hasPermission } from "../auth/role-permissions";
+import { hasPermission, roleHasPermission } from "../auth/role-permissions";
 import { workOrderPrefix } from "../../common/wo-code";
 import { recalculateNextDue, restorePlanAfterWoCancellation } from "../maintenance-plans/maintenance-plans-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
@@ -1162,12 +1162,22 @@ export async function setWorkOrderApproval(
   payload: { step: "ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA"; name: string; reason?: string | null; onBehalfUserId?: string | null; actionDate?: string | Date | null },
 ) {
   ensureCanOperateWorkOrders(session);
+  // Aprobar también es de tierra desde sep 2026 (permiso "Aprobar OT" de
+  // Equipo → Permisos; por defecto Superintendente y DPA). Antes lo podía
+  // hacer cualquiera que operara la OT.
+  if (payload.step === "APRUEBA" && !hasPermission(session, "wo.approve")) {
+    throw new RouteError(
+      403,
+      "FORBIDDEN",
+      "Aprobar una orden de trabajo es del Superintendente técnico o el DPA / Director de Operaciones.",
+    );
+  }
   // Autorizar es de tierra, igual que en la SS (ver canAuthorizeWorkOrders).
   if (payload.step === "AUTORIZA" && !canAuthorizeWorkOrders(session)) {
     throw new RouteError(
       403,
       "FORBIDDEN",
-      "Autorizar una orden de trabajo es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones.",
+      "Autorizar una orden de trabajo es sólo del DPA / Director de Operaciones.",
     );
   }
 
@@ -1195,16 +1205,17 @@ export async function setWorkOrderApproval(
       // La elegibilidad depende del PASO. ENVIA no es una firma de autoridad
       // (es "ya la completé, fírmenla"): lo manda cualquiera embarcado, salvo
       // el auditor externo, que es de sólo lectura — mismo criterio que
-      // SOLICITA en la SS. APRUEBA admite al JEFE DE MÁQUINAS (es a bordo);
-      // AUTORIZA no, porque es de tierra. Sin esta distinción un admin podría
-      // autorizar "en nombre de" un jefe de máquinas y saltear el gate por la
-      // ventana. Defensa en profundidad: el front ya filtra la lista.
+      // SOLICITA en la SS. APRUEBA y AUTORIZA salen de la matriz de Equipo →
+      // Permisos ("Aprobar OT" / "Autorizar OT"): sin esto un admin podría
+      // firmar "en nombre de" alguien que el permiso no habilita y saltear el
+      // gate por la ventana. Defensa en profundidad: el front ya filtra la lista.
       const enElBuque = Array.isArray(membership.assignedVesselCodes)
         && membership.assignedVesselCodes.includes(current.vesselCode);
+      const key = payload.step === "APRUEBA" ? "wo.approve" : payload.step === "AUTORIZA" ? "wo.authorize" : null;
+      const tienePermiso = key ? await roleHasPermission(session.tenantSlug, membership.role, key) : false;
       const eligible = membership.role === "TENANT_ADMIN"
         || (payload.step === "ENVIA" && enElBuque && membership.role !== "AUDITOR_READONLY")
-        || (membership.role === "FLEET_SUPERINTENDENT" && enElBuque)
-        || (payload.step === "APRUEBA" && membership.role === "MAINTENANCE_MANAGER" && enElBuque);
+        || (key !== null && tienePermiso && enElBuque);
       if (!eligible) {
         throw new RouteError(
           403,
@@ -1212,8 +1223,8 @@ export async function setWorkOrderApproval(
           payload.step === "ENVIA"
             ? "Quien envía la orden a aprobar tiene que estar asignado a este buque."
             : payload.step === "APRUEBA"
-            ? "Solo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar."
-            : "Autorizar es sólo del Superintendente técnico o el DPA / Director de Operaciones.",
+            ? "Aprobar es del Superintendente técnico o el DPA / Director de Operaciones (permiso \"Aprobar OT\")."
+            : "Autorizar es sólo del DPA / Director de Operaciones.",
         );
       }
       signerUserId = onBehalf;

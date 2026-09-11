@@ -15,6 +15,9 @@ import { updateTenantMaintenancePlan, openFormalWorkOrder } from "../maintenance
 import { createTenantWorkOrder, type WorkOrderDepartment } from "../work-orders/work-orders-service";
 import { createServiceRequestForWorkOrder } from "../service-requests/service-requests-service";
 import { recordHoursReadings } from "../asset-hours/asset-hours-service";
+import { getDefect, updateDefect, closeDefect } from "../pms/defects-service";
+import { hasPermission } from "../auth/role-permissions";
+import { getTenantAiLocale, type AiLocale } from "../ai/ai-locale";
 import { log } from "../../common/logger";
 
 /**
@@ -47,10 +50,26 @@ const ALLOWED_SERVICE_REQUEST_FIELDS = new Set(["title", "description", "provide
 /** record_asset_hours: una lectura de horómetro. `runningHours` lo exige applyRecordAssetHours. */
 const ALLOWED_ASSET_HOURS_FIELDS = new Set(["runningHours", "readingDate", "rpm", "note"]);
 
+/** create_work_order_from_defect: buque, equipo y tipo salen del defecto, no de la IA. */
+const ALLOWED_WO_FROM_DEFECT_FIELDS = new Set(["title", "description", "priority", "dueDate"]);
+
+/**
+ * Nota de cierre del defecto cuando el trabajo pasa a una OT nueva. Es el MISMO
+ * texto que deja el botón "Crear OT Correctiva" (clave i18n
+ * `def.verify.closedIntoWo`): el registro tiene que decir lo mismo venga de
+ * donde venga. Se escribe en el idioma del tenant porque queda guardada.
+ */
+const CLOSED_INTO_WO_NOTE: Record<AiLocale, string> = {
+  es: "Reparación permanente derivada a una orden de trabajo nueva.",
+  en: "Permanent repair moved to a new work order.",
+  pt: "Reparo permanente transferido para uma nova ordem de trabalho.",
+};
+
 export interface CopilotAction {
   /**
    * Tipo de acción: "update_plan" | "create_work_order_from_plan" |
-   * "create_work_order" | "create_service_request" | "record_asset_hours".
+   * "create_work_order" | "create_service_request" | "record_asset_hours" |
+   * "create_work_order_from_defect".
    */
   type: string;
   /**
@@ -106,6 +125,9 @@ export async function applyCopilotAction(
   }
   if (action.type === "record_asset_hours") {
     return applyRecordAssetHours(session, action);
+  }
+  if (action.type === "create_work_order_from_defect") {
+    return applyCreateWorkOrderFromDefect(session, action);
   }
   throw new RouteError(400, "UNSUPPORTED_ACTION_TYPE", `Tipo de acción no soportado: "${action.type}".`);
 }
@@ -380,5 +402,86 @@ async function applyRecordAssetHours(
   return {
     ok: true,
     applied: { type: action.type, target: assetCode, entityId: asset.id, vesselCode: asset.vesselCode },
+  };
+}
+
+/**
+ * create_work_order_from_defect: la OT correctiva de un defecto, con las
+ * acciones que recomendó el análisis. `target` = defectCode.
+ *
+ * Hace EXACTAMENTE lo mismo que el botón "Crear OT Correctiva" del defecto
+ * (Defects.tsx): crea la OT para el equipo del defecto, la vincula y cierra el
+ * defecto como "derivado a una OT nueva" — el trabajo sigue en la OT. Dos
+ * caminos para el mismo acto no pueden dejar registros distintos.
+ *
+ * Todo lo que puede fallar se chequea ANTES de crear la OT: si el defecto no se
+ * pudiera vincular después, quedaría una OT suelta que nadie pidió.
+ */
+async function applyCreateWorkOrderFromDefect(
+  session: TenantAccessSession,
+  action: CopilotAction,
+): Promise<ApplyCopilotActionResult> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const defectCode = String(action.target ?? "").trim().toUpperCase();
+  if (!defectCode) throw new RouteError(400, "MISSING_TARGET", "Falta el código del defecto.");
+
+  const found = await (prisma as unknown as { defect: { findFirst(a: unknown): Promise<{ id: string } | null> } })
+    .defect.findFirst({ where: { tenantId: tenant.id, defectCode, deletedAt: null }, select: { id: true } });
+  if (!found) {
+    throw new RouteError(404, "DEFECT_NOT_FOUND", `No se encontró un defecto con código "${defectCode}".`);
+  }
+  // getDefect aplica el alcance de buque del usuario.
+  const defect = await getDefect(session, found.id);
+
+  if (defect.status === "RESOLVED" || defect.status === "CLOSED") {
+    throw new RouteError(409, "DEFECT_ALREADY_CLOSED", `El defecto ${defectCode} ya está cerrado.`);
+  }
+  if (defect.workOrderId) {
+    throw new RouteError(409, "DEFECT_HAS_WORK_ORDER", `El defecto ${defectCode} ya tiene una orden de trabajo asociada.`);
+  }
+  // Mismos permisos que exigen updateDefect y closeDefect más abajo.
+  if (!hasPermission(session, "defect.write") || session.user.role === "AUDITOR_READONLY") {
+    throw new RouteError(403, "FORBIDDEN", "No autorizado para modificar defectos.");
+  }
+
+  const patch = filterPatch(action.patch, ALLOWED_WO_FROM_DEFECT_FIELDS) as {
+    title?: string; description?: string;
+    priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; dueDate?: string;
+  };
+  if (!patch.title) {
+    throw new RouteError(400, "MISSING_TITLE", "Falta el título de la orden de trabajo.");
+  }
+
+  log.info(`[copilot-action] create_work_order_from_defect target=${defectCode} user=${session.user.email}`);
+
+  // Prioridad = severidad del defecto, como el botón; la IA sólo la cambia si el usuario lo pidió.
+  const workOrder = await createTenantWorkOrder(session, {
+    vesselCode: defect.vesselCode,
+    assetId: defect.assetId,
+    type: "CORRECTIVE",
+    priority: patch.priority ?? (defect.severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"),
+    title: patch.title,
+    description: patch.description ?? defect.description,
+    dueDate: patch.dueDate,
+  });
+
+  // Vincular y cerrar: mismo orden que el botón (RESOLVED primero, el backend no deja saltar a CLOSED).
+  const locale = await getTenantAiLocale(session.tenantSlug);
+  await updateDefect(session, defect.id, { workOrderId: workOrder.id, status: "RESOLVED" });
+  await closeDefect(session, defect.id, { closeNotes: CLOSED_INTO_WO_NOTE[locale] });
+
+  return {
+    ok: true,
+    applied: {
+      type: action.type,
+      target: defectCode,
+      entityId: workOrder.id,
+      entityCode: workOrder.workOrderCode,
+      vesselCode: workOrder.vesselCode,
+    },
   };
 }

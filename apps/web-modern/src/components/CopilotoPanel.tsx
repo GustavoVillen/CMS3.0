@@ -31,6 +31,7 @@ import {
   Mic,
   MicOff,
   Volume2,
+  VolumeX,
   Square,
   Paperclip,
   X,
@@ -64,12 +65,73 @@ function buildVoiceSummary(text: string): string {
   return (lastSpace > 100 ? cut.slice(0, lastSpace) : cut) + "…";
 }
 
+/**
+ * Texto para la lectura automática (voz prendida). A diferencia del resumen
+ * del botón "Escuchar", no puede cortar al final: en el modo guiado lo que
+ * importa es la PREGUNTA, que va última. Si el mensaje es largo se lee el
+ * comienzo y la última oración (la pregunta).
+ */
+function buildVoiceText(text: string): string {
+  const clean = buildVoiceSummaryClean(text);
+  if (clean.length <= 450) return clean;
+  const sentences = clean.split(/(?<=[.!?])\s+/);
+  const last = sentences[sentences.length - 1] ?? "";
+  let head = "";
+  for (const s of sentences.slice(0, -1)) {
+    if ((head + " " + s).length > 300) break;
+    head = head ? `${head} ${s}` : s;
+  }
+  return `${head || clean.slice(0, 300)} … ${last}`.slice(0, 480);
+}
+
+/** Mismo limpiado que el resumen, sin recortar. */
+function buildVoiceSummaryClean(text: string): string {
+  return text
+    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+    .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
+    .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\[([^\]]+)]\([^\)]+\)/g, "$1")
+    .replace(/^#{1,3}\s+/gm, "")
+    .replace(/^\s*(?:[-*•]|\d+\.)\s+/gm, "")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, ". ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\.\s*\./g, ".")
+    .trim();
+}
+
+const LS_VOICE_ON = "gpms_copilot_voice_on";
+
+/**
+ * Parte un texto en tramos para hablarlo: la primera oración sola (suena
+ * enseguida) y después tramos de al menos ~80 caracteres (menos pedidos al
+ * servidor, voz más continua).
+ */
+function splitSpeechChunks(text: string): string[] {
+  const sentences = text.split(/(?<=[.!?:])\s+/).map(s => s.trim()).filter(Boolean);
+  if (sentences.length === 0) return [];
+  const out: string[] = [sentences[0]!];
+  let buf = "";
+  for (const s of sentences.slice(1)) {
+    buf = buf ? `${buf} ${s}` : s;
+    if (buf.length >= 80) { out.push(buf); buf = ""; }
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // speechSynthesis helpers
 // ---------------------------------------------------------------------------
 
 function getSpanishVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
+  // La voz elegida para el copiloto es Elena (Argentina). El navegador Edge la
+  // trae como voz propia ("Microsoft Elena Online"): si está, va primero, así el
+  // respaldo suena igual que la voz del servidor.
+  const elena = voices.find(v => /elena/i.test(v.name) && v.lang.startsWith("es"));
+  if (elena) return elena;
   for (const lang of ["es-AR", "es-MX", "es-ES", "es"]) {
     const v = voices.find(v => v.lang === lang || v.lang.startsWith(lang));
     if (v) return v;
@@ -78,6 +140,7 @@ function getSpanishVoice(): SpeechSynthesisVoice | null {
 }
 import { api, ApiError } from "../lib/api";
 import { useCopilotScreenContext, notifyCopilotDataChanged, type CopilotScreenContext } from "../lib/copilot-context";
+import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
 import { useT, useWoTerms, type WoTerms } from "../lib/i18n";
@@ -103,6 +166,26 @@ interface ChatMessage {
   /** Acciones sugeridas por la IA al final de la respuesta. Renderizadas
    * como botones "Aplicar" debajo del bubble del mensaje. */
   actions?: SuggestedAction[];
+  /** Ofrecimiento de asistencia de un formulario: muestra "No volver a ofrecer". */
+  assistOffer?: boolean;
+  /** Mensaje del sistema a la IA que no se muestra en el chat (p. ej. "pasó al paso siguiente"). */
+  hidden?: boolean;
+}
+
+/**
+ * Lo que el panel le manda a la IA, sin mostrarlo, cuando un paso de un flujo
+ * guiado llevó a la pantalla siguiente: así pregunta lo del paso nuevo sin que
+ * el usuario tenga que escribir "seguí".
+ */
+const NEXT_STEP_MESSAGE = "[SIGUIENTE PASO]";
+/** Al abrir un flujo: el copiloto arranca a ayudar sin preguntar si hace falta (pedido de Gustavo). */
+const AUTO_START_MESSAGE = "[AYUDAR]";
+/** El usuario eligió algo a mano en la misma pantalla: la IA vuelve a mirarla y sigue desde ahí. */
+const SCREEN_CHANGE_MESSAGE = "[CAMBIO EN PANTALLA]";
+
+/** Preferencia por persona (y por navegador) de no recibir ofrecimientos de ayuda en los formularios. */
+function assistOptOutKey(userId: string | undefined): string {
+  return `gpms_copilot_assist_off:${userId ?? "anon"}`;
 }
 
 /** Respuesta de /app/copiloto/apply-action. */
@@ -112,7 +195,7 @@ interface ApplyActionResponse {
 }
 
 /** Acciones que terminan con una OT nueva: son las que se abren en pantalla. */
-const CREATES_WORK_ORDER = new Set(["create_work_order_from_plan", "create_work_order"]);
+const CREATES_WORK_ORDER = new Set(["create_work_order_from_plan", "create_work_order", "create_work_order_from_defect"]);
 
 interface Suggestion {
   id: string;
@@ -210,6 +293,8 @@ function stripAiBlocks(text: string): string {
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
     .replace(/\[(?:CAMPOS|RECALCULAR|ABRIR)\][\s\S]*$/, "")
+    // Avisos internos del panel a la IA: si el modelo los repite, no se muestran.
+    .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA)\]/g, "")
     .trim();
 }
 
@@ -661,6 +746,7 @@ export const CopilotoPanel: React.FC = () => {
     screenContext, requestMessage, setRequestMessage,
     hasApplyFieldsCallback, applyFields,
     formActionNames, runFormActions,
+    offer, clearCopilotOffer,
   } = useCopilotScreenContext();
   const t = useT();
   // Buque seleccionado en el header — el copiloto lo usa como contexto de trabajo
@@ -705,6 +791,34 @@ export const CopilotoPanel: React.FC = () => {
    * al listado— el modo guiado se apaga solo y vuelve el botón "Aplicar".
    */
   const guidedActive = !!guidedPath && location.pathname.startsWith(guidedPath);
+
+  // ── Asistente de formularios (useCopilotAssist) ──
+  const { user } = useAuth();
+  const [assistOptOut, setAssistOptOut] = useState(false);
+  useEffect(() => {
+    try { setAssistOptOut(localStorage.getItem(assistOptOutKey(user?.id)) === "1"); } catch { setAssistOptOut(false); }
+  }, [user?.id]);
+  /**
+   * Flujos a los que el copiloto ya les ofreció ayuda. Mientras el usuario esté
+   * en un paso de uno de ellos, los campos que propone la IA entran solos al
+   * formulario, igual que cuando el copiloto abrió la pantalla: el usuario ya
+   * está conversando para completarlo, no tiene sentido un clic más por dato.
+   */
+  const [offeredFlows, setOfferedFlows] = useState<Set<string>>(() => new Set());
+  /** Paso de elección recién cargado por la IA, esperando que aparezca la pantalla siguiente. */
+  const pendingStepRef = useRef<{ flow: string; screen: string; at: number } | null>(null);
+  /** Respuesta que se está recibiendo: se corta si el usuario elige algo en la pantalla. */
+  const readerRef = useRef<{ cancel: () => Promise<void> } | null>(null);
+  const interruptedRef = useRef(false);
+  /** Cuándo cargó algo el copiloto: lo que cambie en pantalla justo después no lo hizo el usuario. */
+  const lastApplyAtRef = useRef(0);
+  /** Aviso a la IA pendiente de mandar apenas termine lo que está en curso. */
+  const pendingSystemMsgRef = useRef<{ flow: string; text: string } | null>(null);
+  const streamingRef = useRef(false);
+  streamingRef.current = streaming;
+  const [systemMsgTick, setSystemMsgTick] = useState(0);
+  const assistFlow = screenContext?.assist?.flow ?? null;
+  const guidedNow = guidedActive || (!!assistFlow && offeredFlows.has(assistFlow));
 
   // File attachment state
   const [pendingFile, setPendingFile]   = useState<FileContent | null>(null);
@@ -828,7 +942,20 @@ export const CopilotoPanel: React.FC = () => {
   // TTS playback — Web Speech API (speechSynthesis), free, no backend
   // ---------------------------------------------------------------------------
 
+  // ── Cola de voz ─────────────────────────────────────────────────────────────
+  // Se habla por tramos (oraciones), en orden, y cada tramo se pide al servidor
+  // apenas se conoce: mientras suena el primero ya se está generando el
+  // siguiente. Antes se esperaba la respuesta ENTERA y después toda la voz de
+  // una: varios segundos de silencio. `speechGenRef` invalida lo encolado
+  // cuando se corta (el usuario escribe, elige en pantalla o apaga la voz).
+  const speechGenRef = useRef(0);
+  const speechChainRef = useRef<Promise<void>>(Promise.resolve());
+  const speechPendingRef = useRef(0);
+
   const stopSpeaking = useCallback(() => {
+    speechGenRef.current += 1;
+    speechChainRef.current = Promise.resolve();
+    speechPendingRef.current = 0;
     window.speechSynthesis.cancel();
     if (audioRef.current) {
       audioRef.current.pause();
@@ -839,17 +966,15 @@ export const CopilotoPanel: React.FC = () => {
     setSpeakingIdx(null);
   }, []);
 
-  // Fallback: voz del navegador (Web Speech API) si ElevenLabs no está disponible.
-  const speakWithBrowser = useCallback((msgIdx: number, summary: string) => {
-    const utterance = new SpeechSynthesisUtterance(summary);
+  /** Voz del navegador (respaldo si el servidor no puede sintetizar). Resuelve al terminar. */
+  const speakWithBrowser = useCallback((text: string) => new Promise<void>(resolve => {
+    const utterance = new SpeechSynthesisUtterance(text);
     const voice = getSpanishVoice();
     if (voice) utterance.voice = voice;
     utterance.lang = voice?.lang ?? "es-AR";
     utterance.rate = 1.05;
-    utterance.onstart = () => setSpeakingIdx(msgIdx);
-    utterance.onend   = () => setSpeakingIdx(null);
-    utterance.onerror = () => setSpeakingIdx(null);
-
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
     if (window.speechSynthesis.getVoices().length === 0) {
       window.speechSynthesis.addEventListener("voiceschanged", () => {
         const v = getSpanishVoice();
@@ -859,36 +984,129 @@ export const CopilotoPanel: React.FC = () => {
     } else {
       window.speechSynthesis.speak(utterance);
     }
+  }), []);
+
+  /** Pide el audio de un tramo al servidor (Azure / Edge, voz Elena). null = usar la voz del navegador. */
+  const fetchSpeechUrl = useCallback(async (text: string): Promise<string | null> => {
+    try {
+      const { audioBase64, mime } = await api.post<{ audioBase64: string; mime: string }>("/app/copiloto/tts", { text });
+      // CSP permite media-src blob: (no data:), así que usamos un Blob URL.
+      const bytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    } catch {
+      return null;
+    }
   }, []);
 
-  const speakMessage = useCallback((msgIdx: number, content: string) => {
+  /** Encola un tramo: se pide ya y suena cuando termine el anterior. */
+  const enqueueSpeech = useCallback((text: string, msgIdx: number) => {
+    const clean = text.trim();
+    if (!clean) return;
+    const gen = speechGenRef.current;
+    const urlPromise = fetchSpeechUrl(clean);
+    speechPendingRef.current += 1;
+    speechChainRef.current = speechChainRef.current.then(async () => {
+      if (gen !== speechGenRef.current) { const u = await urlPromise; if (u) URL.revokeObjectURL(u); return; }
+      setSpeakingIdx(msgIdx);
+      const url = await urlPromise;
+      if (gen !== speechGenRef.current) { if (url) URL.revokeObjectURL(url); return; }
+      if (!url) { await speakWithBrowser(clean); return; }
+      await new Promise<void>(resolve => {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        const done = () => { URL.revokeObjectURL(url); if (audioRef.current === audio) audioRef.current = null; resolve(); };
+        audio.onended = done;
+        audio.onerror = done;
+        audio.play().catch(done);
+      });
+    }).finally(() => {
+      if (gen !== speechGenRef.current) return;
+      speechPendingRef.current = Math.max(0, speechPendingRef.current - 1);
+      if (speechPendingRef.current === 0) setSpeakingIdx(null);
+    });
+  }, [fetchSpeechUrl, speakWithBrowser]);
+
+  /** Lee un texto ya completo, en tramos (así el primero suena rápido). */
+  const speakText = useCallback((msgIdx: number, text: string) => {
+    for (const chunk of splitSpeechChunks(text)) enqueueSpeech(chunk, msgIdx);
+  }, [enqueueSpeech]);
+
+  const speakMessage = useCallback((msgIdx: number, content: string, opts?: { full?: boolean }) => {
     if (speakingIdx === msgIdx) { stopSpeaking(); return; }
     stopSpeaking();
+    // Lectura automática: el mensaje entero (con su pregunta final). Botón "Escuchar": el resumen.
+    const text = opts?.full ? buildVoiceText(content) : buildVoiceSummary(content);
+    if (text) speakText(msgIdx, text);
+  }, [speakingIdx, stopSpeaking, speakText]);
 
-    const summary = buildVoiceSummary(content);
-    setSpeakingIdx(msgIdx);
+  /**
+   * Voz mientras la respuesta todavía se está escribiendo: cada vez que llega
+   * texto, se habla lo que ya forma oraciones completas. `final` = cerró el
+   * stream, se habla el resto. Pasados ~700 caracteres se deja de leer el
+   * medio, pero la última oración (la pregunta) se lee igual.
+   */
+  const streamSpeechRef = useRef<{ idx: number; consumed: number; chars: number; chunks: number } | null>(null);
+  const feedStreamSpeech = useCallback((display: string, final: boolean) => {
+    const st = streamSpeechRef.current;
+    if (!st) return;
+    if (display.length < st.consumed) st.consumed = display.length;
+    const pending = display.slice(st.consumed);
+    let cut = -1;
+    if (final) cut = pending.length;
+    else {
+      const re = /[.!?:](?=\s)|\n/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(pending))) cut = m.index + m[0].length;
+    }
+    if (cut <= 0) return;
+    const piece = pending.slice(0, cut);
+    const text = buildVoiceSummaryClean(piece);
+    // Después del primer tramo conviene juntar un poco: menos pedidos, voz más pareja.
+    if (!final && st.chunks > 0 && text.length < 60) return;
+    st.consumed += cut;
+    if (!text) return;
+    if (st.chars < 700) {
+      enqueueSpeech(text, st.idx);
+      st.chars += text.length;
+      st.chunks += 1;
+    } else if (final) {
+      const last = text.split(/(?<=[.!?])\s+/).pop() ?? "";
+      if (last) enqueueSpeech(last, st.idx);
+    }
+  }, [enqueueSpeech]);
 
-    // Voz principal: ElevenLabs (backend). Si falla por cualquier motivo
-    // (key no configurada, red, upstream) cae a la voz del navegador.
-    (async () => {
-      try {
-        const { audioBase64, mime } = await api.post<{ audioBase64: string; mime: string }>(
-          "/app/copiloto/tts",
-          { text: summary },
-        );
-        // CSP permite media-src blob: (no data:), así que usamos un Blob URL.
-        const bytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
-        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-        const audio = new Audio(objectUrl);
-        audioRef.current = audio;
-        audio.onended = () => { URL.revokeObjectURL(objectUrl); audioRef.current = null; setSpeakingIdx(null); };
-        audio.onerror = () => { URL.revokeObjectURL(objectUrl); audioRef.current = null; speakWithBrowser(msgIdx, summary); };
-        await audio.play();
-      } catch {
-        speakWithBrowser(msgIdx, summary);
-      }
-    })();
-  }, [speakingIdx, stopSpeaking, speakWithBrowser]);
+  // ── Voz prendida: el copiloto lee en voz alta cada respuesta y cada
+  // ofrecimiento apenas termina de escribirlos. Se prende/apaga desde el
+  // encabezado y queda recordado en el navegador.
+  // Arranca en silencio: la voz se prende a mano desde el parlante del
+  // encabezado y queda recordada en ese navegador.
+  const [voiceOn, setVoiceOn] = useState<boolean>(() => {
+    try { return localStorage.getItem(LS_VOICE_ON) === "true"; } catch { return false; }
+  });
+  const toggleVoice = () => {
+    setVoiceOn(prev => {
+      const next = !prev;
+      try { localStorage.setItem(LS_VOICE_ON, String(next)); } catch { /* noop */ }
+      if (!next) stopSpeaking();
+      return next;
+    });
+  };
+  const voiceOnRef = useRef(voiceOn);
+  voiceOnRef.current = voiceOn;
+  // Mensajes que NO vienen por stream (ofrecimientos, confirmaciones del
+  // sistema): se leen apenas aparecen. Los que vienen por stream ya se van
+  // leyendo mientras se escriben (feedStreamSpeech) y quedan marcados acá.
+  const lastSpokenRef = useRef(-1);
+  useEffect(() => {
+    if (!voiceOn || streaming) return;
+    const idx = messages.length - 1;
+    const last = messages[idx];
+    if (!last || idx <= lastSpokenRef.current) return;
+    if (last.role !== "assistant" || last.hidden || !last.content.trim()) return;
+    lastSpokenRef.current = idx;
+    speakMessage(idx, last.content, { full: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, streaming, voiceOn]);
 
   // ---------------------------------------------------------------------------
   // Message sending
@@ -914,12 +1132,14 @@ export const CopilotoPanel: React.FC = () => {
     );
   }, [screenContext]);
 
-  const sendMessage = useCallback(async (overrideText?: string) => {
+  const sendMessage = useCallback(async (overrideText?: string, opts?: { hidden?: boolean }) => {
     const text = (overrideText !== undefined ? overrideText : input).trim();
     if (!text || streaming) return;
 
     if (overrideText === undefined) setInput("");
     setError(null);
+    // El usuario ya contestó: se corta la lectura de la pregunta anterior.
+    if (!opts?.hidden) stopSpeaking();
 
     // ── Print / PDF shortcut ──
     if (isPrintRequest(text)) {
@@ -935,11 +1155,21 @@ export const CopilotoPanel: React.FC = () => {
       return;
     }
 
-    const userMsg: ChatMessage = { role: "user", content: text };
+    const userMsg: ChatMessage = { role: "user", content: text, hidden: opts?.hidden };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setStreaming(true);
-    setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+    // La primera respuesta de una asistencia arrancada sola lleva el "Dejar de ayudar automáticamente".
+    setMessages(prev => [...prev, { role: "assistant", content: "", assistOffer: text === AUTO_START_MESSAGE }]);
+    interruptedRef.current = false;
+    // Voz: esta respuesta se va leyendo mientras llega.
+    const assistantIdx = nextMessages.length;
+    if (voiceOnRef.current) {
+      streamSpeechRef.current = { idx: assistantIdx, consumed: 0, chars: 0, chunks: 0 };
+      lastSpokenRef.current = assistantIdx;
+    } else {
+      streamSpeechRef.current = null;
+    }
 
     try {
       const fileSnapshot = pendingFile;
@@ -955,6 +1185,7 @@ export const CopilotoPanel: React.FC = () => {
         vesselCode: selectedVessel?.code ?? undefined,
         vesselName: selectedVessel?.name ?? undefined,
       });
+      readerRef.current = reader;
 
       let assistantContent = "";
       while (true) {
@@ -977,10 +1208,11 @@ export const CopilotoPanel: React.FC = () => {
               // Extract [CAMPOS] block if present (may arrive mid-stream)
               // En modo guiado no se ofrece el botón: los campos entran solos
               // al cerrar el stream (ver más abajo), sin que parpadee el botón.
-              const campos = guidedActive ? null : extractCamposBlock(assistantContent);
+              const campos = guidedNow ? null : extractCamposBlock(assistantContent);
               if (campos) setPendingFields(campos);
               // Strip the block from what's shown in the chat bubble
               const displayContent = stripAiBlocks(assistantContent);
+              feedStreamSpeech(displayContent, false);
               setMessages(prev => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -1014,6 +1246,14 @@ export const CopilotoPanel: React.FC = () => {
           } catch { /* partial SSE line */ }
         }
       }
+      readerRef.current = null;
+
+      // El usuario eligió algo en la pantalla mientras el copiloto escribía:
+      // esta respuesta quedó vieja. No se carga nada de lo que proponía; el
+      // panel ya le pidió a la IA que mire la pantalla nueva.
+      if (interruptedRef.current) { streamSpeechRef.current = null; return; }
+      feedStreamSpeech(stripAiBlocks(assistantContent), true);
+      streamSpeechRef.current = null;
 
       // ── Pantalla que la IA pidió abrir ──
       // Va ANTES de aplicar campos: primero se abre el formulario, después se
@@ -1031,9 +1271,16 @@ export const CopilotoPanel: React.FC = () => {
       // montó y no hay dónde escribir: los campos quedan en el botón "Aplicar",
       // que aparece solo apenas el formulario se registra. Desde el turno
       // siguiente ya entran solos.
-      if (guidedActive) {
+      if (guidedNow) {
         const finalFields = extractCamposBlock(assistantContent);
         if (finalFields && hasApplyFieldsCallback) {
+          // Paso de elección: la pantalla va a cambiar. Cuando llegue el paso
+          // nuevo, el panel le pide a la IA que siga (ver efecto más abajo).
+          if (screenContext?.assist?.step) {
+            pendingStepRef.current = { flow: screenContext.assist.flow, screen: screenContext.screen, at: Date.now() };
+          }
+          // Lo que cambie en pantalla en los próximos segundos lo hizo el copiloto, no el usuario.
+          lastApplyAtRef.current = Date.now();
           applyFields(finalFields);
           setPendingFields(null);
           setFieldsLoadedFlash(true);
@@ -1046,8 +1293,9 @@ export const CopilotoPanel: React.FC = () => {
       const recalc = extractRecalcBlock(assistantContent);
       if (recalc && formActionNames.length > 0) {
         setRecalcRunning(true);
+        lastApplyAtRef.current = Date.now();
         try { await runFormActions(recalc); }
-        finally { setRecalcRunning(false); }
+        finally { setRecalcRunning(false); lastApplyAtRef.current = Date.now(); }
       }
     } catch (e: any) {
       setError(e.message ?? "Error al conectar con el copiloto");
@@ -1057,11 +1305,13 @@ export const CopilotoPanel: React.FC = () => {
         return updated;
       });
     } finally {
+      readerRef.current = null;
+      streamSpeechRef.current = null;
       setStreaming(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [buildApiMessages, capability, input, messages, screenContext, streaming, selectedVessel, pendingFile,
-      guidedActive, hasApplyFieldsCallback, applyFields, formActionNames, runFormActions, navigate]);
+      guidedNow, hasApplyFieldsCallback, applyFields, formActionNames, runFormActions, navigate, feedStreamSpeech]);
 
   // Aplica una acción sugerida por la IA. Muta el state del action a
   // applying → applied/failed. POST /app/copiloto/apply-action.
@@ -1142,6 +1392,60 @@ export const CopilotoPanel: React.FC = () => {
   // Auto-send a message requested by an external component (e.g. "Asistir con IA" button)
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
+
+  // Un paso de un flujo guiado llevó a la pantalla siguiente (del mismo flujo):
+  // la IA pregunta lo que corresponde ahí sin esperar un "seguí". Si en unos
+  // segundos no cambió nada (la elección no avanzaba de pantalla), se olvida.
+  useEffect(() => {
+    const pending = pendingStepRef.current;
+    if (!pending || streaming) return;
+    if (Date.now() - pending.at > 20_000) { pendingStepRef.current = null; return; }
+    const assist = screenContext?.assist;
+    if (!assist || assist.flow !== pending.flow || screenContext?.screen === pending.screen) return;
+    pendingStepRef.current = null;
+    void sendMessageRef.current(NEXT_STEP_MESSAGE, { hidden: true });
+  }, [screenContext, streaming]);
+
+  // El usuario actuó directo en la pantalla central de un flujo en asistencia:
+  // eligió una opción, pasó a otra ventana o marcó una casilla de lista cerrada.
+  // El copiloto se calla, deja de lado lo que estaba diciendo o escribiendo y
+  // vuelve a mirar la pantalla para seguir desde ahí. Los cambios de texto
+  // libre (tipear) no cuentan: interrumpirían a cada letra.
+  const prevAssistRef = useRef<{ flow: string; screen: string; closed: string } | null>(null);
+  useEffect(() => {
+    const assist = screenContext?.assist;
+    const prev = prevAssistRef.current;
+    const closed = assist
+      ? JSON.stringify(Object.keys(screenContext?.fieldOptions ?? {}).map(k => [k, screenContext?.fieldValues?.[k] ?? null]))
+      : "";
+    prevAssistRef.current = assist && screenContext ? { flow: assist.flow, screen: screenContext.screen, closed } : null;
+    if (!assist || !prev || prev.flow !== assist.flow || !offeredFlows.has(assist.flow)) return;
+    const screenChanged = prev.screen !== screenContext!.screen;
+    if (!screenChanged && prev.closed === closed) return;
+    // Lo acaba de cargar el copiloto: no es el usuario (el paso siguiente lo maneja pendingStepRef).
+    if (Date.now() - lastApplyAtRef.current < 2500) return;
+    stopSpeaking();
+    pendingStepRef.current = null;
+    if (streamingRef.current) {
+      interruptedRef.current = true;
+      void readerRef.current?.cancel().catch(() => {});
+    }
+    pendingSystemMsgRef.current = { flow: assist.flow, text: screenChanged ? NEXT_STEP_MESSAGE : SCREEN_CHANGE_MESSAGE };
+    setSystemMsgTick(n => n + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenContext]);
+
+  // Manda el aviso pendiente (arrancar a ayudar / la pantalla cambió) apenas
+  // no hay otra respuesta en curso y la pantalla activa es la de ese flujo.
+  useEffect(() => {
+    const pending = pendingSystemMsgRef.current;
+    if (!pending || streaming) return;
+    if (screenContext?.assist?.flow !== pending.flow) return;
+    pendingSystemMsgRef.current = null;
+    if (!expanded) setExpanded(true);
+    void sendMessageRef.current(pending.text, { hidden: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [systemMsgTick, streaming, screenContext]);
   useEffect(() => {
     if (!requestMessage) return;
     if (!expanded) setExpanded(true);
@@ -1159,6 +1463,42 @@ export const CopilotoPanel: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestMessage]);
 
+  // Ofrecimiento por iniciativa del copiloto (lo escribe el sistema, sin IA).
+  // Una sola vez por `key` en la sesión: reabrir el mismo análisis no vuelve a
+  // interrumpir con la misma pregunta.
+  const shownOffersRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!offer) return;
+    clearCopilotOffer();
+    if (shownOffersRef.current.has(offer.key)) return;
+    // Ofrecimiento de un formulario: respeta el "No volver a ofrecer".
+    if (offer.assistFlow && assistOptOut) return;
+    shownOffersRef.current.add(offer.key);
+    if (!expanded) setExpanded(true);
+    if (offer.assistFlow) {
+      // No se pregunta si quiere ayuda: se ayuda. El panel le pide a la IA que
+      // arranque con la primera pregunta del formulario (ver efecto de avisos).
+      const flow = offer.assistFlow;
+      setOfferedFlows(prev => new Set(prev).add(flow));
+      pendingSystemMsgRef.current = { flow, text: AUTO_START_MESSAGE };
+      setSystemMsgTick(n => n + 1);
+      return;
+    }
+    setMessages(prev => [...prev, { role: "assistant", content: offer.text }]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offer]);
+
+  const optOutAssist = () => {
+    try { localStorage.setItem(assistOptOutKey(user?.id), "1"); } catch { /* sin almacenamiento: vale para esta sesión */ }
+    setAssistOptOut(true);
+    setMessages(prev => [...prev, { role: "assistant", content: t("copilot.assist.optedOut") }]);
+  };
+  const optInAssist = () => {
+    try { localStorage.removeItem(assistOptOutKey(user?.id)); } catch { /* noop */ }
+    setAssistOptOut(false);
+    setMessages(prev => [...prev, { role: "assistant", content: t("copilot.assist.optedIn") }]);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
   };
@@ -1167,6 +1507,7 @@ export const CopilotoPanel: React.FC = () => {
 
   const clearConversation = () => {
     stopSpeaking();
+    lastSpokenRef.current = -1;
     setMessages([]); setError(null); setPendingFields(null); setPendingFile(null);
     setGuidedPath(null);
   };
@@ -1248,6 +1589,19 @@ export const CopilotoPanel: React.FC = () => {
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={toggleVoice}
+            title={voiceOn ? t("copilot.voice.turnOff") : t("copilot.voice.turnOn")}
+            aria-pressed={voiceOn}
+            className={`transition-colors ${voiceOn ? "text-accent hover:text-fg" : "text-text-industrial/30 hover:text-fg"}`}
+          >
+            {voiceOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+          </button>
+          {assistOptOut && (
+            <button onClick={optInAssist} title={t("copilot.assist.reEnable")} className="text-text-industrial/30 hover:text-accent transition-colors">
+              <Sparkles className="w-3 h-3" />
+            </button>
+          )}
           {messages.length > 0 && (
             <button onClick={clearConversation} title="Limpiar conversación" className="text-text-industrial/30 hover:text-danger transition-colors">
               <Trash2 className="w-3 h-3" />
@@ -1374,7 +1728,7 @@ export const CopilotoPanel: React.FC = () => {
           </div>
         )}
 
-        {messages.map((msg, i) => (
+        {messages.map((msg, i) => msg.hidden ? null : (
           <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
             <div className={`max-w-[92%] rounded-xl px-2.5 py-1.5 text-[11px] leading-relaxed whitespace-pre-wrap ${
               msg.role === "user"
@@ -1393,6 +1747,15 @@ export const CopilotoPanel: React.FC = () => {
                 )
               }
             </div>
+            {msg.assistOffer && !assistOptOut && (
+              <button
+                type="button"
+                onClick={optOutAssist}
+                className="mt-0.5 px-1 text-[9px] text-text-industrial/40 hover:text-accent underline underline-offset-2 transition-colors"
+              >
+                {t("copilot.assist.optOut")}
+              </button>
+            )}
             {/* Suggested actions — botones "Aplicar" debajo del mensaje */}
             {msg.role === "assistant" && msg.actions && msg.actions.length > 0 && (
               <div className="mt-2 space-y-1.5">

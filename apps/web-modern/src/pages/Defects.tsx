@@ -29,6 +29,24 @@ import { textMatches } from "../lib/text-search";
 
 type RcaMethodology = "FIVE_WHYS" | "FISHBONE" | "FTA" | "BARRIER_ANALYSIS";
 
+// Listas cerradas del formulario de edición. Las usan los desplegables y el
+// copiloto (que sólo puede cargar uno de estos valores).
+const DEFECT_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+const DEFECT_OPERATIONAL_STATES = ["NORMAL", "DEGRADED", "RESTRICTED", "NO_GO"] as const;
+// La severidad usa la misma escala que la prioridad de la OT.
+const SEVERITY_LABEL_KEYS: Record<typeof DEFECT_SEVERITIES[number], TranslationKey> = {
+  LOW: "priority.low", MEDIUM: "priority.medium", HIGH: "priority.high", CRITICAL: "priority.critical",
+};
+const OPERATIONAL_STATE_LABEL_KEYS: Record<typeof DEFECT_OPERATIONAL_STATES[number], TranslationKey> = {
+  NORMAL: "def.opState.normal", DEGRADED: "def.opState.degraded", RESTRICTED: "def.opState.restricted", NO_GO: "def.opState.noGo",
+};
+const RCA_METHODOLOGY_OPTIONS: Array<{ value: RcaMethodology; labelKey: TranslationKey }> = [
+  { value: "FIVE_WHYS",        labelKey: "def.method.fiveWhys" },
+  { value: "FISHBONE",         labelKey: "def.method.fishbone" },
+  { value: "FTA",              labelKey: "def.method.fta" },
+  { value: "BARRIER_ANALYSIS", labelKey: "def.method.barrierAnalysis" },
+];
+
 interface Defect {
   id: string;
   tenantId: string;
@@ -992,13 +1010,20 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       severity:              severity              || null,
       operationalState:      operationalState      || null,
       immediateAction:       immediateAction       || null,
-      correctiveAction:      correctiveAction      || null,
+      // correctiveAction no va: el formulario no lo muestra (ahí se guarda la
+      // nota de cierre) y el copiloto lo estaría escribiendo a ciegas.
       rcaAnalysis:           rcaAnalysis           || null,
       rcaMethodology:        rcaMethodology        || null,
       rcaImmediateCause:     rcaImmediateCause     || null,
       rcaContributingCause:  rcaContributingCause  || null,
       rcaRootCause:          rcaRootCause          || null,
       rcaPreventiveActions:  rcaPreventiveActions  || null,
+    },
+    // Listas cerradas: el copiloto tiene que proponer uno de estos valores exactos.
+    fieldOptions: {
+      severity:         DEFECT_SEVERITIES.map(v => ({ value: v, label: t(SEVERITY_LABEL_KEYS[v]) })),
+      operationalState: DEFECT_OPERATIONAL_STATES.map(v => ({ value: v, label: t(OPERATIONAL_STATE_LABEL_KEYS[v]) })),
+      rcaMethodology:   RCA_METHODOLOGY_OPTIONS.map(o => ({ value: o.value, label: t(o.labelKey) })),
     },
     relatedEntities: { workOrderId: defect.workOrderId, assetId: defect.assetId },
   });
@@ -1039,10 +1064,11 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   useCopilotApplyFields(!isClosed ? (fields) => {
     if (fields.description          !== undefined) setDescription(fields.description);
     if (fields.classification       !== undefined) setClassification(fields.classification);
+    if (fields.severity             !== undefined && (DEFECT_SEVERITIES as readonly string[]).includes(fields.severity)) setSeverity(fields.severity);
+    if (fields.operationalState     !== undefined && (DEFECT_OPERATIONAL_STATES as readonly string[]).includes(fields.operationalState)) setOperationalState(fields.operationalState);
     if (fields.immediateAction      !== undefined) setImmediateAction(fields.immediateAction);
-    if (fields.correctiveAction     !== undefined) setCorrectiveAction(fields.correctiveAction);
     if (fields.rcaAnalysis          !== undefined) setRcaAnalysis(fields.rcaAnalysis);
-    if (fields.rcaMethodology       !== undefined && (["FIVE_WHYS", "FISHBONE", "FTA", "BARRIER_ANALYSIS", ""].includes(fields.rcaMethodology))) setRcaMethodology(fields.rcaMethodology as RcaMethodology | "");
+    if (fields.rcaMethodology       !== undefined && (["", ...RCA_METHODOLOGY_OPTIONS.map(o => o.value)] as string[]).includes(fields.rcaMethodology)) setRcaMethodology(fields.rcaMethodology as RcaMethodology | "");
     if (fields.rcaImmediateCause    !== undefined) setRcaImmediateCause(fields.rcaImmediateCause);
     if (fields.rcaContributingCause !== undefined) setRcaContributingCause(fields.rcaContributingCause);
     if (fields.rcaRootCause         !== undefined) setRcaRootCause(fields.rcaRootCause);
@@ -1338,13 +1364,13 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("col.severity")}</label>
                 <select value={severity} onChange={e => setSeverity(e.target.value)} disabled={isClosed} className={fldCls}>
-                  {["LOW","MEDIUM","HIGH","CRITICAL"].map(v => <option key={v}>{v}</option>)}
+                  {DEFECT_SEVERITIES.map(v => <option key={v}>{v}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
                 <label className={fldLabel}>{t("def.operationalState")}</label>
                 <select value={operationalState} onChange={e => setOperationalState(e.target.value)} disabled={isClosed} className={fldCls}>
-                  {["NORMAL","DEGRADED","RESTRICTED","NO_GO"].map(v => <option key={v}>{v}</option>)}
+                  {DEFECT_OPERATIONAL_STATES.map(v => <option key={v}>{v}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">

@@ -52,6 +52,10 @@ export interface FluidResult {
   reportMime: string | null;
   aiAnalysis: string | null;
   aiAnalysisGeneratedAt: string | null;
+  /** Defecto que el resultado crítico generó solo (sólo lo trae el detalle, no el listado). */
+  defectCode?: string | null;
+  defectStatus?: string | null;
+  defectWorkOrderId?: string | null;
 }
 
 // Tipos de muestreo. FLUID es el caso histórico. Al ampliar el módulo a CBM,

@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate, sfiGroupDigit } from "../lib/utils";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, CopilotFlowProvider, CopilotChoiceStep, createCopilotFlowKey } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { useAuth, useCan } from "../lib/auth";
 import { useTheme } from "../lib/theme";
@@ -273,6 +273,12 @@ export const Dashboard: React.FC = () => {
 
   useCopilotEmitter({ module: "DASHBOARD", screen: "DASHBOARD" });
 
+  // Cada toque en un acceso rápido abre un flujo nuevo para el copiloto: todas
+  // sus ventanas (el selector, la lista de OT, el formulario) comparten esta
+  // clave y el copiloto ofrece ayuda una sola vez. Viaja en la navegación
+  // cuando el flujo sigue en otra pantalla (la SS en la OT, el checklist).
+  const [copilotFlow, setCopilotFlow] = React.useState<string | null>(null);
+
   // KPIs derived from fetched data
   // Latest daily report info: timestamp of the most recent submission and
   // a flag indicating whether today's report (in browser local time) is
@@ -507,7 +513,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         {},
       );
       setInspKind("none");
-      navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}`);
+      navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}`, copilotFlow ? { state: { copilotFlow } } : undefined);
     } catch (e) {
       setInspError(e instanceof Error ? e.message : t("dashboard.inspection.openError"));
     } finally {
@@ -528,6 +534,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   return (
     <div className={`${rootGap} animate-in fade-in duration-500`}>
 
+      <CopilotFlowProvider key={copilotFlow ?? "none"} name="dashboard" flowKey={copilotFlow}>
       {showNewWoWizard && (
         <NewWorkOrderWizard
           onClose={() => setShowNewWoWizard(false)}
@@ -535,7 +542,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             setShowNewWoWizard(false);
             // Ruta directa del deep-link (no `?autoCode=`, que es sólo un puente
             // de compatibilidad y agrega un salto de más en el historial).
-            navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders");
+            navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders", copilotFlow ? { state: { copilotFlow } } : undefined);
           }}
         />
       )}
@@ -548,14 +555,26 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           autoSelectClassInspectionAsset={createWoPreset?.classAsset}
           requireProvider={!!createWoPreset}
           onClose={() => { setShowCreateWo(false); setCreateWoPreset(null); }}
-          onSaved={(_woId, workOrderCode) => {
+          onSaved={async (woId, workOrderCode) => {
             const wasSsFlow = !!createWoPreset;
             setShowCreateWo(false);
             setCreateWoPreset(null);
+            const flowState = copilotFlow ? { state: { copilotFlow } } : undefined;
             // El flujo de SS termina en la solicitud (es lo que se estaba
-            // creando); el de OT abre la orden recién creada para completarla.
-            if (wasSsFlow) { navigate("/service-requests"); return; }
-            navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders");
+            // creando): se abre la SS recién creada para completarla. Si hubo
+            // más de un taller (varias SS), va al listado.
+            if (wasSsFlow) {
+              try {
+                const res = await api.get<{ items: Array<{ id: string }> }>(`/app/pms/work-orders/${encodeURIComponent(woId)}/service-requests`);
+                const only = res.items?.length === 1 ? res.items[0]!.id : null;
+                navigate(only ? `/service-requests?openId=${encodeURIComponent(only)}` : "/service-requests", flowState);
+              } catch {
+                navigate("/service-requests");
+              }
+              return;
+            }
+            // El de OT abre la orden recién creada para completarla.
+            navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders", flowState);
           }}
         />
       )}
@@ -577,6 +596,26 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               </div>
               <ModalCloseButton onClose={() => setShowSsChooser(false)} />
             </div>
+            <CopilotChoiceStep
+              module="SERVICE_REQUESTS" screen="SS_CHOOSER" title={t("dashboard.newServiceRequest")}
+              label={t("dashboard.ssChooser.title")} vesselCode={selectedVesselCode ?? undefined}
+              options={[
+                { value: "FROM_WO",     label: t("dashboard.ssChooser.fromOpenWo") },
+                { value: "MAINTENANCE", label: t("dashboard.ssChooser.maintenance") },
+                { value: "REPAIR",      label: t("dashboard.ssChooser.repair") },
+                { value: "CLASS",       label: t("dashboard.ssChooser.classInspection") },
+              ]}
+              onChoose={v => {
+                setShowSsChooser(false);
+                if (v === "FROM_WO") { setShowWoPicker(true); return; }
+                setCreateWoPreset(
+                  v === "MAINTENANCE" ? { maintKind: "PREVENTIVO" }
+                  : v === "REPAIR" ? { maintKind: "CORRECTIVO_NO_PROGRAMADO" }
+                  : { maintKind: "INSPECTION", title: t("dashboard.ssChooser.classInspection"), classAsset: true },
+                );
+                setShowCreateWo(true);
+              }}
+            />
             <div className="grid grid-cols-1 gap-3">
               {/* La orden ya existe: se elige de la lista y la SS se carga desde
                   ahí. Va primero porque es el caso más común a bordo. */}
@@ -632,6 +671,39 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               </div>
               <ModalCloseButton onClose={() => setInspKind("none")} />
             </div>
+
+            {inspKind === "chooser" ? (
+              <CopilotChoiceStep
+                module="INSPECTIONS" screen="INSPECTION_KIND" title={t("dashboard.generateInspection")}
+                label={t("dashboard.inspection.subtitle")} vesselCode={selectedVesselCode ?? undefined}
+                options={[
+                  { value: "EVENT",    label: t("dashboard.inspection.byEvent") },
+                  { value: "PERIODIC", label: t("dashboard.inspection.periodic") },
+                  { value: "CLASS",    label: t("dashboard.inspection.classInspection") },
+                ]}
+                onChoose={v => { void loadInspectionPlans(v as "EVENT" | "PERIODIC" | "CLASS"); }}
+              />
+            ) : !inspLoading && inspOpeningId === null && (
+              <CopilotChoiceStep
+                module="INSPECTIONS" screen="INSPECTION_PLAN_ITEM" title={t("dashboard.generateInspection")}
+                label={t("dashboard.inspection.title")} vesselCode={selectedVesselCode ?? undefined}
+                hint="Choosing a plan item CREATES the inspection work order immediately and opens it."
+                options={[
+                  ...(inspPlans ?? []).map(p => ({ value: p.id, label: `${p.title}${p.assetName ? ` · ${p.assetName}` : ""}` })),
+                  ...(inspKind === "CLASS" ? [{ value: "__occasional__", label: t("dashboard.inspection.occasional") }] : []),
+                ]}
+                onChoose={v => {
+                  if (v === "__occasional__") {
+                    setCreateWoPreset({ maintKind: "INSPECTION", title: t("dashboard.inspection.classTitle"), classAsset: true });
+                    setInspKind("none");
+                    setShowCreateWo(true);
+                    return;
+                  }
+                  const plan = (inspPlans ?? []).find(p => p.id === v);
+                  if (plan) void openInspectionWo(plan);
+                }}
+              />
+            )}
 
             {inspKind === "chooser" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -771,7 +843,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             // eligió la orden para pedirle un servicio al taller, no para
             // mirarla. El recuadro de Solicitudes de Servicio queda detrás, con
             // el resto de los datos que la SS hereda de la OT.
-            navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}?newSs=1`);
+            navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}?newSs=1`, { state: { copilotFlow } });
           }}
         />
       )}
@@ -787,10 +859,11 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             setShowChecklistPicker(false);
             // El alta vive en /checklists: ahí se completa buque/fecha/puerto y
             // al crear se abre el checklist para responder los ítems.
-            navigate(`/checklists?new=${encodeURIComponent(templateId)}`);
+            navigate(`/checklists?new=${encodeURIComponent(templateId)}`, { state: { copilotFlow } });
           }}
         />
       )}
+      </CopilotFlowProvider>
 
       {showMpChooser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowMpChooser(false)}>
@@ -950,7 +1023,8 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
         {/* Fila 2 — lo que se crea: OT, SS, inspección, permiso de trabajo y el
             registro de avance de una SS que ya está en el taller. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+          onClickCapture={() => setCopilotFlow(createCopilotFlowKey("dashboard"))}>
           <button
             onClick={() => setShowNewWoWizard(true)}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
@@ -1176,6 +1250,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
       )}
 
       {/* Recepción de repuestos contra remito (botón verde de arriba). */}
+      <CopilotFlowProvider key={`r-${copilotFlow ?? "none"}`} name="dashboard" flowKey={copilotFlow}>
       {showSpareReceipt && (
         <SpareReceiptModal
           vessels={contextVessels.map(v => ({ code: v.code, name: v.name ?? null }))}
@@ -1192,6 +1267,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           onGoToModule={() => { setShowFluidBatch(false); navigate("/fluid-analyses"); }}
         />
       )}
+      </CopilotFlowProvider>
 
       {/* AI Insights modal */}
       {showInsights && (

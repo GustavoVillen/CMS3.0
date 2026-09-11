@@ -10,7 +10,8 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { RolePermissionsModal } from "../components/RolePermissionsModal";
 import { fmtDate } from "../lib/utils";
-import { useT, type TranslationKey } from "../lib/i18n";
+import { useT } from "../lib/i18n";
+import { useRoleLabels } from "../lib/role-labels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,24 +64,7 @@ const ALL_ROLES = [
 ];
 
 // Etiquetas de roles según la "persona típica" del manual, traducidas al locale
-// del tenant. Hook porque las traducciones dependen del context i18n.
-const ROLE_LABEL_KEYS: Record<string, TranslationKey> = {
-  TENANT_ADMIN:         "role.tenantAdmin",
-  FLEET_SUPERINTENDENT: "role.fleetSuperintendent",
-  MAINTENANCE_MANAGER:  "role.maintenanceManager",
-  TECHNICIAN_OPERATOR:  "role.technicianOperator",
-  INSPECTOR_COMPLIANCE: "role.inspectorCompliance",
-  PROCUREMENT_STORE:    "role.procurementStore",
-  HSE_MANAGER:          "role.hseManager",
-  AUDITOR_READONLY:     "role.auditorReadonly",
-};
-
-function useRoleLabels(): Record<string, string> {
-  const t = useT();
-  return Object.fromEntries(
-    Object.entries(ROLE_LABEL_KEYS).map(([role, key]) => [role, t(key)]),
-  );
-}
+// del tenant: viven en lib/role-labels (también las usan los desplegables de personas).
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE:    "bg-success-sea/10 text-success-sea border-success-sea/20",

@@ -1,5 +1,5 @@
 // Desplegable de "Responsable": elige un usuario del sistema en vez de escribir
-// el nombre a mano.
+// el nombre a mano. Al lado del nombre muestra, más tenue, su rol o cargo.
 //
 // Guarda el ID del usuario, no el texto. Así el nombre sale siempre bien en la
 // pantalla y en los PDF (que resuelven el nombre por ID) aunque después se
@@ -13,10 +13,13 @@
 import React from "react";
 import { useFetch } from "../lib/hooks";
 import { useT } from "../lib/i18n";
+import { PersonSelect } from "./PersonSelect";
 
 export interface DirectoryUser {
   userId: string;
   name: string;
+  role?: string | null;
+  jobTitle?: string | null;
 }
 
 interface Props {
@@ -38,17 +41,16 @@ export const AssigneeSelect: React.FC<Props> = ({ value, onChange, disabled, cla
   const legacy = value && !isKnown ? value : null;
 
   return (
-    <select
+    <PersonSelect
       value={value}
-      onChange={e => onChange(e.target.value)}
+      onChange={onChange}
       disabled={disabled}
       className={className}
-    >
-      <option value="">{t("wo.modal.assigneeNone")}</option>
-      {legacy && <option value={legacy}>{legacy}</option>}
-      {people.map(p => (
-        <option key={p.userId} value={p.userId}>{p.name}</option>
-      ))}
-    </select>
+      emptyLabel={t("wo.modal.assigneeNone")}
+      options={[
+        ...(legacy ? [{ value: legacy, name: legacy }] : []),
+        ...people.map(p => ({ value: p.userId, name: p.name, role: p.role, jobTitle: p.jobTitle })),
+      ]}
+    />
   );
 };

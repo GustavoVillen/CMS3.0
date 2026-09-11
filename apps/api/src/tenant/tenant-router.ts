@@ -1536,10 +1536,11 @@ export async function handleTenantRoutes(
   if (method === "POST" && url.pathname === "/app/copiloto/tts") {
     const slug = requireTenantSlug(request, env);
     const session = requireTenantAccessSession(request, slug);
-    enforceRateLimit(request, `copilot-tts:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    // 90/min: la voz se pide por tramos (oraciones) para empezar a hablar antes.
+    enforceRateLimit(request, `copilot-tts:${session.user.id}`, { maxRequests: 90, windowMs: 60_000 });
     const body = await readJsonBody(request) as { text?: string };
     const { synthesizeSpeech } = await import("./copiloto/tts-service");
-    sendJson(response, 200, await synthesizeSpeech(body.text ?? ""));
+    sendJson(response, 200, await synthesizeSpeech(body.text ?? "", slug));
     return true;
   }
 

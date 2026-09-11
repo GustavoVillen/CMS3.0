@@ -15,6 +15,7 @@ import {
 } from "../../lib/wo-form-catalog";
 import type { WoPlannedItem, WoSpareOption } from "./PlannedItemsEditor";
 import { AutoTextArea } from "../AutoTextArea";
+import { useT } from "../../lib/i18n";
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
@@ -197,6 +198,7 @@ export function WoRegiSections({
   location: string;
   onLocationChange: (v: string) => void;
 }) {
+  const t = useT();
   // Arranca en "otra empresa" si la OT ya se guardó con un nombre escrito a mano.
   const [otraEmpresa, setOtraEmpresa] = React.useState(!providerId && !!providerOther);
 
@@ -238,7 +240,7 @@ export function WoRegiSections({
             value={location}
             disabled={disabled}
             onChange={e => onLocationChange(e.target.value)}
-            placeholder="Ciudad / Km…"
+            placeholder={t("wo.modal.locationPlaceholder")}
           />
         </div>
       </div>

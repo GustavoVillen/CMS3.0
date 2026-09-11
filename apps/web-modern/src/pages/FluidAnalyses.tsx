@@ -14,7 +14,8 @@ import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
+import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -507,6 +508,41 @@ function SampleDetailModal({
   };
   useEffect(() => { void load(); }, [id]);
 
+  // ── Copiloto ──
+  // Lo que ve el usuario, para que el copiloto sepa de qué muestra y de qué
+  // defecto se habla sin preguntar.
+  const can = useCan();
+  const { pushCopilotOffer } = useCopilotScreenContext();
+  const result = sample?.result ?? null;
+  const defectCode = result?.defectCode ?? null;
+  useCopilotEmitter(sample ? {
+    module: "FLUID_ANALYSES",
+    screen: "FLUID_SAMPLE_DETAIL",
+    entityId: sample.id,
+    entityCode: sample.sampleCode,
+    vesselCode: sample.vesselCode,
+    workflowStage: result?.verdict ?? sample.status,
+    relatedEntities: { assetId: sample.assetId, defectCode, defectStatus: result?.defectStatus ?? null },
+  } : null);
+
+  // Resultado grave con su defecto todavía por completar: el copiloto ofrece
+  // abrirlo. Si el defecto ya está cerrado o ya tiene su OT, el trabajo ya
+  // siguió su curso y no hay nada que ofrecer; tampoco a quien no puede
+  // editar defectos.
+  const offerVerdict = result?.verdict === "CRITICAL" || result?.verdict === "ACTION_REQUIRED" ? result.verdict : null;
+  const shouldOfferDefect = !!offerVerdict && !!defectCode
+    && result?.defectStatus !== "RESOLVED" && result?.defectStatus !== "CLOSED"
+    && !result?.defectWorkOrderId && can("defect.write");
+  useEffect(() => {
+    if (!shouldOfferDefect || !sample || !defectCode || !offerVerdict) return;
+    const lead = t(offerVerdict === "CRITICAL" ? "fa.copilotOffer.critical" : "fa.copilotOffer.actionRequired");
+    pushCopilotOffer({
+      key: `fluid-defect:${sample.id}`,
+      text: `${lead} **${defectCode}**. ${t("fa.copilotOffer.ask")}`,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldOfferDefect, sample?.id]);
+
   const remove = async () => {
     if (!confirm(t("confirm.deleteSample"))) return;
     try { await api.delete(`/app/fluid-analyses/${id}`); onChanged(); onClose(); } catch { /* noop */ }
@@ -590,6 +626,15 @@ function SampleDetailModal({
               <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">
                 <p className="text-xs text-text-industrial/70">{sample.result.summary}</p>
               </div>
+            )}
+            {defectCode && (
+              <button
+                type="button"
+                onClick={() => navigate(`/defects/${encodeURIComponent(defectCode)}`)}
+                className="inline-flex items-center gap-1.5 text-xs text-text-industrial/70 hover:text-fg"
+              >
+                {t("fa.linkedDefect")} <span className="font-mono font-bold text-accent hover:underline">{defectCode}</span>
+              </button>
             )}
             <ParametersTable parameters={sample.result.parameters} />
             {/* El archivo va por /app/files/* con Bearer token; un <a href> plano

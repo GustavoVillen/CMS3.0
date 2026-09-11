@@ -12,6 +12,9 @@ import { AssigneeSelect } from "./AssigneeSelect";
 import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
 import { AutoTextArea } from "./AutoTextArea";
 import { findClassInspectionAsset } from "../lib/class-inspection-asset";
+import { useCopilotAssist, type CopilotAssistField } from "../lib/copilot-context";
+import { useFetch } from "../lib/hooks";
+import { PersonSelect } from "./PersonSelect";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -236,7 +239,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   // "Abierta por (en nombre de)": queda como SOLICITA / createdByUserId.
   const [onBehalfUserId, setOnBehalfUserId] = useState("");
-  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null }[]>([]);
+  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; role?: string; jobTitle?: string | null }[]>([]);
 
   // ── INFO fields (standalone mode only) ────────────────────────────────────
   const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? initialVesselCode ?? "");
@@ -781,7 +784,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // El endpoint /app/team/members ya es admin-only.
   useEffect(() => {
     if (!isAdmin) return;
-    api.get<{ userId: string; firstName: string | null; lastName: string | null }[]>("/app/team/members")
+    api.get<{ userId: string; firstName: string | null; lastName: string | null; role?: string; jobTitle?: string | null }[]>("/app/team/members")
       .then(rows => setTeamUsers(Array.isArray(rows) ? rows : []))
       .catch(() => setTeamUsers([]));
   }, [isAdmin]);
@@ -1033,6 +1036,122 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   });
   const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
 
+  // ── Copiloto: el formulario completo, en el mismo orden que la pantalla ──
+  const { data: directory } = useFetch<Array<{ userId: string; name: string }>>("/app/team/directory");
+  const showsStandaloneProviders = !prefill && planProviders.length === 0 && (isMercurio ? assignedToArea === "TERCERIZADO" : requireProvider);
+  const assistFields: CopilotAssistField[] = [];
+  if (!prefill) {
+    assistFields.push(
+      { key: "vesselCode", label: t("wo.modal.vessel"), value: vesselCode,
+        options: vessels.map(v => ({ value: v.code, label: v.name ?? v.code })), set: setVesselCode },
+    );
+    if (assets.length > 0) {
+      assistFields.push({ key: "assetId", label: t("wo.modal.equipment"), value: assetId,
+        options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode })), set: setAssetId });
+    }
+  } else if (prefill.assetSelectable && assets.length > 0) {
+    assistFields.push({ key: "assetId", label: t("wo.modal.equipment"), value: assetId,
+      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode })), set: setAssetId });
+  }
+  if (isMercurio) {
+    assistFields.push(
+      { key: "voyageNumber", label: t("wo.modal.voyageNumber"), value: voyageNumber, set: setVoyageNumber },
+      { key: "location", label: t("wo.modal.location"), value: location, set: setLocation,
+        hint: "Geographic location of the vessel while the work is done: city/port or river km. NOT a place on board." },
+      { key: "operatingCondition", label: t("wo.modal.operatingCondition"), value: operatingCondition, set: setOperatingCondition,
+        options: WO_OPERATING_CONDITIONS.map(c => ({ value: c, label: t(`wo.condition.${c}` as TranslationKey) })) },
+      { key: "requestedByArea", label: t("wo.modal.requestedBy"), value: requestedByArea, options: WO_REQUESTED_BY, set: setRequestedByArea },
+      { key: "assignedToArea", label: t("wo.modal.assignedTo"), value: assignedToArea, options: WO_ASSIGNED_TO,
+        set: v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); } },
+    );
+    if (!prefill) {
+      assistFields.push(
+        { key: "priority", label: t("wo.modal.priority"), value: priority, options: WO_PRIORITY_OPTIONS, set: setPriority },
+        { key: "maintKind", label: t("wo.modal.type"), value: maintKind, options: WO_MAINTENANCE_KINDS_OR_INSPECTION, set: setMaintKind },
+      );
+    }
+    assistFields.push({ key: "systemArea", label: t("wo.modal.system"), value: systemArea, options: WO_SYSTEM_AREAS, set: setSystemArea });
+  } else if (!prefill) {
+    assistFields.push(
+      { key: "type", label: t("wo.modal.type"), value: type, set: setType, options: [
+        { value: "PREVENTIVE", label: t("wo.type.preventive") },
+        { value: "CORRECTIVE", label: t("wo.type.corrective") },
+        { value: "INSPECTION", label: t("wo.type.inspection") },
+      ] },
+      { key: "priority", label: t("wo.modal.priority"), value: priority, set: setPriority, options: [
+        { value: "LOW", label: t("priority.low") }, { value: "MEDIUM", label: t("priority.medium") },
+        { value: "HIGH", label: t("priority.high") }, { value: "CRITICAL", label: t("priority.critical") },
+      ] },
+    );
+  }
+  if (!prefill) {
+    assistFields.push({ key: "criticality", label: t("wo.modal.criticality"), value: criticality, set: setCriticality,
+      options: ["A", "B", "C"].map(v => ({ value: v, label: v })) });
+  }
+  assistFields.push(
+    { key: "title", label: t("wo.modal.titleField"), value: title, set: setTitle },
+    { key: "description", label: t("wo.modal.task"), value: description, set: setDescription },
+  );
+  if (showsStandaloneProviders) {
+    standaloneProviderRequests.forEach((row, i) => {
+      assistFields.push(
+        { key: `line.${i}.providerId`, label: `${t("wo.modal.provider")} ${i + 1}`, value: row.providerId,
+          options: availableProviders.map(p => ({ value: p.id, label: p.name })),
+          set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: v } : r)) },
+        { key: `line.${i}.purpose`, label: `${t("mp.providerRequests.purposePlaceholder")} (${i + 1})`, value: row.purpose,
+          set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: v } : r)) },
+      );
+    });
+  }
+  assistFields.push(
+    { key: "assignedTo", label: t("wo.modal.assignee"), value: assignedTo, set: setAssignedTo,
+      options: (Array.isArray(directory) ? directory : []).map(p => ({ value: p.userId, label: p.name })) },
+    { key: "dueDate", label: t("wo.modal.dueDate"), value: dueDate, set: setDueDate, hint: "Date as YYYY-MM-DD." },
+    { key: "acceptanceCriteria", label: t("wo.modal.acceptanceCriteria"), value: acceptanceCriteria, set: setAcceptanceCriteria,
+      hint: "Has an AI generator (action acceptanceCriteria): offer it instead of writing it yourself." },
+    { key: "loto", label: t("wo.modal.loto"), value: loto, set: setLoto,
+      hint: "Has an AI generator (action loto): offer it instead of writing it yourself." },
+    { key: "riskLevel", label: t("wo.modal.riskLevel"), value: riskLevel, set: setRiskLevel,
+      hint: "Filled together with the risk analysis by the AI generator (action risk).",
+      options: [
+        { value: "LOW", label: t("priority.low") }, { value: "MEDIUM", label: t("priority.medium") },
+        { value: "HIGH", label: t("priority.high") }, { value: "CRITICAL", label: t("priority.critical") },
+      ] },
+    { key: "riskAnalysisResult", label: t("wo.modal.riskAnalysisResult"), value: riskAnalysisResult, set: setRiskAnalysisResult,
+      hint: "Has an AI generator (action risk): offer it instead of writing it yourself." },
+    { key: "consequenceCategory", label: t("wo.modal.consequenceCategory"), value: consequenceCategory, set: setConsequenceCategory,
+      hint: "Filled with its rationale by the AI generator (action consequence).",
+      options: [
+        { value: "SAFETY", label: t("wo.modal.consequence.safety") },
+        { value: "ENVIRONMENTAL", label: t("wo.modal.consequence.environmental") },
+        { value: "OPERATIONAL", label: t("wo.modal.consequence.operational") },
+        { value: "NON_OPERATIONAL", label: t("wo.modal.consequence.nonOperational") },
+      ] },
+  );
+  if (consequenceCategory) {
+    assistFields.push({ key: "consequenceRationale", label: t("wo.modal.consequenceRationale"), value: consequenceRationale, set: setConsequenceRationale });
+  }
+  assistFields.push({ key: "estimatedHours", label: t("wo.modal.estimatedHours"), value: estimatedHours, set: setEstimatedHours });
+
+  useCopilotAssist({
+    module: "WORK_ORDERS",
+    screen: "WO_CREATE",
+    title: requireProvider ? t("dashboard.newServiceRequest") : t("dashboard.newWorkOrder"),
+    vesselCode: vesselCode || undefined,
+    fields: assistFields,
+    actions: {
+      title:              { label: t("wo.modal.titleField"),          run: handleTitleClick },
+      task:               { label: t("wo.modal.task"),                run: handleTaskClick },
+      acceptanceCriteria: { label: t("wo.modal.acceptanceCriteria"),  run: handleCriteriaClick },
+      loto:               { label: t("wo.modal.loto"),                run: handleLotoClick },
+      risk:               { label: t("wo.modal.riskLevel"),           run: handleRiskClick },
+      consequence:        { label: t("wo.modal.consequenceCategory"), run: handleConsequenceClick },
+      ...(showsStandaloneProviders ? {
+        addLine: { label: t("mp.providerRequests.add"), run: () => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }]) },
+      } : {}),
+    },
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -1171,7 +1290,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                       </div>
                       <div className="space-y-1.5">
                         <label className={labelCls}>{t("wo.modal.location")}</label>
-                        <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} />
+                        <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
                       </div>
                       {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
                       <div className="space-y-1.5">
@@ -1247,7 +1366,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                       </div>
                       <div className="space-y-1.5">
                         <label className={labelCls}>{t("wo.modal.location")}</label>
-                        <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} />
+                        <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
                       </div>
                       {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
                       <div className="space-y-1.5">
@@ -1341,14 +1460,13 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 )}
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("wo.modal.openedBy")}</label>
-                  <select value={onBehalfUserId} onChange={e => setOnBehalfUserId(e.target.value)} className={inputCls}>
-                    <option value="">{t("wo.modal.openedBySelf")}</option>
-                    {teamUsers.map(u => (
-                      <option key={u.userId} value={u.userId}>
-                        {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.userId}
-                      </option>
-                    ))}
-                  </select>
+                  <PersonSelect value={onBehalfUserId} onChange={setOnBehalfUserId} className={inputCls}
+                    emptyLabel={t("wo.modal.openedBySelf")}
+                    options={teamUsers.map(u => ({
+                      value: u.userId,
+                      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.userId,
+                      role: u.role, jobTitle: u.jobTitle,
+                    }))} />
                 </div>
               </div>
             )}

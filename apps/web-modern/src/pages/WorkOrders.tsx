@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useSearchParams, useNavigate, Link } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -34,9 +34,10 @@ import {
   WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS,
 } from "../lib/wo-form-catalog";
 import { useAuth, useCan } from "../lib/auth";
+import { useRoleHasPermission } from "../lib/role-permissions";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
@@ -44,6 +45,7 @@ import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { PersonSelect } from "../components/PersonSelect";
 import { textMatches } from "../lib/text-search";
 
 // Mini reference data for showing linked permits inside WO modal
@@ -82,12 +84,6 @@ const SS_DOT_CLS: Record<string, string> = {
   REJECTED: "bg-red-500", CANCELLED: "bg-fg/20",
 };
 
-/**
- * Autorizar es atribución de TIERRA, tanto en la OT como en la SS. Debe
- * coincidir con canAuthorizeWorkOrders / canAuthorize del backend: si se
- * aflojara acá, el arrastre OT→SS se volvería una puerta trasera al gasto.
- */
-const CAN_AUTHORIZE_ROLES = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"];
 const SS_STATUS_COLOR: Record<string, string> = {
   DRAFT: "bg-fg/5 text-text-industrial/60 border-fg/10",
   SOLICITADA: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
@@ -910,44 +906,56 @@ const NewServiceRequestModal: React.FC<{
   onClose: () => void;
   onConfirm: (servicio: string) => Promise<void>;
 }> = ({ defaultValue, busy, onClose, onConfirm }) => {
+  const t = useT();
   const [servicio, setServicio] = useState(defaultValue);
   const [error, setError] = useState<string | null>(null);
 
   const confirmar = async () => {
-    if (!servicio.trim()) { setError("Escribí qué servicio se solicita."); return; }
+    if (!servicio.trim()) { setError(t("wo.newSs.required")); return; }
     setError(null);
     try { await onConfirm(servicio.trim()); }
-    catch (e) { setError(e instanceof Error ? e.message : "No se pudo crear la solicitud de servicio."); }
+    catch (e) { setError(e instanceof Error ? e.message : t("wo.newSs.failed")); }
   };
+
+  useCopilotAssist({
+    module: "SERVICE_REQUESTS",
+    screen: "SS_NEW_FROM_WO",
+    title: t("dashboard.newServiceRequest"),
+    fields: [{ key: "servicio", label: t("wo.newSs.question"), value: servicio, set: setServicio }],
+  });
 
   return (
     <FormModal
-      title="Nueva solicitud de servicio"
-      subtitle="Se hereda el resto de los datos de esta orden de trabajo"
+      title={t("wo.newSs.title")}
+      subtitle={t("wo.newSs.subtitle")}
       onClose={onClose}
       error={error}
       footer={
         <>
           <button type="button" onClick={onClose}
             className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-[11px] text-text-industrial/60">
-            Cancelar
+            {t("common.cancel")}
           </button>
           <button type="button" onClick={() => { void confirmar(); }} disabled={busy}
             className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold disabled:opacity-50">
-            {busy ? "Creando…" : "Crear SS"}
+            {busy ? t("wo.newSs.creating") : t("wo.newSs.create")}
           </button>
         </>
       }
     >
       <div>
-        <label className={labelCls}>¿Qué servicio se solicita al taller externo?</label>
+        <label className={labelCls}>{t("wo.newSs.question")}</label>
         <AutoTextArea className={inputCls + " min-h-[72px] resize-y"} value={servicio} autoFocus
           onChange={e => setServicio(e.target.value)}
-          placeholder="Ej. Reparación del servo timón de babor" />
+          placeholder={t("wo.newSs.placeholder")} />
       </div>
     </FormModal>
   );
 };
+
+/** Envuelve en el flujo del copiloto sólo cuando la pantalla llegó con uno en curso. */
+const MaybeCopilotFlow: React.FC<{ flowKey: string | null; children: React.ReactNode }> = ({ flowKey, children }) =>
+  flowKey ? <CopilotFlowProvider name="wo" flowKey={flowKey}>{children}</CopilotFlowProvider> : <>{children}</>;
 
 // ── WorkOrderModal ────────────────────────────────────────────────────────────
 
@@ -1025,9 +1033,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     : workOrder.enviadoAprobacionAt ? "SOLICITADA"
     : "EN_PREPARACION";
   const isRejected = !!workOrder.rechazadoAt && !workOrder.aprobadoAt;
-  // Autorizar (OT y SS) es sólo de tierra. Debe coincidir con
-  // canAuthorizeWorkOrders del backend.
-  const canAuthorizeWo = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
+  // Aprobar y autorizar (OT y SS) son de tierra: salen de Equipo → Permisos
+  // ("Aprobar OT" / "Autorizar OT"), igual que en el backend.
+  const canWo = useCan();
+  const canApproveWo = canWo("wo.approve");
+  const canAuthorizeWo = canWo("wo.authorize");
   // step de tramitación pendiente (abre ApprovalModal). null = cerrado.
   const [tramita, setTramita] = useState<"ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
 
@@ -1221,7 +1231,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [closeOnBehalfUserId, setCloseOnBehalfUserId] = useState(user?.id ?? "");
   const [closeDate, setCloseDate] = useState("");
-  const [closeTeamUsers, setCloseTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean }[]>([]);
+  const [closeTeamUsers, setCloseTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role?: string; jobTitle?: string | null }[]>([]);
   useEffect(() => {
     if (!isAdmin) return;
     api.get<typeof closeTeamUsers>("/app/team/members")
@@ -1456,6 +1466,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     return opts;
   }, [isMercurio, directoryData, t]);
 
+  // Si la OT se abrió dentro de un flujo que el copiloto venía guiando (Nueva
+  // OT / Nueva Inspección desde el Tablero), sigue en modo guiado acá.
+  const copilotFlow = useCopilotFlowKey();
   useCopilotEmitter({
     module: "WORK_ORDERS",
     screen: "WO_EDIT",
@@ -1466,6 +1479,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     canEdit: isEditable,
     fieldValues: copilotFieldValues,
     fieldOptions: copilotFieldOptions,
+    ...(copilotFlow && isEditable ? { assist: { flow: copilotFlow, title: workOrder.workOrderCode } } : {}),
   });
 
   useCopilotApplyFields(isEditable ? (fields) => {
@@ -2050,7 +2064,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
    */
   const saveThenNavigate = async (to: string) => {
     if (isDirty && !(await onSave())) return;
-    navigate(to);
+    // El flujo guiado (si lo hay) sigue en la pantalla siguiente.
+    navigate(to, copilotFlow ? { state: { copilotFlow } } : undefined);
   };
 
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
@@ -2325,9 +2340,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={saving || (tramitaPhase === "APROBADA" && !canAuthorizeWo)}
+                      disabled={saving || (tramitaPhase === "APROBADA" ? !canAuthorizeWo : !canApproveWo)}
                       title={tramitaPhase === "APROBADA" && !canAuthorizeWo
-                        ? "Autorizar es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones."
+                        ? "Autorizar es sólo del DPA / Director de Operaciones."
+                        : tramitaPhase === "SOLICITADA" && !canApproveWo
+                        ? "Aprobar es del Superintendente técnico o el DPA / Director de Operaciones."
                         : undefined}
                       onClick={() => openTramita(tramitaPhase === "SOLICITADA" ? "APRUEBA" : "AUTORIZA")}
                       className="flex-1 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
@@ -3546,18 +3563,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Quién cierra</label>
             {isAdmin ? (
-              <select
+              <PersonSelect
                 value={closeOnBehalfUserId}
-                onChange={e => setCloseOnBehalfUserId(e.target.value)}
+                onChange={setCloseOnBehalfUserId}
                 className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
-              >
-                {closeTeamUsers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
-                {closeTeamUsers.map(u => (
-                  <option key={u.userId} value={u.userId}>
-                    {(closeMemberName(u) || u.userId)}{!u.hasSignature ? "  ·  (sin firma)" : ""}
-                  </option>
-                ))}
-              </select>
+                options={closeTeamUsers.length === 0
+                  ? [{ value: user?.id ?? "", name: user?.name ?? "—", role: user?.role ?? null }]
+                  : closeTeamUsers.map(u => ({
+                      value: u.userId, name: closeMemberName(u) || u.userId, role: u.role, jobTitle: u.jobTitle,
+                      note: u.hasSignature ? null : t("person.noSignature"),
+                    }))}
+              />
             ) : (
               <input
                 autoFocus
@@ -3949,7 +3965,9 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   const [pendingApproval, setPendingApproval] = useState<{ wo: WorkOrder; step: "ENVIA" | "APRUEBA" | "AUTORIZA" } | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
   const { user } = useAuth();
-  const canAuthorize = CAN_AUTHORIZE_ROLES.includes(user?.role ?? "");
+  const canKanban = useCan();
+  const canApprove = canKanban("wo.approve");
+  const canAuthorize = canKanban("wo.authorize");
   // Grupos por equipo expandidos (clave `${colId}::${assetKey}`). Default: cerrados.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = useCallback((k: string) => {
@@ -3976,12 +3994,16 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
     // Enviar a aprobar (En preparación → Pendiente de aprobación): pide nombre.
     if (stage === "EN_PREPARACION" && targetCol === "SOLICITADA") { setPendingApproval({ wo, step: "ENVIA" }); return; }
     // Aprobar (Pendiente de aprobación → Pendiente de autorización): pide nombre.
-    if (stage === "SOLICITADA" && targetCol === "APROBADA") { setPendingApproval({ wo, step: "APRUEBA" }); return; }
+    if (stage === "SOLICITADA" && targetCol === "APROBADA") {
+      if (!canApprove) { setDropError("Aprobar es del Superintendente técnico o el DPA / Director de Operaciones."); return; }
+      setPendingApproval({ wo, step: "APRUEBA" });
+      return;
+    }
     // Autorizar (Aprobada → Autorizada): pide nombre. No se puede saltar desde
     // Solicitada. Es de tierra: se avisa acá en vez de dejar que el backend
     // devuelva un 403 sin explicación.
     if (stage === "APROBADA" && targetCol === "AUTORIZADA") {
-      if (!canAuthorize) { setDropError("Autorizar es atribución de tierra: Superintendente técnico o DPA / Director de Operaciones."); return; }
+      if (!canAuthorize) { setDropError("Autorizar es sólo del DPA / Director de Operaciones."); return; }
       setPendingApproval({ wo, step: "AUTORIZA" });
       return;
     }
@@ -3996,7 +4018,7 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
       return;
     }
     // Cualquier otro movimiento (ej. salto Solicitada→Autorizada, o retroceso) se ignora.
-  }, [items, onReload, canAuthorize]);
+  }, [items, onReload, canAuthorize, canApprove]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
 
@@ -4110,7 +4132,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   const isAdmin = user?.role === "TENANT_ADMIN";
   const adminPicker = isAdmin && !isReject;
   const [onBehalfUserId, setOnBehalfUserId] = useState(user?.id ?? "");
-  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role: string; assignedVesselCodes: string[] }[]>([]);
+  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role: string; jobTitle?: string | null; assignedVesselCodes: string[] }[]>([]);
   const memberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
   // Quién puede firmar depende del PASO: enviar a aprobar lo hace cualquiera
@@ -4118,13 +4140,13 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   // aprobar admite al JEFE DE MÁQUINAS (es a bordo); autorizar es sólo tierra
   // (admin / superintendente). Mismo criterio que la SS. El backend valida
   // igual; esto es para no ofrecer un 403.
+  const roleHas = useRoleHasPermission(adminPicker);
   const eligibleApprovers = teamUsers.filter(u => {
     if (u.role === "TENANT_ADMIN") return true;
     const enElBuque = (u.assignedVesselCodes ?? []).includes(workOrder.vesselCode);
     if (step === "ENVIA") return enElBuque && u.role !== "AUDITOR_READONLY";
-    if (u.role === "FLEET_SUPERINTENDENT") return enElBuque;
-    if (u.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
-    return false;
+    // Aprobar / autorizar: lo que diga Equipo → Permisos, igual que el backend.
+    return enElBuque && roleHas(u.role, step === "APRUEBA" ? "wo.approve" : "wo.authorize");
   });
   // Admin: fecha de la acción (aprobación/autorización). Default hoy.
   const today = new Date().toISOString().slice(0, 10);
@@ -4201,24 +4223,22 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Nombre de quien {verb}</label>
           {adminPicker ? (
-            <select
+            <PersonSelect
               autoFocus
               value={onBehalfUserId}
-              onChange={e => {
-                const uid = e.target.value;
+              onChange={uid => {
                 setOnBehalfUserId(uid);
                 const u = teamUsers.find(x => x.userId === uid);
                 setName(u ? (memberName(u) || user?.name || "") : (user?.name ?? ""));
               }}
               className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
-            >
-              {eligibleApprovers.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
-              {eligibleApprovers.map(u => (
-                <option key={u.userId} value={u.userId}>
-                  {(memberName(u) || u.userId)}{!u.hasSignature ? "  ·  (sin firma)" : ""}
-                </option>
-              ))}
-            </select>
+              options={eligibleApprovers.length === 0
+                ? [{ value: user?.id ?? "", name: user?.name ?? "—", role: user?.role ?? null }]
+                : eligibleApprovers.map(u => ({
+                    value: u.userId, name: memberName(u) || u.userId, role: u.role, jobTitle: u.jobTitle,
+                    note: u.hasSignature ? null : t("person.noSignature"),
+                  }))}
+            />
           ) : (
             <input
               autoFocus
@@ -4308,6 +4328,11 @@ export const WorkOrdersPage: React.FC = () => {
   // arriba. Es un puente, no un filtro: se saca de la URL apenas se lee (si
   // quedara, recargar o volver con el botón Atrás reabriría el formulario).
   const [autoNewSs, setAutoNewSs] = useState(() => searchParams.get("newSs") === "1");
+  // Flujo guiado por el copiloto que venía del Tablero (Nueva OT / SS /
+  // Inspección). Se lee una vez: limpiar `?newSs` reemplaza la entrada del
+  // historial y el estado de la navegación se pierde.
+  const location = useLocation();
+  const [copilotFlow] = useState<string | null>(() => (location.state as { copilotFlow?: string } | null)?.copilotFlow ?? null);
   useEffect(() => {
     if (searchParams.get("newSs") !== "1") return;
     const p = new URLSearchParams(searchParams);
@@ -4755,16 +4780,19 @@ export const WorkOrdersPage: React.FC = () => {
         />
       )}
       {editing && (
-        <WorkOrderModal
-          workOrder={editing}
-          canManage={canManage}
-          autoOpenNewSs={autoNewSs}
-          onClose={() => { setAutoNewSs(false); closeLink(); }}
-          onSaved={() => { closeLink(); void reload(); }}
-          onReload={() => { void reload(); }}
-          onOpenAction={openActionModal}
-          onPlanExecuted={(planId, completedAt) => { void offerCertificateRenewal(planId, completedAt); }}
-        />
+        // Sólo con un flujo que venía en curso: sin él, la OT no está "en asistencia".
+        <MaybeCopilotFlow flowKey={copilotFlow}>
+          <WorkOrderModal
+            workOrder={editing}
+            canManage={canManage}
+            autoOpenNewSs={autoNewSs}
+            onClose={() => { setAutoNewSs(false); closeLink(); }}
+            onSaved={() => { closeLink(); void reload(); }}
+            onReload={() => { void reload(); }}
+            onOpenAction={openActionModal}
+            onPlanExecuted={(planId, completedAt) => { void offerCertificateRenewal(planId, completedAt); }}
+          />
+        </MaybeCopilotFlow>
       )}
 
       {certToRenew && (

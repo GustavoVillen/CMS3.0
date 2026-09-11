@@ -21,9 +21,10 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { FormModal } from "../components/FormModal";
 import { AlertDialog } from "../components/AlertDialog";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
+import { useRoleHasPermission } from "../lib/role-permissions";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotDataRefresh } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotDataRefresh, useCopilotFlowKey, CopilotFlowProvider } from "../lib/copilot-context";
 import { printServiceRequest } from "../lib/print-work-order";
 import { useTheme } from "../lib/theme";
 import {
@@ -33,6 +34,8 @@ import {
 import { downloadDocx } from "../lib/download-docx";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { PersonSelect } from "../components/PersonSelect";
+import { useT } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 
 // ---------------------------------------------------------------------------
@@ -131,8 +134,6 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 // Deben coincidir con el backend (canApprove / canAuthorize).
 /** Autorizar: sólo tierra. El Jefe de Máquinas aprueba a bordo pero no autoriza. */
-const CAN_AUTHORIZE_ROLES = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"];
-const CAN_APPROVE_ROLES = ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"];
 
 /** Estados terminales: la SS ya no se edita (mismo criterio que record-lock). */
 const LOCKED_STATUSES = ["COMPLETED", "CANCELLED", "REJECTED"];
@@ -162,6 +163,8 @@ interface TeamMember {
   lastName: string | null;
   formName: string | null;
   role: string;
+  /** Cargo cargado en Equipo (se muestra al lado del nombre; si no hay, el rol). */
+  jobTitle?: string | null;
   hasSignature: boolean;
   /** Para ofrecer sólo a los que están a cargo del buque de la SS. */
   assignedVesselCodes?: string[];
@@ -186,15 +189,15 @@ function eligibleSigners(
   members: TeamMember[],
   step: "SOLICITA" | "APRUEBA" | "AUTORIZA",
   vesselCode: string,
+  /** Matriz de Equipo → Permisos ("Aprobar SS" / "Autorizar SS"), la misma que valida el backend. */
+  roleHas: (role: string, key: string) => boolean,
 ): TeamMember[] {
   return members.filter(m => {
     if (m.role === "AUDITOR_READONLY") return false; // solo-lectura: no pide ni firma
     if (m.role === "TENANT_ADMIN") return true;
     const enElBuque = (m.assignedVesselCodes ?? []).includes(vesselCode);
     if (step === "SOLICITA") return enElBuque;
-    if (m.role === "FLEET_SUPERINTENDENT") return enElBuque;
-    if (m.role === "MAINTENANCE_MANAGER") return step === "APRUEBA" && enElBuque;
-    return false;
+    return enElBuque && roleHas(m.role, step === "APRUEBA" ? "sr.approve" : "sr.authorize");
   });
 }
 
@@ -355,8 +358,9 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
 
   // Mismo criterio que el backend: se chequea acá sólo para explicar el porqué
   // en vez de dejar que el arrastre termine en un 403 sin mensaje.
-  const canApprove   = CAN_APPROVE_ROLES.includes(role);
-  const canAuthorize = CAN_AUTHORIZE_ROLES.includes(role);
+  const can = useCan();
+  const canApprove   = can("sr.approve");
+  const canAuthorize = can("sr.authorize");
 
   const run = React.useCallback(async (sr: ServiceRequest, action: "unsubmit" | "start") => {
     setBusyId(sr.id);
@@ -397,7 +401,7 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
     }
     // Autorizar (Aprobada → Autorizada): acá se compromete el gasto, es de tierra.
     if (stage === "APROBADA" && targetCol === "AUTORIZADA") {
-      if (!canAuthorize) { setDropError("Autorizar una solicitud es atribución de tierra (Superintendente / DPA)."); return; }
+      if (!canAuthorize) { setDropError("Autorizar una solicitud es sólo del DPA / Director de Operaciones."); return; }
       setPendingApproval({ sr, step: "AUTORIZA" });
       return;
     }
@@ -507,7 +511,8 @@ export function ServiceRequestsPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { key: locationKey } = useLocation();
+  const location = useLocation();
+  const locationKey = location.key;
   const [selected, setSelected] = useState<ServiceRequest | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [search, setSearch] = useState("");
@@ -586,6 +591,8 @@ export function ServiceRequestsPage() {
 
   // Deep-link desde el panel de la OT: ?openId=<id>
   const openId = searchParams.get("openId");
+  // Flujo guiado por el copiloto que venía de otra pantalla (Nueva SS). Se lee una vez.
+  const [copilotFlow] = React.useState<string | null>(() => (location.state as { copilotFlow?: string } | null)?.copilotFlow ?? null);
   React.useEffect(() => {
     if (!openId || !items.length) return;
     const hit = items.find(i => i.id === openId);
@@ -736,18 +743,24 @@ export function ServiceRequestsPage() {
         />
       )}
 
-      {selected && (
-        <ServiceRequestModal
-          sr={selected}
-          role={user?.role ?? ""}
-          onClose={closeModal}
-          onChanged={() => { reload(); closeModal(); }}
-          // Merge, no reemplazo: el PATCH devuelve el registro pelado (sin la
-          // relación `workOrder` que sí trae la lista) y pisarlo entero borraría
-          // el bloque "OT de origen" del modal abierto.
-          onSaved={updated => { reload(); setSelected(prev => (prev ? { ...prev, ...updated } : updated)); }}
-        />
-      )}
+      {selected && (() => {
+        const modal = (
+          <ServiceRequestModal
+            sr={selected}
+            role={user?.role ?? ""}
+            onClose={closeModal}
+            onChanged={() => { reload(); closeModal(); }}
+            // Merge, no reemplazo: el PATCH devuelve el registro pelado (sin la
+            // relación `workOrder` que sí trae la lista) y pisarlo entero borraría
+            // el bloque "OT de origen" del modal abierto.
+            onSaved={updated => { reload(); setSelected(prev => (prev ? { ...prev, ...updated } : updated)); }}
+          />
+        );
+        // Sólo la SS que llegó dentro de un flujo guiado queda "en asistencia".
+        return copilotFlow && selected.id === openId
+          ? <CopilotFlowProvider name="ss" flowKey={copilotFlow}>{modal}</CopilotFlowProvider>
+          : modal;
+      })()}
     </div>
   );
 }
@@ -768,6 +781,7 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
   onClose: () => void;
   onDone: () => void;
 }) {
+  const t = useT();
   const { user } = useAuth();
   const isReject = step === "RECHAZA";
   const isSolicita = step === "SOLICITA";
@@ -785,10 +799,11 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
   const [error, setError] = useState<string | null>(null);
 
   const { data: teamData } = useFetch<TeamMember[]>(adminPicker ? "/app/team/members" : null, [adminPicker]);
+  const roleHas = useRoleHasPermission(adminPicker);
   // El backend valida igual (resolveSigner); esto es para no ofrecer un 403.
   const eligibles = step === "RECHAZA"
     ? []
-    : eligibleSigners(Array.isArray(teamData) ? teamData : [], step, sr.vesselCode);
+    : eligibleSigners(Array.isArray(teamData) ? teamData : [], step, sr.vesselCode, roleHas);
 
   const title = step === "SOLICITA" ? "Enviar SS a aprobar"
     : step === "APRUEBA" ? "Aprobar SS"
@@ -856,25 +871,23 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
         <div>
           <label className={labelCls}>Nombre de quien {verbo}</label>
           {adminPicker ? (
-            <select
+            <PersonSelect
               autoFocus
               className={inputCls}
               value={onBehalfUserId}
-              onChange={e => {
-                const uid = e.target.value;
+              onChange={uid => {
                 setOnBehalfUserId(uid);
                 const m = eligibles.find(x => x.userId === uid);
                 setName(m ? memberLabel(m) : (user?.name ?? ""));
               }}
-            >
-              {eligibles.length === 0 && <option value={user?.id ?? ""}>{user?.name ?? "—"}</option>}
-              {eligibles.map(m => (
-                <option key={m.userId} value={m.userId}>
-                  {/* La firma sólo importa donde se estampa: solicitar no firma. */}
-                  {memberLabel(m)}{!isSolicita && !m.hasSignature ? "  ·  (sin firma)" : ""}
-                </option>
-              ))}
-            </select>
+              options={eligibles.length === 0
+                ? [{ value: user?.id ?? "", name: user?.name ?? "—", role: user?.role ?? null }]
+                : eligibles.map(m => ({
+                    value: m.userId, name: memberLabel(m), role: m.role, jobTitle: m.jobTitle,
+                    // La firma sólo importa donde se estampa: solicitar no firma.
+                    note: !isSolicita && !m.hasSignature ? t("person.noSignature") : null,
+                  }))}
+            />
           ) : (
             <input autoFocus className={inputCls} value={name}
               onChange={e => setName(e.target.value)} placeholder="Nombre y apellido" />
@@ -1179,8 +1192,9 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [deleting, setDeleting] = useState(false);
   // Paso de tramitación abierto: cada uno pide quién firma y con qué fecha.
   const [tramita, setTramita] = useState<"SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
-  const canApprove = CAN_APPROVE_ROLES.includes(role);
-  const canAuthorize = CAN_AUTHORIZE_ROLES.includes(role);
+  const can = useCan();
+  const canApprove = can("sr.approve");
+  const canAuthorize = can("sr.authorize");
   // Una SS cerrada (completada/cancelada/rechazada) no se edita — el backend
   // lo bloquea igual (record lock), esto sólo evita ofrecerlo.
   const editable = !LOCKED_STATUSES.includes(sr.status);
@@ -1222,6 +1236,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // Mismo trato que la OT: ve los recuadros del formulario, sabe cuáles son de
   // lista cerrada y puede cargarlos preguntando de a uno. No guarda: el usuario
   // revisa la hoja y aprieta Guardar.
+  const copilotFlow = useCopilotFlowKey();
   useCopilotEmitter({
     module: "SERVICE_REQUESTS",
     screen: "SR_EDIT",
@@ -1251,6 +1266,8 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
       communication: doc.config.communicationMethods.map(v => ({ value: v, label: v })),
       distribution:  doc.config.distribution.map(v => ({ value: v, label: v })),
     },
+    // Abierta dentro de un flujo que el copiloto venía guiando (Nueva SS del Tablero).
+    ...(copilotFlow && editable ? { assist: { flow: copilotFlow, title: sr.serviceRequestCode } } : {}),
   });
 
   useCopilotApplyFields(editable ? (fields) => {
@@ -1330,6 +1347,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const { data: teamData } = useFetch<TeamMember[]>(
     puedeCorregirFirmas ? "/app/team/members" : null, [puedeCorregirFirmas]);
   const team = Array.isArray(teamData) ? teamData : [];
+  const roleHas = useRoleHasPermission(puedeCorregirFirmas);
 
   // TALLER QUE CONCURRE — se elige del catálogo de proveedores (mismo patrón que
   // el "Tercerizado" del formulario REGI-MAN-02.3 en la OT). Escribirlo a mano
@@ -1644,7 +1662,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
                   <SsSignColumn key={step} rol={step} at={c.at} rejected={rechazadaEn === step} signatureUrl={firma}>
                     {puedeCorregirFirmas && c.done ? (
                       <SignerSelect value={c.value} onChange={c.set}
-                        options={eligibleSigners(team, step, sr.vesselCode)} />
+                        options={eligibleSigners(team, step, sr.vesselCode, roleHas)} />
                     ) : (
                       <p className="text-[11px] text-fg text-center truncate">{c.name || ""}</p>
                     )}
@@ -1668,7 +1686,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
 
           {!canAuthorize && sr.status === "APROBADA" && (
             <p className="mt-2 text-[11px] text-text-industrial/50 italic">
-              Sólo el Superintendente técnico o el DPA / Director de Operaciones pueden autorizar esta solicitud.
+              Sólo el DPA / Director de Operaciones puede autorizar esta solicitud.
             </p>
           )}
         </div>
@@ -1872,29 +1890,29 @@ function SignerSelect({ value, onChange, options }: {
   // El select se maneja por userId, no por nombre: dos personas pueden llamarse
   // igual, y el nombre suelto no alcanza para saber de quién es la firma.
   const HUERFANO = "__HUERFANO__";
+  const t = useT();
   const enLista = options.some(m => m.userId === value.userId);
   const huerfano = !enLista && value.name ? value.name : null;
   return (
-    <select
-      className="w-full bg-transparent text-[11px] text-fg text-center outline-none"
+    <PersonSelect
+      className="w-full bg-transparent text-[11px] text-fg outline-none"
       value={enLista ? value.userId : (huerfano ? HUERFANO : "")}
-      onChange={e => {
-        const uid = e.target.value;
+      onChange={uid => {
         if (uid === HUERFANO) return; // no se re-elige: es el nombre que ya estaba
         const m = options.find(x => x.userId === uid);
         onChange(m ? { name: memberLabel(m), userId: m.userId } : { name: "", userId: "" });
       }}
-    >
-      <option value="">— sin asignar —</option>
-      {/* Nombre viejo sin usuario (SS de papel, o alguien que ya no está en la
-          empresa). Se ofrece para no borrarlo sin querer, pero el PDF no le
-          pone firma: no hay a quién buscársela. */}
-      {huerfano && <option value={HUERFANO}>{huerfano}  ·  (sin firma)</option>}
-      {options.map(m => (
-        <option key={m.userId} value={m.userId}>
-          {memberLabel(m)}{m.hasSignature ? "" : "  ·  (sin firma)"}
-        </option>
-      ))}
-    </select>
+      emptyLabel={t("person.unassigned")}
+      options={[
+        // Nombre viejo sin usuario (SS de papel, o alguien que ya no está en la
+        // empresa). Se ofrece para no borrarlo sin querer, pero el PDF no le
+        // pone firma: no hay a quién buscársela.
+        ...(huerfano ? [{ value: HUERFANO, name: huerfano, note: t("person.noSignature") }] : []),
+        ...options.map(m => ({
+          value: m.userId, name: memberLabel(m), role: m.role, jobTitle: m.jobTitle,
+          note: m.hasSignature ? null : t("person.noSignature"),
+        })),
+      ]}
+    />
   );
 }

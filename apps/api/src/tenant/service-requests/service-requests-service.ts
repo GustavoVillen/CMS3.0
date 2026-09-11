@@ -33,7 +33,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
-import { hasPermission } from "../auth/role-permissions";
+import { hasPermission, roleHasPermission } from "../auth/role-permissions";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
@@ -145,14 +145,12 @@ function canApprove(session: TenantAccessSession): boolean {
 }
 
 /**
- * Autorizar (habilita mandar el trabajo al taller): SÓLO tierra.
- *   TENANT_ADMIN         = "DPA / Director de Operaciones"
- *   FLEET_SUPERINTENDENT = "Superintendente técnico"
+ * Autorizar (habilita mandar el trabajo al taller): sólo el
+ * TENANT_ADMIN = "DPA / Director de Operaciones" (permiso "Autorizar SS").
  *
- * El Jefe de Máquinas (MAINTENANCE_MANAGER) aprueba a bordo pero NO autoriza:
- * así el gasto con el tercero siempre lo habilita alguien distinto de quien lo
- * pidió. Es a propósito más estricto que la tramitación de la OT (trabajo
- * propio) — no unificar con ella.
+ * Desde sep 2026 el Jefe de Máquinas (MAINTENANCE_MANAGER) ni aprueba ni
+ * autoriza, y el Superintendente aprueba pero no autoriza: el gasto con el
+ * tercero lo habilita sólo el DPA. La OT sigue la misma regla.
  */
 function canAuthorize(session: TenantAccessSession): boolean {
   return hasPermission(session, "sr.authorize");
@@ -175,7 +173,7 @@ function ensureCanAuthorize(session: TenantAccessSession) {
     throw new RouteError(
       403,
       "FORBIDDEN",
-      "Sólo el Superintendente técnico o el DPA / Director de Operaciones pueden autorizar una solicitud de servicio.",
+      "Sólo el DPA / Director de Operaciones puede autorizar una solicitud de servicio.",
     );
   }
 }
@@ -617,7 +615,7 @@ export async function updateServiceRequest(session: TenantAccessSession, id: str
         `No se puede asentar quién ${rule.label} una solicitud que todavía no llegó a ese paso.`,
       );
     }
-    if (userId) await assertSignerEligible(current, rule.step, userId);
+    if (userId) await assertSignerEligible(session, current, rule.step, userId);
     signatures[rule.nameField] = nombre;
     signatures[rule.idField] = userId;
   }
@@ -709,7 +707,7 @@ export async function submitServiceRequest(session: TenantAccessSession, id: str
   if (session.user.role === "TENANT_ADMIN") {
     const onBehalf = normalizeOptionalText(payload.onBehalfUserId);
     if (onBehalf && onBehalf !== session.user.id) {
-      await assertSignerEligible(current, "SOLICITA", onBehalf);
+      await assertSignerEligible(session, current, "SOLICITA", onBehalf);
       solicitaByUserId = onBehalf;
     }
   }
@@ -896,6 +894,7 @@ export interface ApprovalInput {
  * admin: si cada uno tuviera su copia, aflojar una sería una puerta trasera.
  */
 async function assertSignerEligible(
+  session: TenantAccessSession,
   current: Record<string, any>,
   step: "SOLICITA" | "APRUEBA" | "AUTORIZA",
   userId: string,
@@ -910,10 +909,14 @@ async function assertSignerEligible(
   }
   const enElBuque = Array.isArray(membership.assignedVesselCodes)
     && membership.assignedVesselCodes.includes(current.vesselCode);
+  // Aprobar y autorizar salen de la matriz de Equipo → Permisos ("Aprobar SS",
+  // "Autorizar SS"): la misma que decide quién ve el botón. Así elegir "en
+  // nombre de" nunca habilita a alguien que el permiso no habilita.
+  const key = step === "APRUEBA" ? "sr.approve" : step === "AUTORIZA" ? "sr.authorize" : null;
+  const tienePermiso = key ? await roleHasPermission(session.tenantSlug, membership.role, key) : false;
   const eligible = membership.role === "TENANT_ADMIN"
     || (step === "SOLICITA" && enElBuque && membership.role !== "AUDITOR_READONLY")
-    || (membership.role === "FLEET_SUPERINTENDENT" && enElBuque)
-    || (step === "APRUEBA" && membership.role === "MAINTENANCE_MANAGER" && enElBuque);
+    || (key !== null && tienePermiso && enElBuque);
   if (!eligible) {
     throw new RouteError(
       403,
@@ -921,8 +924,8 @@ async function assertSignerEligible(
       step === "SOLICITA"
         ? "Quien solicita tiene que estar asignado a este buque."
         : step === "APRUEBA"
-          ? "Sólo un administrador, el superintendente o el jefe de máquinas a cargo del buque puede aprobar."
-          : "Autorizar es sólo del Superintendente técnico o el DPA / Director de Operaciones.",
+          ? "Aprobar una SS es del Superintendente técnico o el DPA / Director de Operaciones (permiso \"Aprobar SS\")."
+          : "Autorizar es sólo del DPA / Director de Operaciones.",
     );
   }
 }
@@ -939,7 +942,7 @@ async function resolveSigner(
 
   const onBehalf = normalizeOptionalText(payload.onBehalfUserId);
   if (onBehalf && onBehalf !== session.user.id) {
-    await assertSignerEligible(current, step, onBehalf);
+    await assertSignerEligible(session, current, step, onBehalf);
     signerUserId = onBehalf;
   }
   const d = parseOptionalDate(payload.actionDate, "actionDate");
@@ -969,7 +972,8 @@ export async function approveServiceRequest(session: TenantAccessSession, id: st
 }
 
 /**
- * APROBADA → AUTORIZADA. Gate del gasto: sólo Superintendente técnico o DPA.
+ * APROBADA → AUTORIZADA. Gate del gasto: sólo el DPA / Director de Operaciones
+ * (permiso "Autorizar SS"; desde sep 2026 el Superintendente ya no autoriza).
  */
 export async function authorizeServiceRequest(session: TenantAccessSession, id: string, payload: ApprovalInput = {}) {
   ensureCanAuthorize(session);
@@ -1017,7 +1021,7 @@ export async function startServiceRequest(session: TenantAccessSession, id: stri
     throw new RouteError(
       409,
       "NOT_AUTHORIZED_YET",
-      "La solicitud debe estar autorizada por el Superintendente técnico o el DPA antes de mandar el trabajo al taller.",
+      "La solicitud debe estar autorizada por el DPA / Director de Operaciones antes de mandar el trabajo al taller.",
     );
   }
   return (prisma as any).serviceRequest.update({
@@ -1075,7 +1079,7 @@ export async function sendServiceRequestToProvider(
     throw new RouteError(
       409,
       "NOT_AUTHORIZED_YET",
-      "La solicitud debe estar autorizada por el Superintendente técnico o el DPA antes de mandar el trabajo al taller.",
+      "La solicitud debe estar autorizada por el DPA / Director de Operaciones antes de mandar el trabajo al taller.",
     );
   }
 

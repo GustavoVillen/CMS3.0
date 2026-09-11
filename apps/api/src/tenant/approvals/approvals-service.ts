@@ -61,11 +61,11 @@ export interface PendingApprovalsResult {
   srAuthorize: PendingApprovalItem[];
 }
 
-// Espejo de los gates reales. APROBAR una OT no tiene permiso propio: lo cubre
-// el mismo canOperateWorkOrders que exige setWorkOrderApproval. AUTORIZAR (OT y
+// Espejo de los gates reales. APROBAR una OT tiene permiso propio desde sep
+// 2026 ("wo.approve", el mismo que exige setWorkOrderApproval). AUTORIZAR (OT y
 // SS) es de tierra. No inventar permisos acá: si el gate del backend cambia,
 // esta lista se corrige con él o la bandeja miente.
-const canWoApprove   = (s: TenantAccessSession) => hasPermission(s, "wo.manage") || hasPermission(s, "wo.operate");
+const canWoApprove   = (s: TenantAccessSession) => hasPermission(s, "wo.approve");
 const canWoAuthorize = (s: TenantAccessSession) => hasPermission(s, "wo.authorize");
 const canSrApprove   = (s: TenantAccessSession) => hasPermission(s, "sr.approve");
 const canSrAuthorize = (s: TenantAccessSession) => hasPermission(s, "sr.authorize");

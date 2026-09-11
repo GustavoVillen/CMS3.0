@@ -44,6 +44,7 @@ import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { MaintenancePlansGrid } from "../components/MaintenancePlansGrid";
+import { PersonSelect } from "../components/PersonSelect";
 import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
 import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
 import { useT, useWoTerms } from "../lib/i18n";
@@ -179,6 +180,14 @@ function nextDueSort(plan: MaintenancePlan): number {
   if (plan.nextDueDate) return parseLocalDate(plan.nextDueDate).getTime();
   // Por horas: lo que ordena es cuánto FALTA, no el contador absoluto.
   if (plan.nextDueHours != null) return HOURS_BUCKET + (plan.nextDueHours - (plan.assetCurrentHours ?? 0));
+  return Number.POSITIVE_INFINITY;
+}
+
+// Orden de ÚLTIMA VERIFICACIÓN: fechas por tiempo, horas en su propio bucket.
+// Lo nunca ejecutado va al final.
+function lastExecutionSort(plan: MaintenancePlan): number {
+  if (plan.lastExecutionDate) return parseLocalDate(plan.lastExecutionDate).getTime();
+  if (plan.lastExecutionHours != null) return HOURS_BUCKET + plan.lastExecutionHours;
   return Number.POSITIVE_INFINITY;
 }
 
@@ -457,7 +466,7 @@ interface ExecutionModalProps {
   onSuccess: (completedAt?: string) => void;
 }
 
-interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean }
+interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role?: string; jobTitle?: string | null }
 const teamMemberName = (u: TeamMember) => (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
 
 const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId, isAdmin, onClose, onSuccess }) => {
@@ -712,25 +721,22 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
           <div className="space-y-1.5">
             <label className={labelCls}>{t("mp.exec.executedBy")}</label>
             {isAdmin && teamUsers.length > 0 ? (
-              <select
+              <PersonSelect
                 value={executedByUserId}
-                onChange={e => {
-                  const uid = e.target.value;
+                onChange={uid => {
                   setExecutedByUserId(uid);
                   const m = teamUsers.find(u => u.userId === uid);
                   if (m) setExecutedByName(teamMemberName(m) || executedByName);
                 }}
                 className={inputCls}
-              >
-                {!teamUsers.some(u => u.userId === (userId ?? "")) && (
-                  <option value={userId ?? ""}>{userName}</option>
-                )}
-                {teamUsers.map(u => (
-                  <option key={u.userId} value={u.userId}>
-                    {teamMemberName(u) || u.userId}{!u.hasSignature ? "  ·  (sin firma)" : ""}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  ...(!teamUsers.some(u => u.userId === (userId ?? "")) ? [{ value: userId ?? "", name: userName }] : []),
+                  ...teamUsers.map(u => ({
+                    value: u.userId, name: teamMemberName(u) || u.userId, role: u.role, jobTitle: u.jobTitle,
+                    note: u.hasSignature ? null : t("person.noSignature"),
+                  })),
+                ]}
+              />
             ) : (
               <input
                 value={executedByName}
@@ -3624,11 +3630,27 @@ export const MaintenancePlansPage: React.FC = () => {
         </div>
       ),
     },
-    // ── Col 5: VENCE ────────────────────────────────────────────────────────
-    // Las dos fechas van juntas y con pesos distintos. Antes eran dos columnas
-    // con el mismo formato y el mismo peso, y había que subir al encabezado para
-    // saber cuál era cuál. Arriba va el vencimiento —lo único sobre lo que se
-    // decide algo— y debajo, en chico, cuándo se hizo por última vez. El color
+    // ── Col 5: ÚLTIMA VERIFICACIÓN ─────────────────────────────────
+    // Cuándo se hizo por última vez. Iba en chico debajo de VENCE; ahora es
+    // columna propia a su izquierda, para poder leerla y ordenarla sola.
+    {
+      key: "lastExecutionDate",
+      header: t("mp.col.lastVerification"),
+      width: "140px",
+      sortValue: row => lastExecutionSort(row),
+      render: row => {
+        const last = needsHours(row.triggerType)
+          ? (row.lastExecutionHours != null ? `${row.lastExecutionHours.toLocaleString()} hs` : null)
+          : (row.lastExecutionDate ? fmtDate(row.lastExecutionDate) : null);
+        return (
+          <span className="font-mono text-xs tabular-nums whitespace-nowrap text-text-industrial/70">
+            {last ?? <span className="text-text-industrial/30">—</span>}
+          </span>
+        );
+      },
+    },
+    // ── Col 6: VENCE ─────────────────────────────────────────────────────────
+    // Arriba va el vencimiento, lo único sobre lo que se decide algo. El color
     // aparece sólo cuando hay un problema; si está al día, va en negro.
     {
       key: "nextDueDate",
@@ -3642,22 +3664,13 @@ export const MaintenancePlansPage: React.FC = () => {
           : st === "DUE" ? "text-orange-700 dark:text-orange-400"
           : st === "OUT_OF_SERVICE" ? "text-text-industrial/50"
           : "text-fg";
-        const byHours = needsHours(row.triggerType);
-        const next = byHours
+        const next = needsHours(row.triggerType)
           ? (row.nextDueHours != null ? `${row.nextDueHours.toLocaleString()} hs` : null)
           : (row.nextDueDate ? fmtDate(row.nextDueDate) : null);
-        const last = byHours
-          ? (row.lastExecutionHours != null ? `${row.lastExecutionHours.toLocaleString()} hs` : null)
-          : (row.lastExecutionDate ? fmtDate(row.lastExecutionDate) : null);
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className={`font-mono text-xs font-bold tabular-nums whitespace-nowrap ${tone}`}>
-              {next ?? <span className="text-text-industrial/30 font-normal">—</span>}
-            </span>
-            <span className="font-mono text-[10px] text-text-industrial/45 tabular-nums whitespace-nowrap">
-              {t("mp.col.lastShort")}: {last ?? "—"}
-            </span>
-          </div>
+          <span className={`font-mono text-xs font-bold tabular-nums whitespace-nowrap ${tone}`}>
+            {next ?? <span className="text-text-industrial/30 font-normal">—</span>}
+          </span>
         );
       },
     },

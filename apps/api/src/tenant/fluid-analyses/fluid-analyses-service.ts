@@ -301,6 +301,20 @@ export async function getFluidSample(session: TenantAccessSession, id: string) {
     } catch { /* non-blocking */ }
   }
 
+  // El defecto que el resultado crítico generó solo. La muestra guarda nada más
+  // el id; la ventana necesita el código (para mostrarlo y para que el copiloto
+  // lo abra) y saber si sigue abierto y sin OT (sólo ahí tiene sentido ofrecer
+  // completarlo).
+  if (sample.result?.defectId) {
+    const defect = await (prisma as any).defect.findFirst({
+      where: { id: sample.result.defectId, tenantId, deletedAt: null },
+      select: { defectCode: true, status: true, workOrderId: true },
+    });
+    sample.result.defectCode = defect?.defectCode ?? null;
+    sample.result.defectStatus = defect?.status ?? null;
+    sample.result.defectWorkOrderId = defect?.workOrderId ?? null;
+  }
+
   return sample;
 }
 

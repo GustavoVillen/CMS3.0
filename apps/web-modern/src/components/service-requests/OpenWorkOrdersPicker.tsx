@@ -18,6 +18,7 @@ import { ChevronDown, Wrench, Loader2 } from "lucide-react";
 import { useFetch } from "../../lib/hooks";
 import { useT } from "../../lib/i18n";
 import { ModalCloseButton } from "../ModalCloseButton";
+import { CopilotChoiceStep } from "../../lib/copilot-context";
 import { fmtDate } from "../../lib/utils";
 
 /** Sólo lo que la lista necesita mostrar y agrupar. */
@@ -102,6 +103,21 @@ export function OpenWorkOrdersList({ onPick, empty }: {
 
   return (
     <>
+      {!loading && abiertas.length > 0 && (
+        <CopilotChoiceStep
+          module="WORK_ORDERS" screen="OPEN_WO_PICKER" title={t("dashboard.woPicker.title")}
+          label={t("dashboard.woPicker.title")}
+          hint="Open work orders of the selected vessel. If the user describes the job instead of giving a code, match it by title and equipment."
+          options={abiertas.map(w => ({
+            value: w.id,
+            label: [w.workOrderCode, w.title, w.assetName].filter(Boolean).join(" · "),
+          }))}
+          onChoose={id => {
+            const wo = abiertas.find(w => w.id === id);
+            if (wo) onPick({ id: wo.id, workOrderCode: wo.workOrderCode });
+          }}
+        />
+      )}
       {loading && abiertas.length === 0 && (
         <p className="flex items-center gap-2 text-xs text-text-industrial/50 py-6 justify-center">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}

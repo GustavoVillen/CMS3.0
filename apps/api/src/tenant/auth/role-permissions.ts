@@ -33,6 +33,9 @@ export interface PermissionDef {
 
 export const PERMISSIONS: readonly PermissionDef[] = [
   // Mantenimiento
+  // Aprobar la OT (paso anterior a autorizar). Desde sep 2026 es de tierra,
+  // igual que la SS: Superintendente y DPA (pedido de Gustavo).
+  { key: "wo.approve",               group: "maintenance", labelKey: "perm.woApprove" },
   { key: "wo.authorize",             group: "maintenance", labelKey: "perm.woAuthorize" },
   { key: "wo.manage",                group: "maintenance", labelKey: "perm.woManage" },
   { key: "wo.operate",               group: "maintenance", labelKey: "perm.woOperate" },
@@ -102,20 +105,22 @@ export const ALL_TENANT_ROLES: readonly TenantRole[] = [
 export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   TENANT_ADMIN: ALL_PERMISSION_KEYS,
 
-  // Superintendente tecnico (tierra): autoriza OT y SS, aprueba MOC y permisos.
+  // Superintendente tecnico (tierra): aprueba OT y SS (autorizar es sólo del
+  // DPA desde sep 2026), aprueba MOC y permisos.
   FLEET_SUPERINTENDENT: [
-    "wo.authorize", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
+    "wo.approve", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
     "drydock.approve",
-    "sr.approve", "sr.authorize", "spareRequest.approve", "stock.manage",
+    "sr.approve", "spareRequest.approve", "stock.manage",
     "permit.authorize", "permit.manage", "moc.approve", "externalAudit.manage",
     "inspection.execute", "checklist.manageTemplates",
     "crew.manage", "crewCert.manage", "drill.manage", "certificate.manage",
   ],
 
-  // Capitan / Jefe de Maquinas (a bordo): aprueba a bordo, NO autoriza.
+  // Capitan / Jefe de Maquinas (a bordo): pide, pero NO aprueba ni autoriza OT
+  // ni SS — desde sep 2026 aprobar es de tierra (Superintendente o DPA).
   MAINTENANCE_MANAGER: [
     "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write", "defect.write",
-    "sr.approve", "spareRequest.approve", "spareRequest.manage", "spare.manage", "stock.manage", "provider.manage",
+    "spareRequest.approve", "spareRequest.manage", "spare.manage", "stock.manage", "provider.manage",
     "permit.manage", "externalAudit.manage", "inspection.execute", "checklist.manageTemplates",
     "crew.manage", "crewCert.manage", "drill.manage", "certificate.manage",
   ],
@@ -227,6 +232,16 @@ export async function resolvePermissionsForRole(tenantSlug: string, role: Tenant
  */
 export function hasPermission(session: TenantAccessSession, key: PermissionKey): boolean {
   const list = session.user.permissions ?? DEFAULT_ROLE_PERMISSIONS[session.user.role] ?? [];
+  return list.includes(key);
+}
+
+/**
+ * ¿El rol de OTRA persona tiene esta autorización? Para validar a quién se
+ * puede elegir como firmante ("en nombre de"): la regla sale de la misma
+ * matriz que Equipo → Permisos, no de una lista de roles escrita a mano.
+ */
+export async function roleHasPermission(tenantSlug: string, role: string, key: PermissionKey): Promise<boolean> {
+  const list = await resolvePermissionsForRole(tenantSlug, role as TenantRole);
   return list.includes(key);
 }
 

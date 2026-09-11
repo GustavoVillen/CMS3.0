@@ -213,7 +213,7 @@ export function WoPaperForm({
             value={values.location}
             disabled={dis}
             onChange={e => onChange({ location: e.target.value })}
-            placeholder="Ciudad / Km…"
+            placeholder={t("wo.modal.locationPlaceholder")}
           />,
           label("fecha"), fecha ?? header.openDate,
         )}

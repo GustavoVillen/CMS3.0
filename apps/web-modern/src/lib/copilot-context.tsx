@@ -13,7 +13,7 @@
  *   - JSON.stringify dep in useCopilotEmitter prevents infinite re-run loops
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,6 +56,21 @@ export interface CopilotScreenContext {
   fieldOptions?: Record<string, Array<{ value: string; label: string }>>;
   /** Related entity IDs for cross-module context. */
   relatedEntities?: Record<string, string | null>;
+  /** Etiqueta que el usuario VE para cada campo de `fieldValues` (el copiloto la usa al preguntar). */
+  fieldLabels?: Record<string, string>;
+  /** Pista corta por campo cuando la etiqueta sola se presta a confusión ("ciudad o km"). */
+  fieldHints?: Record<string, string>;
+  /** Presente cuando la pantalla es un paso de un flujo con asistente (useCopilotAssist). */
+  assist?: {
+    /** Clave de ESTA apertura del flujo: todos sus pasos la comparten. */
+    flow: string;
+    /** Qué se está completando, como lo ve el usuario ("Nueva orden de trabajo"). */
+    title: string;
+    /** Asistentes del formulario que el copiloto puede disparar con [RECALCULAR]. */
+    actions?: Array<{ name: string; label: string }>;
+    /** Paso de elección: elegir lleva a otra pantalla del flujo. */
+    step?: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +109,28 @@ interface CopilotContextValue {
   unregisterFormActions: () => void;
   /** Corre las acciones pedidas, en orden, esperando cada una. Ignora las que no existan. */
   runFormActions: (names: string[]) => Promise<void>;
+  /**
+   * Ofrecimiento que el copiloto muestra por iniciativa propia (p. ej. al abrir
+   * un análisis crítico: "¿abro el defecto?"). Lo escribe EL SISTEMA, no la
+   * IA — no gasta tokens ni puede decir otra cosa. El panel lo muestra como un
+   * mensaje del copiloto una sola vez por `key` y lo consume.
+   */
+  offer: CopilotOffer | null;
+  pushCopilotOffer: (offer: CopilotOffer) => void;
+  clearCopilotOffer: () => void;
+}
+
+export interface CopilotOffer {
+  /** Identifica el ofrecimiento: el mismo `key` no se muestra dos veces en la sesión. */
+  key: string;
+  /** El mensaje. En los ofrecimientos de asistencia es sólo el título del formulario: el panel arma la frase traducida. */
+  text: string;
+  /**
+   * Ofrecimiento de asistencia de un formulario (useCopilotAssist): lleva el
+   * "No volver a ofrecer" y, si el usuario apagó los ofrecimientos, no se
+   * muestra. Los avisos puntuales (el defecto de un análisis crítico) no.
+   */
+  assistFlow?: string;
 }
 
 /** Un asistente de IA del formulario abierto (el de la chispita). */
@@ -112,6 +149,9 @@ const CopilotContext = createContext<CopilotContextValue>({
   registerFormActions: () => {},
   unregisterFormActions: () => {},
   runFormActions: async () => {},
+  offer: null,
+  pushCopilotOffer: () => {},
+  clearCopilotOffer: () => {},
 });
 
 // ---------------------------------------------------------------------------
@@ -163,6 +203,10 @@ export function CopilotContextProvider({ children }: { children: React.ReactNode
     }
   }, []);
 
+  const [offer, setOffer] = useState<CopilotOffer | null>(null);
+  const pushCopilotOffer = useCallback((next: CopilotOffer) => { setOffer(next); }, []);
+  const clearCopilotOffer = useCallback(() => { setOffer(null); }, []);
+
   return (
     <CopilotContext.Provider value={{
       screenContext, setScreenContext,
@@ -175,6 +219,7 @@ export function CopilotContextProvider({ children }: { children: React.ReactNode
       registerFormActions,
       unregisterFormActions,
       runFormActions,
+      offer, pushCopilotOffer, clearCopilotOffer,
     }}>
       {children}
     </CopilotContext.Provider>
@@ -310,4 +355,180 @@ export function useCopilotEmitter(ctx: CopilotScreenContext | null) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxKey]);
+}
+
+// ---------------------------------------------------------------------------
+// Asistente de formularios — un solo camino para todas las pantallas de carga
+// ---------------------------------------------------------------------------
+
+const CopilotFlowContext = createContext<string | null>(null);
+
+/** Clave nueva para una apertura de flujo (la usa quien arranca el flujo fuera de un provider, p. ej. el Tablero). */
+export function createCopilotFlowKey(name: string): string {
+  return newFlowKey(name);
+}
+
+function newFlowKey(name: string): string {
+  return `${name}:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * Agrupa los pasos de un flujo (elegir la OT → cargar la nota) bajo una misma
+ * clave por apertura. Así el copiloto ofrece ayuda UNA vez al abrir el flujo y
+ * no en cada paso, y sigue en modo guiado de un paso al siguiente aunque cada
+ * paso sea un componente distinto.
+ */
+export function CopilotFlowProvider({ name, flowKey, children }: {
+  name: string;
+  /** Continuar un flujo que empezó en otra pantalla (llega por el estado de la navegación). */
+  flowKey?: string | null;
+  children: React.ReactNode;
+}) {
+  const inherited = useContext(CopilotFlowContext);
+  const [own] = useState(() => newFlowKey(name));
+  // Un flujo que ya venía en curso (abierto desde el Tablero) sigue siendo el mismo.
+  return <CopilotFlowContext.Provider value={flowKey || inherited || own}>{children}</CopilotFlowContext.Provider>;
+}
+
+/** Clave del flujo en curso, para pasarla a la pantalla siguiente al navegar. */
+export function useCopilotFlowKey(): string | null {
+  return useContext(CopilotFlowContext);
+}
+
+/**
+ * Paso de elección de un flujo (¿para qué es?, ¿qué OT?, ¿qué plantilla?):
+ * se pone dentro de la ventana de opciones y no dibuja nada. Elegir desde el
+ * copiloto hace lo mismo que tocar la opción.
+ */
+export function CopilotChoiceStep({ module, screen, title, label, options, onChoose, hint, vesselCode }: {
+  module: string;
+  screen: string;
+  title: string;
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  onChoose: (value: string) => void;
+  hint?: string;
+  vesselCode?: string;
+}) {
+  useCopilotAssist({
+    module, screen, title, vesselCode,
+    fields: [{ key: "choice", label, value: null, options, hint, set: onChoose }],
+  });
+  return null;
+}
+
+export interface CopilotAssistField {
+  key: string;
+  /** Etiqueta tal como la ve el usuario en pantalla (ya traducida). */
+  label: string;
+  value: string | number | boolean | null | undefined;
+  /** Lista cerrada: sólo entra un valor de acá (se acepta el value o el label exacto). */
+  options?: Array<{ value: string; label: string }>;
+  hint?: string;
+  /** Carga el valor en el formulario. Sin `set`, el campo se informa pero el copiloto no lo escribe. */
+  set?: (value: string) => void;
+}
+
+export interface CopilotAssistSpec {
+  module: string;
+  screen: string;
+  /** Qué se está completando, como lo ve el usuario ("Nueva orden de trabajo"). */
+  title: string;
+  entityCode?: string;
+  vesselCode?: string;
+  /** En el orden del formulario: es el orden en que el copiloto pregunta. */
+  fields: CopilotAssistField[];
+  /** Asistentes del formulario (las chispitas, "agregar renglón"…) que el copiloto puede disparar. */
+  actions?: Record<string, { label: string; run: CopilotFormAction }>;
+  relatedEntities?: Record<string, string | null>;
+}
+
+/**
+ * Conecta un formulario (o un paso de un flujo) con el copiloto en una sola
+ * llamada: le cuenta qué campos hay, con su etiqueta visible y sus listas
+ * cerradas; le deja cargar valores (validando las listas); le expone los
+ * asistentes del formulario, y le ofrece ayuda al usuario al abrir el flujo.
+ *
+ * El copiloto nunca guarda: `set` sólo cambia lo que se ve en pantalla (salvo
+ * en los pasos donde elegir ES la acción, que el propio formulario resuelve).
+ *
+ * @param spec  `null` cuando el formulario es de sólo lectura o no aplica.
+ */
+export function useCopilotAssist(spec: CopilotAssistSpec | null) {
+  const inheritedFlow = useContext(CopilotFlowContext);
+  const [ownFlow] = useState(() => newFlowKey(spec?.screen ?? "form"));
+  const flow = inheritedFlow ?? ownFlow;
+  const { pushCopilotOffer } = useContext(CopilotContext);
+
+  const specRef = useRef(spec);
+  specRef.current = spec;
+
+  const ctx = useMemo<CopilotScreenContext | null>(() => {
+    if (!spec) return null;
+    const fieldValues: Record<string, string | null> = {};
+    const fieldLabels: Record<string, string> = {};
+    const fieldHints: Record<string, string> = {};
+    const fieldOptions: Record<string, Array<{ value: string; label: string }>> = {};
+    for (const f of spec.fields) {
+      const v = f.value;
+      fieldValues[f.key] = v === null || v === undefined || v === "" ? null : String(v);
+      fieldLabels[f.key] = f.label;
+      if (f.hint) fieldHints[f.key] = f.hint;
+      if (f.options) fieldOptions[f.key] = f.options;
+    }
+    return {
+      module: spec.module,
+      screen: spec.screen,
+      entityCode: spec.entityCode,
+      vesselCode: spec.vesselCode,
+      canEdit: true,
+      fieldValues,
+      fieldLabels,
+      fieldHints,
+      fieldOptions,
+      relatedEntities: spec.relatedEntities,
+      assist: {
+        flow,
+        title: spec.title,
+        actions: spec.actions
+          ? Object.entries(spec.actions).map(([name, a]) => ({ name, label: a.label }))
+          : undefined,
+        step: spec.fields.length === 1 && !!spec.fields[0]!.options,
+      },
+    };
+  }, [spec, flow]);
+  useCopilotEmitter(ctx);
+
+  useCopilotApplyFields(spec ? (values) => {
+    for (const f of specRef.current?.fields ?? []) {
+      if (!f.set || !(f.key in values)) continue;
+      const raw = String(values[f.key] ?? "");
+      if (f.options) {
+        const norm = raw.trim().toLowerCase();
+        const hit = f.options.find(o => o.value === raw)
+          ?? f.options.find(o => o.label.trim().toLowerCase() === norm);
+        if (hit) f.set(hit.value);
+      } else {
+        f.set(raw);
+      }
+    }
+  } : null);
+
+  const actionRunners = useMemo(() => {
+    if (!spec?.actions) return null;
+    const out: Record<string, CopilotFormAction> = {};
+    for (const name of Object.keys(spec.actions)) {
+      out[name] = () => specRef.current?.actions?.[name]?.run();
+    }
+    return out;
+  }, [spec?.actions]);
+  useCopilotFormActions(actionRunners);
+
+  // Ofrecimiento al abrir el flujo. El panel no lo repite para la misma clave,
+  // así que los pasos siguientes del mismo flujo no vuelven a preguntar.
+  const title = spec?.title ?? null;
+  useEffect(() => {
+    if (!title) return;
+    pushCopilotOffer({ key: `assist:${flow}`, assistFlow: flow, text: title });
+  }, [title, flow, pushCopilotOffer]);
 }

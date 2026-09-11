@@ -136,7 +136,7 @@ export async function listTeamMembers(
  */
 export async function listTeamDirectory(
   session: TenantAccessSession,
-): Promise<{ userId: string; name: string }[]> {
+): Promise<{ userId: string; name: string; role: string | null; jobTitle: string | null }[]> {
   const prisma = getPrismaClient();
 
   if (!prisma) {
@@ -144,7 +144,7 @@ export async function listTeamDirectory(
     const users: DevTenantUserRecord[] = listDevTenantUsers({ tenantSlug: session.tenantSlug });
     return users
       .filter(u => u.membershipStatus !== "REVOKED" && u.membershipStatus !== "SUSPENDED")
-      .map(u => ({ userId: u.id, name: displayName(u.firstName, u.lastName, null, u.email) }))
+      .map(u => ({ userId: u.id, name: displayName(u.firstName, u.lastName, null, u.email), role: null, jobTitle: null }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -159,6 +159,10 @@ export async function listTeamDirectory(
     .map((m: any) => ({
       userId: m.userId,
       name: displayName(m.user.firstName, m.user.lastName, m.user.formName, m.user.email),
+      // Para mostrar al lado del nombre qué papel tiene cada uno (el cargo si
+      // lo cargaron; si no, el rol del sistema, que el frontend traduce).
+      role: m.role ?? null,
+      jobTitle: m.jobTitle ?? null,
     }))
     .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
 }

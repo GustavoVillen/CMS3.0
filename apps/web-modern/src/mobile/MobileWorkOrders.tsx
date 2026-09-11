@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useWoTerms } from "../lib/i18n";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
@@ -462,7 +462,12 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const { user } = useAuth();
   const woTerms = useWoTerms();
   // Solo superintendente/admin aprueban SS → ven el filtro "Para aprobar".
-  const canApproveSS = user?.role === "FLEET_SUPERINTENDENT" || user?.role === "TENANT_ADMIN";
+  // Aprobar / autorizar la OT: lo que diga Equipo → Permisos ("Aprobar OT",
+  // "Autorizar OT"), igual que el backend. Por defecto, Superintendente y DPA.
+  const can = useCan();
+  const canApproveWo = can("wo.approve");
+  const canAuthorizeWo = can("wo.authorize");
+  const canApproveSS = canApproveWo || canAuthorizeWo;
   const [filter, setFilter]       = useState<WoFilter>(initialFilter ?? "open");
   // Si el dashboard navega con un foco distinto, sincronizamos el filtro local.
   React.useEffect(() => {
@@ -859,7 +864,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   // (Información) y 2 (Plan) en lectura + los botones del paso que corresponde:
   //  · SOLICITADA → [APROBAR] / [NO APROBAR]   (APRUEBA / RECHAZA)
   //  · APROBADA   → [AUTORIZAR] / [NO AUTORIZAR] (AUTORIZA / RECHAZA)
-  if (view === "detail" && selected && canApproveSS && (isSolicitada(selected) || isAprobada(selected))) {
+  if (view === "detail" && selected && ((canApproveWo && isSolicitada(selected)) || (canAuthorizeWo && isAprobada(selected)))) {
     const isAuth = isAprobada(selected);
     const positiveStep: "APRUEBA" | "AUTORIZA" = isAuth ? "AUTORIZA" : "APRUEBA";
     const positiveLabel = isAuth ? "AUTORIZAR" : "APROBAR";
@@ -1257,8 +1262,8 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           ["overdue", "Vencidas", overdueWOs.length, "text-red-700 dark:text-red-400"],
           ...(canApproveSS
             ? [
-                ["solicitadas", "Para aprobar",   solicitadasWOs.length, "text-blue-700 dark:text-blue-400"],
-                ["aprobadas",   "Para autorizar", aprobadasWOs.length,   "text-violet-700 dark:text-violet-400"],
+                ...(canApproveWo ? [["solicitadas", "Para aprobar", solicitadasWOs.length, "text-blue-700 dark:text-blue-400"]] : []),
+                ...(canAuthorizeWo ? [["aprobadas", "Para autorizar", aprobadasWOs.length, "text-violet-700 dark:text-violet-400"]] : []),
               ] as [WoFilter, string, number, string][]
             : []),
         ] as [WoFilter, string, number, string][]).map(([f, label, count, color]) => (

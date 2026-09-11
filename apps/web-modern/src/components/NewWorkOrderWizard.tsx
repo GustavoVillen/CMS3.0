@@ -14,6 +14,10 @@ import { ModalCloseButton } from "./ModalCloseButton";
 import { AssetSearchDropdown, type AssetOption } from "./AssetSearchDropdown";
 import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
 import { findClassInspectionAsset } from "../lib/class-inspection-asset";
+import { CopilotFlowProvider, useCopilotAssist, type CopilotAssistSpec } from "../lib/copilot-context";
+
+/** Valor de la opción "ninguno" del paso del ítem del plan (no es un id real). */
+const NO_PLAN_ITEM = "__none__";
 
 type Category = "MAINTENANCE" | "REPAIR" | "CLASS";
 type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind";
@@ -55,7 +59,14 @@ interface NewWorkOrderWizardProps {
   onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
 }
 
-export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose, onSaved }) => {
+/** Todos los pasos (y el formulario completo del final) son UN flujo para el copiloto. */
+export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = (props) => (
+  <CopilotFlowProvider name="new-wo">
+    <NewWorkOrderWizardSteps {...props} />
+  </CopilotFlowProvider>
+);
+
+const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, onSaved }) => {
   const t = useT();
   const { vessels, selectedVesselCode, isVesselScoped } = useVesselContext();
 
@@ -181,6 +192,54 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = ({ onClose,
       setCreating(false);
     }
   }, [onSaved, t]);
+
+  // ── Copiloto: cada paso es una elección; cargarla hace lo mismo que el clic ──
+  const assistBase = { module: "WORK_ORDERS", title: t("dashboard.newWorkOrder"), vesselCode: vesselCode || undefined };
+  let assist: CopilotAssistSpec | null = null;
+  if (!result && step === "category") {
+    assist = { ...assistBase, screen: "WO_WIZARD_CATEGORY", fields: [{
+      key: "category", label: t("wo.wizard.categoryTitle"), value: category,
+      options: [
+        { value: "MAINTENANCE", label: t("dashboard.ssChooser.maintenance") },
+        { value: "REPAIR",      label: t("dashboard.ssChooser.repair") },
+        { value: "CLASS",       label: t("dashboard.ssChooser.classInspection") },
+      ],
+      set: v => chooseCategory(v as Category),
+    }] };
+  } else if (!result && step === "vessel") {
+    assist = { ...assistBase, screen: "WO_WIZARD_VESSEL", fields: [{
+      key: "vesselCode", label: t("wo.wizard.vesselTitle"), value: null,
+      options: vessels.map(v => ({ value: v.code, label: v.name ?? v.code })),
+      set: chooseVessel,
+    }] };
+  } else if (!result && step === "asset" && !loadingAssets) {
+    assist = { ...assistBase, screen: "WO_WIZARD_ASSET", fields: [{
+      key: "assetId", label: t("wo.wizard.assetTitle"), value: null,
+      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode })),
+      set: chooseAsset,
+    }] };
+  } else if (!result && step === "repairKind") {
+    assist = { ...assistBase, screen: "WO_WIZARD_REPAIR_KIND", fields: [{
+      key: "repairKind", label: t("wo.wizard.repairKindTitle"), value: null,
+      options: REPAIR_KIND_OPTIONS.map(o => ({ value: o.value, label: o.label })),
+      set: v => chooseRepairKind(v as RepairKind),
+    }] };
+  } else if (!result && step === "planItem" && !loadingPlans && !creating) {
+    assist = { ...assistBase, screen: "WO_WIZARD_PLAN_ITEM", fields: [{
+      key: "planItem", label: t("wo.wizard.planItemTitle"), value: null,
+      hint: "Choosing a plan item CREATES the work order immediately (it inherits title, criteria, LOTO and risk from the plan). The last option opens the blank form instead.",
+      options: [
+        ...(planItems ?? []).map(p => ({ value: p.id, label: `${p.taskCode} · ${p.title}` })),
+        { value: NO_PLAN_ITEM, label: t("wo.wizard.none") },
+      ],
+      set: v => {
+        if (v === NO_PLAN_ITEM) { setResult({ vesselCode, assetId, maintKind: category === "CLASS" ? "INSPECTION" : undefined }); return; }
+        const item = (planItems ?? []).find(p => p.id === v);
+        if (item) void choosePlanItem(item);
+      },
+    }] };
+  }
+  useCopilotAssist(assist);
 
   if (result) {
     return (
