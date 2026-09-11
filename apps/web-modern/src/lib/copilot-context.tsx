@@ -93,11 +93,14 @@ interface CopilotContextValue {
    */
   hasApplyFieldsCallback: boolean;
   /** Register a callback that the copilot can call to apply field values to the active form. */
-  registerApplyFieldsCallback: (fn: (fields: Record<string, string>) => void) => void;
+  registerApplyFieldsCallback: (fn: ApplyFieldsFn) => void;
   /** Unregister the callback (call on unmount or when form closes). */
   unregisterApplyFieldsCallback: () => void;
-  /** Call the registered callback with the given field values. No-op when none registered. */
-  applyFields: (fields: Record<string, string>) => void;
+  /**
+   * Call the registered callback with the given field values. No-op when none registered.
+   * Devuelve las etiquetas de los campos que el formulario NO aceptó (valor fuera de la lista).
+   */
+  applyFields: (fields: Record<string, string>) => ApplyFieldsResult | void;
   /**
    * Nombres de los asistentes de IA que el formulario abierto expone para que
    * el copiloto los dispare (criterios de aceptación, LOTO, análisis de riesgo).
@@ -131,10 +134,22 @@ export interface CopilotOffer {
    * muestra. Los avisos puntuales (el defecto de un análisis crítico) no.
    */
   assistFlow?: string;
+  /**
+   * Pregunta con respuestas fijas (p. ej. "¿Generar el PDF?" → Sí / No). El
+   * panel las muestra como botones y también entiende un "sí"/"no" escrito;
+   * la respuesta la resuelve la pantalla con `onChoice`, sin pasar por la IA
+   * (si devuelve un texto, el panel lo muestra como confirmación).
+   */
+  choices?: Array<{ value: string; label: string }>;
+  onChoice?: (value: string) => void | string | null | Promise<void | string | null>;
 }
 
 /** Un asistente de IA del formulario abierto (el de la chispita). */
 export type CopilotFormAction = () => void | Promise<void>;
+
+/** Resultado de cargar campos: lo que el formulario rechazó, para avisarlo en vez de callarlo. */
+export interface ApplyFieldsResult { rejected: string[] }
+export type ApplyFieldsFn = (fields: Record<string, string>) => ApplyFieldsResult | void;
 
 const CopilotContext = createContext<CopilotContextValue>({
   screenContext: null,
@@ -163,10 +178,10 @@ export function CopilotContextProvider({ children }: { children: React.ReactNode
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
 
   // Apply-fields callback — ref holds the function, state tracks presence for reactive UI
-  const applyFieldsCallbackRef = useRef<((fields: Record<string, string>) => void) | null>(null);
+  const applyFieldsCallbackRef = useRef<ApplyFieldsFn | null>(null);
   const [hasApplyFieldsCallback, setHasApplyFieldsCallback] = useState(false);
 
-  const registerApplyFieldsCallback = useCallback((fn: (fields: Record<string, string>) => void) => {
+  const registerApplyFieldsCallback = useCallback((fn: ApplyFieldsFn) => {
     applyFieldsCallbackRef.current = fn;
     setHasApplyFieldsCallback(true);
   }, []);
@@ -177,7 +192,7 @@ export function CopilotContextProvider({ children }: { children: React.ReactNode
   }, []);
 
   const applyFields = useCallback((fields: Record<string, string>) => {
-    applyFieldsCallbackRef.current?.(fields);
+    return applyFieldsCallbackRef.current?.(fields);
   }, []);
 
   // Asistentes de IA del formulario abierto — mismo patrón que apply-fields:
@@ -243,14 +258,14 @@ export function useCopilotScreenContext() {
  * @param fn  Function that receives a Record<fieldKey, value> and applies them to the form state.
  *            Pass `null` when the form is read-only or the callback should not be active.
  */
-export function useCopilotApplyFields(fn: ((fields: Record<string, string>) => void) | null) {
+export function useCopilotApplyFields(fn: ApplyFieldsFn | null) {
   const { registerApplyFieldsCallback, unregisterApplyFieldsCallback } = useContext(CopilotContext);
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
   useEffect(() => {
     if (!fnRef.current) return;
-    registerApplyFieldsCallback((fields) => { fnRef.current?.(fields); });
+    registerApplyFieldsCallback((fields) => fnRef.current?.(fields));
     return () => { unregisterApplyFieldsCallback(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fn !== null]); // re-register when nullability changes
@@ -422,8 +437,12 @@ export interface CopilotAssistField {
   /** Etiqueta tal como la ve el usuario en pantalla (ya traducida). */
   label: string;
   value: string | number | boolean | null | undefined;
-  /** Lista cerrada: sólo entra un valor de acá (se acepta el value o el label exacto). */
-  options?: Array<{ value: string; label: string }>;
+  /**
+   * Lista cerrada: sólo entra un valor de acá. Se acepta el value, el label o
+   * un alias exactos (p. ej. el código del equipo, que es como lo nombran las
+   * búsquedas del copiloto), y si no, un label que contenga el texto sin ambigüedad.
+   */
+  options?: Array<{ value: string; label: string; aliases?: string[] }>;
   hint?: string;
   /** Carga el valor en el formulario. Sin `set`, el campo se informa pero el copiloto no lo escribe. */
   set?: (value: string) => void;
@@ -441,6 +460,23 @@ export interface CopilotAssistSpec {
   /** Asistentes del formulario (las chispitas, "agregar renglón"…) que el copiloto puede disparar. */
   actions?: Record<string, { label: string; run: CopilotFormAction }>;
   relatedEntities?: Record<string, string | null>;
+}
+
+/**
+ * Busca en una lista cerrada lo que propuso la IA. En orden: el valor exacto,
+ * el texto visible, un alias (el código del equipo) y, por último, un texto
+ * visible que contenga lo propuesto — sólo si hay UNA opción así (con dos
+ * candidatas no se adivina).
+ */
+function matchOption<T extends { value: string; label: string; aliases?: string[] }>(options: T[], raw: string): T | null {
+  const norm = raw.trim().toLowerCase();
+  if (!norm) return null;
+  const exact = options.find(o => o.value === raw)
+    ?? options.find(o => o.label.trim().toLowerCase() === norm)
+    ?? options.find(o => (o.aliases ?? []).some(a => a.trim().toLowerCase() === norm));
+  if (exact) return exact;
+  const partial = options.filter(o => o.label.toLowerCase().includes(norm));
+  return partial.length === 1 ? partial[0]! : null;
 }
 
 /**
@@ -474,7 +510,8 @@ export function useCopilotAssist(spec: CopilotAssistSpec | null) {
       fieldValues[f.key] = v === null || v === undefined || v === "" ? null : String(v);
       fieldLabels[f.key] = f.label;
       if (f.hint) fieldHints[f.key] = f.hint;
-      if (f.options) fieldOptions[f.key] = f.options;
+      // A la IA van value + label; los alias sólo sirven para reconocer lo que devuelve.
+      if (f.options) fieldOptions[f.key] = f.options.map(o => ({ value: o.value, label: o.label }));
     }
     return {
       module: spec.module,
@@ -500,18 +537,19 @@ export function useCopilotAssist(spec: CopilotAssistSpec | null) {
   useCopilotEmitter(ctx);
 
   useCopilotApplyFields(spec ? (values) => {
+    const rejected: string[] = [];
     for (const f of specRef.current?.fields ?? []) {
       if (!f.set || !(f.key in values)) continue;
       const raw = String(values[f.key] ?? "");
       if (f.options) {
-        const norm = raw.trim().toLowerCase();
-        const hit = f.options.find(o => o.value === raw)
-          ?? f.options.find(o => o.label.trim().toLowerCase() === norm);
+        const hit = matchOption(f.options, raw);
         if (hit) f.set(hit.value);
+        else rejected.push(f.label);
       } else {
         f.set(raw);
       }
     }
+    return { rejected };
   } : null);
 
   const actionRunners = useMemo(() => {

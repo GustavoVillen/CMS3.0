@@ -1039,6 +1039,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // ── Copiloto: el formulario completo, en el mismo orden que la pantalla ──
   const { data: directory } = useFetch<Array<{ userId: string; name: string }>>("/app/team/directory");
   const showsStandaloneProviders = !prefill && planProviders.length === 0 && (isMercurio ? assignedToArea === "TERCERIZADO" : requireProvider);
+  // Al marcar "Tercerizado" la sección del taller aparecía vacía, sólo con
+  // "+ Agregar": quien cargaba a mano tenía un clic de más, y el copiloto no
+  // tenía dónde poner el taller (lo "registraba" en la charla y la OT se
+  // guardaba sin taller, o sea sin SS). Ahora nace con un renglón listo.
+  useEffect(() => {
+    if (showsStandaloneProviders && standaloneProviderRequests.length === 0) {
+      setStandaloneProviderRequests([{ providerId: "", purpose: "" }]);
+    }
+  }, [showsStandaloneProviders, standaloneProviderRequests.length]);
   const assistFields: CopilotAssistField[] = [];
   if (!prefill) {
     assistFields.push(
@@ -1047,11 +1056,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     );
     if (assets.length > 0) {
       assistFields.push({ key: "assetId", label: t("wo.modal.equipment"), value: assetId,
-        options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode })), set: setAssetId });
+        options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: [a.assetCode] })), set: setAssetId });
     }
   } else if (prefill.assetSelectable && assets.length > 0) {
     assistFields.push({ key: "assetId", label: t("wo.modal.equipment"), value: assetId,
-      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode })), set: setAssetId });
+      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: [a.assetCode] })), set: setAssetId });
   }
   if (isMercurio) {
     assistFields.push(
@@ -1096,7 +1105,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     standaloneProviderRequests.forEach((row, i) => {
       assistFields.push(
         { key: `line.${i}.providerId`, label: `${t("wo.modal.provider")} ${i + 1}`, value: row.providerId,
-          options: availableProviders.map(p => ({ value: p.id, label: p.name })),
+          hint: "Outside workshop that does the job. When the OT is saved, a Service Request (SS) is opened to it automatically — without it no SS is created. If the name the user gives is not in the list, say so and ask; do not skip this field.",
+          options: availableProviders.map(p => ({ value: p.id, label: p.name, aliases: p.providerCode ? [p.providerCode] : undefined })),
           set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: v } : r)) },
         { key: `line.${i}.purpose`, label: `${t("mp.providerRequests.purposePlaceholder")} (${i + 1})`, value: row.purpose,
           set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: v } : r)) },

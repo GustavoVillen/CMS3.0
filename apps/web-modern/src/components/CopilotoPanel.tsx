@@ -170,7 +170,30 @@ interface ChatMessage {
   assistOffer?: boolean;
   /** Mensaje del sistema a la IA que no se muestra en el chat (p. ej. "pasó al paso siguiente"). */
   hidden?: boolean;
+  /** Pregunta con respuestas fijas (botones). Se resuelve en la pantalla, sin la IA. */
+  choices?: Array<{ value: string; label: string }>;
+  onChoice?: (value: string) => void | string | null | Promise<void | string | null>;
+  /** Ya se contestó: los botones quedan deshabilitados. */
+  answered?: string;
 }
+
+/**
+ * Opciones numeradas de una respuesta del copiloto ("1. Mantenimiento", "2)
+ * Reparación"): se muestran como botones para que el usuario toque en vez de
+ * escribir el número. Hacen falta al menos dos para que sea una elección.
+ */
+function extractNumberedOptions(text: string): Array<{ n: string; label: string }> {
+  const out: Array<{ n: string; label: string }> = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*(\d{1,2})[.)]\s+(.+?)\s*$/);
+    if (m) out.push({ n: m[1]!, label: m[2]!.replace(/\*\*/g, "") });
+  }
+  return out.length >= 2 ? out.slice(0, 30) : [];
+}
+
+/** Respuestas escritas que valen como "sí" / "no" a una pregunta con botones. */
+const YES_RE = /^\s*(s[ií]|dale|ok(ay)?|bueno|claro|de una|imprim|gener|por favor)\b/i;
+const NO_RE = /^\s*(no|nop|despu[eé]s|luego|m[aá]s tarde|ahora no)\b/i;
 
 /**
  * Lo que el panel le manda a la IA, sin mostrarlo, cuando un paso de un flujo
@@ -1138,8 +1161,13 @@ export const CopilotoPanel: React.FC = () => {
 
     if (overrideText === undefined) setInput("");
     setError(null);
-    // El usuario ya contestó: se corta la lectura de la pregunta anterior.
-    if (!opts?.hidden) stopSpeaking();
+    // El usuario ya contestó por el chat: se corta la lectura de la pregunta
+    // anterior y se deja de esperar que la conteste en la pantalla.
+    if (!opts?.hidden) {
+      stopSpeaking();
+      awaitingRef.current = null;
+      if (typingTimerRef.current) { window.clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+    }
 
     // ── Print / PDF shortcut ──
     if (isPrintRequest(text)) {
@@ -1153,6 +1181,27 @@ export const CopilotoPanel: React.FC = () => {
       setMessages(prev => [...prev, { role: "user", content: text }, reply]);
       if (lastAssistant) printReport(lastAssistant.content);
       return;
+    }
+
+    // ¿Contesta a una pregunta con botones que quedó abierta ("¿Generar el PDF?")?
+    // Un "sí"/"no" escrito vale igual que tocar el botón y no pasa por la IA.
+    if (!opts?.hidden) {
+      const lastVisible = [...messages].map((m, i) => ({ m, i })).reverse().find(x => !x.m.hidden);
+      const q = lastVisible?.m;
+      if (q && q.role === "assistant" && q.choices && !q.answered) {
+        const value = YES_RE.test(text) ? "yes" : NO_RE.test(text) ? "no" : null;
+        if (value && q.choices.some(c => c.value === value)) {
+          const idx = lastVisible!.i;
+          setMessages(prev => [...prev.map((m, i) => i === idx ? { ...m, answered: value } : m), { role: "user", content: text }]);
+          try {
+            const reply = await q.onChoice?.(value);
+            if (reply) setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+          }
+          return;
+        }
+      }
     }
 
     const userMsg: ChatMessage = { role: "user", content: text, hidden: opts?.hidden };
@@ -1281,7 +1330,18 @@ export const CopilotoPanel: React.FC = () => {
           }
           // Lo que cambie en pantalla en los próximos segundos lo hizo el copiloto, no el usuario.
           lastApplyAtRef.current = Date.now();
-          applyFields(finalFields);
+          const applied = applyFields(finalFields);
+          // Lo que el formulario no aceptó se dice: antes el copiloto anunciaba
+          // "seleccionado el compresor" y la casilla seguía vacía. El aviso lo
+          // escribe el sistema; en el turno siguiente la IA ve el campo vacío
+          // y lo vuelve a preguntar.
+          if (applied && applied.rejected.length > 0) {
+            pendingStepRef.current = null;
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: `${t("copilot.assist.notLoaded")} **${applied.rejected.join(", ")}**. ${t("copilot.assist.notLoadedHint")}`,
+            }]);
+          }
           setPendingFields(null);
           setFieldsLoadedFlash(true);
           window.setTimeout(() => setFieldsLoadedFlash(false), 4000);
@@ -1403,37 +1463,110 @@ export const CopilotoPanel: React.FC = () => {
     const assist = screenContext?.assist;
     if (!assist || assist.flow !== pending.flow || screenContext?.screen === pending.screen) return;
     pendingStepRef.current = null;
+    lastNextStepAtRef.current = Date.now();
     void sendMessageRef.current(NEXT_STEP_MESSAGE, { hidden: true });
   }, [screenContext, streaming]);
 
-  // El usuario actuó directo en la pantalla central de un flujo en asistencia:
-  // eligió una opción, pasó a otra ventana o marcó una casilla de lista cerrada.
-  // El copiloto se calla, deja de lado lo que estaba diciendo o escribiendo y
-  // vuelve a mirar la pantalla para seguir desde ahí. Los cambios de texto
-  // libre (tipear) no cuentan: interrumpirían a cada letra.
-  const prevAssistRef = useRef<{ flow: string; screen: string; closed: string } | null>(null);
+  // El usuario puede contestar desde el chat O desde la pantalla central. Si
+  // contesta en la pantalla —elige una opción, pasa a otra ventana, marca una
+  // casilla o escribe en el campo que el copiloto le estaba preguntando— el
+  // copiloto se calla, deja de lado lo que estaba diciendo o escribiendo y
+  // sigue desde lo que ahora se ve.
+  //
+  // El texto libre necesita un cuidado aparte: interrumpir a cada letra sería
+  // insoportable. Por eso sólo cuenta el campo que el copiloto está
+  // preguntando (el primero vacío cuando terminó de hablar) y recién cuando el
+  // usuario deja de escribir un momento. Lo que escriba en otros campos no
+  // interrumpe: la IA lo ve igual en el próximo turno.
+  const screenContextRef = useRef(screenContext);
+  screenContextRef.current = screenContext;
+  const offeredFlowsRef = useRef(offeredFlows);
+  offeredFlowsRef.current = offeredFlows;
+  /** Campo que el copiloto está preguntando ahora, con su valor en ese momento. */
+  const awaitingRef = useRef<{ flow: string; screen: string; key: string; baseline: string | null } | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
+  /** Cuándo mandó el panel el último "[SIGUIENTE PASO]" (para no mandarlo dos veces por el mismo cambio). */
+  const lastNextStepAtRef = useRef(0);
+
+  // Al terminar cada respuesta: cuál es el campo que quedó preguntando (el
+  // primero vacío, que es el que la regla del copiloto manda preguntar). Se
+  // lee un instante después para ver ya cargado lo que la respuesta aplicó.
   useEffect(() => {
-    const assist = screenContext?.assist;
-    const prev = prevAssistRef.current;
-    const closed = assist
-      ? JSON.stringify(Object.keys(screenContext?.fieldOptions ?? {}).map(k => [k, screenContext?.fieldValues?.[k] ?? null]))
-      : "";
-    prevAssistRef.current = assist && screenContext ? { flow: assist.flow, screen: screenContext.screen, closed } : null;
-    if (!assist || !prev || prev.flow !== assist.flow || !offeredFlows.has(assist.flow)) return;
-    const screenChanged = prev.screen !== screenContext!.screen;
-    if (!screenChanged && prev.closed === closed) return;
-    // Lo acaba de cargar el copiloto: no es el usuario (el paso siguiente lo maneja pendingStepRef).
-    if (Date.now() - lastApplyAtRef.current < 2500) return;
+    if (streaming) return;
+    const tid = window.setTimeout(() => {
+      const ctx = screenContextRef.current;
+      const flow = ctx?.assist?.flow;
+      if (!ctx || !flow || !offeredFlowsRef.current.has(flow)) { awaitingRef.current = null; return; }
+      const entry = Object.entries(ctx.fieldValues ?? {}).find(([, v]) => v === null || v === "");
+      awaitingRef.current = entry ? { flow, screen: ctx.screen, key: entry[0], baseline: entry[1] ?? null } : null;
+    }, 400);
+    return () => window.clearTimeout(tid);
+  }, [streaming]);
+
+  const continueFromScreen = useCallback((flow: string, text: string) => {
+    if (typingTimerRef.current) { window.clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+    awaitingRef.current = null;
     stopSpeaking();
     pendingStepRef.current = null;
     if (streamingRef.current) {
       interruptedRef.current = true;
       void readerRef.current?.cancel().catch(() => {});
     }
-    pendingSystemMsgRef.current = { flow: assist.flow, text: screenChanged ? NEXT_STEP_MESSAGE : SCREEN_CHANGE_MESSAGE };
+    pendingSystemMsgRef.current = { flow, text };
     setSystemMsgTick(n => n + 1);
+  }, [stopSpeaking]);
+
+  const prevAssistRef = useRef<{ flow: string; screen: string; closed: string } | null>(null);
+  /**
+   * Último paso visto de un flujo, aunque después la pantalla quede un
+   * instante sin contexto. Al elegir el ítem del plan la app navega a la OT:
+   * entre que se desmonta el asistente y se monta la OT no hay pantalla
+   * anunciada, y sin esta memoria el copiloto no reconocía la OT como el paso
+   * siguiente del mismo flujo y se quedaba esperando.
+   */
+  const lastAssistRef = useRef<{ flow: string; screen: string; closed: string } | null>(null);
+  useEffect(() => {
+    const assist = screenContext?.assist;
+    const prev = prevAssistRef.current ?? lastAssistRef.current;
+    const closed = assist
+      ? JSON.stringify(Object.keys(screenContext?.fieldOptions ?? {}).map(k => [k, screenContext?.fieldValues?.[k] ?? null]))
+      : "";
+    const current = assist && screenContext ? { flow: assist.flow, screen: screenContext.screen, closed } : null;
+    prevAssistRef.current = current;
+    if (current) lastAssistRef.current = current;
+    if (!assist || !prev || prev.flow !== assist.flow || !offeredFlows.has(assist.flow)) return;
+    // Lo acaba de cargar el copiloto: no es el usuario (el paso siguiente lo maneja pendingStepRef).
+    if (Date.now() - lastApplyAtRef.current < 2500) return;
+    // El copiloto ya pidió seguir en este cambio de paso: no preguntar dos veces.
+    if (pendingStepRef.current || Date.now() - lastNextStepAtRef.current < 3000) return;
+
+    // Otra ventana u opción de lista cerrada: respuesta inmediata.
+    const screenChanged = prev.screen !== screenContext!.screen;
+    if (screenChanged || prev.closed !== closed) {
+      if (screenChanged) lastNextStepAtRef.current = Date.now();
+      continueFromScreen(assist.flow, screenChanged ? NEXT_STEP_MESSAGE : SCREEN_CHANGE_MESSAGE);
+      return;
+    }
+
+    // Texto escrito en el campo que el copiloto estaba preguntando: se espera
+    // a que deje de escribir.
+    const aw = awaitingRef.current;
+    if (!aw || aw.flow !== assist.flow || aw.screen !== screenContext!.screen) return;
+    const now = screenContext?.fieldValues?.[aw.key] ?? null;
+    if (!now || now === aw.baseline) return;
+    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = window.setTimeout(() => {
+      typingTimerRef.current = null;
+      const ctx = screenContextRef.current;
+      const still = awaitingRef.current;
+      if (!ctx?.assist || !still || still.key !== aw.key || ctx.screen !== aw.screen) return;
+      if (!(ctx.fieldValues?.[aw.key])) return;
+      continueFromScreen(aw.flow, SCREEN_CHANGE_MESSAGE);
+    }, 1500);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenContext]);
+
+  useEffect(() => () => { if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current); }, []);
 
   // Manda el aviso pendiente (arrancar a ayudar / la pantalla cambió) apenas
   // no hay otra respuesta en curso y la pantalla activa es la de ese flujo.
@@ -1484,9 +1617,22 @@ export const CopilotoPanel: React.FC = () => {
       setSystemMsgTick(n => n + 1);
       return;
     }
-    setMessages(prev => [...prev, { role: "assistant", content: offer.text }]);
+    setMessages(prev => [...prev, { role: "assistant", content: offer.text, choices: offer.choices, onChoice: offer.onChoice }]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offer]);
+
+  /** Respuesta a una pregunta con botones: la resuelve la pantalla que preguntó, sin la IA. */
+  const answerChoice = useCallback(async (msgIdx: number, value: string) => {
+    const msg = messages[msgIdx];
+    if (!msg?.choices || msg.answered) return;
+    setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, answered: value } : m));
+    try {
+      const reply = await msg.onChoice?.(value);
+      if (reply) setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [messages]);
 
   const optOutAssist = () => {
     try { localStorage.setItem(assistOptOutKey(user?.id), "1"); } catch { /* sin almacenamiento: vale para esta sesión */ }
@@ -1515,6 +1661,12 @@ export const CopilotoPanel: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Collapsed strip
   // ---------------------------------------------------------------------------
+
+  // Última respuesta visible: sólo ésa muestra sus opciones numeradas como botones.
+  let lastVisibleIdx = -1;
+  for (let k = messages.length - 1; k >= 0; k--) {
+    if (!messages[k]!.hidden) { lastVisibleIdx = k; break; }
+  }
 
   if (!expanded) {
     return (
@@ -1747,6 +1899,48 @@ export const CopilotoPanel: React.FC = () => {
                 )
               }
             </div>
+            {/* Opciones numeradas de la última respuesta: se tocan en vez de escribir el número. */}
+            {msg.role === "assistant" && !msg.choices && !streaming && i === lastVisibleIdx && (() => {
+              const opts = extractNumberedOptions(msg.content);
+              if (opts.length === 0) return null;
+              return (
+                <div className="mt-1.5 flex flex-col gap-1 max-w-[92%] w-full">
+                  {opts.map(o => (
+                    <button
+                      key={o.n}
+                      type="button"
+                      onClick={() => { void sendMessage(o.n); }}
+                      className="text-left px-2.5 py-1.5 rounded-lg border border-accent/25 bg-accent/[0.06] text-[11px] text-fg hover:bg-accent/15 hover:border-accent/50 transition-colors"
+                    >
+                      <span className="font-bold text-accent mr-1.5">{o.n}</span>{o.label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            {msg.role === "assistant" && msg.choices && msg.choices.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {msg.choices.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    disabled={!!msg.answered}
+                    onClick={() => { void answerChoice(i, c.value); }}
+                    className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all disabled:cursor-not-allowed ${
+                      msg.answered === c.value
+                        ? "bg-accent text-accent-fg border-accent"
+                        : msg.answered
+                          ? "bg-fg/5 border-border text-text-industrial/30"
+                          : c.value === "yes"
+                            ? "bg-accent/10 border-accent/30 text-accent hover:bg-accent/20"
+                            : "bg-fg/5 border-border text-text-industrial/60 hover:text-fg"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {msg.assistOffer && !assistOptOut && (
               <button
                 type="button"

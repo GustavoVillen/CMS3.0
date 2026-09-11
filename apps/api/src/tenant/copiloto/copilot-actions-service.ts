@@ -132,6 +132,33 @@ export async function applyCopilotAction(
   throw new RouteError(400, "UNSUPPORTED_ACTION_TYPE", `Tipo de acción no soportado: "${action.type}".`);
 }
 
+/**
+ * El taller que propone la IA puede venir como id, como código (PRV-M01-0002)
+ * o como nombre: query_providers devuelve los tres y el modelo no siempre elige
+ * el id. Se busca SIEMPRE dentro de la empresa; si no aparece, se devuelve lo
+ * que vino y la validación de siempre (assertProviderInTenant) lo rechaza.
+ */
+async function resolveProviderId(tenantId: string, raw: unknown): Promise<string | undefined> {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (!value) return undefined;
+  const prisma = getPrismaClient() as unknown as {
+    provider: { findFirst(a: unknown): Promise<{ id: string } | null> };
+  };
+  const byId = await prisma.provider.findFirst({ where: { tenantId, id: value, deletedAt: null }, select: { id: true } });
+  if (byId) return byId.id;
+  const byCodeOrName = await prisma.provider.findFirst({
+    where: {
+      tenantId, deletedAt: null,
+      OR: [
+        { providerCode: { equals: value, mode: "insensitive" } },
+        { name: { equals: value, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true },
+  });
+  return byCodeOrName?.id ?? value;
+}
+
 /** Filtra `patch` contra una whitelist; tira 400 si no queda ningún campo permitido y `patch` no estaba vacío. */
 function filterPatch(patch: Record<string, unknown> | undefined, allowed: Set<string>): Record<string, unknown> {
   const filtered: Record<string, unknown> = {};
@@ -270,6 +297,7 @@ async function applyCreateWorkOrder(
   if (!patch.title) {
     throw new RouteError(400, "MISSING_TITLE", "Falta el título de la orden de trabajo.");
   }
+  if (patch.providerId) patch.providerId = await resolveProviderId(tenant.id, patch.providerId);
 
   log.info(`[copilot-action] create_work_order target=${assetCode} user=${session.user.email}`);
 
@@ -323,6 +351,7 @@ async function applyCreateServiceRequest(
   if (!patch.providerId) {
     throw new RouteError(400, "MISSING_PROVIDER", "Falta el taller (providerId) al que se le pide el servicio.");
   }
+  patch.providerId = await resolveProviderId(tenant.id, patch.providerId);
 
   log.info(`[copilot-action] create_service_request target=${workOrderCode} user=${session.user.email}`);
 

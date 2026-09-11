@@ -112,7 +112,9 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, category, severity, status, occurredAt, location, description, immediateAction, rootCause, preventiveActions, lessonsLearned, reportedByName });
-  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
+  // Editando, la ventana vive en su ruta (/near-miss/:code): esa ya es la marca
+  // de historial (otra igual dejaba el cierre en bucle). Al crear no hay ruta.
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose, skipHistory: !!record });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

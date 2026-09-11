@@ -1182,7 +1182,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     rcaPreventiveActions  !== (defect.rcaPreventiveActions  ?? "") ||
     repairType            !== (defect.repairType === "TEMPORARIA" || defect.repairType === "PERMANENTE" ? defect.repairType : null)
   );
-  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose });
+  // Se abre sólo por su ruta (/defects/:code), que ya es la marca de historial:
+  // otra marca igual hacía que, con cambios sin guardar, cerrar reabriera el
+  // diálogo sin fin. Mismo arreglo que Planes y OT.
+  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose, skipHistory: true });
 
   // "ask-permanent-wo" screen
   if (postSaveStep === "ask-permanent-wo") {

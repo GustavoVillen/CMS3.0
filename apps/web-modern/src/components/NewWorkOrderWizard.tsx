@@ -215,7 +215,7 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
   } else if (!result && step === "asset" && !loadingAssets) {
     assist = { ...assistBase, screen: "WO_WIZARD_ASSET", fields: [{
       key: "assetId", label: t("wo.wizard.assetTitle"), value: null,
-      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode })),
+      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: [a.assetCode] })),
       set: chooseAsset,
     }] };
   } else if (!result && step === "repairKind") {

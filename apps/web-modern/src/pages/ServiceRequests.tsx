@@ -24,7 +24,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { useAuth, useCan } from "../lib/auth";
 import { useRoleHasPermission } from "../lib/role-permissions";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotDataRefresh, useCopilotFlowKey, CopilotFlowProvider } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotDataRefresh, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext } from "../lib/copilot-context";
 import { printServiceRequest } from "../lib/print-work-order";
 import { useTheme } from "../lib/theme";
 import {
@@ -1192,6 +1192,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const [deleting, setDeleting] = useState(false);
   // Paso de tramitación abierto: cada uno pide quién firma y con qué fecha.
   const [tramita, setTramita] = useState<"SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
+  const t = useT();
   const can = useCan();
   const canApprove = can("sr.approve");
   const canAuthorize = can("sr.authorize");
@@ -1441,17 +1442,57 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
 
   // Guardar NO cierra el modal: el formulario es largo y se carga por partes —
   // cerrarlo obligaba a volver a abrir la SS para seguir completándola.
-  const save = async () => {
+  const save = async (): Promise<ServiceRequest | null> => {
     setSaving(true);
     setActionError(null);
     try {
       const updated = await api.patch<ServiceRequest>(`/app/pms/service-requests/${sr.id}`, patchPayload());
       onSaved(updated);
+      return updated;
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "No se pudieron guardar los cambios.");
+      return null;
     } finally {
       setSaving(false);
     }
+  };
+
+  // Guardó con el botón "Guardar": el copiloto pregunta si se genera el PDF de
+  // la SS (con lo recién guardado). La respuesta no pasa por la IA.
+  const { pushCopilotOffer } = useCopilotScreenContext();
+  // Después del PDF (se conteste sí o no), si la SS sigue en borrador el
+  // copiloto pregunta si se envía a aprobar. El "sí" abre la MISMA ventana que
+  // el botón "Enviar a aprobar", donde se confirma quién la solicita.
+  const openTramitaRef = React.useRef<(step: "SOLICITA") => void>(() => {});
+  const offerSendToApprove = (code: string) => {
+    pushCopilotOffer({
+      key: `send-ss:${sr.id}:${Date.now()}`,
+      text: `${t("copilot.sendOffer.ss")} **${code}**?`,
+      choices: [{ value: "yes", label: t("copilot.sendOffer.yes") }, { value: "no", label: t("copilot.pdfOffer.no") }],
+      onChoice: (v) => {
+        if (v !== "yes") return null;
+        openTramitaRef.current("SOLICITA");
+        return t("copilot.sendOffer.opened");
+      },
+    });
+  };
+  const offerPdfAfterSave = (saved: ServiceRequest) => {
+    const doc = { ...sr, ...saved };
+    const canSend = doc.status === "DRAFT";
+    pushCopilotOffer({
+      key: `pdf-ss:${sr.id}:${Date.now()}`,
+      text: `${t("copilot.pdfOffer.ss")} **${doc.serviceRequestCode}**?`,
+      choices: [{ value: "yes", label: t("copilot.pdfOffer.yes") }, { value: "no", label: t("copilot.pdfOffer.no") }],
+      onChoice: async (v) => {
+        let reply: string | null = null;
+        if (v === "yes") {
+          const ok = await printServiceRequest(doc);
+          reply = ok ? t("copilot.pdfOffer.done") : null;
+        }
+        if (canSend) offerSendToApprove(doc.serviceRequestCode);
+        return reply;
+      },
+    });
   };
 
   // Este modal es largo y se completa por partes; salir sin querer costaba
@@ -1459,7 +1500,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // el guardián reusa esa misma señal: sin cambios, cerrar no pregunta nada.
   // Va después de `save` porque lo recibe como handler del botón "Guardar" del
   // diálogo.
-  const requestClose = useEscapeGuard({ isDirty: dirty, onSave: save, onClose });
+  const requestClose = useEscapeGuard({ isDirty: dirty, onSave: async () => { await save(); }, onClose });
 
   /**
    * Guarda lo que esté pendiente ANTES de firmar o de mandar al taller.
@@ -1493,6 +1534,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   const openTramita = (step: "SOLICITA" | "APRUEBA" | "AUTORIZA" | "RECHAZA") => {
     void (async () => { if (await saveIfDirty()) setTramita(step); })();
   };
+  openTramitaRef.current = (step) => openTramita(step);
 
   /**
    * Avanza el estado. Propaga el error: los modales de paso muestran el suyo.
@@ -1710,7 +1752,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           </button>
 
           {editable && (
-            <button onClick={() => { void save(); }} disabled={saving || !dirty}
+            <button onClick={() => { void save().then(saved => { if (saved) offerPdfAfterSave(saved); }); }} disabled={saving || !dirty}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-40">
               <Save className="w-3.5 h-3.5" /> {saving ? "Guardando…" : "Guardar"}
             </button>

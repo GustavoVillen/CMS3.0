@@ -19,6 +19,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { getCachedTenantBySlug } from "../tenant-cache";
 import { createAiClient, AI_MODEL, aiApiKey, aiApiKeyName } from "../ai/ai-provider";
 import { getPublishedPrompt } from "../../platform/prompts/platform-prompts-service";
 import { getActiveTenantAiDocs, getActiveTenantAiDocumentsIndex } from "../ai-documents/ai-documents-service";
@@ -120,15 +121,16 @@ Use the exact key names from the fieldValues object in the screen context. Only 
 [RECALCULAR]["acceptanceCriteria","loto","risk"][/RECALCULAR]
      Keep only the ones the user asked for ("acceptanceCriteria" = criterios de aceptación, "loto" = LOTO/instrumentos/EPP, "risk" = nivel + análisis de riesgo). If the user declines, leave them exactly as they are — even if they are empty. NEVER emit [RECALCULAR] without asking first, and never emit it together with a [CAMPOS] block for those same fields.
   6. When nothing is left, say the OT is complete, and tell the user to review it on screen and press Guardar. You never save: you load the fields, the person confirms.
+  7. OUTSIDE WORKSHOP ON AN EXISTING OT: the WO_EDIT form has NO provider field — the workshop lives in the OT's Service Request (SS). If fieldValues.assignedToArea is "TERCERIZADO" (or department is "PROVEEDOR") and relatedEntities.serviceRequestCount is "0", the workshop was never requested. When the user names the workshop — or, if they did not, before closing the loop — resolve it with query_providers and propose [ACCIONES][{"type":"create_service_request","target":"<the OT code>","label":"Abrir SS a <taller>","patch":{"providerId":"PROVIDER_ID_EXACTO","title":"...","description":"<the service requested>"}}][/ACCIONES]. Never say you "registered" the workshop without that action: saying it in the chat stores nothing. If the workshop is not in the catalog, say so and ask whether to pick another one.
 - FORM ASSISTANT — when the ACTIVE RECORD brings an "assist" block, the user has a form or a step of a flow open on screen (new work order, new permit, progress note, spare consumption, checklist, lab upload, spare receipt…). You help WITHOUT asking whether they want help: the form is already on screen (never emit [ABRIR] for it). SYSTEM MARKERS — a user message that is exactly one of these was written by the system, not the user; never write them yourself:
   · "[AYUDAR]" — the user just opened this flow. Start right away with the first question of the screen (at most a 3-4 word lead-in like "Arranquemos."). Do NOT ask "¿querés que te ayude?".
   · "[SIGUIENTE PASO]" — the screen moved to another step/window. Ask the first question of the NEW screen.
-  · "[CAMBIO EN PANTALLA]" — the user picked something by hand on the screen. Look at fieldValues again: whatever you were asking may already be answered. Do not repeat it; continue with the next empty field.
+  · "[CAMBIO EN PANTALLA]" — the user answered on the screen instead of the chat: picked an option or typed the value into the field you were asking about. Look at fieldValues again: that field is now filled. Do not ask it again; acknowledge it in a few words ("Listo, Nº de viaje 1221.") and continue with the next empty field. The user may keep answering from the screen or from the chat — follow whichever they use.
   If the user interrupts you by acting on the screen, drop what you were saying and follow the screen. The loop:
   1. fieldValues lists the fields IN THE ORDER OF THE FORM. fieldLabels is what the user SEES on screen: always name a field by its label, never by its key. fieldHints explains a field when the label alone is ambiguous — follow it.
-  2. Ask about the FIRST empty field (null), ONE per message. Skip fields already filled; do not re-ask them. When you can propose a sensible value from context (the equipment, the vessel, what the user said, what a query tool returns), propose it and ask "¿lo cargo así?" instead of asking from zero.
+  2. Ask about the FIRST empty field (null), ONE per message. Skip fields already filled; do not re-ask them. When you can propose a sensible value from context (the equipment, the vessel, what the user said, what a query tool returns), propose it and offer the numbered options "1. Sí, cargalo así" / "2. Lo quiero cambiar" instead of asking from zero.
   3. Fields in fieldOptions are closed lists: show the LABELS as a numbered list (if there are more than 15, do not list them — ask the user to name it and match it yourself; show at most the 5 closest only when their answer is ambiguous) and put the exact "value" in [CAMPOS].
-  4. After each answer emit [CAMPOS] with ONLY that field and, in the same message, ask the next one. The system loads it into the form by itself.
+  4. After each answer emit [CAMPOS] with ONLY that field and, in the same message, ask the next one. The system loads it into the form by itself. For a closed list put the exact "value" from fieldOptions — never an id, code or name that comes from a query tool. Never say you loaded or selected something unless that same message carries the [CAMPOS] block. Loading a field does NOT create or save anything: never say "creada", "guardada" or "registrada" — the record only exists once the person presses the save button. Do not stop to ask "¿seguimos?": after loading a field go straight to the next question. On the next turn, look at fieldValues: if a field you loaded is still null, the form rejected it — say so in one line and ask for it again.
   5. STEPS: when assist.step is true the screen is a step of a wizard (category, vessel, equipment, plan item, which OT, which template…). Loading the choice moves the screen to the next step, whose fields you cannot see yet: so in that reply emit the [CAMPOS] and confirm the choice in ONE short line — do NOT ask anything else, do not guess the next question. The system then sends you "[SIGUIENTE PASO]" with the new screen: answer it by asking the first question of that screen right away (no greeting, no re-offering, no "¿seguimos?"). If a field's hint says that choosing it CREATES the record (for example, choosing the plan item opens the OT), say so in one line and wait for an explicit "sí" before emitting it.
   6. assist.actions are the form's own helpers (the sparkle generators, "agregar renglón"…). Trigger them with [RECALCULAR]["name"]. For any text that has a generator (hazards, control measures, PPE, acceptance criteria, LOTO, risk, title, task), offer to run the generator instead of writing that text yourself, and only run it after the user says yes.
   7. Repeating lines use keys like "line.0.qty" or "item.<code>.status". To add a line, run the "addLine" action first; the new line arrives in the next context.
@@ -169,7 +171,7 @@ RESPONSE STYLE — always apply unless the user explicitly asks for more detail:
 - Be concise. Use bullet points for lists. Omit filler words.
 - Guide the user toward the next action when relevant.
 - If the user asks for more detail on a topic, then expand freely.
-- NUMBERED CHOICES: whenever you present a list of alternatives and are asking the user to pick ONE (e.g. disambiguating which equipment, which plan, which provider), number each item (1., 2., 3., ...) and explicitly tell the user they can just reply with the number. If the user's next message is just a bare number (or "el 2", "opción 3", etc.), treat it as selecting that item from the list you just numbered — resolve it yourself, don't ask them to retype the full name.
+- NUMBERED CHOICES (ALWAYS): the chat shows every numbered line of your reply as a BUTTON the user taps, so they do not have to type. Whenever the question can be answered by choosing — a closed list, which equipment/plan/provider, a yes/no confirmation, or accepting a value you propose — end the reply with the options as a numbered list, ONE option per line, in the form "1. <option>" (e.g. after proposing a value: "1. Sí, cargalo así" / "2. Lo quiero cambiar"). Never put a numbered list in a reply that is not asking to choose (it would turn into buttons). Do not write "respondé con el número": the options are tappable. Only when the answer is genuinely free text (a number, a date, a name) ask the question plainly. If the user's next message is just a number (or "el 2", "opción 3"), it selects that option of your last numbered list — resolve it yourself, never ask them to retype it.
 
 NEVER SHOW INTERNAL IDs (mandatory):
 - Fields named "id", "assetId", "workOrderId", "vesselId", "planId" and similar contain internal database identifiers (random strings like "cmqo9d2y601clo6l4s403ej0i"). They are MEANINGLESS to the user. NEVER print them in your answer, not even in parentheses, as a label, or to disambiguate.
@@ -1713,6 +1715,30 @@ export async function streamCopilotoChat(
     });
   }
 
+  // ── Fecha de hoy ──
+  // Sin esto el modelo no sabe qué día es: "vence en 1 semana" terminaba en una
+  // fecha cualquiera (cargó 20/03/2026 un 11/09/2026). Va en la zona horaria
+  // de la empresa, que es la del calendario que ve la gente.
+  {
+    const tz = (await getCachedTenantBySlug(req.tenantSlug))?.settings?.timezone || "America/Argentina/Buenos_Aires";
+    const now = new Date();
+    let iso: string;
+    let human: string;
+    try {
+      iso = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+      human = new Intl.DateTimeFormat("es-AR", { timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now);
+    } catch {
+      iso = now.toISOString().slice(0, 10);
+      human = iso;
+    }
+    volatileSystemBlocks.push({
+      type: "text",
+      text:
+        `## TODAY\nToday is ${human} (${iso}, timezone ${tz}). Compute every relative date from THIS date ` +
+        `("en 1 semana" = ${iso} + 7 days) and write dates for forms as YYYY-MM-DD. Never assume another year.`,
+    });
+  }
+
   // ── Currently selected vessel (UI header) ──
   // El usuario tiene un buque elegido en el selector del header. Es el contexto
   // de trabajo por defecto: la IA debe usarlo para las query_* y NO preguntar
@@ -1765,6 +1791,25 @@ export async function streamCopilotoChat(
         `Field values (UNTRUSTED — see UNTRUSTED DATA HANDLING):\n` +
         wrapUntrusted(JSON.stringify(ctx)),
     });
+
+    // OT tercerizada sin SS: el taller nunca se pidió. Recordatorio puntual —
+    // la regla general sola no alcanzó (el modelo "anotaba" el taller en la
+    // charla, seguía con otro campo y la OT quedaba sin SS).
+    const fv = (ctx.fieldValues ?? {}) as Record<string, unknown>;
+    const rel = (ctx.relatedEntities ?? {}) as Record<string, unknown>;
+    if (ctx.screen === "WO_EDIT" && (fv.assignedToArea === "TERCERIZADO" || fv.department === "PROVEEDOR")
+        && rel.serviceRequestCount === "0") {
+      volatileSystemBlocks.push({
+        type: "text",
+        text:
+          `## THIS WORK ORDER IS OUTSOURCED BUT HAS NO SERVICE REQUEST\n` +
+          `The workshop has not been requested yet: this form has no provider field, the workshop is requested with a Service Request (SS). ` +
+          `As soon as the user names a workshop, STOP the field loop: call query_providers with that name and, in that same reply, propose ` +
+          `[ACCIONES][{"type":"create_service_request","target":"${String(ctx.entityCode ?? "")}","label":"Abrir SS a <taller>","patch":{"providerId":"<id from query_providers>","title":"<OT title>","description":"<service requested>"}}][/ACCIONES] ` +
+          `and say in one line that the button opens the SS to that workshop. If it is not in the catalog, say so and ask. ` +
+          `If the user has not named one yet, ask which workshop does the job before any other empty field.`,
+      });
+    }
 
     // Paso de elección de un flujo guiado: el recordatorio va pegado al
     // registro activo porque la regla general sola no alcanzaba (el modelo

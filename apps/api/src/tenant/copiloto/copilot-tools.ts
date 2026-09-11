@@ -1054,6 +1054,9 @@ export async function executeExtendedCopilotTool(
         take: limit,
         orderBy: { name: "asc" },
         select: {
+          // `id`: lo pide la acción "Abrir SS" (providerId). Sin él el modelo lo
+          // inventaba y el botón fallaba con "Proveedor no encontrado".
+          id: true,
           providerCode: true, name: true, category: true, status: true,
           contactName: true, contactEmail: true, contactPhone: true,
           location: true, notes: true,

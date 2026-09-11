@@ -360,6 +360,9 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
     isDirty: recordDirty,
     onSave,
     onClose,
+    // Se abre sólo por su ruta (/capa/:code), que ya es la marca de historial:
+    // otra igual dejaba el cierre en bucle con cambios sin guardar.
+    skipHistory: true,
   });
 
   return (

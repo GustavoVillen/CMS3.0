@@ -37,7 +37,7 @@ import { useAuth, useCan } from "../lib/auth";
 import { useRoleHasPermission } from "../lib/role-permissions";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
@@ -1466,21 +1466,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     return opts;
   }, [isMercurio, directoryData, t]);
 
-  // Si la OT se abrió dentro de un flujo que el copiloto venía guiando (Nueva
-  // OT / Nueva Inspección desde el Tablero), sigue en modo guiado acá.
-  const copilotFlow = useCopilotFlowKey();
-  useCopilotEmitter({
-    module: "WORK_ORDERS",
-    screen: "WO_EDIT",
-    entityId: workOrder.id,
-    entityCode: workOrder.workOrderCode,
-    vesselCode: workOrder.vesselCode,
-    workflowStage: workOrder.status,
-    canEdit: isEditable,
-    fieldValues: copilotFieldValues,
-    fieldOptions: copilotFieldOptions,
-    ...(copilotFlow && isEditable ? { assist: { flow: copilotFlow, title: workOrder.workOrderCode } } : {}),
-  });
 
   useCopilotApplyFields(isEditable ? (fields) => {
     /** Lista cerrada: sólo entra un valor que exista de verdad en el recuadro. */
@@ -1719,6 +1704,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     [workOrder.id],
   );
   const linkedServiceRequests = linkedSrData?.items ?? [];
+  // El copiloto puede abrir una SS desde el chat ("Abrir SS a CONDOR"): el
+  // recuadro de SS de esta OT tiene que mostrarla apenas se aplica, sin cerrar
+  // y reabrir la ventana.
+  useCopilotDataRefresh(reloadServiceRequests);
+
+  // Si la OT se abrió dentro de un flujo que el copiloto venía guiando (Nueva
+  // OT / Nueva Inspección desde el Tablero), sigue en modo guiado acá.
+  const copilotFlow = useCopilotFlowKey();
+  useCopilotEmitter({
+    module: "WORK_ORDERS",
+    screen: "WO_EDIT",
+    entityId: workOrder.id,
+    entityCode: workOrder.workOrderCode,
+    vesselCode: workOrder.vesselCode,
+    workflowStage: workOrder.status,
+    canEdit: isEditable,
+    fieldValues: copilotFieldValues,
+    fieldOptions: copilotFieldOptions,
+    // Cuántas SS tiene: si está asignada a un tercerizado y no tiene ninguna, el
+    // taller nunca se pidió (el copiloto ofrece abrirla).
+    relatedEntities: { serviceRequestCount: String(linkedServiceRequests.length) },
+    ...(copilotFlow && isEditable ? { assist: { flow: copilotFlow, title: workOrder.workOrderCode } } : {}),
+  });
 
   // PROVEEDOR del recuadro ASIGNADO A: se lee de las Solicitudes de Servicio de
   // la OT, que es donde realmente se elige el taller. Antes la hoja tenía su
@@ -2062,6 +2070,45 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
    * cubre estos links: sólo se dispara al cerrar. Si el guardado falla no se
    * navega — perder el trabajo por irse a mirar otra cosa es inaceptable.
    */
+  // Guardó con el botón "Guardar": el copiloto pregunta si se genera el PDF.
+  // Se pide al servidor con lo recién guardado; la respuesta no pasa por la IA.
+  const { pushCopilotOffer } = useCopilotScreenContext();
+  // Después del PDF (se conteste sí o no), si la OT sigue en preparación el
+  // copiloto pregunta si se envía a aprobar. El "sí" abre la MISMA ventana que
+  // el botón "Enviar a aprobar": ahí se confirma quién la envía.
+  const openTramitaRef = useRef<(step: "ENVIA") => void>(() => {});
+  openTramitaRef.current = (step) => { void openTramita(step); };
+  const offerSendToApprove = useCallback(() => {
+    pushCopilotOffer({
+      key: `send-wo:${workOrder.id}:${Date.now()}`,
+      text: `${t("copilot.sendOffer.wo")} **${workOrder.workOrderCode}**?`,
+      choices: [{ value: "yes", label: t("copilot.sendOffer.yes") }, { value: "no", label: t("copilot.pdfOffer.no") }],
+      onChoice: (v) => {
+        if (v !== "yes") return null;
+        openTramitaRef.current("ENVIA");
+        return t("copilot.sendOffer.opened");
+      },
+    });
+  }, [pushCopilotOffer, workOrder.id, workOrder.workOrderCode, t]);
+  const offerPdfAfterSave = useCallback(() => {
+    const canSend = tramitaPhase === "EN_PREPARACION"
+      && workOrder.status !== "CLOSED" && workOrder.status !== "CANCELLED";
+    pushCopilotOffer({
+      key: `pdf-wo:${workOrder.id}:${Date.now()}`,
+      text: `${t("copilot.pdfOffer.wo")} **${workOrder.workOrderCode}**?`,
+      choices: [{ value: "yes", label: t("copilot.pdfOffer.yes") }, { value: "no", label: t("copilot.pdfOffer.no") }],
+      onChoice: async (v) => {
+        let reply: string | null = null;
+        if (v === "yes") {
+          await printWorkOrder({ id: workOrder.id, workOrderCode: workOrder.workOrderCode, title });
+          reply = t("copilot.pdfOffer.done");
+        }
+        if (canSend) offerSendToApprove();
+        return reply;
+      },
+    });
+  }, [pushCopilotOffer, workOrder.id, workOrder.workOrderCode, workOrder.status, title, t, tramitaPhase, offerSendToApprove]);
+
   const saveThenNavigate = async (to: string) => {
     if (isDirty && !(await onSave())) return;
     // El flujo guiado (si lo hay) sigue en la pantalla siguiente.
@@ -2076,6 +2123,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     // sólo necesita esperar a que termine.
     onSave: async () => { await onSave(); },
     onClose,
+    // La OT sólo se abre por su ruta (/work-orders/:code): ESA ruta ya es la
+    // marca de historial. Registrar otra dejaba dos marcas con la misma URL y,
+    // con cambios sin guardar, "Descartar" volvía a la copia y el diálogo se
+    // reabría sin fin (el cierre quedaba en un bucle). Mismo arreglo que Planes.
+    skipHistory: true,
   });
 
   const handleResume = useCallback(async () => {
@@ -3542,7 +3594,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </button>
             )}
             {isEditable && canManage && (
-              <button onClick={() => { void onSave(); }} disabled={saving}
+              <button onClick={() => { void onSave().then(ok => { if (ok) offerPdfAfterSave(); }); }} disabled={saving}
                 className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 flex items-center gap-1.5 ${justSaved ? "bg-green-600 text-white" : "bg-accent text-accent-fg hover:brightness-110"}`}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <><CheckCheck className="w-4 h-4" />{t("mp.modal.saved")}</> : t("common.save")}
               </button>

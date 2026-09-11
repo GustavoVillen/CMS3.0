@@ -499,6 +499,9 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     isDirty: isDeferralDirty,
     onSave: handleSave,
     onClose,
+    // Se abre sólo por su ruta (/deferrals/:code), que ya es la marca de
+    // historial: otra igual dejaba el cierre en bucle con cambios sin guardar.
+    skipHistory: true,
   });
 
   const handleCancelDeferral = useCallback(async () => {

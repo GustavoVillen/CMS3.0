@@ -448,7 +448,9 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const escDirty = useDirtyTracker({ vesselCode, category, title, reasonForChange, proposedChange, riskLevel, riskAssessmentNotes, mitigationActions, plannedDate, impactAreas, regi: regiStr });
-  const requestClose = useEscapeGuard({ isDirty: !isLocked && escDirty, onSave: isLocked ? undefined : onSave, onClose });
+  // Editando, la ventana vive en su ruta (/moc/:code): esa ya es la marca de
+  // historial (otra igual dejaba el cierre en bucle). Al crear no hay ruta.
+  const requestClose = useEscapeGuard({ isDirty: !isLocked && escDirty, onSave: isLocked ? undefined : onSave, onClose, skipHistory: !!moc });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
