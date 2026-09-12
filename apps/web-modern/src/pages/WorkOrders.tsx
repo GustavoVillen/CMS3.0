@@ -1178,7 +1178,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // FECHA INICIO del recuadro de Programación de trabajo. El sistema la carga
   // sola al pasar la OT a ejecución, pero también se escribe a mano: las OT
   // históricas o las que se cerraron sin pasar por "iniciar" la traían vacía.
-  const [startDate, setStartDate]           = useState(toDateInputValue(workOrder.startDate));
+  // Si todavía no hay ninguna, se propone la fecha de apertura de la OT: el
+  // trabajo se programa desde que la orden se abre, y es lo que se tipeaba igual.
+  const [startDate, setStartDate]           = useState(
+    toDateInputValue(workOrder.startDate) || toDateInputValue(workOrder.openDate)
+  );
   const [actualHours, setActualHours] = useState(
     workOrder.actualHours != null ? String(workOrder.actualHours) : ""
   );
@@ -3209,9 +3213,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </section>
           )}
 
-          {/* ── Secciones 6-10 (Avances/Programación/Repuestos/Tarea concluida/
-              Resultado): ocultas del todo hasta que la OT esté aprobada, no
-              sólo deshabilitadas. */}
+          {/* ── Avances / Tarea concluida / Resultado: ocultas del todo hasta
+              que la OT esté aprobada, no sólo deshabilitadas. */}
           {isApproved && (
           <div className="space-y-6">
 
@@ -3235,14 +3238,55 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </section>
           )}
 
-          {/* Programación de trabajo, repuestos/materiales y tarea concluida son
-              recuadros de la hoja de arriba (ver WoPaperForm). */}
+          {/* ── 5. TAREA CONCLUIDA Y RESULTADO ──
+              Sale de la hoja por el mismo motivo que los repuestos: ahí son dos
+              casilleros chiquitos que se pierden, y son la marca con la que la
+              OT se cierra. En la hoja quedan de sólo lectura. */}
+          {isMercurio && (
+          <section className="space-y-3">
+            <PhaseHeader n={5} label={t("wo.modal.taskCompletedSection")} dotCls="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" borderCls="border-emerald-500/25" />
+            <div className="grid sm:grid-cols-2 gap-4 bg-fg/[0.03] border border-fg/10 rounded-2xl p-4">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.taskCompleted")}</label>
+                <div className="flex gap-2">
+                  {[["YES", t("common.yes"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
+                    ["NO", t("common.no"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
+                    <button key={val} type="button" disabled={!isResultEditable}
+                      onClick={() => {
+                        touchRegi();
+                        setRegiForm(prev => ({ ...prev, taskCompleted: prev.taskCompleted === val ? "" : val as "YES" | "NO" }));
+                      }}
+                      className={`flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all disabled:opacity-50 ${regiForm.taskCompleted === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.result")}</label>
+                <div className="flex gap-2">
+                  {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
+                    ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
+                    <button key={val} type="button" disabled={!isResultEditable}
+                      onClick={() => handleWoResultChange(woResult === val ? "" : val)}
+                      className={`flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+          )}
 
-          {/* ── RESULTADO (10 con el formulario de Mercurio, que suma
-                 "Programación de trabajo", "Repuestos y materiales" y
-                 "Tarea concluida") ── */}
+          {/* Programación de trabajo y repuestos/materiales son recuadros de la
+              hoja de arriba (ver WoPaperForm). */}
+
+          {/* ── RESULTADO: los datos del cierre (quién ejecutó, cuándo, horas,
+                 observaciones). El "Satisfactorio / Con deficiencias" del
+                 formulario controlado se marca arriba, en la sección 4. ── */}
           <section className="space-y-4">
-            <PhaseHeader n={isMercurio ? 5 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={isMercurio ? 6 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             {/* Con el formulario controlado, RESULTADO se marca en la hoja. */}

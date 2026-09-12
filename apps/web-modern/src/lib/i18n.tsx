@@ -1819,6 +1819,8 @@ const dict = {
   "wo.modal.result":           { es: "Resultado",              en: "Result",               pt: "Resultado" },
   "wo.modal.result.satisfactory":  { es: "Satisfactorio",      en: "Satisfactory",          pt: "Satisfatório" },
   "wo.modal.result.withDeficiencies":{ es: "Con deficiencias",  en: "With deficiencies",    pt: "Com deficiências" },
+  "wo.modal.taskCompletedSection": { es: "Tarea concluida y resultado", en: "Task completion and result", pt: "Tarefa concluída e resultado" },
+  "wo.modal.taskCompleted":    { es: "¿Tarea concluida?",   en: "Task completed?",      pt: "Tarefa concluída?" },
   "wo.modal.deficiencies":     { es: "Deficiencias encontradas", en: "Deficiencies found", pt: "Deficiências encontradas" },
   "wo.modal.deficienciesPlaceholder": { es: "Descripción detallada de las deficiencias encontradas", en: "Detailed description of deficiencies found", pt: "Descrição detalhada das deficiências encontradas" },
   "wo.modal.executedBy":       { es: "Responsable",            en: "Responsible",          pt: "Responsável" },

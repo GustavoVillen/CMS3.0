@@ -780,9 +780,13 @@ export const CopilotoPanel: React.FC = () => {
   const { width: panelWidth, startResize } = useResizable("gpms_copilot_width", 320, 240, 520);
 
   // Panel state
+  // Panel cerrado = copiloto apagado: no arranca solo, no habla, no gasta
+  // tokens y NO se abre solo. Sigue estando para cuando el usuario lo abra.
+  const expandedRef = useRef(true);
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(LS_EXPANDED) !== "false"; } catch { return true; }
   });
+  expandedRef.current = expanded;
   const [fullscreen, setFullscreen] = useState(false);
 
   // Chat state
@@ -1167,6 +1171,10 @@ export const CopilotoPanel: React.FC = () => {
       stopSpeaking();
       awaitingRef.current = null;
       if (typingTimerRef.current) { window.clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+      // Escribió él: aunque el copiloto no hubiera arrancado solo (panel
+      // cerrado), desde acá los campos que proponga entran solos al formulario.
+      const activeFlow = screenContext?.assist?.flow;
+      if (activeFlow) setOfferedFlows(prev => prev.has(activeFlow) ? prev : new Set(prev).add(activeFlow));
     }
 
     // ── Print / PDF shortcut ──
@@ -1459,6 +1467,7 @@ export const CopilotoPanel: React.FC = () => {
   useEffect(() => {
     const pending = pendingStepRef.current;
     if (!pending || streaming) return;
+    if (!expandedRef.current) { pendingStepRef.current = null; return; }
     if (Date.now() - pending.at > 20_000) { pendingStepRef.current = null; return; }
     const assist = screenContext?.assist;
     if (!assist || assist.flow !== pending.flow || screenContext?.screen === pending.screen) return;
@@ -1504,6 +1513,7 @@ export const CopilotoPanel: React.FC = () => {
   }, [streaming]);
 
   const continueFromScreen = useCallback((flow: string, text: string) => {
+    if (!expandedRef.current) return;
     if (typingTimerRef.current) { window.clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
     awaitingRef.current = null;
     stopSpeaking();
@@ -1573,9 +1583,9 @@ export const CopilotoPanel: React.FC = () => {
   useEffect(() => {
     const pending = pendingSystemMsgRef.current;
     if (!pending || streaming) return;
+    if (!expandedRef.current) { pendingSystemMsgRef.current = null; return; }
     if (screenContext?.assist?.flow !== pending.flow) return;
     pendingSystemMsgRef.current = null;
-    if (!expanded) setExpanded(true);
     void sendMessageRef.current(pending.text, { hidden: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [systemMsgTick, streaming, screenContext]);
@@ -1604,10 +1614,11 @@ export const CopilotoPanel: React.FC = () => {
     if (!offer) return;
     clearCopilotOffer();
     if (shownOffersRef.current.has(offer.key)) return;
+    // Copiloto apagado (panel cerrado): ni ayuda sola ni se abre sola.
+    if (!expandedRef.current) return;
     // Ofrecimiento de un formulario: respeta el "No volver a ofrecer".
     if (offer.assistFlow && assistOptOut) return;
     shownOffersRef.current.add(offer.key);
-    if (!expanded) setExpanded(true);
     if (offer.assistFlow) {
       // No se pregunta si quiere ayuda: se ayuda. El panel le pide a la IA que
       // arranque con la primera pregunta del formulario (ver efecto de avisos).

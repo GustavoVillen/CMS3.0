@@ -390,23 +390,19 @@ export function WoPaperForm({
       </>
     ),
 
-    // TAREA CONCLUIDA? SI / NO + RESULTADO. Debajo, lo que el sistema pide para
-    // cerrar (quién ejecutó, cuándo, horas, repuestos usados, observaciones).
+    // TAREA CONCLUIDA? SI / NO + RESULTADO. En el papel son dos casilleros
+    // chiquitos y en pantalla se perdían, aunque son la marca con la que la OT
+    // se cierra: acá quedan de sólo lectura (para que la hoja se lea completa)
+    // y se marcan abajo, en la sección 5, a todo el ancho.
     completion: () => (
       <>
         <PaperRow>
           <PaperLabelCell className="w-40 shrink-0">{label("taskCompleted")}</PaperLabelCell>
           {([["YES", "SI"], ["NO", "NO"]] as const).map(([v, lab]) => (
-            <button
-              key={v}
-              type="button"
-              disabled={!resultEditable}
-              onClick={() => onChange({ taskCompleted: values.taskCompleted === v ? "" : v })}
-              className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 transition-colors hover:bg-fg/5 disabled:opacity-70 disabled:hover:bg-transparent"
-            >
+            <div key={v} className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5">
               <PaperBox on={values.taskCompleted === v} />
               <span className="text-[11px] font-bold text-fg">{lab}</span>
-            </button>
+            </div>
           ))}
         </PaperRow>
         <PaperRow>
@@ -416,19 +412,16 @@ export function WoPaperForm({
               ["SATISFACTORY", "Satisfactorio"],
               ["WITH_DEFICIENCIES", "Con deficiencias"],
             ] as const).map(([v, lab]) => (
-              <button
-                key={v}
-                type="button"
-                disabled={!resultEditable}
-                onClick={() => onChange({ woResult: values.woResult === v ? "" : v })}
-                className="flex items-center gap-2 disabled:opacity-70"
-              >
+              <div key={v} className="flex items-center gap-2">
                 <PaperBox on={values.woResult === v} />
                 <span className={`text-[11px] ${values.woResult === v ? "font-bold text-fg" : "text-text-industrial/70"}`}>{lab}</span>
-              </button>
+              </div>
             ))}
           </PaperValueCell>
         </PaperRow>
+        <p className="border-b border-fg/25 px-2 py-1 text-[11px] italic text-text-industrial/50">
+          Se marca más abajo, en la sección 5 “Tarea concluida y resultado”.
+        </p>
         {resultExtras && <div className="border-b border-fg/25 p-2">{resultExtras}</div>}
       </>
     ),
