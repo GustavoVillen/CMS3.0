@@ -29,8 +29,10 @@ import {
   getServiceRequestSignatures,
   sendServiceRequestToProvider,
   listHojaRuta,
+  listServiceRequestLabSamples,
   listServiceRequests,
   rejectServiceRequest,
+  saveServiceRequestLabSamples,
   startServiceRequest,
   submitServiceRequest,
   unsubmitServiceRequest,
@@ -185,20 +187,39 @@ export async function handleServiceRequestsRoutes(
   if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/send-to-provider$/.test(url.pathname)) {
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as { acknowledgeMissingSampleNumbers?: boolean } | null;
     const sr = await getServiceRequest(session, id);
     const buffer = await buildServiceRequestPdf(session, id);
     const result = await sendServiceRequestToProvider(session, id, {
       filename: `${(sr as any).serviceRequestCode}.pdf`,
       buffer,
-    });
+    }, body ?? {});
     sendJson(response, 200, result);
     return true;
   }
 
   if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/start$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    sendJson(response, 200, await startServiceRequest(session, id));
+    const body = await readJsonBody(request) as Parameters<typeof startServiceRequest>[2];
+    sendJson(response, 200, await startServiceRequest(session, id, body ?? {}));
     return true;
+  }
+
+  // ── MUESTRAS QUE VIAJAN CON EL PEDIDO ─────────────────────────────────────
+  // Los números de muestra que se despachan al laboratorio. Se anotan acá, antes
+  // del envío, y son la clave con la que después se cotejan los análisis que
+  // vuelven (ver saveServiceRequestLabSamples).
+  if (/^\/app\/pms\/service-requests\/[^/]+\/lab-samples$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") {
+      sendJson(response, 200, await listServiceRequestLabSamples(session, id));
+      return true;
+    }
+    if (method === "PUT") {
+      const body = await readJsonBody(request) as Parameters<typeof saveServiceRequestLabSamples>[2];
+      sendJson(response, 200, await saveServiceRequestLabSamples(session, id, body ?? {}));
+      return true;
+    }
   }
 
   // Completar = ENTREGA / RECEPCION: exige quién recibe y si hay conformidad.

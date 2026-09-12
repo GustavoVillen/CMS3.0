@@ -1009,11 +1009,424 @@ export async function authorizeServiceRequest(session: TenantAccessSession, id: 
   return updated;
 }
 
+// ── MUESTRAS QUE VIAJAN CON LA SS (envío al laboratorio) ─────────────────────
+//
+// Cuando la SS es el pedido a un laboratorio, con ella se despachan frascos
+// numerados. Anotar esos NÚMEROS DE MUESTRA antes de mandarlos es lo que
+// después permite cotejar cada reporte que vuelve contra la muestra que lo
+// estaba esperando — en vez de adivinar el equipo por el nombre que usa el
+// laboratorio ("MOTOR PROPULSOR N1" vs "Motor Principal #1") y la fecha.
+//
+// El número se guarda en `FluidSample.labReference`, que es exactamente la clave
+// con la que la carga masiva de PDF busca la muestra. No hay registro nuevo: las
+// muestras pendientes ya nacen solas al AUTORIZAR la OT, una por rutina de
+// muestreo del plan, cada una con su equipo y su fluido.
+//
+// Quién puede: el mismo que maneja la SS (todos salvo el auditor). A propósito
+// NO se usa el permiso de Análisis de Fluidos, que hoy tienen sólo tres roles:
+// quien despacha el envío es quien tiene los frascos en la mano.
+
+export interface ServiceRequestLabSample {
+  id: string;
+  sampleCode: string;
+  assetId: string;
+  assetName: string | null;
+  kind: string;
+  fluidType: string | null;
+  labReference: string | null;
+  /** Ya llegó el análisis: la fila se muestra pero no se toca. */
+  hasResult: boolean;
+  /** Agregada a mano al numerar el envío (no sale de una rutina del plan). */
+  isExtra: boolean;
+}
+
+/**
+ * Muestras de la OT de esta SS, para el panel del envío al laboratorio.
+ *
+ * `carriesSamples` dice si ES ESTA SS la que se lleva los frascos: una OT puede
+ * tener varias SS (el laboratorio y el taller mecánico), y pedirle los números
+ * de muestra a la del taller sería ruido — y dejaría en su hoja de ruta una
+ * novedad sobre un laboratorio que no tiene nada que ver. El panel se muestra
+ * igual en todas (desde cualquiera se pueden completar los números), pero el
+ * bloqueo del envío corre sólo en la que corresponde.
+ */
+export async function listServiceRequestLabSamples(
+  session: TenantAccessSession,
+  id: string,
+): Promise<LabSamplesPayload> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const sr = await getRequestOrThrow(session, id); // tenant + vessel scope + 404
+  return labSamplesPayload(prisma, sr);
+}
+
+export interface LabSamplesPayload {
+  items: ServiceRequestLabSample[];
+  carriesSamples: boolean;
+}
+
+/** Leer y guardar devuelven lo mismo: la pantalla no tiene que adivinar la forma. */
+async function labSamplesPayload(
+  prisma: unknown,
+  sr: { tenantId: string; workOrderId: string; providerId: string | null },
+): Promise<LabSamplesPayload> {
+  const [items, carriesSamples] = await Promise.all([
+    loadLabSamples(prisma, sr.tenantId, sr.workOrderId),
+    requestCarriesSamples(prisma, sr),
+  ]);
+  return { items, carriesSamples };
+}
+
+/**
+ * ¿Es esta SS la que despacha las muestras de su OT?
+ *
+ * Se resuelve por proveedor: la rutina de muestreo del plan declara a quién se
+ * le manda (área PROVEEDOR → providerId / providerRequests), y al abrir la OT
+ * sale una SS por cada proveedor. Si el proveedor de esta SS es uno de ésos, es
+ * la del laboratorio.
+ *
+ * Cuando no hay con qué distinguir — el plan no declara proveedor, o la SS va a
+ * un taller fuera del catálogo — se responde que sí: es mejor preguntar de más
+ * (y el usuario tiene la salida de "todavía no tengo los números") que dejar
+ * salir el envío sin numerar y volver a cotejar a mano.
+ */
+async function requestCarriesSamples(
+  prisma: unknown,
+  sr: { tenantId: string; workOrderId: string; providerId: string | null },
+): Promise<boolean> {
+  const pending: Array<{ sourcePlanId: string | null }> = await (prisma as any).fluidSample.findMany({
+    where: {
+      tenantId: sr.tenantId, sourceWorkOrderId: sr.workOrderId, deletedAt: null,
+      result: { is: null },
+    },
+    select: { sourcePlanId: true },
+  });
+  if (pending.length === 0) return false;
+  if (!sr.providerId) return true;
+
+  const planIds = [...new Set(pending.map(p => p.sourcePlanId).filter((v): v is string => !!v))];
+  if (planIds.length === 0) return true; // muestras agregadas a mano: sin plan que consultar
+
+  const plans: Array<{ providerId: string | null; providerRequests: unknown }> =
+    await (prisma as any).maintenancePlan.findMany({
+      where: { id: { in: planIds }, tenantId: sr.tenantId },
+      select: { providerId: true, providerRequests: true },
+    });
+
+  const providers = new Set<string>();
+  for (const plan of plans) {
+    if (plan.providerId) providers.add(plan.providerId);
+    if (Array.isArray(plan.providerRequests)) {
+      for (const entry of plan.providerRequests as Array<{ providerId?: unknown }>) {
+        const pid = typeof entry?.providerId === "string" ? entry.providerId.trim() : "";
+        if (pid) providers.add(pid);
+      }
+    }
+  }
+  if (providers.size === 0) return true;
+  return providers.has(sr.providerId);
+}
+
+export interface SaveLabSamplesInput {
+  /** Número para una muestra que ya existe. */
+  numbers?: Array<{ sampleId: string; labReference: string | null }>;
+  /** Muestras que no salen de una rutina: re-muestreo, equipo sin plan. */
+  extras?: Array<{ assetId: string; kind?: string | null; fluidType?: string | null; labReference?: string | null }>;
+  /** Filas agregadas por error. Sólo se borran las extra sin resultado. */
+  removeSampleIds?: string[];
+}
+
+/**
+ * Guarda los números del envío. Devuelve la lista ya actualizada.
+ *
+ * El número se normaliza con la MISMA regla que el lector de PDF
+ * (`baseSampleNumber`): el laboratorio imprime "2610090842-00" y escribe
+ * "2610090842" en el nombre del archivo, y son la misma muestra. Si las dos
+ * normalizaciones se separan, el cotejo deja de encontrar nada.
+ */
+export async function saveServiceRequestLabSamples(
+  session: TenantAccessSession,
+  id: string,
+  input: SaveLabSamplesInput,
+): Promise<LabSamplesPayload> {
+  ensureCanManage(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const sr = await getRequestOrThrow(session, id);
+  // A propósito NO se usa assertNotLocked: acá no se edita la SS, se anotan los
+  // números de las muestras. Una SS COMPLETED (el laboratorio ya retiró los
+  // frascos) puede seguir necesitando que se completen números mientras los
+  // análisis no hayan llegado. Lo que no tiene sentido es numerar un pedido que
+  // se dio de baja.
+  if (sr.status === "CANCELLED" || sr.status === "REJECTED") {
+    throw new RouteError(409, "SERVICE_REQUEST_CLOSED", "La solicitud está dada de baja: no se pueden anotar muestras.");
+  }
+
+  const { baseSampleNumber, createFluidSampleFromWorkOrder, SAMPLE_KINDS, FLUID_TYPES } =
+    await import("../fluid-analyses/fluid-analyses-service");
+
+  const wo = await (prisma as any).workOrder.findFirst({
+    where: { id: sr.workOrderId, tenantId: sr.tenantId, deletedAt: null },
+    select: { id: true, workOrderCode: true, vesselCode: true },
+  });
+  if (!wo) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Orden de trabajo no encontrada.");
+
+  const existing: Array<{ id: string; sampleCode: string; sourcePlanId: string | null; resultId: string | null }> =
+    (await (prisma as any).fluidSample.findMany({
+      where: { tenantId: sr.tenantId, sourceWorkOrderId: wo.id, deletedAt: null },
+      select: { id: true, sampleCode: true, sourcePlanId: true, result: { select: { id: true } } },
+    })).map((s: any) => ({ id: s.id, sampleCode: s.sampleCode, sourcePlanId: s.sourcePlanId, resultId: s.result?.id ?? null }));
+  const byId = new Map(existing.map(s => [s.id, s]));
+
+  // ── Números: se validan TODOS antes de escribir ninguno ──
+  // Un envío se numera de una sola vez; dejar la mitad guardada y la otra mitad
+  // rechazada es peor que no guardar nada.
+  const updates: Array<{ sampleId: string; labReference: string | null; sampleCode: string }> = [];
+  const seen = new Map<string, string>(); // número → sampleCode que lo usa en este envío
+
+  for (const raw of input.numbers ?? []) {
+    const sampleId = String(raw?.sampleId ?? "").trim();
+    const sample = byId.get(sampleId);
+    if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Una de las muestras no pertenece a la orden de esta solicitud.");
+    if (sample.resultId) continue; // el análisis ya llegó: su número no se toca
+    const labReference = baseSampleNumber(raw?.labReference);
+    if (labReference) {
+      const clash = seen.get(labReference);
+      if (clash) {
+        throw new RouteError(409, "SAMPLE_NUMBER_DUPLICATED", `El número de muestra ${labReference} está repetido en este envío (${clash} y ${sample.sampleCode}).`);
+      }
+      seen.set(labReference, sample.sampleCode);
+    }
+    updates.push({ sampleId, labReference, sampleCode: sample.sampleCode });
+  }
+
+  const extras: Array<{ assetId: string; kind: string; fluidType: string | null; labReference: string | null }> = [];
+  for (const raw of input.extras ?? []) {
+    const assetId = String(raw?.assetId ?? "").trim();
+    if (!assetId) throw new RouteError(400, "FIELD_REQUIRED", "Elegí el equipo de la muestra.");
+    const asset = await (prisma as any).asset.findFirst({
+      where: { id: assetId, tenantId: sr.tenantId, vesselCode: wo.vesselCode },
+      select: { id: true },
+    });
+    if (!asset) throw new RouteError(404, "ASSET_NOT_FOUND", "El equipo no pertenece al buque de esta solicitud.");
+    const kind = SAMPLE_KINDS.includes(raw?.kind as never) ? String(raw!.kind) : "FLUID";
+    const fluidType = kind === "FLUID" && FLUID_TYPES.includes(raw?.fluidType as never)
+      ? String(raw!.fluidType)
+      : null;
+    const labReference = baseSampleNumber(raw?.labReference);
+    if (labReference) {
+      const clash = seen.get(labReference);
+      if (clash) {
+        throw new RouteError(409, "SAMPLE_NUMBER_DUPLICATED", `El número de muestra ${labReference} está repetido en este envío (${clash}).`);
+      }
+      seen.set(labReference, "nueva");
+    }
+    extras.push({ assetId, kind, fluidType, labReference });
+  }
+
+  // El número es único en toda la empresa: es la identidad que le da el
+  // laboratorio. Si ya está en otra muestra, o el número está mal tipeado o el
+  // envío se está numerando dos veces.
+  for (const number of seen.keys()) {
+    const taken = await (prisma as any).fluidSample.findFirst({
+      where: {
+        tenantId: sr.tenantId, deletedAt: null,
+        id: { notIn: updates.map(u => u.sampleId) },
+        OR: [{ labReference: number }, { labReference: { startsWith: `${number}-` } }],
+      },
+      select: { sampleCode: true, vesselCode: true },
+    });
+    if (taken) {
+      throw new RouteError(409, "SAMPLE_NUMBER_TAKEN", `El número de muestra ${number} ya está usado por ${taken.sampleCode} (${taken.vesselCode}).`);
+    }
+  }
+
+  // ── Escritura ──
+  for (const u of updates) {
+    await (prisma as any).fluidSample.update({
+      where: { id: u.sampleId },
+      data: { labReference: u.labReference, updatedByUserId: session.user.id },
+    });
+  }
+
+  for (const extra of extras) {
+    const created = await createFluidSampleFromWorkOrder({
+      tenantId:        sr.tenantId,
+      vesselCode:      wo.vesselCode,
+      assetId:         extra.assetId,
+      kind:            extra.kind as never,
+      fluidType:       extra.fluidType as never,
+      workOrderId:     wo.id,
+      workOrderCode:   wo.workOrderCode,
+      // Sin rutina del plan detrás: es una muestra agregada al despachar el
+      // envío, no la ejecución de un ítem del PDM.
+      planId:          null,
+      runningHours:    null,
+      completedAt:     new Date(),
+      createdByUserId: session.user.id,
+      notes:           `Agregada al numerar el envío al laboratorio de ${sr.serviceRequestCode}.`,
+    });
+    if (created && extra.labReference) {
+      await (prisma as any).fluidSample.update({
+        where: { id: created.id },
+        data: { labReference: extra.labReference, updatedByUserId: session.user.id },
+      });
+    }
+  }
+
+  for (const rawId of input.removeSampleIds ?? []) {
+    const sample = byId.get(String(rawId ?? "").trim());
+    if (!sample) continue;
+    // Sólo las agregadas a mano y sin resultado: una muestra que sale de una
+    // rutina del plan es evidencia de que ese ítem se ejecutó, y no se borra
+    // desde acá.
+    if (sample.sourcePlanId || sample.resultId) {
+      throw new RouteError(409, "SAMPLE_NOT_REMOVABLE", `${sample.sampleCode} sale de una rutina del plan o ya tiene resultado: no se puede quitar del envío.`);
+    }
+    await (prisma as any).fluidSample.update({
+      where: { id: sample.id },
+      data: { deletedAt: new Date(), deletedByUserId: session.user.id },
+    });
+  }
+
+  void publishAudit(prisma, {
+    tenantId: sr.tenantId,
+    actorUserId: session.user.id,
+    action: "ServiceRequest.labSampleNumbers",
+    entityType: "ServiceRequest",
+    entityId: sr.id,
+    metadata: {
+      serviceRequestCode: sr.serviceRequestCode,
+      workOrderCode: wo.workOrderCode,
+      numbered: updates.filter(u => !!u.labReference).length,
+      added: extras.length,
+      removed: (input.removeSampleIds ?? []).length,
+    },
+  });
+
+  return labSamplesPayload(prisma, sr);
+}
+
+async function loadLabSamples(
+  prisma: unknown,
+  tenantId: string,
+  workOrderId: string,
+): Promise<ServiceRequestLabSample[]> {
+  const rows: any[] = await (prisma as any).fluidSample.findMany({
+    where: { tenantId, sourceWorkOrderId: workOrderId, deletedAt: null },
+    select: {
+      id: true, sampleCode: true, assetId: true, kind: true, fluidType: true,
+      labReference: true, sourcePlanId: true, result: { select: { id: true } },
+    },
+    orderBy: { sampleCode: "asc" },
+  });
+  if (rows.length === 0) return [];
+
+  // Nombre del equipo, nunca el código (ver CLAUDE.md "Nombres, no códigos").
+  const assetIds = [...new Set(rows.map(r => r.assetId).filter(Boolean))];
+  const assets: Array<{ id: string; name: string | null; assetCode: string | null }> =
+    await (prisma as any).asset.findMany({
+      where: { id: { in: assetIds }, tenantId },
+      select: { id: true, name: true, assetCode: true },
+    });
+  const nameOf = new Map(assets.map(a => [a.id, a.name ?? a.assetCode ?? null]));
+
+  return rows.map(r => ({
+    id: r.id,
+    sampleCode: r.sampleCode,
+    assetId: r.assetId,
+    assetName: nameOf.get(r.assetId) ?? null,
+    kind: r.kind,
+    fluidType: r.fluidType,
+    labReference: r.labReference,
+    hasResult: !!r.result?.id,
+    isExtra: r.sourcePlanId == null,
+  }));
+}
+
+/**
+ * Muestras del envío que todavía no tienen número. Son las que, si el reporte
+ * llega antes de que alguien las numere, hay que cotejar a mano.
+ */
+async function countUnnumberedLabSamples(
+  prisma: unknown,
+  tenantId: string,
+  workOrderId: string,
+): Promise<number> {
+  return (prisma as any).fluidSample.count({
+    where: {
+      tenantId, sourceWorkOrderId: workOrderId, deletedAt: null,
+      labReference: null,
+      result: { is: null },
+    },
+  });
+}
+
+/**
+ * Gate del envío: si el pedido lleva muestras sin numerar, no sale.
+ *
+ * No es un bloqueo duro: el usuario puede seguir declarando que todavía no tiene
+ * los números (`acknowledgeMissingSampleNumbers`), y entonces eso queda asentado
+ * en la HOJA DE RUTA del pedido. Los números se completan después, mientras la
+ * muestra no tenga resultado. Un bloqueo sin salida dejaría el envío trabado
+ * cuando el laboratorio numera al recibir.
+ */
+async function ensureLabSamplesNumbered(
+  prisma: unknown,
+  sr: { tenantId: string; workOrderId: string; providerId: string | null },
+  acknowledged: boolean,
+): Promise<{ carries: boolean; missing: number }> {
+  // Sólo la SS que se lleva los frascos: la del taller mecánico de la misma OT
+  // no tiene por qué saber nada de números de muestra.
+  const carries = await requestCarriesSamples(prisma, sr);
+  if (!carries) return { carries: false, missing: 0 };
+  const missing = await countUnnumberedLabSamples(prisma, sr.tenantId, sr.workOrderId);
+  if (missing > 0 && !acknowledged) {
+    // El frontend ya tiene la lista de muestras del envío y arma el aviso con
+    // su propio idioma: acá alcanza el código. Éste es el cinturón de seguridad
+    // para cualquier otro cliente que llame al endpoint.
+    throw new RouteError(
+      409,
+      "SAMPLE_NUMBERS_MISSING",
+      `Faltan los números de ${missing} muestra(s) del envío. Son los que después permiten cotejar el análisis que vuelve del laboratorio.`,
+    );
+  }
+  return { carries: true, missing };
+}
+
+/** Novedad en la hoja de ruta cuando el envío salió sin numerar. */
+async function logUnnumberedSend(
+  prisma: unknown,
+  session: TenantAccessSession,
+  sr: { id: string; tenantId: string },
+  missing: number,
+): Promise<void> {
+  if (missing <= 0) return;
+  const asientaByName = `${session.user.firstName ?? ""} ${session.user.lastName ?? ""}`.trim() || session.user.email;
+  try {
+    await (prisma as any).serviceRequestLog.create({
+      data: {
+        tenantId: sr.tenantId,
+        serviceRequestId: sr.id,
+        entryDate: new Date(),
+        novedad: `Enviada al laboratorio sin los números de muestra (${missing} pendiente(s) de numerar)`,
+        asientaByName,
+        asientaByUserId: session.user.id,
+        createdByUserId: session.user.id,
+      },
+    });
+  } catch { /* el envío ya pasó: no se cae por no poder asentar la novedad */ }
+}
+
 /**
  * AUTORIZADA → IN_PROGRESS. El taller no arranca sin autorización: éste es el
  * punto donde el gate se vuelve efectivo.
  */
-export async function startServiceRequest(session: TenantAccessSession, id: string) {
+export async function startServiceRequest(
+  session: TenantAccessSession,
+  id: string,
+  payload: { acknowledgeMissingSampleNumbers?: boolean } = {},
+) {
   ensureCanManage(session);
   const prisma = getPrismaClient()!;
   const current = await getRequestOrThrow(session, id);
@@ -1024,10 +1437,13 @@ export async function startServiceRequest(session: TenantAccessSession, id: stri
       "La solicitud debe estar autorizada por el DPA / Director de Operaciones antes de mandar el trabajo al taller.",
     );
   }
-  return (prisma as any).serviceRequest.update({
+  const samples = await ensureLabSamplesNumbered(prisma, current, !!payload.acknowledgeMissingSampleNumbers);
+  const updated = await (prisma as any).serviceRequest.update({
     where: { id },
     data: { status: "IN_PROGRESS", startedAt: new Date(), updatedByUserId: session.user.id },
   });
+  await logUnnumberedSend(prisma, session, current, samples.missing);
+  return updated;
 }
 
 /**
@@ -1071,6 +1487,7 @@ export async function sendServiceRequestToProvider(
   session: TenantAccessSession,
   id: string,
   pdf: { filename: string; buffer: Buffer },
+  payload: { acknowledgeMissingSampleNumbers?: boolean } = {},
 ): Promise<SendToProviderResult> {
   ensureCanManage(session);
   const prisma = getPrismaClient()!;
@@ -1082,6 +1499,11 @@ export async function sendServiceRequestToProvider(
       "La solicitud debe estar autorizada por el DPA / Director de Operaciones antes de mandar el trabajo al taller.",
     );
   }
+  // Antes del correo: si el envío lleva muestras sin numerar, no sale (salvo que
+  // el usuario ya haya declarado que todavía no tiene los números).
+  const samples = await ensureLabSamplesNumbered(
+    prisma, current, !!payload.acknowledgeMissingSampleNumbers,
+  );
 
   const to = providerMailbox();
   if (!isMailConfigured()) return { sent: false, to: [to], reason: "NOT_CONFIGURED" };
@@ -1100,6 +1522,14 @@ export async function sendServiceRequestToProvider(
     : normalizeOptionalText(current.tallerNotes);
   const servicio = normalizeOptionalText(current.description) ?? normalizeOptionalText(current.title);
 
+  // Muestras que viajan con el pedido, con su número y su equipo: es la lista de
+  // lo que se despachó y le sirve al laboratorio para identificar cada frasco.
+  const muestras = samples.carries
+    ? (await loadLabSamples(prisma, current.tenantId, current.workOrderId))
+        .filter(s => !s.hasResult)
+        .map(s => `  · ${s.labReference ?? "(sin número)"} — ${s.assetName ?? s.assetId} (${s.sampleCode})`)
+    : [];
+
   const result = await sendMail({
     to,
     subject: `Solicitud de Servicio ${current.serviceRequestCode} — ${vesselName}`,
@@ -1109,6 +1539,7 @@ export async function sendServiceRequestToProvider(
       `Adjunto la Solicitud de Servicio ${current.serviceRequestCode} del buque ${vesselName}.`,
       taller ? `Taller: ${taller}` : null,
       servicio ? `Servicio solicitado: ${servicio}` : null,
+      ...(muestras.length > 0 ? ["", "Muestras que se envían:", ...muestras] : []),
       "",
       "Quedamos a la espera de confirmación.",
       "",
@@ -1142,6 +1573,7 @@ export async function sendServiceRequestToProvider(
     where: { id },
     data: { status: "IN_PROGRESS", startedAt: new Date(), updatedByUserId: session.user.id },
   });
+  await logUnnumberedSend(prisma, session, current, samples.missing);
 
   return { sent: true, to: result.to, serviceRequest };
 }

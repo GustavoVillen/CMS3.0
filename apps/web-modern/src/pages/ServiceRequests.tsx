@@ -33,6 +33,8 @@ import {
 } from "../components/service-requests/SsPaperForm";
 import { downloadDocx } from "../lib/download-docx";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
+import { LabSamplesPanel, countUnnumbered, type LabSamplesData } from "../components/service-requests/LabSamplesPanel";
+import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { PersonSelect } from "../components/PersonSelect";
 import { useT } from "../lib/i18n";
@@ -656,7 +658,7 @@ export function ServiceRequestsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader icon={Handshake} title="Solicitudes de Servicio" total={shownCount} onReload={reload}>
+      <PageHeader kind="serviceRequest" icon={Handshake} title="Solicitudes de Servicio" total={shownCount} onReload={reload}>
         <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
           <button
             type="button"
@@ -1200,6 +1202,16 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
   // lo bloquea igual (record lock), esto sólo evita ofrecerlo.
   const editable = !LOCKED_STATUSES.includes(sr.status);
 
+  // ── Muestras que viajan con el pedido ──
+  // Las que la OT dejó abiertas al autorizarse (una por rutina de muestreo).
+  // `reload()` y no un contador en las deps: useFetch cachea 30 s y el número
+  // recién anotado tiene que aparecer en el acto (mismo criterio que HojaRutaBox).
+  const { data: labSamples, reload: reloadLabSamples } =
+    useFetch<LabSamplesData>(`/app/pms/service-requests/${sr.id}/lab-samples`, [sr.id]);
+  // Aviso "faltan números": guarda cuántas faltan según el servidor, para que el
+  // texto no salga con un número viejo.
+  const [numbersWarning, setNumbersWarning] = useState<number | null>(null);
+
   // ── Recuadros editables del formulario ──
   // Van todos juntos porque la hoja los edita como un solo bloque (ver
   // SsPaperForm): el papel es un formulario, no una lista de campos sueltos.
@@ -1569,15 +1581,33 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
    * cuerpo ya armados, para que lo adjunte y lo mande desde su cuenta (un
    * mailto: no puede adjuntar archivos solo).
    */
-  const sendToProvider = async () => {
+  const sendToProvider = async (opts?: { acknowledgeMissingSampleNumbers?: boolean }) => {
     setActionError(null);
+    // Si el envío lleva muestras sin numerar, primero se avisa: sin el número,
+    // el análisis que vuelva del laboratorio hay que cotejarlo a mano. El
+    // usuario puede seguir igual, y eso queda asentado en la hoja de ruta.
+    //
+    // Se relee del servidor en vez de mirar el estado de la pantalla: el número
+    // se guarda al salir del campo, y tipear + clickear "Enviar" de corrido deja
+    // el guardado en vuelo. Con el estado viejo el aviso salía de más.
+    if (!opts?.acknowledgeMissingSampleNumbers) {
+      try {
+        const fresh = await api.get<LabSamplesData>(`/app/pms/service-requests/${sr.id}/lab-samples`);
+        const faltan = countUnnumbered(fresh);
+        if (faltan > 0) { setNumbersWarning(faltan); return; }
+      } catch {
+        // Si no se pudo consultar, manda el gate del backend: el envío se
+        // intenta igual y allá se rechaza si faltan números.
+      }
+    }
     const fresh = await saveIfDirty();
     if (!fresh) return;
 
+    const ack = { acknowledgeMissingSampleNumbers: !!opts?.acknowledgeMissingSampleNumbers };
     setBusy(true);
     try {
       const r = await api.post<{ sent: boolean; to: string[]; reason?: string; error?: string }>(
-        `/app/pms/service-requests/${fresh.id}/send-to-provider`, {});
+        `/app/pms/service-requests/${fresh.id}/send-to-provider`, ack);
       if (r.sent) {
         setSentNotice({ mailedTo: r.to.join(", ") });
         return;
@@ -1593,7 +1623,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
         return;
       }
       openProviderEmailDraft(fresh, vesselName);
-      await act("start", undefined, { keepOpen: true });
+      await act("start", ack, { keepOpen: true });
       setSentNotice({ mailedTo: null });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "No se pudo completar la acción.");
@@ -1632,15 +1662,22 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
       <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
         {/* sticky: el formulario es largo — el código, el estado y la X tienen que
             seguir a la vista mientras se scrollea. El scroll lo hace la tarjeta. */}
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-4 bg-bg border-b border-fg/10">
-          <div className="min-w-0">
-            <p className="font-mono text-sm font-bold text-accent">{sr.serviceRequestCode}</p>
-            {sr.workOrder?.assetName && (
-              <p className="text-sm font-semibold text-fg truncate">{sr.workOrder.assetName}</p>
-            )}
-            {/* Sigue al campo mientras se tipea: el encabezado y la DESCRIPCIÓN
-                DEL SERVICIO son el mismo dato, no pueden decir cosas distintas. */}
-            <p className="text-xs text-text-industrial/60 truncate">{form.description || sr.title || "—"}</p>
+        <div className={`sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-4 bg-bg border-b border-fg/10 ${recordHeaderClass("serviceRequest")}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Identidad del registro: la OT y la SS son la misma hoja de
+                documento controlado, y sin esto sólo las distinguía el código del
+                formulario en letra chica. Ver lib/record-identity.tsx. */}
+            <Handshake className={`w-4 h-4 shrink-0 ${RECORD_IDENTITY.serviceRequest.text}`} />
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("ss.entityLabel")}</p>
+              <p className={`font-mono text-sm font-bold ${RECORD_IDENTITY.serviceRequest.text}`}>{sr.serviceRequestCode}</p>
+              {sr.workOrder?.assetName && (
+                <p className="text-sm font-semibold text-fg truncate">{sr.workOrder.assetName}</p>
+              )}
+              {/* Sigue al campo mientras se tipea: el encabezado y la DESCRIPCIÓN
+                  DEL SERVICIO son el mismo dato, no pueden decir cosas distintas. */}
+              <p className="text-xs text-text-industrial/60 truncate">{form.description || sr.title || "—"}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[sr.status] ?? STATUS_COLORS.DRAFT}`}>
@@ -1713,6 +1750,21 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
               })
             }
           />
+
+          {/* Muestras que viajan con el pedido. Va fuera del formulario de papel
+              a propósito: REGI-MAN-02.4 no tiene este bloque, y es información
+              de seguimiento del envío, no parte del documento que se firma. */}
+          {labSamples && labSamples.items.length > 0 && (
+            <div className="mt-3">
+              <LabSamplesPanel
+                srId={sr.id}
+                data={labSamples}
+                editable={editable}
+                vesselCode={sr.vesselCode}
+                onChanged={reloadLabSamples}
+              />
+            </div>
+          )}
 
           {puedeCorregirFirmas && (
             <p className="mt-2 text-[10px] text-text-industrial/40 italic">
@@ -1790,7 +1842,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           )}
 
           {sr.status === "AUTORIZADA" && (
-            <button onClick={() => { void sendToProvider(); }} disabled={busy}
+            <button onClick={() => { void sendToProvider({}); }} disabled={busy}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 disabled:opacity-50">
               <Play className="w-3.5 h-3.5" /> Enviar al Proveedor
             </button>
@@ -1870,6 +1922,36 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           onClose={() => setTramita(null)}
           onDone={() => { setTramita(null); onChanged(); }}
         />
+      )}
+      {/* Faltan números de muestra: se avisa antes de despachar el envío. No es
+          un bloqueo sin salida — el laboratorio a veces numera al recibir — pero
+          seguir sin los números queda asentado en la hoja de ruta. */}
+      {numbersWarning !== null && (
+        <FormModal
+          title={t("ss.labSamples.blockTitle")}
+          subtitle={sr.serviceRequestCode}
+          onClose={() => setNumbersWarning(null)}
+          footer={
+            <>
+              <button type="button" onClick={() => setNumbersWarning(null)}
+                className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold">
+                {t("ss.labSamples.blockComplete")}
+              </button>
+              <button type="button" disabled={busy}
+                onClick={() => {
+                  setNumbersWarning(null);
+                  void sendToProvider({ acknowledgeMissingSampleNumbers: true });
+                }}
+                className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-[11px] font-bold text-text-industrial/70 hover:border-amber-500/40 disabled:opacity-50">
+                {t("ss.labSamples.blockSend")}
+              </button>
+            </>
+          }
+        >
+          <p className="text-sm text-text-industrial">
+            {t("ss.labSamples.blockBody").replace("{n}", String(numbersWarning))}
+          </p>
+        </FormModal>
       )}
       {sentNotice && (
         <FormModal

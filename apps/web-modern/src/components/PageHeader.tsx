@@ -2,6 +2,7 @@ import React from "react";
 import { RefreshCw, ArrowLeft, type LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
+import { RECORD_IDENTITY, type RecordKind } from "../lib/record-identity";
 
 interface PageHeaderProps {
   icon: LucideIcon;
@@ -14,6 +15,13 @@ interface PageHeaderProps {
    * entrada y no tiene sentido salir hacia atrás.
    */
   hideBack?: boolean;
+  /**
+   * Entidad de la pantalla, cuando es una de las tres que se confunden entre sí
+   * (Plan de Mantenimiento / OT / SS). Pinta el recuadro del ícono con su color,
+   * el mismo que lleva la ventana del registro. Sin esto, las tres pantallas
+   * tienen el encabezado idéntico y sólo cambia el ícono.
+   */
+  kind?: RecordKind;
 }
 
 /**
@@ -44,13 +52,13 @@ const BackButton: React.FC = () => {
 };
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
-  icon: Icon, title, total, onReload, children, hideBack,
+  icon: Icon, title, total, onReload, children, hideBack, kind,
 }) => (
   <div className="flex items-center justify-between gap-4 flex-wrap">
     <div className="flex items-center gap-3">
       {!hideBack && <BackButton />}
-      <div className="p-2 rounded-xl bg-accent/10 border border-accent/20">
-        <Icon className="w-5 h-5 text-accent" />
+      <div className={`p-2 rounded-xl border ${kind ? RECORD_IDENTITY[kind].box : "bg-accent/10 border-accent/20"}`}>
+        <Icon className={`w-5 h-5 ${kind ? RECORD_IDENTITY[kind].text : "text-accent"}`} />
       </div>
       <div>
         <h2 className="text-lg font-bold text-fg">{title}</h2>

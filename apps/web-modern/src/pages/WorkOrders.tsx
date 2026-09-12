@@ -35,6 +35,7 @@ import {
 } from "../lib/wo-form-catalog";
 import { useAuth, useCan } from "../lib/auth";
 import { useRoleHasPermission } from "../lib/role-permissions";
+import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext } from "../lib/copilot-context";
@@ -2234,12 +2235,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
+      {/* overflow-hidden: la franja de identidad es un borde superior y sin esto
+          asomaba fuera de las esquinas redondeadas. El cuerpo scrollea aparte. */}
+      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
+        {/* Header — lleva la identidad del registro (franja de color arriba, más
+            el ícono y el nombre de la entidad): la OT y la SS son la misma hoja
+            de documento controlado. Ver lib/record-identity.tsx. */}
+        <div className={`flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0 ${recordHeaderClass("workOrder")}`}>
           <div className="flex items-center gap-3 min-w-0">
-            <Wrench className="w-4 h-4 text-accent shrink-0" />
+            <Wrench className={`w-4 h-4 shrink-0 ${RECORD_IDENTITY.workOrder.text}`} />
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("wo.entityLabel")}</p>
               {/* El equipo va SIEMPRE junto al código: sin él hay que bajar hasta
@@ -2247,7 +2252,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   Se muestra el NOMBRE, nunca el id interno: si el nombre no está
                   resuelto, se omite (un cuid no le dice nada a nadie). */}
               <div className="flex items-baseline gap-1.5 min-w-0">
-                <h2 className="text-sm font-bold text-fg font-mono shrink-0">{workOrder.workOrderCode}</h2>
+                <h2 className={`text-sm font-bold font-mono shrink-0 ${RECORD_IDENTITY.workOrder.text}`}>{workOrder.workOrderCode}</h2>
                 {detailAssetNames.length > 0 && (
                   <span className="text-sm text-text-industrial/70 truncate" title={detailAssetNames.join(", ")}>
                     · {detailAssetNames.length > 1
@@ -4737,7 +4742,7 @@ export const WorkOrdersPage: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Wrench} title={t("page.workOrders")} total={shownCount} onReload={reload}>
+      <PageHeader kind="workOrder" icon={Wrench} title={t("page.workOrders")} total={shownCount} onReload={reload}>
         {canCreate && (
           <button onClick={() => setShowNewWoWizard(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}

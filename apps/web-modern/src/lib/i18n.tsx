@@ -483,6 +483,9 @@ const dict = {
   "mp.selectSfiGroupRequired": { es: "Debe seleccionar el grupo SFI.", en: "Must select SFI group.", pt: "Deve selecionar o grupo SFI." },
   "mp.triggerResultMode": { es: "Modo de resultado",      en: "Result mode",              pt: "Modo de resultado" },
   "mp.newPlan":           { es: "Nuevo Plan",             en: "New Plan",                 pt: "Novo Plano" },
+  // Nombre de la entidad en SINGULAR: identifica un registro abierto, no la
+  // pantalla (que va en plural). Ver lib/record-identity.tsx.
+  "mp.entityLabel":       { es: "Plan de Mantenimiento",  en: "Maintenance Plan",         pt: "Plano de Manutenção" },
   "mp.taskType":              { es: "Tipo de tarea",      en: "Task type",                pt: "Tipo de tarefa" },
   "mp.taskType.MAINTENANCE":  { es: "Mant",               en: "Maint",                    pt: "Mant" },
   "mp.taskType.INSPECTION":   { es: "Insp",               en: "Insp",                     pt: "Insp" },
@@ -1319,6 +1322,8 @@ const dict = {
   "fa.batch.reportSays":     { es: "El reporte dice: {text}",       en: "The report says: {text}",           pt: "O relatório diz: {text}" },
   "fa.batch.actionCreate":   { es: "Se crea la muestra",            en: "Sample will be created",            pt: "A amostra será criada" },
   "fa.batch.actionAttach":   { es: "Se completa {code}",            en: "Completes {code}",                  pt: "Completa {code}" },
+  "fa.batch.matchByNumber":  { es: "Por N° de muestra",             en: "Matched by sample number",          pt: "Pelo N° da amostra" },
+  "fa.batch.matchByAssetDate": { es: "Por equipo y fecha",          en: "Matched by asset and date",         pt: "Por equipamento e data" },
   "fa.batch.actionDuplicate":{ es: "Ya cargado ({code})",           en: "Already loaded ({code})",           pt: "Já carregado ({code})" },
   "fa.batch.actionBlocked":  { es: "Falta completar",               en: "Missing data",                      pt: "Falta completar" },
   "fa.batch.failedTitle":    { es: "Archivos que no se pudieron leer", en: "Files that could not be read",   pt: "Arquivos que não puderam ser lidos" },
@@ -1344,6 +1349,7 @@ const dict = {
   "fa.batch.warn.assetLow":       { es: "Equipo dudoso: verificalo",     en: "Uncertain equipment: check it",   pt: "Equipamento duvidoso: verifique" },
   "fa.batch.warn.noNumber":       { es: "Sin número de muestra: no se puede chequear duplicado", en: "No sample number: duplicates can't be checked", pt: "Sem número de amostra: não é possível verificar duplicados" },
   "fa.batch.warn.numberMismatch": { es: "El número del archivo no coincide con el del reporte", en: "The file number doesn't match the report", pt: "O número do arquivo não coincide com o do relatório" },
+  "fa.batch.warn.numberOtherVessel": { es: "El N° de muestra está anotado en otro buque que el del reporte: revisá antes de confirmar", en: "The sample number belongs to a different vessel than the report's: check before confirming", pt: "O N° da amostra está anotado em outra embarcação que a do relatório: verifique antes de confirmar" },
   "fa.batch.warn.noDate":         { es: "Sin fecha de muestreo",         en: "No sampling date",                pt: "Sem data de coleta" },
   "fa.batch.warn.noVerdict":      { es: "Sin veredicto del laboratorio", en: "No lab verdict",                  pt: "Sem veredito do laboratório" },
   "fa.batch.warn.verdictMismatch":{ es: "Se tomó el veredicto del nombre del archivo", en: "Verdict taken from the file name", pt: "Veredito tirado do nome do arquivo" },
@@ -1492,6 +1498,32 @@ const dict = {
   "sr.noResults":           { es: "Sin resultados",                    en: "No results",                          pt: "Sem resultados" },
   "sr.selectVesselFirst":   { es: "seleccioná un buque primero",       en: "select a vessel first",               pt: "selecione uma embarcação primeiro" },
   "sr.noStock":             { es: "SIN STOCK",                         en: "NO STOCK",                            pt: "SEM ESTOQUE" },
+
+  // Solicitudes de Servicio (SS). Prefijo "ss." — el prefijo "sr." es de
+  // SpareRequests / Solicitudes de Repuestos.
+  "ss.entityLabel":             { es: "Solicitud de Servicio",             en: "Service Request",                     pt: "Solicitação de Serviço" },
+
+  // Muestras que viajan con el pedido al laboratorio.
+  "ss.labSamples.title":        { es: "Muestras que se envían al laboratorio", en: "Samples sent to the lab",          pt: "Amostras enviadas ao laboratório" },
+  "ss.labSamples.hint":         { es: "Anotá el número de cada frasco antes de despachar el envío. Es el número con el que después se reconoce solo el análisis que vuelve.", en: "Write down each bottle's number before dispatching. It is the number that later matches the incoming report on its own.", pt: "Anote o número de cada frasco antes de despachar o envio. É o número com o qual a análise que retorna é reconhecida sozinha." },
+  "ss.labSamples.colAsset":     { es: "Equipo",                            en: "Asset",                               pt: "Equipamento" },
+  "ss.labSamples.colKind":      { es: "Tipo",                              en: "Type",                                pt: "Tipo" },
+  "ss.labSamples.colNumber":    { es: "N° de muestra",                     en: "Sample number",                       pt: "N° da amostra" },
+  "ss.labSamples.numberPh":     { es: "N° del laboratorio",                en: "Lab number",                          pt: "N° do laboratório" },
+  "ss.labSamples.missing":      { es: "Sin numerar ({n})",                 en: "Not numbered ({n})",                  pt: "Sem numerar ({n})" },
+  "ss.labSamples.allNumbered":  { es: "Todas numeradas",                   en: "All numbered",                        pt: "Todas numeradas" },
+  "ss.labSamples.hasResult":    { es: "Análisis recibido",                 en: "Report received",                     pt: "Análise recebida" },
+  "ss.labSamples.add":          { es: "Agregar muestra",                   en: "Add sample",                          pt: "Adicionar amostra" },
+  "ss.labSamples.addConfirm":   { es: "Agregar",                           en: "Add",                                 pt: "Adicionar" },
+  "ss.labSamples.pickAsset":    { es: "Elegí el equipo",                   en: "Pick the asset",                      pt: "Escolha o equipamento" },
+  "ss.labSamples.pickAssetFirst": { es: "Elegí primero el equipo de la muestra.", en: "Pick the sample's asset first.", pt: "Escolha primeiro o equipamento da amostra." },
+  "ss.labSamples.remove":       { es: "Quitar del envío",                  en: "Remove from the shipment",            pt: "Remover do envio" },
+  "ss.labSamples.saveFailed":   { es: "No se pudieron guardar los números.", en: "Could not save the numbers.",       pt: "Não foi possível salvar os números." },
+  "ss.labSamples.assetsFailed": { es: "No se pudo cargar la lista de equipos.", en: "Could not load the asset list.",  pt: "Não foi possível carregar a lista de equipamentos." },
+  "ss.labSamples.blockTitle":   { es: "Faltan números de muestra",         en: "Missing sample numbers",              pt: "Faltam números de amostra" },
+  "ss.labSamples.blockBody":    { es: "{n} muestra(s) del envío no tienen número. Sin el número, el análisis que vuelva del laboratorio hay que cotejarlo a mano.", en: "{n} sample(s) in this shipment have no number. Without it, the incoming report has to be matched by hand.", pt: "{n} amostra(s) do envio não têm número. Sem o número, a análise que retornar precisa ser conferida à mão." },
+  "ss.labSamples.blockComplete": { es: "Completar los números",            en: "Fill in the numbers",                 pt: "Completar os números" },
+  "ss.labSamples.blockSend":    { es: "Enviar sin los números",            en: "Send without the numbers",            pt: "Enviar sem os números" },
 
   // Permits
   "pm.title":               { es: "Permiso de trabajo",                en: "Work permit",                         pt: "Permissão de trabalho" },

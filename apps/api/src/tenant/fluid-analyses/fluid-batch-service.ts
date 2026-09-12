@@ -27,7 +27,7 @@ import { extractFluidReport } from "./fluid-analyses-ai-extractor";
 import { matchAssetByAi, loadVesselAssets, type AssetCandidate } from "../ai/asset-ai-match";
 import {
   ensureCanManageFluidAnalyses, createFluidSample, updateFluidSample, upsertFluidResult,
-  linkFluidSampleToWorkOrder,
+  linkFluidSampleToWorkOrder, baseSampleNumber,
   FLUID_TYPES, VERDICTS, type FluidType, type Verdict,
 } from "./fluid-analyses-service";
 import { openFormalWorkOrder } from "../maintenance-plans/maintenance-plans-service";
@@ -48,7 +48,13 @@ export type BatchWarning =
   | "VERDICT_MISSING"
   | "VERDICT_MISMATCH"        // el veredicto del nombre del archivo no es el que leyó la IA
   | "FLUID_TYPE_ASSUMED"
-  | "NO_PARAMETERS";           // la IA no pudo leer ningún parámetro del reporte
+  | "NO_PARAMETERS"            // la IA no pudo leer ningún parámetro del reporte
+  | "SAMPLE_NUMBER_OTHER_VESSEL"; // el nº de muestra es de otro buque que el del reporte
+
+/** Cómo se encontró la muestra pendiente que espera este resultado. */
+export type AttachMatch =
+  | "SAMPLE_NUMBER"    // el número anotado al despachar el envío: cruce exacto
+  | "ASSET_AND_DATE";  // equipo + fecha dentro de 45 días: inferencia
 
 export interface BatchScanRow {
   fileName: string;
@@ -76,8 +82,20 @@ export interface BatchScanRow {
 
   /** Muestra ya cargada con el mismo número de laboratorio. Si viene, no se guarda nada. */
   duplicateOf: { id: string; sampleCode: string; vesselCode: string } | null;
-  /** Muestra pendiente (creada al autorizar una OT) a la que le corresponde este resultado. */
-  attachTo: { id: string; sampleCode: string; sampledAt: string } | null;
+  /**
+   * Muestra pendiente (creada al autorizar una OT) a la que le corresponde este
+   * resultado, con la OT y el pedido al laboratorio de los que salió.
+   * `matchedBy` dice de dónde salió el cruce: el número de muestra es exacto; el
+   * de equipo + fecha es una conjetura y se muestra distinto.
+   */
+  attachTo: {
+    id: string;
+    sampleCode: string;
+    sampledAt: string;
+    matchedBy: AttachMatch;
+    workOrderCode: string | null;
+    serviceRequestCodes: string[];
+  } | null;
 
   aiNotes: string | null;
   warnings: BatchWarning[];
@@ -149,7 +167,7 @@ export async function scanFluidReportForBatch(
     sampleNumber: hints.sampleNumber,
   });
 
-  const vesselCode = preVessel ?? pickVessel(vessels, null, [
+  const vesselFromReport = preVessel ?? pickVessel(vessels, null, [
     extracted.vesselReferenceText.value ?? "",
   ]);
 
@@ -167,7 +185,34 @@ export async function scanFluidReportForBatch(
     warnings.push("SAMPLE_NUMBER_MISMATCH");
   }
   if (!sampleNumber) warnings.push("SAMPLE_NUMBER_MISSING");
+
+  // ── ¿Ya estaba cargado? ──
+  // Duplicado es SÓLO la muestra que ya tiene resultado. Una muestra con el
+  // mismo número y sin resultado no es un duplicado: es justamente la que se
+  // mandó al laboratorio esperando este reporte.
+  const duplicateOf = sampleNumber
+    ? await findLoadedByLabReference(prisma, tenantId, sampleNumber)
+    : null;
+
+  // ── El número de muestra manda ──
+  // Cuando el número quedó anotado al mandar el envío al laboratorio (panel de
+  // la SS), la muestra pendiente ya dice de qué buque y de qué equipo es el
+  // reporte. Eso no se discute con la conjetura de la IA: se usa tal cual, y de
+  // paso se ahorra la identificación de equipo por nombre parecido, que es el
+  // paso que puede ensuciar la tendencia de otro equipo.
+  const pendingByNumber = (!duplicateOf && sampleNumber)
+    ? await findPendingByLabReference(prisma, tenantId, sampleNumber, vessels.map(v => v.code))
+    : null;
+
+  const vesselCode = pendingByNumber?.vesselCode ?? vesselFromReport;
   if (!vesselCode) warnings.push("VESSEL_NOT_RESOLVED");
+  // El número gana (lo tipeó una persona al despachar el envío, y es único),
+  // pero si contradice al buque que dice el reporte hay algo mal: o el número
+  // se anotó en la muestra equivocada, o el reporte no es de ese buque. Se avisa
+  // fuerte para que el revisor lo mire antes de confirmar.
+  if (pendingByNumber && vesselFromReport && vesselFromReport !== pendingByNumber.vesselCode) {
+    warnings.push("SAMPLE_NUMBER_OTHER_VESSEL");
+  }
 
   // ── Equipo ──
   let assetId: string | null = null;
@@ -176,7 +221,11 @@ export async function scanFluidReportForBatch(
   let assetReason: string | null = null;
   const assetText = extracted.assetReferenceText.value ?? stripExtension(fileName);
 
-  if (vesselCode) {
+  if (pendingByNumber) {
+    assetId = pendingByNumber.assetId;
+    assetName = pendingByNumber.assetName;
+    assetConfidence = "high";
+  } else if (vesselCode) {
     const candidates: AssetCandidate[] = await loadVesselAssets(session, vesselCode);
     const match = await matchAssetByAi(session, vesselCode, assetText, {
       candidates,
@@ -221,15 +270,17 @@ export async function scanFluidReportForBatch(
   const parameters = flattenParameters(extracted.parameters);
   if (Object.keys(parameters).length === 0) warnings.push("NO_PARAMETERS");
 
-  // ── ¿Ya estaba cargado? ──
-  const duplicateOf = sampleNumber
-    ? await findByLabReference(prisma, tenantId, sampleNumber)
-    : null;
-
   // ── ¿Hay una muestra pendiente esperando este resultado? ──
-  const attachTo = (!duplicateOf && vesselCode && assetId && sampledAt)
-    ? await findPendingSample(prisma, tenantId, vesselCode, assetId, sampledAt)
+  // Primero el número (exacto, y trae su propio equipo); si no hay número
+  // anotado, se cae a la heurística de equipo + fecha, que es una conjetura.
+  const heuristic = (!duplicateOf && !pendingByNumber && vesselCode && assetId && sampledAt)
+    ? await findPendingSample(prisma, tenantId, vesselCode, assetId, sampledAt, fluidType)
     : null;
+  const attachTo = pendingByNumber
+    ? await describeAttachTarget(prisma, tenantId, pendingByNumber, "SAMPLE_NUMBER")
+    : heuristic
+      ? await describeAttachTarget(prisma, tenantId, heuristic, "ASSET_AND_DATE")
+      : null;
 
   return {
     fileName,
@@ -313,8 +364,9 @@ export async function commitFluidBatch(
           continue;
         }
         // Revalidación contra la base: entre el escaneo y la confirmación pudo
-        // haberse cargado la misma muestra desde otra pantalla.
-        const existing = await findByLabReference(prisma, tenantId, sampleNumber);
+        // haberse cargado la misma muestra desde otra pantalla. Sólo cuenta la
+        // que ya tiene resultado — la pendiente con ese número es el destino.
+        const existing = await findLoadedByLabReference(prisma, tenantId, sampleNumber);
         if (existing) {
           items.push({
             ...base, status: "skipped", reason: "DUPLICATE",
@@ -341,14 +393,22 @@ export async function commitFluidBatch(
       const pending = attachId
         ? await (prisma as any).fluidSample.findFirst({
             where: { id: attachId, tenantId, vesselCode, deletedAt: null, result: { is: null } },
-            select: { id: true, sampleCode: true },
+            select: { id: true, sampleCode: true, assetId: true, labReference: true },
           })
         : null;
 
       if (pending) {
+        // Si el cruce fue por número de muestra, el equipo es EL DE LA MUESTRA.
+        // El número lo anotó una persona al despachar el envío: vale más que lo
+        // que venga en la fila, que puede traer la conjetura de la IA.
+        const numberMatches = !!sampleNumber
+          && baseSampleNumber(pending.labReference) === sampleNumber;
         await updateFluidSample(session, pending.id, {
-          assetId, fluidType, fluidProduct, sampledAt,
-          labName, labReference: sampleNumber,
+          assetId: numberMatches ? pending.assetId : assetId,
+          fluidType, fluidProduct, sampledAt, labName,
+          // Sólo se escribe si el reporte trajo número: si no, se conserva el
+          // que se anotó al mandar la muestra al laboratorio.
+          ...(sampleNumber ? { labReference: sampleNumber } : {}),
         });
         sampleId = pending.id;
         sampleCode = pending.sampleCode;
@@ -643,29 +703,91 @@ export function pickVessel(
   return best?.code ?? null;
 }
 
-async function findByLabReference(
+/** Las dos formas del mismo número: base y con el sufijo de secuencia del lab. */
+function labReferenceForms(labReference: string) {
+  return [
+    { labReference },
+    { labReference: { startsWith: `${labReference}-` } },
+  ];
+}
+
+/**
+ * Muestra CON RESULTADO que ya tiene este número: el análisis está cargado y el
+ * PDF no se vuelve a guardar.
+ *
+ * Que exija resultado no es un detalle: desde que los números se anotan al
+ * mandar el envío al laboratorio, la muestra pendiente también tiene el número.
+ * Sin este filtro, el reporte que llega se descartaría como "ya cargado" contra
+ * la propia muestra que lo estaba esperando.
+ */
+async function findLoadedByLabReference(
   prisma: unknown,
   tenantId: string,
   labReference: string,
 ): Promise<{ id: string; sampleCode: string; vesselCode: string } | null> {
-  // Se busca la forma base y también la que trae el sufijo de secuencia del lab
-  // ("2610090842" y "2610090842-00" son la MISMA muestra).
   return (prisma as any).fluidSample.findFirst({
     where: {
       tenantId, deletedAt: null,
-      OR: [
-        { labReference },
-        { labReference: { startsWith: `${labReference}-` } },
-      ],
+      result: { isNot: null },
+      OR: labReferenceForms(labReference),
     },
     select: { id: true, sampleCode: true, vesselCode: true },
   });
 }
 
 /**
- * Muestra sin resultado del mismo equipo, la más cercana en fecha dentro de 45
- * días. Es la que dejó abierta la OT de toma de muestra: pegarle el resultado
- * cierra ese ciclo en vez de dejar dos registros del mismo muestreo.
+ * Muestra SIN resultado que lleva este número: la que se mandó al laboratorio y
+ * está esperando justamente este reporte.
+ *
+ * Es el cruce exacto, y por eso manda sobre la heurística: el número lo anotó
+ * una persona al despachar el envío, así que la muestra dice de qué buque y de
+ * qué equipo es el análisis sin tener que adivinarlo por el nombre que usa el
+ * laboratorio.
+ */
+async function findPendingByLabReference(
+  prisma: unknown,
+  tenantId: string,
+  labReference: string,
+  scopedVesselCodes: string[],
+): Promise<{ id: string; sampleCode: string; sampledAt: string; vesselCode: string; assetId: string; assetName: string | null } | null> {
+  const row = await (prisma as any).fluidSample.findFirst({
+    where: {
+      tenantId, deletedAt: null,
+      result: { is: null },
+      // Nunca fuera del alcance del usuario: el número no habilita a escribir en
+      // un buque que no puede tocar.
+      vesselCode: { in: scopedVesselCodes },
+      OR: labReferenceForms(labReference),
+    },
+    select: { id: true, sampleCode: true, sampledAt: true, vesselCode: true, assetId: true },
+    orderBy: { sampledAt: "desc" },
+  });
+  if (!row) return null;
+
+  const asset = await (prisma as any).asset.findFirst({
+    where: { id: row.assetId, tenantId },
+    select: { name: true, assetCode: true },
+  });
+  return {
+    id: row.id,
+    sampleCode: row.sampleCode,
+    sampledAt: row.sampledAt.toISOString().slice(0, 10),
+    vesselCode: row.vesselCode,
+    assetId: row.assetId,
+    assetName: asset?.name ?? asset?.assetCode ?? null,
+  };
+}
+
+/**
+ * Muestra sin resultado del mismo equipo y del mismo tipo de fluido, la más
+ * cercana en fecha dentro de 45 días. Es la que dejó abierta la OT de toma de
+ * muestra: pegarle el resultado cierra ese ciclo en vez de dejar dos registros
+ * del mismo muestreo.
+ *
+ * Es el camino de respaldo, para los envíos sin número anotado. Filtra por kind
+ * FLUID y por tipo de fluido a propósito: un mismo equipo puede tener pendientes
+ * una muestra de aceite y una de vibraciones en la misma ventana de fechas, y
+ * pegar el análisis de aceite en la de vibraciones arruina las dos tendencias.
  */
 async function findPendingSample(
   prisma: unknown,
@@ -673,6 +795,7 @@ async function findPendingSample(
   vesselCode: string,
   assetId: string,
   sampledAt: string,
+  fluidType: FluidType,
 ): Promise<{ id: string; sampleCode: string; sampledAt: string } | null> {
   const target = new Date(sampledAt);
   if (isNaN(target.getTime())) return null;
@@ -683,6 +806,10 @@ async function findPendingSample(
       where: {
         tenantId, vesselCode, assetId, deletedAt: null,
         result: { is: null },
+        kind: "FLUID",
+        // La muestra que no declara fluido sirve igual ("la muestra de aceite de
+        // ese equipo"); la que declara otro fluido, no.
+        OR: [{ fluidType }, { fluidType: null }],
         sampledAt: { gte: new Date(target.getTime() - windowMs), lte: new Date(target.getTime() + windowMs) },
       },
       select: { id: true, sampleCode: true, sampledAt: true },
@@ -693,6 +820,28 @@ async function findPendingSample(
     Math.abs(a.sampledAt.getTime() - target.getTime()) - Math.abs(b.sampledAt.getTime() - target.getTime()));
   const best = rows[0]!;
   return { id: best.id, sampleCode: best.sampleCode, sampledAt: best.sampledAt.toISOString().slice(0, 10) };
+}
+
+/**
+ * La muestra destino con su procedencia: de qué OT salió y cuál fue el pedido al
+ * laboratorio. Va en la pantalla de revisión para que el usuario vea a qué orden
+ * pertenece el análisis ANTES de confirmar, no después de guardarlo.
+ */
+async function describeAttachTarget(
+  prisma: unknown,
+  tenantId: string,
+  sample: { id: string; sampleCode: string; sampledAt: string },
+  matchedBy: AttachMatch,
+): Promise<NonNullable<BatchScanRow["attachTo"]>> {
+  const origin = await resolveSampleOrigin(prisma, tenantId, sample.id);
+  return {
+    id: sample.id,
+    sampleCode: sample.sampleCode,
+    sampledAt: sample.sampledAt,
+    matchedBy,
+    workOrderCode: origin.workOrderCode,
+    serviceRequestCodes: origin.serviceRequestCodes,
+  };
 }
 
 /**
@@ -783,21 +932,6 @@ function normText(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const t = v.trim();
   return t.length > 0 ? t : null;
-}
-
-/**
- * Número de muestra en su forma comparable. El laboratorio lo imprime dentro del
- * PDF con un sufijo de secuencia ("2610090842-00") y lo escribe sin sufijo en el
- * nombre del archivo; las 106 muestras ya cargadas usan la forma sin sufijo. Sin
- * esta normalización, el mismo análisis subido dos veces pasaría el control de
- * duplicados por escribirse distinto.
- */
-function baseSampleNumber(v: unknown): string | null {
-  const t = normText(v);
-  if (!t) return null;
-  const compact = t.replace(/\s+/g, "");
-  const m = compact.match(/^(\d{6,})-\d{1,3}$/);
-  return m ? m[1]! : compact;
 }
 
 function normDate(v: unknown): string | null {

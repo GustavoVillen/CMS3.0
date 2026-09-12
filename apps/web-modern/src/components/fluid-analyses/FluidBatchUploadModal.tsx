@@ -26,7 +26,8 @@ type Step = "pick" | "scanning" | "review" | "done";
 type BatchWarning =
   | "VESSEL_NOT_RESOLVED" | "ASSET_NOT_RESOLVED" | "ASSET_LOW_CONFIDENCE"
   | "SAMPLE_NUMBER_MISSING" | "SAMPLE_NUMBER_MISMATCH" | "SAMPLED_AT_MISSING"
-  | "VERDICT_MISSING" | "VERDICT_MISMATCH" | "FLUID_TYPE_ASSUMED" | "NO_PARAMETERS";
+  | "VERDICT_MISSING" | "VERDICT_MISMATCH" | "FLUID_TYPE_ASSUMED" | "NO_PARAMETERS"
+  | "SAMPLE_NUMBER_OTHER_VESSEL";
 
 interface ScanRow {
   fileName: string;
@@ -49,7 +50,15 @@ interface ScanRow {
   summary: string | null;
   parameters: Record<string, { value: number | string; unit?: string }>;
   duplicateOf: { id: string; sampleCode: string; vesselCode: string } | null;
-  attachTo: { id: string; sampleCode: string; sampledAt: string } | null;
+  attachTo: {
+    id: string;
+    sampleCode: string;
+    sampledAt: string;
+    /** SAMPLE_NUMBER = cruce exacto por el número anotado al despachar el envío. */
+    matchedBy: "SAMPLE_NUMBER" | "ASSET_AND_DATE";
+    workOrderCode: string | null;
+    serviceRequestCodes: string[];
+  } | null;
   aiNotes: string | null;
   warnings: BatchWarning[];
 }
@@ -92,6 +101,7 @@ const WARNING_KEYS: Record<BatchWarning, TranslationKey> = {
   VERDICT_MISMATCH:       "fa.batch.warn.verdictMismatch",
   FLUID_TYPE_ASSUMED:     "fa.batch.warn.fluidType",
   NO_PARAMETERS:          "fa.batch.warn.noParams",
+  SAMPLE_NUMBER_OTHER_VESSEL: "fa.batch.warn.numberOtherVessel",
 };
 
 const SKIP_REASON_KEYS: Record<NonNullable<CommitResult["reason"]>, TranslationKey> = {
@@ -362,6 +372,11 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                     const isDup = !!r.duplicateOf;
                     const assets = r.vesselCode ? (assetsByVessel[r.vesselCode] ?? []) : [];
                     const needsAsset = !isDup && !r.assetId;
+                    // Cruce por número de muestra: el buque y el equipo salen de
+                    // la muestra que se despachó. Cambiarlos a mano contradiría
+                    // el número, así que quedan fijos. Para corregirlos hay que
+                    // corregir el número en la SS.
+                    const lockedByNumber = r.attachTo?.matchedBy === "SAMPLE_NUMBER";
                     return (
                       <tr key={r.fileName + i} className={isDup ? "opacity-45" : needsAsset ? "bg-amber-500/5" : ""}>
                         <Td>
@@ -375,7 +390,7 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                         <Td>
                           <select
                             value={r.vesselCode ?? ""}
-                            disabled={isDup}
+                            disabled={isDup || lockedByNumber}
                             onChange={e => void changeVessel(i, e.target.value)}
                             className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] text-fg max-w-[150px] disabled:opacity-60"
                           >
@@ -386,7 +401,7 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                         <Td>
                           <select
                             value={r.assetId ?? ""}
-                            disabled={isDup || !r.vesselCode}
+                            disabled={isDup || !r.vesselCode || lockedByNumber}
                             onChange={e => {
                               const id = e.target.value;
                               const a = assets.find(x => x.id === id);
@@ -433,9 +448,32 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           ) : needsAsset || !r.vesselCode || !r.sampledAt || !r.verdict ? (
                             <span className="text-amber-600 dark:text-amber-400 font-semibold">{t("fa.batch.actionBlocked")}</span>
                           ) : r.attachTo ? (
-                            <span className="inline-flex items-center gap-1 text-accent font-semibold">
-                              <Link2 className="w-3 h-3" />
-                              {fill(t("fa.batch.actionAttach"), { code: r.attachTo.sampleCode })}
+                            <span className="block">
+                              <span className="inline-flex items-center gap-1 text-accent font-semibold">
+                                <Link2 className="w-3 h-3" />
+                                {fill(t("fa.batch.actionAttach"), { code: r.attachTo.sampleCode })}
+                              </span>
+                              {/* De qué OT y de qué pedido al laboratorio venía la
+                                  muestra: se ve ANTES de confirmar, no después. */}
+                              {r.attachTo.workOrderCode && (
+                                <span className="block text-[10px] font-normal text-text-industrial/50">
+                                  {r.attachTo.workOrderCode}
+                                  {r.attachTo.serviceRequestCodes.length > 0
+                                    ? ` · ${r.attachTo.serviceRequestCodes.join(" · ")}`
+                                    : ""}
+                                </span>
+                              )}
+                              {/* El cruce por número es exacto; el de equipo +
+                                  fecha es una conjetura y se dice. */}
+                              <span className={`block text-[10px] font-normal ${
+                                r.attachTo.matchedBy === "SAMPLE_NUMBER"
+                                  ? "text-success-sea"
+                                  : "text-text-industrial/40"
+                              }`}>
+                                {t(r.attachTo.matchedBy === "SAMPLE_NUMBER"
+                                  ? "fa.batch.matchByNumber"
+                                  : "fa.batch.matchByAssetDate")}
+                              </span>
                             </span>
                           ) : (
                             <span className="text-success-sea font-semibold">{t("fa.batch.actionCreate")}</span>

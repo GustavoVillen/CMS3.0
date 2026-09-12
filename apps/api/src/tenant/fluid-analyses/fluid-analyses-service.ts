@@ -128,6 +128,27 @@ function normText(v: string | null | undefined): string | null {
 }
 
 /**
+ * Forma canónica del NÚMERO DE MUESTRA del laboratorio, la clave con la que se
+ * cotejan los reportes que llegan contra las muestras que se mandaron.
+ *
+ * El lab imprime el número con un sufijo de secuencia ("2610090842-00") y lo
+ * escribe sin sufijo en el nombre del archivo: son la MISMA muestra. Se guarda
+ * la forma base, que es además como están cargadas las muestras históricas.
+ *
+ * Vive acá y no en fluid-batch-service porque la usan los dos extremos del
+ * ciclo: quien anota los números al mandar el envío (Solicitudes de Servicio) y
+ * quien los coteja al recibir los PDF (la carga masiva). Una sola definición: si
+ * las dos normalizaciones se separan, el cotejo deja de encontrar la muestra.
+ */
+export function baseSampleNumber(v: unknown): string | null {
+  const t = normText(v as string | null | undefined);
+  if (!t) return null;
+  const compact = t.replace(/\s+/g, "");
+  const m = compact.match(/^(\d{6,})-\d{1,3}$/);
+  return m ? m[1]! : compact;
+}
+
+/**
  * Horómetro. `undefined` = el cliente no mandó el campo (no se toca lo guardado);
  * `null` = lo mandó vacío (se borra). Se acepta 0: un equipo recién instalado o
  * recién reacondicionado puede muestrearse con el horómetro en cero.
@@ -761,7 +782,8 @@ async function createDefectFromResult(
 // runningHours/sampledAt are backfilled when the WO closes (closeWorkOrder), and
 // the user finishes filling lab data afterwards from the FluidAnalyses page.
 
-export type SampleKindInput = "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER";
+export const SAMPLE_KINDS = ["FLUID", "VIBRATION", "THERMAL", "ULTRASOUND", "OTHER"] as const;
+export type SampleKindInput = typeof SAMPLE_KINDS[number];
 
 export interface CreateSampleFromWoInput {
   tenantId: string;
@@ -777,6 +799,13 @@ export interface CreateSampleFromWoInput {
   runningHours: number | null;
   completedAt: Date;
   createdByUserId: string;
+  /**
+   * De dónde salió la muestra, en palabras. Default: "generada al autorizar la
+   * OT" — el caso del gancho de la OT. Se pasa distinto cuando la muestra se
+   * agrega a mano al numerar el envío al laboratorio, para que la ficha no diga
+   * algo que no pasó.
+   */
+  notes?: string | null;
 }
 
 export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoInput): Promise<{ id: string; sampleCode: string } | null> {
@@ -799,7 +828,7 @@ export async function createFluidSampleFromWorkOrder(input: CreateSampleFromWoIn
       runningHours:      input.runningHours,
       sampledByUserId:   input.createdByUserId,
       status:            "DRAFT",
-      notes:             `Generada automáticamente al autorizar OT ${input.workOrderCode}.`,
+      notes:             normText(input.notes) ?? `Generada automáticamente al autorizar OT ${input.workOrderCode}.`,
       sourceWorkOrderId: input.workOrderId,
       sourcePlanId:      input.planId,
       createdByUserId:   input.createdByUserId,

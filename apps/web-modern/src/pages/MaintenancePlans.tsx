@@ -48,6 +48,7 @@ import { PersonSelect } from "../components/PersonSelect";
 import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
 import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
 import { useT, useWoTerms } from "../lib/i18n";
+import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
@@ -2014,12 +2015,17 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   return (
     <>
       <div className={`fixed inset-0 ${overlayZClass ?? "z-50"} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
-        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+        {/* overflow-hidden: la franja de identidad es un borde superior y sin esto
+            asomaba fuera de las esquinas redondeadas. El cuerpo scrollea aparte. */}
+        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
           {/* Header en 3 partes: volver a la izquierda, acciones a la derecha y el
               titulo al medio. Los dos laterales son flex-1 con la misma base, asi
               el bloque del medio queda centrado en la ventana y no corrido por la
               cantidad de botones de cada lado. */}
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-fg/10 shrink-0">
+          {/* La franja de color y el nombre de la entidad identifican el registro
+              de un vistazo: esta ventana, la de la OT y la de la SS eran casi
+              calcadas. Ver lib/record-identity.tsx. */}
+          <div className={`flex items-center gap-2 px-6 py-4 border-b border-fg/10 shrink-0 ${recordHeaderClass("plan")}`}>
             <div className="flex-1 flex items-center">
               <button
                 type="button"
@@ -2032,11 +2038,15 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               </button>
             </div>
             <div className="min-w-0 flex flex-col items-center text-center">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">
-                {isNew ? t("mp.newPlan") : t("page.maintenancePlans")}
+              {/* El nombre de la entidad va en singular y con su ícono: en plural
+                  ("Planes de Mantenimiento") el encabezado de la ventana se leía
+                  igual que el de la pantalla del listado. */}
+              <h2 className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${RECORD_IDENTITY.plan.text}`}>
+                <ClipboardList className="w-3.5 h-3.5 shrink-0" />
+                {isNew ? t("mp.newPlan") : t("mp.entityLabel")}
               </h2>
               {headerAssetName && (
-                <p className="max-w-full text-xl font-black text-accent leading-tight truncate" title={headerAssetName}>
+                <p className="max-w-full text-xl font-black text-fg leading-tight truncate" title={headerAssetName}>
                   {headerAssetName}
                 </p>
               )}
@@ -3787,7 +3797,7 @@ export const MaintenancePlansPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <PageHeader icon={ClipboardList} title={t("page.maintenancePlans")} total={data?.total} onReload={reload}>
+      <PageHeader kind="plan" icon={ClipboardList} title={t("page.maintenancePlans")} total={data?.total} onReload={reload}>
         {/* Nueva tarea */}
         <button
           onClick={() => { setEditing(null); setShowModal(true); }}
