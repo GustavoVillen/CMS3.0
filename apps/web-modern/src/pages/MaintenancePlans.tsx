@@ -2328,23 +2328,25 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         )}
       </div>
 
-      <div>
-        <p className={`${fLabelCls} mb-1.5`}>{t("mp.samp.flow")}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {([1, 2, 3] as const).map(n => {
-            const dim = n === 2 && labRows.length === 0;
-            const desc = n === 2 && labRows.length === 0 ? t("mp.samp.step2dNoLab") : t(`mp.samp.step${n}d` as Parameters<typeof t>[0]);
-            return (
-              <div key={n} className={`flex gap-2 rounded-xl border border-fg/10 bg-surface px-2.5 py-2 ${dim ? "opacity-60" : ""}`}>
-                <span className="w-[22px] h-[22px] rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 text-[11px] font-extrabold flex items-center justify-center shrink-0">{n}</span>
-                <span>
-                  <span className="block text-[12.5px] font-extrabold text-fg">{t(`mp.samp.step${n}` as Parameters<typeof t>[0])}</span>
-                  <span className="block text-[11px] text-text-industrial/60">{desc}</span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
+      {/* Qué pasa con la muestra: flujo en un renglón (preview V28). El detalle
+          de cada paso va en el aviso al pasar el mouse o tocar. */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+        <span className="inline-flex items-center gap-1 font-semibold text-text-industrial/70 mr-1"><GitBranch className="w-3.5 h-3.5" />{t("mp.samp.flow")}</span>
+        {([1, 2, 3] as const).map(n => {
+          const noLab = n === 2 && labRows.length === 0;
+          const desc = noLab ? t("mp.samp.step2dNoLab") : t(`mp.samp.step${n}d` as Parameters<typeof t>[0]);
+          return (
+            <Fragment key={n}>
+              {n > 1 && <ArrowRight className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400 shrink-0" />}
+              <span title={desc} aria-label={`${t(`mp.samp.step${n}` as Parameters<typeof t>[0])}: ${desc}`}
+                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border py-0.5 pl-1 pr-2.5 font-bold cursor-help ${noLab ? "border-amber-400/70 bg-amber-500/10 text-amber-800 dark:text-amber-300" : "border-violet-500/30 bg-violet-500/[0.06] text-fg"}`}>
+                <span className={`w-[18px] h-[18px] rounded-full text-[10.5px] font-extrabold text-white flex items-center justify-center ${noLab ? "bg-amber-600" : "bg-violet-600"}`}>{n}</span>
+                {t(`mp.samp.step${n}` as Parameters<typeof t>[0])}
+                {n === 2 && <span className="font-semibold opacity-60">· {noLab ? t("mp.samp.step2shortNoLab") : t("mp.samp.step2short")}</span>}
+              </span>
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );

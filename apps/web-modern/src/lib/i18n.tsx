@@ -2873,6 +2873,8 @@ const dict = {
   "mp.samp.step2dNoLab":      { es: "Sin laboratorio no hay SS: hay que pedir el análisis a mano.", en: "No lab means no SR: the analysis must be requested manually.", pt: "Sem laboratório não há SS: é preciso pedir a análise manualmente." },
   "mp.samp.step3":            { es: "Vuelve el informe",      en: "The report comes back", pt: "Volta o relatório" },
   "mp.samp.step3d":           { es: "Se carga el resultado y queda en el historial del equipo.", en: "The result is loaded and stays in the equipment history.", pt: "O resultado é carregado e fica no histórico do equipamento." },
+  "mp.samp.step2short": { es: "con la SS", en: "with the SR", pt: "com a SS" },
+  "mp.samp.step2shortNoLab": { es: "pedir a mano", en: "request manually", pt: "pedir à mão" },
   "mp.samp.chip":             { es: "Muestreo · {kind}",      en: "Sampling · {kind}",     pt: "Amostragem · {kind}" },
   "mp.samp.chipNoLab":        { es: "Falta el laboratorio",   en: "Lab missing",           pt: "Falta o laboratório" },
   "mp.nav.note":              { es: "Los números naranjas son datos recomendados que faltan. Tocá una sección para ir.", en: "Orange numbers are recommended fields still missing. Tap a section to jump to it.", pt: "Os números laranja são dados recomendados que faltam. Toque numa seção para ir." },
