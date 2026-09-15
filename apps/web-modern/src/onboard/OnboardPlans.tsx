@@ -7,7 +7,7 @@
 // Repuestos planificados, fechas y adjuntos quedan para la PC.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarClock, CircleCheck, ListChecks, Send, Sparkles, Loader2, Monitor, UserCheck, AlertTriangle, Building2 } from "lucide-react";
+import { CalendarClock, CircleCheck, ListChecks, Send, Sparkles, Loader2, Monitor, UserCheck, AlertTriangle, Building2, Wrench } from "lucide-react";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useFetch } from "../lib/hooks";
@@ -122,15 +122,20 @@ export const OnboardPlans: React.FC<{ onExit: () => void }> = ({ onExit }) => {
           <CalendarClock className="w-7 h-7" />{tab === "over" ? t("ob.plans.emptyOver") : t("ob.plans.emptySoon")}
         </div>
       ) : list.map(({ p, c }) => (
+        // El trabajo YA EN MARCHA se distingue en verde: no es algo que falte
+        // hacer, y tocarlo no abre otra orden (avisa cuál está abierta).
         <button key={p.id} type="button"
           onClick={() => p.activeWorkOrderCode ? setAlert(t("ob.plans.hasWo").replace("{code}", p.activeWorkOrderCode)) : setOpen(p)}
-          className={`w-full text-left bg-surface border border-fg/10 rounded-2xl p-3.5 flex flex-col gap-1 ${p.activeWorkOrderCode ? "opacity-60" : "active:bg-fg/5"}`}>
+          className={`w-full text-left rounded-2xl p-3.5 flex flex-col gap-1 border ${
+            p.activeWorkOrderCode ? "bg-success/5 border-success/40" : "bg-surface border-fg/10 active:bg-fg/5"
+          }`}>
           <span className="text-[12.5px] font-semibold text-text-industrial/60">{p.assetName ?? "—"}</span>
           <span className="text-base font-extrabold leading-snug">{p.title}</span>
           <span className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-              p.activeWorkOrderCode ? "bg-fg/5 text-text-industrial/60" : c.group === "over" ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning"
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 ${
+              p.activeWorkOrderCode ? "bg-success/15 text-success" : c.group === "over" ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning"
             }`}>
+              {p.activeWorkOrderCode && <Wrench className="w-3.5 h-3.5" />}
               {p.activeWorkOrderCode ? t("ob.plans.hasWoShort").replace("{code}", p.activeWorkOrderCode) : dueLabel(c)}
             </span>
             <span className="font-mono text-xs font-semibold text-text-industrial/60">{p.taskCode}</span>

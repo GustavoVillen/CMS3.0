@@ -4952,7 +4952,7 @@ const dict = {
   "ob.plans.emptyOver": { es: "No hay planes vencidos.", en: "No overdue plans.", pt: "Não há planos vencidos." },
   "ob.plans.emptySoon": { es: "No hay planes por vencer en los próximos 30 días.", en: "No plans due in the next 30 days.", pt: "Não há planos a vencer nos próximos 30 dias." },
   "ob.plans.hasWo": { es: "Este plan ya tiene la {code} abierta: registrá el avance desde ahí.", en: "This plan already has {code} open: log progress there.", pt: "Este plano já tem a {code} aberta: registre o avanço nela." },
-  "ob.plans.hasWoShort": { es: "Ya tiene {code}", en: "Already has {code}", pt: "Já tem {code}" },
+  "ob.plans.hasWoShort": { es: "En ejecución · {code}", en: "In progress · {code}", pt: "Em execução · {code}" },
   "ob.plans.openWo": { es: "Abrir {wo}", en: "Open {wo}", pt: "Abrir {wo}" },
   "ob.plans.siblingsTitle": { es: "También toca en este equipo", en: "Also due on this equipment", pt: "Também vence neste equipamento" },
   "ob.plans.siblingsHint": { es: "Marcalas para hacer todo en la misma {wo}.", en: "Tick them to do everything in the same {wo}.", pt: "Marque para fazer tudo na mesma {wo}." },
