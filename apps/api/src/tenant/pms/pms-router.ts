@@ -16,7 +16,7 @@ import { handleTriggersRoutes } from "./triggers-router";
 import { handleQualityRoutes } from "./quality-router";
 import { handleCatalogsRoutes } from "./catalogs-router";
 import { handleDrydockRoutes } from "./drydock-router";
-import { listPendingApprovals } from "../approvals/approvals-service";
+import { listPendingApprovals, listMySubmissions } from "../approvals/approvals-service";
 
 /**
  * PMS (Preventive Maintenance System) router - Etapa 2+
@@ -55,6 +55,19 @@ export async function handlePmsRoutes(
     const session = requireTenantAccessSession(request, slug);
     sendJson(response, 200, await listPendingApprovals(session, {
       vesselCode: url.searchParams.get("vesselCode"),
+    }));
+    return true;
+  }
+
+  // GET /app/pms/approvals/mine — lo que el usuario mandó a firmar y en qué
+  // quedó (app a bordo, "Lo que mandaste"). Mismo criterio que la bandeja.
+  if (method === "GET" && url.pathname === "/app/pms/approvals/mine") {
+    const slug = resolveTenantSlugFromRequest(request, env);
+    if (!slug) throw new RouteError(400, "TENANT_UNRESOLVED", "Unable to resolve tenant.");
+    const session = requireTenantAccessSession(request, slug);
+    sendJson(response, 200, await listMySubmissions(session, {
+      vesselCode: url.searchParams.get("vesselCode"),
+      limit: Number(url.searchParams.get("limit") ?? 5),
     }));
     return true;
   }

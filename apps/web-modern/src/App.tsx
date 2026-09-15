@@ -13,6 +13,7 @@ import { PlatformLayout } from "./components/PlatformLayout";
 import { Login } from "./pages/Login";
 import { PageLoader } from "./components/PageLoader";
 import { DemoBanner } from "./components/DemoBanner";
+import { OnboardEntry } from "./onboard/entry";
 
 // ---------------------------------------------------------------------------
 // Páginas cargadas BAJO DEMANDA (code-splitting por ruta).
@@ -31,6 +32,8 @@ const MobileLayout = React.lazy(() => import("./components/MobileLayout").then(m
 const MobileDailyReportsPage = React.lazy(() => import("./mobile/MobileDailyReportsPage").then(m => ({ default: m.MobileDailyReportsPage })));
 // Bandeja de firmas del celular (link directo /m-approvals) para el que aprueba/autoriza.
 const MobileApprovals = React.lazy(() => import("./mobile/MobileApprovals").then(m => ({ default: m.MobileApprovals })));
+// App a bordo del Capitán / Jefe de Máquinas (Preview V30). Ver onboard/entry.tsx.
+const OnboardApp = React.lazy(() => import("./onboard/OnboardApp").then(m => ({ default: m.OnboardApp })));
 
 // Tenant
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
@@ -234,10 +237,12 @@ export default function App() {
             <Route path="/m-daily-reports" element={<RequireAuth><TenantI18nWrapper><MobileDailyReportsPage /></TenantI18nWrapper></RequireAuth>} />
             {/* Bandeja de firmas: OT/SS para aprobar y para autorizar (Capitán / Jefe de Máquinas / Superintendente / DPA). */}
             <Route path="/m-approvals" element={<RequireAuth><TenantI18nWrapper><MobileApprovals /></TenantI18nWrapper></RequireAuth>} />
+            {/* App a bordo: Capitán / Jefe de Máquinas desde el celular. */}
+            <Route path="/abordo" element={<RequireAuth><TenantI18nWrapper><OnboardApp /></TenantI18nWrapper></RequireAuth>} />
 
             {/* ── Tenant ── */}
             <Route path="/login" element={<TenantLoginRedirect />} />
-            <Route element={<RequireAuth><TenantI18nWrapper><Layout /></TenantI18nWrapper></RequireAuth>}>
+            <Route element={<RequireAuth><OnboardEntry><TenantI18nWrapper><Layout /></TenantI18nWrapper></OnboardEntry></RequireAuth>}>
               <Route path="/"                  element={<Dashboard />} />
               <Route path="/due-items"         element={<DueItemsPage />} />
               <Route path="/superintendents"   element={<RequireRole roles={["TENANT_ADMIN"]}><VesselSuperintendentsPage /></RequireRole>} />

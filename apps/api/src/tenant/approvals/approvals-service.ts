@@ -311,3 +311,145 @@ export async function listPendingApprovals(
     srAuthorize: (srAuthorizeRows as any[]).map(mapSr),
   };
 }
+
+// ─── Lo que mandé a firmar (app a bordo, Preview V30) ─────────────────────────
+//
+// El lado opuesto de la bandeja: lo que ESTE usuario envió a aprobar —OT, SS y
+// permisos de trabajo— y en qué quedó. Sirve para que el Capitán / Jefe de
+// Máquinas vea desde el celular si le aprobaron o rechazaron algo, y por qué,
+// sin bajar los listados completos por la conexión del buque.
+//
+// Misma regla que arriba: lente de sólo lectura, alcance por buque asignado
+// (fail-closed) y nombre del buque resuelto, nunca el código.
+
+export type MySubmissionState = "PENDING" | "APPROVED" | "AUTHORIZED" | "REJECTED" | "ACTIVE" | "CLOSED";
+
+export interface MySubmissionItem {
+  kind: "WO" | "SR" | "PTW";
+  id: string;
+  code: string;
+  vesselName: string | null;
+  title: string | null;
+  /** Sólo PTW: tipo de permiso (HOT_WORK…), para rotularlo en el idioma del tenant. */
+  permitType: string | null;
+  state: MySubmissionState;
+  /** Motivo del rechazo, si lo hubo. */
+  reason: string | null;
+  at: string | null;
+}
+
+const MY_SUBMISSIONS_DAYS = 30;
+
+export async function listMySubmissions(
+  session: TenantAccessSession,
+  filters: { vesselCode?: string | null; limit?: number } = {},
+): Promise<{ items: MySubmissionItem[] }> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await resolveTenantId(session);
+  const vesselCode = filters.vesselCode ?? null;
+  const limit = Math.min(Math.max(Number(filters.limit) || 5, 1), 20);
+  const me = session.user.id;
+  const since = new Date(Date.now() - MY_SUBMISSIONS_DAYS * 24 * 60 * 60 * 1000);
+
+  const scoped = (where: Record<string, unknown>) => {
+    applyAssignedVesselScope(session, where, vesselCode);
+    return where;
+  };
+
+  const [woRows, srRows, ptwRows] = await Promise.all([
+    // OT: enviadas por mí, o rechazadas (el rechazo limpia "enviado" y la
+    // devuelve a preparación, así que ahí queda sólo quién la creó).
+    (prisma as any).workOrder.findMany({
+      where: scoped({
+        tenantId, deletedAt: null, updatedAt: { gte: since },
+        OR: [
+          { enviadoAprobacionByUserId: me },
+          { createdByUserId: me, rechazadoAt: { not: null }, enviadoAprobacionAt: null },
+        ],
+      }),
+      select: {
+        id: true, workOrderCode: true, vesselCode: true, title: true, status: true,
+        enviadoAprobacionAt: true, aprobadoAt: true, autorizadoAt: true,
+        rechazadoAt: true, rechazoReason: true, updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    }),
+    (prisma as any).serviceRequest.findMany({
+      where: scoped({
+        tenantId, deletedAt: null, updatedAt: { gte: since },
+        status: { in: ["SOLICITADA", "APROBADA", "AUTORIZADA", "REJECTED"] },
+        OR: [{ solicitaByUserId: me }, { createdByUserId: me }],
+      }),
+      select: {
+        id: true, serviceRequestCode: true, vesselCode: true, title: true, description: true,
+        status: true, rechazoReason: true, updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    }),
+    (prisma as any).permitToWork.findMany({
+      where: scoped({
+        tenantId, deletedAt: null, updatedAt: { gte: since },
+        status: { in: ["REQUESTED", "APPROVED", "REJECTED", "ACTIVE"] },
+        OR: [{ requestedByUserId: me }, { createdByUserId: me }],
+      }),
+      select: {
+        id: true, permitCode: true, vesselCode: true, type: true, location: true,
+        status: true, rejectionReason: true, updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    }),
+  ]) as [any[], any[], any[]];
+
+  const vesselCodes = [...new Set([...woRows, ...srRows, ...ptwRows].map(r => r.vesselCode).filter(Boolean))];
+  const vesselRows = vesselCodes.length > 0
+    ? await (prisma as any).vessel.findMany({ where: { tenantId, code: { in: vesselCodes } }, select: { code: true, name: true } }) as any[]
+    : [];
+  const vesselName = new Map<string, string | null>(vesselRows.map(v => [v.code, v.name ?? null]));
+
+  const woState = (r: any): MySubmissionState | null => {
+    if (r.status === "CLOSED" || r.status === "DONE") return "CLOSED";
+    if (r.autorizadoAt) return "AUTHORIZED";
+    if (r.aprobadoAt) return "APPROVED";
+    if (r.enviadoAprobacionAt) return "PENDING";
+    if (r.rechazadoAt) return "REJECTED";
+    return null;
+  };
+  const srState: Record<string, MySubmissionState> = {
+    SOLICITADA: "PENDING", APROBADA: "APPROVED", AUTORIZADA: "AUTHORIZED", REJECTED: "REJECTED",
+  };
+  const ptwState: Record<string, MySubmissionState> = {
+    REQUESTED: "PENDING", APPROVED: "APPROVED", REJECTED: "REJECTED", ACTIVE: "ACTIVE",
+  };
+
+  const items: MySubmissionItem[] = [];
+  for (const r of woRows) {
+    const state = woState(r);
+    if (!state || state === "CLOSED") continue;
+    items.push({
+      kind: "WO", id: r.id, code: r.workOrderCode, vesselName: vesselName.get(r.vesselCode) ?? null,
+      title: r.title ?? null, permitType: null, state,
+      reason: state === "REJECTED" ? (r.rechazoReason ?? null) : null, at: iso(r.updatedAt),
+    });
+  }
+  for (const r of srRows) {
+    items.push({
+      kind: "SR", id: r.id, code: r.serviceRequestCode, vesselName: vesselName.get(r.vesselCode) ?? null,
+      title: r.title ?? r.description ?? null, permitType: null, state: srState[r.status] ?? "PENDING",
+      reason: r.status === "REJECTED" ? (r.rechazoReason ?? null) : null, at: iso(r.updatedAt),
+    });
+  }
+  for (const r of ptwRows) {
+    items.push({
+      kind: "PTW", id: r.id, code: r.permitCode, vesselName: vesselName.get(r.vesselCode) ?? null,
+      title: r.location ?? null, permitType: r.type ?? null, state: ptwState[r.status] ?? "PENDING",
+      reason: r.status === "REJECTED" ? (r.rejectionReason ?? null) : null, at: iso(r.updatedAt),
+    });
+  }
+
+  items.sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+  return { items: items.slice(0, limit) };
+}
