@@ -2,7 +2,10 @@ import React, { useState, useCallback } from "react";
 import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth, useCan } from "../lib/auth";
-import { useWoTerms } from "../lib/i18n";
+import { useT, useWoTerms } from "../lib/i18n";
+import { AlertDialog } from "../components/AlertDialog";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { usePendingProgress } from "../lib/progress-outbox";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
@@ -155,6 +158,7 @@ interface ProgressNote {
   processedText: string | null;
   processed: boolean;
   createdAt: string;
+  createdByName?: string | null;
 }
 
 const ProgressNotesPanel: React.FC<{
@@ -165,6 +169,9 @@ const ProgressNotesPanel: React.FC<{
   canDelete: boolean;
   canAdd: boolean;
 }> = ({ workOrderId, onAdd, onDeleted, reloadKey, canAdd, canDelete }) => {
+  const t = useT();
+  const [confirmDelId, setConfirmDelId] = useState<string | null>(null);
+  const [notesErr, setNotesErr] = useState<string | null>(null);
   const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
     [workOrderId, reloadKey],
@@ -177,16 +184,18 @@ const ProgressNotesPanel: React.FC<{
     return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
 
+  // Avances de esta OT guardados en el teléfono: al enviarse, se recarga la lista.
+  const pending = usePendingProgress(workOrderId, () => { void reload(); });
+
   const handleDelete = useCallback(async (noteId: string) => {
-    if (!window.confirm("¿Borrar este avance? Las observaciones se regenerarán sin él.")) return;
     try {
       await api.delete(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`);
       await reload();
       onDeleted();
     } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "Error al borrar el avance");
+      setNotesErr(e instanceof ApiError ? e.message : t("error.deleteProgress"));
     }
-  }, [workOrderId, reload, onDeleted]);
+  }, [workOrderId, reload, onDeleted, t]);
 
   return (
     <div className="space-y-2">
@@ -206,6 +215,9 @@ const ProgressNotesPanel: React.FC<{
         )}
       </div>
 
+      {pending > 0 && (
+        <p className="rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">{t("pn.pendingThisWo").replace("{n}", String(pending))}</p>
+      )}
       {loading ? (
         <div className="flex justify-center py-3">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />
@@ -219,11 +231,21 @@ const ProgressNotesPanel: React.FC<{
               key={n.id}
               note={n}
               fmtTime={fmtTime}
-              onDelete={canDelete ? () => handleDelete(n.id) : undefined}
+              onDelete={canDelete ? () => setConfirmDelId(n.id) : undefined}
             />
           ))}
         </div>
       )}
+      {confirmDelId && (
+        <ConfirmDialog
+          message={t("pn.confirmDelete")}
+          confirmLabel={t("common.delete")}
+          cancelLabel={t("common.cancel")}
+          onCancel={() => setConfirmDelId(null)}
+          onConfirm={() => { const id = confirmDelId; setConfirmDelId(null); void handleDelete(id); }}
+        />
+      )}
+      {notesErr && <AlertDialog message={notesErr} onClose={() => setNotesErr(null)} />}
     </div>
   );
 };
@@ -253,7 +275,7 @@ const NoteCard: React.FC<{
       <div className="flex items-center gap-2 text-[10px] text-text-industrial/50">
         <Icon className="w-3 h-3" />
         <span className="font-bold uppercase tracking-wider">{KIND_LABEL[note.kind] ?? note.kind}</span>
-        <span className="ml-auto">{fmtTime(note.createdAt)}</span>
+        <span className="ml-auto">{note.createdByName ? `${note.createdByName} · ` : ""}{fmtTime(note.createdAt)}</span>
         {onDelete && (
           <button
             type="button"

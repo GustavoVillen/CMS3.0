@@ -64,7 +64,7 @@ import {
 } from "../work-orders/work-order-schedule-service";
 import {
   createProgressNote,
-  listProgressNotes,
+  listProgressNotes, detectProgressSpares, confirmProgressSpares,
   updateProgressNote,
   deleteProgressNote,
 } from "../work-orders/work-order-progress-notes-service";
@@ -660,6 +660,20 @@ export async function handleMaintenanceRoutes(
 
     const note = await createProgressNote(session, id, { kind, text: caption, fileBuffer, fileName, mimeType, occurredAt });
     sendJson(response, 201, note);
+    return true;
+  }
+
+  // Repuestos mencionados en un avance: detectar (no toca el stock) y confirmar.
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/progress-notes\/detect-spares$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as { text?: string };
+    sendJson(response, 200, { items: await detectProgressSpares(session, id, body.text ?? "") });
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/progress-notes\/confirm-spares$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as { usages?: Array<{ spareId: string; quantity: number }> };
+    sendJson(response, 200, await confirmProgressSpares(session, id, body.usages ?? []));
     return true;
   }
 

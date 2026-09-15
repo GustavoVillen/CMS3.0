@@ -280,7 +280,7 @@ Respondé EXCLUSIVAMENTE con JSON válido (sin markdown):
 
 Si NO hay coincidencias claras, devolver: {"detected": []}`;
 
-interface SpareCatalogItem {
+export interface SpareCatalogItem {
   id: string;
   sku: string;
   name: string;
@@ -288,13 +288,13 @@ interface SpareCatalogItem {
   unit: string;
 }
 
-interface DetectedSpareUsage {
+export interface DetectedSpareUsage {
   spareId: string;
   quantity: number;
   unit: string;
 }
 
-async function detectSparesFromText(
+export async function detectSparesFromText(
   tenantId: string,
   tenantSlug: string,
   userId: string,
@@ -384,6 +384,8 @@ async function detectSparesFromText(
 }
 
 const AUTO_NOTES_PREFIX = "[Auto] Detectado del avance";
+/** Descontar del stock sin confirmación. Apagado desde la V29. */
+const AUTO_APPLY_DETECTED_SPARES = false;
 
 async function applyAutoDetectedSpareUsages(
   wo: { id: string; tenantId: string; vesselCode: string; workOrderCode: string },
@@ -592,8 +594,11 @@ export async function regenerateObservationsForWorkOrder(
       });
       log.info(`[progress-ai] regenerate WO ${workOrderId}: updated observations (${observations.length} chars)`);
 
-      // ─── Detección automática de repuestos usados ──────────────────────────
-      try {
+      // Los repuestos ya NO se descuentan solos desde acá (preview V29): al
+      // guardar el avance, la pantalla pide la detección y descuenta sólo lo
+      // que el usuario confirma (ver detectProgressSpares / confirmProgressSpares).
+      // Se conserva el bloque apagado para volver al comportamiento anterior.
+      if (AUTO_APPLY_DETECTED_SPARES) try {
         const woFull = await (prismaRaw as any).workOrder.findUnique({
           where: { id: wo.id },
           select: { id: true, tenantId: true, vesselCode: true, workOrderCode: true },

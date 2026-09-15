@@ -7,6 +7,8 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { usePendingProgress } from "../lib/progress-outbox";
 import { AssigneeSelect } from "../components/AssigneeSelect";
 import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
@@ -609,6 +611,7 @@ interface ProgressNote {
   text: string | null;
   fileUrl: string | null;
   createdAt: string;
+  createdByName?: string | null;
 }
 
 const KIND_ICON: Record<string, React.FC<{ className?: string }>> = {
@@ -655,7 +658,10 @@ const ProgressNoteRow: React.FC<{
   return (
     <tr className="align-top">
       <td className="px-1">
-        <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>{fmtTime(note.createdAt)}</div>
+        <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
+          {fmtTime(note.createdAt)}
+          {note.createdByName && <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={note.createdByName}>{note.createdByName}</span>}
+        </div>
       </td>
       <td className="px-1">
         <div className={`${noteCellCls} flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-text-industrial/60`}>
@@ -760,27 +766,31 @@ const ProgressNotesPanel: React.FC<{
   // El TEXT/AUDIO se ven mejor en la lista.
   const visualNotes = notes.filter(n => (n.kind === "PHOTO" || n.kind === "VIDEO") && n.fileUrl);
 
-  const handleDelete = useCallback(async (noteId: string) => {
-    if (!window.confirm(t("confirm.deleteProgress"))) return;
+  const [confirmDelId, setConfirmDelId] = useState<string | null>(null);
+  const [notesErr, setNotesErr] = useState<string | null>(null);
+  // Avances de esta OT guardados en el teléfono: al enviarse, se recarga la lista.
+  const pending = usePendingProgress(workOrderId, () => { void reload(); onChanged?.(); });
+
+  const handleDelete = async (noteId: string) => {
     try {
       await api.delete(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`);
       await reload();
       onChanged?.();
     } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : t("error.deleteProgress"));
+      setNotesErr(e instanceof ApiError ? e.message : t("error.deleteProgress"));
     }
-  }, [workOrderId, reload, onChanged]);
+  };
 
-  const handleSave = useCallback(async (noteId: string, text: string) => {
+  const handleSave = async (noteId: string, text: string) => {
     try {
       await api.patch(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`, { text });
       await reload();
       onChanged?.();
     } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "No se pudo guardar el avance.");
+      setNotesErr(e instanceof ApiError ? e.message : t("pn.saveError"));
       throw e;
     }
-  }, [workOrderId, reload, onChanged]);
+  };
 
   return (
     <div className="space-y-2">
@@ -818,6 +828,9 @@ const ProgressNotesPanel: React.FC<{
           )}
         </div>
       </div>
+      {pending > 0 && (
+        <p className="rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">{t("pn.pendingThisWo").replace("{n}", String(pending))}</p>
+      )}
       {loading ? (
         <div className="flex justify-center py-3">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />
@@ -866,7 +879,7 @@ const ProgressNotesPanel: React.FC<{
                 <ProgressNoteRow
                   key={n.id}
                   note={n}
-                  onDelete={canDelete ? () => { void handleDelete(n.id); } : undefined}
+                  onDelete={canDelete ? () => setConfirmDelId(n.id) : undefined}
                   onSave={canEdit ? (text) => handleSave(n.id, text) : undefined}
                   onOpenMedia={() => setLightbox(n)}
                 />
@@ -875,6 +888,17 @@ const ProgressNotesPanel: React.FC<{
           </table>
         </div>
       )}
+
+      {confirmDelId && (
+        <ConfirmDialog
+          message={t("pn.confirmDelete")}
+          confirmLabel={t("common.delete")}
+          cancelLabel={t("common.cancel")}
+          onCancel={() => setConfirmDelId(null)}
+          onConfirm={() => { const id = confirmDelId; setConfirmDelId(null); void handleDelete(id); }}
+        />
+      )}
+      {notesErr && <AlertDialog message={notesErr} onClose={() => setNotesErr(null)} />}
 
       {/* Lightbox para ampliar la foto/video al hacer click en el mosaico */}
       {lightbox && (
@@ -5846,7 +5870,7 @@ export const WorkOrdersPage: React.FC = () => {
         <ProgressNoteSheet
           workOrderId={progressWo.id}
           onClose={() => setProgressWo(null)}
-          onSaved={() => { setProgressWo(null); void reload(); }}
+          onSaved={() => { void reload(); }}
         />
       )}
       {tableActionError && <AlertDialog message={tableActionError} onClose={() => setTableActionError(null)} />}

@@ -16,6 +16,7 @@ import { MobileDrills } from "../mobile/MobileDrills";
 import { MobileCrewCerts } from "../mobile/MobileCrewCerts";
 import { QuickActionFab, type QuickAction } from "./QuickActionFab";
 import { VoiceReportSheet } from "./VoiceReportSheet";
+import { ProgressFlow } from "./ProgressFlow";
 import { useEscapeGuard } from "../lib/escape-guard";
 
 type Tab = "dashboard" | "planes" | "ots" | "defectos" | "diario" | "repuestos" | "copiloto"
@@ -57,6 +58,8 @@ export const MobileLayout: React.FC = () => {
   const [voiceType, setVoiceType] = useState<"defect" | "near_miss" | null>(null);
   // Prefill que MobileDefects consume al recibirlo (luego notifica consumed).
   const [defectsPrefill, setDefectsPrefill] = useState<DefectsVoicePrefill | null>(null);
+  // Registrar avance desde el botón rápido: se elige la OT y se carga ahí mismo.
+  const [showProgress, setShowProgress] = useState(false);
 
   const navigateFromDashboard = (
     target: DashboardTabTarget,
@@ -85,8 +88,8 @@ export const MobileLayout: React.FC = () => {
       case "near-miss":        setTab("defectos"); break;
       case "defect-voice":     setVoiceType("defect"); break;
       case "near-miss-voice":  setVoiceType("near_miss"); break;
-      case "photo":            setTab("ots"); break;
-      case "wo-progress":      setTab("ots"); break;
+      case "photo":            setShowProgress(true); break;
+      case "wo-progress":      setShowProgress(true); break;
     }
   };
 
@@ -151,6 +154,8 @@ export const MobileLayout: React.FC = () => {
         {tab !== "defectos" && tab !== "copiloto" && tab !== "crew" && tab !== "drills" && tab !== "crewcerts" && (
           <QuickActionFab onAction={handleQuickAction} />
         )}
+
+        {showProgress && <ProgressFlow onClose={() => setShowProgress(false)} />}
 
         {/* ── Voice report sheet (compartido layout-wide) ──────────────────── */}
         {voiceType && (

@@ -7,7 +7,8 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { saveAttachment } from "../attachments/attachment-uploads-service";
-import { processNoteAndRegenerate, regenerateObservationsForWorkOrder } from "./work-order-progress-ai";
+import { detectSparesFromText, processNoteAndRegenerate, regenerateObservationsForWorkOrder } from "./work-order-progress-ai";
+import { hasPermission } from "../auth/role-permissions";
 import { log } from "../../common/logger";
 import { assertNotLocked } from "../../common/record-lock";
 
@@ -36,6 +37,8 @@ export interface ProgressNoteRow {
   processError: string | null;
   createdAt: Date;
   createdByUserId: string;
+  /** Quién lo cargó (nombre, no el id). Sólo en la lista. */
+  createdByName?: string | null;
 }
 
 async function getWorkOrderOrThrow(
@@ -180,7 +183,101 @@ export async function listProgressNotes(
     orderBy: { createdAt: "desc" },
   });
 
-  return rows as ProgressNoteRow[];
+  // Nombre de quien cargó cada avance: en la OT se lee "Oscar Duarte", no un id.
+  const userIds = [...new Set((rows as ProgressNoteRow[]).map(r => r.createdByUserId).filter(Boolean))];
+  const users = userIds.length
+    ? await (prismaRaw as any).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, formName: true, email: true } })
+    : [];
+  const nameById = new Map<string, string>(users.map((u: any) => [u.id, (u.formName?.trim() || [u.firstName?.trim(), u.lastName?.trim()].filter(Boolean).join(" ") || u.email) as string]));
+
+  return (rows as ProgressNoteRow[]).map(r => ({ ...r, createdByName: nameById.get(r.createdByUserId) ?? null }));
+}
+
+// ─── Repuestos mencionados en un avance (preview V29) ────────────────────────
+// Antes la IA los descontaba del stock sola. Ahora la pantalla pregunta: primero
+// se detectan (sin tocar nada) y se descuenta sólo lo que el usuario confirma.
+
+export interface DetectedProgressSpare {
+  spareId: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
+export async function detectProgressSpares(
+  session: TenantAccessSession,
+  workOrderId: string,
+  text: string,
+): Promise<DetectedProgressSpare[]> {
+  const wo = await getWorkOrderOrThrow(session, workOrderId);
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const clean = (text ?? "").trim();
+  if (!clean) return [];
+
+  const spares = await (prismaRaw as any).spare.findMany({
+    where: { tenantId: wo.tenantId, vesselCode: wo.vesselCode, deletedAt: null },
+    select: { id: true, sku: true, name: true, manufacturerPartNumber: true, unit: true },
+    // Mismo tope que la detección anterior: suficiente para un buque y no excede tokens.
+    take: 200,
+  });
+  if (spares.length === 0) return [];
+
+  const detected = await detectSparesFromText(wo.tenantId, session.tenantSlug, session.user.id, session.user.email, wo.vesselCode, clean, spares);
+  const byId = new Map<string, any>(spares.map((s: any) => [s.id, s]));
+  return detected
+    .filter(d => byId.has(d.spareId))
+    .map(d => ({ spareId: d.spareId, sku: byId.get(d.spareId).sku, name: byId.get(d.spareId).name, quantity: d.quantity, unit: d.unit }));
+}
+
+export async function confirmProgressSpares(
+  session: TenantAccessSession,
+  workOrderId: string,
+  usages: Array<{ spareId: string; quantity: number }>,
+): Promise<{ created: number }> {
+  const wo = await getWorkOrderOrThrow(session, workOrderId);
+  assertNotLocked("WORK_ORDER", wo.status);
+  // Es un movimiento de stock: lo exige el mismo permiso que cargar consumos a mano.
+  if (!hasPermission(session, "stock.manage")) {
+    throw new RouteError(403, "FORBIDDEN", "No autorizado para registrar consumo de repuestos.");
+  }
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  if (!Array.isArray(usages) || usages.length === 0) return { created: 0 };
+
+  const ids = [...new Set(usages.map(u => String(u?.spareId ?? "")).filter(Boolean))];
+  // Sólo repuestos del mismo tenant y buque que la OT.
+  const spares = await (prismaRaw as any).spare.findMany({
+    where: { id: { in: ids }, tenantId: wo.tenantId, vesselCode: wo.vesselCode, deletedAt: null },
+    select: { id: true, unit: true },
+  });
+  const unitById = new Map<string, string>(spares.map((s: any) => [s.id, s.unit]));
+  const woRow = await (prismaRaw as any).workOrder.findUnique({ where: { id: wo.id }, select: { workOrderCode: true } });
+
+  let created = 0;
+  for (const u of usages) {
+    const qty = Number(u?.quantity);
+    if (!unitById.has(u?.spareId) || !Number.isFinite(qty) || qty <= 0 || qty > 1000) continue;
+    await (prismaRaw as any).stockMovement.create({
+      data: {
+        tenantId: wo.tenantId,
+        vesselCode: wo.vesselCode,
+        spareId: u.spareId,
+        movementCode: `MOV-${wo.vesselCode}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        movementType: "ISSUE",
+        quantity: qty,
+        unit: unitById.get(u.spareId)!,
+        occurredAt: new Date(),
+        referenceType: "WORK_ORDER",
+        referenceId: wo.id,
+        notes: `Utilizado en OT ${woRow?.workOrderCode ?? ""} (confirmado desde un avance)`,
+        createdByUserId: session.user.id,
+      },
+    });
+    created += 1;
+  }
+  return { created };
 }
 
 export async function updateProgressNote(
