@@ -12,6 +12,7 @@ import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import {
   ensureCanApproveDrydock,
+  ensureCanEditContent,
   ensureCanManageDrydock,
   ensureEditable,
   loadScopedSpec,
@@ -113,10 +114,9 @@ export async function upsertDrydockSpecItems(
   specId: string,
   entries: DrydockItemEntry[],
 ) {
-  ensureCanManageDrydock(session);
   const prisma = requirePrisma();
   const spec = await loadScopedSpec(session, specId);
-  ensureEditable(spec);
+  ensureCanEditContent(session, spec);
 
   if (!Array.isArray(entries)) {
     throw new RouteError(400, "VALIDATION_ERROR", "entries debe ser una lista.");
@@ -307,10 +307,9 @@ export async function importItemsFromSources(
   specId: string,
   sources: ImportSourceRef[],
 ) {
-  ensureCanManageDrydock(session);
   const prisma = requirePrisma();
   const spec = await loadScopedSpec(session, specId);
-  ensureEditable(spec);
+  ensureCanEditContent(session, spec);
 
   if (!Array.isArray(sources) || sources.length === 0) {
     throw new RouteError(400, "VALIDATION_ERROR", "No se indicaron origenes para importar.");
@@ -464,6 +463,10 @@ export async function setItemDecision(
   const prisma = requirePrisma();
   const { item, spec } = await loadScopedItem(session, itemId);
   ensureEditable(spec);
+  // Se decide sobre lo que el buque envió y tierra tomó, no sobre un borrador.
+  if (spec.status !== "UNDER_REVIEW") {
+    throw new RouteError(409, "INVALID_STATE", "Los trabajos se aceptan o descartan durante la revision.");
+  }
 
   const next = String(input.itemStatus ?? "").trim().toUpperCase();
   if (!(ITEM_STATUSES as readonly string[]).includes(next)) {
@@ -497,7 +500,8 @@ export async function addItemComment(session: TenantAccessSession, itemId: strin
       itemId: item.id,
       body: text,
       authorUserId: session.user.id,
-      authorName: session.user.email,
+      // El nombre de la persona, no su mail: es lo que se lee en la conversación.
+      authorName: [session.user.firstName, session.user.lastName].filter(Boolean).join(" ").trim() || session.user.email,
       authorRole: session.user.role,
     },
   });

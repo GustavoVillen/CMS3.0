@@ -127,6 +127,23 @@ export function ensureEditable(spec: { status: string }) {
   }
 }
 
+/** Estados en los que el documento está del lado de tierra: sólo tierra lo edita. */
+export const SHORE_STATUSES: readonly string[] = ["SUBMITTED", "UNDER_REVIEW"];
+
+/**
+ * Quién puede cambiar el contenido (datos y trabajos). En borrador o devuelta,
+ * el operativo (el buque). Enviada o en revisión, sólo tierra: el buque conversa
+ * en cada trabajo o la retira mientras nadie la tomó. Así un trabajo ya aceptado
+ * no cambia de texto a espaldas de quien lo aceptó.
+ */
+export function ensureCanEditContent(session: TenantAccessSession, spec: { status: string }) {
+  ensureCanManageDrydock(session);
+  ensureEditable(spec);
+  if (SHORE_STATUSES.includes(spec.status) && !canApproveDrydock(session)) {
+    throw new RouteError(409, "SPEC_IN_SHORE", "La especificacion esta en tierra: solo tierra la modifica. Retirala a borrador para corregirla.");
+  }
+}
+
 // ─── Lectura ─────────────────────────────────────────────────────────────────
 
 export async function listDrydockSpecs(session: TenantAccessSession, filters: DrydockSpecListFilters = {}) {
@@ -265,10 +282,9 @@ export async function createDrydockSpec(session: TenantAccessSession, input: Cre
 }
 
 export async function updateDrydockSpec(session: TenantAccessSession, id: string, input: UpdateDrydockSpecInput) {
-  ensureCanManageDrydock(session);
   const prisma = requirePrisma();
   const spec = await loadScopedSpec(session, id);
-  ensureEditable(spec);
+  ensureCanEditContent(session, spec);
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (input.title !== undefined) data.title = normReq(input.title, "title");
@@ -341,8 +357,8 @@ export async function transitionDrydockSpec(
     throw new RouteError(409, "INVALID_TRANSITION", `${spec.status} → ${next} no permitido.`);
   }
 
-  // Aprobar y rechazar son decisiones de tierra; el resto lo mueve el operativo.
-  if (next === "APPROVED" || next === "REJECTED") ensureCanApproveDrydock(session);
+  // Tomar, aprobar y rechazar son decisiones de tierra; el resto lo mueve el operativo.
+  if (next === "UNDER_REVIEW" || next === "APPROVED" || next === "REJECTED") ensureCanApproveDrydock(session);
   else ensureCanManageDrydock(session);
 
   // No se manda a tierra un documento vacío.
@@ -352,11 +368,16 @@ export async function transitionDrydockSpec(
       throw new RouteError(400, "VALIDATION_ERROR", "La especificacion no tiene items para enviar.");
     }
   }
-  // Aprobar sin ninguna línea aceptada no describe ninguna varada.
+  // Aprobar sin ninguna línea aceptada no describe ninguna varada, y con líneas
+  // sin decidir el PDF saldría incompleto sin que nadie las haya descartado.
   if (next === "APPROVED") {
     const accepted = await prisma.drydockSpecItem.count({ where: { specId: spec.id, itemStatus: "ACCEPTED" } });
     if (accepted === 0) {
       throw new RouteError(400, "VALIDATION_ERROR", "No hay items aceptados: la especificacion no se puede aprobar.");
+    }
+    const pending = await prisma.drydockSpecItem.count({ where: { specId: spec.id, itemStatus: "PROPOSED" } });
+    if (pending > 0) {
+      throw new RouteError(400, "VALIDATION_ERROR", `Quedan ${pending} trabajos sin decidir: acepta o descarta cada uno antes de aprobar.`);
     }
   }
 
