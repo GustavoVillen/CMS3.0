@@ -11,8 +11,8 @@
 //   - salto mayor a 24 h por día transcurrido
 // El usuario confirma y la lectura entra igual, con nota.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Save, History } from "lucide-react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Check, CheckCircle2, History, Loader2, PartyPopper, Pencil, Save, Search } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
@@ -72,25 +72,35 @@ const READING_INPUT_CLS =
 
 type SortKey = "equipo" | "sfi" | "last" | "date" | "stale";
 
+/** Resumen de la planilla para el encabezado de la ventana rápida. */
+export interface HoursGridStats { total: number; done: number; late: number; dirty: number }
+
+/** Lo que la ventana rápida le puede pedir a la planilla (su botón Guardar). */
+export interface AssetHoursGridHandle { save: () => void }
+
 interface Props {
   sheet: HoursSheet;
   /** Fecha a la que se imputan las horas cargadas (YYYY-MM-DD). */
   readingDate: string;
-  /** Recarga la planilla del padre después de guardar. */
-  onSaved: () => void;
-  /** Versión reducida para el Dashboard. */
+  /** Recarga la planilla del padre después de guardar. `count` = lecturas guardadas. */
+  onSaved: (count?: number) => void;
+  /** Versión de tarjetas para la ventana rápida del Dashboard (guardar lo pone el padre). */
   compact?: boolean;
   /** Abre el historial de lecturas de un equipo (sólo en la pantalla completa). */
   onOpenHistory?: (row: HoursSheetRow) => void;
+  /** Vista de tarjetas: avisa cuántos faltan, cuántos atrasados y cuántos sin guardar. */
+  onStatsChange?: (stats: HoursGridStats) => void;
+  /** El guardado pedido no se hizo (aviso cancelado, dato inválido o error). */
+  onSaveCancelled?: () => void;
 }
 
 function fmtHours(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
-export const AssetHoursGrid: React.FC<Props> = ({
-  sheet, readingDate, onSaved, compact, onOpenHistory,
-}) => {
+export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
+  sheet, readingDate, onSaved, compact, onOpenHistory, onStatsChange, onSaveCancelled,
+}, ref) => {
   const t = useT();
   const readOnly = !sheet.canWrite;
 
@@ -289,33 +299,227 @@ export const AssetHoursGrid: React.FC<Props> = ({
           };
         }),
       });
-      onSaved();
+      if (compact) {
+        setSavedMsg(t("assetHours.quick.saved").replace("{n}", String(dirtyIds.length)));
+        window.setTimeout(() => setSavedMsg(null), 2500);
+      }
+      onSaved(dirtyIds.length);
     } catch (err) {
       setAlert(err instanceof ApiError ? err.message : t("assetHours.saveFailed"));
+      onSaveCancelled?.();
     } finally {
       setSaving(false);
     }
   };
 
   const save = async () => {
-    if (dirtyIds.length === 0) { setAlert(t("assetHours.nothingToSave")); return; }
+    // Cualquier salida sin guardar le avisa al padre (p. ej. "Guardar y salir").
+    const stop = (message: string) => { setAlert(message); onSaveCancelled?.(); };
+    if (dirtyIds.length === 0) { stop(t("assetHours.nothingToSave")); return; }
     for (const assetId of dirtyIds) {
       const row = sheet.rows.find((r) => r.assetId === assetId)!;
       const raw = effectiveHoursOf(row);
       // El RPM es un dato DE la lectura: sin horas no hay lectura donde guardarlo.
-      if (raw === "") { setAlert(t("assetHours.rpmNeedsHours")); return; }
+      if (raw === "") { stop(t("assetHours.rpmNeedsHours")); return; }
       const value = Number(raw);
-      if (!Number.isFinite(value) || value < 0) { setAlert(t("assetHours.invalidNumber")); return; }
+      if (!Number.isFinite(value) || value < 0) { stop(t("assetHours.invalidNumber")); return; }
       const rpmDraft = (rpmDrafts[assetId] ?? "").trim();
       if (rpmDraft !== "") {
         const rpm = Number(rpmDraft);
-        if (!Number.isFinite(rpm) || rpm < 0) { setAlert(t("assetHours.invalidRpm")); return; }
+        if (!Number.isFinite(rpm) || rpm < 0) { stop(t("assetHours.invalidRpm")); return; }
       }
     }
     const warning = buildWarnings();
     if (warning) { setPending(warning); return; }
     await send(null);
   };
+
+  useImperativeHandle(ref, () => ({ save: () => { void save(); } }));
+
+  /** "hoy", "ayer" o la fecha: con qué palabra se nombra el día de la planilla. */
+  const whenLabel = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    if (readingDate === today) return t("assetHours.quick.whenToday");
+    if (readingDate === yesterday) return t("assetHours.quick.whenYesterday");
+    return readingDate.split("-").reverse().join("/");
+  })();
+
+  // ── Vista de tarjetas (ventana rápida del Tablero) ────────────────────────
+  // Una fila compacta por equipo, pensada para cargar desde el celular: qué
+  // falta cargar (naranja), qué ya está (verde), qué se tipeó y no se guardó
+  // (celeste) y qué número parece mal (rojo), con la diferencia a la vista
+  // mientras se escribe. Pedido del usuario, sep 2026 (preview V11).
+  const [filter, setFilter] = useState<"pending" | "done" | "all">("pending");
+  const [query, setQuery] = useState("");
+  const [rpmOpen, setRpmOpen] = useState<Record<string, boolean>>({});
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  const dayDiff = (from: string, to: string) =>
+    Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86_400_000);
+  const isLate = (row: HoursSheetRow) => row.daysSinceReading == null || row.daysSinceReading > STALE_DAYS;
+  /** El número tipeado no cierra: menor a la última o salto mayor a 24 h por día. */
+  const rowWarning = (row: HoursSheetRow): "back" | "jump" | null => {
+    const delta = deltaOf(row);
+    if (delta == null || !row.previousReading) return null;
+    if (delta < 0) return "back";
+    const days = Math.max(1, dayDiff(row.previousReading.readingDate, readingDate));
+    return delta > days * MAX_HOURS_PER_DAY ? "jump" : null;
+  };
+
+  const stats = useMemo(() => ({
+    total: sheet.rows.length,
+    done: sheet.rows.filter(r => r.readingOnDate || dirtyIds.includes(r.assetId)).length,
+    late: sheet.rows.filter(isLate).length,
+    dirty: dirtyIds.length,
+  }), [sheet.rows, dirtyIds]);
+  useEffect(() => { onStatsChange?.(stats); }, [stats, onStatsChange]);
+
+  const cardRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return sheet.rows
+      .filter(r => filter === "all" || (filter === "done" ? !!r.readingOnDate : !r.readingOnDate))
+      .filter(r => !q || `${r.assetName} ${r.assetCode}`.toLowerCase().includes(q));
+  }, [sheet.rows, filter, query]);
+
+  const pill = (cls: string, text: React.ReactNode) => (
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide ${cls}`}>{text}</span>
+  );
+
+  const cardsView = (
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {([
+          ["pending", t("assetHours.quick.filterPending"), sheet.rows.filter(r => !r.readingOnDate).length],
+          ["done", t("assetHours.quick.filterDone"), sheet.rows.filter(r => r.readingOnDate).length],
+          ["all", t("assetHours.quick.filterAll"), sheet.rows.length],
+        ] as const).map(([key, label, count]) => (
+          <button key={key} type="button" onClick={() => setFilter(key)}
+            className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              filter === key ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {label}
+            <span className={`rounded-full px-1.5 text-[11px] ${key === "pending" && count > 0 ? "bg-amber-600 text-white" : "bg-fg/10"}`}>{count}</span>
+          </button>
+        ))}
+        <div className="relative ml-auto w-full sm:w-48">
+          <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-text-industrial/40" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("assetHours.quick.search")}
+            className="w-full rounded-full border border-fg/10 bg-surface pl-8 pr-3 py-1.5 text-xs text-fg focus:outline-none focus:border-accent/50" />
+        </div>
+      </div>
+
+      {sheet.rows.length === 0 ? (
+        <p className="px-4 py-8 text-center text-xs text-text-industrial/40">{t("assetHours.empty")}</p>
+      ) : cardRows.length === 0 ? (
+        <div className="py-8 text-center text-sm text-text-industrial/60">
+          {filter === "pending" && !query
+            ? <><PartyPopper className="w-7 h-7 mx-auto mb-1 text-success-sea" /><b>{t("assetHours.quick.allDone").replace("{when}", whenLabel)}</b></>
+            : t("common.noResults")}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {cardRows.map(row => {
+            const dirty = dirtyIds.includes(row.assetId);
+            const loaded = !!row.readingOnDate;
+            const warning = dirty ? rowWarning(row) : null;
+            const delta = deltaOf(row);
+            const prev = row.previousReading;
+            const tone = warning ? "border-l-red-600 bg-red-50 dark:bg-red-500/10"
+              : dirty ? "border-l-accent bg-accent/5"
+              : loaded ? "border-l-success-sea bg-surface"
+              : "border-l-amber-500 bg-amber-50 dark:bg-amber-500/10";
+            const prevDays = prev ? dayDiff(prev.readingDate, readingDate) : null;
+            const showRpm = rpmOpen[row.assetId] || (rpmDrafts[row.assetId] ?? "") !== "";
+            return (
+              <div key={row.assetId}
+                className={`grid grid-cols-1 sm:grid-cols-[1fr_15.5rem] items-center gap-1 sm:gap-2.5 rounded-xl border border-fg/10 border-l-4 px-2.5 py-1.5 ${tone}`}>
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-bold text-fg" title={`${row.assetCode} — ${row.assetName}`}>
+                    {row.assetName}
+                    <span className="ml-1.5 font-mono text-[11px] font-normal text-text-industrial/40">{row.assetCode}</span>
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-text-industrial/60">
+                    {loaded && !dirty
+                      ? pill("bg-success-sea/15 text-success-sea", <><Check className="w-2.5 h-2.5" />{t("assetHours.quick.statusDone")}</>)
+                      : dirty
+                        ? pill("bg-accent/15 text-accent", t("assetHours.quick.statusDirty"))
+                        : pill("bg-amber-600 text-white", <><Pencil className="w-2.5 h-2.5" />{t("assetHours.quick.statusPending")}</>)}
+                    {row.daysSinceReading == null
+                      ? pill("bg-red-700 text-white", t("assetHours.never"))
+                      : isLate(row) && pill("bg-amber-600 text-white", t("assetHours.quick.lateDays").replace("{n}", String(row.daysSinceReading)))}
+                    <span>
+                      {t("assetHours.quick.last")} <b className="text-fg">{prev ? `${fmtHours(prev.runningHours)} h` : "—"}</b>
+                      {prevDays != null && ` · ${prevDays <= 0 ? t("assetHours.quick.agoToday")
+                        : prevDays === 1 ? t("assetHours.quick.agoYesterday")
+                        : t("assetHours.quick.agoDays").replace("{n}", String(prevDays))}`}
+                    </span>
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="any"
+                      disabled={readOnly || saving}
+                      value={drafts[row.assetId] ?? ""}
+                      onChange={(e) => setDraft(row.assetId, e.target.value)}
+                      placeholder={prev
+                        ? t("assetHours.quick.example").replace("{n}", fmtHours(prev.runningHours + 8))
+                        : t("assetHours.quick.hoursPh")}
+                      className={`w-full rounded-lg border-[1.5px] bg-surface pl-2.5 pr-7 py-1 text-right font-mono text-base font-bold text-fg placeholder:font-normal placeholder:text-sm placeholder-text-industrial/30 focus:outline-none focus:border-accent disabled:opacity-50 ${
+                        warning ? "border-red-500" : !loaded && !dirty ? "border-amber-500" : "border-fg/20"
+                      }`}
+                    />
+                    <span className="pointer-events-none absolute right-2.5 top-1.5 text-xs font-bold text-text-industrial/40">h</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <span className={`min-w-0 flex-1 truncate text-[11px] font-bold ${
+                      warning ? "text-red-700 dark:text-red-400" : delta != null ? "text-success-sea" : "font-normal text-text-industrial/40"
+                    }`}>
+                      {delta == null
+                        ? (prev ? " " : t("assetHours.quick.first"))
+                        : warning === "back"
+                          ? t("assetHours.quick.deltaBack").replace("{n}", fmtHours(delta))
+                          : warning === "jump"
+                            ? t("assetHours.quick.deltaJump").replace("{n}", fmtHours(delta)).replace("{d}", String(Math.max(1, prevDays ?? 1)))
+                            : t("assetHours.quick.deltaOk").replace("{n}", fmtHours(delta))}
+                    </span>
+                    {showRpm ? (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step="any"
+                        disabled={readOnly || saving}
+                        value={rpmDrafts[row.assetId] ?? ""}
+                        onChange={(e) => setRpmDraft(row.assetId, e.target.value)}
+                        placeholder={t("assetHours.rpmPlaceholder")}
+                        className="w-20 shrink-0 rounded-md border border-fg/20 bg-surface px-1.5 py-0.5 text-right font-mono text-xs text-fg focus:outline-none focus:border-accent disabled:opacity-50"
+                      />
+                    ) : !readOnly && (
+                      <button type="button" onClick={() => setRpmOpen(prev => ({ ...prev, [row.assetId]: true }))}
+                        className="shrink-0 text-[10px] font-bold text-accent hover:underline">
+                        {t("assetHours.quick.addRpm")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {savedMsg && (
+        <p className="flex items-center justify-center gap-1.5 rounded-xl bg-success-sea/10 px-3 py-2 text-xs font-bold text-success-sea" aria-live="polite">
+          <CheckCircle2 className="w-4 h-4" /> {savedMsg}
+        </p>
+      )}
+    </div>
+  );
 
   // ── Orden por columna ─────────────────────────────────────────────────────
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -436,6 +640,24 @@ export const AssetHoursGrid: React.FC<Props> = ({
       default: return null;
     }
   };
+
+  if (compact) {
+    return (
+      <>
+        {cardsView}
+        {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
+        {pending && (
+          <ConfirmDialog
+            message={pending.message}
+            confirmLabel={t("assetHours.saveAnyway")}
+            cancelLabel={t("common.cancel")}
+            onCancel={() => { setPending(null); onSaveCancelled?.(); }}
+            onConfirm={() => { const note = pending.note; setPending(null); void send(note); }}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -620,13 +842,14 @@ export const AssetHoursGrid: React.FC<Props> = ({
           message={pending.message}
           confirmLabel={t("assetHours.saveAnyway")}
           cancelLabel={t("common.cancel")}
-          onCancel={() => setPending(null)}
+          onCancel={() => { setPending(null); onSaveCancelled?.(); }}
           onConfirm={() => { const note = pending.note; setPending(null); void send(note); }}
         />
       )}
     </div>
   );
-};
+});
+AssetHoursGrid.displayName = "AssetHoursGrid";
 
 /** Aviso con dos salidas: seguir o cancelar. Mismo formato visual que AlertDialog. */
 const ConfirmDialog: React.FC<{

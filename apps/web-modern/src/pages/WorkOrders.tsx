@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, Camera, CheckCheck, ChevronDown, ExternalLink, FileSpreadsheet, FileText, LayoutGrid, List, Loader2, Maximize2, Mic, Minimize2, Pencil, Plus, Search, ShieldAlert, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -14,7 +14,9 @@ import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
-import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
+import { NewWorkOrderWizard, WizardStepper } from "../components/NewWorkOrderWizard";
+import { isJustCreated, clearJustCreated, markJustCreated } from "../lib/just-created";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel } from "../components/GuideKit";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 // WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
 // la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
@@ -31,7 +33,7 @@ import { CertificateRenewalDialog, type RenewableCertificate } from "../componen
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import {
   WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS,
-  WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS,
+  WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS,
 } from "../lib/wo-form-catalog";
 import { useAuth, useCan } from "../lib/auth";
 import { useRoleHasPermission } from "../lib/role-permissions";
@@ -958,6 +960,16 @@ const NewServiceRequestModal: React.FC<{
 const MaybeCopilotFlow: React.FC<{ flowKey: string | null; children: React.ReactNode }> = ({ flowKey, children }) =>
   flowKey ? <CopilotFlowProvider name="wo" flowKey={flowKey}>{children}</CopilotFlowProvider> : <>{children}</>;
 
+// ── Vista guiada de la OT ─────────────────────────────────────────────────────
+
+/** Color de la prioridad elegida (misma escala que el alta de OT). */
+const GUIDE_PRIORITY_CLS: Record<string, string> = {
+  CRITICAL: "bg-red-700 border-red-700 text-white",
+  HIGH:     "bg-orange-600 border-orange-600 text-white",
+  MEDIUM:   "bg-yellow-600 border-yellow-600 text-white",
+  LOW:      "bg-success-sea border-success-sea text-white",
+};
+
 // ── WorkOrderModal ────────────────────────────────────────────────────────────
 
 interface WorkOrderModalProps {
@@ -980,9 +992,11 @@ interface WorkOrderModalProps {
    * mirarla, así que no tiene que buscar el botón dentro de la ficha.
    */
   autoOpenNewSs?: boolean;
+  /** Se envió a aprobar: la página muestra la confirmación (este modal se cierra). */
+  onSentToApprove?: (workOrderCode: string) => void;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted, autoOpenNewSs }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted, autoOpenNewSs, onSentToApprove }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -2232,6 +2246,1323 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const canCancel   = !isClosed;
   const canClose    = !isClosed && !!woResult.trim();
 
+
+  // ── Bloques compartidos por la vista guiada (Mercurio) y la de siempre ──
+  const handlePaperChange: React.ComponentProps<typeof WoPaperForm>["onChange"] = patch => {
+                touchRegi();
+                const regi: Partial<WoRegiForm> = {};
+                if (patch.voyageNumber !== undefined)    regi.voyageNumber = patch.voyageNumber;
+                if (patch.operatingCondition !== undefined) regi.operatingCondition = patch.operatingCondition;
+                if (patch.requestedByArea !== undefined) regi.requestedByArea = patch.requestedByArea;
+                if (patch.assignedToArea !== undefined)  regi.assignedToArea = patch.assignedToArea;
+                if (patch.systemArea !== undefined)      regi.systemArea = patch.systemArea;
+                if (patch.maintenanceKind !== undefined) regi.maintenanceKind = patch.maintenanceKind;
+                if (patch.pendingDetail !== undefined)   regi.pendingDetail = patch.pendingDetail;
+                if (patch.taskCompleted !== undefined)   regi.taskCompleted = patch.taskCompleted;
+                if (Object.keys(regi).length > 0) setRegiForm(prev => ({ ...prev, ...regi }));
+                if (patch.location !== undefined)           setLocation(patch.location);
+                if (patch.priority !== undefined)           setPriority(patch.priority);
+                if (patch.type !== undefined)               setType(patch.type);
+                if (patch.description !== undefined)        setDescription(patch.description);
+                if (patch.title !== undefined)              setTitle(patch.title);
+                if (patch.acceptanceCriteria !== undefined) setAcceptanceCriteria(patch.acceptanceCriteria);
+                // Elegir "con deficiencias" dispara la propuesta de abrir un
+                // defecto: por eso pasa por su handler y no por setWoResult.
+                if (patch.woResult !== undefined)           handleWoResultChange(patch.woResult);
+                if (patch.riskLevel !== undefined)          setRiskLevel(patch.riskLevel);
+                if (patch.riskAnalysisResult !== undefined) setRiskAnalysisResult(patch.riskAnalysisResult);
+                if (patch.loto !== undefined)               setLoto(patch.loto);
+  };
+  const defAiBanner = (
+    <>
+          {/* ── IA: posible deficiencia detectada en el texto de la OT ── */}
+          {(defAi || defAiCreatedCode) && (
+            <div className="rounded-xl border border-orange-500/25 bg-orange-500/5 p-3 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+              {defAiCreatedCode ? (
+                <div className="flex-1 flex items-center justify-between gap-2">
+                  <p className="text-xs text-orange-700 dark:text-orange-300">{t("wo.defAi.created").replace("{code}", defAiCreatedCode)}</p>
+                  <button type="button" onClick={dismissDefAi} className="text-fg/30 hover:text-fg shrink-0"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : defAi ? (
+                <div className="flex-1 space-y-2">
+                  <p className="text-xs font-bold text-orange-700 dark:text-orange-300">{t("wo.defAi.title")}</p>
+                  <p className="text-xs text-fg/70">{defAi.reason}</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => { void createDeficiencyStub(); }} disabled={defAiCreating}
+                      className="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-700 dark:text-orange-300 text-[11px] font-bold hover:bg-orange-500/30 disabled:opacity-50 transition-all">
+                      {defAiCreating ? t("wo.defAi.creating") : t("wo.defAi.openDefect")}
+                    </button>
+                    <button type="button" onClick={dismissDefAi} className="px-2.5 py-1 rounded-lg text-[11px] text-fg/50 hover:text-fg transition-colors">
+                      {t("wo.defAi.dismiss")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+    </>
+  );
+  const plansPanelEl = (
+    <>
+            {/* ── Ítems del PDM que ejecuta esta OT (uno o varios) ── */}
+            <WoPlansPanel
+              workOrderId={workOrder.id}
+              vesselCode={workOrder.vesselCode}
+              plans={workOrder.plans ?? []}
+              canEdit={isEditable}
+              // onReload (no onSaved): agregar o quitar un ítem refresca el
+              // listado de fondo, pero NO cierra la ventana de la OT.
+              onChanged={onReload}
+            />
+    </>
+  );
+  const checklistEl = (
+    <>
+            <div className="space-y-1.5 mt-3">
+              {checklistDocUrl && !checklistDocFile && (
+                <a href={checklistDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{checklistDocUrl}</a>
+              )}
+              <input type="file" disabled={!isEditable} onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 disabled:opacity-50 cursor-pointer" />
+            </div>
+    </>
+  );
+  const newSrModalEl = (
+    <>
+            {newSrOpen && (
+              <NewServiceRequestModal
+                busy={creatingSr}
+                defaultValue={title || workOrder.title || ""}
+                onClose={() => setNewSrOpen(false)}
+                // Creada la SS se va derecho a su formulario: escribir el nombre
+                // del servicio es el primer paso del pedido, no el último. Si la
+                // OT tiene cambios sin guardar, saveThenNavigate los guarda antes
+                // de salir (y si el guardado falla, se queda acá con el error).
+                onConfirm={async (servicio) => {
+                  const id = await handleCreateServiceRequest(servicio);
+                  if (id) markJustCreated("ss", id);
+                  if (id) await saveThenNavigate(`/service-requests?openId=${id}`);
+                }}
+              />
+            )}
+    </>
+  );
+  const ssListEl = (
+    <>
+            {!canOpenServiceRequest && (
+              <p className="text-[11px] text-text-industrial/50 italic">
+                Una solicitud de servicio no puede abrirse desde una {woTerms.abbr} cerrada o cancelada.
+              </p>
+            )}
+
+            {linkedServiceRequests.length === 0 && canOpenServiceRequest && (
+              <p className="text-[11px] text-text-industrial/50 italic">
+                Sin solicitudes de servicio. Creá una si este trabajo necesita un taller externo.
+              </p>
+            )}
+
+            {linkedServiceRequests.length > 0 && (
+              <div className="space-y-2">
+                {linkedServiceRequests.map(sr => (
+                  // Fila clickeable en vez de <Link>: hay que guardar la OT antes
+                  // de salir, y un link navega sin darnos la oportunidad. Es un
+                  // <div> y no un <button> porque adentro va otro botón (el
+                  // código FA), y un botón dentro de otro es HTML inválido.
+                  <div
+                    key={sr.id}
+                    onClick={() => { void saveThenNavigate(`/service-requests?openId=${sr.id}`); }}
+                    title="Guarda la OT y abre esta solicitud de servicio"
+                    className="cursor-pointer flex items-center gap-3 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30 transition-all"
+                  >
+                    <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
+                    {/* La DESCRIPCIÓN manda: `title` se copia de la OT al crear la
+                        SS y queda congelado, así que muestra el texto viejo si
+                        después se edita la SS o se renombra la OT. */}
+                    <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.description || sr.title || "—"}</span>
+                    {/* A quién se le pidió: el nombre del taller, no un id. */}
+                    {sr.providerName && (
+                      <span className="shrink-0 max-w-[30%] truncate text-[11px] font-semibold text-fg" title={sr.providerName}>
+                        {sr.providerName}
+                      </span>
+                    )}
+                    {/* Código de la muestra, cuando esta OT generó una. Abre la
+                        muestra; al cerrarla se vuelve a esta OT. Va dentro de la
+                        fila clickeable, así que frena la navegación del padre. */}
+                    {linkedSample && (
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void saveThenNavigate(`/fluid-analyses?openId=${encodeURIComponent(linkedSample.id)}`);
+                        }}
+                        className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5 hover:bg-cyan-500/20 transition-colors"
+                        title="Guarda la OT y abre la muestra de análisis generada por ella"
+                      >
+                        {linkedSample.sampleCode}
+                      </button>
+                    )}
+                    <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
+                      {SS_STATUS_LABEL[sr.status] ?? sr.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+    </>
+  );
+  const permitsEl = (
+    <>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-text-industrial/50">
+                      Permisos vinculados
+                    </p>
+                    {isApproved && isEditable && (
+                      <button
+                        type="button"
+                        onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
+                      >
+                        <Plus className="w-3 h-3" /> Nuevo permiso
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sugerencia por el contenido del trabajo (mismas keywords). */}
+                  {isApproved && isEditable && advisoryMatches.length > 0 && linkedPermits.length === 0 && (
+                    <div className="border border-yellow-500/30 bg-yellow-500/5 p-2 space-y-1.5">
+                      <p className="flex items-start gap-1.5 text-[11px] font-semibold text-yellow-800 dark:text-yellow-200">
+                        <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        <span>
+                          Esta {woTerms.abbr} podría requerir permiso de trabajo:{" "}
+                          {advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}.
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {advisoryMatches.map(m => (
+                          <button
+                            key={m.type}
+                            type="button"
+                            onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
+                            className="px-2 py-0.5 border border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
+                          >
+                            Crear {PERMIT_TYPE_LABEL[m.type]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {linkedPermits.length === 0 ? (
+                    <p className="text-[11px] italic text-text-industrial/40">
+                      {isApproved ? "Sin permisos vinculados." : "Se cargan con la OT ya aprobada."}
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {linkedPermits.map(pm => (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          onClick={() => setPermitModalState({ kind: "edit", permit: pm })}
+                          className="w-full flex items-center gap-2 px-2 py-1 border border-fg/25 hover:border-accent/40 text-left transition-colors"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
+                          <span className="shrink-0 font-mono text-[10px] text-text-industrial/60">{pm.permitCode}</span>
+                          <span className={`shrink-0 px-1.5 py-0.5 rounded-full border text-[9px] font-bold ${PTW_STATUS_COLOR[pm.status]}`}>
+                            {PTW_STATUS_LABEL[pm.status]}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-text-industrial/70">
+                            {PERMIT_TYPE_LABEL[pm.type as PermitType] ?? pm.type}
+                          </span>
+                          <span className="flex-1 min-w-0 truncate text-[11px] text-fg/80">{pm.description}</span>
+                          <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+    </>
+  );
+  const scheduleEl = (
+    <>
+                <div className="space-y-2 p-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
+                        {t("wo.modal.startDate")}
+                      </label>
+                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                        disabled={!isEditable} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
+                        {t("wo.modal.endDate")}
+                      </label>
+                      <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)}
+                        disabled={!isEditable} className={inputCls} />
+                    </div>
+                  </div>
+                  <WoScheduleEditor
+                    workOrderId={workOrder.id}
+                    canEdit={isResultEditable}
+                    defaultPlace={location || null}
+                    defaultCompany={workOrder.providerName ?? providerOther ?? null}
+                  />
+                </div>
+    </>
+  );
+  const riskButtonsEl = (
+    <>
+                  <div className="flex gap-1.5">
+                    {([
+                      ["LOW",      "L", "bg-success-sea text-[#0B132B] border-success-sea",       "text-success-sea border-success-sea/40"],
+                      ["MEDIUM",   "M", "bg-yellow-400 text-[#0B132B] border-yellow-400",         "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
+                      ["HIGH",     "H", "bg-red-500 text-fg border-red-500",                      "text-red-700 dark:text-red-400 border-red-400/40"],
+                      ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                      "text-red-600 border-red-600/40"],
+                    ] as [string, string, string, string][]).map(([val, lab, activeCls, inactiveLabelCls]) => (
+                      <button key={val} type="button" disabled={!isEditable || loadingRisk}
+                        onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
+                        className={`w-8 h-8 rounded border font-bold text-xs transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
+                        {lab}
+                      </button>
+                    ))}
+                  </div>
+    </>
+  );
+  const holdNotices = (
+    <>
+            {workOrder.holdReason && (() => {
+              const inProcess = deferralStatus === "REQUESTED" || deferralStatus === "UNDER_REVIEW";
+              const approved  = deferralStatus === "APPROVED" || deferralStatus === "ACTIVE";
+              const closed    = deferralStatus === "CLOSED" || deferralStatus === "EXPIRED";
+              const rejected  = deferralStatus === "REJECTED";
+              const badge = inProcess
+                ? { label: deferralStatus === "UNDER_REVIEW" ? t("wo.deferral.underReview") : t("wo.deferral.requested"), cls: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" }
+                : approved
+                ? { label: deferralStatus === "ACTIVE" ? t("wo.deferral.approvedActive") : t("wo.deferral.approved"), cls: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" }
+                : rejected
+                ? { label: t("wo.deferral.rejected"), cls: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30" }
+                : closed
+                ? { label: deferralStatus === "EXPIRED" ? t("wo.deferral.expired") : t("wo.deferral.closed"), cls: "bg-fg/10 text-text-industrial/60 border-fg/10" }
+                : null;
+              const originalDue = workOrder.dueDate;
+              const postponedTo = deferralTargetDate;
+              const postponedDays = originalDue && postponedTo
+                ? Math.round((new Date(postponedTo).getTime() - new Date(originalDue).getTime()) / 86_400_000)
+                : null;
+              const boxCls = rejected
+                ? "mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
+                : "mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2";
+              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-700 dark:text-yellow-400";
+              const textCls  = rejected ? "text-xs text-red-700 dark:text-red-300" : "text-xs text-yellow-700 dark:text-yellow-300";
+              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-700 dark:text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-700 dark:text-yellow-400/70";
+              const strongCls = rejected ? "font-semibold text-red-700 dark:text-red-300" : "font-semibold text-yellow-700 dark:text-yellow-300";
+              return (
+                <div className={boxCls}>
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <p className={labelCls}>{t("wo.holdReasonLabel")}</p>
+                    {badge && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  <p className={textCls}>{workOrder.holdReason}</p>
+                  <div className={metaCls}>
+                    {originalDue && (
+                      <span>{t("wo.originalDue")}: <span className={strongCls}>{fmtDate(originalDue)}</span></span>
+                    )}
+                    {postponedTo && (
+                      <span>{t("wo.targetDate")}: <span className={strongCls}>{fmtDate(postponedTo)}</span></span>
+                    )}
+                    {postponedDays !== null && (
+                      <span>{t("wo.postponedBy")}: <span className={strongCls}>{postponedDays > 0 ? `+${postponedDays} ${t("wo.days")}` : `${postponedDays} ${t("wo.days")}`}</span></span>
+                    )}
+                  </div>
+                  {rejected && workOrder.status === "ON_HOLD" && (
+                    <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la {woTerms.abbr} o solicite uno nuevo.</p>
+                      <button
+                        type="button"
+                        onClick={() => { void handleResubmitDeferral(); }}
+                        disabled={resuming}
+                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-800 dark:text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
+                      >
+                        {resuming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Re-solicitar diferimiento
+                      </button>
+                    </div>
+                  )}
+                  {deferralHistory.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-fg/10">
+                      <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">Historial de diferimientos</p>
+                      <div className="space-y-0.5">
+                        {deferralHistory.map(d => (
+                          <button
+                            type="button"
+                            key={d.id}
+                            onClick={() => navigate(`/deferrals?autoCode=${d.deferralCode}`)}
+                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-fg/5 transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-mono text-yellow-700 dark:text-yellow-300/80 truncate">{d.deferralCode}</span>
+                              <DeferralStatusBadge status={d.status} />
+                            </span>
+                            <span className="text-text-industrial/40 whitespace-nowrap">{fmtDate(d.requestedAt)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {workOrder.cancelReason && (
+              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 mb-0.5">{t("wo.cancelReasonLabel")}</p>
+                <p className="text-xs text-red-700 dark:text-red-300">{workOrder.cancelReason}</p>
+              </div>
+            )}
+    </>
+  );
+  const deficienciesField = (
+    <>
+            {/* ── Deficiencias encontradas ── */}
+            {woResult === "WITH_DEFICIENCIES" && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className={labelCls}>{t("wo.modal.deficiencies")}</label>
+                  <button
+                    type="button"
+                    onClick={() => { void handleRewriteDeficiencies(); }}
+                    disabled={!isEditable || loadingRewrite || !deficienciasText.trim()}
+                    title={!deficienciasText.trim() ? t("wo.modal.rewriteEmptyError") : t("wo.modal.rewriteTooltip")}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loadingRewrite
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Sparkles className="w-3 h-3" />}
+                    {t("wo.modal.rewriteAI")}
+                  </button>
+                </div>
+                <AutoTextArea rows={3} value={deficienciasText} onChange={e => setDeficienciasText(e.target.value)} disabled={!isEditable || loadingRewrite} className={`${inputCls} resize-none border-orange-500/30 focus:border-orange-400/60`} placeholder={t("wo.modal.deficienciesPlaceholder")} />
+              </div>
+            )}
+    </>
+  );
+  const resultMoreFields = (
+    <>
+            <div className={workOrder.maintenancePlanId ? "grid grid-cols-2 gap-3" : ""}>
+              {workOrder.maintenancePlanId && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.runningHours")}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={runningHoursAtExecution}
+                    onChange={e => setRunningHoursAtExecution(e.target.value)}
+                    disabled={!isEditable}
+                    className={inputCls}
+                    placeholder={t("wo.modal.runningHoursPlaceholder")}
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className={labelCls}>
+                  {t("wo.modal.actualHours")}
+                  {workOrder.estimatedHours != null && (
+                    <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">
+                      {t("wo.modal.actualHoursEstHint").replace("{h}", String(workOrder.estimatedHours))}
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  value={actualHours}
+                  onChange={e => setActualHours(e.target.value)}
+                  disabled={!isEditable}
+                  className={inputCls}
+                  placeholder={t("wo.modal.actualHoursPlaceholder")}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("wo.modal.observations")}</label>
+              <AutoTextArea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none`} placeholder={t("wo.modal.observationsPlaceholder")} />
+            </div>
+            {isCorrective && !isClosed && (
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.defectDetail")}</label>
+                <AutoTextArea rows={2} value={defectDetail} onChange={e => setDefectDetail(e.target.value)} disabled={!isEditable}
+                  className={`${inputCls} resize-none`} placeholder={t("wo.modal.defectDetailPlaceholder")} />
+                <p className="text-[10px] text-text-industrial/40">{t("wo.modal.defectDetailHint")}</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("wo.modal.supportingDoc")}</label>
+              {supportingDocUrl && !supportingDocFile && (
+                <a href={supportingDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{supportingDocUrl}</a>
+              )}
+              <input type="file" disabled={!isEditable} onChange={e => setSupportingDocFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 disabled:opacity-50 cursor-pointer" />
+            </div>
+    </>
+  );
+  const spareUsagesBox = (
+    <>
+            {/* ── Repuestos utilizados ── */}
+            <div className="border border-fg/10 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-fg/50 uppercase tracking-wider">{t("wo.spares.section")}</p>
+                {isEditable && (
+                  <button type="button" onClick={() => setAddingUsage(v => !v)}
+                    className="text-[10px] text-accent/70 hover:text-accent underline">
+                    {addingUsage ? t("common.cancel") : t("wo.spares.add")}
+                  </button>
+                )}
+              </div>
+
+              {spareUsages.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-fg/30 border-b border-fg/10">
+                      <th className="text-left py-1">{t("wo.spares.colSpare")}</th>
+                      <th className="text-right py-1">{t("wo.spares.colQty")}</th>
+                      <th className="text-left py-1 pl-2">{t("wo.spares.colUnit")}</th>
+                      {isEditable && <th />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {spareUsages.map((u, i) => (
+                      <tr key={i} className="border-b border-fg/5 last:border-0">
+                        <td className="py-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <CritBadge crit={u.criticality} />
+                            <span className={u.qty > u.available ? "text-orange-700 dark:text-orange-300" : "text-fg"}>{u.spareName}</span>
+                          </div>
+                        </td>
+                        <td className="py-1.5 text-right">
+                          {isEditable ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={u.qty}
+                              onChange={e => updateUsageQty(i, e.target.value)}
+                              className={`w-24 bg-fg/5 border rounded-lg px-2 py-1.5 text-sm font-semibold text-right focus:outline-none focus:border-accent/50 ${u.qty > u.available ? "border-orange-500/40 text-orange-700 dark:text-orange-300" : "border-fg/15 text-fg"}`}
+                            />
+                          ) : (
+                            <span className="text-fg/70">{u.qty}</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pl-2 text-fg/40 align-middle">{u.unit}</td>
+                        {isEditable && (
+                          <td className="py-1.5 text-right">
+                            <button onClick={() => removeUsage(i)} className="text-fg/20 hover:text-red-700 dark:text-red-400 transition-colors">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {spareUsages.some(u => u.qty > u.available) && (
+                <p className="text-[10px] text-orange-700 dark:text-orange-400">
+                  {t("wo.spares.exceedsStock")}
+                </p>
+              )}
+
+              {addingUsage && (
+                <div className="space-y-1.5 pt-1 border-t border-fg/10">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2 relative">
+                      <input
+                        type="text"
+                        value={usageSearch}
+                        onChange={e => { setUsageSearch(e.target.value); setUsageSpareId(""); setUsageDropdown(true); }}
+                        onFocus={() => setUsageDropdown(true)}
+                        onBlur={() => setTimeout(() => setUsageDropdown(false), 150)}
+                        placeholder={t("wo.spares.searchPlaceholder")}
+                        className={inputCls}
+                      />
+                      {usageDropdown && (
+                        <div className="absolute z-20 w-full mt-1 bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                          {(() => {
+                            const q = usageSearch.toLowerCase();
+                            const filtered = q
+                              ? woSpares.filter(s => textMatches(s.sku, q) || textMatches(s.name, q))
+                              : woSpares.slice(0, 30);
+                            if (filtered.length === 0) return <p className="px-3 py-2 text-xs text-fg/30">{t("common.noResults")}</p>;
+                            return filtered.map(s => (
+                              <button key={s.id} type="button"
+                                onMouseDown={() => { setUsageSpareId(s.id); setUsageSearch(`${s.sku} — ${s.name}`); setUsageDropdown(false); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-fg/5">
+                                <CritBadge crit={s.criticality} />
+                                <span className="flex-1 text-left text-fg">{s.sku} — {s.name}</span>
+                                {s.available <= 0
+                                  ? <span className="text-red-700 dark:text-red-400 text-[10px] font-semibold shrink-0">{t("wo.spares.outOfStock")}</span>
+                                  : <span className="text-fg/30 text-[10px] shrink-0">{t("wo.spares.available")}: {s.available} {s.unit}</span>
+                                }
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <input type="number" min="0.01" step="0.01" value={usageQty} onChange={e => setUsageQty(e.target.value)}
+                        placeholder={t("wo.spares.qtyPlaceholder")} className={inputCls} />
+                      <button onClick={addUsage} disabled={!usageSpareId}
+                        className="px-3 py-2 rounded-xl bg-accent/20 text-accent text-xs font-bold hover:bg-accent/30 disabled:opacity-40 shrink-0">
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  {usageSpareId && (() => {
+                    const spare = woSpares.find(s => s.id === usageSpareId);
+                    const qty = parseFloat(usageQty);
+                    if (spare && qty > spare.available) {
+                      return <p className="text-[10px] text-orange-700 dark:text-orange-400">{t("wo.spares.insufficientStock").replace("{avail}", String(spare.available)).replace("{unit}", spare.unit).replace("{req}", String(qty))}</p>;
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
+
+              {spareUsages.length === 0 && !addingUsage && (
+                <p className="text-xs text-fg/20">{t("wo.spares.empty")}</p>
+              )}
+            </div>
+    </>
+  );
+  const defectPromptBox = (
+    <>
+            {/* ── Prompt abrir DEF ──
+                Se muestra también cuando la OT YA tiene defectos vinculados
+                aunque el prompt esté "idle": es el caso de volver del defecto o
+                reabrir la OT más tarde. */}
+            {woResult === "WITH_DEFICIENCIES" && (defectPrompt !== "idle" || linkedDefects.length > 0) && (
+              <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2.5">
+                {/* La pregunta sólo tiene sentido mientras no haya ninguno. */}
+                {linkedDefects.length === 0 && (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400 shrink-0" />
+                    <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">{t("wo.defectPrompt.question")}</p>
+                  </div>
+                )}
+                {defectPrompt === "ask" && linkedDefects.length === 0 && (
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { void createDefectInline(); }}
+                      className="flex-1 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
+                      {t("wo.defectPrompt.openRecord")}
+                    </button>
+                    <button type="button" onClick={() => setDefectPrompt("declined")}
+                      className="flex-1 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial/50 font-bold text-xs hover:border-fg/20 transition-all">
+                      {t("wo.defectPrompt.skipRecord")}
+                    </button>
+                  </div>
+                )}
+                {defectPrompt === "creating" && (
+                  <div className="flex items-center gap-2 text-xs text-text-industrial/50">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> {t("wo.defectPrompt.creating")}
+                  </div>
+                )}
+                {/* Los códigos salen de la BASE (linkedDefects), no del estado de
+                    la ventana: al volver del defecto el modal se rearma de cero y
+                    antes el recuadro aparecía vacío, como si nunca se hubiera
+                    creado nada. Así siguen visibles siempre, incluso días después. */}
+                {linkedDefects.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-success-sea font-semibold flex-wrap">
+                    <CheckCheck className="w-3.5 h-3.5 shrink-0" />
+                    {t("wo.defectPrompt.created")}:
+                    {linkedDefects.map(d => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => { void saveThenNavigate(`/defects?defectId=${d.id}`); }}
+                        className="inline-flex items-center gap-1 font-mono text-accent hover:underline"
+                        title="Guarda la OT y abre este registro de defecto"
+                      >
+                        {d.defectCode}
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {defectPrompt === "declined" && linkedDefects.length === 0 && (
+                  <p className="text-xs text-text-industrial/40">{t("wo.defectPrompt.declined")}</p>
+                )}
+              </div>
+            )}
+    </>
+  );
+  const closingWarningEl = (
+    <>
+          {closingWarning && (
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">
+              <p className="text-xs text-orange-700 dark:text-orange-300">{closingWarning}</p>
+              <button onClick={() => { void finishClose(); }} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
+                {t("common.acceptAndClose")}
+              </button>
+            </div>
+          )}
+    </>
+  );
+  const paperFormEl = (
+            <WoPaperForm
+              meta={paperDoc.meta}
+              config={paperDoc.config}
+              logoUrl={paperLogo}
+              tenantName={tenant?.name ?? ""}
+              editable={isEditable}
+              resultEditable={isResultEditable}
+              autosave={{ saving: regiSaving, saved: regiSaved, error: regiErr }}
+              header={{
+                vesselName: paperVesselName,
+                workOrderCode: workOrder.workOrderCode,
+                assetLabel: workOrder.assetName ?? workOrder.assetId ?? "",
+                serviceRequestCodes: linkedServiceRequests.map(sr => sr.serviceRequestCode),
+                openDate: fmtDate(workOrder.openDate),
+                planItemCode: (workOrder.plans ?? []).map(pl => pl.taskCode).join(", "),
+                statusLabel: WO_STATUS_PAPER_LABEL[workOrder.status] ?? workOrder.status,
+                createdByName: workOrder.createdByName ?? "",
+              }}
+              values={{
+                voyageNumber: regiForm.voyageNumber,
+                operatingCondition: regiForm.operatingCondition,
+                location,
+                requestedByArea: regiForm.requestedByArea,
+                assignedToArea: regiForm.assignedToArea,
+                priority,
+                maintenanceKind: regiForm.maintenanceKind,
+                type,
+                systemArea: regiForm.systemArea,
+                description,
+                title,
+                acceptanceCriteria,
+                taskCompleted: regiForm.taskCompleted,
+                woResult,
+                pendingDetail: regiForm.pendingDetail,
+                riskLevel,
+                riskAnalysisResult,
+                loto,
+              }}
+              // Los recuadros del papel escriben sobre los mismos campos de
+              // siempre: el bloque del formulario (regiForm, con su
+              // auto-guardado) y los campos sueltos de la OT.
+              onChange={handlePaperChange}
+              /* FECHA del encabezado: la de apertura de la OT. Es el mismo dato
+                 y el mismo estado que el campo de la sección de datos. */
+              fecha={
+                <input
+                  type="date"
+                  className={paperFieldCls}
+                  value={openDate}
+                  disabled={!((tramitaPhase === "SOLICITADA" || isAdmin) && isEditable)}
+                  onChange={e => setOpenDate(e.target.value)}
+                />
+              }
+              tecnico={
+                <AssigneeSelect
+                  value={assignedTo}
+                  onChange={setAssignedTo}
+                  disabled={!isEditable}
+                  className="w-full bg-transparent text-[13px] text-fg outline-none"
+                />
+              }
+              /* Sin selector propio: el taller se elige en la Solicitud de
+                 Servicio y la hoja lo refleja. Si hay varias SS con talleres
+                 distintos, van todos. */
+              proveedor={needsProvider ? (
+                ssProviderNames.length > 0 ? (
+                  <span className="text-[13px] text-fg">{ssProviderNames.join(" · ")}</span>
+                ) : (
+                  <span className="text-[11px] italic text-text-industrial/40">
+                    Se toma de las Solicitudes de Servicio de esta {woTerms.abbr}.
+                  </span>
+                )
+              ) : undefined}
+              /* Los permisos se crean, se sugieren y se abren desde acá mismo:
+                 el recuadro del papel ES la sección de permisos (igual que
+                 REPUESTOS con PlannedItemsEditor). Sólo se pueden cargar con la
+                 OT aprobada, como antes. */
+              permits={permitsEl}
+              /* REPUESTOS y MATERIALES: en la hoja sólo va el aviso. El ancho del
+                 papel corta el código del repuesto y no deja ni leer ni cargar el
+                 listado, así que la carga real vive en la sección 3, debajo de la
+                 hoja y a todo el ancho del modal. */
+              spares={
+                <p className="text-[11px] italic text-text-industrial/50">
+                  Los repuestos se registran más abajo, en la sección 3 “Repuestos y materiales”.
+                </p>
+              }
+              materials={
+                <p className="text-[11px] italic text-text-industrial/50">
+                  Los materiales se registran más abajo, en la sección 3 “Repuestos y materiales”.
+                </p>
+              }
+              schedule={scheduleEl}
+              riskMatrix={
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wide text-text-industrial/50">Nivel</span>
+                  {riskButtonsEl}
+                  {/* Sugerir el nivel y el análisis con IA — la única herramienta
+                      de la app dentro de este recuadro. */}
+                  {isEditable && (
+                    <button type="button" onClick={() => { void handleRiskClick(); }} disabled={loadingRisk}
+                      title={t("wo.ai.riskTooltip")}
+                      className="ml-auto flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-accent hover:text-fg disabled:opacity-40">
+                      {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      Sugerir
+                    </button>
+                  )}
+                </div>
+              }
+              signatures={{
+                solicitante: { name: workOrder.enviadoAprobacionByName ?? workOrder.createdByName ?? null },
+                asignado: { name: workOrder.assignedToUserName ?? null },
+              }}
+            />
+  );
+
+  // ═══ Vista guiada (tenants con el formulario REGI de Mercurio) ═════════════
+  // Misma OT, mismos campos y mismo guardado que la hoja del papel: cambia el
+  // orden (por etapa del trabajo: preparar → aprobación → ejecución → cierre) y
+  // se marca qué falta para avanzar. La hoja sigue disponible, editable, en la
+  // otra vista ("Hoja"). Pedido del usuario, sep 2026 (preview V7).
+  const [woView, setWoView] = useState<"guided" | "paper">("guided");
+  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({});
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  const [sendAsk, setSendAsk] = useState(false);
+  const [leaveAsk, setLeaveAsk] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Recién creada: aviso "¡Orden de trabajo abierta!" con los pasos que siguen.
+  const [showCreatedIntro, setShowCreatedIntro] = useState(() => isMercurio && isJustCreated("wo", workOrder.workOrderCode));
+  useEffect(() => { if (showCreatedIntro) clearJustCreated("wo"); }, [showCreatedIntro]);
+
+  /** 0 preparar · 1 aprobación · 2 ejecución · 3 cierre · 4 terminada. */
+  const guideStep = isClosed ? 4
+    : isApproved && (woResult || regiForm.taskCompleted) ? 3
+    : isApproved ? 2
+    : tramitaPhase === "SOLICITADA" ? 1
+    : 0;
+
+  // Lo que conviene tener antes de enviarla a aprobar. Es una guía, no un
+  // bloqueo: se puede "Enviar igual" (la tramitación no exigía nada antes).
+  const prepChecks = [
+    { key: "title",       label: t("wo.guide.chip.task"),     ok: !!title.trim() },
+    { key: "requestedBy", label: t("wo.modal.requestedBy"),   ok: !!regiForm.requestedByArea },
+    { key: "criteria",    label: t("wo.guide.chip.criteria"), ok: !!acceptanceCriteria.trim() },
+    { key: "risk",        label: t("wo.guide.chip.risk"),     ok: !!riskLevel },
+    { key: "loto",        label: t("wo.modal.loto"),          ok: !!loto.trim() },
+    // Recuadros del papel que se olvidaban (preview V9).
+    { key: "location",    label: t("wo.modal.location"),      ok: !!location.trim() },
+    { key: "assignedTo",  label: t("wo.modal.assignedTo"),    ok: !!regiForm.assignedToArea },
+    { key: "system",      label: t("wo.modal.system"),        ok: !!regiForm.systemArea },
+  ];
+  const prepMissing = prepChecks.filter(c => !c.ok);
+  // Cierre: el resultado es lo único obligatorio (canClose); el resto se marca.
+  const closeChecks = [
+    { key: "taskCompleted", label: t("wo.modal.taskCompleted"), ok: !!regiForm.taskCompleted },
+    { key: "result",        label: t("wo.modal.result"),        ok: !!woResult },
+    { key: "executedBy",    label: t("wo.modal.executedBy"),    ok: !!executedByName.trim() },
+    { key: "executionDate", label: t("wo.modal.executionDate"), ok: !!executionDate },
+  ];
+  const closeMissing = closeChecks.filter(c => !c.ok);
+  const missingKeys = new Set(
+    (guideStep === 0 && isEditable ? prepMissing : guideStep >= 2 && isResultEditable ? closeMissing : []).map(c => c.key),
+  );
+  const FIELD_SECTION: Record<string, string> = {
+    title: "what", criteria: "what", requestedBy: "form", location: "form", assignedTo: "form", system: "form",
+    risk: "safety", loto: "safety",
+    taskCompleted: "closure", result: "closure", executedBy: "closure", executionDate: "closure",
+  };
+  // Abiertos por defecto sólo los bloques de la etapa en curso.
+  const secOpen = (id: string) => openSecs[id] ?? (
+    ["what", "form", "safety", "prev"].includes(id) ? guideStep < 2
+    : ["progress", "used"].includes(id) ? guideStep >= 2
+    : guideStep >= 2
+  );
+  const toggleSec = (id: string) => setOpenSecs(prev => ({ ...prev, [id]: !secOpen(id) }));
+  /** Lleva al campo: vista guiada, abre su bloque, lo centra y lo resalta un instante. */
+  const goField = (key: string) => {
+    setWoView("guided");
+    const sec = FIELD_SECTION[key];
+    if (sec) setOpenSecs(prev => ({ ...prev, [sec]: true }));
+    window.setTimeout(() => {
+      document.getElementById(`wo-field-${key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashKey(key);
+      window.setTimeout(() => setFlashKey(null), 1600);
+    }, 80);
+  };
+  const sectionPill = (keys: string[]) => (
+    <GuidePill missing={keys.filter(k => missingKeys.has(k)).length} completeLabel={t("wo.guide.complete")}
+      missingOne={t("wo.guide.missingOne")} missingMany={t("wo.guide.missingMany")} />
+  );
+  /** Campo que falta: franja y fondo naranja, para que se vea de lejos. */
+  const needWrap = (key: string, children: React.ReactNode) => (
+    <GuideField id={`wo-field-${key}`} missing={missingKeys.has(key)} flash={flashKey === key}>{children}</GuideField>
+  );
+  const needTag = (key: string) => missingKeys.has(key) && <GuideNeedTag label={t("wo.guide.needTag")} />;
+  const aiBtn = (onClick: () => void, loading: boolean, tip?: string) => isEditable && (
+    <button type="button" onClick={onClick} disabled={loading} title={tip}
+      className="inline-flex items-center gap-1 shrink-0 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-0.5 text-[11px] font-bold text-accent hover:bg-accent/15 disabled:opacity-50 transition-colors">
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      {t("wo.modal.aiSuggest")}
+    </button>
+  );
+  const segBtns = (
+    options: { value: string; label: string }[], value: string, onPick: (v: string) => void,
+    disabled: boolean, activeCls?: (v: string) => string | undefined,
+  ) => (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(o => {
+        const on = value === o.value;
+        return (
+          <button key={o.value} type="button" disabled={disabled} onClick={() => onPick(o.value)}
+            className={`px-3 py-1.5 rounded-lg border-[1.5px] text-xs font-semibold transition-colors disabled:opacity-60 ${
+              on ? (activeCls?.(o.value) ?? "bg-accent border-accent text-accent-fg") : "bg-surface border-fg/15 text-fg hover:border-accent/40"
+            }`}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  const guideLabel = (text: React.ReactNode, key?: string, extra?: React.ReactNode) => (
+    <div className="flex items-center justify-between gap-2">
+      <label className={labelCls}>{text}{key && needTag(key)}</label>
+      {extra}
+    </div>
+  );
+
+  const canSendToApprove = isEditable && tramitaPhase === "EN_PREPARACION";
+  const sendToApprove = () => {
+    setLeaveAsk(false);
+    if (prepMissing.length > 0) { setSendAsk(true); return; }
+    void openTramita("ENVIA");
+  };
+  // Cerrar la OT sin haberla enviado: se recuerda que nadie la ve para aprobar.
+  const handleCloseClick = () => {
+    if (isMercurio && canSendToApprove) { setLeaveAsk(true); return; }
+    requestClose();
+  };
+
+  const prepDone = prepChecks.length - prepMissing.length;
+  const btnPrimary = "flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-accent-fg text-sm font-bold hover:brightness-110 disabled:opacity-50 transition-all";
+  const btnSoft = "flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-semibold text-fg hover:border-accent/30 disabled:opacity-40 transition-all";
+  const chipCheck = (c: { key: string; label: string; ok: boolean }) => (
+    <button key={c.key} type="button" onClick={() => goField(c.key)}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+        c.ok ? "border-success-sea/30 bg-success-sea/10 text-success-sea"
+             : "border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-200 hover:bg-amber-200"
+      }`}>
+      {c.ok ? <Check className="w-3.5 h-3.5" /> : <CircleDashed className="w-3.5 h-3.5" />}
+      {c.label}
+    </button>
+  );
+  const kicker = (icon: React.ReactNode, text: string, ok = false) => (
+    <p className={`flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest ${ok ? "text-success-sea" : "text-accent"}`}>
+      {icon}{text}
+    </p>
+  );
+  const authorizeRow = tramitaPhase === "APROBADA" && isEditable && (
+    <div className="flex flex-wrap gap-2">
+      <button type="button" disabled={saving || !canAuthorizeWo} title={!canAuthorizeWo ? t("wo.guide.authorizeNoPerm") : undefined}
+        onClick={() => { void openTramita("AUTORIZA"); }}
+        className="px-4 py-2 rounded-xl border text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        {t("wo.guide.authorize")}
+      </button>
+      <button type="button" onClick={() => { void openTramita("RECHAZA"); }}
+        className="px-4 py-2 rounded-xl border text-xs font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/20 transition-colors">
+        {t("wo.guide.notAuthorize")}
+      </button>
+    </div>
+  );
+  const signersLine = tramitaPhase === "AUTORIZADA" && workOrder.type === "INSPECTION" && workOrder.autorizadoByName === "Sistema"
+    ? <p className="text-xs text-text-industrial/60">{t("wo.tramita.inspectionAutoAuthorized")}</p>
+    : (
+      <p className="text-xs text-text-industrial/60">
+        {workOrder.aprobadoByName && t("wo.guide.exec.approvedBy").replace("{name}", workOrder.aprobadoByName)}
+        {workOrder.autorizadoByName && <> · {t("wo.guide.exec.authorizedBy").replace("{name}", workOrder.autorizadoByName)}</>}
+        {workOrder.autorizadoAt && ` · ${fmtDate(workOrder.autorizadoAt)}`}
+      </p>
+    );
+
+  const nextStepCard = (
+    guideStep === 0 ? (
+      <div className={`rounded-2xl border-[1.5px] p-4 space-y-2.5 ${prepMissing.length === 0 ? "border-success-sea/40 bg-success-sea/5" : "border-accent/35 bg-accent/[0.05]"}`}>
+        {isRejected && (
+          <p className="text-xs text-red-700 dark:text-red-300 leading-snug">
+            <span className="font-bold">{t("wo.guide.rejected")}</span>
+            {workOrder.rechazadoByName ? ` · ${workOrder.rechazadoByName}` : ""}
+            {workOrder.rechazadoAt ? ` · ${fmtDate(workOrder.rechazadoAt)}` : ""}
+            {workOrder.rechazoReason && <span className="block text-text-industrial/70 mt-0.5">{t("wo.guide.reason")}: {workOrder.rechazoReason}</span>}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+          <span className="flex items-center gap-1.5 text-accent">
+            <span className="w-5 h-5 rounded-full border-[1.5px] border-accent bg-accent/10 flex items-center justify-center text-[10px]">1</span>
+            {t("wo.guide.flow.complete")}
+          </span>
+          <ArrowRight className="w-3.5 h-3.5 text-text-industrial/40" />
+          <span className={`flex items-center gap-1.5 ${prepMissing.length === 0 ? "text-success-sea" : "text-text-industrial/50"}`}>
+            <span className={`w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center text-[10px] ${prepMissing.length === 0 ? "border-success-sea bg-success-sea text-white" : "border-fg/25"}`}>2</span>
+            {t("wo.guide.flow.send")}
+          </span>
+        </div>
+        <p className="text-[15px] font-extrabold text-fg">
+          {prepMissing.length > 0 ? t("wo.guide.prep.titleMissing") : t("wo.guide.prep.titleReady")}
+        </p>
+        <div className="h-1.5 rounded-full bg-fg/10 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${prepMissing.length === 0 ? "bg-success-sea" : "bg-accent"}`}
+            style={{ width: `${(prepDone / prepChecks.length) * 100}%` }} />
+        </div>
+        <p className="text-xs text-text-industrial/60">
+          {t("wo.guide.prep.progress").replace("{done}", String(prepDone)).replace("{total}", String(prepChecks.length))}
+          {prepMissing.length > 0 && t("wo.guide.prep.progressHint")}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {[...prepMissing, ...prepChecks.filter(c => c.ok)].map(chipCheck)}
+        </div>
+        {canSendToApprove && (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button type="button" onClick={sendToApprove} disabled={saving} className={btnPrimary}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {t("wo.guide.send")}
+            </button>
+            <span className="text-xs text-text-industrial/60">{t("wo.guide.sendHint")}</span>
+          </div>
+        )}
+      </div>
+    ) : guideStep === 1 ? (
+      <div className="rounded-2xl border-[1.5px] border-accent/35 bg-accent/[0.05] p-4 space-y-2">
+        {kicker(<Hourglass className="w-3 h-3" />, t("wo.guide.approval.title"))}
+        <p className="text-[15px] font-extrabold text-fg">
+          {t("wo.guide.approval.sentBy").replace("{name}", workOrder.enviadoAprobacionByName ?? workOrder.createdByName ?? "—")}
+          {workOrder.enviadoAprobacionAt ? ` · ${fmtDate(workOrder.enviadoAprobacionAt)}` : ""}
+        </p>
+        <p className="text-xs text-text-industrial/60">{t("wo.guide.approval.who")}</p>
+        {isEditable && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button type="button" disabled={saving || !canApproveWo} title={!canApproveWo ? t("wo.guide.approveNoPerm") : undefined}
+              onClick={() => { void openTramita("APRUEBA"); }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold bg-success-sea text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+              <Check className="w-4 h-4" /> {t("wo.guide.approve")}
+            </button>
+            <button type="button" onClick={() => { void openTramita("RECHAZA"); }}
+              className="px-4 py-2.5 rounded-xl border text-sm font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/20 transition-colors">
+              {t("wo.guide.notApprove")}
+            </button>
+          </div>
+        )}
+      </div>
+    ) : guideStep === 2 ? (
+      <div className="rounded-2xl border-[1.5px] border-accent/35 bg-accent/[0.05] p-4 space-y-2">
+        {kicker(<Hammer className="w-3 h-3" />, t("wo.guide.exec.title"))}
+        <p className="text-[15px] font-extrabold text-fg">{t("wo.guide.exec.heading")}</p>
+        {signersLine}
+        {tramitaPhase === "APROBADA" && <p className="text-xs text-text-industrial/60">{t("wo.guide.exec.pendingAuth")}</p>}
+        {authorizeRow}
+        <div className="flex flex-wrap gap-2 pt-1">
+          {isResultEditable && (
+            <button type="button" onClick={() => setShowProgressSheet(true)} className={btnPrimary}>
+              <Camera className="w-4 h-4" /> {t("wo.guide.addProgress")}
+            </button>
+          )}
+          {isResultEditable && (
+            <button type="button" onClick={() => goField("taskCompleted")} className={btnSoft}>
+              <Flag className="w-3.5 h-3.5" /> {t("wo.guide.goClose")}
+            </button>
+          )}
+        </div>
+      </div>
+    ) : guideStep === 3 ? (
+      <div className={`rounded-2xl border-[1.5px] p-4 space-y-2.5 ${closeMissing.length === 0 ? "border-success-sea/40 bg-success-sea/5" : "border-accent/35 bg-accent/[0.05]"}`}>
+        {kicker(<Flag className="w-3 h-3" />, t("wo.guide.step.closure"), closeMissing.length === 0)}
+        <p className="text-[15px] font-extrabold text-fg">
+          {closeMissing.length > 0 ? t("wo.guide.close.titleMissing") : t("wo.guide.close.titleReady")}
+        </p>
+        <p className="text-xs text-text-industrial/60">
+          {closeMissing.length > 0 ? t("wo.guide.close.missing").replace("{n}", String(closeMissing.length)) : t("wo.guide.close.ready")}
+        </p>
+        {closeMissing.length > 0 && <div className="flex flex-wrap gap-1.5">{closeMissing.map(chipCheck)}</div>}
+        {authorizeRow}
+        <button
+          type="button"
+          onClick={() => {
+            setCloseOnBehalfUserId(user?.id ?? "");
+            setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
+            setShowCloseDialog(true);
+          }}
+          disabled={!canClose || closing}
+          title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success-sea text-white text-sm font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+          {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />} {t("wo.modal.closeWO")}
+        </button>
+      </div>
+    ) : (
+      <div className="rounded-2xl border-[1.5px] border-fg/15 bg-fg/[0.03] p-4 space-y-1">
+        {kicker(<CheckCheck className="w-3 h-3" />, workOrder.status === "CANCELLED" ? t("wo.guide.cancelled.title") : t("wo.guide.closed.title"), workOrder.status !== "CANCELLED")}
+        <p className="text-xs text-text-industrial/60">{t("wo.guide.closed.hint")}</p>
+      </div>
+    )
+  );
+
+  const stageLabel = (text: string, locked: boolean) => (
+    <GuideStageLabel text={text} lockedHint={locked ? t("wo.guide.stage.lockedHint") : null} />
+  );
+  const lockedProps = { locked: !isApproved, lockedLabel: t("wo.guide.locked"), lockedText: t("wo.guide.lockedHint") };
+
+  const guidedBody = (
+    <>
+      {defAiBanner}
+      {nextStepCard}
+      {holdNotices}
+      {newSrModalEl}
+
+      {stageLabel(t("wo.guide.stage.prepare"), false)}
+
+      <GuideSection n={1} title={t("wo.guide.sec.what")} subtitle={t("wo.guide.sec.whatSub")}
+        pill={sectionPill(["title", "criteria"])} open={secOpen("what")} onToggle={() => toggleSec("what")}>
+        <div className="space-y-1.5">
+          {guideLabel(t("wo.guide.field.request"))}
+          <AutoTextArea rows={autoRows(description, 2)} value={description}
+            onChange={e => handlePaperChange({ description: e.target.value })}
+            onBlur={() => { void analyzeForDeficiency(description, "task"); }}
+            disabled={!isEditable} className={`${inputCls} resize-y`} placeholder={t("wo.guide.field.requestPh")} />
+        </div>
+        {needWrap("title", <>
+          {guideLabel(<>{t("wo.guide.field.task")} *</>, "title", aiBtn(() => { void handleTitleClick(); }, loadingTitle, t("wo.ai.titleTooltip")))}
+          <AutoTextArea rows={Math.min(6, Math.max(2, title.split("\n").length))} value={title}
+            onChange={e => handlePaperChange({ title: e.target.value })}
+            onBlur={() => { void analyzeForDeficiency(title, "title"); }}
+            disabled={!isEditable || loadingTitle} className={`${inputCls} resize-y`} placeholder={t("wo.guide.field.taskPh")} />
+        </>)}
+        {needWrap("criteria", <>
+          {guideLabel(t("wo.modal.acceptanceCriteria"), "criteria", aiBtn(() => { void handleAcceptanceCriteriaClick(); }, loadingCriteria, t("wo.ai.criteriaTooltip")))}
+          <AutoTextArea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria}
+            onChange={e => handlePaperChange({ acceptanceCriteria: e.target.value })}
+            disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.guide.field.criteriaPh")} />
+        </>)}
+        {plansPanelEl}
+      </GuideSection>
+
+      <GuideSection n={2} title={t("wo.guide.sec.form")} subtitle={t("wo.guide.sec.formSub")}
+        pill={sectionPill(["location", "requestedBy", "assignedTo", "system"])} open={secOpen("form")} onToggle={() => toggleSec("form")}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+          {needWrap("location", <>
+            {guideLabel(<>{t("wo.modal.location")} *</>, "location")}
+            <input value={location} onChange={e => handlePaperChange({ location: e.target.value })} disabled={!isEditable}
+              placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
+          </>)}
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.modal.voyageNumber"))}
+            <input value={regiForm.voyageNumber} onChange={e => handlePaperChange({ voyageNumber: e.target.value })} disabled={!isEditable}
+              placeholder="Ej. V-2026-014" className={inputCls} />
+          </div>
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.modal.operatingCondition"))}
+            <select value={regiForm.operatingCondition} onChange={e => handlePaperChange({ operatingCondition: e.target.value })}
+              disabled={!isEditable} className={inputCls}>
+              <option value="">—</option>
+              {WO_OPERATING_CONDITIONS.map(c => (
+                <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {needWrap("requestedBy", <>
+          {guideLabel(<>{t("wo.modal.requestedBy")} *</>, "requestedBy")}
+          {segBtns(WO_REQUESTED_BY, regiForm.requestedByArea,
+            v => handlePaperChange({ requestedByArea: regiForm.requestedByArea === v ? "" : v }), !isEditable)}
+        </>)}
+        {needWrap("assignedTo", <>
+          {guideLabel(<>{t("wo.modal.assignedTo")} *</>, "assignedTo")}
+          {segBtns(WO_ASSIGNED_TO, regiForm.assignedToArea,
+            v => handlePaperChange({ assignedToArea: regiForm.assignedToArea === v ? "" : v }), !isEditable)}
+        </>)}
+        {(regiForm.assignedToArea === "TERCERIZADO" || linkedServiceRequests.length > 0) && (
+          <div className="space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+            {guideLabel(t("wo.guide.field.ss"), undefined, canOpenServiceRequest ? (
+              <button type="button" onClick={() => setNewSrOpen(true)} disabled={creatingSr}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50">
+                {creatingSr ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Nueva SS
+              </button>
+            ) : undefined)}
+            {ssListEl}
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.guide.field.tecnico"))}
+            <AssigneeSelect value={assignedTo} onChange={setAssignedTo} disabled={!isEditable} className={inputCls} />
+          </div>
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.modal.openDate"))}
+            <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
+              disabled={!((tramitaPhase === "SOLICITADA" || isAdmin) && isEditable)} className={inputCls} />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          {guideLabel(t("wo.modal.priority"))}
+          {/* La prioridad es un dato de la OT: sólo se cambia por otra, no se vacía. */}
+          {segBtns(WO_PRIORITY_OPTIONS, priority, v => handlePaperChange({ priority: v }), !isEditable, v => GUIDE_PRIORITY_CLS[v])}
+        </div>
+        <div className="space-y-1.5">
+          {guideLabel(t("wo.guide.field.kind"))}
+          {segBtns(WO_MAINTENANCE_KINDS_OR_INSPECTION, type === "INSPECTION" ? "INSPECTION" : regiForm.maintenanceKind, v => {
+            if (v === "INSPECTION") { handlePaperChange({ type: "INSPECTION", maintenanceKind: "" }); return; }
+            // Mismo criterio que la hoja (y que deriveTypeFromMaintenanceKind en el backend).
+            handlePaperChange({ type: v === "PREVENTIVO" || v === "PREDICTIVO" ? "PREVENTIVE" : "CORRECTIVE", maintenanceKind: v });
+          }, !isEditable)}
+        </div>
+        {needWrap("system", <>
+          {guideLabel(<>{t("wo.modal.system")} *</>, "system")}
+          {segBtns(WO_SYSTEM_AREAS, regiForm.systemArea,
+            v => handlePaperChange({ systemArea: regiForm.systemArea === v ? "" : v }), !isEditable)}
+        </>)}
+      </GuideSection>
+
+      <GuideSection n={3} title={t("wo.guide.sec.safety")} subtitle={t("wo.guide.sec.safetySub")}
+        pill={sectionPill(["risk", "loto"])} open={secOpen("safety")} onToggle={() => toggleSec("safety")}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          {needWrap("risk", <>
+            {guideLabel(t("wo.modal.riskLevel"), "risk", aiBtn(() => { void handleRiskClick(); }, loadingRisk, t("wo.ai.riskTooltip")))}
+            {riskButtonsEl}
+            <p className="text-[10px] text-text-industrial/50">{t("wo.modal.riskLevelHint").replace(/^—\s*/, "")}</p>
+          </>)}
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.guide.field.permits"))}
+            {permitsEl}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          {guideLabel(t("wo.modal.riskAnalysisResult"))}
+          <AutoTextArea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult}
+            onChange={e => handlePaperChange({ riskAnalysisResult: e.target.value })}
+            disabled={!isEditable || loadingRisk} className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
+        </div>
+        {needWrap("loto", <>
+          {guideLabel(t("wo.modal.loto"), "loto", aiBtn(() => { void handleLotoClick(); }, loadingLoto, t("wo.ai.lotoTooltip")))}
+          <AutoTextArea rows={autoRows(loto, 2)} value={loto}
+            onChange={e => handlePaperChange({ loto: e.target.value })}
+            disabled={!isEditable || loadingLoto} className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
+        </>)}
+      </GuideSection>
+
+      <GuideSection n={4} title={t("wo.guide.sec.prev")} subtitle={t("wo.guide.sec.prevSub")}
+        open={secOpen("prev")} onToggle={() => toggleSec("prev")}>
+        <div className="space-y-1.5">
+          {guideLabel(t("wo.guide.field.planned"))}
+          <PlannedItemsEditor
+            items={plannedItems}
+            onChange={v => { touchRegi(); setPlannedItems(v); }}
+            spares={woSpares}
+            disabled={!isEditable}
+          />
+        </div>
+        {scheduleEl}
+        <div className="space-y-1.5">
+          {guideLabel(t("wo.modal.checklistDoc"))}
+          {checklistEl}
+        </div>
+      </GuideSection>
+
+      {stageLabel(t("wo.guide.step.execution"), !isApproved)}
+
+      <GuideSection n={5} title="Avances" subtitle={t("wo.guide.sec.progressSub")}
+        open={secOpen("progress")} onToggle={() => toggleSec("progress")} {...lockedProps}>
+        <ProgressNotesPanel
+          workOrderId={workOrder.id}
+          canAdd={isResultEditable}
+          canDelete={isEditable || isAdmin}
+          canEdit={isResultEditable}
+          onAdd={() => setShowProgressSheet(true)}
+          reloadKey={notesReloadKey}
+          onChanged={refreshAfterAvance}
+        />
+      </GuideSection>
+
+      <GuideSection n={6} title={t("wo.spares.section")} subtitle={t("wo.guide.sec.usedSub")}
+        open={secOpen("used")} onToggle={() => toggleSec("used")} {...lockedProps}>
+        {spareUsagesBox}
+      </GuideSection>
+
+      {stageLabel(t("wo.guide.step.closure"), !isApproved)}
+
+      <GuideSection n={7} title={t("wo.guide.sec.closure")} subtitle={t("wo.guide.sec.closureSub")}
+        pill={isResultEditable ? sectionPill(["taskCompleted", "result", "executedBy", "executionDate"]) : undefined}
+        open={secOpen("closure")} onToggle={() => toggleSec("closure")} {...lockedProps}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          {needWrap("taskCompleted", <>
+            {guideLabel(<>{t("wo.modal.taskCompleted")} *</>, "taskCompleted")}
+            <div className="flex gap-2">
+              {[["YES", t("common.yes"), "bg-success-sea/10 text-success-sea border-success-sea/40"],
+                ["NO", t("common.no"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/40"]].map(([val, label, cls]) => (
+                <button key={val} type="button" disabled={!isResultEditable}
+                  onClick={() => handlePaperChange({ taskCompleted: regiForm.taskCompleted === val ? "" : val as "YES" | "NO" })}
+                  className={`flex-1 py-2.5 rounded-xl border-[1.5px] text-sm font-bold transition-all disabled:opacity-50 ${regiForm.taskCompleted === val ? cls : "bg-surface text-text-industrial/60 border-fg/15 hover:border-fg/30"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>)}
+          {needWrap("result", <>
+            {guideLabel(<>{t("wo.modal.result")} *</>, "result")}
+            <div className="flex gap-2">
+              {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/40"],
+                ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/40"]].map(([val, label, cls]) => (
+                <button key={val} type="button" disabled={!isResultEditable}
+                  onClick={() => handleWoResultChange(woResult === val ? "" : val)}
+                  className={`flex-1 py-2.5 rounded-xl border-[1.5px] text-sm font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-surface text-text-industrial/60 border-fg/15 hover:border-fg/30"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>)}
+        </div>
+        {regiForm.taskCompleted === "NO" && (
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.guide.field.pending"))}
+            <AutoTextArea rows={2} value={regiForm.pendingDetail}
+              onChange={e => handlePaperChange({ pendingDetail: e.target.value })}
+              disabled={!isResultEditable} className={`${inputCls} resize-y`} placeholder={t("wo.guide.field.pendingPh")} />
+          </div>
+        )}
+        {deficienciesField}
+        {defectPromptBox}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          {needWrap("executedBy", <>
+            {guideLabel(t("wo.modal.executedBy"), "executedBy")}
+            <input value={executedByName} onChange={e => setExecutedByName(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("wo.modal.executedByPlaceholder")} />
+          </>)}
+          {needWrap("executionDate", <>
+            {guideLabel(t("wo.modal.executionDate"), "executionDate")}
+            <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
+          </>)}
+        </div>
+        {resultMoreFields}
+      </GuideSection>
+
+      {closingWarningEl}
+    </>
+  );
+
+  const paperBody = (
+    <>
+      <p className="text-xs text-text-industrial/60 text-center">{t("wo.guide.paperNote")}</p>
+      {paperFormEl}
+    </>
+  );
+
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2300,39 +3631,36 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <ModalCloseButton onClose={requestClose} />
+            <ModalCloseButton onClose={handleCloseClick} />
           </div>
         </div>
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 p-6 space-y-6">
-
-          {/* ── IA: posible deficiencia detectada en el texto de la OT ── */}
-          {(defAi || defAiCreatedCode) && (
-            <div className="rounded-xl border border-orange-500/25 bg-orange-500/5 p-3 flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-              {defAiCreatedCode ? (
-                <div className="flex-1 flex items-center justify-between gap-2">
-                  <p className="text-xs text-orange-700 dark:text-orange-300">{t("wo.defAi.created").replace("{code}", defAiCreatedCode)}</p>
-                  <button type="button" onClick={dismissDefAi} className="text-fg/30 hover:text-fg shrink-0"><X className="w-3.5 h-3.5" /></button>
-                </div>
-              ) : defAi ? (
-                <div className="flex-1 space-y-2">
-                  <p className="text-xs font-bold text-orange-700 dark:text-orange-300">{t("wo.defAi.title")}</p>
-                  <p className="text-xs text-fg/70">{defAi.reason}</p>
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => { void createDeficiencyStub(); }} disabled={defAiCreating}
-                      className="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-700 dark:text-orange-300 text-[11px] font-bold hover:bg-orange-500/30 disabled:opacity-50 transition-all">
-                      {defAiCreating ? t("wo.defAi.creating") : t("wo.defAi.openDefect")}
-                    </button>
-                    <button type="button" onClick={dismissDefAi} className="px-2.5 py-1 rounded-lg text-[11px] text-fg/50 hover:text-fg transition-colors">
-                      {t("wo.defAi.dismiss")}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+        {/* Vista guiada: buque, etapa de la OT y el cambio a la hoja del papel. */}
+        {isMercurio && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-6 pb-3 pt-0.5 border-b border-fg/10 shrink-0">
+            <span className="inline-flex items-center gap-1.5 mt-2.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg">
+              <Ship className="w-3 h-3" /><b className="font-bold">{paperVesselName}</b>
+            </span>
+            <WizardStepper
+              labels={[t("wo.guide.step.prepare"), t("wo.guide.step.approval"), t("wo.guide.step.execution"), t("wo.guide.step.closure")]}
+              current={guideStep}
+            />
+            <div className="ml-auto mt-2.5 flex rounded-lg border border-fg/10 bg-fg/5 p-0.5">
+              {([["guided", t("wo.guide.view.guided"), ListChecks], ["paper", `${t("wo.guide.view.paper")} ${paperDoc.meta.formCode}`, FileText]] as const).map(([v, label, Icon]) => (
+                <button key={v} type="button" onClick={() => setWoView(v)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${woView === v ? "bg-surface text-fg shadow-sm" : "text-text-industrial/60 hover:text-fg"}`}>
+                  <Icon className="w-3.5 h-3.5" /> {label}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
+        )}
+
+        {/* Body */}
+        <div className={`overflow-y-auto flex-1 p-6 ${isMercurio ? "space-y-3.5" : "space-y-6"}`}>
+          {isMercurio ? (woView === "paper" ? paperBody : guidedBody) : (<>
+
+          {defAiBanner}
 
           {/* ── 0. TRAMITACIÓN (En preparación → Envía → Aprueba → Autoriza) ── */}
           {isEditable && (
@@ -2434,16 +3762,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               borderCls="border-accent/30"
             />
 
-            {/* ── Ítems del PDM que ejecuta esta OT (uno o varios) ── */}
-            <WoPlansPanel
-              workOrderId={workOrder.id}
-              vesselCode={workOrder.vesselCode}
-              plans={workOrder.plans ?? []}
-              canEdit={isEditable}
-              // onReload (no onSaved): agregar o quitar un ítem refresca el
-              // listado de fondo, pero NO cierra la ventana de la OT.
-              onChanged={onReload}
-            />
+            {plansPanelEl}
 
             {/* ── Área / responsable ── */}
             {/* En los tenants con el formulario REGI-MAN-02.3 esto vive arriba,
@@ -2594,13 +3913,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {/* ── 3. DOCUMENTO CHECKLIST ── */}
           <section className="space-y-3">
             <PhaseHeader n={isMercurio ? 2 : 3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
-            <div className="space-y-1.5 mt-3">
-              {checklistDocUrl && !checklistDocFile && (
-                <a href={checklistDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{checklistDocUrl}</a>
-              )}
-              <input type="file" disabled={!isEditable} onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 disabled:opacity-50 cursor-pointer" />
-            </div>
+            {checklistEl}
           </section>
 
           {/* ── SOLICITUDES DE SERVICIO (SS) ── */}
@@ -2625,21 +3938,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               ) : undefined}
             />
 
-            {newSrOpen && (
-              <NewServiceRequestModal
-                busy={creatingSr}
-                defaultValue={title || workOrder.title || ""}
-                onClose={() => setNewSrOpen(false)}
-                // Creada la SS se va derecho a su formulario: escribir el nombre
-                // del servicio es el primer paso del pedido, no el último. Si la
-                // OT tiene cambios sin guardar, saveThenNavigate los guarda antes
-                // de salir (y si el guardado falla, se queda acá con el error).
-                onConfirm={async (servicio) => {
-                  const id = await handleCreateServiceRequest(servicio);
-                  if (id) await saveThenNavigate(`/service-requests?openId=${id}`);
-                }}
-              />
-            )}
+            {newSrModalEl}
 
             {/* Recuadro propio (mismo trato que "Tarea concluida"): contratar un
                 taller externo es una decisión de peso y no debe leerse como una
@@ -2651,66 +3950,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 Ya no se exige que la OT esté autorizada (la SS se carga junto
                 con la OT y la tramitación la arrastra); el único motivo que
                 queda es que la OT no esté abierta. */}
-            {!canOpenServiceRequest && (
-              <p className="text-[11px] text-text-industrial/50 italic">
-                Una solicitud de servicio no puede abrirse desde una {woTerms.abbr} cerrada o cancelada.
-              </p>
-            )}
-
-            {linkedServiceRequests.length === 0 && canOpenServiceRequest && (
-              <p className="text-[11px] text-text-industrial/50 italic">
-                Sin solicitudes de servicio. Creá una si este trabajo necesita un taller externo.
-              </p>
-            )}
-
-            {linkedServiceRequests.length > 0 && (
-              <div className="space-y-2">
-                {linkedServiceRequests.map(sr => (
-                  // Fila clickeable en vez de <Link>: hay que guardar la OT antes
-                  // de salir, y un link navega sin darnos la oportunidad. Es un
-                  // <div> y no un <button> porque adentro va otro botón (el
-                  // código FA), y un botón dentro de otro es HTML inválido.
-                  <div
-                    key={sr.id}
-                    onClick={() => { void saveThenNavigate(`/service-requests?openId=${sr.id}`); }}
-                    title="Guarda la OT y abre esta solicitud de servicio"
-                    className="cursor-pointer flex items-center gap-3 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 hover:border-accent/30 transition-all"
-                  >
-                    <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
-                    {/* La DESCRIPCIÓN manda: `title` se copia de la OT al crear la
-                        SS y queda congelado, así que muestra el texto viejo si
-                        después se edita la SS o se renombra la OT. */}
-                    <span className="flex-1 min-w-0 truncate text-xs text-text-industrial">{sr.description || sr.title || "—"}</span>
-                    {/* A quién se le pidió: el nombre del taller, no un id. */}
-                    {sr.providerName && (
-                      <span className="shrink-0 max-w-[30%] truncate text-[11px] font-semibold text-fg" title={sr.providerName}>
-                        {sr.providerName}
-                      </span>
-                    )}
-                    {/* Código de la muestra, cuando esta OT generó una. Abre la
-                        muestra; al cerrarla se vuelve a esta OT. Va dentro de la
-                        fila clickeable, así que frena la navegación del padre. */}
-                    {linkedSample && (
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void saveThenNavigate(`/fluid-analyses?openId=${encodeURIComponent(linkedSample.id)}`);
-                        }}
-                        className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5 hover:bg-cyan-500/20 transition-colors"
-                        title="Guarda la OT y abre la muestra de análisis generada por ella"
-                      >
-                        {linkedSample.sampleCode}
-                      </button>
-                    )}
-                    <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
-                      {SS_STATUS_LABEL[sr.status] ?? sr.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {ssListEl}
             </div>
           </section>
 
@@ -2718,254 +3958,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               Completar la OT es completar el formulario. Lo que la pantalla
               tiene y el papel no (asistentes de IA, adjuntos, avances, planes,
               permisos, diferimientos) queda debajo, en su propia zona. */}
-          {isMercurio && (
-            <WoPaperForm
-              meta={paperDoc.meta}
-              config={paperDoc.config}
-              logoUrl={paperLogo}
-              tenantName={tenant?.name ?? ""}
-              editable={isEditable}
-              resultEditable={isResultEditable}
-              autosave={{ saving: regiSaving, saved: regiSaved, error: regiErr }}
-              header={{
-                vesselName: paperVesselName,
-                workOrderCode: workOrder.workOrderCode,
-                assetLabel: workOrder.assetName ?? workOrder.assetId ?? "",
-                serviceRequestCodes: linkedServiceRequests.map(sr => sr.serviceRequestCode),
-                openDate: fmtDate(workOrder.openDate),
-                planItemCode: (workOrder.plans ?? []).map(pl => pl.taskCode).join(", "),
-                statusLabel: WO_STATUS_PAPER_LABEL[workOrder.status] ?? workOrder.status,
-                createdByName: workOrder.createdByName ?? "",
-              }}
-              values={{
-                voyageNumber: regiForm.voyageNumber,
-                operatingCondition: regiForm.operatingCondition,
-                location,
-                requestedByArea: regiForm.requestedByArea,
-                assignedToArea: regiForm.assignedToArea,
-                priority,
-                maintenanceKind: regiForm.maintenanceKind,
-                type,
-                systemArea: regiForm.systemArea,
-                description,
-                title,
-                acceptanceCriteria,
-                taskCompleted: regiForm.taskCompleted,
-                woResult,
-                pendingDetail: regiForm.pendingDetail,
-                riskLevel,
-                riskAnalysisResult,
-                loto,
-              }}
-              // Los recuadros del papel escriben sobre los mismos campos de
-              // siempre: el bloque del formulario (regiForm, con su
-              // auto-guardado) y los campos sueltos de la OT.
-              onChange={patch => {
-                touchRegi();
-                const regi: Partial<WoRegiForm> = {};
-                if (patch.voyageNumber !== undefined)    regi.voyageNumber = patch.voyageNumber;
-                if (patch.operatingCondition !== undefined) regi.operatingCondition = patch.operatingCondition;
-                if (patch.requestedByArea !== undefined) regi.requestedByArea = patch.requestedByArea;
-                if (patch.assignedToArea !== undefined)  regi.assignedToArea = patch.assignedToArea;
-                if (patch.systemArea !== undefined)      regi.systemArea = patch.systemArea;
-                if (patch.maintenanceKind !== undefined) regi.maintenanceKind = patch.maintenanceKind;
-                if (patch.pendingDetail !== undefined)   regi.pendingDetail = patch.pendingDetail;
-                if (patch.taskCompleted !== undefined)   regi.taskCompleted = patch.taskCompleted;
-                if (Object.keys(regi).length > 0) setRegiForm(prev => ({ ...prev, ...regi }));
-                if (patch.location !== undefined)           setLocation(patch.location);
-                if (patch.priority !== undefined)           setPriority(patch.priority);
-                if (patch.type !== undefined)               setType(patch.type);
-                if (patch.description !== undefined)        setDescription(patch.description);
-                if (patch.title !== undefined)              setTitle(patch.title);
-                if (patch.acceptanceCriteria !== undefined) setAcceptanceCriteria(patch.acceptanceCriteria);
-                // Elegir "con deficiencias" dispara la propuesta de abrir un
-                // defecto: por eso pasa por su handler y no por setWoResult.
-                if (patch.woResult !== undefined)           handleWoResultChange(patch.woResult);
-                if (patch.riskLevel !== undefined)          setRiskLevel(patch.riskLevel);
-                if (patch.riskAnalysisResult !== undefined) setRiskAnalysisResult(patch.riskAnalysisResult);
-                if (patch.loto !== undefined)               setLoto(patch.loto);
-              }}
-              /* FECHA del encabezado: la de apertura de la OT. Es el mismo dato
-                 y el mismo estado que el campo de la sección de datos. */
-              fecha={
-                <input
-                  type="date"
-                  className={paperFieldCls}
-                  value={openDate}
-                  disabled={!((tramitaPhase === "SOLICITADA" || isAdmin) && isEditable)}
-                  onChange={e => setOpenDate(e.target.value)}
-                />
-              }
-              tecnico={
-                <AssigneeSelect
-                  value={assignedTo}
-                  onChange={setAssignedTo}
-                  disabled={!isEditable}
-                  className="w-full bg-transparent text-[13px] text-fg outline-none"
-                />
-              }
-              /* Sin selector propio: el taller se elige en la Solicitud de
-                 Servicio y la hoja lo refleja. Si hay varias SS con talleres
-                 distintos, van todos. */
-              proveedor={needsProvider ? (
-                ssProviderNames.length > 0 ? (
-                  <span className="text-[13px] text-fg">{ssProviderNames.join(" · ")}</span>
-                ) : (
-                  <span className="text-[11px] italic text-text-industrial/40">
-                    Se toma de las Solicitudes de Servicio de esta {woTerms.abbr}.
-                  </span>
-                )
-              ) : undefined}
-              /* Los permisos se crean, se sugieren y se abren desde acá mismo:
-                 el recuadro del papel ES la sección de permisos (igual que
-                 REPUESTOS con PlannedItemsEditor). Sólo se pueden cargar con la
-                 OT aprobada, como antes. */
-              permits={
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-text-industrial/50">
-                      Permisos vinculados
-                    </p>
-                    {isApproved && isEditable && (
-                      <button
-                        type="button"
-                        onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill() })}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20"
-                      >
-                        <Plus className="w-3 h-3" /> Nuevo permiso
-                      </button>
-                    )}
-                  </div>
 
-                  {/* Sugerencia por el contenido del trabajo (mismas keywords). */}
-                  {isApproved && isEditable && advisoryMatches.length > 0 && linkedPermits.length === 0 && (
-                    <div className="border border-yellow-500/30 bg-yellow-500/5 p-2 space-y-1.5">
-                      <p className="flex items-start gap-1.5 text-[11px] font-semibold text-yellow-800 dark:text-yellow-200">
-                        <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
-                        <span>
-                          Esta {woTerms.abbr} podría requerir permiso de trabajo:{" "}
-                          {advisoryMatches.map(m => PERMIT_TYPE_LABEL[m.type]).join(", ")}.
-                        </span>
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {advisoryMatches.map(m => (
-                          <button
-                            key={m.type}
-                            type="button"
-                            onClick={() => setPermitModalState({ kind: "create", prefill: makePermitPrefill(m.type) })}
-                            className="px-2 py-0.5 border border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20"
-                          >
-                            Crear {PERMIT_TYPE_LABEL[m.type]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {linkedPermits.length === 0 ? (
-                    <p className="text-[11px] italic text-text-industrial/40">
-                      {isApproved ? "Sin permisos vinculados." : "Se cargan con la OT ya aprobada."}
-                    </p>
-                  ) : (
-                    <div className="space-y-1">
-                      {linkedPermits.map(pm => (
-                        <button
-                          key={pm.id}
-                          type="button"
-                          onClick={() => setPermitModalState({ kind: "edit", permit: pm })}
-                          className="w-full flex items-center gap-2 px-2 py-1 border border-fg/25 hover:border-accent/40 text-left transition-colors"
-                        >
-                          <ShieldAlert className="w-3.5 h-3.5 text-accent/70 shrink-0" />
-                          <span className="shrink-0 font-mono text-[10px] text-text-industrial/60">{pm.permitCode}</span>
-                          <span className={`shrink-0 px-1.5 py-0.5 rounded-full border text-[9px] font-bold ${PTW_STATUS_COLOR[pm.status]}`}>
-                            {PTW_STATUS_LABEL[pm.status]}
-                          </span>
-                          <span className="shrink-0 text-[10px] text-text-industrial/70">
-                            {PERMIT_TYPE_LABEL[pm.type as PermitType] ?? pm.type}
-                          </span>
-                          <span className="flex-1 min-w-0 truncate text-[11px] text-fg/80">{pm.description}</span>
-                          <ExternalLink className="w-3 h-3 text-text-industrial/40 shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              }
-              /* REPUESTOS y MATERIALES: en la hoja sólo va el aviso. El ancho del
-                 papel corta el código del repuesto y no deja ni leer ni cargar el
-                 listado, así que la carga real vive en la sección 3, debajo de la
-                 hoja y a todo el ancho del modal. */
-              spares={
-                <p className="text-[11px] italic text-text-industrial/50">
-                  Los repuestos se registran más abajo, en la sección 3 “Repuestos y materiales”.
-                </p>
-              }
-              materials={
-                <p className="text-[11px] italic text-text-industrial/50">
-                  Los materiales se registran más abajo, en la sección 3 “Repuestos y materiales”.
-                </p>
-              }
-              schedule={
-                <div className="space-y-2 p-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
-                        {t("wo.modal.startDate")}
-                      </label>
-                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                        disabled={!isEditable} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
-                        {t("wo.modal.endDate")}
-                      </label>
-                      <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)}
-                        disabled={!isEditable} className={inputCls} />
-                    </div>
-                  </div>
-                  <WoScheduleEditor
-                    workOrderId={workOrder.id}
-                    canEdit={isResultEditable}
-                    defaultPlace={location || null}
-                    defaultCompany={workOrder.providerName ?? providerOther ?? null}
-                  />
-                </div>
-              }
-              riskMatrix={
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-wide text-text-industrial/50">Nivel</span>
-                  <div className="flex gap-1.5">
-                    {([
-                      ["LOW",      "L", "bg-success-sea text-[#0B132B] border-success-sea",       "text-success-sea border-success-sea/40"],
-                      ["MEDIUM",   "M", "bg-yellow-400 text-[#0B132B] border-yellow-400",         "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
-                      ["HIGH",     "H", "bg-red-500 text-fg border-red-500",                      "text-red-700 dark:text-red-400 border-red-400/40"],
-                      ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                      "text-red-600 border-red-600/40"],
-                    ] as [string, string, string, string][]).map(([val, lab, activeCls, inactiveLabelCls]) => (
-                      <button key={val} type="button" disabled={!isEditable || loadingRisk}
-                        onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
-                        className={`w-8 h-8 rounded border font-bold text-xs transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
-                        {lab}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Sugerir el nivel y el análisis con IA — la única herramienta
-                      de la app dentro de este recuadro. */}
-                  {isEditable && (
-                    <button type="button" onClick={() => { void handleRiskClick(); }} disabled={loadingRisk}
-                      title={t("wo.ai.riskTooltip")}
-                      className="ml-auto flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-accent hover:text-fg disabled:opacity-40">
-                      {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      Sugerir
-                    </button>
-                  )}
-                </div>
-              }
-              signatures={{
-                solicitante: { name: workOrder.enviadoAprobacionByName ?? workOrder.createdByName ?? null },
-                asignado: { name: workOrder.assignedToUserName ?? null },
-              }}
-            />
-          )}
 
           {/* ── 1. INFORMACIÓN ──
               Con el formulario controlado la sección entera se saca (pedido del
@@ -3012,98 +4005,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               ))}
             </div>
             )}
-            {workOrder.holdReason && (() => {
-              const inProcess = deferralStatus === "REQUESTED" || deferralStatus === "UNDER_REVIEW";
-              const approved  = deferralStatus === "APPROVED" || deferralStatus === "ACTIVE";
-              const closed    = deferralStatus === "CLOSED" || deferralStatus === "EXPIRED";
-              const rejected  = deferralStatus === "REJECTED";
-              const badge = inProcess
-                ? { label: deferralStatus === "UNDER_REVIEW" ? t("wo.deferral.underReview") : t("wo.deferral.requested"), cls: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" }
-                : approved
-                ? { label: deferralStatus === "ACTIVE" ? t("wo.deferral.approvedActive") : t("wo.deferral.approved"), cls: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" }
-                : rejected
-                ? { label: t("wo.deferral.rejected"), cls: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30" }
-                : closed
-                ? { label: deferralStatus === "EXPIRED" ? t("wo.deferral.expired") : t("wo.deferral.closed"), cls: "bg-fg/10 text-text-industrial/60 border-fg/10" }
-                : null;
-              const originalDue = workOrder.dueDate;
-              const postponedTo = deferralTargetDate;
-              const postponedDays = originalDue && postponedTo
-                ? Math.round((new Date(postponedTo).getTime() - new Date(originalDue).getTime()) / 86_400_000)
-                : null;
-              const boxCls = rejected
-                ? "mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2"
-                : "mt-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2";
-              const labelCls = rejected ? "text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400" : "text-[10px] uppercase tracking-wider text-yellow-700 dark:text-yellow-400";
-              const textCls  = rejected ? "text-xs text-red-700 dark:text-red-300" : "text-xs text-yellow-700 dark:text-yellow-300";
-              const metaCls  = rejected ? "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-red-700 dark:text-red-400/70" : "mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-yellow-700 dark:text-yellow-400/70";
-              const strongCls = rejected ? "font-semibold text-red-700 dark:text-red-300" : "font-semibold text-yellow-700 dark:text-yellow-300";
-              return (
-                <div className={boxCls}>
-                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className={labelCls}>{t("wo.holdReasonLabel")}</p>
-                    {badge && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    )}
-                  </div>
-                  <p className={textCls}>{workOrder.holdReason}</p>
-                  <div className={metaCls}>
-                    {originalDue && (
-                      <span>{t("wo.originalDue")}: <span className={strongCls}>{fmtDate(originalDue)}</span></span>
-                    )}
-                    {postponedTo && (
-                      <span>{t("wo.targetDate")}: <span className={strongCls}>{fmtDate(postponedTo)}</span></span>
-                    )}
-                    {postponedDays !== null && (
-                      <span>{t("wo.postponedBy")}: <span className={strongCls}>{postponedDays > 0 ? `+${postponedDays} ${t("wo.days")}` : `${postponedDays} ${t("wo.days")}`}</span></span>
-                    )}
-                  </div>
-                  {rejected && workOrder.status === "ON_HOLD" && (
-                    <div className="mt-2 pt-2 border-t border-red-500/20 flex items-center justify-between gap-2">
-                      <p className="text-[10px] text-red-700 dark:text-red-300/80">El diferimiento fue rechazado. Reanude la {woTerms.abbr} o solicite uno nuevo.</p>
-                      <button
-                        type="button"
-                        onClick={() => { void handleResubmitDeferral(); }}
-                        disabled={resuming}
-                        className="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/30 text-red-800 dark:text-red-200 font-bold text-[10px] hover:bg-red-500/30 disabled:opacity-50 transition-all flex items-center gap-1 whitespace-nowrap"
-                      >
-                        {resuming ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                        Re-solicitar diferimiento
-                      </button>
-                    </div>
-                  )}
-                  {deferralHistory.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-fg/10">
-                      <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-1">Historial de diferimientos</p>
-                      <div className="space-y-0.5">
-                        {deferralHistory.map(d => (
-                          <button
-                            type="button"
-                            key={d.id}
-                            onClick={() => navigate(`/deferrals?autoCode=${d.deferralCode}`)}
-                            className="w-full flex items-center justify-between gap-2 text-[10px] px-1.5 py-1 rounded hover:bg-fg/5 transition-colors text-left"
-                          >
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-mono text-yellow-700 dark:text-yellow-300/80 truncate">{d.deferralCode}</span>
-                              <DeferralStatusBadge status={d.status} />
-                            </span>
-                            <span className="text-text-industrial/40 whitespace-nowrap">{fmtDate(d.requestedAt)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            {workOrder.cancelReason && (
-              <div className="mt-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 mb-0.5">{t("wo.cancelReasonLabel")}</p>
-                <p className="text-xs text-red-700 dark:text-red-300">{workOrder.cancelReason}</p>
-              </div>
-            )}
+            {holdNotices}
             {/* Con el formulario controlado el responsable es el recuadro
                 TECNICO de la hoja. */}
             {!isMercurio && (
@@ -3200,24 +4102,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </section>
           )}
 
-          {/* ── 3. REPUESTOS Y MATERIALES ──
-              Sale de la hoja (donde el recuadro quedaba ilegible) y se carga
-              acá, a todo el ancho. Mismos permisos de siempre: se editan con la
-              OT abierta, sin esperar la aprobación. */}
-          {isMercurio && (
-          <section className="space-y-3">
-            <PhaseHeader n={3} label="Repuestos y materiales" dotCls="bg-amber-500/15 text-amber-700 dark:text-amber-400" borderCls="border-amber-500/25" />
-            <div className="bg-fg/[0.03] border border-fg/10 rounded-2xl p-4">
-              <PlannedItemsEditor
-                items={plannedItems}
-                onChange={v => { touchRegi(); setPlannedItems(v); }}
-                spares={woSpares}
-                disabled={!isEditable}
-              />
-            </div>
-          </section>
-          )}
-
           {/* ── Avances / Tarea concluida / Resultado: ocultas del todo hasta
               que la OT esté aprobada, no sólo deshabilitadas. */}
           {isApproved && (
@@ -3241,47 +4125,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 onChanged={refreshAfterAvance}
               />
             </section>
-          )}
-
-          {/* ── 5. TAREA CONCLUIDA Y RESULTADO ──
-              Sale de la hoja por el mismo motivo que los repuestos: ahí son dos
-              casilleros chiquitos que se pierden, y son la marca con la que la
-              OT se cierra. En la hoja quedan de sólo lectura. */}
-          {isMercurio && (
-          <section className="space-y-3">
-            <PhaseHeader n={5} label={t("wo.modal.taskCompletedSection")} dotCls="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" borderCls="border-emerald-500/25" />
-            <div className="grid sm:grid-cols-2 gap-4 bg-fg/[0.03] border border-fg/10 rounded-2xl p-4">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.taskCompleted")}</label>
-                <div className="flex gap-2">
-                  {[["YES", t("common.yes"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
-                    ["NO", t("common.no"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
-                    <button key={val} type="button" disabled={!isResultEditable}
-                      onClick={() => {
-                        touchRegi();
-                        setRegiForm(prev => ({ ...prev, taskCompleted: prev.taskCompleted === val ? "" : val as "YES" | "NO" }));
-                      }}
-                      className={`flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all disabled:opacity-50 ${regiForm.taskCompleted === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.result")}</label>
-                <div className="flex gap-2">
-                  {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
-                    ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
-                    <button key={val} type="button" disabled={!isResultEditable}
-                      onClick={() => handleWoResultChange(woResult === val ? "" : val)}
-                      className={`flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all disabled:opacity-50 ${woResult === val ? cls : "bg-fg/5 text-text-industrial/50 border-fg/10 hover:border-fg/30"}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
           )}
 
           {/* Programación de trabajo y repuestos/materiales son recuadros de la
@@ -3311,27 +4154,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
             )}
 
-            {/* ── Deficiencias encontradas ── */}
-            {woResult === "WITH_DEFICIENCIES" && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className={labelCls}>{t("wo.modal.deficiencies")}</label>
-                  <button
-                    type="button"
-                    onClick={() => { void handleRewriteDeficiencies(); }}
-                    disabled={!isEditable || loadingRewrite || !deficienciasText.trim()}
-                    title={!deficienciasText.trim() ? t("wo.modal.rewriteEmptyError") : t("wo.modal.rewriteTooltip")}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {loadingRewrite
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Sparkles className="w-3 h-3" />}
-                    {t("wo.modal.rewriteAI")}
-                  </button>
-                </div>
-                <AutoTextArea rows={3} value={deficienciasText} onChange={e => setDeficienciasText(e.target.value)} disabled={!isEditable || loadingRewrite} className={`${inputCls} resize-none border-orange-500/30 focus:border-orange-400/60`} placeholder={t("wo.modal.deficienciesPlaceholder")} />
-              </div>
-            )}
+            {deficienciesField}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -3343,265 +4166,80 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
               </div>
             </div>
-            <div className={workOrder.maintenancePlanId ? "grid grid-cols-2 gap-3" : ""}>
-              {workOrder.maintenancePlanId && (
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.runningHours")}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={runningHoursAtExecution}
-                    onChange={e => setRunningHoursAtExecution(e.target.value)}
-                    disabled={!isEditable}
-                    className={inputCls}
-                    placeholder={t("wo.modal.runningHoursPlaceholder")}
-                  />
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <label className={labelCls}>
-                  {t("wo.modal.actualHours")}
-                  {workOrder.estimatedHours != null && (
-                    <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">
-                      {t("wo.modal.actualHoursEstHint").replace("{h}", String(workOrder.estimatedHours))}
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.25"
-                  value={actualHours}
-                  onChange={e => setActualHours(e.target.value)}
-                  disabled={!isEditable}
-                  className={inputCls}
-                  placeholder={t("wo.modal.actualHoursPlaceholder")}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.observations")}</label>
-              <AutoTextArea rows={3} value={observations} onChange={e => setObservations(e.target.value)} disabled={!isEditable} className={`${inputCls} resize-none`} placeholder={t("wo.modal.observationsPlaceholder")} />
-            </div>
-            {isCorrective && !isClosed && (
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.defectDetail")}</label>
-                <AutoTextArea rows={2} value={defectDetail} onChange={e => setDefectDetail(e.target.value)} disabled={!isEditable}
-                  className={`${inputCls} resize-none`} placeholder={t("wo.modal.defectDetailPlaceholder")} />
-                <p className="text-[10px] text-text-industrial/40">{t("wo.modal.defectDetailHint")}</p>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.supportingDoc")}</label>
-              {supportingDocUrl && !supportingDocFile && (
-                <a href={supportingDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{supportingDocUrl}</a>
-              )}
-              <input type="file" disabled={!isEditable} onChange={e => setSupportingDocFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 disabled:opacity-50 cursor-pointer" />
-            </div>
+            {resultMoreFields}
 
-            {/* ── Repuestos utilizados ── */}
-            <div className="border border-fg/10 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-fg/50 uppercase tracking-wider">{t("wo.spares.section")}</p>
-                {isEditable && (
-                  <button type="button" onClick={() => setAddingUsage(v => !v)}
-                    className="text-[10px] text-accent/70 hover:text-accent underline">
-                    {addingUsage ? t("common.cancel") : t("wo.spares.add")}
-                  </button>
-                )}
-              </div>
+            {spareUsagesBox}
 
-              {spareUsages.length > 0 && (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-[10px] text-fg/30 border-b border-fg/10">
-                      <th className="text-left py-1">{t("wo.spares.colSpare")}</th>
-                      <th className="text-right py-1">{t("wo.spares.colQty")}</th>
-                      <th className="text-left py-1 pl-2">{t("wo.spares.colUnit")}</th>
-                      {isEditable && <th />}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {spareUsages.map((u, i) => (
-                      <tr key={i} className="border-b border-fg/5 last:border-0">
-                        <td className="py-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <CritBadge crit={u.criticality} />
-                            <span className={u.qty > u.available ? "text-orange-700 dark:text-orange-300" : "text-fg"}>{u.spareName}</span>
-                          </div>
-                        </td>
-                        <td className="py-1.5 text-right">
-                          {isEditable ? (
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={u.qty}
-                              onChange={e => updateUsageQty(i, e.target.value)}
-                              className={`w-24 bg-fg/5 border rounded-lg px-2 py-1.5 text-sm font-semibold text-right focus:outline-none focus:border-accent/50 ${u.qty > u.available ? "border-orange-500/40 text-orange-700 dark:text-orange-300" : "border-fg/15 text-fg"}`}
-                            />
-                          ) : (
-                            <span className="text-fg/70">{u.qty}</span>
-                          )}
-                        </td>
-                        <td className="py-1.5 pl-2 text-fg/40 align-middle">{u.unit}</td>
-                        {isEditable && (
-                          <td className="py-1.5 text-right">
-                            <button onClick={() => removeUsage(i)} className="text-fg/20 hover:text-red-700 dark:text-red-400 transition-colors">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              {spareUsages.some(u => u.qty > u.available) && (
-                <p className="text-[10px] text-orange-700 dark:text-orange-400">
-                  {t("wo.spares.exceedsStock")}
-                </p>
-              )}
-
-              {addingUsage && (
-                <div className="space-y-1.5 pt-1 border-t border-fg/10">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2 relative">
-                      <input
-                        type="text"
-                        value={usageSearch}
-                        onChange={e => { setUsageSearch(e.target.value); setUsageSpareId(""); setUsageDropdown(true); }}
-                        onFocus={() => setUsageDropdown(true)}
-                        onBlur={() => setTimeout(() => setUsageDropdown(false), 150)}
-                        placeholder={t("wo.spares.searchPlaceholder")}
-                        className={inputCls}
-                      />
-                      {usageDropdown && (
-                        <div className="absolute z-20 w-full mt-1 bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-xl shadow-xl max-h-52 overflow-y-auto">
-                          {(() => {
-                            const q = usageSearch.toLowerCase();
-                            const filtered = q
-                              ? woSpares.filter(s => textMatches(s.sku, q) || textMatches(s.name, q))
-                              : woSpares.slice(0, 30);
-                            if (filtered.length === 0) return <p className="px-3 py-2 text-xs text-fg/30">{t("common.noResults")}</p>;
-                            return filtered.map(s => (
-                              <button key={s.id} type="button"
-                                onMouseDown={() => { setUsageSpareId(s.id); setUsageSearch(`${s.sku} — ${s.name}`); setUsageDropdown(false); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-fg/5">
-                                <CritBadge crit={s.criticality} />
-                                <span className="flex-1 text-left text-fg">{s.sku} — {s.name}</span>
-                                {s.available <= 0
-                                  ? <span className="text-red-700 dark:text-red-400 text-[10px] font-semibold shrink-0">{t("wo.spares.outOfStock")}</span>
-                                  : <span className="text-fg/30 text-[10px] shrink-0">{t("wo.spares.available")}: {s.available} {s.unit}</span>
-                                }
-                              </button>
-                            ));
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-1">
-                      <input type="number" min="0.01" step="0.01" value={usageQty} onChange={e => setUsageQty(e.target.value)}
-                        placeholder={t("wo.spares.qtyPlaceholder")} className={inputCls} />
-                      <button onClick={addUsage} disabled={!usageSpareId}
-                        className="px-3 py-2 rounded-xl bg-accent/20 text-accent text-xs font-bold hover:bg-accent/30 disabled:opacity-40 shrink-0">
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  {usageSpareId && (() => {
-                    const spare = woSpares.find(s => s.id === usageSpareId);
-                    const qty = parseFloat(usageQty);
-                    if (spare && qty > spare.available) {
-                      return <p className="text-[10px] text-orange-700 dark:text-orange-400">{t("wo.spares.insufficientStock").replace("{avail}", String(spare.available)).replace("{unit}", spare.unit).replace("{req}", String(qty))}</p>;
-                    }
-                    return null;
-                  })()}
-                </div>
-              )}
-
-              {spareUsages.length === 0 && !addingUsage && (
-                <p className="text-xs text-fg/20">{t("wo.spares.empty")}</p>
-              )}
-            </div>
-
-            {/* ── Prompt abrir DEF ──
-                Se muestra también cuando la OT YA tiene defectos vinculados
-                aunque el prompt esté "idle": es el caso de volver del defecto o
-                reabrir la OT más tarde. */}
-            {woResult === "WITH_DEFICIENCIES" && (defectPrompt !== "idle" || linkedDefects.length > 0) && (
-              <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2.5">
-                {/* La pregunta sólo tiene sentido mientras no haya ninguno. */}
-                {linkedDefects.length === 0 && (
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-orange-700 dark:text-orange-400 shrink-0" />
-                    <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">{t("wo.defectPrompt.question")}</p>
-                  </div>
-                )}
-                {defectPrompt === "ask" && linkedDefects.length === 0 && (
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => { void createDefectInline(); }}
-                      className="flex-1 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
-                      {t("wo.defectPrompt.openRecord")}
-                    </button>
-                    <button type="button" onClick={() => setDefectPrompt("declined")}
-                      className="flex-1 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial/50 font-bold text-xs hover:border-fg/20 transition-all">
-                      {t("wo.defectPrompt.skipRecord")}
-                    </button>
-                  </div>
-                )}
-                {defectPrompt === "creating" && (
-                  <div className="flex items-center gap-2 text-xs text-text-industrial/50">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> {t("wo.defectPrompt.creating")}
-                  </div>
-                )}
-                {/* Los códigos salen de la BASE (linkedDefects), no del estado de
-                    la ventana: al volver del defecto el modal se rearma de cero y
-                    antes el recuadro aparecía vacío, como si nunca se hubiera
-                    creado nada. Así siguen visibles siempre, incluso días después. */}
-                {linkedDefects.length > 0 && (
-                  <div className="flex items-center gap-2 text-xs text-success-sea font-semibold flex-wrap">
-                    <CheckCheck className="w-3.5 h-3.5 shrink-0" />
-                    {t("wo.defectPrompt.created")}:
-                    {linkedDefects.map(d => (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => { void saveThenNavigate(`/defects?defectId=${d.id}`); }}
-                        className="inline-flex items-center gap-1 font-mono text-accent hover:underline"
-                        title="Guarda la OT y abre este registro de defecto"
-                      >
-                        {d.defectCode}
-                        <ExternalLink className="w-3 h-3" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {defectPrompt === "declined" && linkedDefects.length === 0 && (
-                  <p className="text-xs text-text-industrial/40">{t("wo.defectPrompt.declined")}</p>
-                )}
-              </div>
-            )}
+            {defectPromptBox}
             </div>{/* end bg-blue box */}
           </section>
           </div>
           )}
 
-          {closingWarning && (
-            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3 space-y-2">
-              <p className="text-xs text-orange-700 dark:text-orange-300">{closingWarning}</p>
-              <button onClick={() => { void finishClose(); }} className="px-4 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/30 transition-all">
-                {t("common.acceptAndClose")}
-              </button>
-            </div>
-          )}
+          {closingWarningEl}
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          </>)}
         </div>
 
         {/* Footer */}
+        {isMercurio ? (
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3.5 border-t border-fg/10 shrink-0">
+            <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf} className={btnSoft}>
+              {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("wo.modal.generatePdf")}
+            </button>
+            <div className="relative">
+              <button type="button" onClick={() => setMoreOpen(v => !v)} className={btnSoft}>
+                <MoreHorizontal className="w-3.5 h-3.5" /> {t("wo.guide.more")}
+              </button>
+              {moreOpen && (
+                <div className="absolute bottom-full left-0 mb-2 min-w-[14rem] rounded-xl border border-fg/10 bg-surface dark:bg-[#0D1B2A] shadow-xl p-1.5 z-10">
+                  {workOrder.status === "ON_HOLD" && (
+                    <button type="button" onClick={() => { setMoreOpen(false); void handleResume(); }} disabled={resuming}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-emerald-700 dark:text-emerald-400 hover:bg-fg/5 disabled:opacity-40">
+                      <CheckCheck className="w-3.5 h-3.5" /> {t("wo.resume")}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => { setMoreOpen(false); onOpenAction(workOrder, "hold"); }} disabled={!canPostpone}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-yellow-700 dark:text-yellow-400 hover:bg-fg/5 disabled:opacity-40">
+                    <Pause className="w-3.5 h-3.5" /> {t("wo.modal.postpone")}
+                  </button>
+                  <button type="button" onClick={() => { setMoreOpen(false); onOpenAction(workOrder, "cancel"); }} disabled={!canCancel}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-red-700 dark:text-red-400 hover:bg-fg/5 disabled:opacity-40">
+                    <XCircle className="w-3.5 h-3.5" /> {t("wo.modal.cancelWO")}
+                  </button>
+                  {isClosed && isAdmin && (
+                    <button type="button" onClick={() => { setMoreOpen(false); onOpenAction(workOrder, "reopen"); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-orange-700 dark:text-orange-300 hover:bg-fg/5">
+                      <RotateCcw className="w-3.5 h-3.5" /> {t("wo.reopen")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <span className="flex-1" />
+            <span className="text-[11px] font-bold" aria-live="polite">
+              {regiErr
+                ? <span className="text-red-600 dark:text-red-400">{regiErr}</span>
+                : regiSaving
+                  ? <span className="text-text-industrial/40">{t("wo.guide.saving")}</span>
+                  : (regiSaved || justSaved)
+                    ? <span className="flex items-center gap-1 text-success-sea"><CheckCheck className="w-3.5 h-3.5" />{t("wo.guide.saved")}</span>
+                    : null}
+            </span>
+            {isEditable && canManage && (
+              <button onClick={() => { void onSave().then(ok => { if (ok) offerPdfAfterSave(); }); }} disabled={saving}
+                className={canSendToApprove ? btnSoft : "px-4 py-2 rounded-xl font-bold text-xs bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5"}>
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
+              </button>
+            )}
+            {canSendToApprove && (
+              <button type="button" onClick={sendToApprove} disabled={saving} className={btnPrimary}>
+                <Send className="w-4 h-4" /> {t("wo.guide.send")}
+                {prepMissing.length > 0 && <span className="text-[10px] font-semibold opacity-85">({prepDone}/{prepChecks.length})</span>}
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <div className="flex gap-2">
             <button onClick={() => { void handleGeneratePdf(); }} disabled={generatingPdf}
@@ -3650,8 +4288,94 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
+
+    {/* ── Vista guiada: avisos ── */}
+    {isMercurio && err && <AlertDialog message={err} onClose={() => setErr(null)} />}
+
+    {showCreatedIntro && (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" role="dialog" aria-modal="true">
+          <div className="flex items-center gap-3">
+            <span className="w-12 h-12 rounded-full bg-success-sea/15 flex items-center justify-center shrink-0">
+              <Check className="w-6 h-6 text-success-sea" strokeWidth={3} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-extrabold text-fg">{t("wo.guide.created.title")}</h2>
+              <p className="text-xs text-text-industrial/60 mt-0.5 truncate">
+                <span className="font-mono font-bold text-accent">{workOrder.workOrderCode}</span>
+                {detailAssetNames[0] ? ` · ${detailAssetNames[0]}` : ""} · {paperVesselName}
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-fg">{t("wo.guide.created.lead")}</p>
+          <ol className="space-y-3">
+            {([
+              [1, t("wo.guide.created.step1"), t("wo.guide.created.step1Hint"), "border-accent bg-accent/10 text-accent"],
+              [2, t("wo.guide.created.step2"), t("wo.guide.created.step2Hint"), "border-fg/25 text-text-industrial/70"],
+            ] as const).map(([n, head, hint, dotCls]) => (
+              <li key={n} className="flex items-start gap-2.5 text-sm">
+                <span className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center text-[11px] font-extrabold shrink-0 ${dotCls}`}>{n}</span>
+                <span><b className="text-fg">{head}</b><span className="block text-xs text-text-industrial/60">{hint}</span></span>
+              </li>
+            ))}
+            <li className="flex items-start gap-2.5 text-sm text-text-industrial/50">
+              <span className="w-6 h-6 rounded-full border-[1.5px] border-dashed border-fg/25 flex items-center justify-center text-[11px] font-extrabold shrink-0">3</span>
+              <span>{t("wo.guide.created.step3")}</span>
+            </li>
+          </ol>
+          <div className="flex justify-end">
+            <button type="button" autoFocus onClick={() => setShowCreatedIntro(false)} className={btnPrimary}>
+              {t("wo.guide.created.go")} <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {sendAsk && (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-3" role="alertdialog" aria-modal="true">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+            <AlertTriangle className="w-4 h-4 text-amber-600" /> {t("wo.guide.sendAsk.title")}
+          </h2>
+          <p className="text-sm text-text-industrial/80">
+            {t("wo.guide.sendAsk.body").replace("{list}", prepMissing.map(c => c.label).join(", "))}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => { setSendAsk(false); void openTramita("ENVIA"); }}
+              className="px-3.5 py-2 rounded-xl text-xs text-fg hover:bg-fg/5">
+              {t("wo.guide.sendAnyway")}
+            </button>
+            <button type="button" autoFocus onClick={() => { setSendAsk(false); if (prepMissing[0]) goField(prepMissing[0].key); }} className={btnPrimary}>
+              {t("wo.guide.completeMissing")}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {leaveAsk && (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-3" role="alertdialog" aria-modal="true">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+            <AlertTriangle className="w-4 h-4 text-amber-600" /> {t("wo.guide.leave.title")}
+          </h2>
+          <p className="text-sm text-text-industrial/80">{t("wo.guide.leave.body")}</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => { setLeaveAsk(false); requestClose(); }}
+              className="px-3.5 py-2 rounded-xl text-xs text-fg hover:bg-fg/5">
+              {t("wo.guide.leave.exit")}
+            </button>
+            <button type="button" autoFocus onClick={sendToApprove} className={btnPrimary}>
+              <Send className="w-4 h-4" /> {t("wo.guide.leave.send")}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Diálogo de cierre (ADMIN): quién cierra (firma CIERRA) + fecha de cierre */}
     {showCloseDialog && (
@@ -3775,7 +4499,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         workOrder={workOrder}
         step={tramita}
         onClose={() => setTramita(null)}
-        onSuccess={() => { setTramita(null); onSaved(); }}
+        onSuccess={() => {
+          if (tramita === "ENVIA") onSentToApprove?.(workOrder.workOrderCode);
+          setTramita(null);
+          onSaved();
+        }}
       />
     )}
     </>
@@ -3785,10 +4513,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 // ── KanbanBoard ───────────────────────────────────────────────────────────────
 
 const PRIORITY_LEFT_CLS: Record<string, string> = {
-  CRITICAL: "border-l-2 border-l-red-500",
-  HIGH:     "border-l-2 border-l-orange-500",
-  MEDIUM:   "border-l-2 border-l-yellow-400",
-  LOW:      "border-l-2 border-l-blue-400/60",
+  CRITICAL: "border-l-4 border-l-red-600",
+  HIGH:     "border-l-4 border-l-orange-500",
+  MEDIUM:   "border-l-4 border-l-yellow-500",
+  LOW:      "border-l-4 border-l-emerald-500",
 };
 
 // ── Tramitación: etapa derivada de la cadena de aprobación + estado diferido ──
@@ -3917,34 +4645,89 @@ function WoCardStageBadge({ wo }: { wo: WorkOrder }) {
   return <span title={label} className={`${base} ${cls}`}>{label}</span>;
 }
 
-function KanbanCardContent({ wo, deferralMap, srs }: {
+/** Acción visible de una tarjeta/fila: el próximo paso de la OT (si el usuario puede darlo). */
+type WoCardAction = { label: string; icon: typeof Send; tone: "accent" | "green"; run: () => void } | null;
+
+/** "Vencida hace N d" / "Vence hoy" / "Vence en N d". */
+function WoDueLabel({ wo }: { wo: WorkOrder }) {
+  const t = useT();
+  if (!wo.dueDate) return <span />;
+  if (wo.status === "CLOSED" || wo.status === "CANCELLED") {
+    return <span className="text-[11px] text-text-industrial/50">{fmtDate(wo.dueDate)}</span>;
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((parseLocalDate(wo.dueDate).getTime() - today.getTime()) / 86_400_000);
+  if (days < 0) {
+    return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 dark:text-red-400" title={fmtDate(wo.dueDate)}>
+      <AlertTriangle className="w-3 h-3" />{t("wo.due.overdueDays").replace("{n}", String(-days))}
+    </span>;
+  }
+  if (days === 0) return <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400" title={fmtDate(wo.dueDate)}>{t("wo.due.today")}</span>;
+  return <span className={`text-[11px] ${days <= 3 ? "font-bold text-amber-700 dark:text-amber-400" : "text-text-industrial/60"}`} title={fmtDate(wo.dueDate)}>
+    {t("wo.due.inDays").replace("{n}", String(days))}
+  </span>;
+}
+
+const WO_PRIO_CHIP_CLS: Record<string, string> = {
+  CRITICAL: "bg-red-700 text-white",
+  HIGH: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+  MEDIUM: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300",
+  LOW: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+};
+
+function WoPriorityChip({ priority }: { priority: string }) {
+  const t = useT();
+  return (
+    <span className={`shrink-0 rounded-full px-1.5 py-px text-[9px] font-extrabold uppercase whitespace-nowrap ${WO_PRIO_CHIP_CLS[priority] ?? "bg-fg/10 text-text-industrial/60"}`}>
+      {t(`wo.prioShort.${priority}` as TranslationKey)}
+    </span>
+  );
+}
+
+function WoActionButton({ action }: { action: WoCardAction }) {
+  if (!action) return null;
+  const Icon = action.icon;
+  return (
+    <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
+      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+        action.tone === "green"
+          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
+          : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
+      }`}>
+      <Icon className="w-3 h-3" /> {action.label}
+    </button>
+  );
+}
+
+function KanbanCardContent({ wo, deferralMap, srs, showAsset, action }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srs: SrLite[];
+  /** Sin agrupar por equipo, el equipo va en la tarjeta. */
+  showAsset: boolean;
+  action: WoCardAction;
 }) {
   const t = useT();
-  const now = new Date();
-  const isOverdue = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && parseLocalDate(wo.dueDate) < now;
   const deferral  = deferralMap.get(wo.id);
-  // Equipos de la OT: con uno solo el header del grupo ya lo dice. Con varios,
-  // el título trae una línea por ítem y la tarjeta lo recorta a dos: sin este
-  // chip parecía que la OT era del primer equipo y el resto se había perdido.
+  const rejected  = !!wo.rechazadoAt && !wo.aprobadoAt;
+  // Equipos de la OT: con varios, el título trae una línea por ítem y la
+  // tarjeta lo recorta a dos; sin el chip parecía que era del primer equipo.
   const assetNames = woAssetNames(wo);
-  // Tarjeta compacta: lo que interesa acá es el N° de OT y el Título. El equipo
-  // se muestra en el header del grupo; quién aprobó/autorizó no va en esta vista.
+  const initials = (wo.assignedToUserName ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]!.toUpperCase()).join("");
   return (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex flex-col items-start gap-1">
-          {/* El código nunca se parte: es lo que se busca a simple vista. Si la
-              columna queda angosta, lo que se recorta es la etiqueta. */}
-          <span className="font-mono font-bold text-fg text-[10px] whitespace-nowrap">{wo.workOrderCode}</span>
-          <WoCardStageBadge wo={wo} />
-        </div>
-        <span className="shrink-0"><CategoryBadge type={wo.type} /></span>
+      <div className="flex items-center gap-1.5">
+        {/* El código nunca se parte: es lo que se busca a simple vista. */}
+        <span className="font-mono font-bold text-fg text-xs whitespace-nowrap">{wo.workOrderCode}</span>
+        <CategoryBadge type={wo.type} />
+        <span className="ml-auto"><WoPriorityChip priority={wo.priority} /></span>
       </div>
-      {wo.title && <p className="text-xs text-fg font-medium line-clamp-2">{wo.title}</p>}
-      {assetNames.length > 1 && (
+      <WoCardStageBadge wo={wo} />
+      {rejected && (
+        <span className="self-start rounded-md bg-red-500/15 px-1.5 py-px text-[10px] font-extrabold text-red-700 dark:text-red-400">{t("wo.card.rejected")}</span>
+      )}
+      {wo.title && <p className="text-[13px] text-fg font-semibold leading-snug line-clamp-2">{wo.title}</p>}
+      {assetNames.length > 1 ? (
         <span
           title={assetNames.join(", ")}
           className="self-start inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent"
@@ -3952,23 +4735,26 @@ function KanbanCardContent({ wo, deferralMap, srs }: {
           <Wrench className="w-2.5 h-2.5" />
           {t("wo.multiAsset.count").replace("{n}", String(assetNames.length))}
         </span>
-      )}
-      {(wo.dueDate || deferral) && (
-        <div className="flex items-center justify-between gap-2">
-          {wo.dueDate ? (
-            <span className={`text-[10px] font-medium ${isOverdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/50"}`}>
-              {isOverdue ? "⚠ " : ""}{fmtDate(wo.dueDate)}
-            </span>
-          ) : <span />}
-          {deferral && <DeferralStatusBadge status={deferral.status} />}
-        </div>
-      )}
-      <SrChips items={srs} />
+      ) : showAsset && assetNames[0] ? (
+        <span className="flex items-center gap-1 text-[11px] text-text-industrial/60 truncate"><Wrench className="w-3 h-3 shrink-0" />{assetNames[0]}</span>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <WoDueLabel wo={wo} />
+        {deferral && <DeferralStatusBadge status={deferral.status} />}
+        <SrChips items={srs} />
+        <span
+          title={wo.assignedToUserName ?? t("wo.fl.noOne")}
+          className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-extrabold ${initials ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300" : "bg-fg/5 text-text-industrial/40"}`}
+        >
+          {initials || "?"}
+        </span>
+      </div>
+      <WoActionButton action={action} />
     </>
   );
 }
 
-function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDragStart }: {
+function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDragStart, showAsset, action }: {
   wo: WorkOrder;
   deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srs: SrLite[];
@@ -3976,16 +4762,19 @@ function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDra
   draggingId: string | null;
   onOpen: (wo: WorkOrder) => void;
   onDragStart: (wo: WorkOrder) => void;
+  showAsset: boolean;
+  action: WoCardAction;
 }) {
   const isDraggable = woStage(wo) !== "HIDDEN";
   const isDragging  = draggingId === wo.id;
-  const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-2 border-l-fg/10";
+  const prioLeft    = PRIORITY_LEFT_CLS[wo.priority] ?? "border-l-4 border-l-fg/10";
   const deferral    = deferralMap.get(wo.id);
   // Rojo si: APL de diferimiento rechazada, o la OT fue rechazada en tramitación.
   const rejected    = deferral?.status === "REJECTED" || (!!wo.rechazadoAt && !wo.aprobadoAt);
+  const overdue     = !!wo.dueDate && wo.status !== "CLOSED" && wo.status !== "CANCELLED" && wo.status !== "ON_HOLD" && parseLocalDate(wo.dueDate) < new Date();
   const borderCls   = rejected
     ? "border-red-500/40 bg-red-500/[0.04] ring-1 ring-red-500/20"
-    : "border-fg/10";
+    : overdue ? "border-fg/10 bg-red-500/[0.05]" : "border-fg/10 bg-surface";
 
   return (
     <div
@@ -3997,15 +4786,15 @@ function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDra
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
       onClick={() => !isDragging && !isLoading && onOpen(wo)}
-      className={`w-full bg-fg/[0.03] border rounded-xl p-3 space-y-2 select-none
+      className={`w-full border rounded-xl px-2.5 py-2 space-y-1.5 select-none flex flex-col
         ${borderCls}
         ${prioLeft}
-        ${isDragging ? "opacity-30" : "hover:bg-fg/[0.07]"}
+        ${isDragging ? "opacity-30" : "hover:shadow-md"}
         ${isDraggable ? "cursor-grab" : "cursor-pointer"}
         ${isLoading ? "opacity-60 pointer-events-none" : ""}
-        transition-colors`}
+        transition-all`}
     >
-      <KanbanCardContent wo={wo} deferralMap={deferralMap} srs={srs} />
+      <KanbanCardContent wo={wo} deferralMap={deferralMap} srs={srs} showAsset={showAsset} action={action} />
     </div>
   );
 }
@@ -4050,7 +4839,7 @@ function groupWosByAsset(items: WorkOrder[], multiLabel: string): { key: string;
     });
 }
 
-function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload }: {
+function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload, grouped, onlyStage, cardAction }: {
   items: WorkOrder[];
   deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srMap: Map<string, SrLite[]>;
@@ -4058,6 +4847,12 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   loading: boolean;
   onOpen: (wo: WorkOrder) => void;
   onReload: () => void;
+  /** Agrupar las tarjetas por equipo (opcional: por defecto se ven todas). */
+  grouped: boolean;
+  /** Con un filtro de etapa, sólo esa columna. */
+  onlyStage?: WoStage;
+  /** Próximo paso visible de cada tarjeta. */
+  cardAction: (wo: WorkOrder) => WoCardAction;
 }) {
   const t = useT();
   const [draggingWo, setDraggingWo]   = useState<WorkOrder | null>(null);
@@ -4069,10 +4864,11 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   const canKanban = useCan();
   const canApprove = canKanban("wo.approve");
   const canAuthorize = canKanban("wo.authorize");
-  // Grupos por equipo expandidos (clave `${colId}::${assetKey}`). Default: cerrados.
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Grupos por equipo plegados (clave `${colId}::${assetKey}`). Default: abiertos,
+  // así las OT se ven apenas se agrupa (antes arrancaban cerrados y escondían todo).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = useCallback((k: string) => {
-    setExpandedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+    setCollapsedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   }, []);
   // ref para evitar stale closure en handleDrop (React 18 batching)
   const draggingWoRef = React.useRef<WorkOrder | null>(null);
@@ -4125,13 +4921,10 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
 
   return (
     <>
-      {dropError && (
-        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
-          {dropError}
-        </p>
-      )}
-      <div className="flex gap-3 pb-4">
-        {KANBAN_COLS.map(col => {
+      {dropError && <AlertDialog message={dropError} onClose={() => setDropError(null)} />}
+      {/* Columnas de ancho mínimo: en el celular se deslizan de costado en vez de apretarse. */}
+      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStage ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
+        {KANBAN_COLS.filter(col => !onlyStage || col.colId === onlyStage).map(col => {
           const colItems = items.filter(w => woStage(w) === col.colId);
           const isOver   = overCol === col.colId && col.droppable;
           return (
@@ -4140,17 +4933,31 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
               onDragOver={e => { if (col.droppable) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); } }}
               onDragLeave={() => setOverCol(null)}
               onDrop={e => { e.preventDefault(); void handleDrop(e, col.colId); }}
-              className={`flex-1 min-w-0 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
+              className={`snap-start min-w-0 flex flex-col ${col.borderCls} pt-3 px-1.5 rounded-b-xl bg-fg/[0.02] transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
             >
               <div className="flex items-center gap-2 px-1 mb-3">
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(col.labelKey)}</span>
                 <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
-                {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
-                {groupWosByAsset(colItems, t("wo.multiAsset.group")).map(group => {
+                {colItems.length === 0 && <p className="text-[11px] text-text-industrial/30 text-center py-6">{t("wo.fl.nothing")}</p>}
+                {!grouped && colItems.map(wo => (
+                  <KanbanCard
+                    key={wo.id}
+                    wo={wo}
+                    deferralMap={deferralMap}
+                    srs={srMap.get(wo.id) ?? []}
+                    isLoading={loadingId === wo.id}
+                    draggingId={draggingWo?.id ?? null}
+                    onOpen={onOpen}
+                    onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
+                    showAsset
+                    action={cardAction(wo)}
+                  />
+                ))}
+                {grouped && groupWosByAsset(colItems, t("wo.multiAsset.group")).map(group => {
                   const gkey = `${col.colId}::${group.key}`;
-                  const collapsed = !expandedGroups.has(gkey);
+                  const collapsed = collapsedGroups.has(gkey);
                   return (
                     <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
                       <button
@@ -4176,6 +4983,8 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
                               draggingId={draggingWo?.id ?? null}
                               onOpen={onOpen}
                               onDragStart={w => { draggingWoRef.current = w; setDraggingWo(w); }}
+                              showAsset={false}
+                              action={cardAction(wo)}
                             />
                           ))}
                         </div>
@@ -4409,7 +5218,7 @@ export const WorkOrdersPage: React.FC = () => {
   const { user } = useAuth();
   const can = useCan();
   const navigate = useNavigate();
-  const { selectedVesselCode } = useVesselContext();
+  const { selectedVesselCode, vessels } = useVesselContext();
   // Editar/guardar una OT. Espeja canManageWorkOrders del backend: quién la
   // tiene se configura en Equipo → Permisos por rol.
   const canManage = can("wo.manage");
@@ -4454,6 +5263,7 @@ export const WorkOrdersPage: React.FC = () => {
     } catch { /* sin certificado vinculado: no molestamos */ }
   }, []);
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
+  const [sentWoCode, setSentWoCode]   = useState<string | null>(null);
   const [createPrefill, setCreatePrefill] = useState<WoPrefill | null>(null);
   // "+ Nueva OT" pasa por el asistente categoría → equipo → ítem del plan.
   // `createPrefill` (deep-link desde un defecto, etc.) sigue abriendo el
@@ -4539,58 +5349,93 @@ export const WorkOrdersPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [data]);
 
-  const visibleItems = useMemo(() => {
-    const items = data?.items ?? null;
-    if (!items || !viewFilter) return items;
+  // ── Filtros (preview V12) ─────────────────────────────────────────────────
+  // Una sola barra para el tablero y la lista:
+  //   - `view` (URL): las tarjetas de resumen y los enlaces del Dashboard.
+  //   - `stageSel`: los botones de etapa (Abiertas / En preparación / …).
+  //   - tipo, prioridad, responsable, equipo, "sólo vencidas" y el buscador.
+  // Antes los filtros sólo existían en la lista y se borraban al pasar al tablero.
+  const [stageSel, setStageSel] = useState<"" | "inPreparation" | "toApprove" | "toAuthorize" | "authorized" | "postponed" | "closed">("");
+  const [typeSel, setTypeSel] = useState("");
+  const [prioSel, setPrioSel] = useState("");
+  const [whoSel, setWhoSel] = useState("");
+  const [assetSel, setAssetSel] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [groupByAsset, setGroupByAsset] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const canList = useCan();
+  const canApproveList = canList("wo.approve");
+  const canAuthorizeList = canList("wo.authorize");
+
+  /** Mismos criterios que tenían los chips de la lista (y los enlaces del Dashboard). */
+  const applyViewKey = useCallback((items: WorkOrder[], key: string): WorkOrder[] => {
     const now = new Date();
     const CLOSED = new Set(["CLOSED", "CANCELLED"]);
-    if (viewFilter === "closed")    return items.filter(w => CLOSED.has(w.status));
-    if (viewFilter === "postponed") return items.filter(w => w.status === "ON_HOLD");
-    if (viewFilter === "postponedRejected") {
-      return items.filter(w => w.status === "ON_HOLD" && deferralMap.get(w.id)?.status === "REJECTED");
-    }
-    if (viewFilter === "postponedPending") {
-      return items.filter(w => {
+    const overdue = (w: WorkOrder) => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < now;
+    switch (key) {
+      case "closed":            return items.filter(w => CLOSED.has(w.status));
+      case "postponed":         return items.filter(w => w.status === "ON_HOLD");
+      case "postponedRejected": return items.filter(w => w.status === "ON_HOLD" && deferralMap.get(w.id)?.status === "REJECTED");
+      case "postponedPending":  return items.filter(w => {
         if (w.status !== "ON_HOLD") return false;
         const s = deferralMap.get(w.id)?.status;
         return s === "REQUESTED" || s === "UNDER_REVIEW";
       });
+      // Pendientes de tramitación: mismas etapas que las columnas del tablero.
+      case "toApprove":         return items.filter(w => woStage(w) === "SOLICITADA");
+      case "toAuthorize":       return items.filter(w => woStage(w) === "APROBADA");
+      // "en proceso" gana sobre la etapa de firma, igual que la etiqueta de la tarjeta.
+      case "inProgress":        return items.filter(w => w.status === "IN_PROGRESS");
+      case "authorized":        return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "AUTORIZADA");
+      case "inPreparation":     return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "EN_PREPARACION");
+      case "overdue":           return items.filter(overdue);
+      case "open":              return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !overdue(w));
+      // Tarjeta "Esperando mi firma" / "Asignadas a mí": sale de los permisos y
+      // del responsable de cada OT (el backend ya los tiene; nada nuevo).
+      case "mine":
+        return canApproveList || canAuthorizeList
+          ? items.filter(w => (canApproveList && woStage(w) === "SOLICITADA") || (canAuthorizeList && woStage(w) === "APROBADA"))
+          : items.filter(w => !CLOSED.has(w.status) && !!user && w.assignedToUserId === user.id);
+      default:                  return items;
     }
-    // Pendientes de tramitación: mismas etapas que las columnas del tablero, así
-    // el filtro coincide 1:1 con lo que el usuario ve en Kanban.
-    if (viewFilter === "toApprove")   return items.filter(w => woStage(w) === "SOLICITADA");
-    if (viewFilter === "toAuthorize") return items.filter(w => woStage(w) === "APROBADA");
-    // Los tres de abajo son los que abre el donut del dashboard. Aplican el
-    // MISMO reparto que la etiqueta de la tarjeta —"en proceso" gana sobre la
-    // etapa de firma—, así lo que se cuenta y lo que se abre coinciden.
-    if (viewFilter === "inProgress")  return items.filter(w => w.status === "IN_PROGRESS");
-    if (viewFilter === "authorized") {
-      return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "AUTORIZADA");
-    }
-    if (viewFilter === "inPreparation") {
-      return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "EN_PREPARACION");
-    }
-    if (viewFilter === "overdue")   return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < now);
-    if (viewFilter === "open")      return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !(!!w.dueDate && parseLocalDate(w.dueDate) < now));
-    return items;
-  }, [data, viewFilter, deferralMap]);
+  }, [deferralMap, canApproveList, canAuthorizeList, user]);
 
-  // Buscador global: cuando hay texto, busca sobre TODAS las SS del buque
-  // (cualquier estado, incluidas las cerradas) ignorando el filtro de vista.
-  // Sin texto, respeta el comportamiento actual (visibleItems / viewFilter).
-  const displayItems = useMemo(() => {
+  const isOverdueWo = (w: WorkOrder) =>
+    w.status !== "CLOSED" && w.status !== "CANCELLED" && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < new Date();
+
+  /** Todo menos la etapa: base de los contadores de los botones de etapa. */
+  const beforeStage = useMemo(() => {
+    let items = data?.items ?? null;
+    if (!items) return items;
+    if (viewFilter) items = applyViewKey(items, viewFilter);
+    if (typeSel) items = items.filter(w => w.type === typeSel);
+    if (prioSel) items = items.filter(w => w.priority === prioSel);
+    if (whoSel) items = items.filter(w => (whoSel === "__none__" ? !w.assignedToUserName : w.assignedToUserName === whoSel));
+    if (assetSel) items = items.filter(w => woAssetNames(w).includes(assetSel));
+    if (overdueOnly) items = items.filter(isOverdueWo);
     const q = search.trim().toLowerCase();
-    if (!q) return visibleItems;
-    const base = data?.items ?? null;
-    if (!base) return base;
-    return base.filter(w =>
-      textMatches(w.workOrderCode ?? "", q) ||
-      textMatches(w.title ?? "", q) ||
-      textMatches(w.assetName ?? "", q) ||
-      textMatches(w.assignedToUserName ?? "", q) ||
-      textMatches(w.vesselCode ?? "", q),
-    );
-  }, [search, visibleItems, data]);
+    if (q) {
+      items = items.filter(w =>
+        textMatches(w.workOrderCode ?? "", q) ||
+        textMatches(w.title ?? "", q) ||
+        textMatches(w.assetName ?? "", q) ||
+        textMatches(w.assignedToUserName ?? "", q),
+      );
+    }
+    return items;
+  }, [data, viewFilter, applyViewKey, typeSel, prioSel, whoSel, assetSel, overdueOnly, search]);
+
+  /** "Abiertas" deja afuera las cerradas, salvo que se esté buscando o se pidan cerradas. */
+  const stageFilter = useCallback((items: WorkOrder[], key: string): WorkOrder[] => {
+    if (key) return applyViewKey(items, key);
+    if (search.trim() || viewFilter === "closed") return items;
+    return items.filter(w => w.status !== "CLOSED" && w.status !== "CANCELLED");
+  }, [applyViewKey, search, viewFilter]);
+
+  const displayItems = useMemo(
+    () => (beforeStage ? stageFilter(beforeStage, stageSel) : beforeStage),
+    [beforeStage, stageFilter, stageSel],
+  );
 
   // Al llegar desde el panel TMSA, sólo las OT que contó esa tarjeta. Se aplica
   // al final para que conviva con la vista (vencidas, a aprobar…) y el buscador.
@@ -4599,23 +5444,62 @@ export const WorkOrdersPage: React.FC = () => {
     [displayItems, tmsaFilter],
   );
 
+  // Las cerradas no tienen columna en el tablero: con esa etapa se muestra la lista.
+  const showBoard = viewMode === "kanban" && stageSel !== "closed" && viewFilter !== "closed";
+  const STAGE_TO_COLUMN: Record<string, WoStage> = {
+    inPreparation: "EN_PREPARACION", toApprove: "SOLICITADA", toAuthorize: "APROBADA",
+    authorized: "AUTORIZADA", postponed: "DIFERIDA",
+  };
+
   /**
-   * Cuántas órdenes se están viendo, para el contador del encabezado.
-   *
-   * Antes mostraba `data.total`: TODAS las órdenes que existieron, cerradas
-   * incluidas. Quedaba "739 registros" arriba de un tablero con 5 tarjetas,
-   * porque el tablero sólo tiene columnas de órdenes ABIERTAS — las cerradas y
-   * anuladas caen en "HIDDEN" y no se dibujan en ningún lado.
-   *
-   * Ahora cuenta lo que efectivamente está en pantalla, respetando filtros y
-   * buscador: en el tablero, las tarjetas; en la lista, las filas (que sí puede
-   * incluir cerradas, por ejemplo con el filtro "Cerradas" o buscando).
+   * Cuántas órdenes se están viendo, para el contador del encabezado: lo que
+   * efectivamente está en pantalla (en el tablero no se dibujan cerradas).
    */
   const shownCount = useMemo(() => {
     const items = tmsaDisplayItems ?? [];
-    if (viewMode !== "kanban") return items.length;
+    if (!showBoard) return items.length;
     return items.filter(w => woStage(w) !== "HIDDEN").length;
-  }, [tmsaDisplayItems, viewMode]);
+  }, [tmsaDisplayItems, showBoard]);
+
+  // ── Tarjetas de resumen (sobre todas las OT del buque, sin filtros) ──
+  const summary = useMemo(() => {
+    const items = data?.items ?? [];
+    return {
+      overdue: applyViewKey(items, "overdue").length,
+      mine: applyViewKey(items, "mine").length,
+      notSent: applyViewKey(items, "inPreparation").length,
+      inProgress: applyViewKey(items, "inProgress").length,
+      deferred: applyViewKey(items, "postponed").length,
+    };
+  }, [data, applyViewKey]);
+  const setViewParam = (key: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (key) params.set("view", key); else params.delete("view");
+    setSearchParams(params, { replace: true });
+  };
+
+  // Opciones de los desplegables: salen de lo que hay cargado.
+  const whoOptions = useMemo(
+    () => [...new Set((data?.items ?? []).map(w => w.assignedToUserName).filter((n): n is string => !!n))].sort(),
+    [data],
+  );
+  const assetOptions = useMemo(
+    () => [...new Set((data?.items ?? []).flatMap(w => woAssetNames(w)))].sort(),
+    [data],
+  );
+  const prioLabel = (p: string) => t(`wo.prioShort.${p}` as TranslationKey);
+
+  // ── Acción visible de cada OT (mismo paso que el arrastre del tablero) ──
+  const [listApproval, setListApproval] = useState<{ wo: WorkOrder; step: "ENVIA" | "APRUEBA" | "AUTORIZA" } | null>(null);
+  const [progressWo, setProgressWo] = useState<WorkOrder | null>(null);
+  const cardAction = useCallback((wo: WorkOrder): { label: string; icon: typeof Send; tone: "accent" | "green"; run: () => void } | null => {
+    const stage = woStage(wo);
+    if (stage === "EN_PREPARACION" && canCreate) return { label: t("wo.guide.send"), icon: Send, tone: "accent", run: () => setListApproval({ wo, step: "ENVIA" }) };
+    if (stage === "SOLICITADA" && canApproveList) return { label: t("wo.guide.approve"), icon: Check, tone: "green", run: () => setListApproval({ wo, step: "APRUEBA" }) };
+    if (stage === "APROBADA" && canAuthorizeList) return { label: t("wo.guide.authorize"), icon: ShieldCheck, tone: "green", run: () => setListApproval({ wo, step: "AUTORIZA" }) };
+    if (stage === "AUTORIZADA" && wo.status !== "IN_PROGRESS" && canCreate) return { label: t("wo.guide.addProgress"), icon: Camera, tone: "accent", run: () => setProgressWo(wo) };
+    return null;
+  }, [canCreate, canApproveList, canAuthorizeList, t]);
 
   // Guard contra clicks rápidos entre dos OT: si mientras cargaba el detalle de
   // A se pidió B, la respuesta de A llega tarde y se descarta (mismo patrón
@@ -4678,7 +5562,8 @@ export const WorkOrdersPage: React.FC = () => {
       render: r => (
         <div>
           <div className="font-mono font-bold text-fg text-xs">{r.workOrderCode}</div>
-          <div className="mt-0.5"><VesselLabel code={r.vesselCode} className="text-[10px]" showCode /></div>
+          {/* Nombre del buque, no el código. */}
+          <div className="mt-0.5"><VesselLabel code={r.vesselCode} className="text-[10px]" /></div>
         </div>
       ),
     },
@@ -4702,20 +5587,28 @@ export const WorkOrdersPage: React.FC = () => {
       },
     },
     { key: "type",   header: t("wo.col.category"),   render: r => <CategoryBadge type={r.type} /> },
-    { key: "assignedToUserId", header: t("wo.col.assignee"), sortValue: r => r.assignedToUserName ?? r.assignedToUserId ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? r.assignedToUserId ?? "—"}</span> },
-    { key: "openDate", header: t("wo.col.openDate"),    render: r => <span className="text-xs text-text-industrial/60 whitespace-nowrap">{fmtDate(r.openDate)}</span> },
+    {
+      key: "priority", header: t("wo.col.priority"),
+      sortValue: r => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>)[r.priority] ?? 9,
+      render: r => <WoPriorityChip priority={r.priority} />,
+    },
+    { key: "assignedToUserId", header: t("wo.col.assignee"), sortValue: r => r.assignedToUserName ?? r.assignedToUserId ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? "—"}</span> },
     {
       key: "dueDate", header: t("wo.col.dueDate"),
-      render: r => {
-        if (!r.dueDate) return <span className="text-xs text-text-industrial/30">—</span>;
-        const overdue = r.status !== "CLOSED" && r.status !== "CANCELLED" && parseLocalDate(r.dueDate) < new Date();
-        return <span className={`text-xs whitespace-nowrap font-medium ${overdue ? "text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{fmtDate(r.dueDate)}</span>;
-      },
+      sortValue: r => r.dueDate ?? "",
+      render: r => <WoDueLabel wo={r} />,
     },
     {
       key: "stage", header: t("wo.col.stage"),
       sortValue: r => woStage(r),
-      render: r => <WoStageBadge wo={r} />,
+      render: r => (
+        <div className="flex flex-col items-start gap-1">
+          <WoStageBadge wo={r} />
+          {!!r.rechazadoAt && !r.aprobadoAt && (
+            <span className="rounded-md bg-red-500/15 px-1.5 py-px text-[10px] font-extrabold text-red-700 dark:text-red-400">{t("wo.card.rejected")}</span>
+          )}
+        </div>
+      ),
     },
     {
       key: "status", header: t("wo.col.status"),
@@ -4738,123 +5631,225 @@ export const WorkOrdersPage: React.FC = () => {
         );
       },
     },
-  ], [deferralMap, navigate, t]);
+    { key: "ss", header: t("wo.col.ss"), render: r => <SrChips items={srMap.get(r.id) ?? []} /> },
+    { key: "action", header: "", render: r => <div className="w-32"><WoActionButton action={cardAction(r)} /></div> },
+  ], [deferralMap, navigate, t, srMap, cardAction]);
+
+  const summaryCards: { key: string; n: number; label: string; hint: string; icon: typeof Wrench; cls: string; num: string }[] = [
+    { key: "overdue", n: summary.overdue, label: t("wo.sum.overdue"), hint: t("wo.sum.overdueHint"), icon: AlertTriangle, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+    canApproveList || canAuthorizeList
+      ? { key: "mine", n: summary.mine, label: t("wo.sum.mySign"), hint: t("wo.sum.mySignHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" }
+      : { key: "mine", n: summary.mine, label: t("wo.sum.mine"), hint: t("wo.sum.mineHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+    { key: "inPreparation", n: summary.notSent, label: t("wo.sum.notSent"), hint: t("wo.sum.notSentHint"), icon: Send, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
+    { key: "inProgress", n: summary.inProgress, label: t("wo.sum.inProgress"), hint: t("wo.sum.inProgressHint"), icon: Hammer, cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+    { key: "postponed", n: summary.deferred, label: t("wo.sum.deferred"), hint: t("wo.sum.deferredHint"), icon: Pause, cls: "border-l-yellow-600", num: "text-yellow-700 dark:text-yellow-400" },
+  ];
+  const STAGE_BUTTONS: { key: typeof stageSel; label: string }[] = [
+    { key: "", label: t("wo.stageF.open") },
+    { key: "inPreparation", label: t("wo.filter.inPreparation") },
+    { key: "toApprove", label: t("wo.stageF.toApprove") },
+    { key: "toAuthorize", label: t("wo.stageF.toAuthorize") },
+    { key: "authorized", label: t("wo.filter.authorized") },
+    { key: "postponed", label: t("wo.filter.postponed") },
+    { key: "closed", label: t("wo.filter.closed") },
+  ];
+  const VIEW_LABEL: Record<string, string> = {
+    overdue: t("wo.sum.overdue"), mine: summaryCards[1]!.label, inPreparation: t("wo.sum.notSent"),
+    inProgress: t("wo.sum.inProgress"), postponed: t("wo.sum.deferred"), toApprove: t("wo.stageF.toApprove"),
+    toAuthorize: t("wo.stageF.toAuthorize"), authorized: t("wo.filter.authorized"), open: t("wo.filter.open"),
+    closed: t("wo.filter.closed"), postponedPending: t("wo.filter.postponedPending"), postponedRejected: t("wo.filter.postponedRejected"),
+  };
+  const activeFilters: { key: string; label: string; clear: () => void }[] = [
+    ...(viewFilter ? [{ key: "view", label: VIEW_LABEL[viewFilter] ?? viewFilter, clear: () => setViewParam("") }] : []),
+    ...(stageSel ? [{ key: "stage", label: STAGE_BUTTONS.find(b => b.key === stageSel)!.label, clear: () => setStageSel("") }] : []),
+    ...(typeSel ? [{ key: "type", label: t(`wo.type.${typeSel === "PREVENTIVE" ? "preventive" : typeSel === "CORRECTIVE" ? "corrective" : "inspection"}` as TranslationKey), clear: () => setTypeSel("") }] : []),
+    ...(prioSel ? [{ key: "prio", label: t("wo.fl.prio").replace("{p}", prioLabel(prioSel)), clear: () => setPrioSel("") }] : []),
+    ...(whoSel ? [{ key: "who", label: whoSel === "__none__" ? t("wo.fl.noOne") : whoSel, clear: () => setWhoSel("") }] : []),
+    ...(assetSel ? [{ key: "asset", label: assetSel, clear: () => setAssetSel("") }] : []),
+    ...(overdueOnly ? [{ key: "overdueOnly", label: t("wo.fl.overdueOnly"), clear: () => setOverdueOnly(false) }] : []),
+  ];
+  const clearAllFilters = () => {
+    setStageSel(""); setTypeSel(""); setPrioSel(""); setWhoSel(""); setAssetSel(""); setOverdueOnly(false); setSearch("");
+    setViewParam("");
+  };
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${
+    on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"
+  }`;
+  const vesselNameForReport = vessels.find(v => v.code === selectedVesselCode)?.name ?? null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader kind="workOrder" icon={Wrench} title={t("page.workOrders")} total={shownCount} onReload={reload}>
+        <div className="flex items-center gap-0.5 rounded-lg border border-fg/10 bg-fg/5 p-0.5">
+          {([["kanban", t("wo.list.board"), LayoutGrid], ["list", t("wo.list.list"), List]] as const).map(([mode, label, Icon]) => (
+            <button key={mode} type="button" onClick={() => setViewMode(mode)}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${viewMode === mode ? "bg-surface text-fg shadow-sm" : "text-text-industrial/50 hover:text-fg"}`}>
+              <Icon className="w-3.5 h-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <button type="button" onClick={() => setExportOpen(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+            {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-accent" />}
+            {t("wo.list.export")} <ChevronDown className="w-3 h-3" />
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1.5 z-20 min-w-[15rem] rounded-xl border border-fg/10 bg-surface dark:bg-[#0D1B2A] p-1.5 shadow-xl">
+              <button type="button" onClick={() => { setExportOpen(false); setShowExcel(true); }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-fg hover:bg-fg/5">
+                <FileSpreadsheet className="w-3.5 h-3.5 text-success-sea" /> {t("wo.list.exportExcel")}
+              </button>
+              <button type="button" disabled={generatingReport}
+                onClick={async () => {
+                  setExportOpen(false);
+                  setGeneratingReport(true);
+                  try { await printOpenWorkOrdersReport(selectedVesselCode, `${woTerms.abbr}s-Abiertas`); } finally { setGeneratingReport(false); }
+                }}
+                title={selectedVesselCode ? t("wo.page.printOpenForVessel").replace("{vessel}", vesselNameForReport ?? selectedVesselCode) : t("wo.page.printOpenAll")}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-fg hover:bg-fg/5 disabled:opacity-50">
+                <FileText className="w-3.5 h-3.5 text-accent" /> {t("wo.list.exportReport")}{vesselNameForReport ? ` · ${vesselNameForReport}` : ""}
+              </button>
+            </div>
+          )}
+        </div>
         {canCreate && (
-          <button onClick={() => setShowNewWoWizard(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
+          <button onClick={() => setShowNewWoWizard(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}
           </button>
         )}
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
-        </button>
-        <button
-          onClick={async () => { setGeneratingReport(true); try { await printOpenWorkOrdersReport(selectedVesselCode, `${woTerms.abbr}s-Abiertas`); } finally { setGeneratingReport(false); } }}
-          disabled={generatingReport}
-          title={selectedVesselCode ? t("wo.page.printOpenForVessel").replace("{vessel}", selectedVesselCode) : t("wo.page.printOpenAll")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50 transition-all"
-        >
-          {generatingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-accent" />} {t("wo.page.openReport")}{selectedVesselCode ? ` (${selectedVesselCode})` : ""}
-        </button>
-        <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode("list")}
-            title="Vista lista"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setViewMode("kanban");
-              // El tablero muestra todas las etapas como columnas: si quedaba un
-              // chip activo de la lista, se limpia — si no, el tablero saldría
-              // recortado sin ningún filtro visible que lo explique.
-              if (viewFilter) {
-                const params = new URLSearchParams(searchParams);
-                params.delete("view");
-                setSearchParams(params, { replace: true });
-              }
-            }}
-            title="Vista Kanban"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-          </button>
-        </div>
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loadingDetail")}</div>}
-      {tableActionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{tableActionError}</p>}
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {/* Los chips son de la vista lista: en el tablero las etapas YA son las
-            columnas, así que ahí sobran (y un filtro activo pero invisible
-            recortaría el tablero sin decir por qué — ver el toggle a Kanban,
-            que limpia el filtro al cambiar de vista). */}
-        {viewMode === "list" && ([
-          { key: "",                  labelKey: "wo.filter.all" },
-          { key: "inPreparation",     labelKey: "wo.filter.inPreparation" },
-          { key: "toApprove",         labelKey: "wo.filter.toApprove" },
-          { key: "toAuthorize",       labelKey: "wo.filter.toAuthorize" },
-          { key: "authorized",        labelKey: "wo.filter.authorized" },
-          { key: "inProgress",        labelKey: "wo.filter.inProgress" },
-          { key: "open",              labelKey: "wo.filter.open" },
-          { key: "overdue",           labelKey: "wo.filter.overdue" },
-          { key: "postponed",         labelKey: "wo.filter.postponed" },
-          { key: "postponedPending",  labelKey: "wo.filter.postponedPending" },
-          { key: "postponedRejected", labelKey: "wo.filter.postponedRejected" },
-          { key: "closed",            labelKey: "wo.filter.closed" },
-        ] as const).map(opt => {
-          const active = viewFilter === opt.key;
+      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {summaryCards.map(c => {
+          const on = viewFilter === c.key;
           return (
-            <button
-              key={opt.key || "all"}
-              type="button"
-              onClick={() => {
-                const params = new URLSearchParams(searchParams);
-                if (opt.key) params.set("view", opt.key); else params.delete("view");
-                setSearchParams(params, { replace: true });
-              }}
-              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
-                active
-                  ? "bg-accent/20 text-accent border-accent/40"
-                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-fg/20 hover:text-text-industrial"
-              }`}
-            >
-              {t(opt.labelKey)}
+            <button key={c.key} type="button" onClick={() => setViewParam(on ? "" : c.key)}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${
+                on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"
+              }`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
             </button>
           );
         })}
-        {/* Buscador global de SS — busca en cualquier estado, incluidas cerradas. */}
-        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 ml-auto">
-          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t("wo.page.searchPlaceholder")}
-            className="w-64 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg transition-colors">
-              <X className="w-3 h-3" />
+      </div>
+
+      {/* Filtros: sirven igual para el tablero y la lista. */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {STAGE_BUTTONS.map(b => {
+            const on = stageSel === b.key;
+            const count = beforeStage ? stageFilter(beforeStage, b.key).length : 0;
+            return (
+              <button key={b.key || "open"} type="button" onClick={() => setStageSel(b.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+                  on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                }`}>
+                {b.label}
+                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={typeSel} onChange={e => setTypeSel(e.target.value)} className={selCls(!!typeSel)}>
+            <option value="">{t("wo.fl.typeAll")}</option>
+            <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
+            <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
+            <option value="INSPECTION">{t("wo.type.inspection")}</option>
+          </select>
+          <select value={prioSel} onChange={e => setPrioSel(e.target.value)} className={selCls(!!prioSel)}>
+            <option value="">{t("wo.fl.prioAll")}</option>
+            {["CRITICAL", "HIGH", "MEDIUM", "LOW"].map(p => <option key={p} value={p}>{prioLabel(p)}</option>)}
+          </select>
+          <select value={whoSel} onChange={e => setWhoSel(e.target.value)} className={selCls(!!whoSel)}>
+            <option value="">{t("wo.fl.whoAll")}</option>
+            <option value="__none__">{t("wo.fl.noOne")}</option>
+            {whoOptions.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select value={assetSel} onChange={e => setAssetSel(e.target.value)} className={`${selCls(!!assetSel)} max-w-[14rem]`}>
+            <option value="">{t("wo.fl.assetAll")}</option>
+            {assetOptions.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <button type="button" onClick={() => setOverdueOnly(v => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              overdueOnly ? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400" : "border-fg/10 bg-surface text-fg"
+            }`}>
+            <AlertTriangle className="w-3.5 h-3.5" /> {t("wo.fl.overdueOnly")}
+          </button>
+          {showBoard && (
+            <button type="button" onClick={() => setGroupByAsset(v => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                groupByAsset ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
+              }`}>
+              <Layers className="w-3.5 h-3.5" /> {t("wo.fl.groupByAsset")}
             </button>
           )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("wo.page.searchPlaceholder")}
+              className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg transition-colors">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         </div>
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-text-industrial/60">
+            {t("wo.fl.filtering")}
+            {activeFilters.map(f => (
+              <span key={f.key} className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/5 py-0.5 pl-2.5 pr-1 font-bold text-accent">
+                {f.label}
+                <button type="button" onClick={f.clear} className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/15 hover:bg-accent/25">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            ))}
+            <button type="button" onClick={clearAllFilters} className="underline hover:text-fg">{t("wo.fl.clear")}</button>
+          </div>
+        )}
       </div>
 
       <TmsaFilterBanner filter={tmsaFilter} shown={tmsaDisplayItems?.length ?? 0} total={data?.items?.length ?? 0} />
 
-      {viewMode === "list" ? (
-        <DataTable columns={columns} data={tmsaDisplayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")} onRowClick={row => openLink(row.workOrderCode)} />
+      {!showBoard ? (
+        <DataTable columns={columns} data={tmsaDisplayItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.workOrders")}
+          onRowClick={row => openLink(row.workOrderCode)}
+          rowClassName={r => (isOverdueWo(r) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")} />
       ) : (
-        <KanbanBoard items={tmsaDisplayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading} onOpen={wo => openLink(wo.workOrderCode)} onReload={reload} />
+        <KanbanBoard items={tmsaDisplayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading}
+          onOpen={wo => openLink(wo.workOrderCode)} onReload={reload}
+          grouped={groupByAsset} onlyStage={stageSel ? STAGE_TO_COLUMN[stageSel] : undefined} cardAction={cardAction} />
       )}
+
+      {/* Acciones de las tarjetas / filas: mismos pasos que dentro de la OT. */}
+      {listApproval && (
+        <ApprovalModal
+          workOrder={listApproval.wo}
+          step={listApproval.step}
+          onClose={() => setListApproval(null)}
+          onSuccess={() => {
+            if (listApproval.step === "ENVIA") setSentWoCode(listApproval.wo.workOrderCode);
+            setListApproval(null);
+            void reload();
+          }}
+        />
+      )}
+      {progressWo && (
+        <ProgressNoteSheet
+          workOrderId={progressWo.id}
+          onClose={() => setProgressWo(null)}
+          onSaved={() => { setProgressWo(null); void reload(); }}
+        />
+      )}
+      {tableActionError && <AlertDialog message={tableActionError} onClose={() => setTableActionError(null)} />}
 
       {showNewWoWizard && (
         <NewWorkOrderWizard
@@ -4892,8 +5887,25 @@ export const WorkOrdersPage: React.FC = () => {
             onReload={() => { void reload(); }}
             onOpenAction={openActionModal}
             onPlanExecuted={(planId, completedAt) => { void offerCertificateRenewal(planId, completedAt); }}
+            onSentToApprove={setSentWoCode}
           />
         </MaybeCopilotFlow>
+      )}
+
+      {/* Confirmación de "Enviar a aprobar": el modal de la OT ya se cerró. */}
+      {sentWoCode && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-3" role="dialog" aria-modal="true">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              <CheckCheck className="w-5 h-5 text-success-sea" /> {t("wo.guide.sent.title")}
+            </h2>
+            <p className="text-sm text-text-industrial/80">{t("wo.guide.sent.body").replace("{code}", sentWoCode)}</p>
+            <div className="flex justify-end">
+              <button type="button" autoFocus onClick={() => setSentWoCode(null)}
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110">OK</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {certToRenew && (

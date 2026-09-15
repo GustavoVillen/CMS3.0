@@ -3,7 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
   Snowflake, Waves, FileDown, Paperclip, Download, Trash2,
+  ArrowLeft, ChevronRight, Info, Save, Send, Ship, Wrench, Users, PenLine, Hourglass, Play, HardHat, RotateCcw, Search,
 } from "lucide-react";
+import { WizardStepper } from "../components/NewWorkOrderWizard";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth, useCan } from "../lib/auth";
@@ -13,6 +16,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
 import { AuthedDocLink, downloadAuthedFile } from "../lib/authed-media";
 import { PageHeader } from "../components/PageHeader";
+import { DataTable, type Column } from "../components/DataTable";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
@@ -167,6 +171,14 @@ function toLocalDateTimeInput(s: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Duración legible ("25 min", "3 h", "2 d") para vencimientos. */
+function fmtSpan(ms: number): string {
+  const m = Math.round(Math.abs(ms) / 60_000);
+  if (m < 60) return `${m} min`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h} h` : `${Math.round(h / 24)} d`;
+}
+
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";
 
@@ -178,6 +190,24 @@ const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase 
  * que no tiene OT. Esta ventana obliga a elegir antes de abrir el formulario,
  * que es lo que hace trazable el vínculo OT ⇄ permiso.
  */
+/** Encabezado común de los pasos del alta (V19): ícono naranja, título y pasos. */
+const PermitWizardHeader: React.FC<{ title: string; stepper?: React.ReactNode; onClose: () => void }> = ({ title, stepper, onClose }) => {
+  const t = useT();
+  return (
+    <div className="px-5 sm:px-6 py-3.5 border-b border-fg/10 shrink-0">
+      <div className="flex items-center gap-3">
+        <span className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-orange-700 dark:text-orange-400">{t("pm.wiz.kicker")}</p>
+          <h2 className="text-base font-black text-fg leading-tight">{title}</h2>
+        </div>
+        <ModalCloseButton onClose={onClose} />
+      </div>
+      {stepper}
+    </div>
+  );
+};
+
 const PermitOriginChooser: React.FC<{
   onFromWorkOrder: () => void;
   onStandalone: () => void;
@@ -186,38 +216,119 @@ const PermitOriginChooser: React.FC<{
   const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="w-4 h-4 text-accent" />
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.newPermit")}</p>
-              <h2 className="text-sm font-bold text-fg">{t("pm.origin.title")}</h2>
-            </div>
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col border-t-4 border-t-orange-600 overflow-hidden">
+        <PermitWizardHeader title={t("pm.newPermit")} onClose={onClose}
+          stepper={<WizardStepper labels={[t("pm.wiz.stepOrigin"), t("pm.wiz.stepWo"), t("pm.wiz.stepType"), t("pm.wiz.stepForm")]} current={0} />} />
+        <div className="p-5 sm:p-6 space-y-4">
+          <div>
+            <p className="text-[15px] font-extrabold text-fg">{t("pm.wiz.originQ")}</p>
+            <p className="text-xs text-text-industrial/60 mt-0.5">{t("pm.wiz.originHint")}</p>
           </div>
-          <ModalCloseButton onClose={onClose} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={onFromWorkOrder}
+              className="text-left p-4 rounded-2xl border-2 border-accent/45 bg-accent/[0.04] hover:bg-accent/10 transition-colors flex items-start gap-3"
+            >
+              <span className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center shrink-0"><Wrench className="w-5 h-5" /></span>
+              <span>
+                <span className="flex flex-wrap items-center gap-1.5 text-sm font-extrabold text-fg">
+                  {t("pm.origin.fromWo")}
+                  <span className="rounded-full bg-accent px-2 py-px text-[10px] font-extrabold text-accent-fg">{t("pm.wiz.usual")}</span>
+                </span>
+                <span className="block text-xs text-text-industrial/60 mt-0.5">{t("pm.origin.fromWoHint")}</span>
+              </span>
+            </button>
+            <button
+              onClick={onStandalone}
+              className="text-left p-4 rounded-2xl border-2 border-fg/10 bg-surface hover:border-fg/25 transition-colors flex items-start gap-3"
+            >
+              <span className="w-10 h-10 rounded-xl bg-fg/5 text-text-industrial/60 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></span>
+              <span>
+                <span className="block text-sm font-extrabold text-fg">{t("pm.origin.standalone")}</span>
+                <span className="block text-xs text-text-industrial/60 mt-0.5">{t("pm.origin.standaloneHint")}</span>
+              </span>
+            </button>
+          </div>
         </div>
-        <div className="p-6 space-y-3">
-          <p className="text-xs text-text-industrial/60">{t("pm.origin.subtitle")}</p>
-          <button
-            onClick={onFromWorkOrder}
-            className="w-full text-left px-4 py-3.5 rounded-xl border border-accent/40 bg-accent/5 hover:bg-accent/10 transition-colors flex items-start gap-3"
-          >
-            <FileText className="w-4 h-4 text-accent shrink-0 mt-0.5" />
-            <span>
-              <span className="block text-sm font-bold text-fg">{t("pm.origin.fromWo")}</span>
-              <span className="block text-[11px] text-text-industrial/60 mt-0.5">{t("pm.origin.fromWoHint")}</span>
-            </span>
+      </div>
+    </div>
+  );
+};
+
+// ─── Tipo de permiso (paso del alta, V19) ────────────────────────────────────
+
+const TYPE_HINT_TKEY: Record<PermitType, TranslationKey> = {
+  HOT_WORK: "pm.wiz.hint.HOT_WORK",
+  ENCLOSED_SPACE_ENTRY: "pm.wiz.hint.ENCLOSED_SPACE_ENTRY",
+  WORKING_ALOFT: "pm.wiz.hint.WORKING_ALOFT",
+  ELECTRICAL_ISOLATION: "pm.wiz.hint.ELECTRICAL_ISOLATION",
+  COLD_WORK: "pm.wiz.hint.COLD_WORK",
+  UNDERWATER_WORK: "pm.wiz.hint.UNDERWATER_WORK",
+};
+const TYPE_TONE: Record<PermitType, string> = {
+  HOT_WORK: "bg-red-500/10 text-red-700 dark:text-red-400",
+  ENCLOSED_SPACE_ENTRY: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  WORKING_ALOFT: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  ELECTRICAL_ISOLATION: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+  COLD_WORK: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
+  UNDERWATER_WORK: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+};
+
+/** Las 6 tarjetas de tipo de permiso. `suggested` = lo que sugiere el texto de la OT. */
+const PermitTypeCards: React.FC<{ value: PermitType | null; suggested?: PermitType | null; compact?: boolean; onPick: (t: PermitType) => void }> = ({ value, suggested, compact, onPick }) => {
+  const t = useT();
+  return (
+    <div className={`grid gap-2.5 ${compact ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3"}`}>
+      {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => {
+        const Icon = TYPE_ICON[tp];
+        const on = value === tp;
+        return (
+          <button key={tp} type="button" onClick={() => onPick(tp)}
+            className={`relative flex flex-col items-start gap-1 rounded-2xl border-2 text-left transition-colors ${compact ? "p-2.5" : "p-3"} ${on ? "border-orange-600 bg-orange-500/[0.06]" : "border-fg/10 bg-surface hover:border-fg/25"}`}>
+            {tp === suggested && (
+              <span className="absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-full bg-violet-500/15 px-1.5 py-px text-[9.5px] font-extrabold text-violet-700 dark:text-violet-300">
+                <Sparkles className="w-2.5 h-2.5" /> {t("pm.wiz.suggested")}
+              </span>
+            )}
+            <span className={`rounded-xl flex items-center justify-center ${compact ? "w-8 h-8" : "w-9 h-9"} ${TYPE_TONE[tp]}`}><Icon className="w-4 h-4" /></span>
+            <span className="text-[13px] font-extrabold text-fg">{t(TYPE_TKEY[tp])}</span>
+            {!compact && <span className="text-[11px] text-text-industrial/60">{t(TYPE_HINT_TKEY[tp])}</span>}
           </button>
-          <button
-            onClick={onStandalone}
-            className="w-full text-left px-4 py-3.5 rounded-xl border border-fg/10 bg-fg/5 hover:bg-fg/10 transition-colors flex items-start gap-3"
-          >
-            <ShieldAlert className="w-4 h-4 text-text-industrial/50 shrink-0 mt-0.5" />
-            <span>
-              <span className="block text-sm font-bold text-fg">{t("pm.origin.standalone")}</span>
-              <span className="block text-[11px] text-text-industrial/60 mt-0.5">{t("pm.origin.standaloneHint")}</span>
+        );
+      })}
+    </div>
+  );
+};
+
+const PermitTypeChooser: React.FC<{
+  stepLabels: string[];
+  current: number;
+  suggested?: PermitType | null;
+  workOrderCode?: string | null;
+  onPick: (t: PermitType) => void;
+  onBack: () => void;
+  onClose: () => void;
+}> = ({ stepLabels, current, suggested, workOrderCode, onPick, onBack, onClose }) => {
+  const t = useT();
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-3xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col border-t-4 border-t-orange-600 overflow-hidden">
+        <PermitWizardHeader title={t("pm.newPermit")} onClose={onClose} stepper={<WizardStepper labels={stepLabels} current={current} />} />
+        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
+          {workOrderCode && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/5 px-2.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+              <Wrench className="w-3 h-3" /> {workOrderCode}
             </span>
+          )}
+          <div>
+            <p className="text-[15px] font-extrabold text-fg">{t("pm.wiz.typeQ")}</p>
+            <p className="text-xs text-text-industrial/60 mt-0.5">{suggested ? t("pm.wiz.typeHintSuggested") : t("pm.wiz.typeHint")}</p>
+          </div>
+          <PermitTypeCards value={null} suggested={suggested} onPick={onPick} />
+        </div>
+        <div className="flex items-center px-5 sm:px-6 py-3 border-t border-fg/10 shrink-0">
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-text-industrial/70 hover:text-fg">
+            <ArrowLeft className="w-3.5 h-3.5" /> {t("common.back")}
           </button>
         </div>
       </div>
@@ -250,9 +361,11 @@ const WorkOrderPicker: React.FC<{
   initialVesselCode?: string | null;
   /** En edición el buque del permiso no se toca: sólo se listan sus OTs. */
   lockVessel?: boolean;
+  /** Pasos del alta (V19). Sin esto es el selector suelto (cambiar la OT de un permiso). */
+  stepper?: React.ReactNode;
   onPick: (wo: PickableWorkOrder) => void;
   onClose: () => void;
-}> = ({ initialVesselCode, lockVessel = false, onPick, onClose }) => {
+}> = ({ initialVesselCode, lockVessel = false, stepper, onPick, onClose }) => {
   const t = useT();
   const { vessels, selectedVesselCode } = useVesselContext();
   const [vesselCode, setVesselCode] = useState(
@@ -278,23 +391,15 @@ const WorkOrderPicker: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <FileText className="w-4 h-4 text-accent" />
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.newPermit")}</p>
-              <h2 className="text-sm font-bold text-fg">{t("pm.woPicker.title")}</h2>
-            </div>
-          </div>
-          <ModalCloseButton onClose={onClose} />
-        </div>
+      <div className={`w-full max-w-2xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col overflow-hidden ${stepper ? "border-t-4 border-t-orange-600" : ""}`}>
+        <PermitWizardHeader title={stepper ? t("pm.newPermit") : t("pm.woPicker.title")} stepper={stepper} onClose={onClose} />
 
         <div className="px-6 py-3 border-b border-fg/10 shrink-0 space-y-2">
-          <div className="flex gap-2">
+          {stepper && <p className="text-[15px] font-extrabold text-fg">{t("pm.wiz.woQ")}</p>}
+          <div className="flex flex-col sm:flex-row gap-2">
             <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={lockVessel}
               className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg disabled:opacity-60">
-              {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
+              {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
             </select>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("pm.woPicker.searchPh")}
               className="flex-1 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50" />
@@ -309,28 +414,37 @@ const WorkOrderPicker: React.FC<{
             <div className="text-center py-10 text-text-industrial/30 text-sm">{t("pm.woPicker.empty")}</div>
           ) : (
             <div className="divide-y divide-fg/5">
-              {items.map(w => (
-                <button key={w.id} onClick={() => onPick(w)}
-                  className="w-full text-left px-6 py-3 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <span className="text-[10px] font-mono font-bold text-fg">{w.workOrderCode}</span>
-                      <span className="text-[9px] px-2 py-0.5 rounded-full border border-fg/10 bg-fg/5 text-text-industrial/60 font-bold">
-                        {WO_STATUS_TKEY[w.status] ? t(WO_STATUS_TKEY[w.status]) : w.status}
+              {items.map(w => {
+                // Tipo de permiso que sugiere el texto de la OT (orientativo).
+                const sug = stepper ? suggestPermitTypesFromText(`${w.title ?? ""} ${w.assetName ?? ""}`)[0]?.type as PermitType | undefined : undefined;
+                const SugIcon = sug ? TYPE_ICON[sug] : null;
+                return (
+                  <button key={w.id} onClick={() => onPick(w)}
+                    className="w-full text-left px-6 py-3 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-[11px] font-mono font-bold text-fg">{w.workOrderCode}</span>
+                        <span className="text-[9.5px] px-2 py-0.5 rounded-full border border-fg/10 bg-fg/5 text-text-industrial/60 font-bold">
+                          {WO_STATUS_TKEY[w.status] ? t(WO_STATUS_TKEY[w.status]) : w.status}
+                        </span>
+                      </div>
+                      <p className="text-[13px] font-bold text-fg truncate">{w.assetName ?? "—"}</p>
+                      <p className="text-xs text-text-industrial/60 truncate">{w.title?.trim() || "—"}</p>
+                    </div>
+                    {sug && SugIcon && (
+                      <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/[0.07] px-2 py-0.5 text-[11px] font-bold text-orange-700 dark:text-orange-400 shrink-0" title={t("pm.wiz.suggested")}>
+                        <SugIcon className="w-3 h-3" /> {t(TYPE_TKEY[sug])}
                       </span>
-                      <VesselLabel code={w.vesselCode} className="text-[10px]" showCode />
-                    </div>
-                    <p className="text-xs text-fg truncate">{w.assetName ?? "—"}</p>
-                    <p className="text-[11px] text-text-industrial/50 truncate">{w.title?.trim() || "—"}</p>
-                  </div>
-                  {w.dueDate && (
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] text-text-industrial/40">{t("wo.col.dueDate")}</p>
-                      <p className="text-[11px] font-mono text-fg">{new Date(w.dueDate).toLocaleDateString("es-AR")}</p>
-                    </div>
-                  )}
-                </button>
-              ))}
+                    )}
+                    {w.dueDate && (
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] text-text-industrial/40">{t("wo.col.dueDate")}</p>
+                        <p className="text-[11px] font-mono text-fg">{new Date(w.dueDate).toLocaleDateString("es-AR")}</p>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -360,9 +474,15 @@ interface PermitModalProps {
   onClose: () => void;
   onSaved: () => void;
   onMocTrigger?: (e: MocTriggerEvent) => void;
+  /** Alta desde el asistente (V19): pasos arriba y "Atrás" al tipo de permiso. */
+  wizard?: { labels: string[]; current: number; onBack: () => void };
+  /** Permiso existente (V22): abre directo una ventanita de acción (p. ej. cerrar). */
+  initialDialog?: "close" | null;
+  /** Refresca el permiso sin cerrar la ventana (equipo de trabajo, gas, cambios de etapa). */
+  onReload?: () => void;
 }
 
-export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClose, onSaved, onMocTrigger }) => {
+export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClose, onSaved, onMocTrigger, wizard, initialDialog, onReload }) => {
   const t = useT();
   const { vessels } = useVesselContext();
   const { user } = useAuth();
@@ -403,8 +523,6 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   // ...pero no se ofrece cambiarlo cuando el permiso se abrió desde la OT.
   const canEditWorkOrder = canLinkWorkOrder && !prefill?.lockWorkOrder;
 
-  const [tab, setTab] = useState<"details" | "participants" | "gas" | "attachments">("details");
-
   // Respaldos: el scan del permiso firmado vuelve después de aprobar/cerrar, así
   // que la lista se carga siempre que el permiso exista, sin importar el estado.
   const { data: attachmentsData, reload: reloadAttachments } = useFetch<{ items: PermitAttachment[] }>(
@@ -434,32 +552,32 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   const onSuggestHazards = useCallback(async () => {
     if (!isEditable || loadingHazards) return;
     if (!description.trim() && !location.trim()) {
-      setErr("Completá al menos ubicación o descripción antes de pedir sugerencia.");
+      setErr(t("pm.wiz.aiNeedsContext"));
       return;
     }
     setLoadingHazards(true);
     const prev = hazards;
-    setHazards("Analizando...");
+    setHazards(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/permits/suggest-hazards", aiBaseInput());
       setHazards(res.text || prev);
     } catch (e) {
       setHazards(prev);
-      setErr(e instanceof ApiError ? e.message : "Error al sugerir peligros.");
+      setErr(e instanceof ApiError ? e.message : t("pm.wiz.aiError"));
     } finally {
       setLoadingHazards(false);
     }
-  }, [isEditable, loadingHazards, description, location, hazards, aiBaseInput]);
+  }, [isEditable, loadingHazards, description, location, hazards, aiBaseInput, t]);
 
   const onSuggestControls = useCallback(async () => {
     if (!isEditable || loadingControls) return;
     if (!description.trim() && !location.trim()) {
-      setErr("Completá al menos ubicación o descripción antes de pedir sugerencia.");
+      setErr(t("pm.wiz.aiNeedsContext"));
       return;
     }
     setLoadingControls(true);
     const prev = controls;
-    setControls("Analizando...");
+    setControls(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/permits/suggest-controls", {
         ...aiBaseInput(),
@@ -468,21 +586,21 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       setControls(res.text || prev);
     } catch (e) {
       setControls(prev);
-      setErr(e instanceof ApiError ? e.message : "Error al sugerir controles.");
+      setErr(e instanceof ApiError ? e.message : t("pm.wiz.aiError"));
     } finally {
       setLoadingControls(false);
     }
-  }, [isEditable, loadingControls, description, location, hazards, controls, aiBaseInput]);
+  }, [isEditable, loadingControls, description, location, hazards, controls, aiBaseInput, t]);
 
   const onSuggestPpe = useCallback(async () => {
     if (!isEditable || loadingPpe) return;
     if (!description.trim() && !location.trim()) {
-      setErr("Completá al menos ubicación o descripción antes de pedir sugerencia.");
+      setErr(t("pm.wiz.aiNeedsContext"));
       return;
     }
     setLoadingPpe(true);
     const prev = ppe;
-    setPpe("Analizando...");
+    setPpe(t("mp.modal.analyzing"));
     try {
       const res = await api.post<{ text: string }>("/app/permits/suggest-ppe", {
         ...aiBaseInput(),
@@ -492,15 +610,20 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       setPpe(res.text || prev);
     } catch (e) {
       setPpe(prev);
-      setErr(e instanceof ApiError ? e.message : "Error al sugerir EPP.");
+      setErr(e instanceof ApiError ? e.message : t("pm.wiz.aiError"));
     } finally {
       setLoadingPpe(false);
     }
-  }, [isEditable, loadingPpe, description, location, hazards, controls, ppe, aiBaseInput]);
+  }, [isEditable, loadingPpe, description, location, hazards, controls, ppe, aiBaseInput, t]);
 
-  const onSave = useCallback(async () => {
+  /** Guardar. `requestAfter` (alta, V19): además pide la aprobación del permiso recién creado. */
+  const onSave = useCallback(async (requestAfter = false) => {
     if (!vesselCode || !location.trim() || !description.trim() || !plannedStart || !plannedEnd) {
-      setErr("Completá vessel, ubicación, descripción y fechas planeadas."); return;
+      setErr(t("pm.wiz.required")); return;
+    }
+    // Para pedir la aprobación, el análisis de riesgo tiene que estar completo.
+    if (requestAfter && (!hazards.trim() || !controls.trim() || !ppe.trim())) {
+      setErr(t("pm.wiz.requestNeeds")); return;
     }
     setSaving(true); setErr(null);
     try {
@@ -519,8 +642,13 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       // borrador). El backend valida que la OT sea del mismo tenant y buque, y
       // rechaza el cambio si el permiso ya salió de borrador.
       if (canLinkWorkOrder) payload.workOrderId = workOrder?.id ?? null;
-      if (isNew) await api.post("/app/permits", payload);
-      else await api.patch(`/app/permits/${permit!.id}`, payload);
+      if (isNew) {
+        const created = await api.post<{ id: string }>("/app/permits", payload);
+        if (requestAfter && created?.id) await api.post(`/app/permits/${created.id}/request`, {});
+      } else {
+        await api.patch(`/app/permits/${permit!.id}`, payload);
+        if (requestAfter && permit!.status === "DRAFT") await api.post(`/app/permits/${permit!.id}/request`, {});
+      }
 
       // Detector MOC TEMPORARY: el bypass/override de una alarma crítica
       // reduce la línea de defensa SOLAS y debe registrarse como Management
@@ -546,47 +674,25 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
       onSaved();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Error al guardar.");
+      setErr(e instanceof ApiError ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
-  }, [isNew, permit, prefill, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, canLinkWorkOrder, workOrder, vessels, onSaved, onMocTrigger]);
+  }, [isNew, permit, vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, canLinkWorkOrder, workOrder, vessels, onSaved, onMocTrigger, t]);
 
   const callAction = useCallback(async (action: string, body?: unknown) => {
     if (!permit) return;
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/permits/${permit.id}/${action}`, body ?? {});
-      onSaved();
+      (onReload ?? onSaved)();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : `Error al ${action}.`);
+      setErr(e instanceof ApiError ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
-  }, [permit, onSaved]);
+  }, [permit, onSaved, onReload, t]);
 
-  const onRequest = () => callAction("request");
-  const onApprove = () => callAction("approve", {});
-  const onReject = () => {
-    const reason = prompt("Motivo de rechazo:");
-    if (!reason || !reason.trim()) return;
-    void callAction("reject", { reason: reason.trim() });
-  };
-  const onActivate = () => callAction("activate");
-  const onClose_ = () => {
-    const notes = prompt("Notas de cierre (opcional):");
-    void callAction("close", { closeNotes: notes?.trim() || null });
-  };
-  const onCancel = () => {
-    const reason = prompt("Motivo de cancelación:");
-    if (!reason || !reason.trim()) return;
-    void callAction("cancel", { reason: reason.trim() });
-  };
-  const onReopen = () => {
-    const reason = prompt("Motivo de re-apertura (mín. 5 caracteres):");
-    if (!reason || reason.trim().length < 5) return;
-    void callAction("reopen", { reason: reason.trim() });
-  };
   /**
    * Descarga el permiso como PDF (para imprimir y firmar) o como Word (para
    * completarlo antes). El nombre del archivo lo decide el servidor: con
@@ -629,268 +735,562 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, workOrderId: workOrder?.id ?? null });
-  const requestClose = useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? onSave : undefined, onClose });
+  const requestClose = useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? () => onSave(false) : undefined, onClose });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="w-4 h-4 text-accent" />
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("pm.title")}</p>
-              <h2 className="text-sm font-bold text-fg">{isNew ? t("pm.newPermit") : `${permit!.permitCode} — ${t(TYPE_TKEY[permit!.type])}`}</h2>
-            </div>
-            {permit && <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[permit.status]}`}>{t(STATUS_TKEY[permit.status])}</span>}
-          </div>
-          <ModalCloseButton onClose={requestClose} />
-        </div>
+  // ── Alta del permiso por bloques (preview V19) ──────────────────────────────
+  const [showTypeCards, setShowTypeCards] = useState(false);
+  const missingNew = {
+    location: !location.trim(),
+    description: !description.trim(),
+    start: !plannedStart,
+    end: !plannedEnd,
+    hazards: !hazards.trim(),
+    controls: !controls.trim(),
+    ppe: !ppe.trim(),
+  };
+  const miss1 = Number(missingNew.location) + Number(missingNew.description) + Number(missingNew.start) + Number(missingNew.end);
+  const miss2 = Number(missingNew.hazards) + Number(missingNew.controls) + Number(missingNew.ppe);
+  /** Horario rápido: hoy o mañana a las 08:00; fin = inicio + N horas o a las 17:00. */
+  const setStartAt = (daysAhead: number) => {
+    const d = new Date(); d.setDate(d.getDate() + daysAhead); d.setHours(8, 0, 0, 0);
+    setPlannedStart(toLocalDateTimeInput(d.toISOString()));
+  };
+  const setEndAt = (hours: number | "17") => {
+    const base = plannedStart ? new Date(plannedStart) : new Date();
+    const d = new Date(base);
+    if (hours === "17") d.setHours(17, 0, 0, 0); else d.setHours(d.getHours() + hours);
+    setPlannedEnd(toLocalDateTimeInput(d.toISOString()));
+  };
+  const quickBtn = "rounded-full border border-fg/10 px-2.5 py-0.5 text-[11px] font-bold text-text-industrial/60 hover:text-fg hover:border-fg/25";
+  const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
+  const aiPill = (onClick: () => void, loading: boolean) => (
+    <button type="button" onClick={onClick} disabled={loading}
+      className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/[0.07] px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 disabled:opacity-60">
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} {t("mp.guide.suggestAi")}
+    </button>
+  );
+  const TypeIcon = TYPE_ICON[type];
+  const suggestedType = prefill?.workOrderId
+    ? (suggestPermitTypesFromText(`${prefill.workOrderTitle ?? ""} ${prefill.description ?? ""}`)[0]?.type as PermitType | undefined) ?? null
+    : null;
 
-        {!isNew && (
-          <div className="flex border-b border-fg/10 px-6 shrink-0">
-            <button onClick={() => setTab("details")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "details" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabDetails")}</button>
-            <button onClick={() => setTab("participants")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "participants" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabParticipants")} ({permit!.participants.length})</button>
-            {permit!.type === "ENCLOSED_SPACE_ENTRY" && (
-              <button onClick={() => setTab("gas")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "gas" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabGasTests")} ({permit!.gasTests.length})</button>
+  const newForm = (
+    <div className="space-y-3.5">
+      {/* Contexto: buque, OT y tipo, con "cambiar" a mano. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {workOrder && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2.5 py-0.5 text-[11.5px] font-bold text-text-industrial/70">
+            <Ship className="w-3 h-3" /><VesselLabel code={vesselCode} className="text-[11.5px]" />
+          </span>
+        )}
+        {workOrder ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/5 px-2.5 py-0.5 font-mono text-[11.5px] font-bold text-accent">
+            <Wrench className="w-3 h-3" /> {workOrder.code ?? "—"}
+            {canEditWorkOrder && (
+              <button type="button" onClick={() => setPickingWorkOrder(true)} className="font-sans text-[11px] font-extrabold underline">{t("pm.wiz.change")}</button>
             )}
-            <button onClick={() => setTab("attachments")} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tab === "attachments" ? "border-accent text-accent" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>{t("pm.tabAttachments")} ({attachments.length})</button>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-fg/10 bg-fg/5 px-2.5 py-0.5 text-[11.5px] font-bold text-text-industrial/60">
+            {t("pm.wiz.noWo")}
+            {canEditWorkOrder && (
+              <button type="button" onClick={() => setPickingWorkOrder(true)} className="text-[11px] font-extrabold text-accent underline">{t("pm.linkWo")}</button>
+            )}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/[0.07] px-2.5 py-0.5 text-[11.5px] font-bold text-orange-700 dark:text-orange-400">
+          <TypeIcon className="w-3 h-3" /> {t(TYPE_TKEY[type])}
+          <button type="button" onClick={() => setShowTypeCards(v => !v)} className="text-[11px] font-extrabold underline">{t("pm.wiz.change")}</button>
+        </span>
+      </div>
+      {showTypeCards && (
+        <PermitTypeCards compact value={type} suggested={suggestedType} onPick={tp => { setType(tp); setShowTypeCards(false); }} />
+      )}
+
+      {/* 1 · Qué, dónde y cuándo */}
+      <GuideSection n={1} title={t("pm.wiz.sec1")} subtitle={t("pm.wiz.sec1Sub")} open onToggle={() => { /* siempre abierto */ }}
+        pill={<GuidePill missing={miss1} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />}>
+        {!workOrder && (
+          <div>
+            <label className={fl}>{t("pm.vessel")}</label>
+            <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
+              {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
+            </select>
           </div>
         )}
-
-        <div className="overflow-y-auto flex-1 p-6">
-          {(isNew || tab === "details") && (
-            <div className="space-y-4">
-              {isTerminal && (
-                <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-orange-700 dark:text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-orange-800 dark:text-orange-200">{t("pm.lockedHint").replace("{status}", t(STATUS_TKEY[permit!.status]))}</p>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                {/* OT asociada: de qué trabajo planificado cuelga este permiso. */}
-                <div className="col-span-2">
-                  <label className={labelCls}>{t("pm.linkedWo")}</label>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10">
-                    {workOrder ? (
-                      <>
-                        <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
-                        <span className="text-xs font-mono font-bold text-fg shrink-0">{workOrder.code ?? "—"}</span>
-                        <span className="text-xs text-text-industrial/60 truncate flex-1">{workOrder.title?.trim() || ""}</span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-text-industrial/50 flex-1">{t("pm.noLinkedWo")}</span>
-                    )}
-                    {canEditWorkOrder && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button type="button" onClick={() => setPickingWorkOrder(true)}
-                          className="text-[10px] font-bold uppercase tracking-wider text-accent hover:brightness-110">
-                          {workOrder ? t("pm.changeWo") : t("pm.linkWo")}
-                        </button>
-                        {workOrder && (
-                          <button type="button" onClick={() => setWorkOrder(null)}
-                            className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50 hover:text-fg">
-                            {t("pm.unlinkWo")}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {!canLinkWorkOrder && workOrder && (
-                    <p className="text-[10px] text-text-industrial/40 mt-1">{t("pm.woLockedHint")}</p>
-                  )}
-                </div>
-                <div>
-                  <label className={labelCls}>{t("pm.vessel")}</label>
-                  <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || !isEditable || !!workOrder} className={inputCls}>
-                    {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>{t("pm.type")}</label>
-                  <select value={type} onChange={e => setType(e.target.value as PermitType)} disabled={!isNew || !isEditable} className={inputCls}>
-                    {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => <option key={tp} value={tp}>{t(TYPE_TKEY[tp])}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>{t("common.location")}</label>
-                  <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("pm.locationPh")} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>{t("pm.workDesc")}</label>
-                  <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t("pm.plannedStart")}</label>
-                  <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t("pm.plannedEnd")}</label>
-                  <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
-                </div>
-                {permit && (permit.validFrom || permit.validTo) && (
-                  <div className="col-span-2 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>{t("pm.validFrom")}</label>
-                      <input value={fmtDateTime(permit.validFrom)} disabled className={inputCls} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>{t("pm.validUntil")}</label>
-                      <input value={fmtDateTime(permit.validTo)} disabled className={inputCls} />
-                    </div>
-                  </div>
-                )}
-                <div className="col-span-2 space-y-1.5">
-                  <label
-                    onClick={isEditable ? onSuggestHazards : undefined}
-                    title={isEditable ? "Sugerir peligros con IA" : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingHazards ? "opacity-60 animate-pulse" : ""}` : ""}`}
-                  >
-                    {loadingHazards ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    Peligros identificados
-                    {loadingHazards && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
-                  </label>
-                  <AutoTextArea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder={t("pm.hazardsPh")} />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <label
-                    onClick={isEditable ? onSuggestControls : undefined}
-                    title={isEditable ? "Sugerir medidas de control con IA" : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingControls ? "opacity-60 animate-pulse" : ""}` : ""}`}
-                  >
-                    {loadingControls ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    Medidas de control
-                    {loadingControls && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
-                  </label>
-                  <AutoTextArea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder={t("pm.controlsPh")} />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <label
-                    onClick={isEditable ? onSuggestPpe : undefined}
-                    title={isEditable ? "Sugerir EPP con IA" : undefined}
-                    className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${isEditable ? `hover:text-fg cursor-pointer ${loadingPpe ? "opacity-60 animate-pulse" : ""}` : ""}`}
-                  >
-                    {loadingPpe ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    EPP requerido
-                    {loadingPpe && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
-                  </label>
-                  <AutoTextArea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder={t("pm.ppePh")} />
-                </div>
-
-                {/* Override / bypass de alarma crítica — al guardar el sistema sugiere abrir MOC TEMPORARY. */}
-                <label className="col-span-2 flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-orange-500/5 border border-orange-500/20 cursor-pointer hover:bg-orange-500/10 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={alarmOverride}
-                    onChange={e => setAlarmOverride(e.target.checked)}
-                    disabled={!isEditable}
-                    className="mt-0.5 accent-orange-400"
-                  />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-orange-800 dark:text-orange-200">{t("pm.overrideBypass")}</p>
-                    <p className="text-[10px] text-orange-800/80 dark:text-orange-200/70 mt-0.5">
-                      Marcalo si este permiso requiere anular o by-passear una alarma de safety
-                      (fire detection, gas, ESD, etc.). El sistema sugerirá registrar un MOC temporal.
-                    </p>
-                  </div>
-                </label>
-
-                <div className="col-span-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                  <Sparkles className="w-3 h-3 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-blue-900/80 dark:text-blue-200/80 leading-snug">
-                    Las sugerencias de Peligros / Controles / EPP son orientativas (asistente IA). Cada aseveración cuantitativa debería estar respaldada por la regulación aplicable. Para entrada a espacio confinado, los umbrales son ISGOTT 6 Cap. 11 (O₂ 19.5–23%, LEL &lt;1%, H₂S &lt;10 ppm, CO &lt;50 ppm); el sistema los valida server-side al hacer el gas test.
-                  </p>
-                </div>
-                {permit?.rejectionReason && (
-                  <div className="col-span-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-red-700 dark:text-red-400 font-bold mb-1">{t("pm.rejectReason")}</p>
-                    <p className="text-xs text-red-800 dark:text-red-200">{permit.rejectionReason}</p>
-                  </div>
-                )}
-                {permit?.cancelReason && (
-                  <div className="col-span-2 bg-fg/5 border border-fg/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/50 font-bold mb-1">{t("pm.cancelReason")}</p>
-                    <p className="text-xs text-text-industrial/70">{permit.cancelReason}</p>
-                  </div>
-                )}
-                {permit?.closeNotes && (
-                  <div className="col-span-2 bg-success-sea/5 border border-success-sea/20 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-success-sea font-bold mb-1">{t("pm.closeNotes")}</p>
-                    <p className="text-xs text-text-industrial/80">{permit.closeNotes}</p>
-                  </div>
-                )}
-              </div>
-              {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+        <GuideField id="pm-f-location" missing={missingNew.location}>
+          <label className={fl}>{t("common.location")}{missingNew.location && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} placeholder={t("pm.locationPh")} />
+        </GuideField>
+        <GuideField id="pm-f-description" missing={missingNew.description}>
+          <label className={fl}>{t("pm.wiz.workWhat")}{missingNew.description && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls} />
+        </GuideField>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <GuideField id="pm-f-start" missing={missingNew.start}>
+            <label className={fl}>{t("pm.wiz.starts")}{missingNew.start && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} className={inputCls} />
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={quickBtn} onClick={() => setStartAt(0)}>{t("pm.wiz.today8")}</button>
+              <button type="button" className={quickBtn} onClick={() => setStartAt(1)}>{t("pm.wiz.tomorrow8")}</button>
             </div>
-          )}
-
-          {!isNew && tab === "participants" && permit && (
-            <ParticipantsTab permit={permit} canEdit={!isTerminal} onChanged={onSaved} />
-          )}
-
-          {!isNew && tab === "gas" && permit && permit.type === "ENCLOSED_SPACE_ENTRY" && (
-            <GasTestsTab permit={permit} canEdit={!isTerminal} onChanged={onSaved} />
-          )}
-
-          {!isNew && tab === "attachments" && permit && (
-            <AttachmentsTab
-              permitId={permit.id}
-              items={attachments}
-              canEdit={canManagePermits}
-              onChanged={reloadAttachments}
-            />
-          )}
+          </GuideField>
+          <GuideField id="pm-f-end" missing={missingNew.end}>
+            <label className={fl}>{t("pm.wiz.ends")}{missingNew.end && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} className={inputCls} />
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={quickBtn} onClick={() => setEndAt(4)}>+4 h</button>
+              <button type="button" className={quickBtn} onClick={() => setEndAt(8)}>+8 h</button>
+              <button type="button" className={quickBtn} onClick={() => setEndAt("17")}>{t("pm.wiz.until17")}</button>
+            </div>
+          </GuideField>
         </div>
+      </GuideSection>
 
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0 flex-wrap">
-          <div className="flex gap-2 flex-wrap">
-            {!isNew && (
-              <>
-                <button onClick={() => { void onDownload("pdf"); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
-                  <FileText className="w-3.5 h-3.5" /> PDF
-                </button>
-                {/* El mismo formulario, editable: se completa en Word y se imprime. */}
-                <button onClick={() => { void onDownload("doc"); }} disabled={saving} title={t("pm.wordHint")} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
-                  <FileDown className="w-3.5 h-3.5" /> Word
-                </button>
-              </>
-            )}
-            {!isNew && permit?.status === "DRAFT" && (
-              <button onClick={() => { void onRequest(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300 font-bold text-xs hover:bg-yellow-500/20 disabled:opacity-50">{t("common.requestApproval")}</button>
-            )}
-            {!isNew && permit?.status === "REQUESTED" && canApprove && (
-              <>
-                <button onClick={() => { void onApprove(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-500/20 disabled:opacity-50">{t("common.approve")}</button>
-                <button onClick={() => { void onReject(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 font-bold text-xs hover:bg-red-500/20 disabled:opacity-50">{t("common.reject")}</button>
-              </>
-            )}
-            {!isNew && permit?.status === "APPROVED" && (
-              <button onClick={() => { void onActivate(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-300 font-bold text-xs hover:bg-green-500/20 disabled:opacity-50">{t("common.activate")}</button>
-            )}
-            {!isNew && permit?.status === "ACTIVE" && (
-              <button onClick={() => { void onClose_(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/30 text-success-sea font-bold text-xs hover:bg-success-sea/20 disabled:opacity-50">{t("common.close")}</button>
-            )}
-            {!isNew && permit && !isTerminal && (
-              <button onClick={() => { void onCancel(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-text-industrial/60 font-bold text-xs hover:bg-fg/10 disabled:opacity-50">{t("common.cancel")}</button>
-            )}
-            {!isNew && isTerminal && isAdmin && (
-              <button onClick={() => { void onReopen(); }} disabled={saving} className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-300 font-bold text-xs hover:bg-orange-500/20 disabled:opacity-50">{t("common.reopen")}</button>
+      {/* 2 · Riesgos y protección */}
+      <GuideSection n={2} title={t("pm.wiz.sec2")} subtitle={t("pm.wiz.sec2Sub")} open onToggle={() => { /* siempre abierto */ }}
+        pill={<GuidePill missing={miss2} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />}>
+        <GuideField id="pm-f-hazards" missing={missingNew.hazards}>
+          <div className="flex items-center gap-1">
+            <label className={`${fl} mb-0`}>{t("pm.wiz.hazards")}{missingNew.hazards && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            {aiPill(() => { void onSuggestHazards(); }, loadingHazards)}
+          </div>
+          <AutoTextArea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={loadingHazards} className={inputCls} placeholder={t("pm.hazardsPh")} />
+        </GuideField>
+        <GuideField id="pm-f-controls" missing={missingNew.controls}>
+          <div className="flex items-center gap-1">
+            <label className={`${fl} mb-0`}>{t("pm.wiz.controls")}{missingNew.controls && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            {aiPill(() => { void onSuggestControls(); }, loadingControls)}
+          </div>
+          <AutoTextArea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={loadingControls} className={inputCls} placeholder={t("pm.controlsPh")} />
+        </GuideField>
+        <GuideField id="pm-f-ppe" missing={missingNew.ppe}>
+          <div className="flex items-center gap-1">
+            <label className={`${fl} mb-0`}>{t("pm.wiz.ppe")}{missingNew.ppe && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            {aiPill(() => { void onSuggestPpe(); }, loadingPpe)}
+          </div>
+          <AutoTextArea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={loadingPpe} className={inputCls} placeholder={t("pm.ppePh")} />
+        </GuideField>
+        <p className="flex items-start gap-1.5 text-[11px] text-text-industrial/50">
+          <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+          <span>{t("pm.wiz.aiNote")}{type === "ENCLOSED_SPACE_ENTRY" ? ` ${t("pm.wiz.aiNoteEnclosed")}` : ""}</span>
+        </p>
+        {/* Override / bypass de alarma crítica — al guardar el sistema sugiere abrir MOC TEMPORARY. */}
+        <label className="flex items-start gap-2.5 rounded-xl border-[1.5px] border-orange-500/30 bg-orange-500/[0.05] px-3 py-2.5 cursor-pointer hover:bg-orange-500/10 transition-colors">
+          <input type="checkbox" checked={alarmOverride} onChange={e => setAlarmOverride(e.target.checked)} className="mt-0.5 w-4 h-4 accent-orange-600" />
+          <span>
+            <span className="block text-[13px] font-extrabold text-orange-800 dark:text-orange-200">{t("pm.wiz.overrideTitle")}</span>
+            <span className="block text-[11.5px] text-text-industrial/60">{t("pm.wiz.overrideHint")}</span>
+          </span>
+        </label>
+      </GuideSection>
+
+      {/* Qué sigue */}
+      <div className="rounded-xl border border-accent/20 bg-accent/[0.06] px-3 py-2.5 text-[12.5px] text-sky-900 dark:text-sky-200">
+        <p><b>{t("pm.wiz.nextTitle")}</b> {type === "ENCLOSED_SPACE_ENTRY" ? t("pm.wiz.nextEnclosed") : t("pm.wiz.next")}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {(["pm.status.draft", "common.requestApproval", "pm.status.approved", "pm.status.active", "pm.status.closed"] as TranslationKey[]).map((k, i) => (
+            <React.Fragment key={k}>
+              {i > 0 && <ChevronRight className="w-3 h-3 opacity-60" />}
+              <span className={`rounded-full border px-2 py-px text-[11px] font-extrabold ${i === 0 ? "border-orange-600 bg-orange-600 text-white" : "border-accent/25 bg-surface text-fg"}`}>{t(k)}</span>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const newFooter = (
+    <div className="flex flex-wrap items-center gap-2 px-5 sm:px-6 py-3 border-t border-fg/10 shrink-0">
+      {wizard && !isDirty && (
+        <button type="button" onClick={wizard.onBack} className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-text-industrial/70 hover:text-fg">
+          <ArrowLeft className="w-3.5 h-3.5" /> {t("common.back")}
+        </button>
+      )}
+      <span className="flex-1" />
+      <button type="button" onClick={requestClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
+      <button type="button" onClick={() => { void onSave(false); }} disabled={saving}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-fg/25 disabled:opacity-50">
+        <Save className="w-3.5 h-3.5" /> {t("pm.wiz.saveDraft")}
+      </button>
+      <button type="button" onClick={() => { void onSave(true); }} disabled={saving}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold hover:brightness-110 disabled:opacity-50">
+        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {t("pm.wiz.saveRequest")}
+        {miss1 + miss2 > 0 && <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(miss1 + miss2))}</span>}
+      </button>
+    </div>
+  );
+
+  // ── Permiso existente (preview V22) ─────────────────────────────────────────
+  // Ventanitas propias para rechazar / cerrar / cancelar / re-abrir (antes: prompt del navegador).
+  const [actionDlg, setActionDlg] = useState<null | "reject" | "close" | "cancel" | "reopen">(initialDialog ?? null);
+  const [dlgText, setDlgText] = useState("");
+  const [approveFrom, setApproveFrom] = useState(toLocalDateTimeInput(permit?.validFrom ?? permit?.plannedStart ?? null));
+  const [approveTo, setApproveTo] = useState(toLocalDateTimeInput(permit?.validTo ?? permit?.plannedEnd ?? null));
+
+  const latestGas = permit?.gasTests?.[0] ?? null;
+  // Mismo criterio que el backend al activar: la última medición, apta y de hace ≤ 30 min.
+  const gasOk = !!latestGas && latestGas.verdict === "PASS" && Date.now() - new Date(latestGas.testedAt).getTime() <= 30 * 60_000;
+  const isEnclosed = permit?.type === "ENCLOSED_SPACE_ENTRY";
+  const validToMs = permit?.validTo ? new Date(permit.validTo).getTime() : null;
+  const activeLate = permit?.status === "ACTIVE" && validToMs != null && validToMs < Date.now();
+
+  const runDialog = useCallback(async () => {
+    const text = dlgText.trim();
+    if (actionDlg === "reject" || actionDlg === "cancel") {
+      if (!text) { setErr(t("pm.edit.reasonRequired")); return; }
+      await callAction(actionDlg, { reason: text });
+    } else if (actionDlg === "reopen") {
+      if (text.length < 5) { setErr(t("pm.edit.reopenMin")); return; }
+      await callAction("reopen", { reason: text });
+    } else if (actionDlg === "close") {
+      await callAction("close", { closeNotes: text || null });
+    }
+    setActionDlg(null);
+    setDlgText("");
+  }, [actionDlg, dlgText, callAction, t]);
+
+  const approveNow = useCallback(() => {
+    void callAction("approve", {
+      validFrom: approveFrom ? new Date(approveFrom).toISOString() : null,
+      validTo: approveTo ? new Date(approveTo).toISOString() : null,
+    });
+  }, [approveFrom, approveTo, callAction]);
+
+  if (!isNew && permit) {
+    const PIcon = TYPE_ICON[permit.type];
+    const order: PermitStatus[] = ["DRAFT", "REQUESTED", "APPROVED", "ACTIVE", "CLOSED"];
+    const stepIdx = permit.status === "REJECTED" || permit.status === "CANCELLED" ? -1 : order.indexOf(permit.status);
+    const stepDates: Partial<Record<PermitStatus, string | null>> = {
+      REQUESTED: permit.requestedAt, APPROVED: permit.approvedAt, ACTIVE: permit.activatedAt, CLOSED: permit.closedAt,
+    };
+    const riskMissing = !hazards.trim() || !controls.trim() || !ppe.trim();
+    const missingCount = [!hazards.trim(), !controls.trim(), !ppe.trim()].filter(Boolean).length;
+    const btn = "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+    const check = (ok: boolean, label: string, Icon: typeof Flame = CheckCircle) => (
+      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11.5px] font-bold ${ok ? "border-emerald-500/35 bg-surface text-emerald-700 dark:text-emerald-400" : "border-amber-400/70 bg-amber-500/10 text-amber-800 dark:text-amber-300"}`}>
+        {ok ? <CheckCircle className="w-3 h-3" /> : <Icon className="w-3 h-3" />} {label}
+      </span>
+    );
+    const aiPillE = (onClick: () => void, loading: boolean) => !isEditable ? null : (
+      <button type="button" onClick={onClick} disabled={loading}
+        className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/[0.07] px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 disabled:opacity-60">
+        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} {t("mp.guide.suggestAi")}
+      </button>
+    );
+
+    // Recuadro "qué hacer ahora" según la etapa del permiso.
+    const next = (() => {
+      const card = (tone: string, iconBox: string, Icon: typeof Flame, title: string, desc: string, extra: React.ReactNode, actions: React.ReactNode) => (
+        <div className={`rounded-2xl border-[1.5px] px-3.5 py-3 space-y-2.5 ${tone}`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${iconBox}`}><Icon className="w-5 h-5" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-black text-fg">{title}</p>
+              <p className="text-[12.5px] text-text-industrial/70">{desc}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 ml-auto">{actions}</div>
+          </div>
+          {extra}
+        </div>
+      );
+      switch (permit.status) {
+        case "DRAFT":
+          return card("border-orange-400/60 bg-orange-500/[0.07]", "bg-orange-600", Send, t("pm.edit.draftTitle"), t("pm.edit.draftDesc"),
+            <div className="flex flex-wrap gap-1.5">
+              {check(!!location.trim() && !!description.trim() && !!plannedStart && !!plannedEnd, t("pm.edit.chkWork"))}
+              {check(!!hazards.trim(), t("pm.wiz.hazards"))}
+              {check(!!controls.trim(), t("pm.wiz.controls"))}
+              {check(!!ppe.trim(), t("pm.edit.chkPpe"))}
+            </div>,
+            <button type="button" disabled={saving} onClick={() => { void onSave(true); }} className={`${btn} bg-orange-600 text-white hover:brightness-110`}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {t("common.requestApproval")}
+              {riskMissing && <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(missingCount))}</span>}
+            </button>);
+        case "REQUESTED":
+          return canApprove
+            ? card("border-yellow-400/70 bg-yellow-500/[0.08]", "bg-yellow-600", PenLine, t("pm.edit.reqTitle"), t("pm.edit.reqDesc"),
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
+                  <div><label className={fl}>{t("pm.validFrom")}</label><input type="datetime-local" value={approveFrom} onChange={e => setApproveFrom(e.target.value)} className={inputCls} /></div>
+                  <div><label className={fl}>{t("pm.validUntil")}</label><input type="datetime-local" value={approveTo} onChange={e => setApproveTo(e.target.value)} className={inputCls} /></div>
+                </div>,
+                <>
+                  <button type="button" disabled={saving} onClick={approveNow} className={`${btn} bg-emerald-600 text-white hover:brightness-110`}><CheckCircle className="w-3.5 h-3.5" /> {t("common.approve")}</button>
+                  <button type="button" disabled={saving} onClick={() => { setDlgText(""); setActionDlg("reject"); }} className={`${btn} border border-red-500/35 bg-surface text-red-700 dark:text-red-400 hover:bg-red-500/10`}><XCircle className="w-3.5 h-3.5" /> {t("common.reject")}</button>
+                </>)
+            : card("border-yellow-400/70 bg-yellow-500/[0.08]", "bg-yellow-600", Hourglass, t("pm.edit.reqWaitTitle"), t("pm.edit.reqWaitDesc"), null, null);
+        case "APPROVED": {
+          const blocked = isEnclosed && !gasOk;
+          return card("border-blue-400/60 bg-blue-500/[0.07]", "bg-blue-600", Play, t("pm.edit.apprTitle"), t("pm.edit.apprDesc"),
+            <div className="flex flex-wrap gap-1.5">
+              {check(true, t("pm.edit.chkPeople").replace("{n}", String(permit.participants.length)), Users)}
+              {permit.validFrom && permit.validTo && check(true, `${t("pm.edit.valid")} ${fmtDateTime(permit.validFrom)} → ${fmtDateTime(permit.validTo)}`)}
+              {isEnclosed && check(gasOk, gasOk ? t("pm.edit.gasOk") : t("pm.edit.gasMissing"), Wind)}
+            </div>,
+            <button type="button" disabled={saving || blocked} onClick={() => { void callAction("activate"); }}
+              title={blocked ? t("pm.edit.gasMissing") : undefined} className={`${btn} bg-accent text-accent-fg hover:brightness-110`}>
+              <Play className="w-3.5 h-3.5" /> {t("common.activate")}
+            </button>);
+        }
+        case "ACTIVE":
+          return activeLate
+            ? card("border-red-400/60 bg-red-500/[0.07]", "bg-red-600", AlertTriangle,
+                t("pm.edit.lateTitle").replace("{span}", fmtSpan(Date.now() - (validToMs ?? Date.now()))), t("pm.edit.lateDesc"), null,
+                <button type="button" disabled={saving} onClick={() => { setDlgText(""); setActionDlg("close"); }} className={`${btn} bg-emerald-600 text-white hover:brightness-110`}><CheckCircle className="w-3.5 h-3.5" /> {t("pm.edit.closePermit")}</button>)
+            : card("border-emerald-500/40 bg-emerald-500/[0.07]", "bg-emerald-600", HardHat,
+                validToMs != null ? t("pm.edit.liveTitle").replace("{span}", fmtSpan(validToMs - Date.now())) : t("pm.edit.liveTitleNoEnd"), t("pm.edit.liveDesc"), null,
+                <button type="button" disabled={saving} onClick={() => { setDlgText(""); setActionDlg("close"); }} className={`${btn} bg-emerald-600 text-white hover:brightness-110`}><CheckCircle className="w-3.5 h-3.5" /> {t("pm.edit.closePermit")}</button>);
+        default: {
+          const reason = permit.status === "REJECTED" ? permit.rejectionReason : permit.status === "CANCELLED" ? permit.cancelReason : permit.closeNotes;
+          const tone = permit.status === "CLOSED" ? ["border-emerald-500/40 bg-emerald-500/[0.07]", "bg-emerald-600"] : ["border-red-400/50 bg-red-500/[0.06]", "bg-red-600"];
+          return card(tone[0], tone[1], permit.status === "CLOSED" ? CheckCircle : XCircle,
+            t(STATUS_TKEY[permit.status]), reason ? reason : t("pm.lockedHint").replace("{status}", t(STATUS_TKEY[permit.status])), null,
+            isAdmin && (
+              <button type="button" disabled={saving} onClick={() => { setDlgText(""); setActionDlg("reopen"); }} className={`${btn} border border-orange-500/40 bg-surface text-orange-700 dark:text-orange-300 hover:bg-orange-500/10`}>
+                <RotateCcw className="w-3.5 h-3.5" /> {t("common.reopen")}
+              </button>
+            ));
+        }
+      }
+    })();
+
+    const dlgMeta = actionDlg && {
+      reject: { title: t("pm.edit.dlgReject"), label: t("pm.edit.dlgRejectQ"), ph: t("pm.edit.dlgRejectPh"), cta: t("common.reject"), cls: "bg-red-600 text-white" },
+      cancel: { title: t("pm.edit.dlgCancel"), label: t("pm.edit.dlgCancelQ"), ph: t("pm.edit.dlgCancelPh"), cta: t("pm.edit.dlgCancelCta"), cls: "bg-red-600 text-white" },
+      reopen: { title: t("pm.edit.dlgReopen"), label: t("pm.edit.dlgReopenQ"), ph: t("pm.edit.dlgReopenPh"), cta: t("common.reopen"), cls: "bg-orange-600 text-white" },
+      close: { title: t("pm.edit.dlgClose"), label: t("pm.edit.dlgCloseQ"), ph: t("pm.edit.dlgClosePh"), cta: t("pm.edit.closePermit"), cls: "bg-emerald-600 text-white" },
+    }[actionDlg];
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-6xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 border-t-4 border-t-orange-600 rounded-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Encabezado */}
+          <div className="flex items-start gap-3 px-4 sm:px-6 py-3 border-b border-fg/10 shrink-0">
+            <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${TYPE_TONE[permit.type]}`}><PIcon className="w-6 h-6" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-orange-700 dark:text-orange-400">{t("pm.wiz.kicker")} · {t(TYPE_TKEY[permit.type])}</p>
+              <h2 className="text-lg font-black text-fg leading-tight truncate">{description.trim() || permit.description}</h2>
+              <p className="text-xs text-text-industrial/60 truncate">{location.trim() || permit.location}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{permit.permitCode}</span>
+                {/* Nombre del buque, no el código. */}
+                <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70"><Ship className="w-3 h-3" /><VesselLabel code={permit.vesselCode} className="text-[11px]" /></span>
+                {workOrder ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 font-mono text-[11px] font-bold text-accent" title={workOrder.title ?? undefined}>
+                    <Wrench className="w-3 h-3" /> {workOrder.code ?? "—"}
+                    {canEditWorkOrder && <button type="button" onClick={() => setPickingWorkOrder(true)} className="font-sans text-[11px] font-extrabold underline">{t("pm.wiz.change")}</button>}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/60">
+                    {t("pm.wiz.noWo")}
+                    {canEditWorkOrder && <button type="button" onClick={() => setPickingWorkOrder(true)} className="text-[11px] font-extrabold text-accent underline">{t("pm.linkWo")}</button>}
+                  </span>
+                )}
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${STATUS_COLOR[permit.status]}`}>{t(STATUS_TKEY[permit.status])}</span>
+              </div>
+            </div>
+            <ModalCloseButton onClose={requestClose} />
+          </div>
+
+          {/* Recorrido con fechas */}
+          <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-2.5 border-b border-fg/10 bg-fg/[0.02] shrink-0">
+            {order.map((s, i) => {
+              const done = stepIdx >= 0 && i < stepIdx;
+              const cur = i === stepIdx;
+              const date = stepDates[s];
+              return (
+                <React.Fragment key={s}>
+                  {i > 0 && <span className="w-5 h-px bg-fg/15" />}
+                  <span className={`flex items-center gap-1.5 text-xs font-bold ${done ? "text-emerald-700 dark:text-emerald-400" : cur ? "text-fg" : "text-text-industrial/40"}`}>
+                    <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[11px] ${done ? "bg-emerald-500 border-emerald-500 text-white" : cur ? "bg-orange-600 border-orange-600 text-white" : "border-fg/25"}`}>
+                      {done ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
+                    </span>
+                    <span>
+                      {t(STATUS_TKEY[s])}
+                      {date && (done || cur) && <span className="block text-[10px] font-semibold text-text-industrial/45">{fmtDateTime(date)}</span>}
+                    </span>
+                  </span>
+                </React.Fragment>
+              );
+            })}
+            {stepIdx < 0 && (
+              <span className="ml-auto rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-extrabold text-red-700 dark:text-red-400">{t(STATUS_TKEY[permit.status])}</span>
             )}
           </div>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
-            {(isNew || tab === "details") && isEditable && (
-              <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="px-4 sm:px-6 pt-4">{next}</div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1fr] gap-4 px-4 sm:px-6 py-4">
+              {/* Izquierda: el trabajo y sus riesgos */}
+              <div className="space-y-3 min-w-0">
+                <GuideSection n={1} title={t("pm.wiz.sec1")} subtitle={isEditable ? t("pm.edit.sec1Editable") : t("pm.edit.sec1Locked")} open onToggle={() => { /* siempre abierto */ }}
+                  pill={!isEditable ? <span className="rounded-full bg-fg/10 px-2 py-0.5 text-[10px] font-bold text-text-industrial/60">{t("pm.edit.locked")}</span>
+                    : <GuidePill missing={[!location.trim(), !description.trim(), !plannedStart, !plannedEnd].filter(Boolean).length} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />}>
+                  {/* Obligatorios: se resaltan mientras falten y el permiso sea editable (preview V24). */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <GuideField id="pm-e-location" missing={isEditable && !location.trim()}>
+                      <label className={fl}>{t("common.location")}{isEditable && !location.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("pm.locationPh")} />
+                    </GuideField>
+                    <div><label className={fl}>{t("pm.type")}</label><input value={t(TYPE_TKEY[permit.type])} disabled className={inputCls} /></div>
+                  </div>
+                  <GuideField id="pm-e-description" missing={isEditable && !description.trim()}>
+                    <label className={fl}>{t("pm.wiz.workWhat")}{isEditable && !description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                    <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
+                  </GuideField>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <GuideField id="pm-e-start" missing={isEditable && !plannedStart}>
+                      <label className={fl}>{t("pm.wiz.starts")}{isEditable && !plannedStart && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
+                    </GuideField>
+                    <GuideField id="pm-e-end" missing={isEditable && !plannedEnd}>
+                      <label className={fl}>{t("pm.wiz.ends")}{isEditable && !plannedEnd && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
+                    </GuideField>
+                  </div>
+                </GuideSection>
+
+                <GuideSection n={2} title={t("pm.wiz.sec2")} subtitle={t("pm.wiz.sec2Sub")} open onToggle={() => { /* siempre abierto */ }}
+                  pill={isEditable ? <GuidePill missing={missingCount} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} /> : undefined}>
+                  <GuideField id="pm-e-hazards" missing={isEditable && !hazards.trim()}>
+                    <div className="flex items-center gap-1"><label className={`${fl} mb-0`}>{t("pm.wiz.hazards")}{isEditable && !hazards.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>{aiPillE(() => { void onSuggestHazards(); }, loadingHazards)}</div>
+                    <AutoTextArea rows={3} value={hazards} onChange={e => setHazards(e.target.value)} disabled={!isEditable || loadingHazards} className={inputCls} placeholder={t("pm.hazardsPh")} />
+                  </GuideField>
+                  <GuideField id="pm-e-controls" missing={isEditable && !controls.trim()}>
+                    <div className="flex items-center gap-1"><label className={`${fl} mb-0`}>{t("pm.wiz.controls")}{isEditable && !controls.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>{aiPillE(() => { void onSuggestControls(); }, loadingControls)}</div>
+                    <AutoTextArea rows={3} value={controls} onChange={e => setControls(e.target.value)} disabled={!isEditable || loadingControls} className={inputCls} placeholder={t("pm.controlsPh")} />
+                  </GuideField>
+                  <GuideField id="pm-e-ppe" missing={isEditable && !ppe.trim()}>
+                    <div className="flex items-center gap-1"><label className={`${fl} mb-0`}>{t("pm.wiz.ppe")}{isEditable && !ppe.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>{aiPillE(() => { void onSuggestPpe(); }, loadingPpe)}</div>
+                    <AutoTextArea rows={2} value={ppe} onChange={e => setPpe(e.target.value)} disabled={!isEditable || loadingPpe} className={inputCls} placeholder={t("pm.ppePh")} />
+                  </GuideField>
+                  <label className={`flex items-start gap-2.5 rounded-xl border-[1.5px] border-orange-500/30 bg-orange-500/[0.05] px-3 py-2.5 ${isEditable ? "cursor-pointer hover:bg-orange-500/10" : "opacity-70"}`}>
+                    <input type="checkbox" checked={alarmOverride} onChange={e => setAlarmOverride(e.target.checked)} disabled={!isEditable} className="mt-0.5 w-4 h-4 accent-orange-600" />
+                    <span>
+                      <span className="block text-[13px] font-extrabold text-orange-800 dark:text-orange-200">{t("pm.wiz.overrideTitle")}</span>
+                      <span className="block text-[11.5px] text-text-industrial/60">{t("pm.wiz.overrideHint")}</span>
+                    </span>
+                  </label>
+                </GuideSection>
+              </div>
+
+              {/* Derecha: equipo de trabajo, gas y permiso firmado */}
+              <div className="space-y-3 min-w-0">
+                <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                  <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg"><Users className="w-4 h-4" /> {t("pm.edit.team")} <span className="ml-auto text-[11px] font-semibold text-text-industrial/50">{permit.participants.length}</span></h3>
+                  <div className="p-3"><ParticipantsTab permit={permit} canEdit={!isTerminal} onChanged={onReload ?? onSaved} /></div>
+                </div>
+                {isEnclosed && (
+                  <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                    <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg">
+                      <Wind className="w-4 h-4" /> {t("pm.edit.gas")}
+                      {latestGas && <span className={`ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${latestGas.verdict === "PASS" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-red-500/15 text-red-700 dark:text-red-400"}`}>{latestGas.verdict === "PASS" ? t("pm.edit.gasPass") : t("pm.edit.gasFail")}</span>}
+                    </h3>
+                    <div className="p-3"><GasTestsTab permit={permit} canEdit={!isTerminal} onChanged={onReload ?? onSaved} /></div>
+                  </div>
+                )}
+                <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                  <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg"><Paperclip className="w-4 h-4" /> {t("pm.edit.signed")}</h3>
+                  <div className="p-3 space-y-2.5">
+                    <AttachmentsTab permitId={permit.id} items={attachments} canEdit={canManagePermits} onChanged={reloadAttachments} />
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => { void onDownload("pdf"); }} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 disabled:opacity-50">
+                        <FileText className="w-3.5 h-3.5" /> {t("pm.edit.pdfPrint")}
+                      </button>
+                      {/* El mismo formulario, editable: se completa en Word y se imprime. */}
+                      <button onClick={() => { void onDownload("doc"); }} disabled={saving} title={t("pm.wordHint")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 disabled:opacity-50">
+                        <FileDown className="w-3.5 h-3.5" /> Word
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-t border-fg/10 shrink-0">
+            {!isTerminal && (
+              <button type="button" onClick={() => { setDlgText(""); setActionDlg("cancel"); }} disabled={saving}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-50">
+                <XCircle className="w-3.5 h-3.5" /> {t("pm.edit.dlgCancelCta")}
+              </button>
+            )}
+            <span className="flex-1" />
+            {isEditable && isDirty && (
+              <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-400"><AlertTriangle className="w-3 h-3" /> {t("mp.guide.dirty")}</span>
+            )}
+            <button onClick={requestClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
+            {isEditable && (
+              <button onClick={() => { void onSave(false); }} disabled={saving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {t("common.save")}
+                {!saving && [!location.trim(), !description.trim(), !plannedStart, !plannedEnd].some(Boolean) && (
+                  <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String([!location.trim(), !description.trim(), !plannedStart, !plannedEnd].filter(Boolean).length))}</span>
+                )}
               </button>
             )}
           </div>
         </div>
+
+        {/* Rechazar / cerrar / cancelar / re-abrir */}
+        {actionDlg && dlgMeta && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-fg/10">
+                <h2 className="text-base font-black text-fg">{dlgMeta.title}</h2>
+                <ModalCloseButton onClose={() => setActionDlg(null)} className="ml-auto" />
+              </div>
+              <div className="px-5 py-4 space-y-2">
+                <label className={fl}>{dlgMeta.label}</label>
+                <AutoTextArea rows={3} value={dlgText} onChange={e => setDlgText(e.target.value)} placeholder={dlgMeta.ph} className={inputCls} autoFocus />
+              </div>
+              <div className="flex items-center gap-2 px-5 py-3 border-t border-fg/10">
+                <span className="flex-1" />
+                <button type="button" onClick={() => setActionDlg(null)} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.back")}</button>
+                <button type="button" onClick={() => { void runDialog(); }} disabled={saving} className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold hover:brightness-110 disabled:opacity-50 ${dlgMeta.cls}`}>
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {dlgMeta.cta}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Avisos y errores en ventanita. */}
+        {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
+
+        {pickingWorkOrder && (
+          <WorkOrderPicker
+            initialVesselCode={vesselCode || null}
+            lockVessel
+            onClose={() => setPickingWorkOrder(false)}
+            onPick={wo => {
+              setWorkOrder({ id: wo.id, code: wo.workOrderCode, title: wo.title });
+              // El permiso vive en el buque de su OT: el backend rechaza el cruce.
+              setVesselCode(wo.vesselCode);
+              setPickingWorkOrder(false);
+            }}
+          />
+        )}
       </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-4xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 border-t-4 border-t-orange-600 rounded-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <PermitWizardHeader title={t("pm.newPermit")} onClose={requestClose}
+          stepper={wizard ? <WizardStepper labels={wizard.labels} current={wizard.current} /> : undefined} />
+        <div className="overflow-y-auto flex-1 p-5 sm:p-6">{newForm}</div>
+        {newFooter}
+      </div>
+
+      {/* Avisos y errores en ventanita (antes: recuadro rojo al pie del formulario). */}
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
 
       {pickingWorkOrder && (
         <WorkOrderPicker
           initialVesselCode={vesselCode || null}
-          lockVessel={!isNew}
+          lockVessel={false}
           onClose={() => setPickingWorkOrder(false)}
           onPick={wo => {
             setWorkOrder({ id: wo.id, code: wo.workOrderCode, title: wo.title });
@@ -951,9 +1351,9 @@ const ParticipantsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: (
 
       {adding && (
         <div className="bg-fg/5 border border-fg/10 rounded-xl p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${!crewId && !name.trim() ? "rounded-xl border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10 px-3 py-2.5" : ""}`}>
             <div>
-              <label className={labelCls}>Tripulante a bordo</label>
+              <label className={labelCls}>Tripulante a bordo{!crewId && !name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={crewId} onChange={e => { setCrewId(e.target.value); if (e.target.value) setName(""); }} className={inputCls}>
                 <option value="">— Otro / contratista —</option>
                 {crewOptions.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.rank})</option>)}
@@ -1185,10 +1585,10 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
       {adding && (
         <div className="bg-fg/5 border border-fg/10 rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Medido por</label>
+            <GuideField id="pm-gas-by" missing={!testedByName.trim()}>
+              <label className={labelCls}>Medido por{!testedByName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input value={testedByName} onChange={e => setTestedByName(e.target.value)} className={inputCls} />
-            </div>
+            </GuideField>
             <div>
               <label className={labelCls}>Ubicación de la medición</label>
               <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} placeholder="ej. boca de hombre, fondo del tanque" />
@@ -1272,6 +1672,7 @@ const GasTestsTab: React.FC<{ permit: Permit; canEdit: boolean; onChanged: () =>
 type CreateFlow =
   | { step: "origin" }
   | { step: "workOrder" }
+  | { step: "type"; prefill: PermitModalPrefill }
   | { step: "form"; prefill?: PermitModalPrefill };
 
 /**
@@ -1280,24 +1681,28 @@ type CreateFlow =
  * Dashboard, para que el flujo sea el mismo desde los dos lados.
  */
 export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void }> = ({ onClose, onSaved }) => {
+  const t = useT();
   const [flow, setFlow] = useState<CreateFlow>({ step: "origin" });
   const mocTrigger = useMocTrigger();
+  const woLabels = [t("pm.wiz.stepOrigin"), t("pm.wiz.stepWo"), t("pm.wiz.stepType"), t("pm.wiz.stepForm")];
+  const freeLabels = [t("pm.wiz.stepOrigin"), t("pm.wiz.stepType"), t("pm.wiz.stepForm")];
 
   return (
     <>
       {flow.step === "origin" && (
         <PermitOriginChooser
           onFromWorkOrder={() => setFlow({ step: "workOrder" })}
-          onStandalone={() => setFlow({ step: "form" })}
+          onStandalone={() => setFlow({ step: "type", prefill: {} })}
           onClose={onClose}
         />
       )}
 
       {flow.step === "workOrder" && (
         <WorkOrderPicker
+          stepper={<WizardStepper labels={woLabels} current={1} />}
           onClose={() => setFlow({ step: "origin" })}
           onPick={wo => setFlow({
-            step: "form",
+            step: "type",
             prefill: {
               vesselCode: wo.vesselCode,
               workOrderId: wo.id,
@@ -1313,6 +1718,18 @@ export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void
         />
       )}
 
+      {flow.step === "type" && (
+        <PermitTypeChooser
+          stepLabels={flow.prefill.workOrderId ? woLabels : freeLabels}
+          current={flow.prefill.workOrderId ? 2 : 1}
+          suggested={flow.prefill.type ?? null}
+          workOrderCode={flow.prefill.workOrderCode ?? null}
+          onPick={tp => setFlow({ step: "form", prefill: { ...flow.prefill, type: tp } })}
+          onBack={() => setFlow(flow.prefill.workOrderId ? { step: "workOrder" } : { step: "origin" })}
+          onClose={onClose}
+        />
+      )}
+
       {flow.step === "form" && (
         <PermitModal
           permit={null}
@@ -1320,6 +1737,11 @@ export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void
           onClose={onClose}
           onSaved={() => { onSaved?.(); onClose(); }}
           onMocTrigger={mocTrigger.ask}
+          wizard={{
+            labels: flow.prefill?.workOrderId ? woLabels : freeLabels,
+            current: flow.prefill?.workOrderId ? 3 : 2,
+            onBack: () => setFlow({ step: "type", prefill: flow.prefill ?? {} }),
+          }}
         />
       )}
 
@@ -1330,104 +1752,243 @@ export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void
 
 export const PermitsPage: React.FC = () => {
   const t = useT();
-  // Estado inicial del filtro tomado de la URL (?status=DRAFT) — permite el
-  // deep-link desde la alerta "sin procesar" del Dashboard.
+  // ?status=DRAFT llega desde la alerta "sin procesar" del Dashboard: arranca ese filtro.
   const [searchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState<"" | PermitStatus>(
-    () => (searchParams.get("status") as PermitStatus | null) ?? "",
-  );
-  const [typeFilter, setTypeFilter]     = useState<"" | PermitType>("");
+  const initialStatus = (searchParams.get("status") as PermitStatus | null) ?? null;
 
-  const path = useMemo(() => {
-    const p = new URLSearchParams();
-    if (statusFilter) p.set("status", statusFilter);
-    if (typeFilter) p.set("type", typeFilter);
-    return `/app/permits${p.toString() ? `?${p.toString()}` : ""}`;
-  }, [statusFilter, typeFilter]);
-
-  const { data, loading, reload } = useFetch<{ items: Permit[]; total: number }>(path, [path]);
+  // ── Listado (preview V22) ──────────────────────────────────────────────────
+  // Se trae todo y se filtra en cliente: las tarjetas y los contadores necesitan el total.
+  const { data, loading, error, reload } = useFetch<{ items: Permit[]; total: number }>("/app/permits", []);
   // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
   const tmsaFilter = useTmsaFilter();
-  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, p => p.id), [data, tmsaFilter]);
-  const [creating, setCreating]     = useState(false);
-  const [editing, setEditing]       = useState<Permit | null>(null);
+  const allItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, p => p.id) ?? [], [data, tmsaFilter]);
+  const { vessels: contextVessels } = useVesselContext();
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Permit | null>(null);
+  const [editingDialog, setEditingDialog] = useState<"close" | null>(null);
   const mocTrigger = useMocTrigger();
+
+  type Stage = "open" | PermitStatus | "all";
+  const [cardSel, setCardSel] = useState<"" | "active" | "requested" | "approved" | "late">("");
+  const [stageSel, setStageSel] = useState<Stage>(initialStatus ?? "open");
+  const [typeSel, setTypeSel] = useState<"" | PermitType>("");
+  const [vesselSel, setVesselSel] = useState("");
+  const [search, setSearch] = useState("");
+
+  const now = Date.now();
+  const isLate = (p: Permit) => p.status === "ACTIVE" && !!p.validTo && new Date(p.validTo).getTime() < now;
+  const needsGas = (p: Permit) => p.type === "ENCLOSED_SPACE_ENTRY" && p.status === "APPROVED" &&
+    !(p.gasTests[0]?.verdict === "PASS" && now - new Date(p.gasTests[0].testedAt).getTime() <= 30 * 60_000);
+  const matchCard = (p: Permit, key: typeof cardSel) => {
+    switch (key) {
+      case "active":    return p.status === "ACTIVE";
+      case "requested": return p.status === "REQUESTED";
+      case "approved":  return p.status === "APPROVED";
+      case "late":      return isLate(p);
+      default:          return true;
+    }
+  };
+  const beforeStage = useMemo(() => {
+    let items = allItems;
+    if (cardSel) items = items.filter(p => matchCard(p, cardSel));
+    if (typeSel) items = items.filter(p => p.type === typeSel);
+    if (vesselSel) items = items.filter(p => p.vesselCode === vesselSel);
+    const q = search.trim().toLowerCase();
+    if (q) {
+      items = items.filter(p => textMatches(p.permitCode, q) || textMatches(p.description ?? "", q) ||
+        textMatches(p.location ?? "", q) || textMatches(p.workOrderCode ?? "", q));
+    }
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allItems, cardSel, typeSel, vesselSel, search]);
+  const OPEN_STATUSES: PermitStatus[] = ["DRAFT", "REQUESTED", "APPROVED", "ACTIVE"];
+  const stageFilter = (items: Permit[], key: Stage) =>
+    key === "all" ? items : key === "open" ? items.filter(p => OPEN_STATUSES.includes(p.status)) : items.filter(p => p.status === key);
+  const shown = stageFilter(beforeStage, stageSel);
+  const count = (key: Exclude<typeof cardSel, "">) => allItems.filter(p => matchCard(p, key)).length;
+  const vesselOptions = useMemo(() => [...new Set(allItems.map(p => p.vesselCode))], [allItems]);
+  const vesselName = (code: string) => contextVessels.find(v => v.code === code)?.name || code;
+
+  const whenCell = (p: Permit) => {
+    if (p.status === "ACTIVE" && p.validTo) {
+      const ms = new Date(p.validTo).getTime() - now;
+      return ms < 0
+        ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-extrabold text-red-700 dark:text-red-400"><AlertTriangle className="w-3 h-3" />{t("pm.list.lateBy").replace("{span}", fmtSpan(ms))}</span>
+        : <span className="whitespace-nowrap text-[11.5px] font-bold text-emerald-700 dark:text-emerald-400">{t("pm.list.endsIn").replace("{span}", fmtSpan(ms))}</span>;
+    }
+    if (p.status === "CLOSED") return <span className="whitespace-nowrap text-[11.5px] text-text-industrial/50">{t("pm.status.closed")} {fmtDateTime(p.closedAt)}</span>;
+    return <span className="whitespace-nowrap text-[11.5px] text-text-industrial/60">{fmtDateTime(p.plannedStart)} → {fmtDateTime(p.plannedEnd)}</span>;
+  };
+  const peopleCell = (p: Permit) => (
+    <div className="flex flex-col items-start gap-1">
+      <span className="inline-flex items-center gap-1 text-[11.5px] text-text-industrial/60 whitespace-nowrap"><Users className="w-3 h-3" />{p.participants.length}</span>
+      {needsGas(p) && <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-extrabold text-amber-800 dark:text-amber-300"><Wind className="w-3 h-3" />{t("pm.list.needGas")}</span>}
+    </div>
+  );
+  const stageChip = (p: Permit) => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${STATUS_COLOR[p.status]}`}>{t(STATUS_TKEY[p.status])}</span>;
+  const rowAction = (p: Permit) => {
+    const base = "inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors";
+    const open = (dlg: "close" | null) => (e: React.MouseEvent) => { e.stopPropagation(); setEditingDialog(dlg); setEditing(p); };
+    switch (p.status) {
+      case "DRAFT":     return <button type="button" onClick={open(null)} className={`${base} border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20`}><Send className="w-3 h-3" /> {t("pm.list.actRequest")}</button>;
+      case "REQUESTED": return <button type="button" onClick={open(null)} className={`${base} border-yellow-500/40 bg-yellow-500/10 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-500/20`}><PenLine className="w-3 h-3" /> {t("pm.list.actReview")}</button>;
+      case "APPROVED":  return <button type="button" onClick={open(null)} className={`${base} border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20`}>{needsGas(p) ? <Wind className="w-3 h-3" /> : <Play className="w-3 h-3" />} {needsGas(p) ? t("pm.list.actGas") : t("common.activate")}</button>;
+      case "ACTIVE":    return <button type="button" onClick={open("close")} className={`${base} border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20`}><CheckCircle className="w-3 h-3" /> {t("pm.edit.closePermit")}</button>;
+      default:          return null;
+    }
+  };
+
+  const columns: Column<Permit>[] = [
+    {
+      key: "permitCode", header: t("pm.list.col.permit"), sortValue: r => r.permitCode,
+      render: p => (
+        <div>
+          <div className="font-mono font-bold text-fg text-xs whitespace-nowrap">{p.permitCode}</div>
+          {/* Nombre del buque, no el código. */}
+          <div className="text-[10.5px] text-text-industrial/50">{vesselName(p.vesselCode)}</div>
+        </div>
+      ),
+    },
+    {
+      key: "type", header: t("pm.type"), sortValue: r => t(TYPE_TKEY[r.type]),
+      render: p => { const Icon = TYPE_ICON[p.type]; return <span className="inline-flex items-center gap-1.5 text-[11.5px] font-bold text-fg whitespace-nowrap"><span className={`w-6 h-6 rounded-lg flex items-center justify-center ${TYPE_TONE[p.type]}`}><Icon className="w-3.5 h-3.5" /></span>{t(TYPE_TKEY[p.type])}</span>; },
+    },
+    {
+      key: "description", header: t("pm.list.col.work"),
+      render: p => (
+        <div className="min-w-0">
+          <div className="text-xs font-bold text-fg line-clamp-2">{p.description}</div>
+          <div className="text-[11px] text-text-industrial/55 truncate">{p.location}</div>
+        </div>
+      ),
+    },
+    {
+      key: "workOrderCode", header: t("pm.list.col.wo"),
+      render: p => p.workOrderCode
+        ? <span className="font-mono text-[11px] font-bold text-accent" title={p.workOrderTitle ?? undefined}>{p.workOrderCode}</span>
+        : <span className="text-[11px] text-text-industrial/45">{t("pm.list.oneOff")}</span>,
+    },
+    { key: "validTo", header: t("pm.list.col.when"), sortValue: r => r.validTo ?? r.plannedStart, render: whenCell },
+    { key: "participants", header: t("pm.list.col.people"), render: peopleCell },
+    { key: "status", header: t("pm.list.col.stage"), render: stageChip },
+    { key: "action", header: "", render: rowAction },
+  ];
+
+  const summaryCards: { key: Exclude<typeof cardSel, "">; label: string; hint: string; icon: typeof Flame; cls: string; num: string }[] = [
+    { key: "active", label: t("pm.sum.active"), hint: t("pm.sum.activeHint"), icon: HardHat, cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+    { key: "requested", label: t("pm.sum.requested"), hint: t("pm.sum.requestedHint"), icon: Hourglass, cls: "border-l-yellow-500", num: "text-yellow-700 dark:text-yellow-400" },
+    { key: "approved", label: t("pm.sum.approved"), hint: t("pm.sum.approvedHint"), icon: Play, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+    { key: "late", label: t("pm.sum.late"), hint: t("pm.sum.lateHint"), icon: AlertTriangle, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+  ];
+  const stages: [Stage, string][] = [
+    ["open", t("pm.list.stageOpen")],
+    ...(["DRAFT", "REQUESTED", "APPROVED", "ACTIVE", "CLOSED"] as PermitStatus[]).map(s => [s, t(STATUS_TKEY[s])] as [Stage, string]),
+    ["all", t("common.all")],
+  ];
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
 
   return (
     <div className="p-6 space-y-4">
-      <PageHeader icon={ShieldAlert} title="Permisos de Trabajo" total={data?.total} onReload={reload}>
+      <PageHeader icon={ShieldAlert} title={t("pm.list.title")} total={shown.length} onReload={reload}>
         <ExportExcelButton module="permits" />
-        <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
-          <Plus className="w-3.5 h-3.5" /> Nuevo permiso
+        <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-orange-600 text-white font-bold text-xs hover:brightness-110">
+          <Plus className="w-3.5 h-3.5" /> {t("pm.list.new")}
         </button>
       </PageHeader>
 
-      <div className="flex gap-2 flex-wrap">
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as "" | PermitStatus)}
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
-          <option value="">— Estado: todos —</option>
-          {(Object.keys(STATUS_TKEY) as PermitStatus[]).map(s => <option key={s} value={s}>{t(STATUS_TKEY[s])}</option>)}
-        </select>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as "" | PermitType)}
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg">
-          <option value="">— Tipo: todos —</option>
-          {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => <option key={tp} value={tp}>{t(TYPE_TKEY[tp])}</option>)}
-        </select>
+      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key;
+          return (
+            <button key={c.key} type="button" onClick={() => { setCardSel(on ? "" : c.key); if (!on) setStageSel("all"); }}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{count(c.key)}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
-
-      {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
-      ) : !tmsaItems?.length ? (
-        <div className="text-center py-10 text-text-industrial/30 text-sm">Sin permisos</div>
-      ) : (
-        <div className="bg-fg/5 border border-fg/10 rounded-xl divide-y divide-fg/5">
-          {tmsaItems.map(p => {
-            const Icon = TYPE_ICON[p.type];
+      {/* Filtros */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {stages.map(([k, label]) => {
+            const on = stageSel === k;
             return (
-              <button key={p.id} onClick={() => setEditing(p)}
-                className="w-full text-left p-4 hover:bg-fg/5 active:bg-fg/10 transition-colors flex items-center gap-3">
-                <Icon className="w-4 h-4 text-text-industrial/50 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <span className="text-[10px] font-mono text-text-industrial/40">{p.permitCode}</span>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLOR[p.status]}`}>{t(STATUS_TKEY[p.status])}</span>
-                    <VesselLabel code={p.vesselCode} className="text-[10px]" showCode />
-                    <span className="text-[10px] text-text-industrial/50">{t(TYPE_TKEY[p.type])}</span>
-                    {p.workOrderCode && (
-                      <span title={p.workOrderTitle ?? undefined}
-                        className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-accent/10 border-accent/20 text-accent">
-                        {p.workOrderCode}
-                      </span>
-                    )}
-                    {p.type === "ENCLOSED_SPACE_ENTRY" && p.gasTests.length > 0 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold bg-fg/5 border-fg/10 text-text-industrial/60">
-                        {p.gasTests.length} gas test{p.gasTests.length !== 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-medium text-fg truncate">{p.description}</p>
-                  <p className="text-xs text-text-industrial/50 truncate">{p.location}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[10px] text-text-industrial/40">{p.status === "ACTIVE" ? "Vence" : "Planeado"}</p>
-                  <p className="text-xs text-fg font-mono">{fmtDateTime(p.status === "ACTIVE" ? p.validTo : p.plannedStart)}</p>
-                  <p className="text-[10px] text-text-industrial/40">{p.participants.length} participantes</p>
-                </div>
+              <button key={k} type="button" onClick={() => setStageSel(k)}
+                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                {label}
+                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{stageFilter(beforeStage, k).length}</span>
               </button>
             );
           })}
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={typeSel} onChange={e => setTypeSel(e.target.value as "" | PermitType)} className={selCls(!!typeSel)}>
+            <option value="">{t("pm.list.typeAll")}</option>
+            {(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => <option key={tp} value={tp}>{t(TYPE_TKEY[tp])}</option>)}
+          </select>
+          {vesselOptions.length > 1 && (
+            <select value={vesselSel} onChange={e => setVesselSel(e.target.value)} className={selCls(!!vesselSel)}>
+              <option value="">{t("pm.list.vesselAll")}</option>
+              {vesselOptions.map(v => <option key={v} value={v}>{vesselName(v)}</option>)}
+            </select>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("pm.list.search")}
+              className="w-full sm:w-60 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {search && <button type="button" onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+          </div>
+        </div>
+      </div>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={shown.length} total={data?.items?.length ?? 0} />
+
+      {/* Escritorio: tabla · Celular: tarjetas */}
+      <div className="hidden md:block">
+        <DataTable columns={columns} data={shown} loading={loading} error={error} keyFn={p => p.id} emptyText={t("pm.list.empty")}
+          onRowClick={p => { setEditingDialog(null); setEditing(p); }}
+          rowClassName={p => (isLate(p) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")} />
+      </div>
+      <div className="md:hidden flex flex-col gap-2">
+        {loading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>}
+        {!loading && shown.length === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{t("pm.list.empty")}</p>}
+        {shown.map(p => {
+          const Icon = TYPE_ICON[p.type];
+          return (
+            <div key={p.id} onClick={() => { setEditingDialog(null); setEditing(p); }}
+              className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer ${isLate(p) ? "border-l-red-600 bg-red-500/[0.06]" : "border-l-fg/10 bg-surface"}`}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-mono text-xs font-bold text-fg">{p.permitCode}</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-text-industrial/70"><Icon className="w-3 h-3" />{t(TYPE_TKEY[p.type])}</span>
+                {stageChip(p)}
+              </div>
+              <p className="text-[13px] font-bold text-fg line-clamp-2">{p.description}</p>
+              <p className="text-xs text-text-industrial/60 truncate">{p.location} · {vesselName(p.vesselCode)}</p>
+              <div className="flex flex-wrap items-center gap-2">{whenCell(p)}{needsGas(p) && peopleCell(p)}</div>
+              {rowAction(p)}
+            </div>
+          );
+        })}
+      </div>
 
       {creating && <NewPermitFlow onClose={() => setCreating(false)} onSaved={() => { void reload(); }} />}
 
       {editing && (
         <PermitModal
+          key={editing.id}
           permit={editing}
+          initialDialog={editingDialog}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void reload(); }}
+          // Equipo de trabajo, gas y cambios de etapa: se refresca el permiso sin cerrar la ventana.
+          onReload={() => {
+            void reload();
+            api.get<Permit>(`/app/permits/${editing.id}`).then(p => setEditing(p)).catch(() => { /* queda el anterior */ });
+          }}
           onMocTrigger={mocTrigger.ask}
         />
       )}

@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
-  Trash2, FileText, TrendingUp, Camera,
+  Trash2, FileText, TrendingUp,
   ArrowUpDown, ChevronUp, ChevronDown, Clipboard,
+  Activity, AlertOctagon, AlertTriangle, AudioLines, Clock, Droplets, Files, Hourglass, Pencil, ScanLine, Search, TestTube, Thermometer,
+  Check, CheckCircle2, ClipboardList, List, Ship, Wrench,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
@@ -13,7 +15,8 @@ import { AlertDialog } from "../components/AlertDialog";
 import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
+import { textMatches } from "../lib/text-search";
 import { useAuth, useCan } from "../lib/auth";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
@@ -29,7 +32,9 @@ import {
   type FluidSample, type AssetItem,
 } from "../components/fluid-analyses/shared";
 import { ScanFluidSampleWizard } from "../components/fluid-analyses/ScanFluidSampleWizard";
+import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { GuideField, GuideNeedTag } from "../components/GuideKit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,24 +65,67 @@ async function uploadAndExtract(file: File, vesselCode: string | null, reference
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+/** Días sin moverse a partir de los cuales una muestra se marca demorada (V18). */
+const FA_DRAFT_LATE_DAYS = 7;
+const FA_SENT_LATE_DAYS = 14;
+
+const KIND_ICON: Record<string, typeof FlaskConical> = {
+  FLUID: Droplets, VIBRATION: Activity, THERMAL: Thermometer, ULTRASOUND: AudioLines, OTHER: FlaskConical,
+};
+const FA_STATUS_CLS: Record<string, string> = {
+  DRAFT: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+  SENT: "bg-blue-500/15 text-blue-800 dark:text-blue-300",
+  REPORTED: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
+  ARCHIVED: "bg-fg/5 text-text-industrial/60",
+};
+type FaCardKey = "draft" | "sent" | "bad" | "caution";
+
+/** Días desde una fecha ISO hasta hoy (0 si no hay fecha). */
+function faDaysSince(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86_400_000));
+}
+/** Cuántos días lleva la muestra en su estado actual (creada / enviada). */
+const faWaitDays = (s: FluidSample) => (s.status === "SENT" ? faDaysSince(s.sentAt ?? s.createdAt) : faDaysSince(s.createdAt));
+const faIsLate = (s: FluidSample) =>
+  (s.status === "DRAFT" && faWaitDays(s) > FA_DRAFT_LATE_DAYS) || (s.status === "SENT" && faWaitDays(s) > FA_SENT_LATE_DAYS);
+const faIsBad = (s: FluidSample) => s.result?.verdict === "CRITICAL" || s.result?.verdict === "ACTION_REQUIRED";
+
+function faMatchCard(s: FluidSample, key: FaCardKey): boolean {
+  switch (key) {
+    case "draft":   return s.status === "DRAFT";
+    case "sent":    return s.status === "SENT";
+    case "bad":     return s.status === "REPORTED" && faIsBad(s);
+    case "caution": return s.status === "REPORTED" && s.result?.verdict === "CAUTION";
+  }
+}
+
 export const FluidAnalysesPage: React.FC = () => {
   const t = useT();
-  const { user } = useAuth();
-  // Mismos tres roles que el backend (ensureCanManageFluidAnalyses): DPA,
-  // superintendente técnico y capitán / jefe de máquinas.
-  const canManage = !!user && ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role);
+  // Mismo tilde que el backend (`fluid.manage`, ensureCanManageFluidAnalyses).
+  const canManage = useCan()("fluid.manage");
 
   const navigate = useNavigate();
 
-  const [filters, setFilters] = useState({ fluidType: "" });
   // Deep-link desde la alerta "sin procesar" del Dashboard: ?status=DRAFT
-  // filtra las muestras a ese estado.
+  // arranca con ese estado elegido.
   const [searchParams, setSearchParams] = useSearchParams();
   const { key: locationKey } = useLocation();
   const statusParam = (searchParams.get("status") ?? "").trim();
   const [creatingSample, setCreatingSample] = useState(false);
   const [scanningWizard, setScanningWizard] = useState(false);
+  const [batchUpload, setBatchUpload] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+
+  // ── Filtros (preview V18) ──
+  const [cardSel, setCardSel] = useState<FaCardKey | "">("");
+  const [stageSel, setStageSel] = useState<string>(() => ((SAMPLE_STATUSES as readonly string[]).includes(statusParam) ? statusParam : ""));
+  const [kindSel, setKindSel] = useState("");
+  const [assetSel, setAssetSel] = useState("");
+  const [verdictSel, setVerdictSel] = useState("");
+  const [search, setSearch] = useState("");
 
   // Deep-link para abrir una muestra desde otra pantalla (hoy: el código FA que
   // se muestra junto a las SS en el modal de OT): ?openId=<id>.
@@ -111,11 +159,7 @@ export const FluidAnalysesPage: React.FC = () => {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const params = new URLSearchParams();
-  if (filters.fluidType)  params.set("fluidType",  filters.fluidType);
-  const path = `/app/fluid-analyses${params.toString() ? "?" + params.toString() : ""}`;
-
-  const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  const { data, loading, error, reload } = useFetch<ListResponse>("/app/fluid-analyses", []);
   // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
   // Acá el emparejamiento va por CÓDIGO: la métrica cuenta resultados de
   // análisis y esta planilla lista muestras; lo que comparten es el sampleCode.
@@ -136,20 +180,44 @@ export const FluidAnalysesPage: React.FC = () => {
   const { vessels: contextVessels } = useVesselContext();
 
   const assets = useMemo(() => assetsData?.items ?? [], [assetsData?.items]);
+  const vesselName = (code: string) => contextVessels.find(v => v.code === code)?.name || code;
+  const scoped = useMemo(() => applyTmsaFilter(data?.items ?? [], tmsaFilter, s => s.sampleCode) ?? [], [data?.items, tmsaFilter]);
+
+  /** Todo menos el estado: base de los contadores de los botones de estado. */
+  const beforeStage = useMemo(() => {
+    let items = scoped;
+    if (cardSel) items = items.filter(s => faMatchCard(s, cardSel));
+    if (kindSel) items = items.filter(s => s.kind === kindSel);
+    if (assetSel) items = items.filter(s => s.assetId === assetSel);
+    if (verdictSel) items = items.filter(s => s.result?.verdict === verdictSel);
+    const q = search.trim().toLowerCase();
+    if (q) {
+      items = items.filter(s =>
+        textMatches(s.sampleCode, q) || textMatches(assetLabel(s.assetId, assets), q) ||
+        textMatches(s.sourceWorkOrderCode ?? "", q) || textMatches(vesselName(s.vesselCode), q) ||
+        textMatches(s.fluidType ? (FLUID_LABELS[s.fluidType] ?? "") : "", q),
+      );
+    }
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoped, cardSel, kindSel, assetSel, verdictSel, search, assets, contextVessels]);
+
+  /** "Activas" deja afuera las archivadas, salvo que se esté buscando. */
+  const stageFilter = useCallback((items: FluidSample[], key: string) => {
+    if (key) return items.filter(s => s.status === key);
+    if (search.trim()) return items;
+    return items.filter(s => s.status !== "ARCHIVED");
+  }, [search]);
 
   const samples = useMemo(() => {
-    const scoped = applyTmsaFilter(data?.items ?? [], tmsaFilter, s => s.sampleCode) ?? [];
-    const items = (statusParam ? scoped.filter(s => s.status === statusParam) : [...scoped]);
+    const items = [...stageFilter(beforeStage, stageSel)];
     items.sort((a, b) => {
       let av: string | number | null = null;
       let bv: string | number | null = null;
       if (sortKey === "sampleCode")  { av = a.sampleCode;  bv = b.sampleCode; }
-      if (sortKey === "vesselCode")  { av = a.vesselCode;  bv = b.vesselCode; }
       if (sortKey === "assetId")     { av = assetLabel(a.assetId, assets); bv = assetLabel(b.assetId, assets); }
-      if (sortKey === "fluidType")   { av = a.fluidType;   bv = b.fluidType; }
+      if (sortKey === "kind")        { av = a.kind;        bv = b.kind; }
       if (sortKey === "sampledAt")   { av = a.sampledAt;   bv = b.sampledAt; }
-      if (sortKey === "createdAt")   { av = a.createdAt;   bv = b.createdAt; }
-      if (sortKey === "runningHours"){ av = a.runningHours ?? -1; bv = b.runningHours ?? -1; }
       if (sortKey === "status")      { av = a.status;      bv = b.status; }
       if (sortKey === "verdict")     { av = a.result?.verdict ?? ""; bv = b.result?.verdict ?? ""; }
       if (sortKey === "sourceWo")    { av = a.sourceWorkOrderCode ?? ""; bv = b.sourceWorkOrderCode ?? ""; }
@@ -158,7 +226,18 @@ export const FluidAnalysesPage: React.FC = () => {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return items;
-  }, [data?.items, sortKey, sortDir, assets, statusParam, tmsaFilter]);
+  }, [beforeStage, stageFilter, stageSel, sortKey, sortDir, assets]);
+
+  const summary = useMemo(() => ({
+    draft: scoped.filter(s => faMatchCard(s, "draft")).length,
+    sent: scoped.filter(s => faMatchCard(s, "sent")).length,
+    bad: scoped.filter(s => faMatchCard(s, "bad")).length,
+    caution: scoped.filter(s => faMatchCard(s, "caution")).length,
+  }), [scoped]);
+  const assetOptions = useMemo(() => {
+    const ids = [...new Set(scoped.map(s => s.assetId))];
+    return ids.map(id => ({ id, label: assetLabel(id, assets) })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [scoped, assets]);
 
   // Borrado desde la propia fila (mismo endpoint y mismo permiso que el botón
   // del detalle: baja lógica, sólo admin/manager).
@@ -178,8 +257,61 @@ export const FluidAnalysesPage: React.FC = () => {
     }
   };
 
+  // Próximo paso de cada muestra: todos abren la muestra, donde se carga la
+  // toma o el informe del laboratorio.
+  const rowAction = (s: FluidSample) => {
+    if (!canManage) return null;
+    if (s.status === "DRAFT") return { label: t("fa.list.actTake"), icon: Pencil, cls: "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15" };
+    if (s.status === "SENT") return { label: t("fa.list.actReport"), icon: ScanLine, cls: "border-violet-500/35 bg-violet-500/[0.07] text-violet-700 dark:text-violet-300 hover:bg-violet-500/15" };
+    if (s.status === "REPORTED" && faIsBad(s)) return { label: t("fa.list.actSeeResult"), icon: AlertOctagon, cls: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20" };
+    return null;
+  };
+  const renderAction = (s: FluidSample) => {
+    const a = rowAction(s);
+    if (!a) return null;
+    const Icon = a.icon;
+    return (
+      <button type="button" onClick={e => { e.stopPropagation(); setOpenDetailId(s.id); }}
+        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${a.cls}`}>
+        <Icon className="w-3 h-3" /> {a.label}
+      </button>
+    );
+  };
+  const kindCell = (s: FluidSample) => {
+    const Icon = KIND_ICON[s.kind] ?? FlaskConical;
+    return (
+      <div>
+        <span className="inline-flex items-center gap-1.5 font-semibold text-fg"><Icon className="w-3.5 h-3.5" />{t(`mp.samp.kind.${s.kind}` as TranslationKey)}</span>
+        {s.kind === "FLUID" && s.fluidType && <div className="text-[10.5px] text-text-industrial/50">{FLUID_LABELS[s.fluidType] ?? s.fluidType}</div>}
+      </div>
+    );
+  };
+  const waitCell = (s: FluidSample) => {
+    if (s.status !== "DRAFT" && s.status !== "SENT") return null;
+    const late = faIsLate(s);
+    const key = s.status === "SENT" ? "fa.list.sentAgo" : "fa.list.createdAgo";
+    return (
+      <span className={`inline-flex items-center gap-1 text-[11px] ${late ? "font-bold text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>
+        {late && <Clock className="w-3 h-3" />}{t(key).replace("{n}", String(faWaitDays(s)))}
+      </span>
+    );
+  };
+  const statusChip = (s: FluidSample) => (
+    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${FA_STATUS_CLS[s.status] ?? FA_STATUS_CLS.ARCHIVED}`}>
+      {t(`fa.st.${s.status}` as TranslationKey)}
+    </span>
+  );
+
+  const summaryCards: { key: FaCardKey; n: number; label: string; hint: string; icon: typeof FlaskConical; cls: string; num: string }[] = [
+    { key: "draft", n: summary.draft, label: t("fa.sum.draft"), hint: t("fa.sum.draftHint"), icon: TestTube, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
+    { key: "sent", n: summary.sent, label: t("fa.sum.sent"), hint: t("fa.sum.sentHint"), icon: Hourglass, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+    { key: "bad", n: summary.bad, label: t("fa.sum.bad"), hint: t("fa.sum.badHint"), icon: AlertOctagon, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+    { key: "caution", n: summary.caution, label: t("fa.sum.caution"), hint: t("fa.sum.cautionHint"), icon: AlertTriangle, cls: "border-l-yellow-600", num: "text-yellow-700 dark:text-yellow-400" },
+  ];
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {deleteError && <AlertDialog message={deleteError} onClose={() => setDeleteError(null)} />}
 
       {creatingSample && canManage && (
@@ -201,6 +333,15 @@ export const FluidAnalysesPage: React.FC = () => {
         />
       )}
 
+      {batchUpload && canManage && (
+        <FluidBatchUploadModal
+          vessels={contextVessels.map(v => ({ code: v.code, name: v.name ?? null }))}
+          onClose={() => { setBatchUpload(false); reload(); }}
+          onSaved={reload}
+          onGoToModule={() => { setBatchUpload(false); reload(); }}
+        />
+      )}
+
       {openDetailId && (
         <SampleDetailModal
           id={openDetailId}
@@ -211,32 +352,82 @@ export const FluidAnalysesPage: React.FC = () => {
         />
       )}
 
-      <PageHeader icon={FlaskConical} title={t("page.fluidAnalyses")} total={data?.total} onReload={reload}>
+      <PageHeader icon={FlaskConical} title={t("page.fluidAnalyses")} total={samples.length} onReload={reload}>
+        {canManage && (
+          <button onClick={() => setCreatingSample(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 transition-all">
+            <Plus className="w-3.5 h-3.5" /> {t("fa.newSample")}
+          </button>
+        )}
+        {canManage && (
+          <button onClick={() => setBatchUpload(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 transition-all">
+            <Files className="w-3.5 h-3.5" /> {t("fa.list.batch")}
+          </button>
+        )}
+        {canManage && (
+          <button onClick={() => setScanningWizard(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700 text-white font-bold text-xs hover:brightness-110 transition-all">
+            <ScanLine className="w-3.5 h-3.5" /> {t("fa.list.scan")}
+          </button>
+        )}
         <ExportExcelButton module="fluid_samples" />
-        <div className="flex items-center gap-2 flex-wrap">
-          <select value={filters.fluidType} onChange={e => setFilters(f => ({ ...f, fluidType: e.target.value }))}
-            className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1.5 text-xs text-text-industrial">
-            <option value="">{t("fa.allFluids")}</option>
-            {FLUID_TYPES.map(f => <option key={f} value={f}>{FLUID_LABELS[f]}</option>)}
-          </select>
-          {canManage && (
-            <button
-              onClick={() => setScanningWizard(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 transition-all"
-            >
-              <Camera className="w-3.5 h-3.5" /> {t("fa.scanSample")}
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={() => setCreatingSample(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" /> {t("fa.newSample")}
-            </button>
-          )}
-        </div>
       </PageHeader>
+
+      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key;
+          return (
+            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filtros */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {(["", ...SAMPLE_STATUSES] as string[]).map(k => {
+            const on = stageSel === k;
+            return (
+              <button key={k || "active"} type="button" onClick={() => setStageSel(k)}
+                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                {k ? t(`fa.st.${k}` as TranslationKey) : t("fa.list.active")}
+                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{stageFilter(beforeStage, k).length}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={kindSel} onChange={e => setKindSel(e.target.value)} className={selCls(!!kindSel)}>
+            <option value="">{t("fa.list.kindAll")}</option>
+            {Object.keys(SAMPLE_KIND_LABELS).map(k => <option key={k} value={k}>{t(`mp.samp.kind.${k}` as TranslationKey)}</option>)}
+          </select>
+          <select value={assetSel} onChange={e => setAssetSel(e.target.value)} className={`${selCls(!!assetSel)} max-w-[14rem]`}>
+            <option value="">{t("wo.fl.assetAll")}</option>
+            {assetOptions.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+          <select value={verdictSel} onChange={e => setVerdictSel(e.target.value)} className={selCls(!!verdictSel)}>
+            <option value="">{t("fa.list.verdictAll")}</option>
+            {VERDICTS.map(v => <option key={v} value={v}>{t(`fa.vd.${v}` as TranslationKey)}</option>)}
+          </select>
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("fa.list.search")}
+              className="w-full sm:w-60 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {search && (
+              <button type="button" onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={samples.length} total={data?.items?.length ?? 0} />
 
       <div className="bento-card overflow-hidden p-0">
         {loading && <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}
@@ -247,80 +438,93 @@ export const FluidAnalysesPage: React.FC = () => {
             <p className="text-sm">{t("fa.emptyState")}</p>
           </div>
         )}
-        <TmsaFilterBanner filter={tmsaFilter} shown={samples.length} total={data?.items?.length ?? 0} />
         {!loading && !error && samples.length > 0 && (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-fg/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
-                <SortTh label="Código"    col="sampleCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Buque"     col="vesselCode"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Equipo"    col="assetId"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Tipo"      col="fluidType"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Toma"      col="sampledAt"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label={t("col.createdAt")} col="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Horas"     col="runningHours" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" />
-                <SortTh label="Estado"    col="status"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="Veredicto" col="verdict"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <SortTh label="OT origen" col="sourceWo"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                {canManage && <th className="px-4 py-3 font-semibold text-right w-10"><span className="sr-only">{t("common.actions")}</span></th>}
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Escritorio: tabla */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-fg/10 text-text-industrial/40 text-[10px] uppercase tracking-widest">
+                    <SortTh label={t("fa.col.sample")} col="sampleCode" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label={t("form.equipment")} col="assetId" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label={t("mp.samp.what")} col="kind" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label={t("fa.col.taken")} col="sampledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label={t("fa.col.status")} col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label={t("fa.col.result")} col="verdict" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label={t("fa.col.sourceWo")} col="sourceWo" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <th className="px-4 py-3"><span className="sr-only">{t("common.actions")}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {samples.map(s => (
+                    <tr key={s.id} onClick={() => setOpenDetailId(s.id)}
+                      className={`border-b border-fg/5 transition-colors cursor-pointer ${faIsBad(s) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)] hover:bg-red-500/10" : "hover:bg-fg/3"}`}>
+                      <td className="px-4 py-2.5">
+                        <div className="font-mono font-bold text-accent">{s.sampleCode}</div>
+                        {/* Nombre del buque, no el código. */}
+                        <div className="text-[10.5px] text-text-industrial/50">{vesselName(s.vesselCode)}</div>
+                      </td>
+                      <td className="px-4 py-2.5 font-semibold text-fg">{assetLabel(s.assetId, assets)}</td>
+                      <td className="px-4 py-2.5">{kindCell(s)}</td>
+                      <td className="px-4 py-2.5 text-text-industrial/70">
+                        {s.status === "DRAFT" ? <span className="text-text-industrial/40">{t("fa.list.notTaken")}</span> : (
+                          <>
+                            {fmtDate(s.sampledAt)}
+                            {s.runningHours != null && <div className="text-[10.5px] text-text-industrial/50 font-mono">{s.runningHours.toLocaleString()} h</div>}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5"><div className="flex flex-col items-start gap-0.5">{statusChip(s)}{waitCell(s)}</div></td>
+                      <td className="px-4 py-2.5">{s.result ? <VerdictBadge verdict={s.result.verdict} /> : <span className="text-text-industrial/30">—</span>}</td>
+                      <td className="px-4 py-2.5">
+                        {s.sourceWorkOrderCode ? (
+                          <button type="button"
+                            onClick={e => { e.stopPropagation(); navigate(`/work-orders?autoCode=${s.sourceWorkOrderCode}`); }}
+                            className="font-mono text-[11px] text-accent hover:underline">
+                            {s.sourceWorkOrderCode}
+                          </button>
+                        ) : <span className="text-text-industrial/20">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {renderAction(s)}
+                          {canManage && (
+                            <button type="button" title={t("common.delete")} aria-label={t("common.delete")}
+                              disabled={deletingId === s.id}
+                              onClick={e => { e.stopPropagation(); void removeSample(s); }}
+                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-text-industrial/40 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40">
+                              {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Celular: tarjetas */}
+            <div className="md:hidden flex flex-col gap-2 p-2">
               {samples.map(s => (
-                <tr key={s.id} onClick={() => setOpenDetailId(s.id)}
-                    className="border-b border-fg/5 hover:bg-fg/3 transition-colors cursor-pointer">
-                  <td className="px-4 py-3 font-mono font-bold text-accent">{s.sampleCode}</td>
-                  <td className="px-4 py-3 text-text-industrial/70">{s.vesselCode}</td>
-                  <td className="px-4 py-3 text-text-industrial/70">{assetLabel(s.assetId, assetsData?.items ?? [])}</td>
-                  <td className="px-4 py-3 text-text-industrial/70">
-                    {s.kind === "FLUID"
-                      ? (s.fluidType ? (FLUID_LABELS[s.fluidType] ?? s.fluidType) : "Fluido")
-                      : SAMPLE_KIND_LABELS[s.kind] ?? s.kind}
-                  </td>
-                  <td className="px-4 py-3 text-text-industrial/60">{fmtDate(s.sampledAt)}</td>
-                  <td className="px-4 py-3 text-text-industrial/60">{fmtDate(s.createdAt)}</td>
-                  <td className="px-4 py-3 text-right text-text-industrial/60 font-mono">{s.runningHours ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded-full bg-fg/5 border border-fg/10 text-[10px] font-bold text-text-industrial/60">
-                      {s.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">{s.result ? <VerdictBadge verdict={s.result.verdict} /> : <span className="text-text-industrial/30">—</span>}</td>
-                  {/* OT que generó la muestra. Clickeable: lleva a esa OT. El
-                      informe del laboratorio se ve abriendo la muestra. */}
-                  <td className="px-4 py-3">
-                    {s.sourceWorkOrderCode
-                      ? (
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); navigate(`/work-orders?autoCode=${s.sourceWorkOrderCode}`); }}
-                          className="font-mono text-[11px] text-accent hover:underline"
-                        >
-                          {s.sourceWorkOrderCode}
-                        </button>
-                      )
-                      : <span className="text-text-industrial/20">—</span>}
-                  </td>
-                  {canManage && (
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        title={t("common.delete")}
-                        aria-label={t("common.delete")}
-                        disabled={deletingId === s.id}
-                        onClick={e => { e.stopPropagation(); void removeSample(s); }}
-                        className="inline-flex items-center justify-center p-1.5 rounded-lg text-text-industrial/40 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
-                      >
-                        {deletingId === s.id
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : <Trash2 className="w-3.5 h-3.5" />}
-                      </button>
-                    </td>
-                  )}
-                </tr>
+                <div key={s.id} onClick={() => setOpenDetailId(s.id)}
+                  className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer ${faIsBad(s) ? "border-l-red-600 bg-red-500/[0.06]" : "border-l-fg/10 bg-surface"}`}>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-accent">{s.sampleCode}</span>
+                    {statusChip(s)}
+                    {s.result && <VerdictBadge verdict={s.result.verdict} />}
+                  </div>
+                  <div className="text-[13px] font-bold text-fg">{assetLabel(s.assetId, assets)}</div>
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs">
+                    {kindCell(s)}
+                    {waitCell(s)}
+                    {s.sourceWorkOrderCode && <span className="ml-auto font-mono text-[11px] text-accent">{s.sourceWorkOrderCode}</span>}
+                  </div>
+                  {renderAction(s)}
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -410,20 +614,21 @@ function SampleFormModal({
     <ModalShell title={mode === "create" ? t("fa.newSample") : `${t("fa.editSample")} ${sample?.sampleCode}`} onClose={requestClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>{t("form.vessel")}</label>
+          {/* Obligatorios: se resaltan mientras falten (preview V24). */}
+          <GuideField id="fa-f-vessel" missing={!vesselCode}>
+            <label className={labelCls}>{t("form.vessel")}{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <select value={vesselCode} onChange={e => { setVesselCode(e.target.value); setAssetId(""); }} className={inputCls}>
               <option value="">{t("fa.selectPh")}</option>
-              {vessels.map(v => <option key={v.code} value={v.code}>{v.code}</option>)}
+              {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
             </select>
-          </div>
-          <div>
-            <label className={labelCls}>{t("form.equipment")}</label>
+          </GuideField>
+          <GuideField id="fa-f-asset" missing={!assetId}>
+            <label className={labelCls}>{t("form.equipment")}{!assetId && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls} disabled={!vesselCode}>
               <option value="">{t("fa.selectPh")}</option>
               {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name ?? a.assetCode}</option>)}
             </select>
-          </div>
+          </GuideField>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -543,6 +748,19 @@ function SampleDetailModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldOfferDefect, sample?.id]);
 
+  // Límites del fluido: marcan los valores fuera de rango en la tabla (V20).
+  const { vessels: contextVessels } = useVesselContext();
+  const [thresholds, setThresholds] = useState<ThresholdLite[]>([]);
+  const fluidTypeForThresholds = sample?.kind === "FLUID" ? sample?.fluidType ?? null : null;
+  useEffect(() => {
+    if (!fluidTypeForThresholds) { setThresholds([]); return; }
+    let cancelled = false;
+    api.get<{ items: ThresholdLite[] }>(`/app/fluid-analyses-thresholds?fluidType=${fluidTypeForThresholds}`)
+      .then(r => { if (!cancelled) setThresholds(r.items ?? []); })
+      .catch(() => { if (!cancelled) setThresholds([]); });
+    return () => { cancelled = true; };
+  }, [fluidTypeForThresholds]);
+
   const remove = async () => {
     if (!confirm(t("confirm.deleteSample"))) return;
     try { await api.delete(`/app/fluid-analyses/${id}`); onChanged(); onClose(); } catch { /* noop */ }
@@ -562,150 +780,187 @@ function SampleDetailModal({
     );
   }
 
-  // El equipo va en el título: "de qué máquina es esta muestra" es lo primero
-  // que se pregunta, y si no está hay que bajar a buscarlo en el cuerpo.
-  // Se usa el NOMBRE resuelto; si el activo no está en la lista se omite, en
-  // vez de caer al id interno recortado que devuelve assetLabel (un "cmqhe9y1…"
-  // en el título no le dice nada a nadie).
+  // ── Vista del detalle (preview V20) ──
   const headerAssetName = assets.find(a => a.id === sample.assetId)?.name ?? null;
+  const kindLabel = t(`mp.samp.kind.${sample.kind}` as TranslationKey);
+  const KindIcon = KIND_ICON[sample.kind] ?? FlaskConical;
+  const vesselLabel = contextVessels.find(v => v.code === sample.vesselCode)?.name || sample.vesselCode;
+  const verdict = sample.result?.verdict ?? null;
+  const VERDICT_BANNER: Record<Verdict, { box: string; icon: string; title: string; Icon: typeof FlaskConical }> = {
+    NORMAL:          { box: "bg-emerald-500/10 border-emerald-500/40", icon: "bg-emerald-500", title: "text-emerald-700 dark:text-emerald-400", Icon: CheckCircle2 },
+    CAUTION:         { box: "bg-amber-500/10 border-amber-500/40",     icon: "bg-amber-500",   title: "text-amber-700 dark:text-amber-400",     Icon: AlertTriangle },
+    CRITICAL:        { box: "bg-red-500/10 border-red-500/40",         icon: "bg-red-600",     title: "text-red-700 dark:text-red-400",         Icon: AlertOctagon },
+    ACTION_REQUIRED: { box: "bg-red-500/10 border-red-500/40",         icon: "bg-red-700",     title: "text-red-700 dark:text-red-400",         Icon: AlertOctagon },
+  };
+  // Recorrido: creada → tomada → en el laboratorio → informe.
+  const stepIdx = sample.result ? 4 : sample.status === "SENT" ? 3 : sample.status === "DRAFT" ? 1 : 2;
+  const track: { title: string; sub: string }[] = [
+    { title: t("fa.track.created"), sub: `${fmtDate(sample.createdAt) ?? "—"}${sample.sourceWorkOrderId ? ` · ${t("fa.track.createdByWo")}` : ""}` },
+    { title: t("fa.track.taken"), sub: sample.status === "DRAFT" ? t("fa.list.notTaken") : `${fmtDate(sample.sampledAt) ?? "—"}${sample.runningHours != null ? ` · ${sample.runningHours.toLocaleString()} h` : ""}` },
+    { title: t("fa.track.atLab"), sub: sample.sentAt || sample.labName ? [sample.sentAt ? fmtDate(sample.sentAt) : null, sample.labName].filter(Boolean).join(" · ") : "—" },
+    { title: t("fa.track.report"), sub: sample.result ? `${fmtDate(sample.result.receivedAt) ?? "—"}` : sample.status === "SENT" ? t("fa.list.sentAgo").replace("{n}", String(faWaitDays(sample))) : "—" },
+  ];
+  const facts: { label: string; value: string }[] = [
+    { label: t("fa.col.taken"), value: sample.status === "DRAFT" ? "—" : (fmtDate(sample.sampledAt) ?? "—") },
+    { label: t("fa.statProduct"), value: sample.fluidProduct ?? "—" },
+    { label: t("fa.containerId"), value: sample.containerCode ?? "—" },
+    { label: t("fa.statLab"), value: sample.labName ?? "—" },
+    { label: t("fa.statLabRef"), value: sample.labReference ?? "—" },
+  ];
 
   return (
-    <ModalShell
-      title={[
-        sample.sampleCode,
-        sample.kind === "FLUID"
-          ? (sample.fluidType ? FLUID_LABELS[sample.fluidType] : "Fluido")
-          : SAMPLE_KIND_LABELS[sample.kind],
-        headerAssetName,
-      ].filter(Boolean).join(" · ")}
-      onClose={onClose}
-      wide
-    >
-      <div className="space-y-5">
-        {sample.sourceWorkOrderId && (
-          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
-            <div className="flex items-center gap-2 text-xs text-accent/80">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{t("fa.autoGen")}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-6xl max-h-[92vh] flex flex-col bg-surface dark:bg-[#0D1526] border border-fg/10 border-t-4 border-t-violet-600 rounded-2xl shadow-2xl overflow-hidden">
+        {/* Encabezado: el equipo es lo primero que se pregunta. */}
+        <div className="flex items-start gap-3 px-5 py-3 border-b border-fg/10 shrink-0">
+          <span className="w-10 h-10 rounded-xl bg-violet-500/15 text-violet-700 dark:text-violet-300 flex items-center justify-center shrink-0"><KindIcon className="w-5 h-5" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+              {[t("fa.detail.kicker"), kindLabel, sample.kind === "FLUID" && sample.fluidType ? FLUID_LABELS[sample.fluidType] : null].filter(Boolean).join(" · ")}
+            </p>
+            <h2 className="text-lg font-black text-fg leading-tight truncate">{headerAssetName ?? sample.sampleCode}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{sample.sampleCode}</span>
+              {/* Nombre del buque, no el código. */}
+              <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70"><Ship className="w-3 h-3" />{vesselLabel}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${FA_STATUS_CLS[sample.status] ?? FA_STATUS_CLS.ARCHIVED}`}>{t(`fa.st.${sample.status}` as TranslationKey)}</span>
+              {sample.sourceWorkOrderId && (
+                <button type="button" onClick={() => navigate(`/work-orders?openId=${encodeURIComponent(sample.sourceWorkOrderId!)}`)}
+                  className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 text-[11px] font-bold text-accent hover:bg-accent/15">
+                  <Wrench className="w-3 h-3" /> {sample.sourceWorkOrderCode ? `${sample.sourceWorkOrderCode} · ` : ""}{t("fa.detail.fromWo")}
+                </button>
+              )}
             </div>
-            <button
-              onClick={() => navigate(`/work-orders?openId=${encodeURIComponent(sample.sourceWorkOrderId!)}`)}
-              className="text-xs font-bold text-accent hover:text-fg inline-flex items-center gap-1"
-            >
-              {t("fa.viewSourceWo")}
-            </button>
           </div>
-        )}
-
-        {/* Header info */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label={t("col.vessel")} value={sample.vesselCode} />
-          <Stat label={t("capa.equipment")} value={assetLabel(sample.assetId, assets)} />
-          <Stat label={t("fa.sampleDate").replace(" *", "")} value={fmtDate(sample.sampledAt)} />
-          <StatHours
-            label={t("fa.statHours")}
-            sampleId={sample.id}
-            value={sample.runningHours}
-            canEdit={canEditHours}
-            onSaved={updated => { setSample(updated); onChanged(); }}
-          />
-          <Stat label={t("fa.statProduct")} value={sample.fluidProduct ?? "—"} />
-          <Stat label={t("fa.statLab")} value={sample.labName ?? "—"} />
-          <Stat label={t("fa.statLabRef")} value={sample.labReference ?? "—"} />
-          <Stat label={t("col.status")} value={sample.status} />
+          <ModalCloseButton onClose={onClose} />
         </div>
 
-        {/* Result section */}
-        {sample.result ? (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-fg">{t("fa.labResult")}</h3>
-              <VerdictBadge verdict={sample.result.verdict} />
-            </div>
-            {sample.result.summary && (
-              <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">
-                <p className="text-xs text-text-industrial/70">{sample.result.summary}</p>
+        {/* Recorrido de la muestra */}
+        <div className="grid grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto] items-center gap-2.5 px-5 py-2.5 border-b border-fg/10 bg-fg/[0.02] shrink-0">
+          {track.map((s, i) => {
+            const done = i < stepIdx;
+            const cur = i === stepIdx;
+            return (
+              <div key={i} className="flex items-center gap-2 min-w-0">
+                <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[11px] font-extrabold shrink-0 ${
+                  done ? "bg-emerald-500 border-emerald-500 text-white" : cur ? "bg-violet-600 border-violet-600 text-white" : "border-fg/25 text-text-industrial/40"
+                }`}>{done ? <Check className="w-3.5 h-3.5" /> : i + 1}</span>
+                <span className="min-w-0">
+                  <span className={`block text-xs font-extrabold ${done || cur ? "text-fg" : "text-text-industrial/40"}`}>{s.title}</span>
+                  <span className="block text-[10.5px] text-text-industrial/60 truncate">{s.sub}</span>
+                </span>
               </div>
-            )}
-            {defectCode && (
-              <button
-                type="button"
-                onClick={() => navigate(`/defects/${encodeURIComponent(defectCode)}`)}
-                className="inline-flex items-center gap-1.5 text-xs text-text-industrial/70 hover:text-fg"
-              >
-                {t("fa.linkedDefect")} <span className="font-mono font-bold text-accent hover:underline">{defectCode}</span>
-              </button>
-            )}
-            <ParametersTable parameters={sample.result.parameters} />
-            {/* El archivo va por /app/files/* con Bearer token; un <a href> plano
-                no manda el header y da UPLOADS_GONE. AuthedDocLink lo baja
-                autenticado y lo abre como blob en una pestaña nueva. */}
-            {sample.result.reportUrl && (
-              <AuthedDocLink
-                src={sample.result.reportUrl}
-                label={t("fa.viewOrigReport")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30"
-              />
-            )}
-            {canManage && (
-              <button onClick={() => setShowResultForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
-                <Edit3 className="w-3.5 h-3.5 text-accent" /> {t("fa.modifyResult")}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="p-4 rounded-xl border border-dashed border-fg/10 text-center">
-            <p className="text-xs text-text-industrial/50 mb-3">{t("fa.noLabResult")}</p>
-            {canManage && (
-              <button onClick={() => setShowResultForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110">
-                <Sparkles className="w-3.5 h-3.5" /> {t("fa.loadResultAi")}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Trend chart — solo para muestras de fluido (los otros kinds usan otros parámetros). */}
-        {sample.kind === "FLUID" && sample.fluidType && (
-          <div className="space-y-2 pt-2 border-t border-fg/10">
-            <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-accent" /> {t("fa.assetTrend")}
-            </h3>
-            <TrendChart assetId={sample.assetId} fluidType={sample.fluidType} />
-          </div>
-        )}
-
-        {/* AI insight: tendencias + interpretación + recomendaciones */}
-        {sample.result && (
-          <AiInsightCard result={sample.result} sampleId={sample.id} onRefresh={load} />
-        )}
-
-        {sample.notes && (
-          <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">
-            <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("fa.notes")}</p>
-            <p className="text-xs text-text-industrial/70 whitespace-pre-wrap">{sample.notes}</p>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center gap-2 pt-2 border-t border-fg/10">
-          <div className="flex items-center gap-2">
-            <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30">
-              <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
+            );
+          })}
+          {!sample.result && canManage && sample.status !== "ARCHIVED" && (
+            <button type="button" onClick={() => setShowResultForm(true)}
+              className="col-span-2 lg:col-span-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-violet-700 px-3.5 py-2 text-xs font-extrabold text-white hover:brightness-110 whitespace-nowrap">
+              <ScanLine className="w-4 h-4" /> {t("fa.list.actReport")}
             </button>
-            {canManage && (
-              <button onClick={remove} title={t("common.delete")}
-                className="flex items-center justify-center p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-500/20">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+          )}
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1fr] gap-4 p-5">
+            {/* Izquierda: resultado y valores */}
+            <div className="space-y-4 min-w-0">
+              {sample.result && verdict ? (() => {
+                const b = VERDICT_BANNER[verdict];
+                return (
+                  <div className={`flex items-start gap-3 rounded-2xl border-[1.5px] p-3.5 ${b.box}`}>
+                    <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${b.icon}`}><b.Icon className="w-5 h-5" /></span>
+                    <div className="min-w-0">
+                      <p className={`text-lg font-black ${b.title}`}>{t(`fa.vd.${verdict}` as TranslationKey)}</p>
+                      {sample.result.summary && <p className="mt-0.5 text-[13px] leading-snug text-fg/85">{sample.result.summary}</p>}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {defectCode && (
+                          <button type="button" onClick={() => navigate(`/defects/${encodeURIComponent(defectCode)}`)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-surface px-2.5 py-1 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/10">
+                            <AlertOctagon className="w-3.5 h-3.5" /> {t("fa.linkedDefect")} {defectCode}
+                          </button>
+                        )}
+                        {/* El archivo va por /app/files/* con Bearer token; AuthedDocLink lo baja autenticado. */}
+                        {sample.result.reportUrl && (
+                          <AuthedDocLink src={sample.result.reportUrl} label={t("fa.viewOrigReport")}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-fg/10 bg-surface px-2.5 py-1 text-xs font-bold text-fg hover:border-fg/25" />
+                        )}
+                        {canManage && (
+                          <button type="button" onClick={() => setShowResultForm(true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-fg/10 bg-surface px-2.5 py-1 text-xs font-bold text-fg hover:border-fg/25">
+                            <Edit3 className="w-3.5 h-3.5" /> {t("fa.modifyResult")}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="flex items-start gap-3 rounded-2xl border-[1.5px] border-dashed border-blue-400/60 bg-blue-500/[0.06] p-3.5">
+                  <span className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center shrink-0"><Hourglass className="w-5 h-5" /></span>
+                  <div>
+                    <p className="text-base font-black text-blue-700 dark:text-blue-300">{sample.status === "DRAFT" ? t("fa.detail.waitTake") : t("fa.detail.waitReport")}</p>
+                    <p className="mt-0.5 text-[13px] text-fg/75">{t("fa.detail.waitReportHint")}</p>
+                  </div>
+                </div>
+              )}
+              {sample.result && <ParametersTable parameters={sample.result.parameters} thresholds={thresholds} />}
+            </div>
+
+            {/* Derecha: datos de la toma, tendencia y lo que dice la IA */}
+            <div className="space-y-4 min-w-0">
+              <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg"><ClipboardList className="w-4 h-4" /> {t("fa.detail.takeData")}</h3>
+                <div className="grid grid-cols-2 gap-2 p-2.5">
+                  {facts.slice(0, 1).map(f => <Stat key={f.label} label={f.label} value={f.value} />)}
+                  <StatHours
+                    label={t("fa.statHours")}
+                    sampleId={sample.id}
+                    value={sample.runningHours}
+                    canEdit={canEditHours}
+                    onSaved={updated => { setSample(updated); onChanged(); }}
+                  />
+                  {facts.slice(1).map(f => <Stat key={f.label} label={f.label} value={f.value} />)}
+                </div>
+              </div>
+
+              {sample.kind === "FLUID" && sample.fluidType && (
+                <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                  <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg"><TrendingUp className="w-4 h-4" /> {t("fa.assetTrend")}</h3>
+                  <div className="p-2.5"><TrendChart assetId={sample.assetId} fluidType={sample.fluidType} /></div>
+                </div>
+              )}
+
+              {sample.result && <AiInsightCard result={sample.result} sampleId={sample.id} onRefresh={load} />}
+
+              {sample.notes && (
+                <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">
+                  <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("fa.notes")}</p>
+                  <p className="text-xs text-text-industrial/70 whitespace-pre-wrap">{sample.notes}</p>
+                </div>
+              )}
+            </div>
           </div>
-          <button onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-text-industrial hover:text-fg hover:bg-fg/5">
+        </div>
+
+        <div className="flex items-center gap-2 px-5 py-3 border-t border-fg/10 shrink-0">
+          <button onClick={() => downloadFluidPdf(sample.id, sample.sampleCode)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-accent/30">
+            <FileText className="w-3.5 h-3.5 text-accent" /> {t("common.savePdf")}
+          </button>
+          {canManage && (
+            <button onClick={remove} title={t("common.delete")}
+              className="flex items-center justify-center p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-500/20">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <span className="flex-1" />
+          <button onClick={onClose} className="px-4 py-1.5 rounded-lg bg-violet-700 text-white text-xs font-bold hover:brightness-110">
             {t("common.close")}
           </button>
         </div>
       </div>
-    </ModalShell>
+    </div>
   );
 }
 
@@ -716,6 +971,7 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
   sampleId: string;
   onRefresh: () => Promise<void>;
 }) {
+  const t = useT();
   const [regenerating, setRegenerating] = useState(false);
 
   const regenerate = async () => {
@@ -745,20 +1001,20 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
 
   if (!result.aiAnalysis) {
     return (
-      <div className="space-y-2 pt-2 border-t border-fg/10">
-        <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-          <FileText className="w-4 h-4 text-accent" /> Análisis
+      <div className="rounded-2xl border border-fg/10 overflow-hidden">
+        <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg">
+          <Sparkles className="w-4 h-4 text-violet-600" /> {t("fa.detail.aiTitle")}
         </h3>
-        <div className="p-3 rounded-xl bg-fg/5 border border-dashed border-fg/10 text-center">
+        <div className="p-3 text-center">
           <p className="text-xs text-text-industrial/50">
             {regenerating
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline-block mr-1" /> Generando análisis...</>
-              : "Este análisis aún no fue generado."}
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin inline-block mr-1" /> {t("fa.detail.aiGenerating")}</>
+              : t("fa.detail.aiNone")}
           </p>
           {!regenerating && (
             <button onClick={() => { void regenerate(); }}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs font-bold text-accent hover:bg-accent/20">
-              <FileText className="w-3.5 h-3.5" /> Generar análisis
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/25 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-500/20">
+              <Sparkles className="w-3.5 h-3.5" /> {t("fa.detail.aiGenerate")}
             </button>
           )}
         </div>
@@ -767,31 +1023,24 @@ function AiInsightCard({ result, sampleId, onRefresh }: {
   }
 
   return (
-    <div className="space-y-2 pt-2 border-t border-fg/10">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-          <FileText className="w-4 h-4 text-accent" /> Análisis
-        </h3>
-        <div className="flex items-center gap-2">
-          {result.aiAnalysisGeneratedAt && (
-            <span className="text-[10px] text-text-industrial/40">
-              Generado: {fmtDate(result.aiAnalysisGeneratedAt)}
-            </span>
-          )}
+    <div className="rounded-2xl border border-fg/10 overflow-hidden">
+      <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg">
+        <Sparkles className="w-4 h-4 text-violet-600" /> {t("fa.detail.aiTitle")}
+        <span className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold text-text-industrial/50">
+          {result.aiAnalysisGeneratedAt && t("fa.detail.aiGenerated").replace("{date}", fmtDate(result.aiAnalysisGeneratedAt) ?? "")}
           <button
             onClick={() => { void regenerate(); }}
             disabled={regenerating}
-            className="text-[10px] text-accent/70 hover:text-accent disabled:opacity-50"
-            title="Regenerar análisis"
+            className="text-accent hover:underline disabled:opacity-50"
           >
-            {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : "Regenerar"}
+            {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : t("fa.detail.aiRegenerate")}
           </button>
-        </div>
-      </div>
-      <div className="p-3 rounded-xl bg-accent/5 border border-accent/20">
+        </span>
+      </h3>
+      <div className="p-3 bg-violet-500/[0.04]">
         <MarkdownText
           text={result.aiAnalysis}
-          className="text-xs text-text-industrial/80 font-sans"
+          className="text-[12.5px] text-text-industrial/85 font-sans"
         />
       </div>
     </div>
@@ -910,34 +1159,99 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ParametersTable({ parameters }: { parameters: Record<string, FluidParameter | number | string> }) {
+// ─── Valores del laboratorio agrupados (preview V20) ─────────────────────────
+
+/** Grupo de cada parámetro (clave en minúscula tal como la guarda el informe). */
+const PARAM_GROUP: Record<string, "wear" | "contam" | "additive" | "props"> = {
+  fe: "wear", cu: "wear", al: "wear", cr: "wear", pb: "wear", sn: "wear", ni: "wear", mn: "wear", ag: "wear", v: "wear", cd: "wear", ti: "wear",
+  si: "contam", na: "contam", k: "contam", h2o: "contam", water: "contam", agua: "contam", soot: "contam", fuel: "contam",
+  ca: "additive", p: "additive", zn: "additive", mg: "additive", b: "additive", ba: "additive", mo: "additive",
+  visc40: "props", visc100: "props", v40: "props", v100: "props", viscosity: "props", tbn: "props", tan: "props", oxidation: "props", nitration: "props",
+};
+const PARAM_GROUP_ORDER = ["wear", "contam", "additive", "props", "other"] as const;
+
+/** Nombre legible del parámetro; si no está en la lista, la clave tal cual. */
+function useParamLabel() {
   const t = useT();
-  const entries = Object.entries(parameters);
+  return (key: string) => {
+    const k = key.toLowerCase();
+    const tk = `fa.param.${k}` as TranslationKey;
+    const label = t(tk);
+    // useT devuelve "[clave]" cuando no hay traducción: ahí se muestra la clave cruda.
+    return label === `[${tk}]` ? key : label;
+  };
+}
+
+interface ThresholdLite { parameter: string; cautionMin: number | null; cautionMax: number | null; criticalMin: number | null; criticalMax: number | null }
+/** "crit" / "caution" / null según los límites cargados del parámetro. */
+function paramLevel(key: string, value: unknown, thresholds: ThresholdLite[]): "crit" | "caution" | null {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  const th = thresholds.find(x => x.parameter.toLowerCase() === key.toLowerCase());
+  if (!th) return null;
+  if ((th.criticalMax != null && n > th.criticalMax) || (th.criticalMin != null && n < th.criticalMin)) return "crit";
+  if ((th.cautionMax != null && n > th.cautionMax) || (th.cautionMin != null && n < th.cautionMin)) return "caution";
+  return null;
+}
+
+function ParametersTable({ parameters, thresholds = [] }: { parameters: Record<string, FluidParameter | number | string>; thresholds?: ThresholdLite[] }) {
+  const t = useT();
+  const paramLabel = useParamLabel();
+  const [showAll, setShowAll] = useState(false);
+  const entries = Object.entries(parameters).map(([key, raw]) => {
+    const val = (typeof raw === "object" && raw !== null) ? (raw as FluidParameter).value : raw;
+    const unit = (typeof raw === "object" && raw !== null) ? (raw as FluidParameter).unit ?? "" : "";
+    return { key, val, unit, level: paramLevel(key, val, thresholds), group: PARAM_GROUP[key.toLowerCase()] ?? "other" };
+  });
   if (entries.length === 0) return <p className="text-xs text-text-industrial/40">{t("fa.noParams")}</p>;
+  const flagged = entries.filter(e => e.level);
+  const listAll = showAll || flagged.length === 0;
+
+  const row = (e: typeof entries[number]) => (
+    <tr key={e.key} className={`border-t border-fg/5 ${e.level === "crit" ? "bg-red-500/[0.08]" : e.level === "caution" ? "bg-amber-500/[0.08]" : ""}`}>
+      <td className="px-3 py-1.5 w-12 font-mono text-[10.5px] uppercase text-text-industrial/40">{e.key}</td>
+      <td className="px-3 py-1.5 text-fg">
+        {paramLabel(e.key)}
+        {e.level && (
+          <span className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-extrabold ${e.level === "crit" ? "bg-red-500/15 text-red-700 dark:text-red-400" : "bg-amber-500/20 text-amber-800 dark:text-amber-300"}`}>
+            {e.level === "crit" ? t("fa.vd.CRITICAL") : t("fa.vd.CAUTION")}
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-right font-mono font-bold text-fg">{String(e.val)}</td>
+      <td className="px-3 py-1.5 w-20 text-text-industrial/50">{e.unit}</td>
+    </tr>
+  );
+
   return (
-    <div className="rounded-xl border border-fg/10 overflow-hidden">
-      <table className="w-full text-xs">
-        <thead className="bg-fg/5">
-          <tr className="text-text-industrial/40 text-[10px] uppercase tracking-widest">
-            <th className="text-left px-3 py-2 font-semibold">{t("fa.colParam")}</th>
-            <th className="text-right px-3 py-2 font-semibold">{t("fa.colValue")}</th>
-            <th className="text-left px-3 py-2 font-semibold">{t("fa.colUnit")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map(([key, raw]) => {
-            const val = (typeof raw === "object" && raw !== null) ? (raw as FluidParameter).value : raw;
-            const unit = (typeof raw === "object" && raw !== null) ? (raw as FluidParameter).unit ?? "" : "";
-            return (
-              <tr key={key} className="border-t border-fg/5">
-                <td className="px-3 py-2 font-mono text-text-industrial/80">{key}</td>
-                <td className="px-3 py-2 text-right font-mono text-fg">{String(val)}</td>
-                <td className="px-3 py-2 text-text-industrial/50">{unit}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="rounded-2xl border border-fg/10 overflow-hidden">
+      <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg">
+        <List className="w-4 h-4" /> {t("fa.detail.values")}
+        <span className="ml-auto text-[11px] font-semibold text-text-industrial/60">
+          {flagged.length ? t("fa.detail.outOfRange").replace("{n}", String(flagged.length)) : t("fa.detail.allInRange")}
+        </span>
+      </h3>
+      {listAll ? PARAM_GROUP_ORDER.map(g => {
+        const rows = entries.filter(e => e.group === g);
+        if (!rows.length) return null;
+        return (
+          <div key={g}>
+            <p className="px-3 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-text-industrial/45">{t(`fa.detail.group.${g}` as TranslationKey)}</p>
+            <table className="w-full text-xs"><tbody>{rows.map(row)}</tbody></table>
+          </div>
+        );
+      }) : (
+        <div>
+          <p className="px-3 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-text-industrial/45">{t("fa.detail.flaggedGroup")}</p>
+          <table className="w-full text-xs"><tbody>{flagged.map(row)}</tbody></table>
+        </div>
+      )}
+      {flagged.length > 0 && (
+        <button type="button" onClick={() => setShowAll(v => !v)}
+          className="w-full border-t border-fg/10 bg-fg/5 py-2 text-xs font-bold text-text-industrial/70 hover:text-fg">
+          {showAll ? t("fa.detail.showFlagged") : t("fa.detail.showAll").replace("{n}", String(entries.length))}
+        </button>
+      )}
     </div>
   );
 }
@@ -1051,12 +1365,13 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
 
 function ParamSelector({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
   const t = useT();
+  const paramLabel = useParamLabel();
   return (
     <div className="flex items-center gap-2">
       <TrendingUp className="w-3.5 h-3.5 text-accent" />
       <span className="text-[10px] uppercase tracking-wider text-text-industrial/40 font-semibold">{t("fa.paramLabel")}</span>
       <select value={value} onChange={e => onChange(e.target.value)} className="bg-fg/5 border border-fg/10 rounded px-2 py-1 text-xs text-fg font-mono">
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {options.map(o => <option key={o} value={o}>{paramLabel(o)}</option>)}
       </select>
     </div>
   );
@@ -1283,13 +1598,13 @@ function ResultFormModal({
               <label className={labelCls}>Fecha de recepción</label>
               <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
             </div>
-            <div>
-              <label className={labelCls}>Veredicto *</label>
+            <GuideField id="fa-f-verdict" missing={!verdict}>
+              <label className={labelCls}>{t("fa.verdict")}{!verdict && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={verdict} onChange={e => setVerdict(e.target.value as Verdict)} className={inputCls}>
-                <option value="">Seleccionar...</option>
+                <option value="">{t("fa.selectPh")}</option>
                 {VERDICTS.map(v => <option key={v} value={v}>{VERDICT_STYLES[v].label}</option>)}
               </select>
-            </div>
+            </GuideField>
           </div>
           <div>
             <div className="flex items-center gap-2 mb-1.5">

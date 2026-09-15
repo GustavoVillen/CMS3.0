@@ -372,13 +372,17 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                     const isDup = !!r.duplicateOf;
                     const assets = r.vesselCode ? (assetsByVessel[r.vesselCode] ?? []) : [];
                     const needsAsset = !isDup && !r.assetId;
+                    // Fila bloqueada: la celda que falta se marca en naranja (preview V24).
+                    const needsVessel = !isDup && !r.vesselCode;
+                    const blockedRow = needsAsset || needsVessel || (!isDup && (!r.sampledAt || !r.verdict));
+                    const missTag = <span className="inline-block rounded-full bg-amber-600 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-white">{t("mp.guide.missing")}</span>;
                     // Cruce por número de muestra: el buque y el equipo salen de
                     // la muestra que se despachó. Cambiarlos a mano contradiría
                     // el número, así que quedan fijos. Para corregirlos hay que
                     // corregir el número en la SS.
                     const lockedByNumber = r.attachTo?.matchedBy === "SAMPLE_NUMBER";
                     return (
-                      <tr key={r.fileName + i} className={isDup ? "opacity-45" : needsAsset ? "bg-amber-500/5" : ""}>
+                      <tr key={r.fileName + i} className={isDup ? "opacity-45" : blockedRow ? "bg-amber-500/5 shadow-[inset_4px_0_0_rgb(245,158,11)]" : ""}>
                         <Td>
                           <span className="block max-w-[200px] truncate" title={r.fileName}>{r.fileName}</span>
                           {r.warnings.length > 0 && (
@@ -392,7 +396,7 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                             value={r.vesselCode ?? ""}
                             disabled={isDup || lockedByNumber}
                             onChange={e => void changeVessel(i, e.target.value)}
-                            className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] text-fg max-w-[150px] disabled:opacity-60"
+                            className={`bg-fg/5 border rounded-lg px-2 py-1 text-[11px] text-fg max-w-[150px] disabled:opacity-60 ${needsVessel ? "border-amber-500/60" : "border-fg/10"}`}
                           >
                             <option value="">—</option>
                             {vessels.map(v => <option key={v.code} value={v.code}>{v.name ?? v.code}</option>)}
@@ -438,8 +442,8 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           </select>
                         </Td>
                         <Td>{r.sampleNumber ?? "—"}</Td>
-                        <Td>{r.sampledAt ?? "—"}</Td>
-                        <Td>{r.verdict ? <VerdictBadge verdict={r.verdict} /> : "—"}</Td>
+                        <Td>{r.sampledAt ?? (isDup ? "—" : missTag)}</Td>
+                        <Td>{r.verdict ? <VerdictBadge verdict={r.verdict} /> : (isDup ? "—" : missTag)}</Td>
                         <Td>
                           {isDup ? (
                             <span className="text-text-industrial/50">

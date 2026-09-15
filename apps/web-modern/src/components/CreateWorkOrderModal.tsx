@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Droplets, Loader2, Plus, Sparkles, Wrench, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Upload, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS } from "../lib/wo-form-catalog";
-import { FormBox, OptionRow, PaperSectionBar } from "./work-orders/WoRegiSections";
 import { AssetSearchDropdown } from "./AssetSearchDropdown";
 import { ModalCloseButton } from "./ModalCloseButton";
+import { AlertDialog } from "./AlertDialog";
+import { markJustCreated } from "../lib/just-created";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
 import { AutoTextArea } from "./AutoTextArea";
@@ -15,6 +16,7 @@ import { findClassInspectionAsset } from "../lib/class-inspection-asset";
 import { useCopilotAssist, type CopilotAssistField } from "../lib/copilot-context";
 import { useFetch } from "../lib/hooks";
 import { PersonSelect } from "./PersonSelect";
+import { GuideField, GuideNeedTag } from "./GuideKit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -193,6 +195,14 @@ interface CreateWorkOrderModalProps {
    * esto la ventana reaparece igual a la anterior y no se sabe en cuál se está.
    */
   stepLabel?: string;
+  /** Buque/equipo ya elegidos en un paso anterior (asistente de "Nueva OT"): el
+   *  "cambiar" de las etiquetas vuelve a ese paso. Sin esto, abre los selectores acá. */
+  onChangeContext?: () => void;
+  /** Alta desde el asistente de "Nueva SS": la ventana se presenta como Solicitud
+   *  de Servicio y los talleres ya vienen elegidos (`initialProviderIds`). */
+  serviceRequestMode?: boolean;
+  /** Talleres elegidos de antemano: se abre una SS por cada uno al guardar. */
+  initialProviderIds?: string[];
   onClose: () => void;
   onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
 }
@@ -229,7 +239,80 @@ function TypeBadge({ type }: { type: string }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onClose, onSaved }) => {
+/** Color de la prioridad elegida (misma escala de urgencia en todos los tenants). */
+const PRIORITY_ACTIVE_CLS: Record<string, string> = {
+  CRITICAL: "bg-red-700 border-red-700 text-white",
+  HIGH:     "bg-orange-600 border-orange-600 text-white",
+  MEDIUM:   "bg-yellow-600 border-yellow-600 text-white",
+  LOW:      "bg-success-sea border-success-sea text-white",
+};
+
+/** Opciones de un toque (reemplaza selects y casilleros del papel en el alta).
+ *  Volver a tocar la opción activa la limpia, salvo `allowClear={false}`. */
+export function SegButtons({ options, value, onChange, disabled, allowClear = true, activeCls }: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  allowClear?: boolean;
+  activeCls?: (v: string) => string | undefined;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(o => {
+        const on = value === o.value;
+        return (
+          <button key={o.value} type="button" disabled={disabled}
+            onClick={() => onChange(on && allowClear ? "" : o.value)}
+            className={`px-3 py-1.5 rounded-lg border-[1.5px] text-xs font-semibold transition-colors disabled:opacity-60 ${
+              on ? (activeCls?.(o.value) ?? "bg-accent border-accent text-accent-fg") : "bg-fg/5 border-fg/10 text-fg hover:border-accent/40"
+            }`}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Bloque plegable numerado del formulario. */
+function FormSection({ n, title, subtitle, badge, children }: {
+  n: number; title: string; subtitle: string; badge?: React.ReactNode; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section className="rounded-2xl border border-fg/10 bg-surface dark:bg-white/[0.02]">
+      <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2.5 w-full text-left px-4 py-3">
+        <span className="w-[22px] h-[22px] rounded-full bg-fg text-surface text-[11px] font-bold flex items-center justify-center shrink-0">{n}</span>
+        <span className="min-w-0">
+          <span className="block text-[13px] font-extrabold text-fg">{title}</span>
+          <span className="block text-[11px] text-text-industrial/60">{subtitle}</span>
+        </span>
+        <span className="ml-auto flex items-center gap-2 shrink-0">
+          {badge}
+          {open ? <ChevronUp className="w-4 h-4 text-text-industrial/40" /> : <ChevronDown className="w-4 h-4 text-text-industrial/40" />}
+        </span>
+      </button>
+      {open && <div className="px-4 pb-4 pt-1 space-y-3.5">{children}</div>}
+    </section>
+  );
+}
+
+/** Botón "✨ Sugerir" de la IA junto al rótulo de un campo. `dim` = falta un dato
+ *  previo: se ve apagado pero sigue tocable, así el aviso explica qué falta. */
+function AiSuggestButton({ label, onClick, loading, dim, title }: {
+  label: string; onClick: () => void; loading?: boolean; dim?: boolean; title?: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={loading} title={title}
+      className={`inline-flex items-center gap-1 shrink-0 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-0.5 text-[11px] font-bold text-accent hover:bg-accent/15 transition-colors ${dim ? "opacity-40" : ""} ${loading ? "animate-pulse" : ""}`}>
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      {label}
+    </button>
+  );
+}
+
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onChangeContext, serviceRequestMode, initialProviderIds, onClose, onSaved }) => {
   const t = useT();
   const { user, tenant } = useAuth();
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
@@ -318,7 +401,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // Mantenimiento. Al guardar, la OT se manda a esos talleres y se abre una SS
   // por cada uno.
   const [standaloneProviderRequests, setStandaloneProviderRequests] = useState<{ providerId: string; purpose: string }[]>(
-    () => requireProvider ? [{ providerId: "", purpose: "" }] : [],
+    () => initialProviderIds?.length
+      ? initialProviderIds.map(providerId => ({ providerId, purpose: "" }))
+      : requireProvider ? [{ providerId: "", purpose: "" }] : [],
   );
   const [description, setDescription]           = useState(prefill?.description ?? "");
   const [assignedTo, setAssignedTo]             = useState(prefill?.responsible ?? "");
@@ -871,6 +956,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const cleanStandaloneProviders = standaloneProviderRequests.filter(r => r.providerId);
   const hasAnyProvider = cleanStandaloneProviders.length > 0 || confirmedPlanIds.length > 0;
 
+  // Campos que hoy bloquean el guardado: se resaltan como guía (preview V24).
+  const missReq = {
+    vessel: !prefill && !vesselCode.trim(),
+    asset: (!prefill || !!prefill.assetSelectable) && !assetId,
+    provider: !prefill && requireProvider && !hasAnyProvider,
+  };
+  const missReqCount = Number(missReq.vessel) + Number(missReq.asset) + Number(missReq.provider);
+
   const onSave = useCallback(async () => {
     setErr(null);
     if (!prefill) {
@@ -1015,6 +1108,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         }
       }
 
+      // La ficha de la OT muestra el aviso "¡Orden de trabajo abierta!" con los
+      // pasos que siguen. En el alta de SS el flujo termina en la solicitud.
+      if (!serviceRequestMode) markJustCreated("wo", woCode);
       await onSaved(woId, woCode);
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
@@ -1022,7 +1118,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
       checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t,
-      standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio,
+      standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio, serviceRequestMode,
       requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location]);
 
   // ESC guard
@@ -1162,63 +1258,259 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     },
   });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+  // ── Render ────────────────────────────────────────────────────────────────
+  // Buque y equipo ya elegidos en el asistente: se muestran como etiquetas fijas
+  // arriba (con "cambiar") en vez de repetir los selectores.
+  const [editContext, setEditContext] = useState(false);
+  const showContextChips = !prefill && !!initialAssetId && !editContext && !!vesselCode && !!assetId;
+  const chipCls = "inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg";
+  const vesselLabel = (code: string) => vessels.find(v => v.code === code)?.name ?? code;
+  const assetLabel = assets.find(a => a.id === assetId)?.name ?? null;
+  // Talleres ya elegidos en el paso "Proveedor" del asistente de Nueva SS.
+  const providersPreselected = !!serviceRequestMode && !!initialProviderIds?.length && !!onChangeContext;
+  const providerName = (id: string) => availableProviders.find(p => p.id === id)?.name ?? "…";
+  // En SS el taller es el dato central: va en el bloque 1, no en "Asignado a".
+  const providersInFirstSection = !isMercurio || !!serviceRequestMode;
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <Wrench className="w-4 h-4 text-accent" />
-            <div>
-              <h2 className="text-sm font-bold text-fg">
-                {t("wo.modal.title")}
-                {stepLabel && (
-                  <span className="ml-2 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent align-middle">
-                    {stepLabel}
-                  </span>
-                )}
-              </h2>
-              {prefill && (
-                <p className="text-[10px] text-text-industrial/50 mt-0.5">
-                  {t("wo.modal.fromSource")} {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
-                </p>
+  const priorityOptions = isMercurio ? WO_PRIORITY_OPTIONS : [
+    { value: "CRITICAL", label: t("priority.critical") }, { value: "HIGH", label: t("priority.high") },
+    { value: "MEDIUM", label: t("priority.medium") },     { value: "LOW", label: t("priority.low") },
+  ];
+  const criticalityOptions = ["A", "B", "C"].map(v => ({ value: v, label: v }));
+
+  const vesselAssetFields = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <GuideField id="wo-new-vessel" missing={missReq.vessel}>
+        <label className={labelCls}>{t("wo.modal.vessel")} *{missReq.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+        <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
+          <option value="">{t("wo.modal.selectVessel")}</option>
+          {vessels.map(v => (
+            <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
+          ))}
+        </select>
+      </GuideField>
+      <GuideField id="wo-new-asset" missing={missReq.asset}>
+        <label className={labelCls}>{t("wo.modal.equipment")} *{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+        {loadingAssets
+          ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
+          : assets.length > 0
+            ? <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId}
+                placeholder={t("wo.modal.selectEquipment")} />
+            : <input value={assetId} onChange={e => setAssetId(e.target.value)}
+                placeholder={vesselCode ? t("wo.modal.noEquipmentEnterId") : t("wo.modal.enterVesselFirst")}
+                className={inputCls} />
+        }
+      </GuideField>
+    </div>
+  );
+
+  // Talleres del trabajo: los que traen los planes (se abre una SS por cada
+  // uno al crear la OT) o, en alta libre, los que se eligen a mano.
+  const providersBlock = (
+    <>
+      {planProviders.length > 0 && (
+        <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
+            {planProviders.length === 1 ? "Proveedor" : `Proveedores (${planProviders.length})`}
+          </p>
+          {planProviders.map(p => (
+            <div key={p.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-fg">
+              {availableProviders.length > 0 ? (
+                <select
+                  value={providerOverride[p.id] ?? p.id}
+                  onChange={e => setProviderOverride(prev => ({ ...prev, [p.id]: e.target.value }))}
+                  className="bg-fg/5 border border-fg/10 rounded px-1.5 py-0.5 text-[11px] font-semibold text-fg focus:outline-none focus:border-accent/50"
+                >
+                  {!availableProviders.some(ap => ap.id === p.id) && <option value={p.id}>{p.name}</option>}
+                  {availableProviders.map(ap => <option key={ap.id} value={ap.id}>{ap.name}</option>)}
+                </select>
+              ) : (
+                <span className="font-semibold">{p.name}</span>
+              )}
+              {p.purposes.length > 0 && (
+                <span className="text-text-industrial/60">· {p.purposes.join(" / ")}</span>
+              )}
+              {p.taskCodes.length > 0 && (
+                <span className="text-text-industrial/45 font-mono">· {p.taskCodes.join(", ")}</span>
               )}
             </div>
+          ))}
+          <p className="text-[10px] text-text-industrial/50 pt-0.5">
+            {planProviders.length === 1
+              ? "Al crear la orden se abre una solicitud de servicio para este taller."
+              : "Al crear la orden se abre una solicitud de servicio por taller."}
+          </p>
+        </div>
+      )}
+      {/* Sólo en alta libre: en modo prefill (desde un plan) el proveedor ya lo
+          maneja el plan (caja de arriba) y el backend lo deriva solo al abrir
+          la OT — un editor acá se ignoraría en silencio. */}
+      {/* Asistente de "Nueva SS": los talleres ya se eligieron en su paso; acá
+          sólo se escribe qué servicio se le pide a cada uno. */}
+      {showsStandaloneProviders && providersPreselected && (
+        <div className="rounded-xl border border-accent/25 bg-accent/5 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label className={labelCls}>{t("wo.modal.ssServicePerProvider")}</label>
+            <button type="button" onClick={() => onChangeContext?.()}
+              className="shrink-0 rounded-full border border-accent/25 px-2.5 py-0.5 text-[11px] font-bold text-accent hover:bg-accent/10 transition-colors">
+              {t("wo.modal.changeProviders")}
+            </button>
+          </div>
+          {standaloneProviderRequests.map((row, i) => (
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,13rem)_1fr] items-center gap-2">
+              <span className="flex items-center gap-1.5 min-w-0 text-[13px] font-bold text-fg">
+                <Handshake className="w-3.5 h-3.5 text-accent shrink-0" />
+                <span className="truncate">{providerName(row.providerId)}</span>
+              </span>
+              <input
+                value={row.purpose}
+                onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                placeholder={t("mp.providerRequests.purposePlaceholder")}
+                className={inputCls}
+              />
+            </div>
+          ))}
+          <p className="text-[10px] text-text-industrial/50">{t("wo.modal.ssOnePerProvider")}</p>
+        </div>
+      )}
+      {showsStandaloneProviders && !providersPreselected && (
+        <div className={`rounded-xl border p-3 space-y-2 ${missReq.provider ? "border-amber-500/60 border-l-4 bg-amber-50 dark:bg-amber-500/10" : "border-accent/25 bg-accent/5"}`}>
+          <label className={labelCls}>{t("wo.modal.provider")}{requireProvider ? " *" : ""}{missReq.provider && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          {standaloneProviderRequests.map((row, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                <select
+                  value={row.providerId}
+                  onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                  className={inputCls}
+                >
+                  <option value="">{t("wo.modal.providerSelect")}</option>
+                  {availableProviders.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                  ))}
+                </select>
+                <input
+                  value={row.purpose}
+                  onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                  placeholder={t("mp.providerRequests.purposePlaceholder")}
+                  className={inputCls}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setStandaloneProviderRequests(prev => prev.filter((_, j) => j !== i))}
+                title={t("mp.providerRequests.remove")}
+                className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
+          </button>
+          {cleanStandaloneProviders.length > 0 && (
+            <p className="text-[10px] text-text-industrial/50">{t("wo.modal.providerHint")}</p>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  let sectionNo = 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-fg/10 shrink-0">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              {serviceRequestMode ? <Handshake className="w-4 h-4 text-accent" /> : <Wrench className="w-4 h-4 text-accent" />}
+              {serviceRequestMode ? t("dashboard.newServiceRequest") : t("wo.modal.title")}
+              {stepLabel && (
+                <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">
+                  {stepLabel}
+                </span>
+              )}
+            </h2>
+            {prefill && (
+              <p className="text-[10px] text-text-industrial/50 mt-0.5">
+                {t("wo.modal.fromSource")} {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
+              </p>
+            )}
+            {(showContextChips || prefill) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className={chipCls}><Ship className="w-3 h-3" /><b className="font-bold">{vesselLabel(prefill?.vesselCode ?? vesselCode)}</b></span>
+                {prefill && !prefill.assetSelectable && (
+                  <span className={chipCls}><Cog className="w-3 h-3" /><b className="font-bold">{resolvedAssetName ?? prefill.assetId}</b></span>
+                )}
+                {showContextChips && (
+                  <>
+                    <span className={chipCls}><Cog className="w-3 h-3" /><b className="font-bold">{assetLabel ?? "…"}</b></span>
+                    {providersPreselected && (
+                      <span className={chipCls}><Handshake className="w-3 h-3" />
+                        <b className="font-bold">{standaloneProviderRequests.map(r => providerName(r.providerId)).join(", ")}</b>
+                      </span>
+                    )}
+                    <button type="button"
+                      onClick={() => { if (onChangeContext) onChangeContext(); else setEditContext(true); }}
+                      className="text-[11px] font-semibold text-accent hover:text-fg transition-colors px-1">
+                      {t("wo.wizard.change")}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <ModalCloseButton onClose={requestClose} />
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 p-6 space-y-6">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-3.5">
 
-          {/* ── INFORMACIÓN ── */}
-          <section>
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold mb-3">{t("wo.modal.section.info")}</p>
-
-            {!prefill && (
-              <div className="mb-3">
-                <input ref={scanInputRef} type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
-                  capture="environment" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) void handleScanFile(f); e.target.value = ""; }} />
+          {/* Escanear la OT en papel (sólo alta libre) */}
+          {!prefill && (
+            <div className="rounded-xl border-[1.5px] border-dashed border-accent/40 bg-accent/[0.04] px-4 py-2.5">
+              <input ref={scanInputRef} type="file"
+                accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
+                capture="environment" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handleScanFile(f); e.target.value = ""; }} />
+              <div className="flex flex-wrap items-center gap-3">
+                <Camera className="w-[22px] h-[22px] text-accent shrink-0" />
+                <div className="flex-1 min-w-[10rem]">
+                  <p className="text-[13px] font-bold text-fg">{t("wo.modal.scanTitle")}</p>
+                  <p className="text-xs text-text-industrial/60">{t("wo.modal.scanDesc")}</p>
+                </div>
                 <button type="button" onClick={() => scanInputRef.current?.click()}
                   disabled={scanning || !vesselCode.trim()}
                   title={!vesselCode.trim() ? t("wo.ai.scan.selectVesselFirst") : t("wo.ai.scan.tooltip")}
-                  className={`flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors disabled:opacity-40 ${!scanning && vesselCode.trim() ? "hover:text-fg cursor-pointer" : ""}`}>
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-semibold text-fg hover:border-accent/40 disabled:opacity-40 transition-colors">
                   {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
                   {t("wo.ai.scan.button")}
                 </button>
-                {scanNotice && (
-                  <p className="text-[10px] text-accent mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 shrink-0" /> {scanNotice}
-                  </p>
-                )}
               </div>
-            )}
+              {scanNotice && (
+                <p className="text-[10px] text-accent mt-1.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 shrink-0" /> {scanNotice}
+                </p>
+              )}
+            </div>
+          )}
 
-            {prefill ? (
-              <div className="space-y-3">
+          {/* 1 · Qué hay que hacer */}
+          <FormSection n={++sectionNo}
+            title={serviceRequestMode ? t("wo.modal.sec.whatSs") : t("wo.modal.sec.what")}
+            subtitle={serviceRequestMode ? t("wo.modal.sec.whatSsSub") : t("wo.modal.sec.whatSub")}>
+            {!prefill && !showContextChips && vesselAssetFields}
+
+            {prefill && (
+              <>
                 {/* Ítems del PDM que cubre esta OT. Solo aparece cuando se
                     generó una sola orden desde varios planes (astillero). */}
                 {prefill.additionalPlans && prefill.additionalPlans.length > 0 && (
@@ -1242,15 +1534,14 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   </div>
                 )}
                 {prefill.assetSelectable && (
-                  <div className="space-y-1.5">
-                    <label
-                      onClick={() => { void handleSuggestAsset(); }}
-                      title={t("wo.ai.suggestAssetTooltip")}
-                      className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${assets.length > 0 ? `hover:text-fg cursor-pointer ${suggestingAsset ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
-                    >
-                      {suggestingAsset ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      {t("wo.modal.equipment")} *
-                    </label>
+                  <GuideField id="wo-new-asset-prefill" missing={missReq.asset}>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className={labelCls}>{t("wo.modal.equipment")} *{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      {assets.length > 0 && (
+                        <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={suggestingAsset}
+                          title={t("wo.ai.suggestAssetTooltip")} onClick={() => { void handleSuggestAsset(); }} />
+                      )}
+                    </div>
                     {loadingAssets
                       ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
                       : assets.length > 0
@@ -1265,16 +1556,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                         <Sparkles className="w-3 h-3" /> {t("wo.ai.assetSuggested")}
                       </p>
                     )}
-                  </div>
+                  </GuideField>
                 )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {([
-                    [t("wo.modal.vessel"),    vessels.find(v => v.code === prefill.vesselCode)?.name ?? prefill.vesselCode, "text-accent"],
-                    prefill.assetSelectable
-                      ? null
-                      : [t("wo.modal.equipment"), resolvedAssetName ?? prefill.assetId, "text-fg"],
                     [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
-                    [t("wo.modal.priority"),  prefill.priority   ?? "MEDIUM",       "text-fg"],
                     [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-fg"],
                     prefill.dueDate
                       ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-fg"]
@@ -1286,215 +1572,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     </div>
                   ))}
                 </div>
-                {/* Mismos recuadros del formulario REGI-MAN-02.3 que el alta
-                    libre. Tipo/Prioridad ya vienen fijados por el plan (cajas
-                    de arriba); acá sólo lo que el papel pide y el plan no
-                    define: viaje, ubicación, quién solicita/asigna y sistema. */}
-                {isMercurio && (
-                  <div className="space-y-3 pt-1">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
-                        <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
-                          placeholder="Ej. V-2026-014" className={inputCls} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelCls}>{t("wo.modal.location")}</label>
-                        <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
-                      </div>
-                      {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
-                      <div className="space-y-1.5">
-                        <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
-                        <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
-                          className={inputCls}>
-                          <option value="">—</option>
-                          {WO_OPERATING_CONDITIONS.map(c => (
-                            <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <PaperSectionBar title={t("wo.modal.requestedBy")} />
-                      <OptionRow options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <PaperSectionBar title={t("wo.modal.assignedTo")} />
-                      {/* Precargado según el plan (Proveedor→Tercerizado,
-                          Cubierta/Máquinas/Barcaza→Tripulación), pero editable:
-                          quien abre la OT puede pisarlo. No cambia a qué
-                          proveedor se le manda la SS (sale de los proveedores
-                          del plan, más abajo). */}
-                      <OptionRow options={WO_ASSIGNED_TO} value={assignedToArea}
-                        onChange={v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); }} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Prioridad ya viene fijada por el plan (caja de
-                          arriba) — se repite acá con el look del papel, pero
-                          deshabilitada: no se cambia desde este recuadro. */}
-                      <FormBox title={t("wo.modal.priority")} options={WO_PRIORITY_OPTIONS} value={priority} disabled onChange={() => {}} />
-                      <FormBox title={t("wo.modal.system")} options={WO_SYSTEM_AREAS} value={systemArea} onChange={setSystemArea} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.vessel")} *</label>
-                    <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
-                      <option value="">{t("wo.modal.selectVessel")}</option>
-                      {vessels.map(v => (
-                        <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.equipment")} *</label>
-                    {loadingAssets
-                      ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
-                      : assets.length > 0
-                        ? <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId}
-                            placeholder={t("wo.modal.selectEquipment")} />
-                        : <input value={assetId} onChange={e => setAssetId(e.target.value)}
-                            placeholder={vesselCode ? t("wo.modal.noEquipmentEnterId") : t("wo.modal.enterVesselFirst")}
-                            className={inputCls} />
-                    }
-                  </div>
-                </div>
-                {isMercurio ? (
-                  <>
-                    {/* Mismo orden que el papel REGI-MAN-02.3: nro de viaje/
-                        ubicación, solicitado por, asignado a (+ proveedor si
-                        corresponde), y los 3 recuadros con casillero. */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
-                        <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
-                          placeholder="Ej. V-2026-014" className={inputCls} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelCls}>{t("wo.modal.location")}</label>
-                        <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
-                      </div>
-                      {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
-                      <div className="space-y-1.5">
-                        <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
-                        <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
-                          className={inputCls}>
-                          <option value="">—</option>
-                          {WO_OPERATING_CONDITIONS.map(c => (
-                            <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <PaperSectionBar title={t("wo.modal.requestedBy")} />
-                      <OptionRow options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <PaperSectionBar title={t("wo.modal.assignedTo")} />
-                      <OptionRow options={WO_ASSIGNED_TO} value={assignedToArea} onChange={setAssignedToArea} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <FormBox title={t("wo.modal.priority")} options={WO_PRIORITY_OPTIONS} value={priority}
-                        onChange={v => { if (v) setPriority(v); }} />
-                      <FormBox title={t("wo.modal.type")} options={WO_MAINTENANCE_KINDS_OR_INSPECTION} value={maintKind}
-                        onChange={setMaintKind} />
-                      <FormBox title={t("wo.modal.system")} options={WO_SYSTEM_AREAS} value={systemArea}
-                        onChange={setSystemArea} />
-                    </div>
-                    <div className="space-y-1.5 max-w-[8rem]">
-                      <label className={labelCls}>{t("wo.modal.criticality")}</label>
-                      <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                      </select>
-                    </div>
-                  </>
-                ) : (
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <label className={labelCls}>{t("wo.modal.type")}</label>
-                      <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-                        <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
-                        <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
-                        <option value="INSPECTION">{t("wo.type.inspection")}</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={labelCls}>{t("wo.modal.priority")}</label>
-                      <select value={priority} onChange={e => setPriority(e.target.value)} title={t("priority.hint")} className={inputCls}>
-                        <option value="LOW">{t("priority.low")}</option>
-                        <option value="MEDIUM">{t("priority.medium")}</option>
-                        <option value="HIGH">{t("priority.high")}</option>
-                        <option value="CRITICAL">{t("priority.critical")}</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={labelCls}>{t("wo.modal.criticality")}</label>
-                      <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.openDate")}</label>
-                    <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.dueDate")}</label>
-                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
-                  </div>
-                </div>
-              </div>
+              </>
             )}
-
-            {/* Admin: fecha de apertura (backdating) + abrir en nombre de otro usuario.
-                En modo standalone la fecha de apertura ya está arriba, así que acá
-                solo se agrega cuando el origen es un plan (donde no estaba). */}
-            {isAdmin && (
-              <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-fg/10">
-                {prefill && (
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("wo.modal.openDate")}</label>
-                    <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.openedBy")}</label>
-                  <PersonSelect value={onBehalfUserId} onChange={setOnBehalfUserId} className={inputCls}
-                    emptyLabel={t("wo.modal.openedBySelf")}
-                    options={teamUsers.map(u => ({
-                      value: u.userId,
-                      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.userId,
-                      role: u.role, jobTitle: u.jobTitle,
-                    }))} />
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* ── PLAN ── */}
-          <section className="space-y-4">
-            <p className="text-[10px] uppercase tracking-widest text-text-industrial/40 font-semibold border-t border-fg/10 pt-4">{t("wo.modal.section.plan")}</p>
 
             <div className="space-y-1.5">
-              <label
-                onClick={handleTitleClick}
-                title={t("wo.ai.titleTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors hover:text-fg cursor-pointer ${loadingTitle ? "opacity-60 animate-pulse" : ""}`}
-              >
-                {loadingTitle ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.titleField")}
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.titleField")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingTitle}
+                  title={t("wo.ai.titleTooltip")} onClick={handleTitleClick} />
+              </div>
               {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
                   título es una línea por ítem y en un input se vería sólo la
                   primera. Con un solo ítem se ve igual que antes (una fila). */}
@@ -1508,6 +1594,19 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               />
             </div>
 
+            <div className="space-y-1.5">
+              {/* "Sugerir" = la IA propone las tareas a partir del equipo y el
+                  título (mismo gesto que Criterios / LOTO / Riesgo). */}
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.task")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingTask} dim={!title.trim()}
+                  title={!title.trim() ? t("wo.ai.completeTitleFirst") : t("wo.ai.taskTooltip")} onClick={handleTaskClick} />
+              </div>
+              <AutoTextArea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
+                disabled={loadingTask}
+                className={`${inputCls} resize-y`} />
+            </div>
+
             {/* Detección de plan: corre sola una vez por equipo (silenciosa si
                 no encuentra nada), pero acá se puede repetir a mano en
                 cualquier momento — típicamente después de terminar de escribir
@@ -1519,9 +1618,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   onClick={() => { void handleSuggestPlanLinks(); }}
                   disabled={detectingPlanLink || !assetId || !(title.trim() || description.trim())}
                   title={!assetId ? t("wo.ai.planLink.detectNeedsEquipment") : !(title.trim() || description.trim()) ? t("wo.ai.completeTitleFirst") : t("wo.ai.planLink.detectTooltip")}
-                  className={`flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors disabled:opacity-40 ${!detectingPlanLink && assetId && (title.trim() || description.trim()) ? "hover:text-fg cursor-pointer" : ""}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-semibold text-fg hover:border-accent/40 disabled:opacity-40 transition-colors"
                 >
-                  {detectingPlanLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {detectingPlanLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
                   {t("wo.ai.planLink.detectButton")}
                 </button>
                 {planLinkNoMatch && (
@@ -1530,169 +1629,197 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               </div>
             )}
 
-            <div className="space-y-1.5">
-              {/* Clic en el rótulo = la IA propone las tareas a partir del
-                  equipo y el título (mismo gesto que Criterios / LOTO / Riesgo). */}
-              <label
-                onClick={handleTaskClick}
-                title={!title.trim() ? t("wo.ai.completeTitleFirst") : t("wo.ai.taskTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${title.trim() ? `hover:text-fg cursor-pointer ${loadingTask ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
-              >
-                {loadingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.task")}
-              </label>
-              <AutoTextArea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
-                disabled={loadingTask}
-                className={`${inputCls} resize-y`} />
-            </div>
+            {providersInFirstSection && providersBlock}
+          </FormSection>
 
-            {/* Talleres del trabajo. Sale de los planes (área = Proveedor): al
-                crear la OT se abre una solicitud de servicio por cada uno. Va
-                acá, debajo de la tarea, para que se vea a quién se le encarga
-                antes de crear la orden. */}
-            {planProviders.length > 0 && (
-              <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1.5">
-                <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
-                  {planProviders.length === 1 ? "Proveedor" : `Proveedores (${planProviders.length})`}
-                </p>
-                {planProviders.map(p => (
-                  <div key={p.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-fg">
-                    {availableProviders.length > 0 ? (
-                      <select
-                        value={providerOverride[p.id] ?? p.id}
-                        onChange={e => setProviderOverride(prev => ({ ...prev, [p.id]: e.target.value }))}
-                        className="bg-fg/5 border border-fg/10 rounded px-1.5 py-0.5 text-[11px] font-semibold text-fg focus:outline-none focus:border-accent/50"
-                      >
-                        {!availableProviders.some(ap => ap.id === p.id) && <option value={p.id}>{p.name}</option>}
-                        {availableProviders.map(ap => <option key={ap.id} value={ap.id}>{ap.name}</option>)}
-                      </select>
-                    ) : (
-                      <span className="font-semibold">{p.name}</span>
-                    )}
-                    {p.purposes.length > 0 && (
-                      <span className="text-text-industrial/60">· {p.purposes.join(" / ")}</span>
-                    )}
-                    {p.taskCodes.length > 0 && (
-                      <span className="text-text-industrial/45 font-mono">· {p.taskCodes.join(", ")}</span>
-                    )}
-                  </div>
-                ))}
-                <p className="text-[10px] text-text-industrial/50 pt-0.5">
-                  {planProviders.length === 1
-                    ? "Al crear la orden se abre una solicitud de servicio para este taller."
-                    : "Al crear la orden se abre una solicitud de servicio por taller."}
-                </p>
-              </div>
-            )}
-            {/* Proveedor(es) libre(s) (modo standalone, sin plan): al crear la
-                OT se abre una SS por cada uno. Mismo editor que usa el Plan de
-                Mantenimiento (proveedor + para qué). Si ya se vinculó un plan
-                que trae sus propios proveedores (caja de arriba), esto no hace
-                falta — sería pedir el dato dos veces. */}
-            {!prefill && planProviders.length === 0 && (isMercurio ? assignedToArea === "TERCERIZADO" : requireProvider) && (
-              /* Sólo en alta libre: en modo prefill (desde un plan) el
-                 proveedor ya lo maneja el plan (caja "Proveedores" de arriba)
-                 y el backend lo deriva solo al abrir la OT — un editor acá
-                 se ignoraría en silencio. */
-              <div className="space-y-2">
-                <label className={labelCls}>{t("wo.modal.provider")}{requireProvider ? " *" : ""}</label>
-                {standaloneProviderRequests.map((row, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                      <select
-                        value={row.providerId}
-                        onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
-                        className={inputCls}
-                      >
-                        <option value="">{t("wo.modal.providerSelect")}</option>
-                        {availableProviders.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
-                        ))}
-                      </select>
-                      <input
-                        value={row.purpose}
-                        onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
-                        placeholder={t("mp.providerRequests.purposePlaceholder")}
-                        className={inputCls}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setStandaloneProviderRequests(prev => prev.filter((_, j) => j !== i))}
-                      title={t("mp.providerRequests.remove")}
-                      className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
-                </button>
-                {cleanStandaloneProviders.length > 0 && (
-                  <p className="text-[10px] text-text-industrial/50">{t("wo.modal.providerHint")}</p>
-                )}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.assignee")}</label>
-                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} className={inputCls} />
-              </div>
+          {/* 2 · Prioridad, fechas y responsable */}
+          <FormSection n={++sectionNo} title={t("wo.modal.sec.when")} subtitle={t("wo.modal.sec.whenSub")}>
+            <div className="space-y-1.5">
+              <label className={labelCls} title={t("priority.hint")}>{t("wo.modal.priority")}</label>
+              {/* Desde un plan la prioridad viene fijada por el plan: se muestra, no se cambia. */}
+              <SegButtons options={priorityOptions} value={priority} disabled={!!prefill} allowClear={false}
+                onChange={v => { if (v) setPriority(v); }} activeCls={v => PRIORITY_ACTIVE_CLS[v]} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(!prefill || isAdmin) && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.openDate")}</label>
+                  <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.dueDate")}</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
               </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
+                <input type="number" min="0" step="0.5" value={estimatedHours}
+                  onChange={e => setEstimatedHours(e.target.value)}
+                  className={inputCls} placeholder="—" />
+              </div>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.assignee")}</label>
+                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} className={inputCls} />
+              </div>
+              {/* Admin: abrir en nombre de otro usuario (SOLICITA). */}
+              {isAdmin && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className={labelCls}>{t("wo.modal.openedBy")}</label>
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">{t("wo.modal.adminOnly")}</span>
+                  </div>
+                  <PersonSelect value={onBehalfUserId} onChange={setOnBehalfUserId} className={inputCls}
+                    emptyLabel={t("wo.modal.openedBySelf")}
+                    options={teamUsers.map(u => ({
+                      value: u.userId,
+                      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.userId,
+                      role: u.role, jobTitle: u.jobTitle,
+                    }))} />
+                </div>
+              )}
+            </div>
+          </FormSection>
+
+          {/* 3 · Datos del formulario REGI-MAN-02.3 (Mercurio) — mismo orden que el papel */}
+          {isMercurio && (
+            <FormSection n={++sectionNo} title={t("wo.modal.sec.regi")} subtitle={t("wo.modal.sec.regiSub")}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
+                  <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
+                    placeholder="Ej. V-2026-014" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.location")}</label>
+                  <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
+                </div>
+                {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
+                  <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
+                    className={inputCls}>
+                    <option value="">—</option>
+                    {WO_OPERATING_CONDITIONS.map(c => (
+                      <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.requestedBy")}</label>
+                <SegButtons options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelCls}>{t("wo.modal.assignedTo")}</label>
+                  {serviceRequestMode && <span className="text-[10px] text-text-industrial/50">{t("wo.modal.ssAlwaysOutsourced")}</span>}
+                </div>
+                {/* En modo prefill viene precargado según el plan
+                    (Proveedor→Tercerizado, Cubierta/Máquinas/Barcaza→Tripulación),
+                    pero editable: quien abre la OT puede pisarlo. */}
+                <SegButtons options={WO_ASSIGNED_TO} value={assignedToArea}
+                  onChange={v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); }} />
+                {!providersInFirstSection && providersBlock}
+              </div>
+              {!prefill && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.type")}</label>
+                  <SegButtons options={WO_MAINTENANCE_KINDS_OR_INSPECTION} value={maintKind} onChange={setMaintKind} />
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.system")}</label>
+                  <SegButtons options={WO_SYSTEM_AREAS} value={systemArea} onChange={setSystemArea} />
+                </div>
+                {!prefill && (
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>{t("wo.modal.criticality")}</label>
+                    <SegButtons options={criticalityOptions} value={criticality} allowClear={false} onChange={setCriticality} />
+                  </div>
+                )}
+              </div>
+            </FormSection>
+          )}
+
+          {/* 3 · Clasificación (resto de los tenants, alta libre) */}
+          {!isMercurio && !prefill && (
+            <FormSection n={++sectionNo} title={t("wo.modal.sec.classif")} subtitle={t("wo.modal.sec.classifSub")}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.type")}</label>
+                  <SegButtons allowClear={false} value={type} onChange={setType} options={[
+                    { value: "PREVENTIVE", label: t("wo.type.preventive") },
+                    { value: "CORRECTIVE", label: t("wo.type.corrective") },
+                    { value: "INSPECTION", label: t("wo.type.inspection") },
+                  ]} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.criticality")}</label>
+                  <SegButtons options={criticalityOptions} value={criticality} allowClear={false} onChange={setCriticality} />
+                </div>
+              </div>
+            </FormSection>
+          )}
+
+          {/* 4 · Seguridad y criterio de cierre */}
+          <FormSection n={++sectionNo} title={t("wo.modal.sec.safety")} subtitle={t("wo.modal.sec.safetySub")}
+            badge={<span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">{t("wo.modal.recommended")}</span>}>
             <div className="space-y-1.5">
-              <label
-                onClick={handleCriteriaClick}
-                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.criteriaTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
-              >
-                {loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.acceptanceCriteria")}
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.acceptanceCriteria")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingCriteria} dim={!aiTaskDesc}
+                  title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.criteriaTooltip")} onClick={handleCriteriaClick} />
+              </div>
               <AutoTextArea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
                 disabled={loadingCriteria}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
             </div>
             <div className="space-y-1.5">
-              <label
-                onClick={handleLotoClick}
-                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.lotoTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
-              >
-                {loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.loto")}
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.loto")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingLoto} dim={!aiTaskDesc}
+                  title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.lotoTooltip")} onClick={handleLotoClick} />
+              </div>
               <AutoTextArea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)}
                 disabled={loadingLoto}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
             </div>
-            <div className="space-y-1.5">
-              <label
-                onClick={handleRiskClick}
-                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.riskTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingRisk ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
-              >
-                {loadingRisk ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.riskLevel")}
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.riskLevelHint")}</span>
-              </label>
-              <div className="flex gap-1.5">
-                {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
-                  <button key={val} type="button"
-                    disabled={loadingRisk}
-                    onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
-                    className={`w-9 h-9 rounded-lg border font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
-                    {label}
-                  </button>
-                ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelCls}>{t("wo.modal.riskLevel")}</label>
+                  <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingRisk} dim={!aiTaskDesc}
+                    title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.riskTooltip")} onClick={handleRiskClick} />
+                </div>
+                <div className="flex gap-1.5">
+                  {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
+                    <button key={val} type="button"
+                      disabled={loadingRisk}
+                      onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
+                      className={`w-10 h-9 rounded-lg border-[1.5px] font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-text-industrial/50">{t("wo.modal.riskLevelHint").replace(/^—\s*/, "")}</p>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelCls}>{t("wo.modal.consequenceCategory")}</label>
+                  <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingConsequence} dim={!aiTaskDesc}
+                    title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.modal.consequenceTooltip")} onClick={handleConsequenceClick} />
+                </div>
+                <select value={consequenceCategory} onChange={e => setConsequenceCategory(e.target.value)}
+                  disabled={loadingConsequence} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                  <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                  <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                  <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
+                </select>
               </div>
             </div>
             <div className="space-y-1.5">
@@ -1700,26 +1827,6 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               <AutoTextArea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
                 disabled={loadingRisk}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
-            </div>
-
-            {/* RCM consecuencia */}
-            <div className="space-y-1.5">
-              <label
-                onClick={handleConsequenceClick}
-                title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.modal.consequenceTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider transition-colors ${aiTaskDesc ? `hover:text-fg cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}
-              >
-                {loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t("wo.modal.consequenceCategory")}
-              </label>
-              <select value={consequenceCategory} onChange={e => setConsequenceCategory(e.target.value)}
-                disabled={loadingConsequence} className={inputCls}>
-                <option value="">—</option>
-                <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
-                <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
-                <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
-                <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
-              </select>
             </div>
             {consequenceCategory && (
               <div className="space-y-1.5">
@@ -1729,28 +1836,32 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
               </div>
             )}
+          </FormSection>
 
-            {/* Horas estimadas */}
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
-              <input type="number" min="0" step="0.5" value={estimatedHours}
-                onChange={e => setEstimatedHours(e.target.value)}
-                className={inputCls} placeholder="—" />
-            </div>
-
+          {/* 5 · Adjuntos */}
+          <FormSection n={++sectionNo} title={t("wo.modal.sec.attach")} subtitle={t("wo.modal.sec.attachSub")}>
             <div className="space-y-1.5">
               <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
               {prefill?.checklistDocUrl ? (
                 <a href={prefill.checklistDocUrl} target="_blank" rel="noreferrer"
                   className="block text-xs text-accent underline truncate">{prefill.checklistDocUrl}</a>
               ) : !prefill ? (
-                <input type="file" onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)}
-                  className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 cursor-pointer" />
+                <label
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) setChecklistDocFile(f); }}
+                  className="flex flex-col items-center gap-1 rounded-xl border-[1.5px] border-dashed border-fg/25 px-4 py-3.5 text-center text-xs text-text-industrial/60 hover:border-accent/50 cursor-pointer transition-colors"
+                >
+                  <input type="file" className="hidden" onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)} />
+                  <Upload className="w-4 h-4" />
+                  {checklistDocFile
+                    ? <span className="font-semibold text-fg">{checklistDocFile.name}</span>
+                    : <span>{t("wo.modal.dropChecklist")}</span>}
+                </label>
               ) : (
                 <p className="text-xs text-text-industrial/40 italic">{t("wo.modal.noChecklistDoc")}</p>
               )}
             </div>
-          </section>
+          </FormSection>
 
           {prefill?.samplingFluidType && (
             <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">
@@ -1771,16 +1882,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               </p>
             </div>
           )}
-
-          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
+        <div className="flex flex-wrap items-center gap-2 px-6 py-3.5 border-t border-fg/10 shrink-0">
+          <span className="mr-auto flex items-center gap-1.5 text-[11px] text-text-industrial/60">
+            <Info className="w-3.5 h-3.5 shrink-0" /> {serviceRequestMode ? t("wo.modal.footerNoteSs") : t("wo.modal.footerNote")}
+          </span>
+          <button onClick={requestClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg hover:bg-fg/5">{t("common.cancel")}</button>
           <button onClick={() => { void onSave(); }} disabled={saving}
             className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("wo.modal.create")}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : serviceRequestMode ? t("wo.modal.createWoSs") : t("wo.modal.create")}
+            {!saving && missReqCount > 0 && <span className="ml-1 text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(missReqCount))}</span>}
           </button>
         </div>
       </div>
@@ -1793,6 +1906,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           onDismiss={handlePlanLinkDismiss}
         />
       )}
+
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </div>
   );
 };

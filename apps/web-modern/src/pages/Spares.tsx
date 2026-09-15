@@ -1,15 +1,18 @@
 import React, { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, ChevronDown, FileDown, FileSpreadsheet, Loader2, Maximize2, Minimize2, Package, Plus, Save, Search, X } from "lucide-react";
-import { api } from "../lib/api";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  AlertTriangle, CalendarCheck, ChevronRight, FileDown, FileSpreadsheet, History, Loader2, MapPin, Package, PackageX, Plus, RefreshCw, Save, Search,
+  ShieldAlert, ShoppingCart, Ship, SlidersHorizontal, Trash2, TrendingDown, Truck, X,
+} from "lucide-react";
+import { api, ApiError } from "../lib/api";
 import { useFetch } from "../lib/hooks";
-import { DataTable, StatusBadge, fmtDate, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
+import { DataTable, fmtDate, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { useT } from "../lib/i18n";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
@@ -43,36 +46,10 @@ interface ListResponse { items: Spare[]; total: number; }
 // SFI: solo grupo (0-9). Nombres desde i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-// ---------------------------------------------------------------------------
-// Stock level indicator (uses onHand from calculation service)
-// ---------------------------------------------------------------------------
-
-function StockCell({ spare }: { spare: Spare }) {
-  const critical = spare.onHand < spare.minStock;
-  const warning  = !critical && spare.onHand <= spare.reorderPoint;
-  return (
-    <div className="flex items-center gap-1.5">
-      {critical && <AlertTriangle className="w-3 h-3 text-red-700 dark:text-red-400 shrink-0" />}
-      <span className={`font-bold text-xs ${critical ? "text-red-700 dark:text-red-400" : warning ? "text-yellow-700 dark:text-yellow-400" : "text-emerald-700 dark:text-emerald-400"}`}>
-        {spare.onHand}
-      </span>
-      <span className="text-fg/20 text-[10px]">{spare.unit}</span>
-    </div>
-  );
-}
-
-function CriticalityBadge({ value }: { value: string }) {
-  const colors: Record<string, string> = {
-    A: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
-    B: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
-    C: "bg-fg/5 text-fg/40 border-fg/10",
-  };
-  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${colors[value] ?? colors.C}`}>{value}</span>;
-}
-
-// ---------------------------------------------------------------------------
-// Stock movement history panel
-// ---------------------------------------------------------------------------
+/** Tareas del plan que llevan el repuesto (`spares` JSON del plan). */
+interface PlanWithSpares { id: string; vesselCode: string; title: string; assetName?: string | null; status: string; spares: { kind?: string; spareId?: string | null; quantity?: number; unit?: string }[] | null }
+/** Recepciones: cada línea trae el SKU del repuesto que entró. */
+interface ReceiptLite { id: string; receiptCode: string; vesselCode: string; providerName: string | null; receivedAt: string; lines: { sku: string | null; quantity: number; unit: string }[] }
 
 interface StockMovement {
   id: string; movementCode: string; movementType: string;
@@ -81,78 +58,45 @@ interface StockMovement {
   notes: string | null;
 }
 
-const MOV_LABEL: Record<string, string> = {
-  RECEIPT: "Ingreso", ISSUE: "Egreso", ADJUSTMENT: "Ajuste",
-  TRANSFER_IN: "Transfer +", TRANSFER_OUT: "Transfer −",
-  RETURN_IN: "Devolución", ADJUSTMENT_PLUS: "Ajuste +", ADJUSTMENT_MINUS: "Ajuste −",
-};
 const NEGATIVE_TYPES = new Set(["ISSUE", "TRANSFER_OUT", "ADJUSTMENT_MINUS"]);
-
-function MovBadge({ type }: { type: string }) {
-  const neg = NEGATIVE_TYPES.has(type);
-  const cls = neg
-    ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
-    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20";
-  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold ${cls}`}>{MOV_LABEL[type] ?? type}</span>;
-}
-
-const SpareHistoryPanel: React.FC<{ spareId: string }> = ({ spareId }) => {
-  const t = useT();
-  const { data, loading } = useFetch<{ items: StockMovement[] }>(`/app/pms/stock-movements?spareId=${spareId}`);
-  const movements = data?.items ?? [];
-
-  if (loading) return (
-    <div className="px-4 pb-4 flex items-center gap-2 text-xs text-fg/30">
-      <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}
-    </div>
-  );
-  if (movements.length === 0) return (
-    <p className="px-4 pb-4 text-xs text-fg/20">{t("common.noMovements")}</p>
-  );
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-[10px] text-fg/30 border-b border-fg/10">
-            <th className="text-left px-4 py-2">{t("common.date")}</th>
-            <th className="text-left px-4 py-2">{t("common.type")}</th>
-            <th className="text-right px-4 py-2">{t("common.quantity")}</th>
-            <th className="text-left px-4 py-2">{t("col.vessel")}</th>
-            <th className="text-left px-4 py-2">{t("sp.colWoRef")}</th>
-            <th className="text-left px-4 py-2">{t("common.notes")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {movements.map(m => (
-            <tr key={m.id} className="border-b border-fg/5 last:border-0 hover:bg-fg/[0.03]">
-              <td className="px-4 py-2 text-fg/50 whitespace-nowrap">{fmtDate(m.occurredAt)}</td>
-              <td className="px-4 py-2"><MovBadge type={m.movementType} /></td>
-              <td className="px-4 py-2 text-right font-mono">
-                <span className={NEGATIVE_TYPES.has(m.movementType) ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}>
-                  {NEGATIVE_TYPES.has(m.movementType) ? "−" : "+"}{m.quantity} {m.unit}
-                </span>
-              </td>
-              <td className="px-4 py-2"><VesselLabel code={m.vesselCode} className="text-[10px]" showCode /></td>
-              <td className="px-4 py-2">
-                {m.referenceCode
-                  ? <span className="font-mono text-fg/70">{m.referenceCode}</span>
-                  : <span className="text-fg/20">—</span>}
-              </td>
-              <td className="px-4 py-2 text-fg/40 max-w-[160px] truncate" title={m.notes ?? undefined}>{m.notes ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+const MOV_TKEY: Record<string, TranslationKey> = {
+  RECEIPT: "sp.mov.RECEIPT", ISSUE: "sp.mov.ISSUE", ADJUSTMENT: "sp.mov.ADJUSTMENT",
+  TRANSFER_IN: "sp.mov.TRANSFER_IN", TRANSFER_OUT: "sp.mov.TRANSFER_OUT",
+  RETURN_IN: "sp.mov.RETURN_IN", ADJUSTMENT_PLUS: "sp.mov.ADJUSTMENT_PLUS", ADJUSTMENT_MINUS: "sp.mov.ADJUSTMENT_MINUS",
 };
+
+/** Nivel del stock: bajo el mínimo / para reponer / bien. Sin niveles cargados no se alarma. */
+function stockLevel(s: Spare): "low" | "reorder" | "ok" {
+  if (s.minStock > 0 && s.onHand < s.minStock) return "low";
+  if (s.reorderPoint > 0 && s.onHand <= s.reorderPoint) return "reorder";
+  return "ok";
+}
+const LEVEL_TEXT = { low: "text-red-700 dark:text-red-400", reorder: "text-amber-700 dark:text-amber-400", ok: "text-emerald-700 dark:text-emerald-400" };
+const LEVEL_BAR = { low: "bg-red-600", reorder: "bg-amber-500", ok: "bg-emerald-600" };
+const CRIT_CHIP: Record<string, string> = { A: "bg-red-700 text-white", B: "bg-amber-500/15 text-amber-800 dark:text-amber-300", C: "bg-fg/5 text-text-industrial/60" };
+
+function StockBar({ spare }: { spare: Spare }) {
+  const t = useT();
+  const lvl = stockLevel(spare);
+  const max = Math.max((spare.targetStock ?? 0) * 1.2, spare.reorderPoint * 1.6, spare.onHand, 1);
+  return (
+    <div className="flex flex-col gap-1 min-w-[130px]">
+      <span className={`text-xs font-extrabold ${LEVEL_TEXT[lvl]}`}>{spare.onHand} <span className="font-semibold text-text-industrial/50">{spare.unit}</span></span>
+      <div className="relative h-1.5 rounded-full bg-fg/10">
+        <span className={`absolute inset-y-0 left-0 rounded-full ${LEVEL_BAR[lvl]}`} style={{ width: `${Math.min(100, (spare.onHand / max) * 100)}%` }} />
+        {spare.minStock > 0 && <i className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-fg" style={{ left: `${(spare.minStock / max) * 100}%` }} />}
+      </div>
+      <span className="text-[10px] text-text-industrial/45">{t("sp.v23.minReorder").replace("{min}", String(spare.minStock)).replace("{ro}", String(spare.reorderPoint))}</span>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Input style helpers
 // ---------------------------------------------------------------------------
 
-const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-fg placeholder-fg/20 focus:outline-none focus:border-accent/50";
-const labelCls = "block text-[10px] font-semibold text-fg/50 uppercase tracking-wider mb-1";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
 
 // ---------------------------------------------------------------------------
 // SpareModal
@@ -160,18 +104,20 @@ const labelCls = "block text-[10px] font-semibold text-fg/50 uppercase tracking-
 
 interface SpareModalProps {
   spare: Spare | null;
+  plans: PlanWithSpares[];
+  receipts: ReceiptLite[];
   onClose: () => void;
   onSaved: (s: Spare) => void;
   onMocTrigger?: (e: MocTriggerEvent) => void;
 }
 
-async function downloadSparePdf(spare: { id: string; sku: string; vesselCode: string }): Promise<void> {
+async function downloadSparePdf(spare: { id: string; sku: string; vesselCode: string }, errMsg: string): Promise<void> {
   const token = localStorage.getItem("gpms_token") ?? "";
   const slug  = localStorage.getItem("gpms_tenant_slug") ?? "";
   const res = await fetch(`/app/pms/spares/${spare.id}/pdf`, {
     headers: { Authorization: `Bearer ${token}`, "X-Tenant-Slug": slug },
   });
-  if (!res.ok) throw new Error("No se pudo generar el PDF.");
+  if (!res.ok) throw new Error(errMsg);
   const blob = await res.blob();
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
@@ -181,13 +127,14 @@ async function downloadSparePdf(spare: { id: string; sku: string; vesselCode: st
   URL.revokeObjectURL(url);
 }
 
-const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocTrigger }) => {
+const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose, onSaved, onMocTrigger }) => {
   const isNew = spare === null;
   const can = useCan();
   const t = useT();
-  // El ajuste manual lo habilita el permiso "stock.manage" (Equipo → Permisos),
-  // el mismo que valida el backend al registrar el movimiento. Antes estaba
-  // atado a dos roles fijos y la tripulación no podía cargar el inventario.
+  const navigate = useNavigate();
+  // Alta/edición/baja: "spare.manage"; ajuste manual: "stock.manage" (Equipo → Permisos),
+  // los mismos permisos que valida el backend.
+  const canEdit = can("spare.manage");
   const canAdjustStock = !isNew && can("stock.manage");
 
   const [vesselCode,              setVesselCode]              = useState(spare?.vesselCode              ?? "");
@@ -212,6 +159,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels } = useVesselContext();
+  const vesselName = (code: string) => vessels.find(v => v.code === code)?.name || code;
 
   // SFI: solo grupo (0-9). El grupo se deriva del primer dígito del código guardado.
   const [sfiGroup, setSfiGroup] = useState<string>(() => {
@@ -223,46 +171,46 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
-  const [expanded,    setExpanded]    = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Ajuste manual: ventanita propia (antes: recuadro amarillo dentro del formulario).
+  const [adjOpen,    setAdjOpen]    = useState(false);
   const [adjQty,     setAdjQty]     = useState(String(spare?.onHand ?? 0));
   const [adjNotes,   setAdjNotes]   = useState("");
   const [adjSaving,  setAdjSaving]  = useState(false);
-  const [adjError,   setAdjError]   = useState<string | null>(null);
-  const [adjSuccess, setAdjSuccess] = useState(false);
+
+  const movements = useFetch<{ items: StockMovement[] }>(spare ? `/app/pms/stock-movements?spareId=${spare.id}` : null, [spare?.id]);
 
   const handleSave = async () => {
     setError(null);
+    const payload = {
+      vesselCode:             vesselCode.trim().toUpperCase(),
+      sku:                    sku.trim().toUpperCase(),
+      name:                   name.trim(),
+      category:               category.trim() || null,
+      criticality:            criticality as "A" | "B" | "C",
+      manufacturer:           manufacturer.trim() || null,
+      model:                  model.trim() || null,
+      unit:                   unit.trim(),
+      minStock:               parseFloat(minStock) || 0,
+      reorderPoint:           parseFloat(reorderPoint) || 0,
+      targetStock:            targetStock.trim() ? parseFloat(targetStock) : null,
+      location:               location.trim() || null,
+      status:                 status as "ACTIVE" | "OBSOLETE",
+      internalPartNumber:     internalPartNumber.trim() || null,
+      manufacturerPartNumber: manufacturerPartNumber.trim() || null,
+      longDescription:        longDescription.trim() || null,
+      sfiCode:                sfiCode.trim() || null,
+      leadTimeDays:           leadTimeDays.trim() ? parseInt(leadTimeDays, 10) : null,
+      isEquivalent:           isEquivalent,
+    };
+    if (!payload.vesselCode) { setError(t("error.vesselRequired")); return; }
+    if (!payload.sku)        { setError(t("error.skuRequired"));    return; }
+    if (!payload.name)       { setError(t("error.nameRequired"));   return; }
+    if (!payload.unit)       { setError(t("error.unitRequired"));   return; }
     setSaving(true);
     try {
-      const payload = {
-        vesselCode:             vesselCode.trim().toUpperCase(),
-        sku:                    sku.trim().toUpperCase(),
-        name:                   name.trim(),
-        category:               category.trim() || null,
-        criticality:            criticality as "A" | "B" | "C",
-        manufacturer:           manufacturer.trim() || null,
-        model:                  model.trim() || null,
-        unit:                   unit.trim(),
-        minStock:               parseFloat(minStock) || 0,
-        reorderPoint:           parseFloat(reorderPoint) || 0,
-        targetStock:            targetStock.trim() ? parseFloat(targetStock) : null,
-        location:               location.trim() || null,
-        status:                 status as "ACTIVE" | "OBSOLETE",
-        internalPartNumber:     internalPartNumber.trim() || null,
-        manufacturerPartNumber: manufacturerPartNumber.trim() || null,
-        longDescription:        longDescription.trim() || null,
-        sfiCode:                sfiCode.trim() || null,
-        leadTimeDays:           leadTimeDays.trim() ? parseInt(leadTimeDays, 10) : null,
-        isEquivalent:           isEquivalent,
-      };
-      if (!payload.vesselCode) { setError(t("error.vesselRequired")); setSaving(false); return; }
-      if (!payload.sku)        { setError(t("error.skuRequired"));    setSaving(false); return; }
-      if (!payload.name)       { setError(t("error.nameRequired"));   setSaving(false); return; }
-      if (!payload.unit)       { setError(t("error.unitRequired"));   setSaving(false); return; }
-
       const result = isNew
         ? await api.post<Spare>("/app/pms/spares", payload)
         : await api.patch<Spare>(`/app/pms/spares/${spare.id}`, payload);
@@ -290,25 +238,49 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 
       onSaved(result);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error al guardar.");
+      setError(e instanceof Error ? e.message : t("common.saveError"));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
     if (!spare) return;
-    if (!window.confirm(t("confirm.deleteSpare").replace("{sku}", spare.sku))) return;
     setSaving(true);
     try {
       await api.delete(`/app/pms/spares/${spare.id}`);
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error al eliminar.");
+      setError(e instanceof Error ? e.message : t("error.delete"));
       setSaving(false);
+      setConfirmDelete(false);
     }
   };
 
-  const isCriticalStock = !isNew && spare.onHand < spare.minStock;
-  const isWarnStock     = !isNew && !isCriticalStock && spare.onHand <= spare.reorderPoint;
+  const applyAdjustment = async () => {
+    if (!spare) return;
+    const newQty = parseFloat(adjQty);
+    if (isNaN(newQty) || newQty < 0) { setError(t("error.invalidQuantity")); return; }
+    const delta = newQty - spare.onHand;
+    if (delta === 0) { setError(t("error.sameQuantity")); return; }
+    setAdjSaving(true);
+    try {
+      await api.post(`/app/pms/stock-movements`, {
+        vesselCode:    spare.vesselCode,
+        spareId:       spare.id,
+        movementType:  delta > 0 ? "ADJUSTMENT_PLUS" : "ADJUSTMENT_MINUS",
+        quantity:      Math.abs(delta),
+        unit:          spare.unit,
+        occurredAt:    new Date().toISOString(),
+        referenceType: "ADJUSTMENT",
+        notes:         adjNotes.trim() || t("sp.v23.adjDefaultNote"),
+      });
+      setAdjNotes("");
+      setAdjOpen(false);
+      void movements.reload();
+      onSaved({ ...spare, onHand: newQty, available: newQty });
+    } catch (e) {
+      setError(e instanceof ApiError || e instanceof Error ? e.message : t("common.saveError"));
+    } finally { setAdjSaving(false); }
+  };
 
   // ESC guard: confirma cambios sin guardar
   const isDirty = useDirtyTracker({
@@ -317,312 +289,312 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
     internalPartNumber, manufacturerPartNumber, longDescription, sfiCode, leadTimeDays,
     isEquivalent,
   });
-  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose });
+  const requestClose = useEscapeGuard({ isDirty: canEdit && isDirty, onSave: canEdit ? handleSave : undefined, onClose });
+
+  // Nexos: tareas del plan que lo usan y recepciones donde entró.
+  const usedIn = useMemo(() => !spare ? [] : plans
+    .filter(p => p.status !== "INACTIVE" && Array.isArray(p.spares) && p.spares.some(s => s?.spareId === spare.id))
+    .map(p => ({ plan: p, line: p.spares!.find(s => s?.spareId === spare.id)! })), [plans, spare]);
+  const receivedFrom = useMemo(() => !spare ? [] : receipts
+    .filter(r => r.vesselCode === spare.vesselCode && r.lines.some(l => l.sku === spare.sku)), [receipts, spare]);
+
+  // Obligatorios (preview V24): lo mismo que valida handleSave.
+  const missReq = { vessel: !vesselCode.trim(), sku: !sku.trim(), name: !name.trim(), unit: !unit.trim() };
+  const missTotal = canEdit ? Object.values(missReq).filter(Boolean).length : 0;
+  const needTag = (on: boolean) => canEdit && on ? <GuideNeedTag label={t("mp.guide.missing")} /> : null;
+
+  const lvl = spare ? stockLevel(spare) : "ok";
+  const gaugeMax = spare ? Math.max((spare.targetStock ?? 0) * 1.25, spare.reorderPoint * 1.6, spare.minStock * 2, spare.onHand, 1) : 1;
+  const gaugeTone = { low: "border-red-400/60 bg-red-500/[0.06]", reorder: "border-amber-400/60 bg-amber-500/[0.07]", ok: "border-emerald-500/40 bg-emerald-500/[0.06]" }[lvl];
+  const missingToTarget = spare?.targetStock ? Math.max(0, spare.targetStock - spare.onHand) : 0;
+  const mark = (value: number, label: string) => value > 0 && (
+    <span className="absolute -top-4 -translate-x-1/2 whitespace-nowrap text-[10px] font-extrabold text-text-industrial/60" style={{ left: `${Math.min(100, (value / gaugeMax) * 100)}%` }}>
+      {label}
+      <i className="absolute left-1/2 top-3.5 h-4 w-0.5 bg-fg" />
+    </span>
+  );
+
+  const box = (icon: React.ReactNode, title: string, right: React.ReactNode, body: React.ReactNode) => (
+    <div className="rounded-2xl border border-fg/10 overflow-hidden">
+      <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg">{icon} {title}<span className="ml-auto text-[11px] font-semibold text-text-industrial/50">{right}</span></h3>
+      <div className="p-3 space-y-2">{body}</div>
+    </div>
+  );
+  const rel = "w-full flex items-center gap-2 rounded-xl border border-fg/10 px-2.5 py-2 text-left text-xs hover:border-accent/40 transition-colors";
+  const empty = (txt: string) => <p className="text-xs text-text-industrial/45">{txt}</p>;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90%]"}`} onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-6xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 border-t-4 border-t-violet-600 rounded-2xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <Package className="w-4 h-4 text-accent" />
-            <div>
-              <h2 className="text-sm font-bold text-fg">{isNew ? t("sp.newSpareTitle") : spare.sku}</h2>
-              {!isNew && <p className="text-[10px] text-fg/40 mt-0.5">{spare.name} · Vessel: {spare.vesselCode}</p>}
-            </div>
+        {/* Encabezado */}
+        <div className="flex items-start gap-3 px-4 sm:px-6 py-3 border-b border-fg/10 shrink-0">
+          <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-violet-500/15 text-violet-700 dark:text-violet-300"><Package className="w-6 h-6" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-violet-700 dark:text-violet-400">{t("sp.v23.kicker")}{category.trim() ? ` · ${category.trim()}` : ""}</p>
+            <h2 className="text-lg font-black text-fg leading-tight truncate">{name.trim() || t("sp.newSpareTitle")}</h2>
+            {(manufacturer.trim() || manufacturerPartNumber.trim()) && (
+              <p className="text-xs text-text-industrial/60 truncate">{[manufacturer.trim(), manufacturerPartNumber.trim() && `P/N ${manufacturerPartNumber.trim()}`].filter(Boolean).join(" · ")}</p>
+            )}
             {!isNew && (
-              <div className="flex items-center gap-2">
-                <CriticalityBadge value={spare.criticality} />
-                {isCriticalStock && <span className="text-[10px] font-semibold text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">{t("sp.criticalStock")}</span>}
-                {isWarnStock     && <span className="text-[10px] font-semibold text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-md">{t("sp.belowReorderPoint")}</span>}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{spare.sku}</span>
+                {/* Nombre del buque, no el código. */}
+                <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70"><Ship className="w-3 h-3" /><VesselLabel code={spare.vesselCode} className="text-[11px]" /></span>
+                <span className={`rounded-md px-2 py-0.5 text-[10.5px] font-black ${CRIT_CHIP[spare.criticality] ?? CRIT_CHIP.C}`}>{t("sp.v23.critN").replace("{c}", spare.criticality)}</span>
+                {spare.location && <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70"><MapPin className="w-3 h-3" />{spare.location}</span>}
+                {spare.status === "OBSOLETE" && <span className="rounded-full bg-fg/10 px-2 py-0.5 text-[11px] font-bold text-text-industrial/60">{t("sp.v23.obsolete")}</span>}
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.reduce") : t("common.expand")}>
-              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-            <ModalCloseButton onClose={requestClose} />
-          </div>
+          <ModalCloseButton onClose={requestClose} />
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>{t("form.vessel")}</label>
-              {isNew
-                ? <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
-                    <option value="">{t("sp.selectVesselPh")}</option>
-                    {vessels.map(v => (
-                      <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
-                    ))}
-                  </select>
-                : <p className="text-sm"><VesselLabel code={spare.vesselCode} className="text-sm" showCode /></p>}
-            </div>
-            <div>
-              <label className={labelCls}>{t("sp.sku")}</label>
-              <input value={sku} onChange={e => setSku(e.target.value.toUpperCase())} placeholder="SKU-001" className={inputCls} />
-            </div>
-          </div>
-
-          <div>
-            <label className={labelCls}>{t("sp.nameReq")}</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder={t("sp.namePh")} className={inputCls} />
-          </div>
-
-          {longDescription !== undefined && (
-            <div>
-              <label className={labelCls}>{t("sp.longDesc")}</label>
-              <AutoTextArea value={longDescription} onChange={e => setLongDescription(e.target.value)} placeholder={t("sp.longDescPh")} rows={2} className={`${inputCls} resize-none`} />
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>{t("common.category")}</label>
-              <input value={category} onChange={e => setCategory(e.target.value)} placeholder={t("sp.categoryPh")} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>{t("common.criticality")}</label>
-              <select value={criticality} onChange={e => setCriticality(e.target.value)} className={inputCls}>
-                <option value="A">{t("sp.critAImportant")}</option>
-                <option value="B">{t("sp.critB")}</option>
-                <option value="C">{t("sp.critC")}</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>{t("sp.manufacturer")}</label>
-              <input value={manufacturer} onChange={e => setManufacturer(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>{t("sp.model")}</label>
-              <input value={model} onChange={e => setModel(e.target.value)} className={inputCls} />
-            </div>
-          </div>
-
-          {/* Repuesto equivalente / no-OEM — al guardar con criticidad A
-              el sistema sugiere abrir un MOC EQUIPMENT_CHANGE. */}
-          <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-fg/3 border border-fg/10 cursor-pointer hover:bg-fg/5 transition-colors">
-            <input
-              type="checkbox"
-              checked={isEquivalent}
-              onChange={e => setIsEquivalent(e.target.checked)}
-              className="mt-0.5 accent-accent"
-            />
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-fg">{t("sp.equivNotOem")}</p>
-              <p className="text-[10px] text-fg/40 mt-0.5">
-                Marcalo si el repuesto NO es del fabricante original del equipo.
-                En componentes de criticidad A el sistema sugerirá registrar un MOC.
-              </p>
-            </div>
-          </label>
-
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <label className={labelCls}>{t("sp.unitReq")}</label>
-              <input value={unit} onChange={e => setUnit(e.target.value)} placeholder="ud, m, kg, L…" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Ubicación en bodega</label>
-              <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Rack A-3…" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>{t("mp.sfiGroup")}</label>
-              <select value={sfiGroup} onChange={e => handleSfiGroupChange(e.target.value)} className={inputCls}>
-                <option value="">{t("mp.selectSfiGroup")}</option>
-                {SFI_GROUP_NUMBERS.map(g => (
-                  <option key={g} value={String(g)}>{g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Part numbers */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Part Number interno</label>
-              <input value={internalPartNumber} onChange={e => setInternalPartNumber(e.target.value)} placeholder="IPN-001" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Part Number fabricante</label>
-              <input value={manufacturerPartNumber} onChange={e => setManufacturerPartNumber(e.target.value)} placeholder="OEM-12345" className={inputCls} />
-            </div>
-          </div>
-
-          {/* Stock thresholds — no currentStock field, only policy levels */}
-          <div className="border border-fg/10 rounded-xl p-4 space-y-3">
-            <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Niveles de stock</p>
-            {!isNew && (
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-fg/40">Stock actual (calculado):</span>
-                <span className={`font-bold ${isCriticalStock ? "text-red-700 dark:text-red-400" : isWarnStock ? "text-yellow-700 dark:text-yellow-400" : "text-emerald-700 dark:text-emerald-400"}`}>
-                  {spare.onHand} {spare.unit}
-                </span>
-                {spare.available !== spare.onHand && (
-                  <span className="text-fg/30 text-[10px]">Disponible: {spare.available}</span>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Cuánto hay contra mínimo / reorden / objetivo */}
+          {spare && (
+            <div className={`mx-4 sm:mx-6 mt-4 flex flex-wrap items-center gap-4 rounded-2xl border-[1.5px] px-4 py-3 ${gaugeTone}`}>
+              <div>
+                <p className="text-[10.5px] font-extrabold uppercase text-text-industrial/55">{t("sp.v23.inStock")}</p>
+                <p className={`text-3xl font-black leading-none ${LEVEL_TEXT[lvl]}`}>{spare.onHand} <span className="text-sm">{spare.unit}</span></p>
+                {spare.available !== spare.onHand && <p className="text-[11px] text-text-industrial/55">{t("sp.v23.available").replace("{n}", String(spare.available))}</p>}
+              </div>
+              <div className="flex-1 min-w-[220px]">
+                <div className="relative mt-5 mb-1.5 h-3 rounded-full bg-fg/10">
+                  <span className={`absolute inset-y-0 left-0 rounded-full ${LEVEL_BAR[lvl]}`} style={{ width: `${Math.min(100, (spare.onHand / gaugeMax) * 100)}%` }} />
+                  {mark(spare.minStock, t("sp.v23.markMin").replace("{n}", String(spare.minStock)))}
+                  {mark(spare.reorderPoint, t("sp.v23.markReorder").replace("{n}", String(spare.reorderPoint)))}
+                  {mark(spare.targetStock ?? 0, t("sp.v23.markTarget").replace("{n}", String(spare.targetStock ?? 0)))}
+                </div>
+                <p className="text-[11px] text-text-industrial/55">
+                  {spare.minStock <= 0 && spare.reorderPoint <= 0 ? t("sp.v23.noLevels")
+                    : [missingToTarget > 0 && t("sp.v23.missingTarget").replace("{n}", String(missingToTarget)), spare.leadTimeDays != null && t("sp.v23.leadTime").replace("{n}", String(spare.leadTimeDays))].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {lvl !== "ok" && (
+                  <button type="button" onClick={() => navigate("/spare-requests")} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold hover:brightness-110">
+                    <ShoppingCart className="w-3.5 h-3.5" /> {t("sp.v23.order")}
+                  </button>
+                )}
+                {canAdjustStock && (
+                  <button type="button" onClick={() => { setAdjQty(String(spare.onHand)); setAdjOpen(true); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-fg/15 bg-surface text-xs font-bold text-fg hover:border-accent/40">
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> {t("sp.v23.adjust")}
+                  </button>
                 )}
               </div>
+            </div>
+          )}
+
+          <div className={`grid grid-cols-1 ${isNew ? "" : "lg:grid-cols-[1.3fr_1fr]"} gap-4 px-4 sm:px-6 py-4`}>
+            <div className="space-y-3 min-w-0">
+              <GuideSection n={1} title={t("sp.v23.sec1")} subtitle={t("sp.v23.sec1Sub")} open onToggle={() => { /* siempre abierto */ }}
+                pill={canEdit ? <GuidePill missing={Number(missReq.vessel) + Number(missReq.sku) + Number(missReq.name)} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} /> : undefined}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <GuideField id="sp-f-vessel" missing={canEdit && missReq.vessel}>
+                    <label className={fl}>{t("form.vessel")}{needTag(missReq.vessel)}</label>
+                    {isNew
+                      ? <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
+                          <option value="">{t("sp.selectVesselPh")}</option>
+                          {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
+                        </select>
+                      : <input value={vesselName(spare.vesselCode)} disabled className={inputCls} />}
+                  </GuideField>
+                  <GuideField id="sp-f-sku" missing={canEdit && missReq.sku}>
+                    <label className={fl}>{t("sp.sku")}{needTag(missReq.sku)}</label>
+                    <input value={sku} onChange={e => setSku(e.target.value.toUpperCase())} disabled={!canEdit} placeholder="SKU-001" className={inputCls} />
+                  </GuideField>
+                </div>
+                <GuideField id="sp-f-name" missing={canEdit && missReq.name}>
+                  <label className={fl}>{t("sp.nameReq")}{needTag(missReq.name)}</label>
+                  <input value={name} onChange={e => setName(e.target.value)} disabled={!canEdit} placeholder={t("sp.namePh")} className={inputCls} />
+                </GuideField>
+                <div><label className={fl}>{t("sp.longDesc")}</label><AutoTextArea value={longDescription} onChange={e => setLongDescription(e.target.value)} disabled={!canEdit} placeholder={t("sp.longDescPh")} rows={2} className={`${inputCls} resize-none`} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className={fl}>{t("common.category")}</label><input value={category} onChange={e => setCategory(e.target.value)} disabled={!canEdit} placeholder={t("sp.categoryPh")} className={inputCls} /></div>
+                  <div>
+                    <label className={fl}>{t("common.criticality")}</label>
+                    <select value={criticality} onChange={e => setCriticality(e.target.value)} disabled={!canEdit} className={inputCls}>
+                      <option value="A">{t("sp.critAImportant")}</option>
+                      <option value="B">{t("sp.critB")}</option>
+                      <option value="C">{t("sp.critC")}</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className={fl}>{t("sp.manufacturer")}</label><input value={manufacturer} onChange={e => setManufacturer(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
+                  <div><label className={fl}>{t("sp.model")}</label><input value={model} onChange={e => setModel(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className={fl}>{t("sp.v23.pnInternal")}</label><input value={internalPartNumber} onChange={e => setInternalPartNumber(e.target.value)} disabled={!canEdit} placeholder="IPN-001" className={inputCls} /></div>
+                  <div><label className={fl}>{t("sp.v23.pnManufacturer")}</label><input value={manufacturerPartNumber} onChange={e => setManufacturerPartNumber(e.target.value)} disabled={!canEdit} placeholder="OEM-12345" className={inputCls} /></div>
+                </div>
+                <div>
+                  <label className={fl}>{t("mp.sfiGroup")}</label>
+                  <select value={sfiGroup} onChange={e => handleSfiGroupChange(e.target.value)} disabled={!canEdit} className={inputCls}>
+                    <option value="">{t("mp.selectSfiGroup")}</option>
+                    {SFI_GROUP_NUMBERS.map(g => <option key={g} value={String(g)}>{g} - {t(`sfi.g.${g}` as TranslationKey)}</option>)}
+                  </select>
+                </div>
+                {/* Repuesto equivalente / no-OEM — al guardar con criticidad A el sistema sugiere abrir un MOC EQUIPMENT_CHANGE. */}
+                <label className={`flex items-start gap-2.5 rounded-xl border-[1.5px] border-amber-400/50 bg-amber-500/[0.06] px-3 py-2.5 ${canEdit ? "cursor-pointer hover:bg-amber-500/10" : "opacity-70"}`}>
+                  <input type="checkbox" checked={isEquivalent} onChange={e => setIsEquivalent(e.target.checked)} disabled={!canEdit} className="mt-0.5 w-4 h-4 accent-amber-600" />
+                  <span>
+                    <span className="block text-[13px] font-extrabold text-amber-800 dark:text-amber-200">{t("sp.equivNotOem")}</span>
+                    <span className="block text-[11.5px] text-text-industrial/60">{t("sp.v23.equivHint")}</span>
+                  </span>
+                </label>
+              </GuideSection>
+
+              <GuideSection n={2} title={t("sp.v23.sec2")} subtitle={t("sp.v23.sec2Sub")} open onToggle={() => { /* siempre abierto */ }}
+                pill={canEdit ? <GuidePill missing={Number(missReq.unit)} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} /> : undefined}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className={fl}>{t("sp.v23.location")}</label><input value={location} onChange={e => setLocation(e.target.value)} disabled={!canEdit} placeholder={t("sp.v23.locationPh")} className={inputCls} /></div>
+                  <GuideField id="sp-f-unit" missing={canEdit && missReq.unit}>
+                    <label className={fl}>{t("sp.unitReq")}{needTag(missReq.unit)}</label>
+                    <input value={unit} onChange={e => setUnit(e.target.value)} disabled={!canEdit} placeholder="ud, m, kg, L…" className={inputCls} />
+                  </GuideField>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div><label className={fl}>{t("sp.v23.minStock")}</label><input type="number" min="0" step="0.01" value={minStock} onChange={e => setMinStock(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
+                  <div><label className={fl}>{t("sp.v23.reorderPoint")}</label><input type="number" min="0" step="0.01" value={reorderPoint} onChange={e => setReorderPoint(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
+                  <div><label className={fl}>{t("sp.v23.targetStock")}</label><input type="number" min="0" step="0.01" value={targetStock} onChange={e => setTargetStock(e.target.value)} disabled={!canEdit} placeholder={t("sp.v23.optional")} className={inputCls} /></div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className={fl}>{t("sp.v23.leadTimeDays")}</label><input type="number" min="0" step="1" value={leadTimeDays} onChange={e => setLeadTimeDays(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
+                  <div>
+                    <label className={fl}>{t("col.status")}</label>
+                    <select value={status} onChange={e => setStatus(e.target.value)} disabled={!canEdit} className={inputCls}>
+                      <option value="ACTIVE">{t("sp.v23.active")}</option>
+                      <option value="OBSOLETE">{t("sp.v23.obsolete")}</option>
+                    </select>
+                  </div>
+                </div>
+                {!isNew && <p className="text-[11px] text-text-industrial/45">{t("prov.createdAt")} {fmtDate(spare.createdAt)}</p>}
+              </GuideSection>
+            </div>
+
+            {/* Derecha: dónde se usa, qué pasó y quién lo trae */}
+            {!isNew && (
+              <div className="space-y-3 min-w-0">
+                {box(<CalendarCheck className="w-4 h-4" />, t("sp.v23.usedIn"), usedIn.length ? t("sp.v23.tasksN").replace("{n}", String(usedIn.length)) : null,
+                  usedIn.length === 0 ? empty(t("sp.v23.usedInEmpty")) : usedIn.slice(0, 8).map(({ plan, line }) => (
+                    <button key={plan.id} type="button" className={rel} onClick={() => navigate(`/maintenance-plans?openId=${encodeURIComponent(plan.id)}`)}>
+                      <b className="text-fg shrink-0">{plan.assetName || "—"}</b>
+                      <span className="truncate text-text-industrial/55">{plan.title}{line.quantity ? ` · ${line.quantity} ${line.unit ?? ""}` : ""}</span>
+                      <ChevronRight className="ml-auto w-3.5 h-3.5 shrink-0 text-text-industrial/40" />
+                    </button>
+                  )))}
+                {box(<History className="w-4 h-4" />, t("sp.v23.movements"), movements.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : null,
+                  (movements.data?.items ?? []).length === 0 ? empty(t("common.noMovements")) : (movements.data?.items ?? []).slice(0, 10).map(m => {
+                    const neg = NEGATIVE_TYPES.has(m.movementType);
+                    const isWo = m.referenceType === "WORK_ORDER" && !!m.referenceCode;
+                    return (
+                      <div key={m.id} role={isWo ? "button" : undefined} onClick={isWo ? () => navigate(`/work-orders/${encodeURIComponent(m.referenceCode!)}`) : undefined}
+                        className={`${rel} ${isWo ? "cursor-pointer" : "hover:border-fg/10"}`} title={m.notes ?? undefined}>
+                        <span className={`font-mono font-extrabold shrink-0 ${neg ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>{neg ? "−" : "+"}{m.quantity}</span>
+                        <span className="text-fg shrink-0">{MOV_TKEY[m.movementType] ? t(MOV_TKEY[m.movementType]) : m.movementType}</span>
+                        {m.referenceCode ? <span className="font-mono text-[11px] font-bold text-accent truncate">{m.referenceCode}</span> : m.notes ? <span className="truncate text-text-industrial/50">{m.notes}</span> : null}
+                        <span className="ml-auto flex items-center gap-1 shrink-0 text-[11px] text-text-industrial/50">{fmtDate(m.occurredAt)}{isWo && <ChevronRight className="w-3.5 h-3.5" />}</span>
+                      </div>
+                    );
+                  }))}
+                {box(<Truck className="w-4 h-4" />, t("sp.v23.whoBrings"), null,
+                  receivedFrom.length === 0 ? empty(t("sp.v23.whoBringsEmpty")) : receivedFrom.slice(0, 5).map(r => (
+                    <button key={r.id} type="button" className={rel} onClick={() => navigate("/spare-receipts")}>
+                      <b className="text-fg truncate">{r.providerName || "—"}</b>
+                      <span className="font-mono text-[11px] text-text-industrial/55 shrink-0">{r.receiptCode}</span>
+                      <span className="ml-auto text-[11px] text-text-industrial/50 shrink-0">{fmtDate(r.receivedAt)}</span>
+                    </button>
+                  )))}
+              </div>
             )}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={labelCls}>Stock mínimo</label>
-                <input type="number" min="0" step="0.01" value={minStock} onChange={e => setMinStock(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Punto de reorden</label>
-                <input type="number" min="0" step="0.01" value={reorderPoint} onChange={e => setReorderPoint(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Stock objetivo</label>
-                <input type="number" min="0" step="0.01" value={targetStock} onChange={e => setTargetStock(e.target.value)} placeholder="Opcional" className={inputCls} />
-              </div>
-            </div>
           </div>
-
-          {/* Manual stock adjustment — requiere el permiso stock.manage */}
-          {canAdjustStock && (
-            <div className="border border-yellow-500/20 rounded-xl p-4 space-y-3 bg-yellow-500/5">
-              <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400/70 uppercase tracking-wider">Ajuste manual de stock</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Nueva cantidad</label>
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={adjQty}
-                    onChange={e => { setAdjQty(e.target.value); setAdjSuccess(false); setAdjError(null); }}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Motivo (opcional)</label>
-                  <input
-                    type="text"
-                    value={adjNotes}
-                    onChange={e => setAdjNotes(e.target.value)}
-                    placeholder="Ej: inventario físico, corrección…"
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              {adjError   && <p className="text-xs text-red-700 dark:text-red-400">{adjError}</p>}
-              {adjSuccess  && <p className="text-xs text-emerald-700 dark:text-emerald-400">Stock actualizado y registrado en bitácora.</p>}
-              <button
-                disabled={adjSaving}
-                onClick={async () => {
-                  const newQty = parseFloat(adjQty);
-                  if (isNaN(newQty) || newQty < 0) { setAdjError(t("error.invalidQuantity")); return; }
-                  setAdjSaving(true); setAdjError(null); setAdjSuccess(false);
-                  try {
-                    const currentOnHand = spare.onHand;
-                    const delta = newQty - currentOnHand;
-                    if (delta !== 0) {
-                      const movementType = delta > 0 ? "ADJUSTMENT_PLUS" : "ADJUSTMENT_MINUS";
-                      await api.post(`/app/pms/stock-movements`, {
-                        vesselCode:    spare.vesselCode,
-                        spareId:       spare.id,
-                        movementType,
-                        quantity:      Math.abs(delta),
-                        unit:          spare.unit,
-                        occurredAt:    new Date().toISOString(),
-                        referenceType: "ADJUSTMENT",
-                        notes:         adjNotes.trim() || `Ajuste manual de stock`,
-                      });
-                      setAdjSuccess(true);
-                      setAdjNotes("");
-                      onSaved({ ...spare, onHand: newQty, available: newQty });
-                    } else {
-                      setAdjError(t("error.sameQuantity"));
-                    }
-                  } catch (e) {
-                    setAdjError(e instanceof Error ? e.message : "Error al ajustar stock.");
-                  } finally { setAdjSaving(false); }
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all disabled:opacity-50"
-              >
-                {adjSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                Aplicar ajuste
-              </button>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Lead time (días)</label>
-              <input type="number" min="0" step="1" value={leadTimeDays} onChange={e => setLeadTimeDays(e.target.value)} placeholder="Tiempo de entrega…" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Estado</label>
-              <select value={status} onChange={e => setStatus(e.target.value)} className={inputCls}>
-                <option value="ACTIVE">Activo</option>
-                <option value="OBSOLETE">Obsoleto</option>
-              </select>
-            </div>
-          </div>
-
-          {!isNew && <p className="text-[10px] text-fg/20">Alta: {fmtDate(spare.createdAt)}</p>}
-
-          {!isNew && (
-            <div className="border border-fg/10 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowHistory(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-fg/5 transition-colors"
-              >
-                <span className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">Historial de movimientos</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-fg/30 transition-transform ${showHistory ? "rotate-180" : ""}`} />
-              </button>
-              {showHistory && <SpareHistoryPanel spareId={spare.id} />}
-            </div>
-          )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-fg/10 shrink-0 space-y-2">
-          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex gap-2">
-              {!isNew && (
-                <button onClick={() => void handleDelete()} disabled={saving} className="px-3 py-1.5 text-xs text-red-700 dark:text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded-lg transition-colors disabled:opacity-40">
-                  Eliminar
-                </button>
-              )}
-              {!isNew && spare && (
-                <button
-                  onClick={async () => {
-                    setDownloadingPdf(true);
-                    setError(null);
-                    try {
-                      await downloadSparePdf(spare);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "No se pudo generar el PDF.");
-                    } finally {
-                      setDownloadingPdf(false);
-                    }
-                  }}
-                  disabled={downloadingPdf}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg/60 hover:text-fg border border-fg/10 hover:border-accent/30 rounded-lg transition-colors disabled:opacity-40"
-                >
-                  {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
-                  Guardar PDF
-                </button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-1.5 text-xs text-fg/50 hover:text-fg rounded-lg border border-fg/10 hover:border-fg/20 transition-colors">Cerrar</button>
-              <button onClick={() => void handleSave()} disabled={saving} className="px-5 py-1.5 text-xs font-semibold bg-accent/20 border border-accent/30 text-accent rounded-lg hover:bg-accent/30 disabled:opacity-40 transition-all">
-                {saving ? "Guardando…" : (isNew ? "Crear repuesto" : "Guardar")}
-              </button>
-            </div>
-          </div>
+        {/* Pie */}
+        <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-t border-fg/10 shrink-0">
+          {!isNew && canEdit && (
+            <button type="button" onClick={() => setConfirmDelete(true)} disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
+            </button>
+          )}
+          {!isNew && (
+            <button type="button"
+              onClick={async () => {
+                setDownloadingPdf(true);
+                try { await downloadSparePdf(spare, t("sp.pdfError")); }
+                catch (err) { setError(err instanceof Error ? err.message : t("sp.pdfError")); }
+                finally { setDownloadingPdf(false); }
+              }}
+              disabled={downloadingPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 disabled:opacity-50">
+              {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />} PDF
+            </button>
+          )}
+          <span className="flex-1" />
+          {canEdit && isDirty && <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-400"><AlertTriangle className="w-3 h-3" /> {t("mp.guide.dirty")}</span>}
+          <button type="button" onClick={requestClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
+          {canEdit && (
+            <button type="button" onClick={() => void handleSave()} disabled={saving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs hover:brightness-110 disabled:opacity-50">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {t("common.save")}
+              {!saving && missTotal > 0 && <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(missTotal))}</span>}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Ajustar stock */}
+      {adjOpen && spare && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-fg/10">
+              <SlidersHorizontal className="w-4 h-4" /><h2 className="text-base font-black text-fg">{t("sp.v23.adjust")}</h2>
+              <ModalCloseButton onClose={() => setAdjOpen(false)} className="ml-auto" />
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-text-industrial/60">{t("sp.v23.adjNow").replace("{name}", spare.name).replace("{n}", `${spare.onHand} ${spare.unit}`)}</p>
+              <GuideField id="sp-adj-qty" missing={adjQty.trim() === ""}>
+                <label className={fl}>{t("sp.v23.adjQty")}{adjQty.trim() === "" && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <input type="number" min="0" step="0.01" value={adjQty} onChange={e => setAdjQty(e.target.value)} className={inputCls} autoFocus />
+              </GuideField>
+              <div><label className={fl}>{t("sp.v23.adjReason")}</label><input value={adjNotes} onChange={e => setAdjNotes(e.target.value)} placeholder={t("sp.v23.adjReasonPh")} className={inputCls} /></div>
+              <p className="text-[11px] text-text-industrial/50">{t("sp.v23.adjLog")}</p>
+            </div>
+            <div className="flex items-center gap-2 px-5 py-3 border-t border-fg/10">
+              <span className="flex-1" />
+              <button type="button" onClick={() => setAdjOpen(false)} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.back")}</button>
+              <button type="button" onClick={() => void applyAdjustment()} disabled={adjSaving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:brightness-110 disabled:opacity-50">
+                {adjSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {t("sp.v23.adjSave")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && spare && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-fg/10">
+              <h2 className="text-base font-black text-fg">{t("sp.v23.deleteTitle")}</h2>
+              <ModalCloseButton onClose={() => setConfirmDelete(false)} className="ml-auto" />
+            </div>
+            <p className="px-5 py-4 text-sm text-fg">{t("confirm.deleteSpare").replace("{sku}", spare.sku)}</p>
+            <div className="flex items-center gap-2 px-5 py-3 border-t border-fg/10">
+              <span className="flex-1" />
+              <button type="button" onClick={() => setConfirmDelete(false)} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.back")}</button>
+              <button type="button" onClick={() => void handleDelete()} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:brightness-110 disabled:opacity-50">
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {t("common.delete")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Avisos y errores en ventanita. */}
+      {error && <AlertDialog message={error} onClose={() => setError(null)} />}
     </div>
   );
 };
@@ -631,73 +603,81 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, onClose, onSaved, onMocT
 // SparesPage
 // ---------------------------------------------------------------------------
 
+type SpareCard = "" | "zero" | "low" | "reorder" | "critA";
+
 export const SparesPage: React.FC = () => {
   const t = useT();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const can = useCan();
 
-  const [vesselInput,      setVesselInput]      = useState("");
-  const [vesselFilter,     setVesselFilter]      = useState("");
-  const [statusFilter,     setStatusFilter]      = useState("");
-  const [criticalityFilter,setCriticalityFilter] = useState(() => searchParams.get("criticality") ?? "");
-  const [belowReorder,     setBelowReorder]      = useState(false);
-  const [stockStatusFilter,setStockStatusFilter] = useState<string>(() => searchParams.get("stockStatus") ?? "");
-  const [categoryFilter,   setCategoryFilter]    = useState<string>("");
-  const [searchText,       setSearchText]        = useState("");
-  const [showExcel,        setShowExcel]         = useState(false);
-  const [selected,         setSelected]          = useState<Spare | null | "new">(null);
+  // ── Listado (preview V23) ──────────────────────────────────────────────────
+  // Se trae todo y se filtra en cliente: las tarjetas necesitan el total.
+  // ?criticality= y ?stockStatus= (desde el Dashboard) siguen arrancando su filtro.
+  const initialStock = searchParams.get("stockStatus") ?? "";
+  const [cardSel, setCardSel] = useState<SpareCard>(() => (initialStock === "sin_stock" ? "zero" : initialStock === "bajo_reorden" ? "reorder" : ""));
+  const [okOnly] = useState(initialStock === "ok");
+  const [vesselSel, setVesselSel] = useState("");
+  const [critSel, setCritSel] = useState(() => searchParams.get("criticality") ?? "");
+  const [statusSel, setStatusSel] = useState<"ACTIVE" | "OBSOLETE" | "">("ACTIVE");
+  const [catSel, setCatSel] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [showExcel, setShowExcel] = useState(false);
+  const [selected, setSelected] = useState<Spare | null>(null);
   // "Nuevo repuesto" abre la Recepción: el repuesto se da de alta desde lo que
   // llegó al buque, después de que la ventana busca los parecidos. Es lo que
   // evita que el mismo filtro entre dos veces con nombres distintos.
-  const [showReceipt,      setShowReceipt]       = useState(false);
-  const [pdfBusy,          setPdfBusy]           = useState(false);
-  const [pdfError,         setPdfError]          = useState<string | null>(null);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const { vessels, selectedVesselCode } = useVesselContext();
 
-  const buildPath = () => {
-    const p = new URLSearchParams();
-    if (vesselFilter)      p.set("vesselCode",   vesselFilter);
-    if (statusFilter)      p.set("status",        statusFilter);
-    if (criticalityFilter) p.set("criticality",   criticalityFilter);
-    if (belowReorder)      p.set("belowReorder",  "true");
-    const qs = p.toString();
-    return `/app/pms/spares${qs ? `?${qs}` : ""}`;
-  };
-
-  const { data, loading, error, reload } = useFetch<ListResponse>(buildPath(), [vesselFilter, statusFilter, criticalityFilter, belowReorder]);
+  const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/spares", []);
+  // Nexos: tareas del plan con repuestos y recepciones (se cargan aparte, no frenan la lista).
+  const plansFetch = useFetch<{ items: PlanWithSpares[] }>("/app/pms/maintenance-plans", []);
+  const receiptsFetch = useFetch<{ items: ReceiptLite[] }>("/app/pms/goods-receipts", []);
+  const plans = useMemo(() => plansFetch.data?.items ?? [], [plansFetch.data]);
+  const receipts = useMemo(() => receiptsFetch.data?.items ?? [], [receiptsFetch.data]);
   const tmsaFilter = useTmsaFilter();
 
-  const filteredItems = (() => {
-    let items = data?.items ?? null;
-    if (!items) return items;
-    // Cuando se llega desde una métrica del panel TMSA, se muestran exactamente
-    // los repuestos que contó esa tarjeta.
-    items = applyTmsaFilter(items, tmsaFilter, s => s.id);
-    if (!items) return items;
-    if (categoryFilter) {
-      items = items.filter(s => (s.category ?? "") === categoryFilter);
+  const allItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, s => s.id) ?? [], [data, tmsaFilter]);
+  const planCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of plans) {
+      if (p.status === "INACTIVE" || !Array.isArray(p.spares)) continue;
+      for (const id of new Set(p.spares.map(s => s?.spareId).filter(Boolean) as string[])) m.set(id, (m.get(id) ?? 0) + 1);
     }
-    if (stockStatusFilter) {
-      items = items.filter(s => {
-        if (stockStatusFilter === "sin_stock")    return s.available <= 0;
-        if (stockStatusFilter === "bajo_reorden") return s.available > 0 && s.available < s.reorderPoint;
-        if (stockStatusFilter === "ok")           return s.available >= s.reorderPoint;
-        return true;
-      });
+    return m;
+  }, [plans]);
+  const matchCard = (s: Spare, k: SpareCard) => {
+    switch (k) {
+      case "zero":    return s.available <= 0;
+      case "low":     return stockLevel(s) === "low";
+      case "reorder": return s.available > 0 && s.available < s.reorderPoint;
+      case "critA":   return s.criticality === "A" && stockLevel(s) === "low";
+      default:        return true;
     }
-    if (searchText.trim()) {
-      const q = searchText.trim().toLowerCase();
+  };
+  const filteredItems = useMemo(() => {
+    let items = allItems;
+    if (cardSel) items = items.filter(s => matchCard(s, cardSel));
+    if (okOnly) items = items.filter(s => s.available >= s.reorderPoint);
+    if (vesselSel) items = items.filter(s => s.vesselCode === vesselSel);
+    if (critSel) items = items.filter(s => s.criticality === critSel);
+    if (statusSel) items = items.filter(s => s.status === statusSel);
+    if (catSel) items = items.filter(s => (s.category ?? "") === catSel);
+    const q = searchText.trim().toLowerCase();
+    if (q) {
       items = items.filter(s =>
-        textMatches(s.sku, q) ||
-        textMatches(s.name, q) ||
-        textMatches(s.vesselCode, q) ||
-        textMatches(s.sfiCode, q) ||
-        textMatches(s.manufacturer, q) ||
-        textMatches(s.manufacturerPartNumber, q) ||
-        textMatches(s.internalPartNumber, q)
-      );
+        textMatches(s.sku, q) || textMatches(s.name, q) || textMatches(s.sfiCode, q) || textMatches(s.manufacturer, q) ||
+        textMatches(s.manufacturerPartNumber, q) || textMatches(s.internalPartNumber, q) || textMatches(s.location, q));
     }
     return items;
-  })();
+  }, [allItems, cardSel, okOnly, vesselSel, critSel, statusSel, catSel, searchText]);
+  const countBase = useMemo(() => allItems.filter(s => (!statusSel || s.status === statusSel) && (!vesselSel || s.vesselCode === vesselSel)), [allItems, statusSel, vesselSel]);
+  const categories = useMemo(() => [...new Set(allItems.map(s => s.category).filter(Boolean) as string[])].sort(), [allItems]);
+  const vesselOptions = useMemo(() => [...new Set(allItems.map(s => s.vesselCode))], [allItems]);
+  const vesselName = (code: string) => vessels.find(v => v.code === code)?.name || code;
 
   const handleSaved = (s: Spare) => { reload(); setSelected(s); };
   const mocTrigger = useMocTrigger();
@@ -708,22 +688,20 @@ export const SparesPage: React.FC = () => {
    * el navegador y el backend no los conoce.
    */
   const exportPdf = async () => {
-    const items = filteredItems ?? [];
-    if (items.length === 0) return;
+    if (filteredItems.length === 0) return;
     setPdfBusy(true);
     try {
       const parts = [
-        vesselFilter ? vesselFilter : null,
-        criticalityFilter ? `${t("col.criticality")} ${criticalityFilter}` : null,
-        statusFilter ? statusFilter : null,
-        categoryFilter || null,
-        belowReorder ? t("sp.reorderAlerts") : null,
+        vesselSel ? vesselName(vesselSel) : null,
+        critSel ? `${t("col.criticality")} ${critSel}` : null,
+        cardSel ? summaryCards.find(c => c.key === cardSel)?.label ?? null : null,
+        catSel || null,
         searchText.trim() ? `"${searchText.trim()}"` : null,
       ].filter(Boolean);
       await downloadAuthedFile(
         "/app/pms/reports/spare-list/pdf",
         `repuestos-${new Date().toISOString().slice(0, 10)}.pdf`,
-        { ids: items.map(s => s.id), filterLabel: parts.length ? parts.join(" · ") : null },
+        { ids: filteredItems.map(s => s.id), filterLabel: parts.length ? parts.join(" · ") : null },
       );
     } catch {
       setPdfError(t("sp.pdfError"));
@@ -732,32 +710,57 @@ export const SparesPage: React.FC = () => {
     }
   };
 
+  const rowAction = (s: Spare) => {
+    const base = "inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors";
+    if (stockLevel(s) !== "ok") {
+      return <button type="button" onClick={e => { e.stopPropagation(); navigate("/spare-requests"); }} className={`${base} border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20`}><ShoppingCart className="w-3 h-3" /> {t("sp.v23.order")}</button>;
+    }
+    return null;
+  };
+  const critChip = (c: string) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${CRIT_CHIP[c] ?? CRIT_CHIP.C}`}>{c}</span>;
+
   const COLUMNS: Column<Spare>[] = [
-    { key: "sku",          header: "SKU",                  render: r => <span className="font-mono font-bold text-fg text-xs">{r.sku}</span> },
-    { key: "name",         header: t("col.name"),          render: r => <span className="font-medium text-fg text-xs">{r.name}</span> },
-    { key: "vesselCode",   header: t("col.vessel"),        render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
-    { key: "category",     header: t("col.category"),      render: r => r.category
-        ? <button
-            type="button"
-            onClick={e => { e.stopPropagation(); setCategoryFilter(prev => prev === r.category ? "" : (r.category ?? "")); }}
-            className="text-xs text-fg/60 hover:text-accent hover:underline transition-colors cursor-pointer"
-            title="Filtrar por esta categoría"
-          >{r.category}</button>
-        : <span className="text-xs text-fg/60">—</span> },
-    { key: "criticality",  header: t("col.criticality"),   render: r => <CriticalityBadge value={r.criticality} /> },
-    { key: "onHand",       header: t("col.stockCurrent"),  render: r => <StockCell spare={r} /> },
-    { key: "minStock",     header: t("col.minimum"),       render: r => <span className="text-xs text-fg/50">{r.minStock}</span> },
-    { key: "reorderPoint", header: t("col.reorder"),       render: r => <span className="text-xs text-fg/50">{r.reorderPoint}</span> },
-    { key: "status",       header: t("col.status"),        render: r => <StatusBadge status={r.status} /> },
+    {
+      key: "name", header: t("sp.v23.col.spare"), sortValue: r => r.name,
+      render: r => (
+        <div className="min-w-0">
+          <div className="text-xs font-bold text-fg">{r.name}</div>
+          {/* Nombre del buque, no el código. */}
+          <div className="text-[10.5px] text-text-industrial/50"><span className="font-mono">{r.sku}</span> · {vesselName(r.vesselCode)}</div>
+        </div>
+      ),
+    },
+    { key: "category", header: t("col.category"), sortValue: r => r.category ?? "", render: r => <span className="text-xs text-text-industrial/60">{r.category ?? "—"}</span> },
+    { key: "criticality", header: t("col.criticality"), sortValue: r => r.criticality, render: r => critChip(r.criticality) },
+    { key: "onHand", header: t("col.stockCurrent"), sortValue: r => r.onHand - r.minStock, render: r => <StockBar spare={r} /> },
+    { key: "location", header: t("sp.v23.col.where"), render: r => <span className="text-xs text-text-industrial/60">{r.location ?? "—"}</span> },
+    {
+      key: "usedIn", header: t("sp.v23.usedIn"), sortValue: r => planCount.get(r.id) ?? 0,
+      render: r => planCount.get(r.id)
+        ? <span className="inline-flex items-center gap-1 text-[11px] text-text-industrial/60 whitespace-nowrap"><CalendarCheck className="w-3 h-3" />{t("sp.v23.tasksN").replace("{n}", String(planCount.get(r.id)))}</span>
+        : <span className="text-text-industrial/30">—</span>,
+    },
+    { key: "action", header: "", render: rowAction },
   ];
 
+  const summaryCards: { key: Exclude<SpareCard, "">; label: string; hint: string; icon: typeof Package; cls: string; num: string }[] = [
+    { key: "zero", label: t("sp.v23.sum.zero"), hint: t("sp.v23.sum.zeroHint"), icon: PackageX, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+    { key: "low", label: t("sp.v23.sum.low"), hint: t("sp.v23.sum.lowHint"), icon: TrendingDown, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
+    { key: "reorder", label: t("sp.v23.sum.reorder"), hint: t("sp.v23.sum.reorderHint"), icon: RefreshCw, cls: "border-l-violet-600", num: "text-violet-700 dark:text-violet-400" },
+    { key: "critA", label: t("sp.v23.sum.critA"), hint: t("sp.v23.sum.critAHint"), icon: ShieldAlert, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+  ];
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {showExcel && <ExcelPanel module="spares" onClose={() => { setShowExcel(false); reload(); }} />}
       {selected && (
         <SpareModal
-          spare={selected === "new" ? null : selected}
-          onClose={() => setSelected(null)}
+          key={selected.id}
+          spare={selected}
+          plans={plans}
+          receipts={receipts}
+          onClose={() => { setSelected(null); reload(); }}
           onSaved={handleSaved}
           onMocTrigger={mocTrigger.ask}
         />
@@ -766,9 +769,9 @@ export const SparesPage: React.FC = () => {
       {showReceipt && (
         <SpareReceiptModal
           vessels={vessels.map(v => ({ code: v.code, name: v.name ?? null }))}
-          defaultVesselCode={vesselFilter || selectedVesselCode}
+          defaultVesselCode={vesselSel || selectedVesselCode}
           onClose={() => setShowReceipt(false)}
-          onSaved={reload}
+          onSaved={() => { reload(); void receiptsFetch.reload(); }}
         />
       )}
 
@@ -776,98 +779,95 @@ export const SparesPage: React.FC = () => {
 
       <MocTriggerHost controller={mocTrigger} />
 
-      <PageHeader icon={Package} title={t("page.spares")} total={data?.total} onReload={reload}>
-        {/* Search */}
-        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5">
-          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
-          <input
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            placeholder={t("spares.page.searchPlaceholder")}
-            className="w-56 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
-          />
-          {searchText && (
-            <button onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-fg transition-colors">
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        {/* Excel */}
-        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
-        </button>
-
-        {/* PDF de lo que se está viendo: mismas filas, mismo orden, mismos filtros. */}
+      <PageHeader icon={Package} title={t("page.spares")} total={filteredItems.length} onReload={reload}>
         <button
           onClick={() => void exportPdf()}
-          disabled={pdfBusy || !filteredItems || filteredItems.length === 0}
+          disabled={pdfBusy || filteredItems.length === 0}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40"
         >
           {pdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
           {t("sp.generatePdf")}
         </button>
-
-        {/* Criticality filter */}
-        <select value={toFilterSelectValue(criticalityFilter)} onChange={e => setCriticalityFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>Toda criticidad</option>
-          <option value="A">A — Crítica</option>
-          <option value="B">B — Importante</option>
-          <option value="C">C — Rutinaria</option>
-        </select>
-
-        {/* Status filter */}
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => setStatusFilter(fromFilterSelectValue(e.target.value))} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="ACTIVE">{t("status.active")}</option>
-          <option value="OBSOLETE">Obsoleto</option>
-        </select>
-
-        {/* Stock status filter chip (from Dashboard navigation) */}
-        {stockStatusFilter && (
-          <button onClick={() => setStockStatusFilter("")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all bg-accent/15 border-accent/30 text-accent">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            {stockStatusFilter === "sin_stock" ? "Sin stock" : stockStatusFilter === "bajo_reorden" ? "Bajo reorden" : "Stock OK"}
-            <X className="w-3 h-3 ml-0.5" />
-          </button>
-        )}
-
-        {/* Category filter chip (click en la columna Categoría) */}
-        {categoryFilter && (
-          <button onClick={() => setCategoryFilter("")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all bg-accent/15 border-accent/30 text-accent"
-            title="Quitar filtro de categoría">
-            {categoryFilter}
-            <X className="w-3 h-3 ml-0.5" />
-          </button>
-        )}
-
-        {/* Below reorder toggle */}
-        <button
-          onClick={() => setBelowReorder(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${belowReorder ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-700 dark:text-yellow-400" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-yellow-500/20"}`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          Alertas reorden
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+          <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-
         {/* Alta: pasa por la Recepción (busca primero, crea después). */}
-        <button onClick={() => setShowReceipt(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all font-semibold">
-          <Plus className="w-3.5 h-3.5" /> {t("sp.newSpareTitle")}
-        </button>
+        {can("stock.manage") && (
+          <button onClick={() => setShowReceipt(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:brightness-110 transition-all">
+            <Plus className="w-3.5 h-3.5" /> {t("sp.v23.new")}
+          </button>
+        )}
       </PageHeader>
 
-      <TmsaFilterBanner filter={tmsaFilter} shown={filteredItems?.length ?? 0} total={data?.items?.length ?? 0} />
-      <DataTable
-        columns={COLUMNS}
-        data={filteredItems}
-        loading={loading}
-        error={error}
-        keyFn={r => r.id}
-        emptyText={t("empty.spares")}
-        onRowClick={r => setSelected(r)}
-      />
+      {/* Resumen: tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key;
+          return (
+            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{countBase.filter(s => matchCard(s, c.key)).length}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filtros */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {vesselOptions.length > 1 && (
+            <select value={vesselSel} onChange={e => setVesselSel(e.target.value)} className={selCls(!!vesselSel)}>
+              <option value="">{t("sp.v23.vesselAll")}</option>
+              {vesselOptions.map(v => <option key={v} value={v}>{vesselName(v)}</option>)}
+            </select>
+          )}
+          <select value={catSel} onChange={e => setCatSel(e.target.value)} className={`${selCls(!!catSel)} max-w-[14rem]`}>
+            <option value="">{t("sp.v23.catAll")}</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={critSel} onChange={e => setCritSel(e.target.value)} className={selCls(!!critSel)}>
+            <option value="">{t("sp.v23.critAll")}</option>
+            <option value="A">{t("sp.critAImportant")}</option>
+            <option value="B">{t("sp.critB")}</option>
+            <option value="C">{t("sp.critC")}</option>
+          </select>
+          <select value={statusSel} onChange={e => setStatusSel(e.target.value as typeof statusSel)} className={selCls(statusSel !== "ACTIVE")}>
+            <option value="ACTIVE">{t("sp.v23.statusActive")}</option>
+            <option value="OBSOLETE">{t("sp.v23.statusObsolete")}</option>
+            <option value="">{t("sp.v23.statusAll")}</option>
+          </select>
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder={t("sp.v23.search")}
+              className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {searchText && <button type="button" onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+          </div>
+        </div>
+      </div>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={filteredItems.length} total={data?.items?.length ?? 0} />
+
+      {/* Escritorio: tabla · Celular: tarjetas */}
+      <div className="hidden md:block">
+        <DataTable columns={COLUMNS} data={filteredItems} loading={loading} error={error} keyFn={r => r.id} emptyText={t("empty.spares")}
+          onRowClick={r => setSelected(r)}
+          rowClassName={r => (r.criticality === "A" && stockLevel(r) === "low" ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")} />
+      </div>
+      <div className="md:hidden flex flex-col gap-2">
+        {loading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>}
+        {!loading && filteredItems.length === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{t("empty.spares")}</p>}
+        {filteredItems.slice(0, 200).map(s => (
+          <div key={s.id} onClick={() => setSelected(s)}
+            className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer ${stockLevel(s) === "low" ? "border-l-red-600" : stockLevel(s) === "reorder" ? "border-l-amber-500" : "border-l-fg/10"} bg-surface`}>
+            <div className="flex items-center gap-1.5">{critChip(s.criticality)}<b className="text-[13px] text-fg truncate">{s.name}</b></div>
+            <p className="text-[11px] text-text-industrial/55"><span className="font-mono">{s.sku}</span>{s.location ? ` · ${s.location}` : ""}</p>
+            <StockBar spare={s} />
+            {rowAction(s)}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

@@ -44,6 +44,10 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "assetHours.write",         group: "maintenance", labelKey: "perm.assetHoursWrite" },
   { key: "defect.write",             group: "maintenance", labelKey: "perm.defectWrite" },
   { key: "defect.delete",            group: "maintenance", labelKey: "perm.defectDelete" },
+  // Cargar, corregir y borrar análisis de laboratorio (muestras de aceite, etc.).
+  // Antes era una lista fija de roles; desde sep 2026 es un tilde (pedido de
+  // Gustavo: la tripulación también los carga).
+  { key: "fluid.manage",             group: "maintenance", labelKey: "perm.fluidManage" },
   // Aprobar la especificacion de varada (TMSA 4.2.4): la arma el buque, la
   // aprueba tierra. Por defecto solo el superintendente de flota.
   { key: "drydock.approve",          group: "maintenance", labelKey: "perm.drydockApprove" },
@@ -109,7 +113,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // DPA desde sep 2026), aprueba MOC y permisos.
   FLEET_SUPERINTENDENT: [
     "wo.approve", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
-    "drydock.approve",
+    "fluid.manage", "drydock.approve",
     "sr.approve", "spareRequest.approve", "stock.manage",
     "permit.authorize", "permit.manage", "moc.approve", "externalAudit.manage",
     "inspection.execute", "checklist.manageTemplates",
@@ -119,7 +123,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // Capitan / Jefe de Maquinas (a bordo): pide, pero NO aprueba ni autoriza OT
   // ni SS — desde sep 2026 aprobar es de tierra (Superintendente o DPA).
   MAINTENANCE_MANAGER: [
-    "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write", "defect.write",
+    "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write", "defect.write", "fluid.manage",
     "spareRequest.approve", "spareRequest.manage", "spare.manage", "stock.manage", "provider.manage",
     "permit.manage", "externalAudit.manage", "inspection.execute", "checklist.manageTemplates",
     "crew.manage", "crewCert.manage", "drill.manage", "certificate.manage",
@@ -127,7 +131,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
 
   // Tripulante: opera la OT, no la habilita. Carga horómetros (es quien los lee a bordo).
   TECHNICIAN_OPERATOR: [
-    "wo.operate", "assetHours.write", "defect.write", "permit.manage", "crew.manage", "certificate.manage",
+    "wo.operate", "assetHours.write", "defect.write", "fluid.manage", "permit.manage", "crew.manage", "certificate.manage",
     "spareRequest.manage", "stock.manage",
   ],
 

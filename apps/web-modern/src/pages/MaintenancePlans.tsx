@@ -1,32 +1,57 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
+  AudioLines,
+  ArrowRight,
+  BadgeCheck,
   Ban,
+  CalendarCheck,
+  CalendarClock,
   CalendarRange,
+  CalendarX,
+  Check,
   CheckCircle2,
+  CircleDot,
   ChevronsDownUp,
   ChevronsUpDown,
+  ClipboardCheck,
   ClipboardList,
   Clock,
+  Droplets,
   ExternalLink,
+  FileCheck,
   FileDown,
   FileSpreadsheet,
   FileText,
   Filter,
   FlaskConical,
   GitBranch,
+  Handshake,
+  Hourglass,
+  Info,
+  ListChecks,
   ListTree,
   Loader2,
   Maximize2,
   Minimize2,
+  Paperclip,
+  Pencil,
   Plus,
+  Save,
   Search,
+  SearchCheck,
+  Ship,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Table2,
+  Thermometer,
   Trash2,
+  Upload,
+  Users,
   Wrench,
   X,
   Zap,
@@ -69,6 +94,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { CRITERIA_SOURCES, type CriteriaSource } from "../lib/criteria-source";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
 import { textMatches } from "../lib/text-search";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -443,10 +469,18 @@ function previewNextDue(
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
-const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
-// Recuadro que agrupa visualmente una sección del formulario del plan.
-const sectionCardCls = "rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-4";
-const sectionTitleCls = "text-[11px] font-bold uppercase tracking-widest text-accent/80";
+// Rótulo de campo de la ventana por secciones (V15): en minúscula, más legible.
+const fLabelCls = "flex items-center text-xs font-semibold text-text-industrial/70";
+const PLAN_SECTIONS = ["what", "when", "who", "safety", "docs"] as const;
+/** Qué analiza un plan de muestreo (V17b): sólo el tipo, sin detalle de fluido. */
+const SAMPLING_KINDS: { kind: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER"; icon: typeof Wrench }[] = [
+  { kind: "FLUID", icon: Droplets },
+  { kind: "VIBRATION", icon: Activity },
+  { kind: "THERMAL", icon: Thermometer },
+  { kind: "ULTRASOUND", icon: AudioLines },
+  { kind: "OTHER", icon: FlaskConical },
+];
+type PlanSectionKey = (typeof PLAN_SECTIONS)[number];
 const sectionLabelCls = "block font-semibold uppercase tracking-wider px-2 py-1 rounded-sm";
 const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", color: "white", fontSize: "1.2rem" };
 const aiLabelStyle: React.CSSProperties = { backgroundColor: "#0c1f3f", color: "white", fontSize: "1.2rem", borderLeft: "3px solid #3b82f6" };
@@ -469,6 +503,32 @@ interface ExecutionModalProps {
 
 interface TeamMember { userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role?: string; jobTitle?: string | null }
 const teamMemberName = (u: TeamMember) => (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
+
+/** Encabezado común de las ventanas del plan (V16): ícono, título, plan, equipo y buque. */
+const PlanSubHeader: React.FC<{ plan: MaintenancePlan; icon: typeof Wrench; tone: string; title: string; onClose: () => void }> = ({ plan, icon: Icon, tone, title, onClose }) => (
+  <div className="flex items-start gap-3 px-5 py-3.5 border-b border-fg/10 shrink-0">
+    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tone}`}><Icon className="w-5 h-5" /></div>
+    <div className="min-w-0 flex-1">
+      <h2 className="text-base font-black text-fg leading-tight">{title}</h2>
+      <p className="text-xs text-text-industrial/60 truncate">{[plan.title, plan.assetName].filter(Boolean).join(" · ")}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{plan.taskCode}</span>
+        {/* Nombre del buque, no el código. */}
+        <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70">
+          <Ship className="w-3 h-3" /><VesselLabel code={plan.vesselCode} className="text-[11px]" />
+        </span>
+      </div>
+    </div>
+    <ModalCloseButton onClose={onClose} />
+  </div>
+);
+
+/** "YYYY-MM-DD" de hoy menos `back` días, en hora local. */
+function localIsoDay(back = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() - back);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId, isAdmin, onClose, onSuccess }) => {
   const navigate = useNavigate();
@@ -493,6 +553,8 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
   const [saving, setSaving] = useState(false);
   const [openingDefect, setOpeningDefect] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Con deficiencias: abrir el defecto al guardar (antes era un botón aparte que también guardaba).
+  const [openDefect, setOpenDefect] = useState(true);
 
   // AI suggestion — auto-triggered while typing deficiencies
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
@@ -502,6 +564,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
 
   const isHoursBased = needsHours(plan.triggerType);
+  const withDeficiencies = result === "CON_DEFICIENCIAS";
 
   // Debounced AI analysis when deficiencies notes changes
   React.useEffect(() => {
@@ -556,28 +619,12 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
       setError(err instanceof ApiError ? err.message : t("mp.exec.saveError"));
       return false;
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   };
 
-  const handleSave = async () => {
-    if (await doSave()) onSuccess(completedAt);
-  };
-
-  // ESC guard
-  const isDirty = useDirtyTracker({
-    executedByName, result, notes, deficienciesNotes, completedAt, runningHours,
-    docFileName: docFile?.name ?? "",
-  });
-  const requestClose = useEscapeGuard({
-    enabled: !showPrintConfirm,
-    isDirty,
-    onSave: handleSave,
-    onClose,
-  });
-
-  const handleSaveAndPdf = async () => {
-    if (!await doSave()) return;
+  const downloadReportPdf = async () => {
     const token = localStorage.getItem("gpms_token");
     const slug  = localStorage.getItem("gpms_tenant_slug");
     const headers: Record<string, string> = {};
@@ -585,10 +632,8 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
     if (slug)  headers["X-Tenant-Slug"] = slug;
     try {
       const res = await fetch(`/app/pms/maintenance-plans/${plan.id}/pdf`, { headers });
-      console.log("[PDF] response status:", res.status);
       if (res.ok) {
         const blob = await res.blob();
-        console.log("[PDF] blob size:", blob.size);
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement("a");
         a.href     = url;
@@ -609,18 +654,35 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
       console.error("[PDF] fetch error:", err);
       alert(t("mp.exec.pdfFailed"));
     }
+  };
+
+  /**
+   * Guardar (con o sin PDF). Con deficiencias y la casilla tildada, sigue al
+   * alta del defecto — mismo camino que el viejo botón "Abrir registro DEF":
+   * si la tarea tiene OT abierta, primero pregunta si imprimirla.
+   */
+  const finish = async (withPdf: boolean) => {
+    if (!await doSave()) return;
+    if (withPdf) await downloadReportPdf();
+    if (withDeficiencies && openDefect) {
+      if (plan.activeWorkOrderCode) setShowPrintConfirm(true);
+      else await createDefectAndNavigate();
+      return;
+    }
     onSuccess(completedAt);
   };
 
-  const handleOpenDef = async () => {
-    if (!await doSave()) return;
-    // If there's an active WO, ask about printing first
-    if (plan.activeWorkOrderCode) {
-      setShowPrintConfirm(true);
-    } else {
-      await createDefectAndNavigate();
-    }
-  };
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    executedByName, result, notes, deficienciesNotes, completedAt, runningHours,
+    docFileName: docFile?.name ?? "",
+  });
+  const requestClose = useEscapeGuard({
+    enabled: !showPrintConfirm,
+    isDirty,
+    onSave: () => finish(false),
+    onClose,
+  });
 
   const createDefectAndNavigate = async () => {
     setOpeningDefect(true);
@@ -643,228 +705,247 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
     }
   };
 
+  const errorDialog = error && <AlertDialog message={error} onClose={() => setError(null)} />;
+
   // Print WO confirmation screen
   if (showPrintConfirm) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
-            <h2 className="text-base font-bold text-fg">{t("mp.exec.savedTitle")}</h2>
-            <ModalCloseButton onClose={requestClose} />
-          </div>
-          <div className="p-6 space-y-4">
-            <p className="text-sm text-fg/80">{t("mp.exec.printWoQuestion")}</p>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10">
-              <span className="text-xs text-text-industrial/60 font-mono">{t("wo.entityLabelShort")}: {plan.activeWorkOrderCode}</span>
+      <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+              <h2 className="text-base font-bold text-fg">{t("mp.exec.savedTitle")}</h2>
+              <ModalCloseButton onClose={requestClose} />
             </div>
-            {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
-          </div>
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
-            <button
-              onClick={() => void createDefectAndNavigate()}
-              disabled={openingDefect}
-              className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg transition-colors disabled:opacity-50"
-            >
-              {t("mp.exec.continueWithoutPrint")}
-            </button>
-            <button
-              onClick={() => {
-                window.open(`/work-orders?autoCode=${plan.activeWorkOrderCode}`, "_blank");
-                void createDefectAndNavigate();
-              }}
-              disabled={openingDefect}
-              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
-            >
-              {openingDefect ? <Loader2 className="w-4 h-4 animate-spin" /> : t("mp.exec.printAndContinue")}
-            </button>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-fg/80">{t("mp.exec.printWoQuestion")}</p>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10">
+                <span className="text-xs text-text-industrial/60 font-mono">{t("wo.entityLabelShort")}: {plan.activeWorkOrderCode}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
+              <button
+                onClick={() => void createDefectAndNavigate()}
+                disabled={openingDefect}
+                className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg transition-colors disabled:opacity-50"
+              >
+                {t("mp.exec.continueWithoutPrint")}
+              </button>
+              <button
+                onClick={() => {
+                  window.open(`/work-orders?autoCode=${plan.activeWorkOrderCode}`, "_blank");
+                  void createDefectAndNavigate();
+                }}
+                disabled={openingDefect}
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+              >
+                {openingDefect ? <Loader2 className="w-4 h-4 animate-spin" /> : t("mp.exec.printAndContinue")}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+        {errorDialog}
+      </>
     );
   }
 
+  // Qué pasa al guardar: nueva fecha (misma cuenta que el backend, sólo de muestra).
+  const nextPreview = previewNextDue(plan.triggerType, completedAt, runningHours, String(plan.frequencyMonths ?? ""), String(plan.frequencyHours ?? ""));
+  const quickDays: { back: number; label: string }[] = [{ back: 0, label: t("mp.exec.today") }, { back: 1, label: t("mp.exec.yesterday") }];
+  const busy = saving || uploading || openingDefect;
+  const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
-          <div>
-            <h2 className="text-base font-bold text-fg">{t("mp.exec.reportTitle")}</h2>
-            <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
-          </div>
-          <ModalCloseButton onClose={requestClose} />
-        </div>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-2xl max-h-[92vh] flex flex-col bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <PlanSubHeader plan={plan} icon={ClipboardCheck} tone="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" title={t("mp.exec.reportTitle")} onClose={requestClose} />
 
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Result selector */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.exec.resultLabel")}</label>
-            <div className="flex gap-2">
-              {(["SATISFACTORIO", "CON_DEFICIENCIAS"] as const).map(r => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setResult(r)}
-                  className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                    result === r
-                      ? r === "SATISFACTORIO"
-                        ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
-                        : "bg-yellow-500/15 border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
-                      : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
-                  }`}
-                >
-                  {r === "SATISFACTORIO" ? t("mp.exec.satisfactory") : t("mp.exec.withDeficiencies")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Executed by — el admin puede elegir el usuario ejecutor; el resto reporta a su nombre */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.exec.executedBy")}</label>
-            {isAdmin && teamUsers.length > 0 ? (
-              <PersonSelect
-                value={executedByUserId}
-                onChange={uid => {
-                  setExecutedByUserId(uid);
-                  const m = teamUsers.find(u => u.userId === uid);
-                  if (m) setExecutedByName(teamMemberName(m) || executedByName);
-                }}
-                className={inputCls}
-                options={[
-                  ...(!teamUsers.some(u => u.userId === (userId ?? "")) ? [{ value: userId ?? "", name: userName }] : []),
-                  ...teamUsers.map(u => ({
-                    value: u.userId, name: teamMemberName(u) || u.userId, role: u.role, jobTitle: u.jobTitle,
-                    note: u.hasSignature ? null : t("person.noSignature"),
-                  })),
-                ]}
-              />
-            ) : (
-              <input
-                value={executedByName}
-                onChange={e => setExecutedByName(e.target.value)}
-                className={inputCls}
-                placeholder={t("mp.exec.executedByPlaceholder")}
-              />
-            )}
-          </div>
-
-          {/* Date */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.exec.executionDate")}</label>
-            <input
-              type="date"
-              value={completedAt}
-              onChange={e => setCompletedAt(e.target.value)}
-              className={inputCls}
-            />
-          </div>
-
-          {/* Running hours */}
-          {isHoursBased && (
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.exec.runningHoursLabel")}</label>
-              <input
-                type="number"
-                min="0"
-                value={runningHours}
-                onChange={e => setRunningHours(e.target.value)}
-                className={inputCls}
-                placeholder={t("wo.modal.runningHoursPlaceholder")}
-              />
-            </div>
-          )}
-
-          {/* Notes */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("wo.modal.observations")}</label>
-            <AutoTextArea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-              className={inputCls}
-              placeholder={t("mp.exec.notesPlaceholder")}
-            />
-          </div>
-
-          {/* Deficiencies */}
-          {result === "CON_DEFICIENCIAS" && (
-            <div className="space-y-1.5">
-              <label className={labelCls + " text-yellow-700 dark:text-yellow-400"}>{t("mp.exec.deficienciesLabel")}</label>
-              <AutoTextArea
-                value={deficienciesNotes}
-                onChange={e => setDeficienciesNotes(e.target.value)}
-                rows={4}
-                className={`${inputCls} border-yellow-500/30 focus:border-yellow-400/50`}
-                placeholder={t("mp.exec.deficienciesPlaceholder")}
-              />
-            </div>
-          )}
-
-          {/* Document upload */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.exec.checklistLabel")}</label>
-            {docFile ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20">
-                <span className="text-xs text-accent flex-1 truncate">{docFile.name}</span>
-                <button type="button" onClick={() => setDocFile(null)} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-3.5 h-3.5" /></button>
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+            {/* ¿Cómo salió? */}
+            <div>
+              <p className={fl}>{t("mp.exec.howItWent")}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {(["SATISFACTORIO", "CON_DEFICIENCIAS"] as const).map(r => {
+                  const on = result === r;
+                  const ok = r === "SATISFACTORIO";
+                  return (
+                    <button key={r} type="button" onClick={() => setResult(r)}
+                      className={`flex items-start gap-2.5 rounded-2xl border-2 p-3 text-left transition-all ${
+                        on
+                          ? ok ? "border-emerald-500 bg-emerald-500/10" : "border-amber-500 bg-amber-500/10"
+                          : "border-fg/10 bg-surface hover:border-fg/25"
+                      }`}>
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${on ? (ok ? "bg-emerald-500 text-white" : "bg-amber-500 text-white") : "bg-fg/5 text-text-industrial/40"}`}>
+                        {ok ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-extrabold text-fg">{ok ? t("mp.exec.okTitle") : t("mp.exec.defTitle")}</span>
+                        <span className="block text-[11.5px] text-text-industrial/60">{ok ? t("mp.exec.okHint") : t("mp.exec.defHint")}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-fg/20 cursor-pointer hover:border-accent/40 transition-colors">
-                <span className="text-xs text-text-industrial/50">{t("mp.exec.selectFile")}</span>
-                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
-                  onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
-              </label>
+            </div>
+
+            <div className={`grid grid-cols-1 gap-3 ${isHoursBased ? "sm:grid-cols-[1.3fr_1fr_1fr]" : "sm:grid-cols-2"}`}>
+              {/* Executed by — el admin puede elegir el usuario ejecutor; el resto reporta a su nombre */}
+              <GuideField id="mp-exec-by" missing={!executedByName.trim()}>
+                <label className={fl}>{t("mp.exec.executedBy")}{!executedByName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                {isAdmin && teamUsers.length > 0 ? (
+                  <PersonSelect
+                    value={executedByUserId}
+                    onChange={uid => {
+                      setExecutedByUserId(uid);
+                      const m = teamUsers.find(u => u.userId === uid);
+                      if (m) setExecutedByName(teamMemberName(m) || executedByName);
+                    }}
+                    className={inputCls}
+                    options={[
+                      ...(!teamUsers.some(u => u.userId === (userId ?? "")) ? [{ value: userId ?? "", name: userName }] : []),
+                      ...teamUsers.map(u => ({
+                        value: u.userId, name: teamMemberName(u) || u.userId, role: u.role, jobTitle: u.jobTitle,
+                        note: u.hasSignature ? null : t("person.noSignature"),
+                      })),
+                    ]}
+                  />
+                ) : (
+                  <input
+                    value={executedByName}
+                    onChange={e => setExecutedByName(e.target.value)}
+                    className={inputCls}
+                    placeholder={t("mp.exec.executedByPlaceholder")}
+                  />
+                )}
+              </GuideField>
+
+              <div>
+                <label className={fl}>{t("mp.exec.executionDate")}</label>
+                <input type="date" value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
+                <div className="mt-1.5 flex gap-1.5">
+                  {quickDays.map(q => {
+                    const day = localIsoDay(q.back);
+                    return (
+                      <button key={q.back} type="button" onClick={() => setCompletedAt(day)}
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition-colors ${completedAt === day ? "border-accent bg-accent text-accent-fg" : "border-fg/10 text-text-industrial/60 hover:text-fg"}`}>
+                        {q.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {isHoursBased && (
+                <div>
+                  <label className={fl}>{t("mp.exec.runningHoursLabel")}</label>
+                  <input type="number" min="0" value={runningHours} onChange={e => setRunningHours(e.target.value)}
+                    className={inputCls} placeholder={t("wo.modal.runningHoursPlaceholder")} />
+                  {plan.assetCurrentHours != null && (
+                    <p className="mt-1 text-[11px] text-text-industrial/50">{t("mp.exec.lastReading").replace("{h}", plan.assetCurrentHours.toLocaleString())}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className={fl}>{t("wo.modal.observations")} <span className="font-normal text-text-industrial/40">· {t("mp.modal.optional")}</span></label>
+              <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className={inputCls} placeholder={t("mp.exec.notesPlaceholder")} />
+            </div>
+
+            {/* Con deficiencias: qué se encontró, lo que sugiere el copiloto y el defecto. */}
+            {withDeficiencies && (
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/[0.06] p-3 space-y-3">
+                <GuideField id="mp-exec-def" missing={!deficienciesNotes.trim()}>
+                  <label className={fl}>
+                    {t("mp.exec.defWhat")}
+                    {!deficienciesNotes.trim() && <GuideNeedTag label={t("mp.exec.required")} />}
+                  </label>
+                  <AutoTextArea value={deficienciesNotes} onChange={e => setDeficienciesNotes(e.target.value)} rows={3}
+                    className={inputCls} placeholder={t("mp.exec.deficienciesPlaceholder")} />
+                </GuideField>
+
+                {aiLoading && (
+                  <div className="flex items-center gap-2 text-xs text-text-industrial/50">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                    {t("mp.exec.copilotAnalyzing")}
+                  </div>
+                )}
+                {aiSuggestion && !aiLoading && (
+                  <div className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-3">
+                    <p className="flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300 mb-1"><Sparkles className="w-3 h-3" />{t("mp.exec.copilotSuggestion")}</p>
+                    <p className="text-xs text-fg/80 whitespace-pre-wrap">{aiSuggestion}</p>
+                  </div>
+                )}
+
+                <label className="flex items-start gap-2.5 rounded-xl border-[1.5px] border-red-500/35 bg-surface p-3 cursor-pointer">
+                  <input type="checkbox" checked={openDefect} onChange={e => setOpenDefect(e.target.checked)} className="mt-0.5 w-4 h-4 accent-red-600" />
+                  <span>
+                    <span className="block text-[13px] font-extrabold text-red-700 dark:text-red-400">{t("mp.exec.openDefectOnSave")}</span>
+                    <span className="block text-[11.5px] text-text-industrial/60">{t("mp.exec.openDefectOnSaveHint")}</span>
+                  </span>
+                </label>
+              </div>
             )}
+
+            {/* Document upload */}
+            <div>
+              <label className={fl}>{t("mp.exec.checklistLabel")} <span className="font-normal text-text-industrial/40">· {t("mp.modal.optional")}</span></label>
+              {docFile ? (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-accent/10 border border-accent/25">
+                  <FileCheck className="w-4 h-4 text-accent shrink-0" />
+                  <span className="text-xs font-bold text-accent flex-1 truncate">{docFile.name}</span>
+                  <button type="button" onClick={() => setDocFile(null)} className="text-text-industrial/40 hover:text-fg transition-colors"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border-[1.5px] border-dashed border-fg/20 cursor-pointer hover:border-accent/40 transition-colors">
+                  <Upload className="w-4 h-4 text-text-industrial/50" />
+                  <span className="text-xs text-text-industrial/60">{t("mp.exec.selectFile")}</span>
+                  <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+                    onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
+                </label>
+              )}
+            </div>
+
+            {/* Qué va a pasar al guardar */}
+            <div className="flex items-start gap-2 rounded-xl border border-accent/20 bg-accent/[0.06] px-3 py-2.5 text-[12.5px] text-sky-900 dark:text-sky-200">
+              <Info className="w-4 h-4 shrink-0 mt-px" />
+              <div>
+                <p className="font-bold">{t("mp.exec.onSave")}</p>
+                <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                  <li>
+                    {t("mp.exec.onSaveExecuted").replace("{date}", fmtDate(completedAt) ?? completedAt)}
+                    {nextPreview && ` ${t("mp.exec.onSaveNext").replace("{next}", nextPreview.text)}`}
+                  </li>
+                  {withDeficiencies && openDefect && <li>{t("mp.exec.onSaveDefect")}</li>}
+                </ul>
+              </div>
+            </div>
           </div>
 
-          {/* ── DEF question — último campo ───────────────────────────────── */}
-          {result === "CON_DEFICIENCIAS" && (
-            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 space-y-3">
-              <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 uppercase tracking-wider">{t("mp.exec.defLogQuestion")}</p>
-
-              {/* AI analysis */}
-              {aiLoading && (
-                <div className="flex items-center gap-2 text-xs text-text-industrial/50">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-                  {t("mp.exec.copilotAnalyzing")}
-                </div>
-              )}
-              {aiSuggestion && !aiLoading && (
-                <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">
-                  <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-1.5">{t("mp.exec.copilotSuggestion")}</p>
-                  <p className="text-xs text-fg/80 whitespace-pre-wrap">{aiSuggestion}</p>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void handleOpenDef()}
-                disabled={saving || openingDefect || uploading}
-                className="w-full py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-700 dark:text-red-400 font-bold text-xs hover:bg-red-500/25 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-              >
-                {(saving || openingDefect) ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {t("mp.exec.openDefRecord")}
-              </button>
-            </div>
-          )}
-
-          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
-        </div>
-
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <button
-            onClick={() => { void handleSaveAndPdf(); }}
-            disabled={saving || uploading}
-            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
-          >
-            {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("mp.exec.uploading")}</>
-              : saving ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <><FileDown className="w-3.5 h-3.5" /> {t("mp.exec.saveAndPdf")}</>}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-t border-fg/10 shrink-0">
+            <button onClick={onClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
+            <span className="flex-1" />
+            <button
+              onClick={() => { void finish(false); }}
+              disabled={busy}
+              className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-fg/25 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            >
+              {saving && !uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {t("common.save")}
+            </button>
+            <button
+              onClick={() => { void finish(true); }}
+              disabled={busy}
+              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            >
+              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("mp.exec.uploading")}</>
+                : <><FileDown className="w-3.5 h-3.5" /> {t("mp.exec.saveAndDownloadPdf")}</>}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      {errorDialog}
+    </>
   );
 };
 
@@ -883,6 +964,8 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
   const [justification, setJustification] = useState("");
   const [compensatoryMeasures, setCompensatoryMeasures] = useState("");
   const [authorizedBy, setAuthorizedBy] = useState("");
+  // Autorización: elegida a la vista (antes eran dos botones del pie).
+  const [authMode, setAuthMode] = useState<"wait" | "now">("wait");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -957,141 +1040,119 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
   });
   const requestClose = useEscapeGuard({
     isDirty,
-    onSave: () => save(false),
+    onSave: () => save(authMode === "wait"),
     onClose,
   });
 
+  // Cuánto se corre el vencimiento.
+  const delta = (() => {
+    if (isHoursBased) {
+      if (plan.nextDueHours == null || !newDueHours) return null;
+      const d = Number(newDueHours) - plan.nextDueHours;
+      return Number.isFinite(d) && d !== 0 ? `${d > 0 ? "+" : ""}${d.toLocaleString()} h` : null;
+    }
+    if (!plan.nextDueDate || !newDueDate) return null;
+    const d = Math.round((parseLocalDate(newDueDate).getTime() - parseLocalDate(plan.nextDueDate).getTime()) / 86_400_000);
+    return d !== 0 ? t("mp.postpone.deltaDays").replace("{n}", `${d > 0 ? "+" : ""}${d}`) : null;
+  })();
+  const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
-          <div>
-            <h2 className="text-base font-bold text-fg">{t("mp.postpone.title")}</h2>
-            <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{plan.taskCode}</span> · <VesselLabel code={plan.vesselCode} className="text-[11px]" showCode /></p>
-          </div>
-          <ModalCloseButton onClose={requestClose} />
-        </div>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-2xl max-h-[92vh] flex flex-col bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <PlanSubHeader plan={plan} icon={CalendarClock} tone="bg-amber-500/10 text-amber-700 dark:text-amber-400" title={t("mp.postpone.title")} onClose={requestClose} />
 
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Inherited plan context */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-              <p className="text-[10px] uppercase text-text-industrial/40 tracking-wider">{t("mp.postpone.taskLabel")}</p>
-              <p className="text-sm font-medium text-fg line-clamp-2">{plan.title}</p>
-            </div>
-            <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-              <p className="text-[10px] uppercase text-text-industrial/40 tracking-wider">{t("mp.postpone.currentDue")}</p>
-              <p className="text-sm font-mono text-accent">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+            {/* Vencimiento actual → nuevo */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-2.5">
+              <div className="rounded-xl border border-fg/10 p-3">
+                <p className="text-[10.5px] font-bold uppercase tracking-wider text-text-industrial/45">{t("mp.postpone.currentDue")}</p>
+                <p className="mt-1 text-base font-extrabold font-mono text-red-700 dark:text-red-400">
+                  {isHoursBased
+                    ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()} h` : "—")
+                    : (fmtDate(plan.nextDueDate) ?? "—")}
+                </p>
+              </div>
+              <ArrowRight className="hidden sm:block w-5 h-5 text-text-industrial/40 justify-self-center" />
+              <div className="rounded-xl border border-accent/35 p-3">
+                <p className="flex items-center text-[10.5px] font-bold uppercase tracking-wider text-text-industrial/45">
+                  {isHoursBased ? t("mp.postpone.newDueHours") : t("mp.postpone.newDueDate")}
+                  {delta && <span className="ml-1.5 rounded-full bg-amber-500/20 px-2 text-[11px] font-extrabold normal-case tracking-normal text-amber-800 dark:text-amber-300">{delta}</span>}
+                </p>
                 {isHoursBased
-                  ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
-                  : (fmtDate(plan.nextDueDate) ?? "—")}
-              </p>
+                  ? <input type="number" min="0" value={newDueHours} onChange={e => setNewDueHours(e.target.value)} className={`${inputCls} mt-1`} placeholder={t("mp.postpone.newDueHoursPlaceholder")} />
+                  : <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className={`${inputCls} mt-1`} />}
+              </div>
+            </div>
+
+            <GuideField id="mp-postpone-why" missing={!justification.trim()}>
+              <label className={fl}>
+                {t("mp.postpone.why")}
+                {!justification.trim() && <GuideNeedTag label={t("mp.exec.required")} />}
+              </label>
+              <AutoTextArea value={justification} onChange={e => setJustification(e.target.value)} rows={3} className={inputCls} placeholder={t("mp.postpone.justificationPlaceholder")} />
+            </GuideField>
+
+            <div>
+              <label className={fl}>{t("mp.postpone.meanwhile")} <span className="font-normal text-text-industrial/40">· {t("mp.postpone.compensatoryMeasures")}</span></label>
+              <AutoTextArea value={compensatoryMeasures} onChange={e => setCompensatoryMeasures(e.target.value)} rows={2} className={inputCls} placeholder={t("mp.postpone.compensatoryPlaceholder")} />
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => { void fetchAiSuggestion(); }}
+                disabled={aiLoading || !justification.trim()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-500/35 bg-violet-500/[0.07] text-violet-700 dark:text-violet-300 text-xs font-bold disabled:opacity-40 hover:bg-violet-500/15 transition-all"
+              >
+                {aiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {aiLoading ? t("common.analyzing") : t("mp.postpone.copilotReview")}
+              </button>
+              {aiSuggestion && (
+                <div className="mt-2 rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-3">
+                  <p className="text-[10.5px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300 mb-1">{t("mp.exec.copilotSuggestion")}</p>
+                  <p className="text-sm text-fg/80 whitespace-pre-wrap">{aiSuggestion}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Autorización */}
+            <div>
+              <p className={fl}>{t("mp.postpone.authorization")}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(["wait", "now"] as const).map(m => (
+                  <button key={m} type="button" onClick={() => setAuthMode(m)}
+                    className={`rounded-xl border-2 p-3 text-left transition-colors ${authMode === m ? "border-accent bg-accent/[0.06]" : "border-fg/10 hover:border-fg/25"}`}>
+                    <span className="flex items-center gap-1.5 text-[13px] font-extrabold text-fg">
+                      {m === "wait" ? <Hourglass className="w-3.5 h-3.5" /> : <BadgeCheck className="w-3.5 h-3.5" />}
+                      {m === "wait" ? t("mp.postpone.authWait") : t("mp.postpone.authNow")}
+                    </span>
+                    <span className="block text-[11.5px] text-text-industrial/60 mt-0.5">{m === "wait" ? t("mp.postpone.authWaitHint") : t("mp.postpone.authNowHint")}</span>
+                  </button>
+                ))}
+              </div>
+              {authMode === "now" && (
+                <input value={authorizedBy} onChange={e => setAuthorizedBy(e.target.value)} className={`${inputCls} mt-2`} placeholder={t("mp.postpone.authorizedByPlaceholder")} />
+              )}
             </div>
           </div>
 
-          {/* New due */}
-          {isHoursBased ? (
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.postpone.newDueHours")}</label>
-              <input
-                type="number"
-                min="0"
-                value={newDueHours}
-                onChange={e => setNewDueHours(e.target.value)}
-                className={inputCls}
-                placeholder={t("mp.postpone.newDueHoursPlaceholder")}
-              />
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("mp.postpone.newDueDate")}</label>
-              <input
-                type="date"
-                value={newDueDate}
-                onChange={e => setNewDueDate(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-          )}
-
-          {/* Justification */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.postpone.justification")}</label>
-            <AutoTextArea
-              value={justification}
-              onChange={e => setJustification(e.target.value)}
-              rows={3}
-              className={inputCls}
-              placeholder={t("mp.postpone.justificationPlaceholder")}
-            />
-          </div>
-
-          {/* Compensatory measures */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.postpone.compensatoryMeasures")}</label>
-            <AutoTextArea
-              value={compensatoryMeasures}
-              onChange={e => setCompensatoryMeasures(e.target.value)}
-              rows={2}
-              className={inputCls}
-              placeholder={t("mp.postpone.compensatoryPlaceholder")}
-            />
-          </div>
-
-          {/* AI Suggestion button */}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-t border-fg/10 shrink-0">
+            <button onClick={onClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
+            <span className="flex-1" />
             <button
-              type="button"
-              onClick={() => { void fetchAiSuggestion(); }}
-              disabled={aiLoading || !justification.trim()}
-              className="px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-xs font-semibold disabled:opacity-40 hover:bg-accent/15 transition-all"
-            >
-              {aiLoading ? <><Loader2 className="w-3 h-3 animate-spin inline mr-1" />{t("common.analyzing")}</> : t("mp.postpone.copilotSuggest")}
-            </button>
-          </div>
-
-          {aiSuggestion && (
-            <div className="rounded-xl border border-accent/20 bg-accent/5 p-4">
-              <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-2">{t("mp.exec.copilotSuggestion")}</p>
-              <p className="text-sm text-fg/80 whitespace-pre-wrap">{aiSuggestion}</p>
-            </div>
-          )}
-
-          {/* Authorized by */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>{t("mp.postpone.authorizedBy")} <span className="text-text-industrial/30">{t("mp.postpone.authorizedByHint")}</span></label>
-            <input
-              value={authorizedBy}
-              onChange={e => setAuthorizedBy(e.target.value)}
-              className={inputCls}
-              placeholder={t("mp.postpone.authorizedByPlaceholder")}
-            />
-          </div>
-
-          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
-        </div>
-
-        <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { void save(true); }}
+              onClick={() => { void save(authMode === "wait"); }}
               disabled={saving}
-              className="px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial/70 hover:text-fg disabled:opacity-50 transition-all"
+              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
             >
-              {t("mp.postpone.waitAuthorization")}
-            </button>
-            <button
-              onClick={() => { void save(false); }}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarCheck className="w-3.5 h-3.5" />} {t("mp.postpone.save")}
             </button>
           </div>
         </div>
       </div>
-    </div>
+      {error && <AlertDialog message={error} onClose={() => setError(null)} />}
+    </>
   );
 };
 
@@ -1311,15 +1372,20 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     }, 400);
   }, [vesselCode, isNew, plan?.vesselCode]);
 
-  // Proveedores del tenant, para cuando el área es PROVEEDOR.
+  // Elegir el laboratorio desde el bloque de muestreo (V17b): mini formulario.
+  const [labFormOpen, setLabFormOpen] = useState(false);
+  const [labPickId, setLabPickId] = useState("");
+  const [labPickPurpose, setLabPickPurpose] = useState("");
+
+  // Proveedores del tenant, para cuando el área es PROVEEDOR (o se elige el laboratorio).
   useEffect(() => {
-    if (department !== "PROVEEDOR" || providers.length > 0) return;
+    if ((department !== "PROVEEDOR" && !labFormOpen) || providers.length > 0) return;
     let cancelled = false;
     api.get<{ items: Array<{ id: string; name: string; providerCode: string }> }>(`/app/providers?status=ACTIVE`)
       .then(r => { if (!cancelled) setProviders(r.items ?? []); })
       .catch(() => { if (!cancelled) setProviders([]); });
     return () => { cancelled = true; };
-  }, [department, providers.length]);
+  }, [department, providers.length, labFormOpen]);
 
   // Certificado que renueva este mantenimiento (servicios tercerizados que
   // terminan en un documento del proveedor, ej. el SERVICE del AIS). El vínculo
@@ -1731,7 +1797,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
-    checklistTemplate, samplingFluidType,
+    checklistTemplate, samplingKind, samplingFluidType,
     lastExecDate, lastExecHours, nextDueDateOverride, nextDueHoursOverride, plannedSpares,
   }, `${saveResetKey}:${planSyncKey}`);
   planDirtyRef.current = planDirty;
@@ -2002,7 +2068,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // como en edicion: el campo es identico, solo cambia el bloque que lo aloja.
   const sfiGroupField = (
     <div className="space-y-1.5">
-      <label className={labelCls}>{t("mp.sfiGroup")}</label>
+      <label className={fLabelCls}>{t("mp.sfiGroup")}</label>
       <select value={sfiGroupNumber === null ? "" : String(sfiGroupNumber)}
         onChange={e => setSfiGroupNumber(e.target.value ? Number(e.target.value) : null)}
         className={selectCls}>
@@ -2012,63 +2078,355 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     </div>
   );
 
+  // Laboratorio del plan de muestreo = los proveedores cargados del plan. Mismo
+  // criterio que el backend: sólo cuentan con área PROVEEDOR (openFormalWorkOrder).
+  const labRows = department === "PROVEEDOR"
+    ? providerRequests.filter(r => r.providerId).map(r => ({
+        providerId: r.providerId,
+        purpose: r.purpose,
+        name: providers.find(p => p.id === r.providerId)?.name
+          ?? plan?.providerRequests?.find(pr => pr.providerId === r.providerId)?.providerName
+          ?? (plan?.providerId === r.providerId ? plan?.providerName : null)
+          ?? "—",
+      }))
+    : [];
+
+  // ── Vista por secciones (preview V15) ─────────────────────────────────────
+  // Datos recomendados que faltan: se marcan en naranja y se cuentan en el
+  // índice y en el botón Guardar. No bloquean el guardado.
+  const missing = {
+    criteria: !readOnly && !acceptanceCriteria.trim(),
+    responsible: !readOnly && !responsible.trim(),
+    loto: !readOnly && !loto.trim(),
+    risk: !readOnly && !riskLevel,
+    // Plan de muestreo sin laboratorio: al abrir la OT no se genera la SS.
+    lab: !readOnly && !!samplingKind && labRows.length === 0,
+    // Obligatorios (preview V24): sin ellos el guardado falla.
+    vessel: !readOnly && isNew && !vesselCode,
+    asset: !readOnly && !assetId,
+    title: !readOnly && !title.trim(),
+    purpose: !readOnly && department === "PROVEEDOR" && providerRequests.some(r => r.providerId && !r.purpose.trim()),
+  };
+  const sectionMissing: Record<PlanSectionKey, number> = {
+    what: Number(missing.criteria) + Number(missing.lab) + Number(missing.vessel) + Number(missing.asset) + Number(missing.title),
+    when: 0,
+    who: Number(missing.responsible) + Number(missing.purpose),
+    safety: Number(missing.loto) + Number(missing.risk),
+    docs: 0,
+  };
+  const totalMissing = sectionMissing.what + sectionMissing.who + sectionMissing.safety;
+  const [openSecs, setOpenSecs] = useState<Record<PlanSectionKey, boolean>>({ what: true, when: true, who: true, safety: true, docs: true });
+  const [activeSec, setActiveSec] = useState<PlanSectionKey>("what");
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const goToSection = (k: PlanSectionKey) => {
+    setOpenSecs(s => ({ ...s, [k]: true }));
+    setActiveSec(k);
+    // Después de abrirla (si estaba plegada), así la posición ya es la final.
+    window.setTimeout(() => {
+      const box = bodyScrollRef.current;
+      const el = document.getElementById(`mp-sec-${k}`);
+      if (box && el) box.scrollTo({ top: el.offsetTop - 8, behavior: "smooth" });
+    }, 0);
+  };
+  const onBodyScroll = () => {
+    const box = bodyScrollRef.current;
+    if (!box) return;
+    let cur: PlanSectionKey = "what";
+    for (const k of PLAN_SECTIONS) {
+      const el = document.getElementById(`mp-sec-${k}`);
+      if (el && el.offsetTop - 40 <= box.scrollTop) cur = k;
+    }
+    if (cur !== activeSec) setActiveSec(cur);
+  };
+  const sectionMeta: Record<PlanSectionKey, { title: string; sub: string; icon: typeof Wrench }> = {
+    what:   { title: t("mp.sec.what"),   sub: t("mp.sec.whatSub"),   icon: ListChecks },
+    when:   { title: t("mp.sec.when"),   sub: t("mp.sec.whenSub"),   icon: CalendarRange },
+    who:    { title: t("mp.sec.who"),    sub: t("mp.sec.whoSub"),    icon: Users },
+    safety: { title: t("mp.sec.safety"), sub: t("mp.sec.safetySub"), icon: ShieldAlert },
+    docs:   { title: t("mp.sec.docs"),   sub: t("mp.sec.docsSub"),   icon: Paperclip },
+  };
+  const sectionPill = (k: PlanSectionKey) => (k === "what" || k === "who" || k === "safety") && !readOnly
+    ? <GuidePill missing={sectionMissing[k]} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />
+    : undefined;
+  const aiPill = (onClick: () => void, loading: boolean, tooltip: string) => readOnly ? null : (
+    <button type="button" onClick={onClick} disabled={loading} title={tooltip}
+      className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/[0.07] px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 disabled:opacity-60">
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} {t("mp.guide.suggestAi")}
+    </button>
+  );
+
+  // ── Plan de muestreo (preview V17b) ──
+  // Va en "Qué se hace": define la tarea. Sólo se elige QUÉ se analiza; el tipo
+  // de fluido que ya tengan cargado los planes se conserva (no se muestra).
+  // La muestra se crea al AUTORIZAR la OT (setWorkOrderApproval en el backend).
+  const addLab = () => {
+    if (!labPickId) return;
+    setDepartment("PROVEEDOR");
+    setProviderRequests(prev => [...prev.filter(r => r.providerId), { providerId: labPickId, purpose: labPickPurpose.trim() }]);
+    setLabFormOpen(false);
+    setLabPickId("");
+  };
+  const samplingBlock = !samplingKind ? (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-dashed border-fg/15 px-3.5 py-3">
+      <span className="w-9 h-9 rounded-xl bg-fg/5 text-text-industrial/40 flex items-center justify-center shrink-0"><FlaskConical className="w-5 h-5" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-extrabold text-fg">{t("mp.samp.question")}</span>
+        <span className="block text-[11.5px] text-text-industrial/60">{t("mp.samp.questionHint")}</span>
+      </span>
+      <div className="flex rounded-xl border border-fg/10 bg-fg/5 p-0.5 ml-auto">
+        <span className="rounded-lg bg-surface px-3.5 py-1.5 text-xs font-extrabold text-fg shadow-sm">{t("mp.samp.no")}</span>
+        <button type="button" onClick={() => setSamplingKind("FLUID")} className="rounded-lg px-3.5 py-1.5 text-xs font-extrabold text-text-industrial/60 hover:text-fg">{t("mp.samp.yes")}</button>
+      </div>
+    </div>
+  ) : (
+    <div className="rounded-2xl border-2 border-violet-500/30 bg-gradient-to-b from-violet-500/[0.06] to-transparent px-3.5 py-3 space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="w-9 h-9 rounded-xl bg-violet-500/15 text-violet-700 dark:text-violet-300 flex items-center justify-center shrink-0"><FlaskConical className="w-5 h-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-extrabold text-fg">{t("mp.samp.title")}</span>
+          <span className="block text-[11.5px] text-text-industrial/60">{t("mp.samp.titleHint")}</span>
+        </span>
+        <div className="flex rounded-xl border border-fg/10 bg-fg/5 p-0.5 ml-auto">
+          <button type="button" onClick={() => { setSamplingKind(""); setSamplingFluidType(""); }} className="rounded-lg px-3.5 py-1.5 text-xs font-extrabold text-text-industrial/60 hover:text-fg">{t("mp.samp.no")}</button>
+          <span className="rounded-lg bg-violet-700 px-3.5 py-1.5 text-xs font-extrabold text-white">{t("mp.samp.yes")}</span>
+        </div>
+      </div>
+
+      <div>
+        <p className={`${fLabelCls} mb-1.5`}>{t("mp.samp.what")}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {SAMPLING_KINDS.map(({ kind, icon: Icon }) => {
+            const on = samplingKind === kind;
+            return (
+              <button key={kind} type="button"
+                onClick={() => { setSamplingKind(kind); if (kind !== "FLUID") setSamplingFluidType(""); }}
+                className={`flex flex-col items-start gap-0.5 rounded-xl border-[1.5px] px-2.5 py-2 text-left transition-colors ${
+                  on ? "border-violet-600 bg-violet-500/10" : "border-fg/10 bg-surface hover:border-fg/25"
+                }`}>
+                <span className={`flex items-center gap-1.5 text-[12.5px] font-extrabold ${on ? "text-violet-700 dark:text-violet-300" : "text-fg"}`}>
+                  <Icon className="w-3.5 h-3.5" /> {t(`mp.samp.kind.${kind}` as Parameters<typeof t>[0])}
+                </span>
+                <span className="text-[10.5px] text-text-industrial/50">{t(`mp.samp.kindHint.${kind}` as Parameters<typeof t>[0])}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className={`${fLabelCls} mb-1.5`}>
+          {t("mp.samp.lab")}
+          {missing.lab && <GuideNeedTag label={t("mp.guide.missing")} />}
+        </p>
+        {labRows.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-emerald-500/35 bg-surface px-3 py-2">
+            <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {labRows.map(r => (
+                <span key={r.providerId} className="block text-[13px] font-extrabold text-fg">
+                  {r.name}{r.purpose ? <span className="font-normal text-text-industrial/60"> · {r.purpose}</span> : null}
+                </span>
+              ))}
+              <span className="block text-[11.5px] text-text-industrial/60">{t("mp.samp.labOkHint")}</span>
+            </span>
+            <button type="button" onClick={() => goToSection("who")}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-fg/10 px-2.5 py-1 text-xs font-bold text-fg hover:border-fg/25">
+              <Pencil className="w-3 h-3" /> {t("mp.samp.labChange")}
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-400/60 bg-amber-500/[0.08] px-3 py-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-extrabold text-amber-800 dark:text-amber-300">{t("mp.samp.labMissingTitle")}</span>
+                <span className="block text-[11.5px] text-text-industrial/60">{t("mp.samp.labMissingHint")}</span>
+              </span>
+              {!labFormOpen && !readOnly && (
+                <button type="button"
+                  onClick={() => { setLabFormOpen(true); setLabPickPurpose(t(`mp.samp.purpose.${samplingKind}` as Parameters<typeof t>[0])); }}
+                  className="ml-auto inline-flex items-center gap-1 rounded-lg bg-violet-700 px-2.5 py-1.5 text-xs font-bold text-white hover:brightness-110">
+                  <Plus className="w-3.5 h-3.5" /> {t("mp.samp.labPick")}
+                </button>
+              )}
+            </div>
+            {labFormOpen && (
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                <select value={labPickId} onChange={e => setLabPickId(e.target.value)} className={selectCls}>
+                  <option value="">{t("mp.samp.labSelect")}</option>
+                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>)}
+                </select>
+                <input value={labPickPurpose} onChange={e => setLabPickPurpose(e.target.value)} placeholder={t("mp.providerRequests.purposePlaceholder")} className={inputCls} />
+                <button type="button" onClick={addLab} disabled={!labPickId}
+                  className="inline-flex items-center justify-center gap-1 rounded-xl bg-violet-700 px-3 py-2 text-xs font-bold text-white hover:brightness-110 disabled:opacity-40">
+                  <Check className="w-3.5 h-3.5" /> {t("mp.samp.labAdd")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p className={`${fLabelCls} mb-1.5`}>{t("mp.samp.flow")}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {([1, 2, 3] as const).map(n => {
+            const dim = n === 2 && labRows.length === 0;
+            const desc = n === 2 && labRows.length === 0 ? t("mp.samp.step2dNoLab") : t(`mp.samp.step${n}d` as Parameters<typeof t>[0]);
+            return (
+              <div key={n} className={`flex gap-2 rounded-xl border border-fg/10 bg-surface px-2.5 py-2 ${dim ? "opacity-60" : ""}`}>
+                <span className="w-[22px] h-[22px] rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 text-[11px] font-extrabold flex items-center justify-center shrink-0">{n}</span>
+                <span>
+                  <span className="block text-[12.5px] font-extrabold text-fg">{t(`mp.samp.step${n}` as Parameters<typeof t>[0])}</span>
+                  <span className="block text-[11px] text-text-industrial/60">{desc}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  /** "cada 72 meses", "cada 500 horas"… o el tipo, si no tiene frecuencia. */
+  const freqPhrase = (tt: string, fm: string, fh: string): string | null => {
+    const unit = needsHours(tt) ? "hours" : needsDays(tt) ? "days" : needsWeeks(tt) ? "weeks" : needsMonths(tt) ? "months" : null;
+    if (!unit) return null;
+    const n = unit === "hours" ? fh : fm;
+    if (!n) return null;
+    return t("mp.facts.every").replace("{n}", Number(n).toLocaleString()).replace("{unit}", t(`mp.unit.${unit}` as Parameters<typeof t>[0]));
+  };
+
+  // Franja de vencimiento: lo primero que hay que saber de un plan guardado.
+  const dueInfo = useMemo(() => {
+    if (!plan) return null;
+    const es = computeStatus(plan);
+    const tone: "bad" | "warn" | "ok" | "idle" =
+      es === "OVERDUE" ? "bad" : (es === "DUE" || es === "UPCOMING" || es === "IN_WINDOW") ? "warn" : es === "NEVER_EXECUTED" ? "idle" : "ok";
+    const clamp = (x: number) => Math.max(0, Math.min(100, Math.round(x * 100)));
+    let headline = t("mp.due.none");
+    let dueText: string | null = null;
+    let pct: number | null = null;
+    if (plan.nextDueHours != null) {
+      dueText = `${plan.nextDueHours.toLocaleString()} h`;
+      const cur = plan.assetCurrentHours;
+      if (cur == null) {
+        headline = t("mp.due.atHours").replace("{h}", plan.nextDueHours.toLocaleString());
+      } else {
+        const diff = plan.nextDueHours - cur;
+        headline = diff <= 0
+          ? t("mp.due.overdueHours").replace("{n}", Math.abs(diff).toLocaleString())
+          : t("mp.due.inHours").replace("{n}", diff.toLocaleString());
+        const last = plan.lastExecutionHours;
+        if (last != null && plan.nextDueHours > last) pct = clamp((cur - last) / (plan.nextDueHours - last));
+      }
+    } else if (plan.nextDueDate) {
+      const due = parseLocalDate(plan.nextDueDate);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+      dueText = fmtDate(plan.nextDueDate) ?? null;
+      headline = days < 0
+        ? t("mp.due.overdueDays").replace("{n}", String(-days))
+        : days === 0 ? t("mp.due.today") : t("mp.due.inDays").replace("{n}", String(days));
+      if (plan.lastExecutionDate) {
+        const last = parseLocalDate(plan.lastExecutionDate).getTime();
+        if (due.getTime() > last) pct = clamp((today.getTime() - last) / (due.getTime() - last));
+      }
+    }
+    return { tone, headline, dueText, pct };
+  }, [plan, t]);
+  const DUE_TONE = {
+    bad:  { box: "bg-red-500/10 text-red-700 dark:text-red-400",         text: "text-red-700 dark:text-red-400",         bar: "bg-red-500",     icon: CalendarX },
+    warn: { box: "bg-amber-500/10 text-amber-700 dark:text-amber-400",   text: "text-amber-700 dark:text-amber-400",     bar: "bg-amber-500",   icon: CalendarClock },
+    ok:   { box: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400", text: "text-emerald-700 dark:text-emerald-400", bar: "bg-emerald-500", icon: CalendarCheck },
+    idle: { box: "bg-slate-500/10 text-slate-600 dark:text-slate-300",   text: "text-slate-700 dark:text-slate-300",     bar: "bg-slate-400",   icon: Clock },
+  } as const;
+  const leadPhrase = windowMode === "MANUAL" && windowLeadDays
+    ? t("mp.due.leadDays").replace("{n}", windowLeadDays)
+    : t("mp.due.leadAuto");
+  const sfiLabel = sfiGroupNumber != null ? `${sfiGroupNumber} – ${t(`sfi.g.${sfiGroupNumber}` as Parameters<typeof t>[0])}` : null;
+  const freqNow = freqPhrase(triggerType, frequencyMonths, frequencyHours);
+
   return (
     <>
       <div className={`fixed inset-0 ${overlayZClass ?? "z-50"} flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
         {/* overflow-hidden: la franja de identidad es un borde superior y sin esto
             asomaba fuera de las esquinas redondeadas. El cuerpo scrollea aparte. */}
-        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-          {/* Header en 3 partes: volver a la izquierda, acciones a la derecha y el
-              titulo al medio. Los dos laterales son flex-1 con la misma base, asi
-              el bloque del medio queda centrado en la ventana y no corrido por la
-              cantidad de botones de cada lado. */}
-          {/* La franja de color y el nombre de la entidad identifican el registro
-              de un vistazo: esta ventana, la de la OT y la de la SS eran casi
-              calcadas. Ver lib/record-identity.tsx. */}
-          <div className={`flex items-center gap-2 px-6 py-4 border-b border-fg/10 shrink-0 ${recordHeaderClass("plan")}`}>
-            <div className="flex-1 flex items-center">
-              <button
-                type="button"
-                onClick={requestClose}
-                title={t("common.back")}
-                aria-label={t("common.back")}
-                className="p-2 -ml-1 rounded-xl text-fg/40 hover:text-fg hover:bg-fg/5 transition-all shrink-0"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="min-w-0 flex flex-col items-center text-center">
-              {/* El nombre de la entidad va en singular y con su ícono: en plural
-                  ("Planes de Mantenimiento") el encabezado de la ventana se leía
-                  igual que el de la pantalla del listado. */}
+        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl h-[90vh]"}`} onClick={e => e.stopPropagation()}>
+          {/* Encabezado: de qué plan se trata (título grande), sobre qué equipo y
+              los datos que lo identifican. La franja de color y el nombre de la
+              entidad lo distinguen de la OT y la SS (lib/record-identity.tsx). */}
+          <div className={`flex items-start gap-2 px-4 sm:px-6 py-3 border-b border-fg/10 shrink-0 ${recordHeaderClass("plan")}`}>
+            <button
+              type="button"
+              onClick={requestClose}
+              title={t("common.back")}
+              aria-label={t("common.back")}
+              className="p-2 -ml-1 rounded-xl text-fg/40 hover:text-fg hover:bg-fg/5 transition-all shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0 flex-1">
               <h2 className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${RECORD_IDENTITY.plan.text}`}>
                 <ClipboardList className="w-3.5 h-3.5 shrink-0" />
                 {isNew ? t("mp.newPlan") : t("mp.entityLabel")}
               </h2>
-              {headerAssetName && (
-                <p className="max-w-full text-xl font-black text-fg leading-tight truncate" title={headerAssetName}>
-                  {headerAssetName}
+              {(title.trim() || headerAssetName) && (
+                <p className="max-w-full text-lg sm:text-xl font-black text-fg leading-tight truncate" title={title.trim() || headerAssetName || undefined}>
+                  {title.trim() || headerAssetName}
                 </p>
               )}
-              {/* Ir a la OT NO cierra antes el plan: cerrar ahora significa
-                  "volver atrás", y hacerlo justo antes de navegar dejaba dos
-                  navegaciones peleando. Basta con navegar — el cambio de ruta
-                  desmonta este modal, y al cerrar la OT se vuelve acá. */}
-              {!isNew && <StatusBadgeInline plan={plan} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />}
-              {/* Este servicio termina en un certificado del proveedor. Sólo
-                  informativo: el vínculo se administra desde /certificates. */}
-              {!isNew && linkedCert && (
-                <button
-                  type="button"
-                  onClick={() => navigate("/certificates")}
-                  title="Al reportar la ejecución se ofrece renovar este certificado"
-                  className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] font-bold text-accent hover:bg-accent/20 transition-colors"
-                >
-                  <FileText className="w-3 h-3" /> Renueva {linkedCert.certificateCode}
-                </button>
+              {(headerAssetName || sfiLabel) && title.trim() && (
+                <p className="text-xs text-text-industrial/60 truncate">{[headerAssetName, sfiLabel].filter(Boolean).join(" · ")}</p>
+              )}
+              {!isNew && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{plan.taskCode}</span>
+                  {/* Nombre del buque, no el código. */}
+                  <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70">
+                    <Ship className="w-3 h-3" /><VesselLabel code={plan.vesselCode} className="text-[11px]" />
+                  </span>
+                  {/* Ir a la OT NO cierra antes el plan: cerrar ahora significa
+                      "volver atrás", y hacerlo justo antes de navegar dejaba dos
+                      navegaciones peleando. Basta con navegar — el cambio de ruta
+                      desmonta este modal, y al cerrar la OT se vuelve acá. */}
+                  <StatusBadgeInline plan={plan} onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)} />
+                  <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70">
+                    {t(`mp.taskTypeFull.${taskType}` as Parameters<typeof t>[0])}
+                  </span>
+                  {/* Este servicio termina en un certificado del proveedor. Sólo
+                      informativo: el vínculo se administra desde /certificates. */}
+                  {/* Plan de muestreo: se ve de lejos qué se analiza y a qué laboratorio va. */}
+                  {samplingKind && (
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:text-violet-300">
+                        <FlaskConical className="w-3 h-3" /> {t("mp.samp.chip").replace("{kind}", t(`mp.samp.kind.${samplingKind}` as Parameters<typeof t>[0]))}
+                      </span>
+                      {labRows.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:text-violet-300">
+                          <Handshake className="w-3 h-3" /> {labRows.map(r => r.name).join(", ")}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                          <AlertTriangle className="w-3 h-3" /> {t("mp.samp.chipNoLab")}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {linkedCert && (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/certificates")}
+                      title={t("mp.cert.renewsHint")}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[11px] font-bold text-accent hover:bg-accent/20 transition-colors"
+                    >
+                      <FileText className="w-3 h-3" /> {t("mp.cert.renews").replace("{code}", linkedCert.certificateCode)}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-            <div className="flex-1 flex items-center justify-end gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {!isNew && <CopyLinkButton />}
               <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -2077,665 +2435,657 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
             </div>
           </div>
 
-          {readOnly && (
-            <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-700 dark:text-yellow-400">
-              {t("mp.modal.readOnly")}
-            </div>
-          )}
-          <fieldset disabled={readOnly} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto disabled:opacity-70">
+          {/* Franja de vencimiento + la acción que corresponde (abrir la OT,
+              ir a la que ya está abierta o reportar el resultado). */}
+          {!isNew && dueInfo && (() => {
+            const tone = DUE_TONE[dueInfo.tone];
+            const ToneIcon = tone.icon;
+            const lastText = needsHours(plan.triggerType)
+              ? (plan.lastExecutionHours != null ? `${plan.lastExecutionHours.toLocaleString()} h` : t("mp.facts.never"))
+              : (fmtDate(plan.lastExecutionDate) ?? t("mp.facts.never"));
+            const planFreq = freqPhrase(plan.triggerType, String(plan.frequencyMonths ?? ""), String(plan.frequencyHours ?? ""))
+              ?? t(`mp.tt.${plan.triggerType}` as Parameters<typeof t>[0]);
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr_auto] items-center gap-3 px-4 sm:px-6 py-2.5 border-b border-fg/10 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tone.box}`}><ToneIcon className="w-6 h-6" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-[15px] font-extrabold ${tone.text}`}>{dueInfo.headline}</p>
+                    <p className="text-[11.5px] text-text-industrial/60 truncate">
+                      {[dueInfo.dueText, plan.activeWorkOrderCode ? t("mp.due.woOpen").replace("{code}", plan.activeWorkOrderCode) : leadPhrase].filter(Boolean).join(" · ")}
+                    </p>
+                    {dueInfo.pct != null && (
+                      <div className="mt-1 h-1.5 rounded-full bg-fg/10 overflow-hidden"><div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${dueInfo.pct}%` }} /></div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-text-industrial/60">
+                  <span>{t("mp.modal.lastExecution")}<b className="block text-[13px] text-fg">{lastText}</b></span>
+                  <span>{t("mp.facts.freq")}<b className="block text-[13px] text-fg">{planFreq}</b></span>
+                  {plan.estimatedHours != null && <span>{t("mp.estimatedHours")}<b className="block text-[13px] text-fg">{plan.estimatedHours} h</b></span>}
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  {plan.activeWorkOrderCode && (
+                    <button type="button" onClick={() => navigate(`/work-orders?autoCode=${plan.activeWorkOrderCode}`)}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:brightness-110 transition-all flex items-center gap-1.5 whitespace-nowrap">
+                      <ExternalLink className="w-3.5 h-3.5" /> {t("mp.goToWo").replace("{code}", plan.activeWorkOrderCode)}
+                    </button>
+                  )}
+                  {canExecute && needsWO && !(plan.activeWorkOrderCode && plan.executionStatus === "IN_WINDOW") && (
+                    <button
+                      onClick={() => plan.activeWorkOrderCode ? setConfirmDuplicateWO(true) : setShowExecution(true)}
+                      className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${plan.activeWorkOrderCode
+                        ? "bg-accent/10 border border-accent/20 text-accent hover:bg-accent/15"
+                        : "bg-accent text-accent-fg hover:brightness-110"}`}
+                    >
+                      <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> {t("mp.modal.openWO")}</span>
+                    </button>
+                  )}
+                  {/* Solo Alerta → OT Express (nace autorizada). El resto de los
+                      modos sin OT formal sigue con "Reportar Resultado". */}
+                  {canExecute && isExpressMode && (
+                    <button
+                      onClick={() => { void openExpressWorkOrder(); }}
+                      disabled={openingExpress}
+                      title={expressGoesToProvider ? t("mp.express.providerHint") : t("mp.express.hint")}
+                      className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all whitespace-nowrap"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {openingExpress ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                        {expressGoesToProvider
+                          ? t("mp.col.executeWO")
+                          : t("mp.modal.openExpressWO").replace("{abbr}", woTerms.abbr)}
+                      </span>
+                    </button>
+                  )}
+                  {canExecute && !needsWO && !isExpressMode && (
+                    <button
+                      onClick={() => setShowExecution(true)}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:brightness-110 transition-all whitespace-nowrap"
+                    >
+                      {t("mp.modal.reportResult")}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
-            {/* Read-only identifiers (edit mode) */}
-            {!isNew && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-1">{t("mp.taskCode")}</p>
-                    {isAdmin
-                      ? <input
-                          value={taskCode}
-                          onChange={e => setTaskCode(e.target.value.toUpperCase())}
-                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono font-bold text-fg py-0.5 transition-colors"
-                        />
-                      : <p className="text-sm font-mono font-bold text-fg">{plan.taskCode}</p>
-                    }
-                  </div>
-                  <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("col.vessel")}</p>
-                    <p className="text-sm"><VesselLabel code={plan.vesselCode} className="text-sm" showCode /></p>
-                  </div>
-                </div>
-                {/* Last / Next execution info. El ADMIN puede editar la última
-                    ejecución; el próximo vencimiento se calcula solo desde la
-                    frecuencia (preview en vivo; el backend lo confirma al guardar). */}
-                {(() => {
-                  const preview = previewNextDue(triggerType, lastExecDate, lastExecHours, frequencyMonths, frequencyHours);
-                  return (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.lastExecution")}</p>
-                    {canEditMilestones ? (
-                      needsHours(triggerType) ? (
-                        <input
-                          type="number" value={lastExecHours}
-                          onChange={e => setLastExecHours(e.target.value)}
-                          placeholder="Horas"
-                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-fg py-0.5 transition-colors"
-                        />
-                      ) : (
-                        <input
-                          type="date" value={lastExecDate}
-                          onChange={e => setLastExecDate(e.target.value)}
-                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-fg py-0.5 transition-colors"
-                        />
-                      )
-                    ) : (
-                      <p className="text-sm text-fg font-mono">
-                        {needsHours(plan.triggerType)
-                          ? (plan.lastExecutionHours != null ? `${plan.lastExecutionHours.toLocaleString()}h` : "—")
-                          : (fmtDate(plan.lastExecutionDate) ?? "—")}
-                      </p>
+          {/* Cuerpo: índice de secciones + formulario. En pantalla chica el índice
+              va arriba y se desliza de costado. */}
+          <div className={`flex-1 min-h-0 grid grid-rows-[auto_1fr] ${expanded ? "md:grid-rows-1 md:grid-cols-[13rem_1fr]" : ""}`}>
+            <nav className={`flex gap-1 overflow-x-auto border-b border-fg/10 px-3 py-2 bg-fg/[0.02] ${expanded ? "md:flex-col md:overflow-y-auto md:overflow-x-visible md:border-b-0 md:border-r md:py-3" : ""}`}>
+              {PLAN_SECTIONS.map(k => {
+                const m = sectionMeta[k];
+                const Icon = m.icon;
+                const on = activeSec === k;
+                return (
+                  <button key={k} type="button" onClick={() => goToSection(k)}
+                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
+                      on ? "bg-teal-500/10 text-teal-700 dark:text-teal-300" : "text-text-industrial/60 hover:bg-fg/5 hover:text-fg"
+                    }`}>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {m.title}
+                    {sectionMissing[k] > 0 && (
+                      <span className="ml-auto rounded-full bg-amber-500/20 px-1.5 text-[10px] font-extrabold text-amber-800 dark:text-amber-300">{sectionMissing[k]}</span>
                     )}
-                  </div>
-                  <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("mp.modal.nextDueDate")}</p>
-                    {canEditMilestones ? (
-                      needsHours(triggerType) ? (
-                        <input
-                          type="number" value={nextDueHoursOverride}
-                          onChange={e => setNextDueHoursOverride(e.target.value)}
-                          placeholder="Horas"
-                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-accent py-0.5 transition-colors"
-                        />
-                      ) : (
-                        <input
-                          type="date" value={nextDueDateOverride}
-                          onChange={e => setNextDueDateOverride(e.target.value)}
-                          className="w-full bg-transparent border-b border-fg/20 focus:border-accent/60 outline-none text-sm font-mono text-accent py-0.5 transition-colors"
-                        />
-                      )
-                    ) : (
-                      <p className="text-sm font-mono text-accent">
-                        {isAdmin
-                          ? (preview?.text ?? (needsHours(plan.triggerType)
-                              ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
-                              : (fmtDate(plan.nextDueDate) ?? "—")))
-                          : (needsHours(plan.triggerType)
-                              ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
-                              : (fmtDate(plan.nextDueDate) ?? "—"))}
-                      </p>
-                    )}
-                    {canEditMilestones ? (
-                      <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueManualHint")}</p>
-                    ) : (
-                      isAdmin && preview && (
-                        <p className="text-[9px] text-text-industrial/40 mt-0.5">{t("mp.modal.nextDueAuto")}</p>
-                      )
-                    )}
-                  </div>
-                </div>
-                  );
-                })()}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    {assetId
-                      ? <button
-                          type="button"
-                          // A la ficha del equipo, directo. NO se cierra el plan
-                          // antes: cerrar es "volver atrás" y dejaba dos
-                          // navegaciones peleando — basta con navegar, el cambio
-                          // de ruta desmonta este modal (mismo criterio que el
-                          // enlace a la OT, más arriba). La ruta es /equipment:
-                          // /assets es sólo un alias viejo.
-                          onClick={() => navigate(`/equipment?open=${encodeURIComponent(assetId)}`)}
-                          className={`${labelCls} hover:text-accent transition-colors cursor-pointer`}
-                          title={t("mp.modal.openAsset")}
-                        >{t("mp.asset")}</button>
-                      : <label className={labelCls}>{t("mp.asset")}</label>}
-                    {loadingAssets
-                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
-                      : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
-                    }
-                  </div>
-                  {sfiGroupField}
-                </div>
-              </>
-            )}
+                  </button>
+                );
+              })}
+              {expanded && !readOnly && (
+                <p className="hidden md:block px-2.5 pt-3 text-[10.5px] leading-snug text-text-industrial/40">{t("mp.nav.note")}</p>
+              )}
+            </nav>
 
-            {/* Create-only identifiers */}
-            {isNew && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("mp.vesselCode")}</label>
-                    {loadingVessels
-                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</div>
-                      : <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={lockAsset} className={`${selectCls} disabled:opacity-60`}>
-                          <option value="">{t("mp.modal.selectVessel")}</option>
-                          {vessels.map(v => <option key={v.code} value={v.code}>{v.code}{v.name ? ` — ${v.name}` : ""}</option>)}
+            <div ref={bodyScrollRef} onScroll={onBodyScroll} className="relative min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-3">
+              {readOnly && (
+                <div className="px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-700 dark:text-yellow-400">
+                  {t("mp.modal.readOnly")}
+                </div>
+              )}
+
+              {/* ── 1 · Qué se hace ── */}
+              <div id="mp-sec-what">
+                <GuideSection n={1} title={sectionMeta.what.title} subtitle={sectionMeta.what.sub} pill={sectionPill("what")}
+                  open={openSecs.what} onToggle={() => setOpenSecs(s => ({ ...s, what: !s.what }))}>
+                  <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    {/* Identificación: en el alta se elige todo; en un plan guardado el
+                        buque ya está en el encabezado. */}
+                    {isNew ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <GuideField id="mp-f-vessel" missing={missing.vessel}>
+                          <label className={fLabelCls}>{t("mp.vesselCode")}{missing.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                          {loadingVessels
+                            ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</div>
+                            : <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={lockAsset} className={`${selectCls} disabled:opacity-60`}>
+                                <option value="">{t("mp.modal.selectVessel")}</option>
+                                {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
+                              </select>
+                          }
+                        </GuideField>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className={fLabelCls}>{t("mp.taskCode")}</label>
+                            {taskCodeAuto && taskCode && <span className="text-[9px] text-accent/60 font-mono uppercase tracking-wider">{t("mp.modal.codeAuto")}</span>}
+                          </div>
+                          <div className="relative">
+                            <input
+                              value={loadingCode ? "" : taskCode}
+                              onChange={e => { setTaskCode(e.target.value.toUpperCase()); setTaskCodeAuto(false); }}
+                              placeholder={loadingCode ? t("mp.modal.codeGenerating") : t("mp.modal.codePlaceholder")}
+                              className={`${inputCls} pr-8 ${taskCodeAuto && taskCode ? "text-accent/80 font-mono" : ""}`}
+                            />
+                            {loadingCode && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent/50 animate-spin" />}
+                            {!loadingCode && !taskCodeAuto && vesselCode && (
+                              <button type="button" onClick={() => setTaskCodeAuto(true)} title={t("mp.modal.regenerateCode")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-accent transition-colors">↺</button>
+                            )}
+                          </div>
+                        </div>
+                        <GuideField id="mp-f-asset-new" missing={missing.asset}>
+                          <label className={fLabelCls}>{t("mp.asset")}{missing.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                          {loadingAssets
+                            ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
+                            : <AssetSearchDropdown
+                                assets={assets}
+                                value={assetId}
+                                onChange={setAssetId}
+                                disabled={lockAsset || !vesselCode || assets.length === 0}
+                                placeholder={!vesselCode ? t("mp.modal.selectVesselFirst") : assets.length === 0 ? t("mp.modal.noAssetsForVessel") : t("mp.selectAsset")}
+                              />
+                          }
+                        </GuideField>
+                        {sfiGroupField}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr_1fr] gap-3">
+                        <div className="space-y-1.5">
+                          <label className={fLabelCls}>{t("mp.taskCode")}</label>
+                          {isAdmin
+                            ? <input value={taskCode} onChange={e => setTaskCode(e.target.value.toUpperCase())} className={`${inputCls} font-mono font-bold`} />
+                            : <p className="py-2 text-sm font-mono font-bold text-fg">{plan.taskCode}</p>}
+                        </div>
+                        <GuideField id="mp-f-asset" missing={missing.asset}>
+                          {assetId
+                            ? <button
+                                type="button"
+                                // A la ficha del equipo, directo. NO se cierra el plan
+                                // antes: cerrar es "volver atrás" y dejaba dos
+                                // navegaciones peleando — basta con navegar, el cambio
+                                // de ruta desmonta este modal. La ruta es /equipment:
+                                // /assets es sólo un alias viejo.
+                                onClick={() => navigate(`/equipment?open=${encodeURIComponent(assetId)}`)}
+                                className={`${fLabelCls} hover:text-accent transition-colors cursor-pointer`}
+                                title={t("mp.modal.openAsset")}
+                              >{t("mp.asset")} ↗</button>
+                            : <label className={fLabelCls}>{t("mp.asset")}{missing.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>}
+                          {loadingAssets
+                            ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
+                            : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
+                          }
+                        </GuideField>
+                        {sfiGroupField}
+                      </div>
+                    )}
+
+                    {/* Tipo de tarea + origen del criterio (ISM 10.1) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-3">
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls}>{t("mp.taskType")}</label>
+                        <div className="flex gap-2">
+                          {(["MAINTENANCE", "INSPECTION"] as const).map(tt => (
+                            <button key={tt} type="button" onClick={() => setTaskType(tt)}
+                              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-bold transition-all ${
+                                taskType === tt
+                                  ? "bg-teal-500/10 border-teal-600/50 text-teal-700 dark:text-teal-300"
+                                  : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
+                              }`}>
+                              {tt === "MAINTENANCE" ? <Wrench className="w-3.5 h-3.5" /> : <SearchCheck className="w-3.5 h-3.5" />}
+                              {t(`mp.taskTypeFull.${tt}` as Parameters<typeof t>[0])}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* De qué regla nace la tarea. Es lo que el Código ISM 10.1 le pide
+                          mostrar a la Compañía: requisito → tarea de mantenimiento. */}
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls} title={t("mp.criteriaSource.hint")}>
+                          {t("mp.criteriaSource")} <span className="font-normal text-text-industrial/40">· {t("mp.f.criteriaSourceHint")}</span>
+                        </label>
+                        <select value={criteriaSource} onChange={e => setCriteriaSource(e.target.value as CriteriaSource | "")} className={selectCls} disabled={readOnly}>
+                          <option value="">{t("mp.cs.none")}</option>
+                          {CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>)}
                         </select>
-                    }
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className={labelCls}>{t("mp.taskCode")}</label>
-                      {taskCodeAuto && taskCode && <span className="text-[9px] text-accent/60 font-mono uppercase tracking-wider">{t("mp.modal.codeAuto")}</span>}
+                      </div>
                     </div>
-                    <div className="relative">
-                      <input
-                        value={loadingCode ? "" : taskCode}
-                        onChange={e => { setTaskCode(e.target.value.toUpperCase()); setTaskCodeAuto(false); }}
-                        placeholder={loadingCode ? t("mp.modal.codeGenerating") : t("mp.modal.codePlaceholder")}
-                        className={`${inputCls} pr-8 ${taskCodeAuto && taskCode ? "text-accent/80 font-mono" : ""}`}
-                      />
-                      {loadingCode && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent/50 animate-spin" />}
-                      {!loadingCode && !taskCodeAuto && vesselCode && (
-                        <button type="button" onClick={() => setTaskCodeAuto(true)} title={t("mp.modal.regenerateCode")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-industrial/30 hover:text-accent transition-colors">↺</button>
+
+                    {samplingBlock}
+
+                    <GuideField id="mp-f-title" missing={missing.title}>
+                      <label className={fLabelCls}>{t("col.title")}{missing.title && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
+                    </GuideField>
+
+                    <div className="space-y-1.5">
+                      <label className={fLabelCls}>{t("mp.f.tasks")}</label>
+                      <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
+                    </div>
+
+                    <GuideField id="mp-f-criteria" missing={missing.criteria}>
+                      <div className="flex items-center gap-1">
+                        <label className={fLabelCls}>{t("mp.acceptanceCriteria")}</label>
+                        {missing.criteria && <GuideNeedTag label={t("mp.guide.missing")} />}
+                        {aiPill(() => { void handleAcceptanceCriteriaClick(); }, loadingCriteria, t("mp.modal.aiCriteriaTooltip"))}
+                      </div>
+                      <RichTextArea value={acceptanceCriteria} onChange={setAcceptanceCriteria} rows={2} className={inputCls} disabled={loadingCriteria} />
+                    </GuideField>
+                  </fieldset>
+                </GuideSection>
+              </div>
+
+              {/* ── 2 · Cuándo ── */}
+              <div id="mp-sec-when">
+                <GuideSection n={2} title={sectionMeta.when.title} subtitle={sectionMeta.when.sub}
+                  open={openSecs.when} onToggle={() => setOpenSecs(s => ({ ...s, when: !s.when }))}>
+                  <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls}>{t("mp.f.scheduleBy")}</label>
+                        <select value={triggerType} onChange={e => setTriggerType(e.target.value as TriggerType)} className={selectCls}>
+                          {TRIGGER_TYPES.map(tt => <option key={tt} value={tt}>{t(`mp.tt.${tt}` as any)}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls}>
+                          {needsHours(triggerType) ? t("mp.f.everyHours") : needsDays(triggerType) ? t("mp.f.everyDays") : needsWeeks(triggerType) ? t("mp.f.everyWeeks") : t("mp.f.everyMonths")}
+                        </label>
+                        {needsHours(triggerType)
+                          ? <input type="number" min="1" value={frequencyHours} onChange={e => setFrequencyHours(e.target.value)} className={inputCls} />
+                          : <input type="number" min="1" value={frequencyMonths} onChange={e => setFrequencyMonths(e.target.value)} className={inputCls} disabled={triggerType === "CONDITION" || triggerType === "EVENT"} />
+                        }
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls}>{t("mp.f.onExecute")}</label>
+                        <select value={triggerResultMode} onChange={e => setTriggerResultMode(e.target.value)} className={selectCls}>
+                          {TRIGGER_RESULT_MODES.map(m => <option key={m} value={m}>{t(`mp.trm.${m}` as any)}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Aviso de MOC apenas cambia la frecuencia: antes aparecía recién
+                        al tocar Guardar. El popup de Guardar sigue igual. */}
+                    {planChangedFrequency && !readOnly && (
+                      <div className="flex items-start gap-2 rounded-xl border border-orange-500/35 bg-orange-500/[0.07] px-3 py-2 text-xs text-orange-800 dark:text-orange-200">
+                        <GitBranch className="w-4 h-4 shrink-0 mt-px" />
+                        <p><b>{t("mp.moc.inlineTitle")}</b> {t("mp.moc.inlineBody")}</p>
+                      </div>
+                    )}
+
+                    {/* Última ejecución y próximo vencimiento. Quien puede corregir los
+                        hitos los edita; el resto los ve. El próximo vencimiento se
+                        calcula solo desde la frecuencia (el backend lo confirma). */}
+                    {!isNew && (() => {
+                      const preview = previewNextDue(triggerType, lastExecDate, lastExecHours, frequencyMonths, frequencyHours);
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="space-y-1.5">
+                            <label className={fLabelCls}>{t("mp.modal.lastExecution")}</label>
+                            {canEditMilestones ? (
+                              needsHours(triggerType)
+                                ? <input type="number" value={lastExecHours} onChange={e => setLastExecHours(e.target.value)} placeholder="Horas" className={`${inputCls} font-mono`} />
+                                : <input type="date" value={lastExecDate} onChange={e => setLastExecDate(e.target.value)} className={`${inputCls} font-mono`} />
+                            ) : (
+                              <p className="py-2 text-sm text-fg font-mono">
+                                {needsHours(plan.triggerType)
+                                  ? (plan.lastExecutionHours != null ? `${plan.lastExecutionHours.toLocaleString()}h` : "—")
+                                  : (fmtDate(plan.lastExecutionDate) ?? "—")}
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className={fLabelCls}>{t("mp.modal.nextDueDate")}</label>
+                            {canEditMilestones ? (
+                              needsHours(triggerType)
+                                ? <input type="number" value={nextDueHoursOverride} onChange={e => setNextDueHoursOverride(e.target.value)} placeholder="Horas" className={`${inputCls} font-mono text-accent`} />
+                                : <input type="date" value={nextDueDateOverride} onChange={e => setNextDueDateOverride(e.target.value)} className={`${inputCls} font-mono text-accent`} />
+                            ) : (
+                              <p className="py-2 text-sm font-mono text-accent">
+                                {isAdmin
+                                  ? (preview?.text ?? (needsHours(plan.triggerType)
+                                      ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
+                                      : (fmtDate(plan.nextDueDate) ?? "—")))
+                                  : (needsHours(plan.triggerType)
+                                      ? (plan.nextDueHours != null ? `${plan.nextDueHours.toLocaleString()}h` : "—")
+                                      : (fmtDate(plan.nextDueDate) ?? "—"))}
+                              </p>
+                            )}
+                            {canEditMilestones
+                              ? <p className="text-[10px] text-text-industrial/45">{t("mp.modal.nextDueManualHint")}</p>
+                              : isAdmin && preview && <p className="text-[10px] text-text-industrial/45">{t("mp.modal.nextDueAuto")}</p>}
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className={fLabelCls}>{t("mp.f.estHours")}</label>
+                            <input type="number" min="0" step="0.5" value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} placeholder="—" className={inputCls} disabled={readOnly} />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {isNew && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1.5">
+                          <label className={fLabelCls}>{t("mp.f.estHours")}</label>
+                          <input type="number" min="0" step="0.5" value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Aviso anticipado (ventana de ejecución) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls}>{t("mp.f.windowMode")}</label>
+                        <select value={windowMode} onChange={e => { setWindowMode(e.target.value); if (e.target.value === "AUTO") setWindowLeadDays(""); }} className={selectCls} disabled={readOnly}>
+                          <option value="AUTO">{t("mp.f.windowAuto")}</option>
+                          <option value="MANUAL">{t("mp.f.windowManual")}</option>
+                        </select>
+                      </div>
+                      {/* En AUTO los días los calcula el sistema: el campo no se muestra. */}
+                      {windowMode !== "AUTO" && (
+                        <div className="space-y-1.5">
+                          <label className={fLabelCls}>{t("mp.f.leadDays")}</label>
+                          <input type="number" min="0" value={windowLeadDays} onChange={e => setWindowLeadDays(e.target.value)}
+                            placeholder={t("mp.modal.leadDaysManualPlaceholder")} disabled={readOnly} className={inputCls} />
+                        </div>
                       )}
                     </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("mp.asset")}</label>
-                    {loadingAssets
-                      ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
-                      : <AssetSearchDropdown
-                          assets={assets}
-                          value={assetId}
-                          onChange={setAssetId}
-                          disabled={lockAsset || !vesselCode || assets.length === 0}
-                          placeholder={!vesselCode ? t("mp.modal.selectVesselFirst") : assets.length === 0 ? t("mp.modal.noAssetsForVessel") : t("mp.selectAsset")}
-                        />
-                    }
-                  </div>
-                  {sfiGroupField}
-                </div>
-              </>
-            )}
 
-            {/* Task type + origen del criterio (ISM 10.1) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.taskType")}</label>
-                <div className="flex gap-2">
-                  {(["MAINTENANCE", "INSPECTION"] as const).map(tt => (
-                    <button key={tt} type="button" onClick={() => setTaskType(tt)}
-                      className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all ${
-                        taskType === tt
-                          ? "bg-accent/15 border-accent/50 text-accent"
-                          : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
-                      }`}>
-                      {t(`mp.taskType.${tt}` as any)}
-                    </button>
-                  ))}
-                </div>
+                    {/* La programación dicha en una frase, para no tener que interpretarla. */}
+                    <div className="flex items-start gap-2 rounded-xl border border-accent/20 bg-accent/[0.06] px-3 py-2 text-[12.5px] text-sky-900 dark:text-sky-200">
+                      <Info className="w-4 h-4 shrink-0 mt-px" />
+                      <p>
+                        {freqNow ? t("mp.sentence.every").replace("{freq}", freqNow) : t("mp.sentence.noFreq")}{" "}
+                        {windowMode === "MANUAL" && windowLeadDays
+                          ? t("mp.sentence.window").replace("{n}", windowLeadDays)
+                          : t("mp.sentence.windowAuto")}
+                      </p>
+                    </div>
+                  </fieldset>
+                </GuideSection>
               </div>
-              {/* De qué regla nace la tarea. Es lo que el Código ISM 10.1 le pide
-                  mostrar a la Compañía: requisito → tarea de mantenimiento. */}
-              <div className="space-y-1.5">
-                <label className={labelCls} title={t("mp.criteriaSource.hint")}>{t("mp.criteriaSource")}</label>
-                <select
-                  value={criteriaSource}
-                  onChange={e => setCriteriaSource(e.target.value as CriteriaSource | "")}
-                  className={selectCls}
-                  disabled={readOnly}
-                >
-                  <option value="">{t("mp.cs.none")}</option>
-                  {CRITERIA_SOURCES.map(cs => <option key={cs} value={cs}>{t(`mp.cs.${cs}` as any)}</option>)}
-                </select>
-              </div>
-            </div>
 
-            {/* Title */}
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("col.title")}</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
-            </div>
+              {/* ── 3 · Quién y con qué ── */}
+              <div id="mp-sec-who">
+                <GuideSection n={3} title={sectionMeta.who.title} subtitle={sectionMeta.who.sub} pill={sectionPill("who")}
+                  open={openSecs.who} onToggle={() => setOpenSecs(s => ({ ...s, who: !s.who }))}>
+                  <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    <div className="space-y-1.5">
+                      <label className={fLabelCls}>{t("mp.f.area")}</label>
+                      <div className="flex flex-wrap gap-2">
+                        {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
+                          <button key={d} type="button"
+                            onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderRequests([]); }}
+                            className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
+                              department === d
+                                ? "bg-accent text-accent-fg border-accent"
+                                : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
+                            }`}
+                          >{t(`wo.dept.${d}`)}</button>
+                        ))}
+                      </div>
+                      {/* Varios proveedores + aclaración. Al abrir la OT se crea una SS por
+                          fila. La aclaración es obligatoria (se valida al guardar). Un mismo
+                          proveedor puede repetirse (dos trabajos distintos = dos SS). */}
+                      {department === "PROVEEDOR" && (
+                        <div className="space-y-2 pt-1">
+                          <p className="text-[11px] text-text-industrial/50">{t("mp.f.providersHint")}</p>
+                          {providerRequests.map((row, i) => (
+                            <div key={i} className={`flex items-start gap-2 ${row.providerId && !row.purpose.trim() && !readOnly ? "rounded-xl border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10 px-2 py-1.5" : ""}`}>
+                              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                                <select
+                                  value={row.providerId}
+                                  onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                                  className={selectCls}
+                                >
+                                  <option value="">{t("wo.modal.providerSelect")}</option>
+                                  {providers.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                                  ))}
+                                </select>
+                                <div className="space-y-1">
+                                  <input
+                                    value={row.purpose}
+                                    onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                                    placeholder={t("mp.providerRequests.purposePlaceholder")}
+                                    className={inputCls}
+                                  />
+                                  {row.providerId && !row.purpose.trim() && !readOnly && <GuideNeedTag label={t("mp.guide.missing")} />}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setProviderRequests(prev => prev.filter((_, j) => j !== i))}
+                                title={t("mp.providerRequests.remove")}
+                                className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-fg/25 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
-            {/* ── Recuadro: TAREAS A REALIZAR ── (tarea + programación) */}
-            <div className={sectionCardCls}>
-              <p className={sectionTitleCls}>{t("mp.modal.tasksToPerform")}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-3 items-start">
+                      <GuideField id="mp-f-responsible" missing={missing.responsible}>
+                        <label className={fLabelCls}>{t("mp.responsible")}{missing.responsible && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                        <input value={responsible} onChange={e => setResponsible(e.target.value)} placeholder={t("mp.f.responsiblePh")} className={inputCls} />
+                      </GuideField>
+                      <div className="space-y-1.5">
+                        <label className={fLabelCls}>{t("mp.f.planStatus")}</label>
+                        <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
+                          {EDITABLE_STATUSES.map(item => <option key={item} value={item}>{t(`mp.status.${item}` as any)}</option>)}
+                        </select>
+                      </div>
+                    </div>
 
-              {/* Description (el título del recuadro ya oficia de rótulo) */}
-              <div className="space-y-1.5">
-              <RichTextArea value={description} onChange={setDescription} rows={3} className={inputCls} />
-            </div>
+                    {/* Repuestos / materiales previstos: salen del catálogo /Spares (con
+                        stock) o van a mano. Al abrir la OT se heredan. NO descuenta stock. */}
+                    <div className="space-y-1.5">
+                      <label className={fLabelCls}>{t("mp.spares.title")}</label>
+                      <p className="text-[11px] text-text-industrial/50">{t("mp.spares.hint")}</p>
+                      <PlannedItemsEditor items={plannedSpares} onChange={setPlannedSpares} spares={spareCatalog} disabled={readOnly} />
+                    </div>
+                  </fieldset>
+                </GuideSection>
+              </div>
 
-            {/* Trigger + Frequency + Mode + Horas estimadas (una sola fila de 4) */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.triggerType")}</label>
-                <select value={triggerType} onChange={e => setTriggerType(e.target.value as TriggerType)} className={selectCls}>
-                  {TRIGGER_TYPES.map(tt => <option key={tt} value={tt}>{t(`mp.tt.${tt}` as any)}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>
-                  {needsHours(triggerType) ? t("mp.frequencyHours") : needsDays(triggerType) ? t("mp.frequencyDays") : needsWeeks(triggerType) ? t("mp.frequencyWeeks") : t("mp.frequencyMonths")}
-                </label>
-                {needsHours(triggerType)
-                  ? <input type="number" min="1" value={frequencyHours} onChange={e => setFrequencyHours(e.target.value)} className={inputCls} />
-                  : <input type="number" min="1" value={frequencyMonths} onChange={e => setFrequencyMonths(e.target.value)} className={inputCls} disabled={triggerType === "CONDITION" || triggerType === "EVENT"} />
-                }
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.triggerResultMode")}</label>
-                <select value={triggerResultMode} onChange={e => setTriggerResultMode(e.target.value)} className={selectCls}>
-                  {TRIGGER_RESULT_MODES.map(m => <option key={m} value={m}>{t(`mp.trm.${m}` as any)}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.estimatedHours")}</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={estimatedHours}
-                  onChange={e => setEstimatedHours(e.target.value)}
-                  placeholder="—"
-                  className={inputCls}
-                  disabled={readOnly}
-                />
-              </div>
-            </div>
+              {/* ── 4 · Seguridad ── */}
+              <div id="mp-sec-safety">
+                <GuideSection n={4} title={sectionMeta.safety.title} subtitle={sectionMeta.safety.sub} pill={sectionPill("safety")}
+                  open={openSecs.safety} onToggle={() => setOpenSecs(s => ({ ...s, safety: !s.safety }))}>
+                  <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    <GuideField id="mp-f-loto" missing={missing.loto}>
+                      <div className="flex items-center gap-1">
+                        <label className={fLabelCls}>{t("mp.f.lotoTitle")}</label>
+                        {missing.loto && <GuideNeedTag label={t("mp.guide.missing")} />}
+                        {aiPill(() => { void handleLotoClick(); }, loadingLoto, t("wo.ai.lotoTooltip"))}
+                      </div>
+                      <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
+                    </GuideField>
 
-            {/* Ventana de ejecución anticipada */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.modal.windowMode")}</label>
-                <select value={windowMode} onChange={e => { setWindowMode(e.target.value); if (e.target.value === "AUTO") setWindowLeadDays(""); }} className={selectCls} disabled={readOnly}>
-                  <option value="AUTO">{t("mp.modal.windowAuto")}</option>
-                  <option value="MANUAL">{t("mp.modal.windowManual")}</option>
-                </select>
-              </div>
-              {/* En AUTO los días los calcula el sistema: el campo no se muestra
-                  (antes quedaba visible pero deshabilitado, ocupando lugar y
-                  haciendo dudar si había que completarlo). La explicación de
-                  cómo se calcula queda junto al selector de modo. */}
-              {windowMode === "AUTO" ? (
-                <p className="text-[10px] text-text-industrial/40 self-end pb-2">{t("mp.modal.leadDaysHint")}</p>
-              ) : (
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("mp.modal.leadDays")}</label>
-                  <input
-                    type="number" min="0" value={windowLeadDays}
-                    onChange={e => setWindowLeadDays(e.target.value)}
-                    placeholder={t("mp.modal.leadDaysManualPlaceholder")}
-                    disabled={readOnly}
-                    className={inputCls}
-                  />
-                </div>
-              )}
-            </div>
-            </div>{/* ── fin recuadro TAREAS A REALIZAR ── */}
+                    {/* Nivel de riesgo + matriz + resultado (componente compartido con
+                        Diferimientos: su título sigue siendo el que pide la sugerencia). */}
+                    <GuideField id="mp-f-risk" missing={missing.risk}>
+                      {missing.risk && <GuideNeedTag label={t("mp.guide.missing")} />}
+                      <RiskMatrix
+                        probability={riskProbability}
+                        consequence={riskConsequence}
+                        level={riskLevel}
+                        result={riskAnalysisResult}
+                        readOnly={readOnly}
+                        loading={loadingRisk}
+                        onSelect={(p, c, lvl) => { setRiskProbability(p); setRiskConsequence(c); setRiskLevel(lvl); }}
+                        onResultChange={setRiskAnalysisResult}
+                        onSuggest={handleRiskClick}
+                      />
+                    </GuideField>
 
-            {/* ── Recuadro: PLAN DE MUESTREO ── */}
-            <div className={sectionCardCls}>
-              <p className={sectionTitleCls}>
-                {t("mp.modal.samplingLabel")} <span className="text-text-industrial/40 normal-case font-normal">{t("mp.modal.optional")}</span>
-              </p>
-            {/* Plan de muestreo — kind primero; si es FLUID, segundo select con el sub-tipo. */}
-            <div className="space-y-1.5">
-              <select
-                value={samplingKind}
-                onChange={e => {
-                  const v = e.target.value;
-                  setSamplingKind(v);
-                  // Al salir de FLUID, limpiar el sub-tipo (no aplica).
-                  if (v !== "FLUID") setSamplingFluidType("");
-                }}
-                className={selectCls}
-                disabled={readOnly}
-              >
-                <option value="">{t("mp.modal.notSamplingPlan")}</option>
-                <option value="FLUID">{t("sampling.kind.fluid")}</option>
-                <option value="VIBRATION">{t("sampling.kind.vibration")}</option>
-                <option value="THERMAL">{t("sampling.kind.thermal")}</option>
-                <option value="ULTRASOUND">{t("sampling.kind.ultrasound")}</option>
-                <option value="OTHER">{t("sampling.kind.other")}</option>
-              </select>
-              {samplingKind === "FLUID" && (
-                <select value={samplingFluidType} onChange={e => setSamplingFluidType(e.target.value)} className={selectCls} disabled={readOnly}>
-                  <option value="">{t("mp.modal.selectFluidType")}</option>
-                  <option value="ENGINE_OIL">{t("fluid.plan.engineOil")}</option>
-                  <option value="HYDRAULIC_OIL">{t("fluid.plan.hydraulic")}</option>
-                  <option value="GEARBOX_OIL">{t("fluid.plan.gearbox")}</option>
-                  <option value="TRANSMISSION_OIL">{t("fluid.plan.transmission")}</option>
-                  <option value="FUEL_DIESEL">{t("fluid.plan.diesel")}</option>
-                  <option value="FUEL_GASOIL">{t("fluid.plan.gasoil")}</option>
-                  <option value="COOLING_WATER">{t("fluid.plan.coolingWater")}</option>
-                  <option value="BOILER_WATER">{t("fluid.plan.boilerWater")}</option>
-                  <option value="POTABLE_WATER">{t("fluid.plan.potableWater")}</option>
-                  <option value="REFRIGERANT">{t("fluid.plan.refrigerant")}</option>
-                  <option value="OTHER">{t("fluid.plan.other")}</option>
-                </select>
-              )}
-              {samplingKind && (
-                <p className="text-[10px] text-accent/70">{t("mp.modal.samplingHint")}</p>
-              )}
-            </div>
-            </div>{/* ── fin recuadro PLAN DE MUESTREO ── */}
-
-            {/* ── Recuadro: ÁREA / RESPONSABLE ── */}
-            <div className={sectionCardCls}>
-              <p className={sectionTitleCls}>{t("mp.department")}</p>
-            {/* Área / responsable */}
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap gap-2">
-                {(["CUBIERTA", "MAQUINAS", "BARCAZA", "PROVEEDOR", "OTROS"] as const).map(d => (
-                  <button key={d} type="button"
-                    onClick={() => { const next = department === d ? "" : d; setDepartment(next); if (next !== "PROVEEDOR") setProviderRequests([]); }}
-                    className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${
-                      department === d
-                        ? "bg-accent text-accent-fg border-accent"
-                        : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-accent/40"
-                    }`}
-                  >{t(`wo.dept.${d}`)}</button>
-                ))}
-              </div>
-              {/* Varios proveedores + aclaración. Al abrir la OT se crea una SS por
-                  fila. La aclaración es obligatoria (se valida al guardar). Un mismo
-                  proveedor puede repetirse (dos trabajos distintos = dos SS). */}
-              {department === "PROVEEDOR" && (
-                <div className="space-y-2 mt-1">
-                  {providerRequests.map((row, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      {/* Grilla proveedor + aclaración: cada uno ocupa media fila y
-                          nunca desborda el modal (min-w-0). En pantalla angosta se
-                          apilan. La X queda aparte, sin robar ancho. */}
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                    {/* RCM consequence — "si esta tarea no se hace, ¿qué pasa?" */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1">
+                        <label className={fLabelCls}>
+                          {t("wo.modal.consequenceTitle")}
+                          <span className="ml-1 font-normal text-text-industrial/45">{t("wo.modal.consequenceHint")}</span>
+                        </label>
+                        {aiPill(() => { void handleConsequenceClick(); }, loadingConsequence, t("wo.modal.consequenceTooltip"))}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-[14rem_1fr] gap-2">
                         <select
-                          value={row.providerId}
-                          onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                          value={consequenceCategory}
+                          onChange={e => setConsequenceCategory(e.target.value as any)}
+                          disabled={readOnly || loadingConsequence}
                           className={selectCls}
                         >
-                          <option value="">{t("wo.modal.providerSelect")}</option>
-                          {providers.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
-                          ))}
+                          <option value="">{t("wo.modal.consequenceUnclassified")}</option>
+                          <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                          <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                          <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                          <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
                         </select>
-                        <input
-                          value={row.purpose}
-                          onChange={e => setProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
-                          placeholder={t("mp.providerRequests.purposePlaceholder")}
-                          className={inputCls}
-                        />
+                        <RichTextArea value={consequenceRationale} onChange={setConsequenceRationale} rows={2} className={inputCls} disabled={readOnly || loadingConsequence} />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setProviderRequests(prev => prev.filter((_, j) => j !== i))}
-                        title={t("mp.providerRequests.remove")}
-                        className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
-                  </button>
-                </div>
-              )}
-            </div>
-            </div>{/* ── fin recuadro ÁREA / RESPONSABLE ── */}
-
-            {/* ── Recuadro: REPUESTOS / MATERIALES PREVISTOS ──
-                Los repuestos salen del catálogo /Spares (con stock); los materiales
-                van a mano. Al abrir la OT se heredan. Es planificación: NO descuenta stock. */}
-            <div className={sectionCardCls}>
-              <div className="space-y-0.5">
-                <p className={sectionTitleCls}>{t("mp.spares.title")}</p>
-                <p className="text-[11px] text-text-industrial/50">{t("mp.spares.hint")}</p>
+                  </fieldset>
+                </GuideSection>
               </div>
-              <PlannedItemsEditor
-                items={plannedSpares}
-                onChange={setPlannedSpares}
-                spares={spareCatalog}
-                disabled={readOnly}
-              />
-            </div>
 
-            {/* Responsible + Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.responsible")}</label>
-                <input value={responsible} onChange={e => setResponsible(e.target.value)} className={inputCls} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("col.status")}</label>
-                <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
-                  {EDITABLE_STATUSES.map(item => <option key={item} value={item}>{t(`mp.status.${item}` as any)}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Acceptance criteria */}
-            <div className="space-y-1.5">
-              <label
-                onClick={readOnly ? undefined : handleAcceptanceCriteriaClick}
-                title={readOnly ? undefined : t("mp.modal.aiCriteriaTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                  readOnly
-                    ? "text-text-industrial/60 cursor-default"
-                    : `text-accent hover:text-fg cursor-pointer ${loadingCriteria ? "opacity-60 animate-pulse" : ""}`
-                }`}
-              >
-                {!readOnly && (loadingCriteria ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
-                {t("mp.acceptanceCriteria")}
-              </label>
-              <RichTextArea value={acceptanceCriteria} onChange={setAcceptanceCriteria} rows={2} className={inputCls} disabled={loadingCriteria} />
-            </div>
-
-            {/* LOTO */}
-            <div className="space-y-1.5">
-              <label
-                onClick={readOnly ? undefined : handleLotoClick}
-                title={readOnly ? undefined : t("wo.ai.lotoTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                  readOnly
-                    ? "text-text-industrial/60 cursor-default"
-                    : `text-accent hover:text-fg cursor-pointer ${loadingLoto ? "opacity-60 animate-pulse" : ""}`
-                }`}
-              >
-                {!readOnly && (loadingLoto ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
-                {t("mp.loto")}
-              </label>
-              <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
-            </div>
-
-            {/* Nivel de riesgo + matriz + resultado (componente compartido con Diferimientos) */}
-            <RiskMatrix
-              probability={riskProbability}
-              consequence={riskConsequence}
-              level={riskLevel}
-              result={riskAnalysisResult}
-              readOnly={readOnly}
-              loading={loadingRisk}
-              onSelect={(p, c, lvl) => { setRiskProbability(p); setRiskConsequence(c); setRiskLevel(lvl); }}
-              onResultChange={setRiskAnalysisResult}
-              onSuggest={handleRiskClick}
-            />
-
-            {/* RCM consequence — "si esta tarea no se hace, ¿qué pasa?" */}
-            <div className="space-y-1.5">
-              <label
-                onClick={readOnly ? undefined : handleConsequenceClick}
-                title={readOnly ? undefined : t("wo.modal.consequenceTooltip")}
-                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                  readOnly
-                    ? "text-text-industrial/60 cursor-default"
-                    : `text-accent hover:text-fg cursor-pointer ${loadingConsequence ? "opacity-60 animate-pulse" : ""}`
-                }`}
-              >
-                {!readOnly && (loadingConsequence ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
-                {t("wo.modal.consequenceTitle")}
-                <span className="text-[10px] normal-case font-normal text-text-industrial/50 ml-1">{t("wo.modal.consequenceHint")}</span>
-              </label>
-              <select
-                value={consequenceCategory}
-                onChange={e => setConsequenceCategory(e.target.value as any)}
-                disabled={readOnly || loadingConsequence}
-                className={inputCls}
-              >
-                <option value="">{t("wo.modal.consequenceUnclassified")}</option>
-                <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
-                <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
-                <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
-                <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
-              </select>
-              <RichTextArea
-                value={consequenceRationale}
-                onChange={setConsequenceRationale}
-                rows={2}
-                className={inputCls}
-                disabled={readOnly || loadingConsequence}
-              />
-            </div>
-
-            {/* LISTA DE CHEQUEO del ítem del PDM (Word / PDF / Excel).
-                Antes sólo aparecía con el modo "CHECKLIST", que ya no se puede
-                elegir: la subida quedó inalcanzable aunque hay planes con
-                documento cargado. Ahora está siempre — es la planilla que se
-                usa al ejecutar, y en una inspección es lo que se completa. */}
-            <div className="space-y-1.5">
-                <label className={labelCls}>{t("mp.checklistTemplate")}</label>
-                {taskType === "INSPECTION" && (
-                  <p className="text-[11px] text-text-industrial/50">{t("mp.checklistInspectionHint")}</p>
-                )}
-                <div className="rounded-xl border border-fg/10 bg-fg/5 p-4 space-y-3">
-                  {checklistTemplate && (checklistTemplate.startsWith("/uploads/") || checklistTemplate.startsWith("/app/files/")) ? (
-                    <div className="flex items-center justify-between gap-3">
-                      <button type="button"
-                        onClick={() => { void downloadAuthedFile(checklistTemplate); }}
-                        className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 hover:text-green-300 truncate"
-                        title="Descargar plantilla">
-                        <ClipboardList className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{checklistTemplate.split("/").pop()}</span>
-                      </button>
-                      <button type="button" onClick={() => setChecklistTemplate("")} className="text-text-industrial/40 hover:text-red-400 transition-colors shrink-0"><X className="w-4 h-4" /></button>
+              {/* ── 5 · Documentos ── (el plan de muestreo subió a "Qué se hace", V17b) */}
+              <div id="mp-sec-docs">
+                <GuideSection n={5} title={sectionMeta.docs.title} subtitle={sectionMeta.docs.sub}
+                  open={openSecs.docs} onToggle={() => setOpenSecs(s => ({ ...s, docs: !s.docs }))}>
+                  <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    {/* LISTA DE CHEQUEO del ítem del PDM (Word / PDF / Excel). Siempre
+                        visible: es la planilla que se usa al ejecutar, y en una
+                        inspección es lo que se completa. */}
+                    <div className="space-y-1.5">
+                      <label className={fLabelCls}>{t("mp.checklistTemplate")}</label>
+                      {taskType === "INSPECTION" && (
+                        <p className="text-[11px] text-text-industrial/50">{t("mp.checklistInspectionHint")}</p>
+                      )}
+                      <div className="rounded-xl border border-fg/10 bg-fg/5 p-3 space-y-3">
+                        {checklistTemplate && (checklistTemplate.startsWith("/uploads/") || checklistTemplate.startsWith("/app/files/")) ? (
+                          <div className="flex items-center justify-between gap-3">
+                            <button type="button"
+                              onClick={() => { void downloadAuthedFile(checklistTemplate); }}
+                              className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 hover:text-green-300 truncate"
+                              title={t("mp.f.downloadTemplate")}>
+                              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                              <span className="truncate">{checklistTemplate.split("/").pop()}</span>
+                            </button>
+                            <button type="button" onClick={() => setChecklistTemplate("")} className="text-text-industrial/40 hover:text-red-400 transition-colors shrink-0"><X className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-text-industrial/40">{t("mp.checklistNoFile")}</p>
+                        )}
+                        {isNew ? (
+                          <p className="text-[10px] text-yellow-700 dark:text-yellow-400/70">{t("mp.modal.checklistSaveFirst")}</p>
+                        ) : (
+                          <label className={`flex items-center gap-2 cursor-pointer w-fit px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                            checklistUploading ? "border-fg/10 text-text-industrial/40 cursor-not-allowed" : "border-green-500/30 text-green-700 dark:text-green-400 hover:bg-green-500/10"
+                          }`}>
+                            {checklistUploading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.checklistUploading")}</> : <><FileSpreadsheet className="w-3.5 h-3.5" /> {t("mp.checklistUpload")}</>}
+                            <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt" className="sr-only"
+                              disabled={checklistUploading || isNew}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file || !plan) return;
+                                e.target.value = "";
+                                setChecklistUploading(true);
+                                setChecklistUploadError(null);
+                                try {
+                                  const res = await api.upload(`/app/pms/maintenance-plans/${plan.id}/upload-checklist`, file);
+                                  setChecklistTemplate((res as { url: string }).url);
+                                } catch (err) {
+                                  setChecklistUploadError(err instanceof ApiError ? err.message : t("common.saveError"));
+                                } finally {
+                                  setChecklistUploading(false);
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                        {checklistUploadError && <p className="text-xs text-red-700 dark:text-red-400">{checklistUploadError}</p>}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-xs text-text-industrial/40">{t("mp.checklistNoFile")}</p>
-                  )}
-                  {isNew ? (
-                    <p className="text-[10px] text-yellow-700 dark:text-yellow-400/70">{t("mp.modal.checklistSaveFirst")}</p>
-                  ) : (
-                    <label className={`flex items-center gap-2 cursor-pointer w-fit px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                      checklistUploading ? "border-fg/10 text-text-industrial/40 cursor-not-allowed" : "border-green-500/30 text-green-700 dark:text-green-400 hover:bg-green-500/10"
-                    }`}>
-                      {checklistUploading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.checklistUploading")}</> : <><FileSpreadsheet className="w-3.5 h-3.5" /> {t("mp.checklistUpload")}</>}
-                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt" className="sr-only"
-                        disabled={checklistUploading || isNew}
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file || !plan) return;
-                          e.target.value = "";
-                          setChecklistUploading(true);
-                          setChecklistUploadError(null);
-                          try {
-                            const res = await api.upload(`/app/pms/maintenance-plans/${plan.id}/upload-checklist`, file);
-                            setChecklistTemplate((res as { url: string }).url);
-                          } catch (err) {
-                            setChecklistUploadError(err instanceof ApiError ? err.message : t("common.saveError"));
-                          } finally {
-                            setChecklistUploading(false);
-                          }
-                        }}
-                      />
-                    </label>
-                  )}
-                  {checklistUploadError && <p className="text-xs text-red-700 dark:text-red-400">{checklistUploadError}</p>}
-                </div>
-            </div>
 
-            {/* Los avisos de este formulario van en una ventanita con OK
-                (ver AlertDialog al final del modal): al pie del formulario
-                quedaban fuera de la vista y parecía que el botón no hacía nada. */}
-          </fieldset>
+                  </fieldset>
+                </GuideSection>
+              </div>
 
-          {/* Footer — always shows Reportar Ejecución + Postergar for active plans */}
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10 bg-surface dark:bg-[#0D1B2A] shrink-0">
-            <div className="flex gap-2">
-              {/* Borrar el plan NO vive acá: está en la última columna de la
-                  planilla de planes, igual que en Equipos. */}
-              {canExecute && needsWO && !(plan.activeWorkOrderCode && plan.executionStatus === "IN_WINDOW") && (
-                <button
-                  onClick={() => plan.activeWorkOrderCode ? setConfirmDuplicateWO(true) : setShowExecution(true)}
-                  className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:bg-accent/15 transition-all"
-                >
-                  <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> {t("mp.modal.openWO")}</span>
-                </button>
-              )}
-              {/* Solo Alerta → OT Express (nace autorizada). El resto de los
-                  modos sin OT formal sigue con "Reportar Resultado". */}
-              {canExecute && isExpressMode && (
-                <button
-                  onClick={() => { void openExpressWorkOrder(); }}
-                  disabled={openingExpress}
-                  title={expressGoesToProvider ? t("mp.express.providerHint") : t("mp.express.hint")}
-                  className="px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent font-bold text-xs hover:bg-accent/15 disabled:opacity-50 transition-all"
-                >
-                  <span className="flex items-center gap-1.5">
-                    {openingExpress ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-                    {expressGoesToProvider
-                      ? t("mp.col.executeWO")
-                      : t("mp.modal.openExpressWO").replace("{abbr}", woTerms.abbr)}
-                  </span>
-                </button>
-              )}
-              {canExecute && !needsWO && !isExpressMode && (
-                <button
-                  onClick={() => setShowExecution(true)}
-                  className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500/15 transition-all"
-                >
-                  {t("mp.modal.reportResult")}
-                </button>
-              )}
+              {/* Los avisos de este formulario van en una ventanita con OK
+                  (ver AlertDialog al final del modal): al pie del formulario
+                  quedaban fuera de la vista y parecía que el botón no hacía nada. */}
             </div>
-            <div className="flex gap-2">
-              {!isNew && (
-                <button
-                  onClick={() => setShowHistory(true)}
-                  className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-fg/20 transition-all flex items-center gap-1.5"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  {t("mp.modal.history")}
-                </button>
-              )}
-              {!isNew && (
-                <button
-                  onClick={downloadPdf}
-                  className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-fg/20 transition-all flex items-center gap-1.5"
-                  title={t("mp.modal.pdfTooltip")}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  PDF
-                </button>
-              )}
-              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">
-                {readOnly ? t("mp.modal.close") : t("common.cancel")}
+          </div>
+
+          {/* Pie: historial y PDF a la izquierda; guardar a la derecha, con lo que falta. */}
+          <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-t border-fg/10 bg-surface dark:bg-[#0D1B2A] shrink-0">
+            {/* Borrar el plan NO vive acá: está en la última columna de la
+                planilla de planes, igual que en Equipos. */}
+            {!isNew && (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-fg/20 transition-all flex items-center gap-1.5"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                {t("mp.modal.history")}
               </button>
-              {!readOnly && (
-                <button
-                  onClick={() => {
-                    // Interceptor: si cambió la periodicidad, mostramos el popup
-                    // de MOC antes de guardar. El user decide guardar igual o
-                    // abrir MOC primero.
-                    if (planChangedFrequency) setShowMocPrompt(true);
-                    else void onSave();
-                  }}
-                  disabled={saving}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 ${justSaved ? "bg-green-600 text-white" : "bg-accent text-accent-fg hover:brightness-110"}`}
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <><CheckCircle2 className="w-4 h-4" />{t("mp.modal.saved")}</> : t("common.save")}
-                </button>
-              )}
-            </div>
+            )}
+            {!isNew && (
+              <button
+                onClick={downloadPdf}
+                className="px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:text-fg hover:border-fg/20 transition-all flex items-center gap-1.5"
+                title={t("mp.modal.pdfTooltip")}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                PDF
+              </button>
+            )}
+            <span className="flex-1" />
+            {!readOnly && planDirty && !justSaved && (
+              <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-400">
+                <CircleDot className="w-3 h-3" /> {t("mp.guide.dirty")}
+              </span>
+            )}
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">
+              {readOnly ? t("mp.modal.close") : t("common.cancel")}
+            </button>
+            {!readOnly && (
+              <button
+                onClick={() => {
+                  // Interceptor: si cambió la periodicidad, mostramos el popup
+                  // de MOC antes de guardar. El user decide guardar igual o
+                  // abrir MOC primero.
+                  if (planChangedFrequency) setShowMocPrompt(true);
+                  else void onSave();
+                }}
+                disabled={saving}
+                className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-1.5 ${justSaved ? "bg-green-600 text-white" : "bg-accent text-accent-fg hover:brightness-110"}`}
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <><CheckCircle2 className="w-4 h-4" />{t("mp.modal.saved")}</> : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />{t("common.save")}
+                    {totalMissing > 0 && <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(totalMissing))}</span>}
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

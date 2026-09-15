@@ -4,6 +4,7 @@ import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { generateFluidAiAnalysis } from "./fluid-analyses-ai-insights";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
+import { ensurePermission } from "../auth/role-permissions";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -76,23 +77,17 @@ export interface UpdateResultInput extends Partial<CreateResultInput> {}
  * Quién administra los análisis: cargar el resultado del laboratorio, corregir
  * una muestra, vincularla a su OT o darla de baja.
  *
- * Los tres roles que siguen el mantenimiento del buque de punta a punta:
- *   · TENANT_ADMIN          — DPA / Director de Operaciones
- *   · FLEET_SUPERINTENDENT  — Superintendente técnico (tierra)
- *   · MAINTENANCE_MANAGER   — Capitán / Jefe de Máquinas (a bordo)
- *
- * El superintendente se sumó en sep 2026 a pedido del usuario: es quien recibe
- * los informes del laboratorio desde tierra, y sin esto tenía que pedirle a
- * otro que los cargara.
+ * Sale del tilde "Cargar y editar análisis de laboratorio" (`fluid.manage`) de
+ * Equipo → Permisos. Por defecto lo tienen el DPA, el Superintendente técnico,
+ * el Capitán / Jefe de Máquinas y, desde sep 2026, el Tripulante (pedido del
+ * usuario: a bordo también los cargan). Antes era una lista fija de roles.
  *
  * Los UMBRALES no entran acá: los sigue tocando sólo TENANT_ADMIN (ver
  * upsertThreshold). Mover un umbral cambia el veredicto de todos los análisis
  * del tenant, no de uno.
  */
 export function ensureCanManageFluidAnalyses(session: TenantAccessSession): void {
-  const role = session.user.role;
-  const ok = role === "TENANT_ADMIN" || role === "FLEET_SUPERINTENDENT" || role === "MAINTENANCE_MANAGER";
-  if (!ok) throw new RouteError(403, "FORBIDDEN", "Sin permiso para gestionar análisis de fluidos.");
+  ensurePermission(session, "fluid.manage", "Sin permiso para gestionar análisis de fluidos.");
 }
 
 /**

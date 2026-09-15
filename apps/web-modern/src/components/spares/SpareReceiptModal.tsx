@@ -11,6 +11,7 @@
 // Tres pasos: datos del remito → revisión → resumen. Nada se escribe en la base
 // hasta el botón de confirmar.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { GuideNeedTag } from "../GuideKit";
 import {
   PackagePlus, Upload, Loader2, CheckCircle2, AlertTriangle, Search, Plus, Trash2, FileText,
 } from "lucide-react";
@@ -513,6 +514,9 @@ const ReviewRow: React.FC<{
   const t = useT();
   const qty = Number(row.quantity);
   const validQty = Number.isFinite(qty) && qty > 0;
+  // Lo que falta para que la fila se pueda guardar, resaltado en naranja (preview V24).
+  const needDest = !row.spareId && !row.confirmedNew;
+  const need = <GuideNeedTag label={t("mp.guide.missing")} />;
 
   return (
     <div className={`rounded-xl border p-3 space-y-3 ${STATUS_STYLE[row.status]}`}>
@@ -531,8 +535,9 @@ const ReviewRow: React.FC<{
             type="number" min="0" step="0.01"
             value={row.quantity}
             onChange={e => onPatch({ quantity: e.target.value })}
-            className={`${inputCls} ${validQty ? "" : "border-red-500/50"}`}
+            className={`${inputCls} ${validQty ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`}
           />
+          {!validQty && need}
         </div>
         <div className="w-20">
           <label className={labelCls}>{t("rcp.col.unit")}</label>
@@ -561,7 +566,8 @@ const ReviewRow: React.FC<{
           <button onClick={onMarkNew} className="text-fg/40 underline hover:text-fg">{t("rcp.change")}</button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className={`space-y-2 ${needDest ? "rounded-xl border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10 px-3 py-2" : ""}`}>
+          {needDest && <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300">{t("rcp.v24.pickOrNew")}{need}</p>}
           {row.candidates.length > 0 && (
             <div className="space-y-1">
               <p className="text-[11px] font-bold text-yellow-700 dark:text-yellow-400">{t("rcp.similar")}</p>
@@ -600,12 +606,12 @@ const ReviewRow: React.FC<{
             <SimilarCheck vesselCode={vesselCode} name={row.newName} onPick={onPick} />
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               <div>
-                <label className={labelCls}>{t("rcp.newSku")}</label>
-                <input value={row.newSku} onChange={e => onPatch({ newSku: e.target.value })} placeholder="FIL-COMB-GEN" className={inputCls} />
+                <label className={labelCls}>{t("rcp.newSku")}{!row.newSku.trim() && need}</label>
+                <input value={row.newSku} onChange={e => onPatch({ newSku: e.target.value })} placeholder="FIL-COMB-GEN" className={`${inputCls} ${row.newSku.trim() ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`} />
               </div>
               <div className="sm:col-span-2">
-                <label className={labelCls}>{t("rcp.newName")}</label>
-                <input value={row.newName} onChange={e => onPatch({ newName: e.target.value })} className={inputCls} />
+                <label className={labelCls}>{t("rcp.newName")}{!row.newName.trim() && need}</label>
+                <input value={row.newName} onChange={e => onPatch({ newName: e.target.value })} className={`${inputCls} ${row.newName.trim() ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`} />
               </div>
               <div>
                 <label className={labelCls}>{t("rcp.newCrit")}</label>

@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FileDown, FileSpreadsheet, LayoutGrid, List, ListTree, Loader2, Maximize2, Minimize2, Plus, Search, Settings, ShieldAlert, Sparkles, Trash2, X } from "lucide-react";
+import {
+  AlertOctagon, AlertTriangle, CalendarCheck, CalendarPlus, CalendarX, ChevronRight, Clock, FileDown, FileMinus, FileSpreadsheet, FlaskConical, Gauge, LayoutGrid, List, ListTree,
+  Loader2, Package, Plus, PowerOff, Save, Search, Settings, ShieldAlert, Ship, Sparkles, Trash2, X,
+} from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
-import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -18,6 +19,9 @@ import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-fi
 import { MaintenancePlanModal, type MaintenancePlan } from "./MaintenancePlans";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { textMatches } from "../lib/text-search";
+import { AlertDialog } from "../components/AlertDialog";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import type { FluidSample } from "../components/fluid-analyses/shared";
 
 interface Asset {
   id: string;
@@ -62,6 +66,12 @@ interface Vessel {
   name: string;
   status: string;
 }
+
+/** Defecto y muestra de fluidos, lo justo para los nexos del equipo. */
+interface AssetDefectLite { id: string; defectCode: string; assetId: string | null; status: string; severity: string; description: string; reportedAt: string }
+type AssetFluidLite = Pick<FluidSample, "id" | "sampleCode" | "sampledAt" | "status" | "result">;
+
+const ASSET_CRIT_CHIP: Record<string, string> = { A: "bg-red-700 text-white", B: "bg-amber-500/15 text-amber-800 dark:text-amber-300", C: "bg-fg/5 text-text-industrial/60" };
 
 // SFI: solo grupo (0-9). Nombres desde i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
@@ -118,11 +128,12 @@ const CriticalityDot: React.FC<{ value: string | null | undefined; title?: strin
 };
 
 /** Tarjeta de equipo del tablero. Al hacer clic abre el mismo modal que la lista. */
-function AssetBoardCard({ asset, onOpen, safetyTitle, critTitle }: {
+function AssetBoardCard({ asset, onOpen, safetyTitle, critTitle, statusLabel }: {
   asset: Asset;
   onOpen: (a: Asset) => void;
   safetyTitle: string;
   critTitle: string;
+  statusLabel: string;
 }) {
   return (
     <button
@@ -147,7 +158,7 @@ function AssetBoardCard({ asset, onOpen, safetyTitle, critTitle }: {
       <p className="text-xs text-fg font-medium line-clamp-2 leading-snug" title={asset.name}>{asset.name}</p>
       {asset.status !== "OPERATIONAL" && (
         <span className={`block text-[9px] font-bold ${asset.status === "OUT_OF_SERVICE" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
-          {asset.status === "OUT_OF_SERVICE" ? "FUERA DE SERVICIO" : asset.status}
+          {statusLabel}
         </span>
       )}
     </button>
@@ -180,7 +191,7 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
   }, [assets]);
 
   if (loading && !assets) {
-    return <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando equipos...</div>;
+    return <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loading")}</div>;
   }
 
   // Sólo se muestran los grupos que tienen equipos: una columna vacía no aporta
@@ -189,7 +200,7 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
   // (Incluye "sin grupo SFI", que además es un caso de datos incompletos.)
   const cols = [
     ...BOARD_GROUP_NUMBERS.map(g => ({ key: g as number | "NONE", label: `G${g}`, name: t(`sfi.g.${g}` as Parameters<typeof t>[0]) })),
-    { key: "NONE" as const, label: "—", name: "Sin grupo SFI" },
+    { key: "NONE" as const, label: "—", name: t("gantt.noSfiGroup") },
   ].filter(col => (byGroup.get(col.key)?.length ?? 0) > 0);
 
   if (cols.length === 0) {
@@ -220,6 +231,7 @@ function AssetsBoard({ assets, loading, onOpen, t }: {
                     onOpen={onOpen}
                     safetyTitle={t("asset.safetyCritical")}
                     critTitle={t("asset.criticalityOf")}
+                    statusLabel={t(`asset.v23.st.${a.status}` as TranslationKey)}
                   />
                 ))}
               </div>
@@ -603,7 +615,7 @@ const PlanTaskTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   );
 };
 
-const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
+const AssetMaintenancePlans: React.FC<{ asset: Asset; newRequestKey?: number; onChanged?: () => void }> = ({ asset, newRequestKey = 0, onChanged }) => {
   const t = useT();
   const { user } = useAuth();
   const can = useCan();
@@ -630,6 +642,8 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
   // undefined = cerrado | null = nueva tarea | objeto = edición
   const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null | undefined>(undefined);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  // "Armar plan" del aviso de arriba abre la tarea nueva acá.
+  useEffect(() => { if (newRequestKey > 0) setEditingPlan(null); }, [newRequestKey]);
 
   const sfiGroupNumber = useMemo(() => {
     const first = asset.sfiCode?.trim()?.[0];
@@ -718,7 +732,7 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset }> = ({ asset }) => {
           defaultSfiGroupNumber={sfiGroupNumber}
           lockAsset
           onClose={() => setEditingPlan(undefined)}
-          onSaved={async () => { await reload(); }}
+          onSaved={async () => { await reload(); onChanged?.(); }}
         />
       )}
     </div>
@@ -733,6 +747,8 @@ interface AssetModalProps {
   isAdmin: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** Pide la baja (abre la confirmación en la página). */
+  onDeleteRequest?: (a: Asset) => void;
 }
 
 interface AssetNameOption {
@@ -748,8 +764,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
   isAdmin,
   onClose,
   onSaved,
+  onDeleteRequest,
 }) => {
   const t = useT();
+  const can = useCan();
+  const navigate = useNavigate();
   const isEdit = Boolean(initial);
 
   const { data: assetDetail } = useFetch<Asset>(
@@ -793,7 +812,6 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const [assetCodeTouched, setAssetCodeTouched] = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [expanded,    setExpanded]    = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // La excepción "no requiere plan" sólo tiene sentido en un equipo de criticidad
@@ -984,11 +1002,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
 
   const onSave = useCallback(async () => {
     if (!vesselCode.trim() && !isEdit) {
-      setActionError("Vessel es requerido.");
+      setActionError(t("error.vesselRequired"));
       return;
     }
     if (!assetCode.trim() && !isEdit) {
-      setActionError("Asset Code es requerido.");
+      setActionError(t("asset.v23.codeRequired"));
       return;
     }
     if (!selectedGroup) {
@@ -996,7 +1014,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
       return;
     }
     if (!name.trim()) {
-      setActionError("Debe seleccionar o indicar el nombre del asset.");
+      setActionError(t("asset.v23.nameRequired"));
       return;
     }
     // Un equipo sin plan tiene que decir por qué: la excepción sin motivo es
@@ -1022,7 +1040,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
           asset.assetCode.trim().toUpperCase() === codeUpper,
         );
         if (duplicated) {
-          setActionError("Asset Code ya existe para este vessel. Se requiere uno único.");
+          setActionError(t("asset.v23.codeDuplicated"));
           setSaving(false);
           return;
         }
@@ -1123,11 +1141,11 @@ const AssetModal: React.FC<AssetModalProps> = ({
       setPlanNotRequired(noLlevaPlan);
       setPlanNotRequiredReason(noLlevaPlan ? result.rationale : "");
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "No se pudo obtener sugerencia.");
+      setActionError(err instanceof ApiError ? err.message : t("asset.v23.suggestError"));
     } finally {
       setSuggestingCriticality(false);
     }
-  }, [name, vesselCode, selectedGroup, manufacturer, model, serialNumber, suggestingCriticality]);
+  }, [name, vesselCode, selectedGroup, manufacturer, model, serialNumber, suggestingCriticality, t]);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -1138,369 +1156,389 @@ const AssetModal: React.FC<AssetModalProps> = ({
   });
   const requestClose = useEscapeGuard({ isDirty, onSave: onSave, onClose });
 
+  // ── Ventana del equipo (preview V23) ─────────────────────────────────────────
+  // Nexos del equipo: tareas (para el aviso de "sin plan" y los repuestos),
+  // defectos abiertos y la última muestra de fluidos. Sólo en edición.
+  const [plansNewKey, setPlansNewKey] = useState(0);
+  const relPlans = useFetch<{ items: MaintenancePlan[] }>(initial?.id ? `/app/pms/maintenance-plans?assetId=${encodeURIComponent(initial.id)}` : null, [initial?.id]);
+  const relDefects = useFetch<{ items: AssetDefectLite[] }>(initial?.id ? `/app/pms/defects?assetId=${encodeURIComponent(initial.id)}` : null, [initial?.id]);
+  const relFluids = useFetch<{ items: AssetFluidLite[] }>(initial?.id ? `/app/fluid-analyses?assetId=${encodeURIComponent(initial.id)}` : null, [initial?.id]);
+  const activePlans = useMemo(() => (relPlans.data?.items ?? []).filter(p => p.status !== "INACTIVE"), [relPlans.data]);
+  const overduePlans = activePlans.filter(p => p.status === "OVERDUE").length;
+  const openDefects = (relDefects.data?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED");
+  const lastSample = [...(relFluids.data?.items ?? [])].sort((a, b) => b.sampledAt.localeCompare(a.sampledAt))[0] ?? null;
+  const planSpares = useMemo(() => {
+    const m = new Map<string, { label: string; qty: number; unit: string; tasks: number }>();
+    for (const p of activePlans) {
+      const lines = (p as unknown as { spares?: { spareId?: string | null; description?: string; quantity?: number; unit?: string }[] | null }).spares;
+      if (!Array.isArray(lines)) continue;
+      for (const l of lines) {
+        const key = l?.spareId || l?.description || "";
+        if (!key) continue;
+        const cur = m.get(key) ?? { label: l.description || key, qty: 0, unit: l.unit ?? "", tasks: 0 };
+        cur.qty += Number(l.quantity) || 0; cur.tasks += 1;
+        m.set(key, cur);
+      }
+    }
+    return [...m.values()];
+  }, [activePlans]);
+  const noPlanGap = isEdit && !relPlans.loading && relPlans.data != null && activePlans.length === 0 && criticality !== "C" && !planNotRequired;
+  const canManageAsset = can("asset.manage");
+  // Obligatorios (preview V24): lo mismo que valida onSave.
+  const missReq = {
+    vessel: !isEdit && !vesselCode.trim(),
+    code: !isEdit && !assetCode.trim(),
+    group: !selectedGroup,
+    name: !name.trim(),
+    exemptReason: puedeEximirse && planNotRequired && !planNotRequiredReason.trim(),
+  };
+  const missSec1 = Number(missReq.vessel) + Number(missReq.code) + Number(missReq.group) + Number(missReq.name);
+  const missTotal = missSec1 + Number(missReq.exemptReason);
+  const needTag = (on: boolean) => on ? <GuideNeedTag label={t("mp.guide.missing")} /> : null;
+
+  const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
+  const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+  const box = (icon: React.ReactNode, title: string, right: React.ReactNode, body: React.ReactNode) => (
+    <div className="rounded-2xl border border-fg/10 overflow-hidden">
+      <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg">{icon} {title}<span className="ml-auto text-[11px] font-semibold">{right}</span></h3>
+      <div className="p-3 space-y-2">{body}</div>
+    </div>
+  );
+  const rel = "w-full flex items-center gap-2 rounded-xl border border-fg/10 px-2.5 py-2 text-left text-xs hover:border-accent/40 transition-colors";
+  const empty = (txt: string) => <p className="text-xs text-text-industrial/45">{txt}</p>;
+  const vesselName = (code: string) => vessels.find(v => v.code === code)?.name || code;
+  const statusTone: Record<string, string> = {
+    OPERATIONAL: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    DEGRADED: "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+    OUT_OF_SERVICE: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400",
+  };
+  const SEV_CLS: Record<string, string> = { CRITICAL: "bg-red-700 text-white", HIGH: "bg-orange-500/15 text-orange-700 dark:text-orange-300", MEDIUM: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", LOW: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" };
+  const SEV_KEY: Record<string, TranslationKey> = { LOW: "priority.low", MEDIUM: "priority.medium", HIGH: "priority.high", CRITICAL: "priority.critical" };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-          <h2 className="text-base font-bold text-fg">{isEdit ? t("asset.editTitle") : t("asset.newTitle")}</h2>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-fg/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("asset.collapse") : t("asset.expand")}>
-              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-            <ModalCloseButton onClose={requestClose} />
+      <div className="w-full max-w-6xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 border-t-4 border-t-sky-600 rounded-2xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Encabezado */}
+        <div className="flex items-start gap-3 px-4 sm:px-6 py-3 border-b border-fg/10 shrink-0">
+          <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-sky-500/15 text-sky-700 dark:text-sky-300"><Settings className="w-6 h-6" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+              {t("asset.v23.kicker")}{selectedGroup ? ` · ${selectedGroup} ${t(`sfi.g.${selectedGroup}` as TranslationKey)}` : ""}
+            </p>
+            <h2 className="text-lg font-black text-fg leading-tight truncate">{name.trim() || (isEdit ? t("asset.editTitle") : t("asset.newTitle"))}</h2>
+            {(manufacturer.trim() || model.trim() || serialNumber.trim()) && (
+              <p className="text-xs text-text-industrial/60 truncate">{[[manufacturer.trim(), model.trim()].filter(Boolean).join(" "), serialNumber.trim() && t("asset.v23.serialN").replace("{n}", serialNumber.trim())].filter(Boolean).join(" · ")}</p>
+            )}
+            {isEdit && initial && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{initial.assetCode}</span>
+                {/* Nombre del buque, no el código. */}
+                <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70"><Ship className="w-3 h-3" />{vesselName(initial.vesselCode)}</span>
+                <span className={`rounded-md px-2 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[criticality] ?? ASSET_CRIT_CHIP.C}`}>{t("asset.v23.critN").replace("{c}", criticality)}</span>
+                {isSafetyCritical && <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300"><ShieldAlert className="w-3 h-3" />ISM 10.3</span>}
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusTone[status] ?? statusTone.OPERATIONAL}`}>{t(`asset.v23.st.${status}` as TranslationKey)}</span>
+              </div>
+            )}
           </div>
+          <ModalCloseButton onClose={requestClose} />
         </div>
-        <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.vessel")}</label>
-              <select
-                value={vesselCode}
-                onChange={e => setVesselCode(e.target.value)}
-                disabled={isEdit && !isAdmin}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
-              >
-                <option value="">{t("asset.selectVessel")}</option>
-                {vessels.map(vessel => (
-                  <option key={vessel.code} value={vessel.code}>
-                    {vessel.code} - {vessel.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.code")}</label>
-              <input
-                value={assetCode}
-                onChange={e => {
-                  setAssetCode(e.target.value.toUpperCase());
-                  setAssetCodeTouched(true);
-                }}
-                disabled={(isEdit && !isAdmin) || (!isEdit && Boolean(selectedNameOption))}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
-              />
-            </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("mp.sfiGroup")}</label>
-              <select
-                value={selectedGroup}
-                onChange={e => onGroupChanged(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
-              >
-                <option value="">{t("mp.selectSfiGroup")}</option>
-                {SFI_GROUP_NUMBERS.map(g => (
-                  <option key={g} value={String(g)}>
-                    {g} - {t(`sfi.g.${g}` as Parameters<typeof t>[0])}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">
-                {t("col.name")}
-              </label>
-              {nameOptions.length > 0 && (
-                <select
-                  value={selectedNameOption?.name ?? ""}
-                  onChange={e => onNameChanged(e.target.value)}
-                  disabled={!selectedGroup}
-                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 disabled:opacity-60"
-                >
-                  <option value="">{t("asset.selectExistingName")}</option>
-                  {nameOptions.map(option => (
-                    <option key={`${option.name}-${option.suggestedAssetCode}`} value={option.name}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Qué hacer ahora */}
+          {noPlanGap ? (
+            <div className="mx-4 sm:mx-6 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] border-red-400/60 bg-red-500/[0.07] px-3.5 py-3">
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 bg-red-600"><CalendarX className="w-5 h-5" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-black text-fg">{t("asset.v23.noPlanTitle")}</p>
+                <p className="text-[12.5px] text-text-industrial/70">{t("asset.v23.noPlanDesc").replace("{c}", criticality)}</p>
+              </div>
+              {canManageAsset && (
+                <button type="button" onClick={() => { setPlansNewKey(k => k + 1); document.getElementById("asset-plans")?.scrollIntoView({ behavior: "smooth" }); }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold hover:brightness-110">
+                  <CalendarPlus className="w-3.5 h-3.5" /> {t("asset.v23.buildPlan")}
+                </button>
               )}
-              <input
-                value={name}
-                onChange={e => onNameChanged(e.target.value)}
-                disabled={!selectedGroup}
-                placeholder={nameOptions.length > 0 ? t("asset.namePlaceholderEdit") : t("asset.namePlaceholderNew")}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60"
-              />
             </div>
+          ) : isEdit && openDefects.length > 0 ? (
+            <div className="mx-4 sm:mx-6 mt-4 flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] border-amber-400/60 bg-amber-500/[0.07] px-3.5 py-3">
+              <span className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 bg-amber-600"><AlertOctagon className="w-5 h-5" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-black text-fg">{t("asset.v23.defectsTitle").replace("{n}", String(openDefects.length))}</p>
+                <p className="text-[12.5px] text-text-industrial/70">{t("asset.v23.defectsDesc")}</p>
+              </div>
+            </div>
+          ) : null}
 
-            <div className="space-y-1.5">
-              <button
-                type="button"
-                onClick={() => { void requestCriticalitySuggestion(); }}
-                disabled={!name.trim() || suggestingCriticality}
-                title={!name.trim() ? t("asset.suggestCritNeedsName") : t("asset.suggestCritTitle")}
-                className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider hover:text-fg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {suggestingCriticality
-                  ? <Loader2 className="w-3 h-3 animate-spin" />
-                  : <Sparkles className="w-3 h-3" />}
-                {t("col.criticality")}
-              </button>
-              <select
-                value={criticality}
-                onChange={e => setCriticality(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
-              >
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.status")}</label>
-              <select
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
-              >
-                <option value="OPERATIONAL">OPERATIONAL</option>
-                <option value="DEGRADED">DEGRADED</option>
-                <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
-              </select>
-            </div>
-            {/* ISM safety-critical (ISM Code 10.3) — el flag se sugiere desde el botón "Criticidad (IA)" */}
-            <div className="space-y-1.5 col-span-2 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSafetyCritical}
-                  onChange={e => setIsSafetyCritical(e.target.checked)}
-                  className="w-4 h-4 accent-accent"
-                />
-                <span className="text-sm text-fg">
-                  {t("asset.safetyCritical")} <span className="text-text-industrial/60">(ISM 10.3)</span>
-                </span>
-              </label>
-
-              {/* Segunda mitad del 10.3: el Código exige probar periódicamente lo
-                  que NO está en uso continuo. La pregunta se hace en criollo
-                  ("¿cómo trabaja?") y sólo aparece si el equipo es crítico para
-                  la seguridad: en el resto no cambia nada y ensucia la ficha. */}
-              {isSafetyCritical && (
-                <div className="mt-3 pt-3 border-t border-fg/10 space-y-2">
-                  <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.dutyMode")}</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {([false, true] as const).map(standbyOption => (
-                      <label
-                        key={String(standbyOption)}
-                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2 cursor-pointer transition-colors ${
-                          isStandby === standbyOption
-                            ? "bg-accent/10 border-accent/40"
-                            : "bg-fg/3 border-fg/10 hover:bg-fg/5"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="assetDutyMode"
-                          checked={isStandby === standbyOption}
-                          onChange={() => {
-                            setIsStandby(standbyOption);
-                            if (!standbyOption) setStandbyTestPlanId("");
-                          }}
-                          className="w-4 h-4 mt-0.5 accent-accent shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-sm text-fg">{t(standbyOption ? "asset.dutyMode.standby" : "asset.dutyMode.continuous")}</p>
-                          <p className="text-[11px] text-text-industrial/50 leading-snug">
-                            {t(standbyOption ? "asset.dutyMode.standbyHint" : "asset.dutyMode.continuousHint")}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
+          <div className={`grid grid-cols-1 ${isEdit ? "lg:grid-cols-[1.3fr_1fr]" : ""} gap-4 px-4 sm:px-6 py-4`}>
+            <div className="space-y-3 min-w-0">
+              {/* 1 · Identificación */}
+              <GuideSection n={1} title={t("asset.v23.sec1")} subtitle={t("asset.v23.sec1Sub")} open onToggle={() => { /* siempre abierto */ }}
+                pill={<GuidePill missing={missSec1} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <GuideField id="as-f-vessel" missing={missReq.vessel}>
+                    <label className={fl}>{t("col.vessel")}{needTag(missReq.vessel)}</label>
+                    <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={isEdit && !isAdmin} className={inp}>
+                      <option value="">{t("asset.selectVessel")}</option>
+                      {vessels.map(vessel => <option key={vessel.code} value={vessel.code}>{vessel.name || vessel.code}</option>)}
+                    </select>
+                  </GuideField>
+                  <GuideField id="as-f-code" missing={missReq.code}>
+                    <label className={fl}>{t("asset.code")}{needTag(missReq.code)}</label>
+                    <input value={assetCode} onChange={e => { setAssetCode(e.target.value.toUpperCase()); setAssetCodeTouched(true); }}
+                      disabled={(isEdit && !isAdmin) || (!isEdit && Boolean(selectedNameOption))} className={inp} />
+                  </GuideField>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <GuideField id="as-f-group" missing={missReq.group}>
+                    <label className={fl}>{t("mp.sfiGroup")}{needTag(missReq.group)}</label>
+                    <select value={selectedGroup} onChange={e => onGroupChanged(e.target.value)} className={inp}>
+                      <option value="">{t("mp.selectSfiGroup")}</option>
+                      {SFI_GROUP_NUMBERS.map(g => <option key={g} value={String(g)}>{g} - {t(`sfi.g.${g}` as TranslationKey)}</option>)}
+                    </select>
+                  </GuideField>
+                  <div>
+                    <label className={fl}>{t("col.status")}</label>
+                    <select value={status} onChange={e => setStatus(e.target.value)} className={inp}>
+                      {(["OPERATIONAL", "DEGRADED", "OUT_OF_SERVICE"] as const).map(s => <option key={s} value={s}>{t(`asset.v23.st.${s}` as TranslationKey)}</option>)}
+                    </select>
                   </div>
+                </div>
+                <GuideField id="as-f-name" missing={missReq.name}>
+                  <label className={fl}>{t("col.name")}{needTag(missReq.name)}</label>
+                  {nameOptions.length > 0 && (
+                    <select value={selectedNameOption?.name ?? ""} onChange={e => onNameChanged(e.target.value)} disabled={!selectedGroup} className={inp}>
+                      <option value="">{t("asset.selectExistingName")}</option>
+                      {nameOptions.map(option => <option key={`${option.name}-${option.suggestedAssetCode}`} value={option.name}>{option.name}</option>)}
+                    </select>
+                  )}
+                  <input value={name} onChange={e => onNameChanged(e.target.value)} disabled={!selectedGroup}
+                    placeholder={nameOptions.length > 0 ? t("asset.namePlaceholderEdit") : t("asset.namePlaceholderNew")} className={inp} />
+                </GuideField>
+              </GuideSection>
 
-                  {/* La prueba periódica no es un registro nuevo: es una de las
-                      tareas del propio equipo. Se designa cuál, y su historial
-                      de ejecuciones queda como la evidencia. */}
-                  {isStandby && (
-                    <div className="space-y-1.5 pt-1">
-                      <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.standbyTestPlan")}</label>
-                      {!isEdit || !initial?.id ? (
-                        <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-2">{t("asset.standbyTestPlanOnSave")}</p>
-                      ) : standbyPlansFetch.loading ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-accent" />
-                      ) : standbyPlanOptions.length === 0 ? (
-                        <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-2">{t("asset.standbyTestPlanEmpty")}</p>
-                      ) : (
-                        <>
-                          <select
-                            value={standbyTestPlanId}
-                            onChange={e => setStandbyTestPlanId(e.target.value)}
-                            className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
-                          >
-                            <option value="">{t("asset.standbyTestPlanNone")}</option>
-                            {standbyPlanOptions.map(pl => (
-                              <option key={pl.id} value={pl.id}>
-                                {pl.taskCode} · {pl.title}{fmtPlanFreq(pl) ? ` · ${fmtPlanFreq(pl)}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-[11px] text-text-industrial/50 leading-snug">{t("asset.standbyTestPlanHint")}</p>
-                        </>
+              {/* 2 · Criticidad y seguridad */}
+              <GuideSection n={2} title={t("asset.v23.sec2")} subtitle={t("asset.v23.sec2Sub")} open onToggle={() => { /* siempre abierto */ }}>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <label className={`${fl} mb-0`}>{t("col.criticality")}</label>
+                    <button type="button" onClick={() => { void requestCriticalitySuggestion(); }} disabled={!name.trim() || suggestingCriticality}
+                      title={!name.trim() ? t("asset.suggestCritNeedsName") : t("asset.suggestCritTitle")}
+                      className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/[0.07] px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {suggestingCriticality ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} {t("mp.guide.suggestAi")}
+                    </button>
+                  </div>
+                  <select value={criticality} onChange={e => setCriticality(e.target.value)} className={`${inp} mt-1.5`}>
+                    <option value="A">{t("asset.v23.critA")}</option>
+                    <option value="B">{t("asset.v23.critB")}</option>
+                    <option value="C">{t("asset.v23.critC")}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={fl}>{t("asset.critRationale")}</label>
+                  <AutoTextArea value={criticalityRationale} onChange={e => setCriticalityRationale(e.target.value)} rows={3} placeholder={t("asset.critRationalePh")} className={`${inp} resize-y`} />
+                </div>
+                {/* ISM safety-critical (ISM Code 10.3) — el flag se sugiere desde el botón de IA de la criticidad */}
+                <div className="rounded-xl border-[1.5px] border-violet-500/30 bg-violet-500/[0.05] px-3 py-2.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={isSafetyCritical} onChange={e => setIsSafetyCritical(e.target.checked)} className="w-4 h-4 accent-violet-600" />
+                    <span className="text-[13px] font-extrabold text-fg">{t("asset.safetyCritical")} <span className="font-semibold text-text-industrial/60">(ISM 10.3)</span></span>
+                  </label>
+                  {/* Segunda mitad del 10.3: el Código exige probar periódicamente lo
+                      que NO está en uso continuo. Sólo aparece si el equipo es crítico. */}
+                  {isSafetyCritical && (
+                    <div className="mt-3 pt-3 border-t border-fg/10 space-y-2">
+                      <p className="text-xs font-semibold text-text-industrial/70">{t("asset.dutyMode")}</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {([false, true] as const).map(standbyOption => (
+                          <label key={String(standbyOption)}
+                            className={`flex items-start gap-2.5 rounded-xl border px-3 py-2 cursor-pointer transition-colors ${isStandby === standbyOption ? "bg-accent/10 border-accent/40" : "bg-surface border-fg/10 hover:bg-fg/5"}`}>
+                            <input type="radio" name="assetDutyMode" checked={isStandby === standbyOption}
+                              onChange={() => { setIsStandby(standbyOption); if (!standbyOption) setStandbyTestPlanId(""); }}
+                              className="w-4 h-4 mt-0.5 accent-accent shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-fg">{t(standbyOption ? "asset.dutyMode.standby" : "asset.dutyMode.continuous")}</p>
+                              <p className="text-[11px] text-text-industrial/50 leading-snug">{t(standbyOption ? "asset.dutyMode.standbyHint" : "asset.dutyMode.continuousHint")}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      {/* La prueba periódica es una de las tareas del propio equipo. */}
+                      {isStandby && (
+                        <div className="space-y-1.5 pt-1">
+                          <label className={fl}>{t("asset.standbyTestPlan")}</label>
+                          {!isEdit || !initial?.id ? (
+                            <p className="text-xs text-text-industrial/50">{t("asset.standbyTestPlanOnSave")}</p>
+                          ) : standbyPlansFetch.loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                          ) : standbyPlanOptions.length === 0 ? (
+                            <p className="text-xs text-text-industrial/50">{t("asset.standbyTestPlanEmpty")}</p>
+                          ) : (
+                            <>
+                              <select value={standbyTestPlanId} onChange={e => setStandbyTestPlanId(e.target.value)} className={inp}>
+                                <option value="">{t("asset.standbyTestPlanNone")}</option>
+                                {standbyPlanOptions.map(pl => <option key={pl.id} value={pl.id}>{pl.taskCode} · {pl.title}{fmtPlanFreq(pl) ? ` · ${fmtPlanFreq(pl)}` : ""}</option>)}
+                              </select>
+                              <p className="text-[11px] text-text-industrial/50 leading-snug">{t("asset.standbyTestPlanHint")}</p>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+                {/* Excepción declarada: equipo C (no ISM 10.3) que no lleva plan. Sin esta
+                    marca, un equipo sin plan se cuenta como brecha de cobertura (TMSA 4.1.1 / ISM 10.1). */}
+                {puedeEximirse && (
+                  <div className="rounded-xl border border-fg/10 bg-fg/[0.03] px-3 py-2.5 space-y-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={planNotRequired} onChange={e => setPlanNotRequired(e.target.checked)} className="w-4 h-4 accent-accent" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-fg">{t("asset.planNotRequired")}</p>
+                        <p className="text-xs text-text-industrial/50">{t("asset.planNotRequiredHint")}</p>
+                      </div>
+                    </label>
+                    {planNotRequired && (
+                      <GuideField id="as-f-exempt" missing={missReq.exemptReason}>
+                        {needTag(missReq.exemptReason)}
+                        <AutoTextArea value={planNotRequiredReason} onChange={e => setPlanNotRequiredReason(e.target.value)} rows={2} placeholder={t("asset.planNotRequiredReasonPh")} className={`${inp} resize-y`} />
+                      </GuideField>
+                    )}
+                  </div>
+                )}
+              </GuideSection>
 
-            {/* Excepción declarada: equipo que no lleva plan de mantenimiento. Sin
-                esta marca, un equipo sin plan se cuenta como brecha de cobertura
-                (TMSA 4.1.1 / ISM 10.1) aunque la decisión esté tomada.
-                Sólo se ofrece en equipos de criticidad C que no sean ISM 10.3:
-                en el resto no corresponde y sólo ensucia el formulario. */}
-            {puedeEximirse && (
-              <div className="space-y-1.5 col-span-2 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={planNotRequired}
-                    onChange={e => setPlanNotRequired(e.target.checked)}
-                    className="w-4 h-4 accent-accent"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-fg">{t("asset.planNotRequired")}</p>
-                    <p className="text-xs text-text-industrial/50">{t("asset.planNotRequiredHint")}</p>
+              {/* 3 · Datos técnicos */}
+              <GuideSection n={3} title={t("asset.v23.sec3")} subtitle={t("asset.v23.sec3Sub")} open onToggle={() => { /* siempre abierto */ }}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div><label className={fl}>{t("col.manufacturer")}</label><input value={manufacturer} onChange={e => setManufacturer(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("col.model")}</label><input value={model} onChange={e => setModel(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("asset.v23.serial")}</label><input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} className={inp} /></div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div><label className={fl}>{t("asset.v23.installed")}</label><input type="date" value={installationDate} onChange={e => setInstallationDate(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("asset.v23.lastOverhaul")}</label><input type="date" value={lastOverhaulDate} onChange={e => setLastOverhaulDate(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("asset.v23.replacement")}</label><input type="date" value={replacementDate} onChange={e => setReplacementDate(e.target.value)} className={inp} /></div>
+                </div>
+                <label className="flex items-center gap-2.5 rounded-xl border border-fg/10 bg-fg/[0.03] px-3 py-2.5 cursor-pointer hover:bg-fg/5">
+                  <input type="checkbox" checked={trackDailyReport} onChange={e => setTrackDailyReport(e.target.checked)} className="w-4 h-4 rounded accent-accent shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-fg font-medium">{t("asset.hoursTracking")}</p>
+                    <p className="text-xs text-text-industrial/50">{t("asset.hoursTrackingHint")}</p>
                   </div>
                 </label>
-                {planNotRequired && (
-                  <AutoTextArea
-                    value={planNotRequiredReason}
-                    onChange={e => setPlanNotRequiredReason(e.target.value)}
-                    rows={2}
-                    placeholder={t("asset.planNotRequiredReasonPh")}
-                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
-                  />
-                )}
-              </div>
-            )}
+              </GuideSection>
+            </div>
 
-            <div className="space-y-1.5 col-span-2">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("asset.critRationale")}</label>
-              <AutoTextArea
-                value={criticalityRationale}
-                onChange={e => setCriticalityRationale(e.target.value)}
-                rows={3}
-                placeholder={t("asset.critRationalePh")}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-y"
-              />
-            </div>
-            <label className="flex items-center gap-3 bg-fg/3 border border-fg/8 rounded-xl px-4 py-3 cursor-pointer hover:bg-fg/5 transition-colors">
-              <input
-                type="checkbox"
-                checked={trackDailyReport}
-                onChange={e => setTrackDailyReport(e.target.checked)}
-                className="w-4 h-4 rounded accent-accent shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-fg font-medium">{t("asset.hoursTracking")}</p>
-                <p className="text-xs text-text-industrial/50">{t("asset.hoursTrackingHint")}</p>
-              </div>
-              {currentHours != null && (
-                <div className="shrink-0 text-right">
-                  <p className="text-[10px] text-text-industrial/40 uppercase tracking-wider">{t("asset.accumulatedHours")}</p>
-                  <p className="font-mono text-base font-bold text-accent leading-tight">{Number(currentHours).toLocaleString()}h</p>
-                  {currentHoursDate && (
-                    <p className="text-[10px] text-text-industrial/40 leading-tight">
-                      {currentHoursDate}
-                      {currentHoursSource === "MANUAL" ? ` · ${t("assetHours.source.manual")}`
-                        : currentHoursSource === "VOYAGE_TANK_REPORT" ? ` · ${t("assetHours.source.voyage")}`
-                        : currentHoursSource === "DAILY_REPORT" ? ` · ${t("assetHours.source.daily")}` : ""}
-                    </p>
-                  )}
-                </div>
-              )}
-            </label>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.manufacturer")}</label>
-              <input
-                value={manufacturer}
-                onChange={e => setManufacturer(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.model")}</label>
-              <input
-                value={model}
-                onChange={e => setModel(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Serial</label>
-              <input
-                value={serialNumber}
-                onChange={e => setSerialNumber(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Installation</label>
-              <input
-                type="date"
-                value={installationDate}
-                onChange={e => setInstallationDate(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Last Overhaul</label>
-              <input
-                type="date"
-                value={lastOverhaulDate}
-                onChange={e => setLastOverhaulDate(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Replacement</label>
-              <input
-                type="date"
-                value={replacementDate}
-                onChange={e => setReplacementDate(e.target.value)}
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-              />
-            </div>
-          </div>
-          {isEdit && initial?.id && <AssetMaintenancePlans asset={initial} />}
-          {isEdit && initial?.id && <AssetHistory asset={initial} />}
-          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
-        </div>
-        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-fg/10">
-          <div>
+            {/* Derecha: lo que está conectado al equipo */}
             {isEdit && initial && (
-              <button
-                onClick={async () => {
-                  setDownloadingPdf(true);
-                  setActionError(null);
-                  try {
-                    await downloadAssetPdf(initial);
-                  } catch (err) {
-                    setActionError(err instanceof ApiError ? err.message : t("asset.pdfError"));
-                  } finally {
-                    setDownloadingPdf(false);
-                  }
-                }}
-                disabled={downloadingPdf}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 hover:text-fg disabled:opacity-50 transition-all"
-              >
-                {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
-                {t("asset.downloadPdf")}
-              </button>
+              <div className="space-y-3 min-w-0">
+                {box(<CalendarCheck className="w-4 h-4" />, t("asset.plans.title"),
+                  relPlans.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : null,
+                  planNotRequired && activePlans.length === 0 ? empty(t("asset.v23.planExempt"))
+                    : activePlans.length === 0 ? empty(t("asset.plans.empty"))
+                    : (
+                      <button type="button" className={rel} onClick={() => document.getElementById("asset-plans")?.scrollIntoView({ behavior: "smooth" })}>
+                        <b className="text-fg">{t("asset.v23.tasksN").replace("{n}", String(activePlans.length))}</b>
+                        {overduePlans > 0 && <span className="font-bold text-red-700 dark:text-red-400">{t("asset.v23.overdueN").replace("{n}", String(overduePlans))}</span>}
+                        <ChevronRight className="ml-auto w-3.5 h-3.5 text-text-industrial/40" />
+                      </button>
+                    ))}
+                {box(<AlertOctagon className="w-4 h-4" />, t("asset.v23.openDefects"),
+                  <button type="button" onClick={() => navigate("/defects", { state: { createDefectFromWo: { vesselCode: initial.vesselCode, assetId: initial.id, assetName: initial.name } } })}
+                    className="inline-flex items-center gap-1 text-accent font-bold hover:underline"><Plus className="w-3 h-3" />{t("asset.v23.report")}</button>,
+                  openDefects.length === 0 ? empty(relDefects.loading ? t("common.loading") : t("asset.v23.noDefects")) : openDefects.slice(0, 6).map(d => (
+                    <button key={d.id} type="button" className={rel} onClick={() => navigate(`/defects/${encodeURIComponent(d.defectCode)}`)}>
+                      <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold ${SEV_CLS[d.severity] ?? "bg-fg/10"}`}>{SEV_KEY[d.severity] ? t(SEV_KEY[d.severity]) : d.severity}</span>
+                      <span className="truncate text-fg">{d.description}</span>
+                      <span className="ml-auto flex items-center gap-1 shrink-0 text-[11px] text-text-industrial/50">{fmtHistoryDate(d.reportedAt)}<ChevronRight className="w-3.5 h-3.5" /></span>
+                    </button>
+                  )))}
+                {box(<Gauge className="w-4 h-4" />, t("asset.v23.hoursAndLab"), null,
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-fg/10 px-2.5 py-2">
+                        <p className="text-[10.5px] font-bold text-text-industrial/50">{t("asset.accumulatedHours")}</p>
+                        <p className="text-lg font-black text-fg">{currentHours != null ? `${Number(currentHours).toLocaleString()} h` : "—"}</p>
+                        {currentHoursDate && (
+                          <p className="text-[10px] text-text-industrial/45">
+                            {currentHoursDate}
+                            {currentHoursSource === "MANUAL" ? ` · ${t("assetHours.source.manual")}`
+                              : currentHoursSource === "VOYAGE_TANK_REPORT" ? ` · ${t("assetHours.source.voyage")}`
+                              : currentHoursSource === "DAILY_REPORT" ? ` · ${t("assetHours.source.daily")}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-fg/10 px-2.5 py-2">
+                        <p className="text-[10.5px] font-bold text-text-industrial/50">{t("asset.v23.lastSample")}</p>
+                        {lastSample ? (
+                          <>
+                            <p className={`text-sm font-black ${lastSample.result?.verdict === "CRITICAL" || lastSample.result?.verdict === "ACTION_REQUIRED" ? "text-red-700 dark:text-red-400" : lastSample.result?.verdict === "CAUTION" ? "text-amber-700 dark:text-amber-400" : "text-fg"}`}>
+                              {lastSample.result?.verdict ? t(`fa.vd.${lastSample.result.verdict}` as TranslationKey) : t(`fa.st.${lastSample.status}` as TranslationKey)}
+                            </p>
+                            <p className="text-[10px] text-text-industrial/45">{fmtHistoryDate(lastSample.sampledAt)}</p>
+                          </>
+                        ) : <p className="text-sm font-black text-text-industrial/40">—</p>}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs">
+                      {trackDailyReport && <button type="button" onClick={() => navigate(`/asset-hours?vesselCode=${encodeURIComponent(initial.vesselCode)}`)} className="inline-flex items-center gap-1 font-bold text-accent hover:underline"><Clock className="w-3 h-3" />{t("asset.v23.loadHours")}</button>}
+                      {lastSample && <button type="button" onClick={() => navigate(`/fluid-analyses?code=${encodeURIComponent(lastSample.sampleCode)}`)} className="inline-flex items-center gap-1 font-bold text-accent hover:underline"><FlaskConical className="w-3 h-3" />{t("asset.v23.seeSample")}</button>}
+                    </div>
+                  </>)}
+                {box(<Package className="w-4 h-4" />, t("asset.v23.planSpares"), planSpares.length ? String(planSpares.length) : null,
+                  planSpares.length === 0 ? empty(t("asset.v23.planSparesEmpty")) : planSpares.slice(0, 8).map(s => (
+                    <div key={s.label} className={`${rel} hover:border-fg/10`}>
+                      <span className="truncate text-fg">{s.label}</span>
+                      <span className="ml-auto shrink-0 text-[11px] text-text-industrial/55">{s.qty ? `${s.qty} ${s.unit}` : ""} · {t("asset.v23.tasksN").replace("{n}", String(s.tasks))}</span>
+                    </div>
+                  )))}
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-            <button onClick={() => { void onSave(); }} disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save")}
+
+          {/* Tareas del plan e historial: tablas completas, a lo ancho. */}
+          {isEdit && initial?.id && (
+            <div id="asset-plans" className="px-4 sm:px-6 pb-4 space-y-4">
+              <AssetMaintenancePlans asset={initial} newRequestKey={plansNewKey} onChanged={() => { void relPlans.reload(); }} />
+              <AssetHistory asset={initial} />
+            </div>
+          )}
+        </div>
+
+        {/* Pie */}
+        <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-t border-fg/10 shrink-0">
+          {isEdit && initial && canManageAsset && onDeleteRequest && (
+            <button type="button" onClick={() => onDeleteRequest(initial)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-500/10">
+              <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
             </button>
-          </div>
+          )}
+          {isEdit && initial && (
+            <button type="button"
+              onClick={async () => {
+                setDownloadingPdf(true);
+                try { await downloadAssetPdf(initial); }
+                catch (err) { setActionError(err instanceof ApiError ? err.message : t("asset.pdfError")); }
+                finally { setDownloadingPdf(false); }
+              }}
+              disabled={downloadingPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 disabled:opacity-50">
+              {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />} {t("asset.downloadPdf")}
+            </button>
+          )}
+          <span className="flex-1" />
+          {isDirty && <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-400"><AlertTriangle className="w-3 h-3" /> {t("mp.guide.dirty")}</span>}
+          <button type="button" onClick={requestClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.close")}</button>
+          <button type="button" onClick={() => { void onSave(); }} disabled={saving}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 text-white font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {t("common.save")}
+            {!saving && missTotal > 0 && <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(missTotal))}</span>}
+          </button>
         </div>
       </div>
+
+      {/* Avisos y errores en ventanita. */}
+      {actionError && <AlertDialog message={actionError} onClose={() => setActionError(null)} />}
     </div>
   );
 };
@@ -1529,7 +1567,7 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
   }, [asset.id, onDeleted, t]);
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
           <h2 className="text-base font-bold text-fg">{t("common.delete")}</h2>
@@ -1537,10 +1575,10 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-text-industrial/70">
-            ¿Eliminar asset <span className="text-fg font-semibold">{asset.assetCode}</span> ({asset.name})?
+            {t("asset.v23.deleteConfirm").replace("{code}", asset.assetCode).replace("{name}", asset.name)}
           </p>
-          {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
+        {actionError && <AlertDialog message={actionError} onClose={() => setActionError(null)} />}
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
           <button onClick={() => { void onDelete(); }} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-fg font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
@@ -1552,11 +1590,15 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
   );
 };
 
+type AssetCard = "" | "noPlan" | "ism" | "notOperational" | "defects";
+
 export const AssetsPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
+  const can = useCan();
   const { selectedVesselCode } = useVesselContext();
   const isAdmin = user?.role === "TENANT_ADMIN";
+  const canManageAsset = can("asset.manage");
   const [searchParams, setSearchParams] = useSearchParams();
   const [showExcel, setShowExcel] = useState(false);
   const [editing, setEditing] = useState<Asset | null | undefined>(undefined);
@@ -1564,8 +1606,9 @@ export const AssetsPage: React.FC = () => {
   useCopilotEmitter(editing === undefined ? { module: "ASSETS", screen: "ASSET_LIST" } : null);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
-  const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE" | "ISM">("ALL");
+  const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE">("ALL");
   const [viewMode, setViewMode] = useState<"list" | "board">("list");
+  const [cardSel, setCardSel] = useState<AssetCard>("");
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
@@ -1598,6 +1641,29 @@ export const AssetsPage: React.FC = () => {
   // Reuse VesselContext instead of re-fetching /app/vessels.
   const { vessels: contextVessels } = useVesselContext();
   const { data: tenantAssetsData, reload: reloadTenantAssets } = useFetch<ListResponse>("/app/pms/assets", ["/app/pms/assets"]);
+  // ── Listado (preview V23) ──────────────────────────────────────────────────
+  // Plan y defectos por equipo: se cargan aparte y no frenan la lista.
+  const plansFetch = useFetch<{ items: { id: string; assetId: string | null; status: string }[] }>("/app/pms/maintenance-plans", []);
+  const defectsFetch = useFetch<{ items: AssetDefectLite[] }>("/app/pms/defects", []);
+  const linksLoading = plansFetch.loading || defectsFetch.loading;
+  const planStats = useMemo(() => {
+    const m = new Map<string, { active: number; overdue: number }>();
+    for (const p of plansFetch.data?.items ?? []) {
+      if (!p.assetId || p.status === "INACTIVE") continue;
+      const cur = m.get(p.assetId) ?? { active: 0, overdue: 0 };
+      cur.active += 1; if (p.status === "OVERDUE") cur.overdue += 1;
+      m.set(p.assetId, cur);
+    }
+    return m;
+  }, [plansFetch.data]);
+  const openDefectCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of defectsFetch.data?.items ?? []) {
+      if (!d.assetId || d.status === "RESOLVED" || d.status === "CLOSED") continue;
+      m.set(d.assetId, (m.get(d.assetId) ?? 0) + 1);
+    }
+    return m;
+  }, [defectsFetch.data]);
 
   const openEdit = useCallback(async (row: Asset) => {
     setDetailLoadingId(row.id);
@@ -1624,40 +1690,39 @@ export const AssetsPage: React.FC = () => {
     setSearchParams(params, { replace: true });
   }, [openAssetId, searchParams, setSearchParams]);
 
-  const onDeleteRequested = useCallback((row: Asset) => {
-    setDeleteTarget(row);
-  }, []);
-
   const onDeleted = useCallback(() => {
     setDeleteTarget(null);
+    setEditing(undefined);
     void reload();
     void reloadTenantAssets();
   }, [reload, reloadTenantAssets]);
 
+  /** Crítico (A/B) sin tareas activas y sin la exención escrita: brecha de cobertura. */
+  const isNoPlan = useCallback((a: Asset) => a.criticality !== "C" && !a.planNotRequired && !(planStats.get(a.id)?.active), [planStats]);
+  const matchCard = useCallback((a: Asset, k: AssetCard) => {
+    switch (k) {
+      case "noPlan":         return isNoPlan(a);
+      case "ism":            return a.isSafetyCritical;
+      case "notOperational": return a.status !== "OPERATIONAL";
+      case "defects":        return (openDefectCount.get(a.id) ?? 0) > 0;
+      default:               return true;
+    }
+  }, [isNoPlan, openDefectCount]);
+
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, a => a.id), [data, tmsaFilter]);
   const filteredAssets = useMemo(() => {
-    let items = data?.items ?? null;
+    let items = tmsaItems;
     if (!items) return items;
-    // Cuando se llega desde una métrica del panel TMSA, la planilla muestra
-    // exactamente los activos que contó esa tarjeta.
-    items = applyTmsaFilter(items, tmsaFilter, a => a.id);
-    if (!items) return items;
-    if (sfiTab === "ISM") items = items.filter(a => a.isSafetyCritical);
-    else if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
+    if (cardSel) items = items.filter(a => matchCard(a, cardSel));
+    if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       items = items.filter(a =>
-        textMatches(a.assetCode, q) ||
-        textMatches(a.name, q) ||
-        textMatches(a.vesselCode, q) ||
-        textMatches(a.sfiCode, q) ||
-        textMatches((a as any).description, q) ||
-        textMatches((a as any).manufacturer, q) ||
-        textMatches((a as any).model, q) ||
-        textMatches((a as any).serialNumber, q)
-      );
+        textMatches(a.assetCode, q) || textMatches(a.name, q) || textMatches(a.sfiCode, q) ||
+        textMatches(a.manufacturer, q) || textMatches(a.model, q) || textMatches(a.serialNumber, q));
     }
     return items;
-  }, [data, sfiTab, searchText, tmsaFilter]);
+  }, [tmsaItems, cardSel, matchCard, sfiTab, searchText]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1677,13 +1742,13 @@ export const AssetsPage: React.FC = () => {
   const toggleGroup = useCallback((key: string) => {
     setCollapsedGroups(prev => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   }, []);
   const sfiGroupLabel = useCallback((tab: SfiTab) => {
     if (tab === "NONE" || tab === "ALL" || tab === "ISM") return t("gantt.noSfiGroup");
-    return `G${tab} · ${t(`sfi.g.${tab}` as Parameters<typeof t>[0])}`;
+    return `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`;
   }, [t]);
   const assetGroupBy = useMemo(
     () => groupBySfi
@@ -1703,47 +1768,80 @@ export const AssetsPage: React.FC = () => {
     [groupBySfi, sfiGroupLabel],
   );
 
+  const vesselName = useCallback((code: string) => contextVessels.find(v => v.code === code)?.name || code, [contextVessels]);
+  const statusTone: Record<string, string> = {
+    OPERATIONAL: "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-700 dark:text-emerald-400",
+    DEGRADED: "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+    OUT_OF_SERVICE: "border-red-500/30 bg-red-500/[0.06] text-red-700 dark:text-red-400",
+  };
+
+  const planCell = useCallback((a: Asset) => {
+    if (linksLoading) return <Loader2 className="w-3.5 h-3.5 animate-spin text-text-industrial/30" />;
+    const s = planStats.get(a.id);
+    if (s?.active) {
+      return (
+        <div className="whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-emerald-700 dark:text-emerald-400"><CalendarCheck className="w-3 h-3" />{t("asset.v23.tasksN").replace("{n}", String(s.active))}</span>
+          {s.overdue > 0 && <div className="text-[10.5px] font-bold text-red-700 dark:text-red-400">{t("asset.v23.overdueN").replace("{n}", String(s.overdue))}</div>}
+        </div>
+      );
+    }
+    if (a.planNotRequired) return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] text-text-industrial/55"><FileMinus className="w-3 h-3" />{t("asset.v23.exempt")}</span>;
+    if (a.criticality === "C") return <span className="text-[11.5px] text-text-industrial/40">{t("asset.v23.noPlanC")}</span>;
+    return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold text-red-700 dark:text-red-400"><AlertTriangle className="w-3 h-3" />{t("asset.v23.noPlan")}</span>;
+  }, [linksLoading, planStats, t]);
+
+  const rowAction = useCallback((a: Asset) => {
+    const base = "inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors";
+    if (!linksLoading && isNoPlan(a) && canManageAsset) {
+      return <button type="button" onClick={e => { e.stopPropagation(); void openEdit(a); }} className={`${base} border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20`}><CalendarPlus className="w-3 h-3" /> {t("asset.v23.buildPlan")}</button>;
+    }
+    if ((openDefectCount.get(a.id) ?? 0) > 0) {
+      return <button type="button" onClick={e => { e.stopPropagation(); void openEdit(a); }} className={`${base} border-red-500/40 bg-red-500/[0.06] text-red-700 dark:text-red-400 hover:bg-red-500/15`}><AlertOctagon className="w-3 h-3" /> {t("asset.v23.seeDefects")}</button>;
+    }
+    return null;
+  }, [linksLoading, isNoPlan, canManageAsset, openDefectCount, openEdit, t]);
+
   const columns: Column<Asset>[] = useMemo(() => [
-    { key: "assetCode", header: t("col.code"), render: row => <span className="font-mono font-bold text-fg text-xs">{row.assetCode}</span> },
     {
-      key: "name",
-      header: t("col.name"),
-      render: row => (
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-fg line-clamp-1">{row.name}</span>
-          {row.isSafetyCritical && (
-            <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center text-amber-700 dark:text-amber-400">
-              <ShieldAlert className="w-3.5 h-3.5" />
-            </span>
-          )}
+      key: "name", header: t("asset.v23.col.asset"), sortValue: (r: Asset) => r.name,
+      render: (row: Asset) => (
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-fg line-clamp-1">{row.name}</span>
+            {row.isSafetyCritical && <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/15 px-1.5 text-[9.5px] font-extrabold text-violet-700 dark:text-violet-300"><ShieldAlert className="w-2.5 h-2.5" />ISM</span>}
+          </div>
+          {/* Nombre del buque, no el código. */}
+          <div className="text-[10.5px] text-text-industrial/50"><span className="font-mono">{row.assetCode}</span> · {vesselName(row.vesselCode)}</div>
         </div>
       ),
     },
-    { key: "vesselCode", header: t("col.vessel"), render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode /> },
-    { key: "sfiCode", header: t("col.sfiCode"), render: row => row.sfiCode ?? "—" },
-    { key: "criticality", header: t("col.criticality"), render: row => row.criticality },
-    { key: "status", header: t("col.status"), render: row => <StatusBadge status={row.status} /> },
+    { key: "sfiCode", header: t("asset.v23.col.system"), sortValue: (r: Asset) => r.sfiCode ?? "", render: (row: Asset) => { const tab = sfiTabOfCode(row.sfiCode); return <span className="text-xs text-text-industrial/70 whitespace-nowrap">{tab === "NONE" ? "—" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`}</span>; } },
+    { key: "criticality", header: t("col.criticality"), sortValue: (r: Asset) => r.criticality, render: (row: Asset) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[row.criticality] ?? ASSET_CRIT_CHIP.C}`}>{row.criticality}</span> },
+    { key: "plan", header: t("asset.plans.title"), sortValue: (r: Asset) => planStats.get(r.id)?.active ?? 0, render: planCell },
+    { key: "currentHours", header: t("asset.v23.col.hours"), sortValue: (r: Asset) => r.currentHours ?? -1, render: (row: Asset) => row.currentHours != null ? <span className="text-xs whitespace-nowrap">{Number(row.currentHours).toLocaleString()} h</span> : <span className="text-text-industrial/30">—</span> },
     {
-      key: "actions",
-      header: "",
-      sortable: false,
-      render: row => (
-        <button
-          onClick={e => {
-            e.stopPropagation();
-            onDeleteRequested(row);
-          }}
-          className="p-1.5 rounded-lg text-text-industrial/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
-          title={t("common.delete")}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      ),
+      key: "defects", header: t("asset.v23.col.defects"), sortValue: (r: Asset) => openDefectCount.get(r.id) ?? 0,
+      render: (row: Asset) => (openDefectCount.get(row.id) ?? 0) > 0
+        ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold text-red-700 dark:text-red-400"><AlertOctagon className="w-3 h-3" />{t("asset.v23.openN").replace("{n}", String(openDefectCount.get(row.id)))}</span>
+        : <span className="text-text-industrial/30">—</span>,
     },
-  ], [onDeleteRequested, t]);
+    { key: "status", header: t("col.status"), render: (row: Asset) => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${statusTone[row.status] ?? statusTone.OPERATIONAL}`}>{t(`asset.v23.st.${row.status}` as TranslationKey)}</span> },
+    { key: "actions", header: "", sortable: false, render: rowAction },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, vesselName, planStats, planCell, openDefectCount, rowAction]);
+
+  const summaryCards: { key: Exclude<AssetCard, "">; label: string; hint: string; icon: typeof Settings; cls: string; num: string; waits: boolean }[] = [
+    { key: "noPlan", label: t("asset.v23.sum.noPlan"), hint: t("asset.v23.sum.noPlanHint"), icon: CalendarX, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400", waits: true },
+    { key: "ism", label: t("asset.v23.sum.ism"), hint: t("asset.v23.sum.ismHint"), icon: ShieldAlert, cls: "border-l-violet-600", num: "text-violet-700 dark:text-violet-400", waits: false },
+    { key: "notOperational", label: t("asset.v23.sum.notOperational"), hint: t("asset.v23.sum.notOperationalHint"), icon: PowerOff, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400", waits: false },
+    { key: "defects", label: t("asset.v23.sum.defects"), hint: t("asset.v23.sum.defectsHint"), icon: AlertOctagon, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400", waits: true },
+  ];
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
+  const vesselOptions = useMemo(() => [...new Set((tenantAssetsData?.items ?? []).map(a => a.vesselCode))], [tenantAssetsData]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {showExcel && <ExcelPanel module="assets" onClose={() => { setShowExcel(false); reload(); }} />}
       {editing !== undefined && (
         <AssetModal
@@ -1752,155 +1850,150 @@ export const AssetsPage: React.FC = () => {
           vessels={contextVessels}
           tenantAssets={tenantAssetsData?.items ?? []}
           isAdmin={isAdmin}
-          onClose={() => setEditing(undefined)}
+          onClose={() => { setEditing(undefined); void defectsFetch.reload(); void plansFetch.reload(); }}
           onSaved={() => {
             setEditing(undefined);
             void reload();
             void reloadTenantAssets();
+            void plansFetch.reload();
           }}
+          onDeleteRequest={a => setDeleteTarget(a)}
         />
       )}
       {deleteTarget && <DeleteAssetModal asset={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={onDeleted} />}
       <PageHeader icon={Settings} title={t("page.assets")} total={filteredAssets?.length ?? data?.total} onReload={reload}>
         <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode("list")}
-            title={t("asset.viewList")}
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
-          >
+          <button type="button" onClick={() => setViewMode("list")} title={t("asset.viewList")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}>
             <List className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => { setViewMode("board"); if (sfiTab !== "ALL" && sfiTab !== "ISM") setSfiTab("ALL"); }}
-            title={t("asset.viewBoard")}
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "board" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
-          >
+          <button type="button" onClick={() => { setViewMode("board"); setSfiTab("ALL"); }} title={t("asset.viewBoard")}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === "board" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}>
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         </div>
         {viewMode === "list" && (
-          <button
-            type="button"
-            onClick={() => setGroupBySfi(v => !v)}
-            title={t("asset.groupBySfi")}
-            aria-pressed={groupBySfi}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-              groupBySfi
-                ? "bg-accent/20 border-accent/40 text-accent"
-                : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
-            }`}
-          >
+          <button type="button" onClick={() => setGroupBySfi(v => !v)} title={t("asset.groupBySfi")} aria-pressed={groupBySfi}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${groupBySfi ? "bg-accent/20 border-accent/40 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"}`}>
             <ListTree className="w-3.5 h-3.5" /> {t("asset.groupBySfi")}
           </button>
         )}
-        <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
-          <Plus className="w-3.5 h-3.5" /> {t("common.new")}
-        </button>
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
-        <select value={toFilterSelectValue(statusFilter)} onChange={e => updateFilters({ status: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="OPERATIONAL">OPERATIONAL</option>
-          <option value="DEGRADED">DEGRADED</option>
-          <option value="OUT_OF_SERVICE">OUT_OF_SERVICE</option>
-        </select>
-        <select value={toFilterSelectValue(criticalityFilter)} onChange={e => updateFilters({ criticality: fromFilterSelectValue(e.target.value) })} className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-          <option value={FILTER_ALL_VALUE}>{t("status.all")}</option>
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
-        </select>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-industrial/40 pointer-events-none" />
-            <input
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              placeholder="Buscar por código, nombre, buque, SFI..."
-              className="w-64 pl-7 bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-            />
-          </div>
-          {(statusFilter || criticalityFilter || vesselFilter || searchText) && (
-            <button onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); }} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all">{t("common.clear")}</button>
-          )}
-        </div>
+        <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-600 text-white font-bold text-xs hover:brightness-110 transition-all">
+          <Plus className="w-3.5 h-3.5" /> {t("asset.v23.new")}
+        </button>
       </PageHeader>
 
-      {/* SFI group tab bar — en el tablero los chips de grupo sobran (cada grupo
-          ya es una columna) y elegir uno dejaría nueve columnas vacías. El chip
-          ISM 10.3 sí se mantiene: filtra a lo ancho de todas las columnas. */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {viewMode === "list" && SFI_TABS.map(tab => {
-          const count = tab.key === "ALL"
-            ? (data?.items.length ?? 0)
-            : (tabCounts[String(tab.key)] ?? 0);
-          const isActive = sfiTab === tab.key;
-          if (tab.key !== "ALL" && count === 0 && !isActive) return null;
+      {/* Resumen: tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key;
           return (
-            <button
-              key={String(tab.key)}
-              onClick={() => setSfiTab(tab.key)}
-              className={[
-                "px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
-                isActive
-                  ? "bg-accent text-accent-fg border-accent"
-                  : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:text-fg hover:border-fg/20",
-              ].join(" ")}
-            >
-              {/* Nombre completo del grupo, igual que en Planes de Mantenimiento:
-                  "G7" solo no dice nada si no te sabés la numeración SFI. */}
-              {tab.key === "ALL"
-                ? tab.label
-                : <>{tab.label} <span className="font-semibold">{t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])}</span></>}
-              {count > 0 && <span className="ml-1.5 opacity-70">({count})</span>}
+            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.waits && linksLoading ? "…" : (tmsaItems ?? []).filter(a => matchCard(a, c.key)).length}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
             </button>
           );
         })}
-        {/* ISM 10.3 — equipos críticos para seguridad */}
-        {(() => {
-          const ismCount = (data?.items ?? []).filter(a => a.isSafetyCritical).length;
-          if (ismCount === 0) return null;
-          const isActive = sfiTab === "ISM";
-          return (
-            <button
-              onClick={() => setSfiTab("ISM")}
-              title="Equipos críticos para seguridad (ISM Code 10.3)"
-              className={[
-                "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap",
-                isActive
-                  ? "bg-amber-500 text-accent-fg border-amber-500"
-                  : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50",
-              ].join(" ")}
-            >
-              <ShieldAlert className="w-3.5 h-3.5" />
-              ISM 10.3 <span className="opacity-70">({ismCount})</span>
-            </button>
-          );
-        })()}
+      </div>
+
+      {/* Filtros */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        {/* Grupos SFI con su nombre: en el tablero sobran (cada grupo ya es una columna). */}
+        {viewMode === "list" && (
+          <div className="flex flex-wrap gap-1.5">
+            {SFI_TABS.map(tab => {
+              const count = tab.key === "ALL" ? (data?.items.length ?? 0) : (tabCounts[String(tab.key)] ?? 0);
+              const isActive = sfiTab === tab.key;
+              if (tab.key !== "ALL" && count === 0 && !isActive) return null;
+              return (
+                <button key={String(tab.key)} type="button" onClick={() => setSfiTab(tab.key as typeof sfiTab)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${isActive ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                  {tab.key === "ALL" ? t("common.all") : `${tab.key} · ${t(`sfi.g.${tab.key}` as TranslationKey)}`}
+                  <span className={`rounded-full px-1.5 text-[10px] ${isActive ? "bg-white/25" : "bg-fg/10"}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {vesselOptions.length > 1 && (
+            <select value={vesselFilter} onChange={e => updateFilters({ vesselCode: e.target.value })} className={selCls(!!vesselFilter)}>
+              <option value="">{t("asset.v23.vesselAll")}</option>
+              {vesselOptions.map(v => <option key={v} value={v}>{vesselName(v)}</option>)}
+            </select>
+          )}
+          <select value={criticalityFilter} onChange={e => updateFilters({ criticality: e.target.value })} className={selCls(!!criticalityFilter)}>
+            <option value="">{t("asset.v23.critAll")}</option>
+            <option value="A">{t("asset.v23.critA")}</option>
+            <option value="B">{t("asset.v23.critB")}</option>
+            <option value="C">{t("asset.v23.critC")}</option>
+          </select>
+          <select value={statusFilter} onChange={e => updateFilters({ status: e.target.value })} className={selCls(!!statusFilter)}>
+            <option value="">{t("asset.v23.statusAll")}</option>
+            {(["OPERATIONAL", "DEGRADED", "OUT_OF_SERVICE"] as const).map(s => <option key={s} value={s}>{t(`asset.v23.st.${s}` as TranslationKey)}</option>)}
+          </select>
+          {(statusFilter || criticalityFilter || vesselFilter || searchText || cardSel) && (
+            <button type="button" onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); setCardSel(""); }}
+              className="rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 text-xs text-text-industrial/80 hover:text-fg">{t("common.clear")}</button>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder={t("asset.v23.search")}
+              className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {searchText && <button type="button" onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+          </div>
+        </div>
       </div>
 
       <TmsaFilterBanner filter={tmsaFilter} shown={filteredAssets?.length ?? 0} total={data?.items?.length ?? 0} />
-      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />Cargando detalle del asset...</div>}
-      {viewMode === "list"
-        ? <DataTable
-            columns={columns}
-            data={filteredAssets}
-            loading={loading}
-            error={error}
-            keyFn={row => row.id}
-            emptyText={t("empty.assets")}
-            onRowClick={row => { void openEdit(row); }}
-            groupBy={assetGroupBy}
-            collapsedGroups={collapsedGroups}
-            onToggleGroup={toggleGroup}
-            // Ordenar por una columna y agrupar se pisan: al ordenar, la lista
-            // pasa a verse de corrido (mismo criterio que Plan de Mantenimiento).
-            onSortUngroup={() => setGroupBySfi(false)}
-          />
-        : <AssetsBoard assets={filteredAssets} loading={loading} onOpen={row => { void openEdit(row); }} t={t} />}
+      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("asset.v23.loadingDetail")}</div>}
+      {viewMode === "list" ? (
+        <>
+          <div className="hidden md:block">
+            <DataTable
+              columns={columns}
+              data={filteredAssets}
+              loading={loading}
+              error={error}
+              keyFn={row => row.id}
+              emptyText={t("empty.assets")}
+              onRowClick={row => { void openEdit(row); }}
+              rowClassName={row => (row.status === "OUT_OF_SERVICE" || (!linksLoading && row.criticality === "A" && isNoPlan(row)) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")}
+              groupBy={assetGroupBy}
+              collapsedGroups={collapsedGroups}
+              onToggleGroup={toggleGroup}
+              // Ordenar por una columna y agrupar se pisan: al ordenar, la lista
+              // pasa a verse de corrido (mismo criterio que Plan de Mantenimiento).
+              onSortUngroup={() => setGroupBySfi(false)}
+            />
+          </div>
+          <div className="md:hidden flex flex-col gap-2">
+            {loading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>}
+            {!loading && (filteredAssets?.length ?? 0) === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{t("empty.assets")}</p>}
+            {(filteredAssets ?? []).slice(0, 200).map(a => (
+              <div key={a.id} onClick={() => { void openEdit(a); }}
+                className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer bg-surface ${a.status === "OUT_OF_SERVICE" ? "border-l-red-600" : a.status === "DEGRADED" ? "border-l-amber-500" : "border-l-fg/10"}`}>
+                <div className="flex items-center gap-1.5">
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[a.criticality] ?? ASSET_CRIT_CHIP.C}`}>{a.criticality}</span>
+                  <b className="text-[13px] text-fg truncate">{a.name}</b>
+                  {a.isSafetyCritical && <ShieldAlert className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
+                </div>
+                <p className="text-[11px] text-text-industrial/55"><span className="font-mono">{a.assetCode}</span> · {sfiGroupLabel(sfiTabOfCode(a.sfiCode))}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {planCell(a)}
+                  <span className={`rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${statusTone[a.status] ?? statusTone.OPERATIONAL}`}>{t(`asset.v23.st.${a.status}` as TranslationKey)}</span>
+                </div>
+                {rowAction(a)}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : <AssetsBoard assets={filteredAssets} loading={loading} onOpen={row => { void openEdit(row); }} t={t} />}
     </div>
   );
 };

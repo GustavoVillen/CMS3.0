@@ -51,6 +51,8 @@ interface DataTableProps<T> {
   keyFn: (row: T) => string;
   emptyText?: string;
   onRowClick?: (row: T) => void;
+  /** Clase extra por fila (p. ej. resaltar las vencidas). */
+  rowClassName?: (row: T) => string;
   // Fija el layout de la tabla (table-fixed) para que los anchos no dependan
   // del contenido de las filas visibles. Combinar con Column.width.
   layoutFixed?: boolean;
@@ -67,7 +69,7 @@ interface DataTableProps<T> {
   onSortUngroup?: () => void;
 }
 
-export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup, onSortUngroup }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, rowClassName, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup, onSortUngroup }: DataTableProps<T>) {
   const [searchParams, setSearchParams] = useSearchParams();
   const validSortKeys = useMemo(() => columns.map(col => col.key), [columns]);
 
@@ -278,7 +280,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                     {!collapsed && g.rows.map(row => (
                       <tr
                         key={keyFn(row)}
-                        className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
+                        className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) ?? ""}`}
                         onClick={() => onRowClick?.(row)}
                       >
                         {columns.map(col => (
@@ -294,7 +296,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
             : sortedData.map(row => (
                 <tr
                   key={keyFn(row)}
-                  className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""}`}
+                  className={`hover:bg-fg/[0.03] transition-colors group ${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) ?? ""}`}
                   onClick={() => onRowClick?.(row)}
                 >
                   {columns.map(col => (

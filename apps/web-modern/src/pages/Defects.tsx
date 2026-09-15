@@ -1,10 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Bot, Camera, Download, ExternalLink, GitBranch, Loader2, Maximize2, Minimize2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import {
+  AlertOctagon, AlertTriangle, Ban, Bot, Camera, Check, CheckCircle2, CircleDot, ClipboardCheck, Clock, Download, Droplets, ExternalLink,
+  GitBranch, Hammer, History, Link2, Loader2, Maximize2, Minimize2, MoreHorizontal, Pencil, Plus, RotateCcw, Save, Search, SearchCheck,
+  ShieldQuestion, Ship, Sparkles, Trash2, Wrench, X,
+} from "lucide-react";
+import { GuideSection, GuideField, GuideNeedTag } from "../components/GuideKit";
 import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
-import { DataTable, PriorityBadge, StatusBadge, type Column } from "../components/DataTable";
+import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel, AssetLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
@@ -92,22 +97,6 @@ interface ListResponse {
   total: number;
 }
 
-const OP_STATE_STYLES: Record<string, string> = {
-  NORMAL: "bg-success-sea/10 text-success-sea border-success-sea/20",
-  DEGRADED: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
-  RESTRICTED: "bg-accent/10 text-accent border-accent/20",
-  NO_GO: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
-};
-
-function OperationalStateBadge({ value }: { value: string }) {
-  const cls = OP_STATE_STYLES[value] ?? "bg-fg/5 text-text-industrial/40 border-fg/10";
-  return (
-    <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
-      {value}
-    </span>
-  );
-}
-
 function normalizeOptionalText(value: string): string | null {
   const text = value.trim();
   return text || null;
@@ -174,24 +163,6 @@ function defectOriginKey(classification: string): DefectOriginKey {
     default:                          return "manual";
   }
 }
-
-const ORIGIN_STYLES: Record<DefectOriginKey, string> = {
-  wo:         "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
-  inspection: "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20",
-  fluid:      "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
-  audit:      "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
-  manual:     "bg-fg/5 text-text-industrial/60 border-fg/10",
-};
-
-const OriginBadge: React.FC<{ classification: string }> = ({ classification }) => {
-  const t = useT();
-  const key = defectOriginKey(classification);
-  return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${ORIGIN_STYLES[key]}`}>
-      {t("def.origin.prefix")}: {t(`def.origin.${key}` as Parameters<typeof t>[0])}
-    </span>
-  );
-};
 
 // ─── AssetLiveSearch ──────────────────────────────────────────────────────────
 
@@ -600,15 +571,16 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>{t("form.vessel")}</label>
+            {/* Obligatorios: se resaltan mientras falten (preview V24). */}
+            <GuideField id="def-new-vessel" missing={!vesselCode}>
+              <label className={labelCls}>{t("form.vessel")}{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls + " appearance-none"} required>
                 <option value="">{t("asset.selectVessel")}</option>
                 {vessels.map(v => (
-                  <option key={v.code} value={v.code}>{v.code}{v.name ? ` — ${v.name}` : ""}</option>
+                  <option key={v.code} value={v.code}>{v.name || v.code}</option>
                 ))}
               </select>
-            </div>
+            </GuideField>
             <div>
               <label className={labelCls}>{t("form.severity")}</label>
               <select value={severity} onChange={e => setSeverity(e.target.value)} className={inputCls + " appearance-none"}>
@@ -616,13 +588,16 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
               </select>
             </div>
           </div>
-          <AssetLiveSearch
-            assets={assets}
-            loading={loadingAssets}
-            disabled={!vesselCode}
-            value={assetId}
-            onChange={setAssetId}
-          />
+          <GuideField id="def-new-asset" missing={!assetId}>
+            {!assetId && <GuideNeedTag label={t("mp.guide.missing")} />}
+            <AssetLiveSearch
+              assets={assets}
+              loading={loadingAssets}
+              disabled={!vesselCode}
+              value={assetId}
+              onChange={setAssetId}
+            />
+          </GuideField>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>{t("form.operationalState")}</label>
@@ -630,14 +605,14 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
                 {OP_STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <div>
-              <label className={labelCls}>{t("form.classification")}</label>
+            <GuideField id="def-new-class" missing={!classification.trim()}>
+              <label className={labelCls}>{t("form.classification")}{!classification.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input value={classification} onChange={e => setClassification(e.target.value)} className={inputCls} placeholder={t("def.classificationPh")} />
-            </div>
+            </GuideField>
           </div>
-          <div>
+          <GuideField id="def-new-desc" missing={!description.trim()}>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelCls + " mb-0"}>{t("form.description")}</label>
+              <label className={labelCls + " mb-0"}>{t("form.description")}{!description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -653,7 +628,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
               </div>
             </div>
             <AutoTextArea value={description} onChange={e => setDescription(e.target.value)} rows={4} className={inputCls + " resize-y"} placeholder={t("def.descPh")} />
-          </div>
+          </GuideField>
 
           {/* ── Sugerencia IA ─────────────────────────────────────────────── */}
           {suggestion && (
@@ -782,15 +757,19 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
             )}
           </div>
 
-          {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">Cancelar</button>
             <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               Crear defecto
+              {!saving && [!vesselCode, !assetId, !classification.trim(), !description.trim()].some(Boolean) && (
+                <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String([!vesselCode, !assetId, !classification.trim(), !description.trim()].filter(Boolean).length))}</span>
+              )}
             </button>
           </div>
         </form>
+        {/* Fuera del <form>: el OK del aviso no debe enviar el formulario. */}
+        {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
       </div>
     </div>
   );
@@ -804,12 +783,15 @@ interface DefectModalProps {
   onSaved: () => void;
   /** Refresca la lista de fondo sin cerrar el modal (ej. tras "Aprobar RCA"). */
   onReload: () => void;
+  /** Acción pedida desde el botón de la fila del listado (V21). */
+  initialAction?: "createWo" | "close" | null;
+  /** "Volvió a fallar": el listado ofrece cargar la reincidencia como defecto nuevo. */
+  onRecurrence?: (defect: Defect) => void;
 }
 
 const fldCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60 transition-all";
-const fldLabel = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
 
-const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onReload }) => {
+const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onReload, initialAction, onRecurrence }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -1148,23 +1130,6 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     }
   }, [closeCheckText, defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved, t]);
 
-  const handleSave = useCallback(async () => {
-    // La comprobación se valida ANTES de guardar: si no, el defecto quedaría
-    // parcheado y el aviso saldría después, con el formulario ya modificado.
-    if (repairType === "PERMANENTE" && !closeCheckText) {
-      setActionError(t("def.verify.required"));
-      return;
-    }
-    if (!await patchDefect()) return;
-    if (repairType === "PERMANENTE") {
-      await closeDefectAndWo();
-    } else if (repairType === "TEMPORARIA") {
-      setPostSaveStep("ask-permanent-wo");
-    } else {
-      onSaved();
-    }
-  }, [closeCheckText, closeDefectAndWo, onSaved, patchDefect, repairType, t]);
-
   // ESC guard: dirty si algun campo editable difiere del valor original del defect
   const isDirty = !isClosed && (
     description           !== (defect.description           ?? "") ||
@@ -1185,7 +1150,70 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   // Se abre sólo por su ruta (/defects/:code), que ya es la marca de historial:
   // otra marca igual hacía que, con cambios sin guardar, cerrar reabriera el
   // diálogo sin fin. Mismo arreglo que Planes y OT.
-  const requestClose = useEscapeGuard({ isDirty, onSave: handleSave, onClose, skipHistory: true });
+  // Guardar desde el aviso de cambios sin guardar = guardar sin cerrar (V21).
+  const requestClose = useEscapeGuard({ isDirty, onSave: async () => { if (await patchDefect()) onSaved(); }, onClose, skipHistory: true });
+
+  // ── Vista guiada del defecto (preview V21) ──────────────────────────────────
+  // Ventana "Cerrar el defecto": reparación permanente (con cómo se comprobó) o
+  // temporaria (abre la OT definitiva). Reemplaza el bloque del final del form.
+  const [closeDlg, setCloseDlg] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const initialActionDone = React.useRef(false);
+  const originKey = defectOriginKey(defect.classification);
+  // Con origen OT, workOrderId ES la OT de origen: no es la que repara.
+  const repairWoCode = originKey !== "wo" ? defect.workOrderCode : null;
+  const canCreateWo = !isClosed && !defect.workOrderId;
+
+  /** Guardar sin cerrar (el cierre va por su ventana). */
+  const saveOnly = useCallback(async () => {
+    if (await patchDefect()) onSaved();
+  }, [patchDefect, onSaved]);
+
+  /** Cambio de etapa desde "Más acciones": se guarda enseguida con el resto del formulario. */
+  const setStage = useCallback(async (next: string) => {
+    setMoreOpen(false);
+    setStatus(next);
+    if (await patchDefect({ status: next })) onReload();
+  }, [patchDefect, onReload]);
+
+  /** Cerrar desde la ventana: permanente → guarda y cierra; temporaria → abre la OT definitiva. */
+  const confirmClose = useCallback(async () => {
+    if (repairType === "PERMANENTE") {
+      if (!closeCheckText) { setActionError(t("def.verify.required")); return; }
+      if (!await patchDefect({ repairType: "PERMANENTE" })) return;
+      setCloseDlg(false);
+      await closeDefectAndWo();
+    } else if (repairType === "TEMPORARIA") {
+      if (!await patchDefect({ repairType: "TEMPORARIA" })) return;
+      setCloseDlg(false);
+      setShowCreateWo(true);
+    }
+  }, [repairType, closeCheckText, patchDefect, closeDefectAndWo, t]);
+
+  /** ISM 10.2.3 — confirmar desde el defecto si el arreglo sigue funcionando. */
+  const verifyEffectiveness = useCallback(async (outcome: "EFFECTIVE" | "INEFFECTIVE") => {
+    setVerifying(true);
+    try {
+      await api.post(`/app/pms/defects/${defect.id}/verify-effectiveness`, { outcome });
+      onReload();
+      if (outcome === "INEFFECTIVE") onRecurrence?.(defect);
+      else onSaved();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("def.verify.error"));
+    } finally {
+      setVerifying(false);
+    }
+  }, [defect, onReload, onRecurrence, onSaved, t]);
+
+  // Acción pedida desde el listado ("Crear OT correctiva" / "Cerrar defecto").
+  useEffect(() => {
+    if (initialActionDone.current || !initialAction) return;
+    initialActionDone.current = true;
+    if (initialAction === "createWo" && canCreateWo) setShowCreateWo(true);
+    if (initialAction === "close" && !isClosed) setCloseDlg(true);
+  }, [initialAction, canCreateWo, isClosed]);
+
 
   // "ask-permanent-wo" screen
   if (postSaveStep === "ask-permanent-wo") {
@@ -1242,432 +1270,476 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     );
   }
 
+  // Etapa del recorrido: Reportado → En reparación → Cerrado → Confirmado.
+  const verifyDue = isClosed && !!defect.effectivenessDueAt && !defect.effectivenessVerifiedAt;
+  const verifyDueNow = verifyDue && new Date(defect.effectivenessDueAt!).getTime() <= Date.now();
+  const stepIdx = isClosed
+    ? (defect.effectivenessVerifiedAt ? 4 : 3)
+    : status === "RESOLVED" ? 2
+    : (status === "IN_PROGRESS" || !!repairWoCode) ? 1 : 0;
+  const reportedDays = Math.max(0, Math.floor((Date.now() - new Date(defect.reportedAt).getTime()) / 86_400_000));
+  const rcaRecommended = !isClosed && (severity === "HIGH" || severity === "CRITICAL") && !rcaRootCause.trim();
+  const btn = "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50";
+  const aiPill = (onClick: () => void, loading: boolean, label: string, Icon: typeof Sparkles = Sparkles) => isClosed ? null : (
+    <button type="button" onClick={onClick} disabled={loading}
+      className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/[0.07] px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 disabled:opacity-60">
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />} {label}
+    </button>
+  );
+  const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
+
+  // Recuadro "qué hacer ahora" según la etapa.
+  const nextCard = (() => {
+    const card = (tone: string, iconBox: string, Icon: typeof Sparkles, title: string, desc: string, actions: React.ReactNode) => (
+      <div className={`flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] px-3.5 py-3 ${tone}`}>
+        <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${iconBox}`}><Icon className="w-5 h-5" /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-black text-fg">{title}</p>
+          <p className="text-[12.5px] text-text-industrial/70">{desc}</p>
+        </div>
+        <div className="flex flex-wrap gap-2 ml-auto">{actions}</div>
+      </div>
+    );
+    if (isClosed && defect.effectivenessVerifiedAt) {
+      return card("border-emerald-500/40 bg-emerald-500/[0.08]", defect.effectivenessOutcome === "INEFFECTIVE" ? "bg-red-600" : "bg-emerald-500", CheckCircle2,
+        `${t("def.guide.verified")}: ${t(effectivenessLabelKey(defect.effectivenessOutcome))}`,
+        fmtDate(defect.effectivenessVerifiedAt) ?? "", null);
+    }
+    if (verifyDueNow) {
+      return card("border-amber-400/60 bg-amber-500/[0.08]", "bg-amber-500", ShieldQuestion, t("def.guide.verifyTitle"), t("def.guide.verifyDesc"),
+        user?.role !== "AUDITOR_READONLY" && (
+          <>
+            <button type="button" disabled={verifying} onClick={() => { void verifyEffectiveness("EFFECTIVE"); }} className={`${btn} bg-emerald-600 text-white hover:brightness-110`}>
+              {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} {t("def.verify.stillOk")}
+            </button>
+            <button type="button" disabled={verifying} onClick={() => { void verifyEffectiveness("INEFFECTIVE"); }} className={`${btn} border border-red-500/35 bg-surface text-red-700 dark:text-red-400 hover:bg-red-500/10`}>
+              <RotateCcw className="w-3.5 h-3.5" /> {t("def.verify.failedAgain")}
+            </button>
+          </>
+        ));
+    }
+    if (isClosed) {
+      return card("border-emerald-500/40 bg-emerald-500/[0.08]", "bg-emerald-500", CheckCircle2, t("def.guide.closedTitle"),
+        verifyDue ? `${t("def.verify.pendingUntil")} ${fmtDate(defect.effectivenessDueAt)}` : (closeNotes ?? ""), null);
+    }
+    const closeBtn = (primary: boolean) => (
+      <button type="button" onClick={() => { setRepairType(prev => prev ?? "PERMANENTE"); setCloseDlg(true); }}
+        className={`${btn} ${primary ? "bg-emerald-600 text-white hover:brightness-110" : "border border-fg/10 bg-surface text-fg hover:border-fg/25"}`}>
+        <Check className="w-3.5 h-3.5" /> {primary ? t("def.guide.close") : t("def.guide.alreadyFixed")}
+      </button>
+    );
+    if (repairWoCode && status !== "RESOLVED") {
+      return card("border-blue-400/60 bg-blue-500/[0.07]", "bg-blue-600", Hammer,
+        t("def.guide.workTitle").replace("{code}", repairWoCode), t("def.guide.workDesc"),
+        <>
+          <button type="button" onClick={() => navigate(`/work-orders?autoCode=${repairWoCode}`)} className={`${btn} border border-fg/10 bg-surface text-fg hover:border-fg/25`}>
+            <ExternalLink className="w-3.5 h-3.5" /> {t("def.guide.goWo")}
+          </button>
+          {closeBtn(true)}
+        </>);
+    }
+    if (status === "RESOLVED") {
+      return card("border-emerald-500/40 bg-emerald-500/[0.07]", "bg-emerald-600", CheckCircle2, t("def.guide.resolvedTitle"), t("def.guide.resolvedDesc"), closeBtn(true));
+    }
+    return card(status === "DEFERRED" ? "border-yellow-500/50 bg-yellow-500/[0.08]" : "border-red-400/50 bg-red-500/[0.06]",
+      status === "DEFERRED" ? "bg-yellow-600" : "bg-red-600", Wrench,
+      status === "DEFERRED" ? t("def.guide.deferredTitle") : t("def.guide.openTitle"),
+      canCreateWo ? t("def.guide.openDesc") : t("def.guide.openDescNoWo"),
+      <>
+        {canCreateWo && (
+          <button type="button" onClick={() => setShowCreateWo(true)} className={`${btn} bg-accent text-accent-fg hover:brightness-110`}>
+            <Wrench className="w-3.5 h-3.5" /> {t("def.guide.createWo").replace("{abbr}", woTerms.abbr)}
+          </button>
+        )}
+        {closeBtn(false)}
+      </>);
+  })();
+
+  const sevCls: Record<string, string> = {
+    CRITICAL: "border-red-700 bg-red-700 text-white", HIGH: "border-orange-500 bg-orange-500/15 text-orange-700 dark:text-orange-300",
+    MEDIUM: "border-yellow-500 bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", LOW: "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  };
+  const opCls: Record<string, string> = {
+    NO_GO: "border-red-700 bg-red-700 text-white", RESTRICTED: "border-orange-500 bg-orange-500/15 text-orange-700 dark:text-orange-300",
+    DEGRADED: "border-yellow-500 bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", NORMAL: "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  };
+  const labels = [t("def.step.reported"), t("def.step.repair"), t("def.step.closed"), t("def.step.confirmed")];
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-2xl max-h-[90vh]"}`} onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10 shrink-0">
-            <div>
-              <h2 className="text-base font-bold text-fg">{t("page.defects")}</h2>
-              <p className="text-[11px] text-text-industrial/50 flex items-center gap-1"><span className="font-mono">{defect.defectCode}</span> · <VesselLabel code={defect.vesselCode} className="text-[11px]" showCode /> · <AssetLabel id={defect.assetId} className="text-sm font-bold text-accent" /></p>
+        <div className={`w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 border-t-4 border-t-red-600 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${expanded ? "w-full h-full" : "max-w-3xl max-h-[92vh]"}`} onClick={e => e.stopPropagation()}>
+          {/* Encabezado: sobre qué equipo, qué pasó y lo que lo identifica */}
+          <div className="flex items-start gap-3 px-4 sm:px-6 py-3 border-b border-fg/10 shrink-0">
+            <span className="w-10 h-10 rounded-xl bg-red-500/10 text-red-700 dark:text-red-400 flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-red-700 dark:text-red-400">
+                {t("def.guide.kicker")} · {t(`def.origin.${originKey}` as TranslationKey)}
+              </p>
+              <h2 className="text-lg font-black text-fg leading-tight truncate"><AssetLabel id={defect.assetId} className="text-lg font-black text-fg" /></h2>
+              {description.trim() && <p className="text-xs text-text-industrial/70 line-clamp-1">{description}</p>}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 font-mono text-[11px] font-bold text-fg">{defect.defectCode}</span>
+                {/* Nombre del buque, no el código. */}
+                <span className="inline-flex items-center gap-1 rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/70"><Ship className="w-3 h-3" /><VesselLabel code={defect.vesselCode} className="text-[11px]" /></span>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${sevCls[severity] ?? ""}`}>{t(SEVERITY_LABEL_KEYS[severity as typeof DEFECT_SEVERITIES[number]] ?? "priority.medium")}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${opCls[operationalState] ?? ""}`}>{t(`def.op.${operationalState}` as TranslationKey)}</span>
+                {originKey === "wo" && defect.workOrderCode && (
+                  <button type="button" onClick={() => navigate(`/work-orders?autoCode=${defect.workOrderCode}`)} title={t("def.origin.openWo")}
+                    className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 font-mono text-[11px] font-bold text-accent hover:bg-accent/15">
+                    <Wrench className="w-3 h-3" /> {defect.workOrderCode} · {t("def.guide.generatedIt")}
+                  </button>
+                )}
+                {originKey === "audit" && defect.auditId && (
+                  <button type="button" onClick={() => navigate(`/external-audits?auditId=${defect.auditId}`)} title={t("def.origin.openAudit")}
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                    <ClipboardCheck className="w-3 h-3" /> {defect.auditCode ?? t("def.origin.audit")}
+                  </button>
+                )}
+                <span className="rounded-full border border-fg/10 bg-fg/5 px-2 py-0.5 text-[11px] font-bold text-text-industrial/60">{t("def.guide.reportedAgo").replace("{n}", String(reportedDays))}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <CopyLinkButton />
-              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? "Reducir" : "Ampliar"}>
+              <button onClick={() => setExpanded(v => !v)} className="p-1.5 rounded-lg text-text-industrial/30 hover:text-fg hover:bg-fg/5 transition-colors" title={expanded ? t("common.minimize") : t("common.maximize")}>
                 {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
               <ModalCloseButton onClose={requestClose} />
             </div>
           </div>
 
-          <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-            {/* Meta info */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                { label: t("def.reportedAt"), value: fmtDate(defect.reportedAt) },
-                { label: t("col.status"),     value: defect.status },
-                { label: t("col.severity"),   value: defect.severity },
-                { label: t("def.operationalState"), value: defect.operationalState },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
-                  <p className="text-[9px] uppercase tracking-wider text-text-industrial/40 mb-0.5">{label}</p>
-                  <p className="text-xs font-bold text-fg truncate">{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Banner OT RESOLUTORA — solo cuando workOrderId representa la OT que resolvió
-                el defecto. Si el origen es una OT (WORK_ORDER_FINDING), workOrderId ES la OT
-                de origen (no se puede crear correctiva: el botón queda deshabilitado), así que
-                NO se muestra acá para no confundirla con una resolutora — ya la muestra el
-                badge de Origen. */}
-            {defectOriginKey(defect.classification) !== "wo" && (defect.status === "RESOLVED" || defect.status === "CLOSED") && defect.workOrderCode && (
-              <button
-                type="button"
-                onClick={() => navigate(`/work-orders?autoCode=${defect.workOrderCode}`)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-success-sea/5 border border-success-sea/30 hover:bg-success-sea/15 transition-colors text-left group"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] uppercase tracking-wider text-success-sea/70 font-bold">{t("def.resolvedViaWo")}</span>
-                  <span className="font-mono font-bold text-success-sea text-xs">{defect.workOrderCode}</span>
-                </div>
-                <ExternalLink className="w-3.5 h-3.5 text-success-sea/60 group-hover:text-success-sea shrink-0" />
-              </button>
-            )}
-
-            {isClosed && closeNotes && (
-              <div className="rounded-xl border border-success-sea/20 bg-success-sea/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-success-sea mb-1">{t("def.closeNotes")}</p>
-                <p className="text-sm text-success-sea">{closeNotes}</p>
-              </div>
-            )}
-
-            {/* ISM 10.2.3 — resultado de la verificación de eficacia, o cuándo toca. */}
-            {isClosed && (defect.effectivenessVerifiedAt || defect.effectivenessDueAt) && (
-              <div className={`rounded-xl border px-3 py-2 ${
-                !defect.effectivenessVerifiedAt ? "border-amber-500/30 bg-amber-500/10"
-                  : defect.effectivenessOutcome === "INEFFECTIVE" ? "border-red-500/30 bg-red-500/10"
-                  : "border-success-sea/20 bg-success-sea/10"
-              }`}>
-                <p className="text-[10px] uppercase tracking-wider text-text-industrial/60 mb-1">{t("def.verify.result")}</p>
-                <p className="text-sm text-fg">
-                  {defect.effectivenessVerifiedAt
-                    ? `${t(effectivenessLabelKey(defect.effectivenessOutcome))} · ${fmtDate(defect.effectivenessVerifiedAt)}`
-                    : `${t("def.verify.pendingUntil")} ${fmtDate(defect.effectivenessDueAt)}`}
-                </p>
-                {defect.effectivenessNote && (
-                  <p className="text-xs text-text-industrial/70 mt-1">{defect.effectivenessNote}</p>
-                )}
-              </div>
-            )}
-
-            {/* Descripción breve */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className={fldLabel}>{t("form.briefDesc")}</label>
-                {!isClosed && <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />}
-              </div>
-              <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder={t("def.briefDescPh")} />
-            </div>
-
-            {/* Clasificación + selects */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <label className={fldLabel}>{t("def.classification")}</label>
-                {defectOriginKey(defect.classification) === "wo" && defect.workOrderCode ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/work-orders?autoCode=${defect.workOrderCode}`)}
-                    title={t("def.origin.openWo")}
-                    className="inline-flex items-center gap-1.5 group"
-                  >
-                    <OriginBadge classification={defect.classification} />
-                    <span className="font-mono text-[10px] text-blue-700 dark:text-blue-400 group-hover:underline">{defect.workOrderCode}</span>
-                    <ExternalLink className="w-3 h-3 text-blue-700 dark:text-blue-400/60 group-hover:text-blue-400 shrink-0" />
-                  </button>
-                ) : defectOriginKey(defect.classification) === "audit" && defect.auditId ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/external-audits?auditId=${defect.auditId}`)}
-                    title={t("def.origin.openAudit")}
-                    className="inline-flex items-center gap-1.5 group"
-                  >
-                    <OriginBadge classification={defect.classification} />
-                    {defect.auditCode && <span className="font-mono text-[10px] text-amber-700 dark:text-amber-400 group-hover:underline">{defect.auditCode}</span>}
-                    <ExternalLink className="w-3 h-3 text-amber-700 dark:text-amber-400/60 group-hover:text-amber-400 shrink-0" />
-                  </button>
-                ) : (
-                  <OriginBadge classification={defect.classification} />
-                )}
-              </div>
-              <input value={classification} onChange={e => setClassification(e.target.value)} disabled={isClosed} className={fldCls} />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("col.severity")}</label>
-                <select value={severity} onChange={e => setSeverity(e.target.value)} disabled={isClosed} className={fldCls}>
-                  {DEFECT_SEVERITIES.map(v => <option key={v}>{v}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("def.operationalState")}</label>
-                <select value={operationalState} onChange={e => setOperationalState(e.target.value)} disabled={isClosed} className={fldCls}>
-                  {DEFECT_OPERATIONAL_STATES.map(v => <option key={v}>{v}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("col.status")}</label>
-                <select value={status} onChange={e => setStatus(e.target.value)} disabled={isClosed} className={fldCls}>
-                  {["OPEN","UNDER_REVIEW","IN_PROGRESS","DEFERRED","RESOLVED"].map(v => <option key={v}>{v}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Acción inmediata */}
-            <div className="space-y-1.5">
-              <label
-                onClick={!isClosed ? handleImmediateActionClick : undefined}
-                title={!description.trim() ? "Completá la descripción primero" : isClosed ? undefined : "Sugerir con IA"}
-                className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${isClosed ? "text-text-industrial/60" : `text-accent ${description.trim() ? `cursor-pointer hover:text-fg ${loadingImmediate ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}`}
-              >
-                {!isClosed && (loadingImmediate ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />)}
-                {t("def.immediateAction")}
-                {loadingImmediate && <span className="ml-1 text-[9px] normal-case font-normal">analizando…</span>}
-              </label>
-              <AutoTextArea rows={3} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
-            </div>
-
-            {/* Fotos del defecto */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <p className={fldLabel}>Fotos {photos.length > 0 && `(${photos.length})`}</p>
-                <div className="flex items-center gap-2">
-                  {photos.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => { void handleAnalyzeStoredPhotos(); }}
-                      disabled={analyzingPhotos || isClosed}
-                      title="La IA analiza las fotos y agrega descripción técnica al campo Descripción"
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50"
-                    >
-                      {analyzingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      {analyzingPhotos ? "Analizando…" : "Analizar con IA"}
-                    </button>
-                  )}
-                  {!isClosed && (
-                    <button
-                      type="button"
-                      onClick={() => photoInputRef.current?.click()}
-                      disabled={uploadingPhotos}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-text-industrial hover:border-accent/40 hover:text-fg text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-                    >
-                      {uploadingPhotos ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
-                      Agregar fotos
-                    </button>
-                  )}
-                  <input ref={photoInputRef} type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={(e) => { void onPhotosSelectedEdit(e); }} />
-                </div>
-              </div>
-              {photosLoading ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
-              ) : photos.length === 0 ? (
-                <p className="text-xs text-text-industrial/40 italic text-center py-3">{t("def.noPhotosShort")} {!isClosed && t("def.clickAddPhotos")}</p>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                  {photos.map(p => (
-                    <div key={p.id} className="relative aspect-square bg-fg/5 border border-fg/10 rounded-lg overflow-hidden group">
-                      {p.description && (
-                        <button type="button" onClick={() => setLightboxPhoto(p)} className="w-full h-full">
-                          <AuthedImage src={p.description} alt={p.filename} className="w-full h-full object-cover" />
-                        </button>
-                      )}
-                      {!isClosed && (
-                        <button
-                          type="button"
-                          onClick={() => { void removePhotoEdit(p.id); }}
-                          className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-fg/80 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-fg transition-all"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Análisis RCA estructurado */}
-            <div className="rounded-xl border border-fg/10 bg-fg/2 p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-bold text-text-industrial/80 uppercase tracking-wider">{t("def.rcaTitle")}</p>
-                <div className="flex items-center gap-2">
-                  {rcaApprovedAt && (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40">
-                      {t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}
+          {/* Recorrido */}
+          <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-2.5 border-b border-fg/10 bg-fg/[0.02] shrink-0">
+            {labels.map((l, i) => {
+              const done = i < stepIdx;
+              const cur = i === stepIdx;
+              return (
+                <React.Fragment key={l}>
+                  {i > 0 && <span className="w-5 h-px bg-fg/15" />}
+                  <span className={`flex items-center gap-1.5 text-xs font-bold ${done ? "text-emerald-700 dark:text-emerald-400" : cur ? "text-fg" : "text-text-industrial/40"}`}>
+                    <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[11px] ${done ? "bg-emerald-500 border-emerald-500 text-white" : cur ? "bg-red-600 border-red-600 text-white" : "border-fg/25"}`}>
+                      {done ? <Check className="w-3.5 h-3.5" /> : i + 1}
                     </span>
-                  )}
-                  {!isClosed && (
-                    <button
-                      type="button"
-                      onClick={() => { void analyzeRca(); }}
-                      disabled={rcaAnalyzing}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 text-accent border border-accent/30 text-[10px] font-bold hover:bg-accent/20 disabled:opacity-50 transition-colors"
-                    >
-                      {rcaAnalyzing
-                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                        : <Bot className="w-3 h-3" />}
-                      {rcaAnalyzing ? "Analizando…" : "Analizar con IA"}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={fldLabel}>{t("def.rcaMethodology")}</label>
-                  <select value={rcaMethodology} onChange={e => setRcaMethodology(e.target.value as RcaMethodology | "")} disabled={isClosed} className={fldCls}>
-                    <option value="">—</option>
-                    <option value="FIVE_WHYS">{t("def.method.fiveWhys")}</option>
-                    <option value="FISHBONE">{t("def.method.fishbone")}</option>
-                    <option value="FTA">{t("def.method.fta")}</option>
-                    <option value="BARRIER_ANALYSIS">{t("def.method.barrierAnalysis")}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("def.rcaSummary")}</label>
-                <RichTextArea rows={2} value={rcaAnalysis} onChange={setRcaAnalysis} disabled={isClosed} className={fldCls} placeholder={t("def.rcaSummaryPh")} />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("def.rcaImmediateCause")}</label>
-                <RichTextArea rows={2} value={rcaImmediateCause} onChange={setRcaImmediateCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaImmediatePh")} />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("def.rcaContributingCause")}</label>
-                <RichTextArea rows={2} value={rcaContributingCause} onChange={setRcaContributingCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaContributingPh")} />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("def.rcaRootCause")}</label>
-                <RichTextArea rows={2} value={rcaRootCause} onChange={setRcaRootCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaRootPh")} />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={fldLabel}>{t("def.rcaPreventiveActions")}</label>
-                <RichTextArea rows={2} value={rcaPreventiveActions} onChange={setRcaPreventiveActions} disabled={isClosed} className={fldCls} placeholder={t("def.rcaPreventivePh")} />
-              </div>
-
-              {!isClosed && !rcaApprovedAt && rcaRootCause.trim() && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const now = new Date().toISOString();
-                    // Guarda TODOS los campos del formulario (no solo RCA) — mismo patchDefect
-                    // que usa "Guardar" — y no cierra el modal (a diferencia de handleSave).
-                    if (!await patchDefect({ rcaApprovedAt: now })) return;
-                    setRcaApprovedAt(now);
-                    onReload();
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
-                >
-                  {t("def.rcaApprove")}
-                </button>
-              )}
-            </div>
-
-            {rcaAnalysisError && (
-              <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{rcaAnalysisError}</p>
+                    {l}
+                  </span>
+                </React.Fragment>
+              );
+            })}
+            {status === "DEFERRED" && !isClosed && (
+              <span className="ml-auto rounded-full bg-yellow-500/15 px-2 py-0.5 text-[11px] font-extrabold text-yellow-800 dark:text-yellow-300">{t("def.st.DEFERRED")}</span>
             )}
+          </div>
 
-            {/* Tipo de reparación — último campo */}
-            {!isClosed && (
-              <div className="rounded-xl border border-fg/10 bg-fg/2 p-4 space-y-3">
-                <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">¿La acción fue una corrección temporaria o permanente?</p>
-                <div className="flex gap-2">
-                  {(["TEMPORARIA", "PERMANENTE"] as const).map(rt => (
-                    <button
-                      key={rt}
-                      type="button"
-                      onClick={() => setRepairType(prev => prev === rt ? null : rt)}
-                      className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                        repairType === rt
-                          ? rt === "PERMANENTE"
-                            ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
-                            : "bg-yellow-500/15 border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
-                          : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-fg/20 hover:text-fg"
-                      }`}
-                    >
-                      {rt === "TEMPORARIA" ? "⚠ Temporaria" : "✓ Permanente"}
-                    </button>
-                  ))}
-                </div>
-                {repairType === "PERMANENTE" && (
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400/70">{t("def.saveWillCloseWo")}</p>
-                )}
-                {repairType === "TEMPORARIA" && (
-                  <p className="text-[11px] text-yellow-700 dark:text-yellow-400/70">{t("def.saveWillAskWo")}</p>
-                )}
-
-                {/* ISM 10.2.3 — cómo se comprobó que quedó resuelto. Sólo aparece
-                    en la reparación permanente, que es la que cierra el defecto:
-                    en la temporaria el trabajo sigue en otra OT y no hay nada
-                    que verificar todavía. */}
-                {repairType === "PERMANENTE" && (
-                  <div className="pt-3 border-t border-fg/10 space-y-2">
-                    <p className="text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def.verify.closeQuestion")}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {CLOSE_CHECK_OPTIONS.map(opt => (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => setCloseCheck(prev => prev === opt.key ? null : opt.key)}
-                          className={`py-2 px-3 rounded-xl border text-xs font-bold text-left transition-all ${
-                            closeCheck === opt.key
-                              ? "bg-accent/15 border-accent/50 text-accent"
-                              : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-fg/20 hover:text-fg"
-                          }`}
-                        >
-                          {t(opt.labelKey)}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="px-4 sm:px-6 pt-4">{nextCard}</div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4 px-4 sm:px-6 py-4">
+              {/* Izquierda: qué pasó y por qué */}
+              <div className="space-y-3 min-w-0">
+                <GuideSection n={1} title={t("def.sec.what")} subtitle={t("def.sec.whatSub")} open onToggle={() => { /* siempre abierto */ }}>
+                  <GuideField id="def-e-desc" missing={!isClosed && !description.trim()}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className={`${fl} mb-0`}>{t("def.guide.found")}{!isClosed && !description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      {!isClosed && <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />}
+                    </div>
+                    <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder={t("def.briefDescPh")} />
+                  </GuideField>
+                  <div>
+                    <label className={fl}>{t("col.severity")}</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DEFECT_SEVERITIES.map(v => (
+                        <button key={v} type="button" disabled={isClosed} onClick={() => setSeverity(v)}
+                          className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors disabled:opacity-70 ${severity === v ? sevCls[v] : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                          {t(SEVERITY_LABEL_KEYS[v])}
                         </button>
                       ))}
                     </div>
-                    {closeCheck === "other" && (
-                      <input
-                        type="text"
-                        value={closeCheckOther}
-                        onChange={e => setCloseCheckOther(e.target.value)}
-                        placeholder={t("def.verify.otherPh")}
-                        className="w-full px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-fg placeholder:text-text-industrial/40 focus:border-accent/40 focus:outline-none"
-                      />
+                  </div>
+                  <div>
+                    <label className={fl}>{t("def.guide.equipmentState")}</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DEFECT_OPERATIONAL_STATES.map(v => (
+                        <button key={v} type="button" disabled={isClosed} onClick={() => setOperationalState(v)}
+                          className={`rounded-xl border-[1.5px] px-3 py-1 text-left transition-colors disabled:opacity-70 ${operationalState === v ? opCls[v] : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                          <span className="block text-xs font-bold">{t(`def.op.${v}` as TranslationKey)}</span>
+                          <span className="block text-[10px] opacity-80">{t(`def.opHint.${v}` as TranslationKey)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <GuideField id="def-e-class" missing={!isClosed && !classification.trim()}>
+                    <label className={fl}>{t("def.classification")}{!isClosed && !classification.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                    <input value={classification} onChange={e => setClassification(e.target.value)} disabled={isClosed} className={fldCls} />
+                  </GuideField>
+
+                  {/* Fotos del defecto */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <p className={`${fl} mb-0`}>{t("def.guide.photos")} {photos.length > 0 && `(${photos.length})`}</p>
+                      {photos.length > 0 && aiPill(() => { void handleAnalyzeStoredPhotos(); }, analyzingPhotos, t("def.guide.describeAi"))}
+                      <input ref={photoInputRef} type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={(e) => { void onPhotosSelectedEdit(e); }} />
+                    </div>
+                    {photosLoading ? (
+                      <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
+                    ) : (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                        {photos.map(p => (
+                          <div key={p.id} className="relative aspect-square bg-fg/5 border border-fg/10 rounded-xl overflow-hidden group">
+                            {p.description && (
+                              <button type="button" onClick={() => setLightboxPhoto(p)} className="w-full h-full">
+                                <AuthedImage src={p.description} alt={p.filename} className="w-full h-full object-cover" />
+                              </button>
+                            )}
+                            {!isClosed && (
+                              <button type="button" onClick={() => { void removePhotoEdit(p.id); }} title={t("common.delete")}
+                                className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {!isClosed && (
+                          <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhotos}
+                            className="aspect-square rounded-xl border-[1.5px] border-dashed border-fg/25 flex flex-col items-center justify-center gap-1 text-[11px] font-bold text-text-industrial/60 hover:border-accent/40 hover:text-fg disabled:opacity-50">
+                            {uploadingPhotos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} {t("def.guide.addPhotos")}
+                          </button>
+                        )}
+                        {isClosed && photos.length === 0 && <p className="col-span-full text-xs text-text-industrial/40 italic">{t("def.noPhotosShort")}</p>}
+                      </div>
                     )}
-                    <p className="text-[11px] text-text-industrial/50">{t("def.verify.closeHint")}</p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <label className={`${fl} mb-0`}>{t("def.guide.immediate")}</label>
+                      {aiPill(() => { void handleImmediateActionClick(); }, loadingImmediate, t("mp.guide.suggestAi"))}
+                    </div>
+                    <AutoTextArea rows={2} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
+                  </div>
+                </GuideSection>
+
+                <GuideSection n={2} title={t("def.sec.why")} subtitle={t("def.sec.whySub")} open onToggle={() => { /* siempre abierto */ }}
+                  pill={rcaApprovedAt
+                    ? <span className="rounded-full bg-success-sea/15 px-2 py-0.5 text-[10px] font-bold text-success-sea whitespace-nowrap">{t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}</span>
+                    : rcaRecommended ? <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-bold text-white whitespace-nowrap">{t("def.guide.recommended")}</span> : undefined}>
+                  <GuideField id="def-rca" missing={rcaRecommended}>
+                    <div className="flex items-center gap-1.5">
+                      <label className={`${fl} mb-0`}>{t("def.rcaMethodology")}</label>
+                      {rcaRecommended && <GuideNeedTag label={t("def.guide.recommendedHigh")} />}
+                      {aiPill(() => { void analyzeRca(); }, rcaAnalyzing, t("def.guide.analyzeAi"), Bot)}
+                    </div>
+                    <select value={rcaMethodology} onChange={e => setRcaMethodology(e.target.value as RcaMethodology | "")} disabled={isClosed} className={fldCls}>
+                      <option value="">—</option>
+                      {RCA_METHODOLOGY_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
+                    </select>
+                  </GuideField>
+                  <div>
+                    <label className={fl}>{t("def.rcaSummary")}</label>
+                    <RichTextArea rows={2} value={rcaAnalysis} onChange={setRcaAnalysis} disabled={isClosed} className={fldCls} placeholder={t("def.rcaSummaryPh")} />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className={fl}>{t("def.rcaImmediateCause")}</label>
+                      <RichTextArea rows={2} value={rcaImmediateCause} onChange={setRcaImmediateCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaImmediatePh")} />
+                    </div>
+                    <div>
+                      <label className={fl}>{t("def.rcaContributingCause")}</label>
+                      <RichTextArea rows={2} value={rcaContributingCause} onChange={setRcaContributingCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaContributingPh")} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={fl}>{t("def.rcaRootCause")}</label>
+                    <RichTextArea rows={2} value={rcaRootCause} onChange={setRcaRootCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaRootPh")} />
+                  </div>
+                  <div>
+                    <label className={fl}>{t("def.rcaPreventiveActions")}</label>
+                    <RichTextArea rows={2} value={rcaPreventiveActions} onChange={setRcaPreventiveActions} disabled={isClosed} className={fldCls} placeholder={t("def.rcaPreventivePh")} />
+                  </div>
+                  {!isClosed && !rcaApprovedAt && rcaRootCause.trim() && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const now = new Date().toISOString();
+                        // Guarda TODOS los campos del formulario (no solo RCA) — mismo patchDefect
+                        // que usa "Guardar" — y no cierra el modal.
+                        if (!await patchDefect({ rcaApprovedAt: now })) return;
+                        setRcaApprovedAt(now);
+                        onReload();
+                      }}
+                      className="self-start px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
+                    >
+                      {t("def.rcaApprove")}
+                    </button>
+                  )}
+                </GuideSection>
+              </div>
+
+              {/* Derecha: relacionado, cierre e historia */}
+              <div className="space-y-3 min-w-0">
+                <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                  <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg"><Link2 className="w-4 h-4" /> {t("def.guide.related")}</h3>
+                  <div className="p-3 space-y-2.5">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <p className="text-[10.5px] font-semibold text-text-industrial/45">{t("def.origin.prefix")}</p>
+                        <p className="font-bold text-fg">{originKey === "manual" ? t("def.origin.manual") : t(`def.class.${originKey}` as TranslationKey)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10.5px] font-semibold text-text-industrial/45">{t("def.guide.repairWo")}</p>
+                        {repairWoCode ? (
+                          <button type="button" onClick={() => navigate(`/work-orders?autoCode=${repairWoCode}`)} className="font-mono font-bold text-accent hover:underline">{repairWoCode}</button>
+                        ) : <p className="font-bold text-text-industrial/50">{t("def.guide.noRepairWo")}</p>}
+                      </div>
+                    </div>
+                    {!isClosed && (severity === "CRITICAL" || status === "DEFERRED" || operationalState === "NO_GO" || operationalState === "RESTRICTED") && (
+                      <button onClick={() => setShowMoc(true)} title={t("def.guide.mocHint")}
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-fg/10 text-xs font-bold text-fg hover:border-accent/30 transition-all">
+                        <GitBranch className="w-3.5 h-3.5" /> {t("def.guide.openMoc")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isClosed && (
+                  <div className="rounded-2xl border border-emerald-500/30 overflow-hidden">
+                    <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-emerald-500/20 bg-emerald-500/[0.06] text-[13.5px] font-extrabold text-fg"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> {t("def.guide.closeBox")}</h3>
+                    <div className="p-3 space-y-2 text-xs">
+                      {defect.repairType && <p><span className="text-text-industrial/50">{t("def.guide.repairKind")}:</span> <b>{defect.repairType === "PERMANENTE" ? t("def.guide.permanent") : t("def.guide.temporary")}</b></p>}
+                      {closeNotes && <p><span className="text-text-industrial/50">{t("def.closeNotes")}:</span> <b>{closeNotes}</b></p>}
+                      {(defect.effectivenessVerifiedAt || defect.effectivenessDueAt) && (
+                        <p><span className="text-text-industrial/50">{t("def.verify.result")}:</span> <b>{defect.effectivenessVerifiedAt
+                          ? `${t(effectivenessLabelKey(defect.effectivenessOutcome))} · ${fmtDate(defect.effectivenessVerifiedAt)}`
+                          : `${t("def.verify.pendingUntil")} ${fmtDate(defect.effectivenessDueAt)}`}</b></p>
+                      )}
+                      {defect.effectivenessNote && <p className="text-text-industrial/70">{defect.effectivenessNote}</p>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-fg/10 overflow-hidden">
+                  <h3 className="flex items-center gap-1.5 px-3 py-2.5 border-b border-fg/10 text-[13.5px] font-extrabold text-fg"><History className="w-4 h-4" /> {t("def.guide.history")}</h3>
+                  <ol className="p-3 space-y-2 text-xs">
+                    {[
+                      { on: true, color: "bg-red-600", text: t("def.guide.hReported"), date: defect.reportedAt },
+                      { on: !!repairWoCode, color: "bg-blue-600", text: `${t("def.guide.hWo")} ${repairWoCode ?? ""}`, date: null },
+                      { on: !!defect.rcaApprovedAt, color: "bg-violet-600", text: t("def.guide.hRca"), date: defect.rcaApprovedAt },
+                      { on: isClosed, color: "bg-emerald-500", text: t("def.guide.hClosed"), date: null },
+                      { on: !!defect.effectivenessVerifiedAt, color: defect.effectivenessOutcome === "INEFFECTIVE" ? "bg-red-600" : "bg-emerald-600", text: `${t("def.guide.hVerified")}: ${t(effectivenessLabelKey(defect.effectivenessOutcome))}`, date: defect.effectivenessVerifiedAt },
+                      { on: verifyDue, color: "bg-amber-500", text: t("def.guide.hVerifyPending"), date: defect.effectivenessDueAt },
+                    ].filter(e => e.on).map((e, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${e.color}`} />
+                        <span><b className="text-fg">{e.text}</b>{e.date && <span className="text-text-industrial/55"> · {fmtDate(e.date)}</span>}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-3 border-t border-fg/10 shrink-0">
+            <button onClick={() => { void downloadDefectPdf(defect); }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+              <Download className="w-3.5 h-3.5" /> PDF
+            </button>
+            {!isClosed && (
+              <div className="relative">
+                <button type="button" onClick={() => setMoreOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30">
+                  <MoreHorizontal className="w-3.5 h-3.5" /> {t("wo.guide.more")}
+                </button>
+                {moreOpen && (
+                  <div className="absolute bottom-full left-0 mb-1.5 z-20 min-w-[14rem] rounded-xl border border-fg/10 bg-surface dark:bg-[#0D1B2A] p-1.5 shadow-xl">
+                    {(["OPEN", "UNDER_REVIEW", "IN_PROGRESS", "DEFERRED", "RESOLVED"] as const).filter(s => s !== status).map(s => (
+                      <button key={s} type="button" disabled={saving} onClick={() => { void setStage(s); }}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-fg hover:bg-fg/5 disabled:opacity-50">
+                        {t("def.guide.markAs").replace("{status}", t(`def.st.${s}` as TranslationKey))}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
             )}
-          </div>
-
-          <div className="flex justify-between gap-2 px-6 py-4 border-t border-fg/10">
-            <div className="flex items-center gap-2">
-              <button onClick={() => { void downloadDefectPdf(defect); }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
-                <Download className="w-3.5 h-3.5" /> PDF
+            {/* Eliminar: SÓLO administrador (ensureCanDeleteDefect). Borrado lógico. */}
+            {isAdmin && (
+              <button onClick={() => { void handleDelete(); }} disabled={deleting} title={t("common.delete")}
+                className="flex items-center justify-center p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-all">
+                {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
               </button>
-              {!isClosed && (
-                <button onClick={() => setShowCreateWo(true)} disabled={!!defect.workOrderId}
-                  title={defect.workOrderId ? `Ya tiene una ${woTerms.abbr} asociada` : undefined}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                  Crear {woTerms.abbr} Correctiva
-                </button>
-              )}
-              {/* Abrir MOC: defectos CRITICAL o con status DEFERRED suelen
-                * implicar operación con redundancia degradada o bypass →
-                * amerita MOC TEMPORARY formal para auditoría. */}
-              {!isClosed && (severity === "CRITICAL" || status === "DEFERRED") && (
-                <button
-                  onClick={() => setShowMoc(true)}
-                  title="Documentar el cambio operacional con un MOC formal"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-                >
-                  <GitBranch className="w-3.5 h-3.5" /> Abrir MOC
-                </button>
-              )}
-              {/* Eliminar: SÓLO administrador. El backend ya lo exigía
-                  (ensureCanDeleteDefect) pero no había forma de invocarlo desde
-                  la app. Es borrado lógico: el registro deja de listarse pero la
-                  fila queda, con quién y cuándo lo borró. */}
-              {isAdmin && (
-                <button onClick={() => { void handleDelete(); }} disabled={deleting}
-                  title="Eliminar este registro de defecto (sólo administrador)"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 disabled:opacity-50 transition-all">
-                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  {t("common.delete")}
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{t("common.cancel")}</button>
-              {!isClosed && (
-                <button onClick={() => { void handleSave(); }} disabled={saving || closing}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all ${
-                    repairType === "PERMANENTE"
-                      ? "bg-emerald-500/80 text-fg"
-                      : "bg-accent text-accent-fg"
-                  }`}>
-                  {(saving || closing) ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : repairType === "PERMANENTE" ? "Guardar y cerrar"
-                    : t("common.save")}
-                </button>
-              )}
-            </div>
+            )}
+            <span className="flex-1" />
+            {!isClosed && isDirty && (
+              <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-400"><CircleDot className="w-3 h-3" /> {t("mp.guide.dirty")}</span>
+            )}
+            <button onClick={onClose} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors">{isClosed ? t("common.close") : t("common.cancel")}</button>
+            {!isClosed && (
+              <button onClick={() => { void saveOnly(); }} disabled={saving || closing}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {t("common.save")}
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Cerrar el defecto: reparación permanente (cómo se comprobó) o temporaria (OT definitiva). */}
+      {closeDlg && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-fg/10">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <h2 className="text-base font-black text-fg">{t("def.guide.closeDlgTitle")}</h2>
+              <ModalCloseButton onClose={() => setCloseDlg(false)} className="ml-auto" />
+            </div>
+            <div className="px-5 py-4 space-y-3.5">
+              <div>
+                <p className={fl}>{t("def.guide.definitiveQ")}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(["PERMANENTE", "TEMPORARIA"] as const).map(rt => {
+                    const on = repairType === rt;
+                    return (
+                      <button key={rt} type="button" onClick={() => setRepairType(rt)}
+                        className={`rounded-xl border-2 p-2.5 text-left transition-colors ${on ? (rt === "PERMANENTE" ? "border-emerald-500 bg-emerald-500/10" : "border-amber-500 bg-amber-500/10") : "border-fg/10 hover:border-fg/25"}`}>
+                        <span className="block text-[13px] font-extrabold text-fg">{rt === "PERMANENTE" ? t("def.guide.permYes") : t("def.guide.tempNo")}</span>
+                        <span className="block text-[11px] text-text-industrial/60">{rt === "PERMANENTE" ? t("def.guide.permHint") : t("def.guide.tempHint").replace("{abbr}", woTerms.abbr)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {repairType === "PERMANENTE" && (
+                <GuideField id="def-close-check" missing={!closeCheckText}>
+                  <p className={fl}>{t("def.verify.closeQuestion")}{!closeCheckText && <GuideNeedTag label={t("mp.exec.required")} />}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {CLOSE_CHECK_OPTIONS.map(opt => (
+                      <button key={opt.key} type="button" onClick={() => setCloseCheck(prev => prev === opt.key ? null : opt.key)}
+                        className={`py-2 px-3 rounded-xl border-2 text-xs font-bold text-left transition-all ${closeCheck === opt.key ? "border-emerald-500 bg-emerald-500/10 text-fg" : "border-fg/10 text-text-industrial/70 hover:border-fg/25"}`}>
+                        {t(opt.labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                  {closeCheck === "other" && (
+                    <input type="text" value={closeCheckOther} onChange={e => setCloseCheckOther(e.target.value)} placeholder={t("def.verify.otherPh")} className={fldCls} />
+                  )}
+                  <p className="text-[11px] text-text-industrial/55">{t("def.verify.closeHint")}</p>
+                </GuideField>
+              )}
+              {repairType === "TEMPORARIA" && (
+                <p className="rounded-xl border border-amber-400/60 bg-amber-500/[0.08] px-3 py-2 text-xs text-amber-900 dark:text-amber-200">{t("def.guide.tempExplain").replace("{abbr}", woTerms.abbr)}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 px-5 py-3 border-t border-fg/10">
+              <span className="flex-1" />
+              <button type="button" onClick={() => setCloseDlg(false)} className="px-3 py-2 rounded-xl text-xs text-text-industrial hover:text-fg">{t("common.cancel")}</button>
+              <button type="button" onClick={() => { void confirmClose(); }} disabled={!repairType || saving || closing}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:brightness-110 disabled:opacity-50">
+                {(saving || closing) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {repairType === "TEMPORARIA" ? t("def.guide.createPermWo").replace("{abbr}", woTerms.abbr) : t("def.guide.close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Abrir MOC desde el defecto: documenta el cambio operacional
         * mientras dura la condición degradada. */}
@@ -1709,6 +1781,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           (en un formulario tan largo el recuadro quedaba fuera de la vista y
           parecía que el botón no había hecho nada). */}
       {actionError && <AlertDialog message={actionError} onClose={() => setActionError(null)} />}
+      {rcaAnalysisError && <AlertDialog message={rcaAnalysisError} onClose={() => setRcaAnalysisError(null)} />}
     </>
   );
 };
@@ -1795,7 +1868,7 @@ const EffectivenessReviewStrip: React.FC<{
 
 export const DefectsPage: React.FC = () => {
   const t = useT();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/defects");
   const [editing, setEditing] = useState<Defect | null>(null);
   const [creating, setCreating] = useState(false);
@@ -1847,40 +1920,91 @@ export const DefectsPage: React.FC = () => {
       .catch(() => {});
   }, [autoDefectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [vesselInput, setVesselInput] = useState(vesselFilter);
+  // ── Listado (preview V21) ──────────────────────────────────────────────────
+  // Se trae todo y se filtra en cliente: los filtros cruzan estado, severidad,
+  // estado del equipo, origen y equipo, y los contadores necesitan el total.
+  // Los parámetros viejos de la URL (?status, ?severity, ?vesselCode,
+  // ?verification=DUE) siguen funcionando: arrancan el filtro correspondiente.
+  const { vessels: contextVessels } = useVesselContext();
+  const woTerms = useWoTerms();
+  useAssetsCache(); // nombres de equipos para el buscador y el filtro
+  const [cardSel, setCardSel] = useState<"" | "crit" | "stop" | "nowo" | "verify">(() => (verificationFilter === "DUE" ? "verify" : ""));
+  const [stageSel, setStageSel] = useState<"open" | "closed" | "all">(() =>
+    statusFilter === "CLOSED" || statusFilter === "RESOLVED" ? "closed" : statusFilter ? "all" : "open");
+  const [statusExact] = useState(statusFilter);
+  const [sevSel, setSevSel] = useState(severityFilter);
+  const [opSel, setOpSel] = useState("");
+  const [originSel, setOriginSel] = useState("");
+  const [assetSel, setAssetSel] = useState("");
+  const [vesselSel, setVesselSel] = useState(vesselFilter);
+  const [search, setSearch] = useState("");
+  const [pendingAction, setPendingAction] = useState<"createWo" | "close" | null>(null);
 
-  useEffect(() => {
-    setVesselInput(vesselFilter);
-  }, [vesselFilter]);
+  const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/defects", []);
 
-  const updateFilters = useCallback((next: { status?: string; severity?: string; vesselCode?: string }) => {
-    const params = new URLSearchParams(searchParams);
-    const nextStatus = next.status !== undefined ? next.status : statusFilter;
-    const nextSeverity = next.severity !== undefined ? next.severity : severityFilter;
-    const nextVessel = next.vesselCode !== undefined ? next.vesselCode : vesselFilter;
-    if (nextStatus) params.set("status", nextStatus); else params.delete("status");
-    if (nextSeverity) params.set("severity", nextSeverity); else params.delete("severity");
-    if (nextVessel) params.set("vesselCode", nextVessel); else params.delete("vesselCode");
-    setSearchParams(params, { replace: true });
-  }, [searchParams, setSearchParams, severityFilter, statusFilter, vesselFilter]);
-
-  const path = useMemo(() => {
-    const params = new URLSearchParams();
-    if (statusFilter) params.set("status", statusFilter);
-    if (severityFilter) params.set("severity", severityFilter);
-    if (vesselFilter) params.set("vesselCode", vesselFilter);
-    if (verificationFilter) params.set("verification", verificationFilter);
-    const query = params.toString();
-    return `/app/pms/defects${query ? `?${query}` : ""}`;
-  }, [severityFilter, statusFilter, vesselFilter, verificationFilter]);
-
-  const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
-
-  // Franja "Para revisar": los cerrados hace 30+ días sin confirmar. Se pide
-  // aparte de la lista principal para que aparezca esté como esté filtrada la
-  // pantalla: es la única parte de la app con los botones de confirmación.
+  // Franja "Para confirmar": los cerrados hace 30+ días sin confirmar. Se pide
+  // aparte para que aparezca esté como esté filtrada la pantalla.
   const reviewDue = useFetch<ListResponse>("/app/pms/defects?verification=DUE", []);
-  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
+  const allItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id) ?? [], [data, tmsaFilter]);
+
+  const isOpenDefect = (d: Defect) => d.status !== "RESOLVED" && d.status !== "CLOSED";
+  const ageDays = (d: Defect) => Math.max(0, Math.floor((Date.now() - new Date(d.reportedAt).getTime()) / 86_400_000));
+  /** Abierto hace demasiado para su severidad: crítico +7 d, alto +15 d, cualquiera +30 d. */
+  const isLate = (d: Defect) => isOpenDefect(d) && ((d.severity === "CRITICAL" && ageDays(d) > 7) || (d.severity === "HIGH" && ageDays(d) > 15) || ageDays(d) > 30);
+  const repairWo = (d: Defect) => (defectOriginKey(d.classification) !== "wo" ? d.workOrderCode : null);
+  const isVerifyDue = (d: Defect) => d.status === "CLOSED" && !!d.effectivenessDueAt && !d.effectivenessVerifiedAt && new Date(d.effectivenessDueAt).getTime() <= Date.now();
+  const matchCard = (d: Defect, key: typeof cardSel) => {
+    switch (key) {
+      case "crit":   return isOpenDefect(d) && d.severity === "CRITICAL";
+      case "stop":   return isOpenDefect(d) && (d.operationalState === "NO_GO" || d.operationalState === "RESTRICTED");
+      case "nowo":   return isOpenDefect(d) && !d.workOrderId;
+      case "verify": return isVerifyDue(d);
+      default:       return true;
+    }
+  };
+
+  const beforeStage = useMemo(() => {
+    let items = allItems;
+    if (cardSel) items = items.filter(d => matchCard(d, cardSel));
+    if (statusExact && !["CLOSED", "RESOLVED"].includes(statusExact)) items = items.filter(d => d.status === statusExact);
+    if (sevSel) items = items.filter(d => d.severity === sevSel);
+    if (opSel) items = items.filter(d => d.operationalState === opSel);
+    if (originSel) items = items.filter(d => defectOriginKey(d.classification) === originSel);
+    if (assetSel) items = items.filter(d => d.assetId === assetSel);
+    if (vesselSel) items = items.filter(d => d.vesselCode === vesselSel);
+    const q = search.trim().toLowerCase();
+    if (q) {
+      items = items.filter(d =>
+        textMatches(d.defectCode, q) || textMatches(d.description ?? "", q) ||
+        textMatches(getAssetName(d.assetId) ?? "", q) || textMatches(d.workOrderCode ?? "", q) || textMatches(d.classification ?? "", q),
+      );
+    }
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allItems, cardSel, statusExact, sevSel, opSel, originSel, assetSel, vesselSel, search]);
+
+  const stageFilter = useCallback((items: Defect[], key: typeof stageSel) => {
+    if (key === "all") return items;
+    if (key === "closed") return items.filter(d => !isOpenDefect(d));
+    // "Abiertos" deja afuera los cerrados, salvo que se busque o se pidan los "para confirmar".
+    if (search.trim() || cardSel === "verify") return items;
+    return items.filter(isOpenDefect);
+  }, [search, cardSel]);
+  const shown = useMemo(() => stageFilter(beforeStage, stageSel), [beforeStage, stageFilter, stageSel]);
+
+  const summary = useMemo(() => ({
+    crit: allItems.filter(d => matchCard(d, "crit")).length,
+    stop: allItems.filter(d => matchCard(d, "stop")).length,
+    nowo: allItems.filter(d => matchCard(d, "nowo")).length,
+    verify: allItems.filter(d => matchCard(d, "verify")).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [allItems]);
+  const assetOptions = useMemo(() => {
+    const ids = [...new Set(allItems.map(d => d.assetId).filter(Boolean))];
+    return ids.map(id => ({ id, label: getAssetName(id) ?? id })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allItems]);
+  const vesselOptions = useMemo(() => [...new Set(allItems.map(d => d.vesselCode))], [allItems]);
+  const vesselName = (code: string) => contextVessels.find(v => v.code === code)?.name || code;
 
   const openDetail = useCallback(async (row: Defect) => {
     setDetailLoadingId(row.id);
@@ -1890,11 +2014,11 @@ export const DefectsPage: React.FC = () => {
       setEditing(detailed);
     } catch (err) {
       setEditing(row);
-      setDetailError(err instanceof ApiError ? err.message : "No se pudo cargar el detalle del defecto.");
+      setDetailError(err instanceof ApiError ? err.message : t("def.guide.loadError"));
     } finally {
       setDetailLoadingId(null);
     }
-  }, []);
+  }, [t]);
 
   // Deep-link: la URL `/defects/:code` es la fuente de verdad del detalle.
   useEffect(() => {
@@ -1913,83 +2037,118 @@ export const DefectsPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkCode, data, editing]);
 
-  const columns: Column<Defect>[] = useMemo(() => [
+  const SEV_CHIP: Record<string, string> = {
+    CRITICAL: "bg-red-700 text-white", HIGH: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+    MEDIUM: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", LOW: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  };
+  const OP_CHIP: Record<string, string> = {
+    NO_GO: "bg-red-600 text-white", RESTRICTED: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+    DEGRADED: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", NORMAL: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  };
+  const ST_CHIP: Record<string, string> = {
+    OPEN: "border-red-500/30 bg-red-500/[0.06] text-red-700 dark:text-red-400",
+    UNDER_REVIEW: "border-red-500/30 bg-red-500/[0.06] text-red-700 dark:text-red-400",
+    IN_PROGRESS: "border-blue-500/30 bg-blue-500/[0.06] text-blue-700 dark:text-blue-400",
+    DEFERRED: "border-yellow-500/35 bg-yellow-500/10 text-yellow-800 dark:text-yellow-300",
+    RESOLVED: "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-700 dark:text-emerald-400",
+    CLOSED: "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-700 dark:text-emerald-400",
+  };
+  const chip = (cls: string, label: string) => <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${cls}`}>{label}</span>;
+  const originCell = (d: Defect) => {
+    const key = defectOriginKey(d.classification);
+    const Icon = { wo: Wrench, inspection: SearchCheck, fluid: Droplets, audit: ClipboardCheck, manual: Pencil }[key];
+    return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-text-industrial/60 whitespace-nowrap"><Icon className="w-3 h-3" />{t(`def.origin.${key}` as TranslationKey)}</span>;
+  };
+  const ageCell = (d: Defect) => isOpenDefect(d)
+    ? <span className={`inline-flex items-center gap-1 text-[11.5px] whitespace-nowrap ${isLate(d) ? "font-extrabold text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{isLate(d) && <Clock className="w-3 h-3" />}{t("def.list.ago").replace("{n}", String(ageDays(d)))}</span>
+    : <span className="text-[11.5px] text-text-industrial/45">{t("def.st.CLOSED")}</span>;
+  const rowAction = (d: Defect) => {
+    const base = "inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors";
+    if (isVerifyDue(d)) {
+      return <button type="button" onClick={e => { e.stopPropagation(); openLink(d.defectCode); }} className={`${base} border-amber-400/60 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20`}><ShieldQuestion className="w-3 h-3" /> {t("def.list.actVerify")}</button>;
+    }
+    if (!isOpenDefect(d)) return null;
+    if (!d.workOrderId) {
+      return <button type="button" onClick={e => { e.stopPropagation(); setPendingAction("createWo"); openLink(d.defectCode); }} className={`${base} border-accent/35 bg-accent/5 text-accent hover:bg-accent/15`}><Wrench className="w-3 h-3" /> {t("def.guide.createWo").replace("{abbr}", woTerms.abbr)}</button>;
+    }
+    return <button type="button" onClick={e => { e.stopPropagation(); setPendingAction("close"); openLink(d.defectCode); }} className={`${base} border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20`}><CheckCircle2 className="w-3 h-3" /> {t("def.guide.close")}</button>;
+  };
+
+  const columns: Column<Defect>[] = [
     {
-      key: "defectCode",
-      header: t("col.code"),
-      render: row => <span className="font-mono font-bold text-fg text-xs">{row.defectCode}</span>,
+      key: "defectCode", header: t("def.list.col.defect"), sortValue: r => r.defectCode,
+      render: row => (
+        <div>
+          <div className="font-mono font-bold text-fg text-xs whitespace-nowrap">{row.defectCode}</div>
+          {/* Nombre del buque, no el código. */}
+          <div className="text-[10.5px] text-text-industrial/50">{vesselName(row.vesselCode)}</div>
+        </div>
+      ),
     },
     {
-      key: "classification",
-      header: t("def.classification"),
-      render: row => {
-        const originKey = defectOriginKey(row.classification);
-        const mainText = originKey === "manual"
-          ? row.classification
-          : t(`def.class.${originKey}` as Parameters<typeof t>[0]);
-        return (
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <OriginBadge classification={row.classification} />
-              <span className="font-medium text-fg whitespace-nowrap">{mainText}</span>
-              {/* El EQUIPO junto a la clasificación: sin esto, todos los
-                  defectos de fluidos se leen igual ("Análisis de fluidos") y hay
-                  que abrir cada uno para saber de qué máquina es. */}
-              {row.assetId && (
-                <>
-                  <span className="text-text-industrial/30 shrink-0">·</span>
-                  <AssetLabel id={row.assetId} className="text-xs text-text-industrial/80 truncate" />
-                </>
-              )}
-            </div>
-            {row.description && (
-              <div className="text-[11px] text-text-industrial/60 line-clamp-2">{row.description}</div>
-            )}
-          </div>
-        );
-      },
+      key: "assetId", header: t("def.list.col.what"), sortValue: r => getAssetName(r.assetId) ?? "",
+      render: row => (
+        <div className="min-w-0">
+          <AssetLabel id={row.assetId} className="text-xs font-bold text-fg" />
+          {row.description && <div className="text-[11.5px] text-text-industrial/60 line-clamp-2">{row.description}</div>}
+        </div>
+      ),
     },
+    { key: "classification", header: t("def.origin.prefix"), render: originCell },
     {
-      key: "vesselCode",
-      header: t("col.vessel"),
-      render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
+      key: "severity", header: t("col.severity"),
+      sortValue: r => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>)[r.severity] ?? 9,
+      render: row => chip(SEV_CHIP[row.severity] ?? "bg-fg/10", t(SEVERITY_LABEL_KEYS[row.severity as typeof DEFECT_SEVERITIES[number]] ?? "priority.medium")),
     },
+    { key: "operationalState", header: t("def.guide.equipmentState"), render: row => chip(OP_CHIP[row.operationalState] ?? "bg-fg/10", t(`def.op.${row.operationalState}` as TranslationKey)) },
+    { key: "status", header: t("def.list.col.stage"), render: row => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${ST_CHIP[row.status] ?? ""}`}>{t(`def.st.${row.status}` as TranslationKey)}</span> },
+    { key: "reportedAt", header: t("def.list.col.open"), sortValue: r => r.reportedAt, render: ageCell },
     {
-      key: "severity",
-      header: t("col.severity"),
-      render: row => <PriorityBadge priority={row.severity} />,
+      key: "workOrderCode", header: t("def.list.col.wo"),
+      render: row => repairWo(row)
+        ? <span className="font-mono text-[11px] font-bold text-accent">{repairWo(row)}</span>
+        : <span className="text-text-industrial/30">—</span>,
     },
-    {
-      key: "operationalState",
-      header: t("def.operationalState"),
-      render: row => <OperationalStateBadge value={row.operationalState} />,
-    },
-    {
-      key: "status",
-      header: t("col.status"),
-      render: row => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "reportedAt",
-      header: t("def.reportedAt"),
-      render: row => fmtDate(row.reportedAt),
-    },
-  ], [t]);
+    { key: "action", header: "", render: row => rowAction(row) },
+  ];
+
+  const summaryCards: { key: Exclude<typeof cardSel, "">; n: number; label: string; hint: string; icon: typeof Wrench; cls: string; num: string }[] = [
+    { key: "crit", n: summary.crit, label: t("def.sum.crit"), hint: t("def.sum.critHint"), icon: AlertOctagon, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+    { key: "stop", n: summary.stop, label: t("def.sum.stop"), hint: t("def.sum.stopHint"), icon: Ban, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
+    { key: "nowo", n: summary.nowo, label: t("def.sum.nowo"), hint: t("def.sum.nowoHint"), icon: Wrench, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+    { key: "verify", n: summary.verify, label: t("def.sum.verify"), hint: t("def.sum.verifyHint"), icon: ShieldQuestion, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
+  ];
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
 
   return (
-    <div className="space-y-5">
-      <PageHeader icon={AlertTriangle} title={t("page.defects")} total={data?.total} onReload={reload}>
+    <div className="space-y-4">
+      <PageHeader icon={AlertTriangle} title={t("page.defects")} total={shown.length} onReload={reload}>
         <ExportExcelButton module="defects" />
         <button
           onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 transition-all"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:brightness-110 transition-all"
         >
-          <Plus className="w-3.5 h-3.5" /> Nuevo Defecto
+          <Plus className="w-3.5 h-3.5" /> {t("def.list.report")}
         </button>
       </PageHeader>
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
-      {detailError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{detailError}</p>}
+      {detailError && <AlertDialog message={detailError} onClose={() => setDetailError(null)} />}
+
+      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key;
+          return (
+            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <EffectivenessReviewStrip
         items={reviewDue.data?.items ?? []}
@@ -2004,8 +2163,81 @@ export const DefectsPage: React.FC = () => {
         }}
       />
 
-      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
-      <DataTable columns={columns} data={tmsaItems} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")} onRowClick={row => openLink(row.defectCode)} />
+      {/* Filtros */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {([["open", t("def.list.stageOpen")], ["closed", t("def.list.stageClosed")], ["all", t("def.list.stageAll")]] as const).map(([k, label]) => {
+            const on = stageSel === k;
+            return (
+              <button key={k} type="button" onClick={() => setStageSel(k)}
+                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                {label}
+                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{stageFilter(beforeStage, k).length}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={sevSel} onChange={e => setSevSel(e.target.value)} className={selCls(!!sevSel)}>
+            <option value="">{t("def.list.sevAll")}</option>
+            {DEFECT_SEVERITIES.slice().reverse().map(v => <option key={v} value={v}>{t(SEVERITY_LABEL_KEYS[v])}</option>)}
+          </select>
+          <select value={opSel} onChange={e => setOpSel(e.target.value)} className={selCls(!!opSel)}>
+            <option value="">{t("def.list.opAll")}</option>
+            {DEFECT_OPERATIONAL_STATES.map(v => <option key={v} value={v}>{t(`def.op.${v}` as TranslationKey)}</option>)}
+          </select>
+          <select value={originSel} onChange={e => setOriginSel(e.target.value)} className={selCls(!!originSel)}>
+            <option value="">{t("def.list.originAll")}</option>
+            {(["wo", "inspection", "fluid", "audit", "manual"] as const).map(k => <option key={k} value={k}>{t(`def.origin.${k}` as TranslationKey)}</option>)}
+          </select>
+          <select value={assetSel} onChange={e => setAssetSel(e.target.value)} className={`${selCls(!!assetSel)} max-w-[14rem]`}>
+            <option value="">{t("wo.fl.assetAll")}</option>
+            {assetOptions.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+          {vesselOptions.length > 1 && (
+            <select value={vesselSel} onChange={e => setVesselSel(e.target.value)} className={selCls(!!vesselSel)}>
+              <option value="">{t("def.list.vesselAll")}</option>
+              {vesselOptions.map(v => <option key={v} value={v}>{vesselName(v)}</option>)}
+            </select>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("def.list.search")}
+              className="w-full sm:w-60 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {search && <button type="button" onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+          </div>
+        </div>
+      </div>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={shown.length} total={data?.items?.length ?? 0} />
+
+      {/* Escritorio: tabla · Celular: tarjetas */}
+      <div className="hidden md:block">
+        <DataTable columns={columns} data={shown} loading={loading} error={error} keyFn={row => row.id} emptyText={t("empty.defects")}
+          onRowClick={row => openLink(row.defectCode)}
+          rowClassName={row => (isLate(row) || (isOpenDefect(row) && row.operationalState === "NO_GO") ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")} />
+      </div>
+      <div className="md:hidden flex flex-col gap-2">
+        {loading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>}
+        {!loading && shown.length === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{t("empty.defects")}</p>}
+        {shown.map(d => (
+          <div key={d.id} onClick={() => openLink(d.defectCode)}
+            className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer ${isLate(d) ? "border-l-red-600 bg-red-500/[0.06]" : "border-l-fg/10 bg-surface"}`}>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-xs font-bold text-fg">{d.defectCode}</span>
+              {chip(SEV_CHIP[d.severity] ?? "bg-fg/10", t(SEVERITY_LABEL_KEYS[d.severity as typeof DEFECT_SEVERITIES[number]] ?? "priority.medium"))}
+              {chip(OP_CHIP[d.operationalState] ?? "bg-fg/10", t(`def.op.${d.operationalState}` as TranslationKey))}
+            </div>
+            <AssetLabel id={d.assetId} className="block text-[13px] font-bold text-fg" />
+            {d.description && <p className="text-xs text-text-industrial/60 line-clamp-2">{d.description}</p>}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-block rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${ST_CHIP[d.status] ?? ""}`}>{t(`def.st.${d.status}` as TranslationKey)}</span>
+              {ageCell(d)}
+            </div>
+            {rowAction(d)}
+          </div>
+        ))}
+      </div>
 
       {creating && (
         <CreateDefectModal
@@ -2017,12 +2249,25 @@ export const DefectsPage: React.FC = () => {
       {editing && (
         <DefectModal
           defect={editing}
-          onClose={() => closeLink()}
+          initialAction={pendingAction}
+          onClose={() => { setPendingAction(null); closeLink(); }}
           onSaved={() => {
+            setPendingAction(null);
             closeLink();
             void reload();
+            void reviewDue.reload();
           }}
-          onReload={() => void reload()}
+          onReload={() => { void reload(); void reviewDue.reload(); }}
+          onRecurrence={row => {
+            setPendingAction(null);
+            closeLink();
+            setCreatePrefill({
+              vesselCode: row.vesselCode,
+              assetId: row.assetId,
+              detail: `${t("def.verify.recurrence")} ${row.defectCode}: ${row.description}`,
+            });
+            setCreating(true);
+          }}
         />
       )}
     </div>

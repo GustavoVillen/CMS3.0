@@ -20,7 +20,7 @@ import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
-import { OpenWorkOrdersPicker } from "../components/service-requests/OpenWorkOrdersPicker";
+import { NewServiceRequestWizard } from "../components/NewServiceRequestWizard";
 import { ProgressFlow } from "../components/ProgressFlow";
 import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumptionFlow";
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
@@ -176,12 +176,9 @@ export const Dashboard: React.FC = () => {
   // El consumo se guarda con un PATCH de la OT: exige `wo.manage`, igual que el
   // backend (canManageWorkOrders). El tripulante lo carga al cerrar la orden.
   const canLogSpareUse = can("wo.manage");
-  // Cargar análisis de laboratorio en lote: mismos roles que exige el backend
-  // del módulo (ensureCanManageFluidAnalyses en fluid-analyses-service.ts) —
-  // DPA, superintendente técnico y capitán / jefe de máquinas.
-  const canLoadFluidBatch = user
-    ? ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"].includes(user.role)
-    : false;
+  // Cargar análisis de laboratorio en lote: mismo tilde que exige el backend
+  // del módulo (`fluid.manage`, ensureCanManageFluidAnalyses).
+  const canLoadFluidBatch = can("fluid.manage");
   // Registrar lo que llegó al buque: mismo permiso que el ajuste manual de
   // stock, que es lo que valida el backend (requireReceivePermission en
   // goods-receipts-service.ts).
@@ -205,10 +202,11 @@ export const Dashboard: React.FC = () => {
   // Trabajo") pasa por el asistente categoría → equipo → ítem del plan. La SS
   // (createWoPreset + showCreateWo) sigue con su propio mecanismo, sin tocar.
   const [showNewWoWizard, setShowNewWoWizard] = React.useState(false);
-  // Preset con el que se abre CreateWorkOrderModal cuando viene del chooser de
-  // "Nueva Solicitud de Servicio" (null = alta libre, sin preset).
+  // Preset con el que se abre CreateWorkOrderModal para la Inspección de Clase
+  // ocasional (con taller: abre también la SS). null = alta libre, sin preset.
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
-  const [showSsChooser, setShowSsChooser] = React.useState(false);
+  // "Nueva Solicitud de Servicio": asistente para qué → buque → OT/equipo → proveedor.
+  const [showSsWizard, setShowSsWizard] = React.useState(false);
   const [showNewPermit, setShowNewPermit] = React.useState(false);
   // Registro de Avance: una sola puerta para asentar lo que se hizo, sobre una
   // OT abierta o sobre una SS que está en el taller (ver ProgressFlow).
@@ -217,10 +215,6 @@ export const Dashboard: React.FC = () => {
   const [showSpareUse, setShowSpareUse] = React.useState(false);
   // Completar un checklist: se elige el template y el alta sigue en /checklists.
   const [showChecklistPicker, setShowChecklistPicker] = React.useState(false);
-  // Cuarto camino del asistente de SS: la OT ya existe. En vez de crear una
-  // orden nueva, se elige entre las abiertas y se abre esa OT, que es donde vive
-  // el alta de la solicitud.
-  const [showWoPicker, setShowWoPicker] = React.useState(false);
   const [showMpChooser, setShowMpChooser] = React.useState(false);
   // ── Generar una inspección ────────────────────────────────────────────────
   // Dos pasos: qué clase de inspección (por evento / periódica) y después el
@@ -586,70 +580,17 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         />
       )}
 
-      {showSsChooser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowSsChooser(false)}>
-          <div className="w-full max-w-lg bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-fg">{t("dashboard.ssChooser.title")}</h2>
-                <p className="text-xs text-text-industrial/50 mt-0.5">{t("dashboard.ssChooser.subtitle")}</p>
-              </div>
-              <ModalCloseButton onClose={() => setShowSsChooser(false)} />
-            </div>
-            <CopilotChoiceStep
-              module="SERVICE_REQUESTS" screen="SS_CHOOSER" title={t("dashboard.newServiceRequest")}
-              label={t("dashboard.ssChooser.title")} vesselCode={selectedVesselCode ?? undefined}
-              options={[
-                { value: "FROM_WO",     label: t("dashboard.ssChooser.fromOpenWo") },
-                { value: "MAINTENANCE", label: t("dashboard.ssChooser.maintenance") },
-                { value: "REPAIR",      label: t("dashboard.ssChooser.repair") },
-                { value: "CLASS",       label: t("dashboard.ssChooser.classInspection") },
-              ]}
-              onChoose={v => {
-                setShowSsChooser(false);
-                if (v === "FROM_WO") { setShowWoPicker(true); return; }
-                setCreateWoPreset(
-                  v === "MAINTENANCE" ? { maintKind: "PREVENTIVO" }
-                  : v === "REPAIR" ? { maintKind: "CORRECTIVO_NO_PROGRAMADO" }
-                  : { maintKind: "INSPECTION", title: t("dashboard.ssChooser.classInspection"), classAsset: true },
-                );
-                setShowCreateWo(true);
-              }}
-            />
-            <div className="grid grid-cols-1 gap-3">
-              {/* La orden ya existe: se elige de la lista y la SS se carga desde
-                  ahí. Va primero porque es el caso más común a bordo. */}
-              <button
-                onClick={() => { setShowSsChooser(false); setShowWoPicker(true); }}
-                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/15 transition-all text-left"
-              >
-                <ClipboardCheck className="w-6 h-6 text-accent shrink-0" />
-                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.fromOpenWo")}</span>
-              </button>
-              <button
-                onClick={() => { setCreateWoPreset({ maintKind: "PREVENTIVO" }); setShowSsChooser(false); setShowCreateWo(true); }}
-                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-              >
-                <ClipboardList className="w-6 h-6 text-accent shrink-0" />
-                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.maintenance")}</span>
-              </button>
-              <button
-                onClick={() => { setCreateWoPreset({ maintKind: "CORRECTIVO_NO_PROGRAMADO" }); setShowSsChooser(false); setShowCreateWo(true); }}
-                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-              >
-                <Wrench className="w-6 h-6 text-accent shrink-0" />
-                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.repair")}</span>
-              </button>
-              <button
-                onClick={() => { setCreateWoPreset({ maintKind: "INSPECTION", title: t("dashboard.ssChooser.classInspection"), classAsset: true }); setShowSsChooser(false); setShowCreateWo(true); }}
-                className="flex items-center gap-3 px-5 py-4 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 hover:bg-fg/10 transition-all text-left"
-              >
-                <ShieldAlert className="w-6 h-6 text-accent shrink-0" />
-                <span className="font-bold text-sm text-fg">{t("dashboard.ssChooser.classInspection")}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      {showSsWizard && (
+        <NewServiceRequestWizard
+          onClose={() => setShowSsWizard(false)}
+          onFinished={serviceRequestId => {
+            setShowSsWizard(false);
+            // El flujo termina en la solicitud: se abre la SS recién creada para
+            // completarla. Si hubo más de un taller (varias SS), va al listado.
+            navigate(serviceRequestId ? `/service-requests?openId=${encodeURIComponent(serviceRequestId)}` : "/service-requests",
+              copilotFlow ? { state: { copilotFlow } } : undefined);
+          }}
+        />
       )}
 
       {/* ── Generar una inspección ─────────────────────────────────────────
@@ -831,21 +772,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             )}
           </div>
         </div>
-      )}
-
-      {showWoPicker && (
-        <OpenWorkOrdersPicker
-          onClose={() => setShowWoPicker(false)}
-          onPick={wo => {
-            setShowWoPicker(false);
-            // La OT se abre en su pantalla YA con el formulario de la SS arriba
-            // (`?newSs=1`): el usuario entró por "Nueva Solicitud de Servicio" y
-            // eligió la orden para pedirle un servicio al taller, no para
-            // mirarla. El recuadro de Solicitudes de Servicio queda detrás, con
-            // el resto de los datos que la SS hereda de la OT.
-            navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}?newSs=1`, { state: { copilotFlow } });
-          }}
-        />
       )}
 
       {showProgress && <ProgressFlow onClose={() => setShowProgress(false)} />}
@@ -1033,7 +959,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
           </button>
           <button
-            onClick={() => setShowSsChooser(true)}
+            onClick={() => setShowSsWizard(true)}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
           >
             <Handshake className="w-6 h-6 text-success-sea shrink-0" />

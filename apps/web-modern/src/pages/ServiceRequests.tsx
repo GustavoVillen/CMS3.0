@@ -1,9 +1,7 @@
 // Solicitudes de Servicio (SS) — pedidos de servicio externo (un taller).
 //
-// Una SS SÓLO se abre desde una OT (viva: planificada, en curso, en espera o
-// diferida), así que esta pantalla NO tiene botón "Nueva SS": es una vista de
-// seguimiento (compras / superintendencia). Para crear una, hay que entrar a la
-// OT correspondiente.
+// Una SS siempre cuelga de una OT. "+ Nueva SS" abre el mismo asistente que el
+// Tablero (NewServiceRequestWizard), que pide o crea esa OT antes del taller.
 //
 // Flujo: Borrador → Solicitada → Aprobada → Autorizada → En ejecución → Completada.
 // Autorizar está restringido a tierra (Superintendente técnico / DPA): es el
@@ -12,7 +10,7 @@
 
 import React, { useState } from "react";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { Handshake, CheckCheck, XCircle, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Search, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
@@ -28,16 +26,20 @@ import { useCopilotEmitter, useCopilotApplyFields, useCopilotDataRefresh, useCop
 import { printServiceRequest } from "../lib/print-work-order";
 import { useTheme } from "../lib/theme";
 import {
-  SsPaperForm, SsSignColumn, SsCheckRow, SS_FORM_FALLBACK, OTRO_TALLER,
+  SsPaperForm, SsSignColumn, SsCheckRow, SS_FORM_FALLBACK, OTRO_TALLER, ssDepartmentLabel,
   type SsFormDoc, type SsPaperValues,
 } from "../components/service-requests/SsPaperForm";
 import { downloadDocx } from "../lib/download-docx";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel } from "../components/GuideKit";
+import { WizardStepper } from "../components/NewWorkOrderWizard";
+import { NewServiceRequestWizard } from "../components/NewServiceRequestWizard";
+import { isJustCreated, clearJustCreated } from "../lib/just-created";
 import { LabSamplesPanel, countUnnumbered, type LabSamplesData } from "../components/service-requests/LabSamplesPanel";
 import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { PersonSelect } from "../components/PersonSelect";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 
 // ---------------------------------------------------------------------------
@@ -109,17 +111,6 @@ const STATUS_LABELS: Record<string, string> = {
   AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
   REJECTED: "Rechazada", CANCELLED: "Cancelada",
 };
-/**
- * Lo mismo que STATUS_LABELS, pero corto: en una tarjeta del tablero no entra
- * "Aprobada. Pendiente de autorización". El texto largo se sigue usando en la
- * lista y en el modal, donde hay lugar.
- */
-const STATUS_SHORT_LABELS: Record<string, string> = {
-  DRAFT: "En preparación", SOLICITADA: "Pendiente de aprobación", APROBADA: "Aprobada",
-  AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución", COMPLETED: "Completada",
-  REJECTED: "Rechazada", CANCELLED: "Cancelada",
-};
-
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-fg/5 text-fg/50 border-fg/10",
   SOLICITADA: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
@@ -129,9 +120,6 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED: "bg-success-sea/10 text-success-sea border-success-sea/20",
   REJECTED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
   CANCELLED: "bg-fg/5 text-fg/30 border-fg/10",
-};
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: "Baja", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Crítica",
 };
 
 // Deben coincidir con el backend (canApprove / canAuthorize).
@@ -228,58 +216,109 @@ const cellCls = "bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm te
  */
 
 const PRIORITY_LEFT_CLS: Record<string, string> = {
-  CRITICAL: "border-l-2 border-l-red-500",
-  HIGH:     "border-l-2 border-l-orange-500",
-  MEDIUM:   "border-l-2 border-l-yellow-400",
-  LOW:      "border-l-2 border-l-blue-400/60",
+  CRITICAL: "border-l-4 border-l-red-600",
+  HIGH:     "border-l-4 border-l-orange-500",
+  MEDIUM:   "border-l-4 border-l-yellow-500",
+  LOW:      "border-l-4 border-l-emerald-500",
+};
+
+const SS_PRIO_CHIP_CLS: Record<string, string> = {
+  CRITICAL: "bg-red-700 text-white",
+  HIGH: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+  MEDIUM: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300",
+  LOW: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
 };
 
 type SsStage = "DRAFT" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "IN_PROGRESS" | "HIDDEN";
 
 /** Colores alineados con STATUS_COLORS para que la tarjeta y el badge no se contradigan. */
-const SS_KANBAN_COLS: Array<{ colId: Exclude<SsStage, "HIDDEN">; label: string; headerCls: string; borderCls: string }> = [
-  { colId: "DRAFT",       label: "En preparación",            headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20" },
-  { colId: "SOLICITADA",  label: "Pendiente de aprobación",   headerCls: "text-yellow-700 dark:text-yellow-400", borderCls: "border-t-2 border-yellow-500/40" },
-  { colId: "APROBADA",    label: "Aprobada. Pendiente de autorización", headerCls: "text-blue-700 dark:text-blue-400",     borderCls: "border-t-2 border-blue-500/40" },
-  { colId: "AUTORIZADA",  label: "Autorizada",                headerCls: "text-violet-700 dark:text-violet-400", borderCls: "border-t-2 border-violet-500/40" },
-  { colId: "IN_PROGRESS", label: "En ejecución",              headerCls: "text-amber-700 dark:text-amber-400",   borderCls: "border-t-2 border-amber-500/40" },
+const SS_KANBAN_COLS: Array<{ colId: Exclude<SsStage, "HIDDEN">; headerCls: string; borderCls: string }> = [
+  { colId: "DRAFT",       headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20" },
+  { colId: "SOLICITADA",  headerCls: "text-yellow-700 dark:text-yellow-400", borderCls: "border-t-2 border-yellow-500/40" },
+  { colId: "APROBADA",    headerCls: "text-blue-700 dark:text-blue-400",     borderCls: "border-t-2 border-blue-500/40" },
+  { colId: "AUTORIZADA",  headerCls: "text-violet-700 dark:text-violet-400", borderCls: "border-t-2 border-violet-500/40" },
+  { colId: "IN_PROGRESS", headerCls: "text-amber-700 dark:text-amber-400",   borderCls: "border-t-2 border-amber-500/40" },
 ];
+
+const SS_OPEN_STATUSES = ["DRAFT", "SOLICITADA", "APROBADA", "AUTORIZADA", "IN_PROGRESS"];
+const SS_TERMINAL_STATUSES = ["COMPLETED", "REJECTED", "CANCELLED"];
+
+/**
+ * Días en el taller a partir de los cuales la SS se marca en rojo. La SS no
+ * guarda cuándo se mandó al taller, así que se cuenta desde la fecha de apertura.
+ */
+const SS_LONG_IN_SHOP_DAYS = 15;
 
 function ssStage(sr: ServiceRequest): SsStage {
   return SS_KANBAN_COLS.some(c => c.colId === sr.status) ? (sr.status as SsStage) : "HIDDEN";
 }
 
-/**
- * Estado de la SS dentro de su tarjeta del tablero.
- *
- * La columna ya dice la etapa, pero la tarjeta tiene que poder leerse sola:
- * al agrupar por equipo y colapsar grupos, el encabezado de la columna queda
- * lejos. Mismo criterio que la tarjeta de la OT.
- *
- * "En ejecución" va con relleno pleno —el resto en tono suave— porque es el
- * único que dice que el trabajo ya arrancó.
- */
-function SsCardStatusBadge({ status }: { status: string }) {
-  const label = STATUS_SHORT_LABELS[status] ?? status;
-  const cls = status === "IN_PROGRESS"
-    ? "bg-amber-600 text-white border-amber-700"
-    : STATUS_COLORS[status] ?? "bg-fg/5 text-fg/50 border-fg/10";
+/** Días desde la apertura (0 = hoy). */
+function ssAgeDays(sr: ServiceRequest): number {
+  const d = new Date(sr.openDate);
+  if (Number.isNaN(d.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86_400_000));
+}
+
+const isLongInShop = (sr: ServiceRequest) => sr.status === "IN_PROGRESS" && ssAgeDays(sr) > SS_LONG_IN_SHOP_DAYS;
+
+/** El taller tal como se muestra: el del catálogo o el "otro taller" escrito a mano. */
+const ssShopName = (sr: ServiceRequest) => sr.providerName?.trim() || sr.tallerNotes?.trim() || "";
+
+/** Acción visible de una tarjeta/fila: el próximo paso de la SS (si el usuario puede darlo). */
+type SsCardAction = { label: string; icon: typeof Send; tone: "accent" | "green"; run: () => void } | null;
+
+function SsPriorityChip({ priority }: { priority: string }) {
+  const t = useT();
   return (
-    <span title={label} className={`inline-block max-w-full truncate text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>
-      {label}
+    <span className={`shrink-0 rounded-full px-1.5 py-px text-[9px] font-extrabold uppercase whitespace-nowrap ${SS_PRIO_CHIP_CLS[priority] ?? "bg-fg/10 text-text-industrial/60"}`}>
+      {t(`wo.prioShort.${priority}` as TranslationKey)}
     </span>
   );
 }
 
-function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
+function SsActionButton({ action }: { action: SsCardAction }) {
+  if (!action) return null;
+  const Icon = action.icon;
+  return (
+    <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
+      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+        action.tone === "green"
+          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
+          : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
+      }`}>
+      <Icon className="w-3 h-3" /> {action.label}
+    </button>
+  );
+}
+
+/** "Abierta hace N d", o en rojo "En el taller hace N d" cuando lleva mucho. */
+function SsAgeLabel({ sr }: { sr: ServiceRequest }) {
+  const t = useT();
+  const days = ssAgeDays(sr);
+  if (isLongInShop(sr)) {
+    return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 dark:text-red-400" title={fmtDate(sr.openDate)}>
+      <AlertTriangle className="w-3 h-3" />{t("ss.card.inShopLong").replace("{n}", String(days))}
+    </span>;
+  }
+  return <span className="text-[11px] text-text-industrial/60" title={fmtDate(sr.openDate)}>{t("ss.card.age").replace("{n}", String(days))}</span>;
+}
+
+function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart, showAsset, action }: {
   sr: ServiceRequest;
   busy: boolean;
   draggingId: string | null;
   onOpen: (sr: ServiceRequest) => void;
   onDragStart: (sr: ServiceRequest | null) => void;
+  /** Sin agrupar por equipo, el equipo va en la tarjeta. */
+  showAsset: boolean;
+  action: SsCardAction;
 }) {
+  const t = useT();
   const isDragging = draggingId === sr.id;
-  const prioLeft   = PRIORITY_LEFT_CLS[sr.priority] ?? "border-l-2 border-l-fg/10";
+  const prioLeft   = PRIORITY_LEFT_CLS[sr.priority] ?? "border-l-4 border-l-fg/10";
+  const shop       = ssShopName(sr);
+  const long       = isLongInShop(sr);
 
   return (
     <div
@@ -291,32 +330,34 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart }: {
       }}
       onDragEnd={() => onDragStart(null)}
       onClick={() => !isDragging && !busy && onOpen(sr)}
-      className={`w-full bg-fg/[0.03] border border-fg/10 rounded-xl p-3 space-y-2 select-none cursor-grab
+      className={`w-full border rounded-xl px-2.5 py-2 space-y-1.5 select-none flex flex-col cursor-grab
+        ${long ? "border-fg/10 bg-red-500/[0.05]" : "border-fg/10 bg-surface"}
         ${prioLeft}
-        ${isDragging ? "opacity-30" : "hover:bg-fg/[0.07]"}
+        ${isDragging ? "opacity-30" : "hover:shadow-md"}
         ${busy ? "opacity-60 pointer-events-none" : ""}
-        transition-colors`}
+        transition-all`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex flex-col items-start gap-1">
-          {/* El código nunca se parte: si falta lugar, se recorta la etiqueta. */}
-          <span className="font-mono font-bold text-fg text-[10px] whitespace-nowrap">{sr.serviceRequestCode}</span>
-          <SsCardStatusBadge status={sr.status} />
-        </div>
-        <span className="text-[9px] font-bold text-text-industrial/40 shrink-0">{sr.vesselCode}</span>
+      <div className="flex items-center gap-1.5">
+        {/* El código nunca se parte: es lo que se busca a simple vista. */}
+        <span className="font-mono font-bold text-fg text-xs whitespace-nowrap">{sr.serviceRequestCode}</span>
+        <span className="ml-auto"><SsPriorityChip priority={sr.priority} /></span>
       </div>
-      {srServicio(sr) && (
-        <p className="text-xs text-fg font-medium line-clamp-2">{srServicio(sr)}</p>
+      {srServicio(sr) && <p className="text-[13px] text-fg font-semibold leading-snug line-clamp-2">{srServicio(sr)}</p>}
+      {showAsset && sr.workOrder?.assetName && (
+        <span className="flex items-center gap-1 text-[11px] text-text-industrial/60 truncate"><Wrench className="w-3 h-3 shrink-0" />{sr.workOrder.assetName}</span>
       )}
-      {/* El equipo NO va acá: es el header del grupo que contiene la tarjeta. */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-text-industrial/50">{fmtDate(sr.openDate)}</span>
+      <span className={`flex items-center gap-1 text-[11px] truncate ${shop ? "font-semibold text-fg" : "font-bold text-amber-700 dark:text-amber-400"}`}>
+        <Handshake className="w-3 h-3 shrink-0" />{shop || t("ss.card.noShop")}
+      </span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <SsAgeLabel sr={sr} />
         {sr.workOrder && (
-          <span className="font-mono text-[9px] text-text-industrial/40 truncate" title="OT de origen">
+          <span className="ml-auto rounded-md border border-accent/25 bg-accent/5 px-1.5 py-px font-mono text-[10px] font-bold text-accent" title={t("ss.col.wo")}>
             {sr.workOrder.workOrderCode}
           </span>
         )}
       </div>
+      <SsActionButton action={action} />
     </div>
   );
 }
@@ -340,22 +381,29 @@ function groupSrsByAsset(items: ServiceRequest[]): { key: string; label: string;
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
+function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, onlyStage, cardAction }: {
   items: ServiceRequest[];
-  role: string;
   loading: boolean;
   onOpen: (sr: ServiceRequest) => void;
   onReload: () => void;
+  /** Arrastre que pide firma: abre el modal de tramitación (lo tiene la página). */
+  onApproval: (sr: ServiceRequest, step: "SOLICITA" | "APRUEBA" | "AUTORIZA") => void;
+  /** Agrupar las tarjetas por equipo (opcional: por defecto se ven todas). */
+  grouped: boolean;
+  /** Con un filtro de etapa, sólo esa columna. */
+  onlyStage?: Exclude<SsStage, "HIDDEN">;
+  cardAction: (sr: ServiceRequest) => SsCardAction;
 }) {
+  const t = useT();
   const [draggingSr, setDraggingSr] = useState<ServiceRequest | null>(null);
   const [overCol, setOverCol]       = useState<string | null>(null);
   const [busyId, setBusyId]         = useState<string | null>(null);
   const [dropError, setDropError]   = useState<string | null>(null);
-  const [pendingApproval, setPendingApproval] = useState<{ sr: ServiceRequest; step: "SOLICITA" | "APRUEBA" | "AUTORIZA" } | null>(null);
-  // Grupos por equipo expandidos (clave `${colId}::${assetKey}`). Default: cerrados.
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Grupos por equipo plegados (clave `${colId}::${assetKey}`). Default: abiertos,
+  // así las SS se ven apenas se agrupa (antes arrancaban cerrados y escondían todo).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = React.useCallback((k: string) => {
-    setExpandedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+    setCollapsedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   }, []);
 
   // Mismo criterio que el backend: se chequea acá sólo para explicar el porqué
@@ -370,11 +418,11 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
       await api.post(`/app/pms/service-requests/${sr.id}/${action}`, {});
       onReload();
     } catch (e) {
-      setDropError(e instanceof Error ? e.message : "No se pudo mover la solicitud.");
+      setDropError(e instanceof Error ? e.message : t("ss.list.moveError"));
     } finally {
       setBusyId(null);
     }
-  }, [onReload]);
+  }, [onReload, t]);
 
   const handleDrop = React.useCallback((e: React.DragEvent, targetCol: Exclude<SsStage, "HIDDEN">) => {
     setOverCol(null);
@@ -391,38 +439,48 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
     if (!sr) return;
 
     // Solicitar (Borrador → Solicitada): pide quién solicita y con qué fecha.
-    if (stage === "DRAFT" && targetCol === "SOLICITADA") { setPendingApproval({ sr, step: "SOLICITA" }); return; }
+    if (stage === "DRAFT" && targetCol === "SOLICITADA") { onApproval(sr, "SOLICITA"); return; }
     // Volver a borrador para corregir. Sólo desde Solicitada: más adelante ya
     // hay firmas asentadas y deshacerlas sin registro sería perder la traza.
     if (stage === "SOLICITADA" && targetCol === "DRAFT") { void run(sr, "unsubmit"); return; }
     // Aprobar (Solicitada → Aprobada): a bordo, pide quién firma.
     if (stage === "SOLICITADA" && targetCol === "APROBADA") {
-      if (!canApprove) { setDropError("Tu rol no puede aprobar una solicitud de servicio."); return; }
-      setPendingApproval({ sr, step: "APRUEBA" });
+      if (!canApprove) { setDropError(t("ss.list.noApprovePerm")); return; }
+      onApproval(sr, "APRUEBA");
       return;
     }
     // Autorizar (Aprobada → Autorizada): acá se compromete el gasto, es de tierra.
     if (stage === "APROBADA" && targetCol === "AUTORIZADA") {
-      if (!canAuthorize) { setDropError("Autorizar una solicitud es sólo del DPA / Director de Operaciones."); return; }
-      setPendingApproval({ sr, step: "AUTORIZA" });
+      if (!canAuthorize) { setDropError(t("wo.guide.authorizeNoPerm")); return; }
+      onApproval(sr, "AUTORIZA");
       return;
     }
     // Mandar al taller (Autorizada → En ejecución).
     if (stage === "AUTORIZADA" && targetCol === "IN_PROGRESS") { void run(sr, "start"); return; }
     // Cualquier otro movimiento (saltos de etapa o retrocesos) se ignora.
-  }, [items, canApprove, canAuthorize, run]);
+  }, [items, canApprove, canAuthorize, run, onApproval, t]);
 
   if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
 
+  const renderCard = (sr: ServiceRequest, showAsset: boolean) => (
+    <SsKanbanCard
+      key={sr.id}
+      sr={sr}
+      busy={busyId === sr.id}
+      draggingId={draggingSr?.id ?? null}
+      onOpen={onOpen}
+      onDragStart={setDraggingSr}
+      showAsset={showAsset}
+      action={cardAction(sr)}
+    />
+  );
+
   return (
     <>
-      {dropError && (
-        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
-          {dropError}
-        </p>
-      )}
-      <div className="flex gap-3 pb-4">
-        {SS_KANBAN_COLS.map(col => {
+      {dropError && <AlertDialog message={dropError} onClose={() => setDropError(null)} />}
+      {/* Columnas de ancho mínimo: en el celular se deslizan de costado en vez de apretarse. */}
+      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStage ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
+        {SS_KANBAN_COLS.filter(col => !onlyStage || col.colId === onlyStage).map(col => {
           const colItems = items.filter(sr => ssStage(sr) === col.colId);
           const isOver   = overCol === col.colId;
           return (
@@ -431,17 +489,18 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); }}
               onDragLeave={() => setOverCol(null)}
               onDrop={e => { e.preventDefault(); handleDrop(e, col.colId); }}
-              className={`flex-1 min-w-0 flex flex-col ${col.borderCls} pt-3 rounded-b-xl transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
+              className={`snap-start min-w-0 flex flex-col ${col.borderCls} pt-3 px-1.5 rounded-b-xl bg-fg/[0.02] transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
             >
               <div className="flex items-center gap-2 px-1 mb-3">
-                <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{col.label}</span>
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(`ss.col.${col.colId}` as TranslationKey)}</span>
                 <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
               </div>
               <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
-                {colItems.length === 0 && <p className="text-[10px] text-text-industrial/25 text-center py-6">—</p>}
-                {groupSrsByAsset(colItems).map(group => {
+                {colItems.length === 0 && <p className="text-[11px] text-text-industrial/30 text-center py-6">{t("wo.fl.nothing")}</p>}
+                {!grouped && colItems.map(sr => renderCard(sr, true))}
+                {grouped && groupSrsByAsset(colItems).map(group => {
                   const gkey = `${col.colId}::${group.key}`;
-                  const collapsed = !expandedGroups.has(gkey);
+                  const collapsed = collapsedGroups.has(gkey);
                   return (
                     <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
                       <button
@@ -457,16 +516,7 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
                       </button>
                       {!collapsed && (
                         <div className="flex flex-col gap-2 p-2 pt-0">
-                          {group.items.map(sr => (
-                            <SsKanbanCard
-                              key={sr.id}
-                              sr={sr}
-                              busy={busyId === sr.id}
-                              draggingId={draggingSr?.id ?? null}
-                              onOpen={onOpen}
-                              onDragStart={setDraggingSr}
-                            />
-                          ))}
+                          {group.items.map(sr => renderCard(sr, false))}
                         </div>
                       )}
                     </div>
@@ -477,15 +527,6 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
           );
         })}
       </div>
-      {pendingApproval && (
-        <SsApprovalModal
-          sr={pendingApproval.sr}
-          step={pendingApproval.step}
-          role={role}
-          onClose={() => setPendingApproval(null)}
-          onDone={() => { setPendingApproval(null); onReload(); }}
-        />
-      )}
     </>
   );
 }
@@ -494,23 +535,30 @@ function SsKanbanBoard({ items, role, loading, onOpen, onReload }: {
 // Page
 // ---------------------------------------------------------------------------
 
+type SsStageKey = "" | "DRAFT" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "IN_PROGRESS" | "COMPLETED" | "REJECTED" | "CANCELLED";
+type SsCardKey = "sign" | "notSent" | "ready" | "long" | "rejected";
+
 /**
- * Chips de situación. La SS no tiene vencimiento ni diferimiento (a diferencia
- * de la OT), así que en vez de "Vencidas / Diferidas" se filtra por lo único que
- * la SS sí tiene: en qué punto del trámite está. Los tres últimos son estados
- * terminales — no van al tablero, así que al elegirlos se pasa a vista lista.
+ * Los chips viejos (?view=open, completed…) pueden venir en enlaces guardados:
+ * se traducen a su botón de etapa.
  */
-const SS_VIEW_FILTERS: Array<{ key: string; label: string; match: (sr: ServiceRequest) => boolean; terminal?: boolean }> = [
-  { key: "",           label: "Todas",        match: () => true },
-  { key: "open",       label: "En trámite",   match: sr => ["DRAFT", "SOLICITADA", "APROBADA", "AUTORIZADA"].includes(sr.status) },
-  { key: "inProgress", label: "En ejecución", match: sr => sr.status === "IN_PROGRESS" },
-  { key: "completed",  label: "Completadas",  match: sr => sr.status === "COMPLETED",  terminal: true },
-  { key: "rejected",   label: "Rechazadas",   match: sr => sr.status === "REJECTED",   terminal: true },
-  { key: "cancelled",  label: "Canceladas",   match: sr => sr.status === "CANCELLED",  terminal: true },
-];
+const LEGACY_VIEW_TO_STAGE: Record<string, SsStageKey> = {
+  open: "", inProgress: "IN_PROGRESS", completed: "COMPLETED", rejected: "REJECTED", cancelled: "CANCELLED",
+};
+const SS_CARD_KEYS: SsCardKey[] = ["sign", "notSent", "ready", "long", "rejected"];
 
 export function ServiceRequestsPage() {
+  const t = useT();
   const { user } = useAuth();
+  const can = useCan();
+  const canApprove = can("sr.approve");
+  const canAuthorize = can("sr.authorize");
+  // Pedir, mandar al taller y recibir: cualquiera menos el rol de sólo lectura
+  // (mismo criterio que canManage del backend de SS).
+  const canManage = !!user && user.role !== "AUDITOR_READONLY";
+  const { vessels } = useVesselContext();
+  // SS recién enviada a aprobar: se confirma acá porque el modal ya se cerró.
+  const [sentSsCode, setSentSsCode] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -518,69 +566,123 @@ export function ServiceRequestsPage() {
   const [selected, setSelected] = useState<ServiceRequest | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [search, setSearch] = useState("");
-  const viewFilter = searchParams.get("view") ?? "";
+  // ── Filtros (preview V13): una sola barra para el tablero y la lista ──
+  const viewParam = searchParams.get("view") ?? "";
+  const cardSel: SsCardKey | "" = (SS_CARD_KEYS as string[]).includes(viewParam) ? (viewParam as SsCardKey) : "";
+  const [stageSel, setStageSel] = useState<SsStageKey>(() => LEGACY_VIEW_TO_STAGE[viewParam] ?? "");
+  const [shopSel, setShopSel] = useState("");
+  const [assetSel, setAssetSel] = useState("");
+  const [prioSel, setPrioSel] = useState("");
+  const [groupByAsset, setGroupByAsset] = useState(false);
+  const [showNewSs, setShowNewSs] = useState(false);
+  // SS recién creada desde "+ Nueva SS": se abre cuando llega en la lista recargada.
+  const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
+  const [listApproval, setListApproval] = useState<{ sr: ServiceRequest; step: "SOLICITA" | "APRUEBA" | "AUTORIZA" } | null>(null);
   // Deep-link del donut del Dashboard: ?status=IN_PROGRESS (o varios separados
-  // por coma, como REJECTED,CANCELLED). Manda por encima de los chips; tocar
-  // cualquier chip lo limpia.
+  // por coma, como REJECTED,CANCELLED). Se muestra como filtro activo.
   const statusParam = searchParams.get("status");
   const statusSet = React.useMemo(
     () => (statusParam ? new Set(statusParam.split(",").map(s => s.trim()).filter(Boolean)) : null),
     [statusParam],
   );
 
-  // Se trae todo y se filtra en cliente: el backend no pagina y los chips cruzan
-  // estados, así que un filtro por estado en la query obligaría a refetchear en
-  // cada clic. Mismo criterio que el tablero de OT.
+  // Se trae todo y se filtra en cliente: el backend no pagina y los filtros
+  // cruzan estados, así que un filtro por estado en la query obligaría a
+  // refetchear en cada clic. Mismo criterio que el tablero de OT.
   const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/service-requests", []);
   // El copiloto escribe desde el chat: si esta pantalla está abierta mostrando
   // lo que acaba de cambiar, se recarga sola.
   useCopilotDataRefresh(reload);
-  const items = data?.items ?? [];
+  const items = React.useMemo(() => data?.items ?? [], [data]);
 
-  const visibleItems = React.useMemo(() => {
-    if (statusSet) return items.filter(sr => statusSet.has(sr.status));
-    const f = SS_VIEW_FILTERS.find(o => o.key === viewFilter) ?? SS_VIEW_FILTERS[0]!;
-    return items.filter(f.match);
-  }, [items, viewFilter, statusSet]);
-
-  // Si el estado pedido no tiene columna en el tablero (Completada, Rechazada,
-  // Cancelada), se pasa a lista: si no, el tablero se vería vacío.
+  // Un ?view= viejo ya se pasó a su botón de etapa: se saca de la URL.
   React.useEffect(() => {
-    if (statusSet && ![...statusSet].some(s => SS_KANBAN_COLS.some(c => c.colId === s))) {
-      setViewMode("list");
-    }
-  }, [statusSet]);
+    if (!(viewParam in LEGACY_VIEW_TO_STAGE)) return;
+    const params = new URLSearchParams(searchParams);
+    params.delete("view");
+    setSearchParams(params, { replace: true });
+  }, [viewParam, searchParams, setSearchParams]);
 
-  // El buscador ignora el chip activo: busca en toda la flota y en cualquier
-  // estado, incluidos los terminales.
-  const displayItems = React.useMemo(() => {
+  const setViewParam = (key: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (key) params.set("view", key); else params.delete("view");
+    setSearchParams(params, { replace: true });
+  };
+  const clearStatusParam = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("status");
+    setSearchParams(params, { replace: true });
+  };
+
+  /** Criterio de cada tarjeta de resumen. */
+  const matchCard = React.useCallback((sr: ServiceRequest, key: SsCardKey): boolean => {
+    switch (key) {
+      case "sign":
+        return canApprove || canAuthorize
+          ? (canApprove && sr.status === "SOLICITADA") || (canAuthorize && sr.status === "APROBADA")
+          : sr.status === "SOLICITADA" || sr.status === "APROBADA";
+      case "notSent":  return sr.status === "DRAFT";
+      case "ready":    return sr.status === "AUTORIZADA";
+      case "long":     return isLongInShop(sr);
+      case "rejected": return sr.status === "REJECTED";
+    }
+  }, [canApprove, canAuthorize]);
+
+  /** Todo menos la etapa: base de los contadores de los botones de etapa. */
+  const beforeStage = React.useMemo(() => {
+    let list = items;
+    if (statusSet) list = list.filter(sr => statusSet.has(sr.status));
+    if (cardSel) list = list.filter(sr => matchCard(sr, cardSel));
+    if (shopSel) list = list.filter(sr => (shopSel === "__none__" ? !ssShopName(sr) : ssShopName(sr) === shopSel));
+    if (assetSel) list = list.filter(sr => sr.workOrder?.assetName === assetSel);
+    if (prioSel) list = list.filter(sr => sr.priority === prioSel);
     const q = search.trim().toLowerCase();
-    if (!q) return visibleItems;
-    return items.filter(sr =>
-      textMatches(sr.serviceRequestCode, q) ||
-      textMatches(sr.title ?? "", q) ||
-      textMatches(sr.description ?? "", q) ||
-      textMatches(sr.vesselCode, q) ||
-      textMatches(sr.workOrder?.workOrderCode ?? "", q),
-    );
-  }, [items, visibleItems, search]);
+    if (q) {
+      list = list.filter(sr =>
+        textMatches(sr.serviceRequestCode, q) ||
+        textMatches(sr.title ?? "", q) ||
+        textMatches(sr.description ?? "", q) ||
+        textMatches(sr.workOrder?.assetName ?? "", q) ||
+        textMatches(ssShopName(sr), q) ||
+        textMatches(sr.workOrder?.workOrderCode ?? "", q),
+      );
+    }
+    return list;
+  }, [items, statusSet, cardSel, matchCard, shopSel, assetSel, prioSel, search]);
 
   /**
-   * Cuántas solicitudes se están viendo, para el contador del encabezado.
-   *
-   * Antes mostraba `data.total`: TODAS las que existieron, completadas
-   * incluidas. Quedaba "119 registros" arriba de un tablero con 5 tarjetas,
-   * porque el tablero sólo tiene columnas de solicitudes en trámite — las
-   * completadas, rechazadas y canceladas caen en "HIDDEN" y no se dibujan.
-   *
-   * Ahora cuenta lo que hay en pantalla, respetando chips y buscador: en el
-   * tablero las tarjetas, en la lista las filas (que sí puede incluir
-   * terminales, por ejemplo con el chip "Completadas").
+   * "En trámite" deja afuera completadas, rechazadas y canceladas, salvo que se
+   * esté buscando o que otro filtro las pida (Rechazadas, el donut del Dashboard).
    */
-  const shownCount = React.useMemo(() => {
-    if (viewMode !== "kanban") return displayItems.length;
-    return displayItems.filter(sr => ssStage(sr) !== "HIDDEN").length;
-  }, [displayItems, viewMode]);
+  const stageFilter = React.useCallback((list: ServiceRequest[], key: SsStageKey): ServiceRequest[] => {
+    if (key) return list.filter(sr => sr.status === key);
+    if (search.trim() || statusSet || cardSel === "rejected") return list;
+    return list.filter(sr => SS_OPEN_STATUSES.includes(sr.status));
+  }, [search, statusSet, cardSel]);
+
+  const displayItems = React.useMemo(() => stageFilter(beforeStage, stageSel), [beforeStage, stageFilter, stageSel]);
+
+  // Completadas, rechazadas y canceladas no tienen columna en el tablero: ahí va la lista.
+  const statusOnlyTerminal = !!statusSet && ![...statusSet].some(s => SS_OPEN_STATUSES.includes(s));
+  const showBoard = viewMode === "kanban" && !SS_TERMINAL_STATUSES.includes(stageSel) && cardSel !== "rejected" && !statusOnlyTerminal;
+
+  /** Cuántas solicitudes se están viendo, para el contador del encabezado. */
+  const shownCount = showBoard ? displayItems.filter(sr => ssStage(sr) !== "HIDDEN").length : displayItems.length;
+
+  // ── Tarjetas de resumen (sobre todas las SS, sin filtros) ──
+  const summary = React.useMemo(() => {
+    const n = (key: SsCardKey) => items.filter(sr => matchCard(sr, key)).length;
+    return { sign: n("sign"), notSent: n("notSent"), ready: n("ready"), long: n("long"), rejected: n("rejected") };
+  }, [items, matchCard]);
+
+  // Opciones de los desplegables: salen de lo que hay cargado.
+  const shopOptions = React.useMemo(() => [...new Set(items.map(ssShopName).filter(Boolean))].sort(), [items]);
+  const assetOptions = React.useMemo(
+    () => [...new Set(items.map(sr => sr.workOrder?.assetName).filter((n): n is string => !!n))].sort(),
+    [items],
+  );
+  const prioLabel = (p: string) => t(`wo.prioShort.${p}` as TranslationKey);
+  const vesselName = (code: string) => vessels.find(v => v.code === code)?.name ?? code;
 
   // ?code=SS-3-M02-2026 — para links que sólo conocen el CÓDIGO y no el id
   // interno (típicamente el copiloto, que cita códigos en su respuesta).
@@ -600,6 +702,11 @@ export function ServiceRequestsPage() {
     const hit = items.find(i => i.id === openId);
     if (hit) setSelected(hit);
   }, [openId, items]);
+  React.useEffect(() => {
+    if (!pendingOpenId) return;
+    const hit = items.find(i => i.id === pendingOpenId);
+    if (hit) { setSelected(hit); setPendingOpenId(null); }
+  }, [pendingOpenId, items]);
 
   const closeModal = () => {
     setSelected(null);
@@ -613,28 +720,40 @@ export function ServiceRequestsPage() {
     setSearchParams(searchParams, { replace: true });
   };
 
+  // ── Acción visible de cada SS (mismo paso que el arrastre del tablero) ──
+  // Mandar al taller y dar el servicio por recibido abren la SS: allá están el
+  // aviso de muestras sin numerar, el correo al proveedor y los datos de la
+  // recepción, que un botón suelto no puede pedir.
+  const cardAction = React.useCallback((sr: ServiceRequest): SsCardAction => {
+    if (sr.status === "DRAFT" && canManage) return { label: t("wo.guide.send"), icon: Send, tone: "accent", run: () => setListApproval({ sr, step: "SOLICITA" }) };
+    if (sr.status === "SOLICITADA" && canApprove) return { label: t("wo.guide.approve"), icon: Check, tone: "green", run: () => setListApproval({ sr, step: "APRUEBA" }) };
+    if (sr.status === "APROBADA" && canAuthorize) return { label: t("wo.guide.authorize"), icon: ShieldCheck, tone: "green", run: () => setListApproval({ sr, step: "AUTORIZA" }) };
+    if (sr.status === "AUTORIZADA" && canManage) return { label: t("ss.guide.sendProvider"), icon: Truck, tone: "accent", run: () => setSelected(sr) };
+    if (sr.status === "IN_PROGRESS" && canManage) return { label: t("ss.guide.received"), icon: PackageCheck, tone: "green", run: () => setSelected(sr) };
+    return null;
+  }, [canManage, canApprove, canAuthorize, t]);
+
   const columns: Column<ServiceRequest>[] = [
     {
-      key: "serviceRequestCode", header: "Código", sortable: true,
-      render: r => <span className="font-mono text-xs font-bold text-accent">{r.serviceRequestCode}</span>,
-    },
-    { key: "vesselCode", header: "Buque", sortable: true },
-    {
-      key: "workOrder", header: "OT de origen", sortable: true,
-      sortValue: r => r.workOrder?.workOrderCode ?? "",
-      render: r => r.workOrder
-        ? <span className="font-mono text-[11px] text-text-industrial/70">{r.workOrder.workOrderCode}</span>
-        : <span className="text-fg/30">—</span>,
+      key: "serviceRequestCode", header: t("ss.col.code"), sortable: true,
+      render: r => (
+        <div>
+          <div className="font-mono text-xs font-bold text-accent whitespace-nowrap">{r.serviceRequestCode}</div>
+          {/* Nombre del buque, no el código. */}
+          <div className="text-[10px] text-text-industrial/50">{vesselName(r.vesselCode)}</div>
+        </div>
+      ),
     },
     {
-      key: "title", header: "Servicio", sortable: true,
+      key: "title", header: t("ss.col.service"), sortable: true,
+      sortValue: r => srServicio(r),
       /* El EQUIPO junto al servicio: sin esto, seis "TOMA DE MUESTRA de Aceite
          Lubricante" seguidas se leen iguales y hay que abrir cada SS para saber
          de qué máquina es. El nombre viene resuelto de la OT de origen
          (workOrder.assetName), la SS no guarda assetId propio. */
       render: r => (
         <div className="space-y-0.5">
-          <span className="text-xs">{srServicio(r) || "—"}</span>
+          <span className="text-xs font-semibold text-fg">{srServicio(r) || "—"}</span>
           {r.workOrder?.assetName && (
             <div className="text-[11px] text-text-industrial/60 truncate">{r.workOrder.assetName}</div>
           )}
@@ -642,106 +761,229 @@ export function ServiceRequestsPage() {
       ),
     },
     {
-      key: "status", header: "Estado", sortable: true,
-      render: r => (
-        <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[r.status] ?? STATUS_COLORS.DRAFT}`}>
-          {STATUS_LABELS[r.status] ?? r.status}
-        </span>
-      ),
+      key: "shop", header: t("ss.col.shop"), sortable: true,
+      sortValue: r => ssShopName(r),
+      render: r => ssShopName(r)
+        ? <span className="text-xs text-fg">{ssShopName(r)}</span>
+        : <span className="text-xs font-bold text-amber-700 dark:text-amber-400">{t("ss.card.noShopShort")}</span>,
     },
     {
-      key: "priority", header: "Prioridad", sortable: true,
-      render: r => <span className="text-xs">{PRIORITY_LABELS[r.priority] ?? r.priority}</span>,
+      key: "workOrder", header: t("ss.col.wo"), sortable: true,
+      sortValue: r => r.workOrder?.workOrderCode ?? "",
+      render: r => r.workOrder
+        ? <span className="font-mono text-[11px] text-accent">{r.workOrder.workOrderCode}</span>
+        : <span className="text-fg/30">—</span>,
     },
-    { key: "openDate", header: "Fecha", sortable: true, render: r => fmtDate(r.openDate) },
+    {
+      key: "priority", header: t("wo.col.priority"), sortable: true,
+      sortValue: r => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>)[r.priority] ?? 9,
+      render: r => <SsPriorityChip priority={r.priority} />,
+    },
+    {
+      key: "status", header: t("ss.col.stage"), sortable: true,
+      render: r => (
+        <div className="flex flex-col items-start gap-1">
+          <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold whitespace-nowrap ${STATUS_COLORS[r.status] ?? STATUS_COLORS.DRAFT}`}>
+            {t(`ss.stage.${r.status}` as TranslationKey)}
+          </span>
+          {r.status === "REJECTED" && r.rechazoReason && (
+            <span className="text-[10px] text-red-700 dark:text-red-400 line-clamp-2">{r.rechazoReason}</span>
+          )}
+        </div>
+      ),
+    },
+    { key: "openDate", header: t("ss.col.opened"), sortable: true, render: r => <SsAgeLabel sr={r} /> },
+    { key: "action", header: "", render: r => <div className="w-36"><SsActionButton action={cardAction(r)} /></div> },
   ];
+
+  const summaryCards: { key: SsCardKey; n: number; label: string; hint: string; icon: typeof Send; cls: string; num: string }[] = [
+    canApprove || canAuthorize
+      ? { key: "sign", n: summary.sign, label: t("wo.sum.mySign"), hint: t("wo.sum.mySignHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" }
+      : { key: "sign", n: summary.sign, label: t("ss.sum.waitSign"), hint: t("ss.sum.waitSignHint"), icon: Hourglass, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+    { key: "notSent", n: summary.notSent, label: t("wo.sum.notSent"), hint: t("wo.sum.notSentHint"), icon: Send, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
+    { key: "ready", n: summary.ready, label: t("ss.sum.ready"), hint: t("ss.sum.readyHint"), icon: Truck, cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+    { key: "long", n: summary.long, label: t("ss.sum.long").replace("{n}", String(SS_LONG_IN_SHOP_DAYS)), hint: t("ss.sum.longHint"), icon: AlertTriangle, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+    { key: "rejected", n: summary.rejected, label: t("ss.sum.rejected"), hint: t("ss.sum.rejectedHint"), icon: Ban, cls: "border-l-yellow-600", num: "text-yellow-700 dark:text-yellow-400" },
+  ];
+  const STAGE_BUTTONS: { key: SsStageKey; label: string }[] = [
+    { key: "", label: t("ss.stageF.open") },
+    { key: "DRAFT", label: t("wo.filter.inPreparation") },
+    { key: "SOLICITADA", label: t("wo.stageF.toApprove") },
+    { key: "APROBADA", label: t("wo.stageF.toAuthorize") },
+    { key: "AUTORIZADA", label: t("wo.filter.authorized") },
+    { key: "IN_PROGRESS", label: t("ss.stageF.inShop") },
+    { key: "COMPLETED", label: t("ss.stageF.completed") },
+    { key: "REJECTED", label: t("ss.sum.rejected") },
+    { key: "CANCELLED", label: t("ss.stageF.cancelled") },
+  ];
+  const activeFilters: { key: string; label: string; clear: () => void }[] = [
+    ...(statusSet ? [{ key: "status", label: [...statusSet].map(s => t(`ss.stage.${s}` as TranslationKey)).join(" · "), clear: clearStatusParam }] : []),
+    ...(cardSel ? [{ key: "card", label: summaryCards.find(c => c.key === cardSel)!.label, clear: () => setViewParam("") }] : []),
+    ...(stageSel ? [{ key: "stage", label: STAGE_BUTTONS.find(b => b.key === stageSel)!.label, clear: () => setStageSel("") }] : []),
+    ...(shopSel ? [{ key: "shop", label: shopSel === "__none__" ? t("ss.fl.noShop") : shopSel, clear: () => setShopSel("") }] : []),
+    ...(assetSel ? [{ key: "asset", label: assetSel, clear: () => setAssetSel("") }] : []),
+    ...(prioSel ? [{ key: "prio", label: t("wo.fl.prio").replace("{p}", prioLabel(prioSel)), clear: () => setPrioSel("") }] : []),
+  ];
+  const clearAllFilters = () => {
+    setStageSel(""); setShopSel(""); setAssetSel(""); setPrioSel(""); setSearch("");
+    const params = new URLSearchParams(searchParams);
+    params.delete("view"); params.delete("status");
+    setSearchParams(params, { replace: true });
+  };
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${
+    on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"
+  }`;
 
   return (
     <div className="space-y-4">
-      <PageHeader kind="serviceRequest" icon={Handshake} title="Solicitudes de Servicio" total={shownCount} onReload={reload}>
-        <div className="flex items-center gap-0.5 border border-fg/10 rounded-lg p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode("list")}
-            title="Vista lista"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("kanban")}
-            title="Vista Kanban"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === "kanban" ? "bg-fg/10 text-fg" : "text-text-industrial/40 hover:text-fg"}`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-          </button>
+      <PageHeader kind="serviceRequest" icon={Handshake} title={t("page.serviceRequests")} total={shownCount} onReload={reload}>
+        <div className="flex items-center gap-0.5 rounded-lg border border-fg/10 bg-fg/5 p-0.5">
+          {([["kanban", t("wo.list.board"), LayoutGrid], ["list", t("wo.list.list"), List]] as const).map(([mode, label, Icon]) => (
+            <button key={mode} type="button" onClick={() => setViewMode(mode)}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${viewMode === mode ? "bg-surface text-fg shadow-sm" : "text-text-industrial/50 hover:text-fg"}`}>
+              <Icon className="w-3.5 h-3.5" /> {label}
+            </button>
+          ))}
         </div>
+        {canManage && (
+          <button type="button" onClick={() => setShowNewSs(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
+            <Plus className="w-3.5 h-3.5" /> {t("ss.list.new")}
+          </button>
+        )}
       </PageHeader>
 
-      <p className="text-[11px] text-text-industrial/50">
-        Una solicitud de servicio se abre desde una orden de trabajo abierta. Para crear una, entrá a la OT correspondiente.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        {SS_VIEW_FILTERS.map(opt => {
-          const active = !statusSet && viewFilter === opt.key;
+      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key;
           return (
-            <button
-              key={opt.key || "all"}
-              type="button"
-              onClick={() => {
-                const params = new URLSearchParams(searchParams);
-                params.delete("status"); // el chip manda sobre el deep-link del dashboard
-                if (opt.key) params.set("view", opt.key); else params.delete("view");
-                setSearchParams(params, { replace: true });
-                // Los estados terminales no tienen columna en el tablero, así que
-                // al filtrarlos se pasa solo a vista lista (si no, quedaría vacío).
-                if (opt.terminal) setViewMode("list");
-              }}
-              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors ${
-                active
-                  ? "bg-accent/20 text-accent border-accent/40"
-                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:border-fg/20 hover:text-text-industrial"
-              }`}
-            >
-              {opt.label}
+            <button key={c.key} type="button" onClick={() => setViewParam(on ? "" : c.key)}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${
+                on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"
+              }`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
             </button>
           );
         })}
-        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 ml-auto">
-          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar SS, servicio, buque u OT…"
-            className="w-64 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg transition-colors">
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
       </div>
 
-      {viewMode === "list" ? (
+      {/* Filtros: sirven igual para el tablero y la lista. */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {STAGE_BUTTONS.map(b => {
+            const on = stageSel === b.key;
+            const count = stageFilter(beforeStage, b.key).length;
+            return (
+              <button key={b.key || "open"} type="button" onClick={() => setStageSel(b.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+                  on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                }`}>
+                {b.label}
+                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={shopSel} onChange={e => setShopSel(e.target.value)} className={`${selCls(!!shopSel)} max-w-[14rem]`}>
+            <option value="">{t("ss.fl.shopAll")}</option>
+            <option value="__none__">{t("ss.fl.noShop")}</option>
+            {shopOptions.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select value={assetSel} onChange={e => setAssetSel(e.target.value)} className={`${selCls(!!assetSel)} max-w-[14rem]`}>
+            <option value="">{t("wo.fl.assetAll")}</option>
+            {assetOptions.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select value={prioSel} onChange={e => setPrioSel(e.target.value)} className={selCls(!!prioSel)}>
+            <option value="">{t("wo.fl.prioAll")}</option>
+            {["CRITICAL", "HIGH", "MEDIUM", "LOW"].map(p => <option key={p} value={p}>{prioLabel(p)}</option>)}
+          </select>
+          {showBoard && (
+            <button type="button" onClick={() => setGroupByAsset(v => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                groupByAsset ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
+              }`}>
+              <Layers className="w-3.5 h-3.5" /> {t("wo.fl.groupByAsset")}
+            </button>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("ss.list.search")}
+              className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {search && (
+              <button type="button" onClick={() => setSearch("")} className="text-text-industrial/40 hover:text-fg transition-colors">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-text-industrial/60">
+            {t("wo.fl.filtering")}
+            {activeFilters.map(f => (
+              <span key={f.key} className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/5 py-0.5 pl-2.5 pr-1 font-bold text-accent"
+                title={f.key === "status" ? t("ss.list.dashboardStatus") : undefined}>
+                {f.label}
+                <button type="button" onClick={f.clear} className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/15 hover:bg-accent/25">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            ))}
+            <button type="button" onClick={clearAllFilters} className="underline hover:text-fg">{t("wo.fl.clear")}</button>
+          </div>
+        )}
+      </div>
+
+      {!showBoard ? (
         <DataTable
           columns={columns}
           data={displayItems}
           loading={loading}
           error={error}
           keyFn={r => r.id}
-          emptyText="Sin solicitudes de servicio"
+          emptyText={t("ss.list.empty")}
           onRowClick={(row: ServiceRequest) => setSelected(row)}
+          rowClassName={r => (isLongInShop(r) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")}
         />
       ) : (
         <SsKanbanBoard
           items={displayItems}
-          role={user?.role ?? ""}
           loading={loading}
           onOpen={setSelected}
           onReload={reload}
+          onApproval={(sr, step) => setListApproval({ sr, step })}
+          grouped={groupByAsset}
+          onlyStage={stageSel && !SS_TERMINAL_STATUSES.includes(stageSel) ? (stageSel as Exclude<SsStage, "HIDDEN">) : undefined}
+          cardAction={cardAction}
+        />
+      )}
+
+      {/* Firmas pedidas desde una tarjeta, una fila o un arrastre: mismo modal que dentro de la SS. */}
+      {listApproval && (
+        <SsApprovalModal
+          sr={listApproval.sr}
+          step={listApproval.step}
+          role={user?.role ?? ""}
+          onClose={() => setListApproval(null)}
+          onDone={() => {
+            if (listApproval.step === "SOLICITA") setSentSsCode(listApproval.sr.serviceRequestCode);
+            setListApproval(null);
+            reload();
+          }}
+        />
+      )}
+
+      {showNewSs && (
+        <NewServiceRequestWizard
+          onClose={() => setShowNewSs(false)}
+          onFinished={serviceRequestId => {
+            setShowNewSs(false);
+            // Una sola SS: se abre para completarla. Varias (un taller cada una): quedan en la lista.
+            if (serviceRequestId) setPendingOpenId(serviceRequestId);
+            reload();
+          }}
         />
       )}
 
@@ -756,6 +998,7 @@ export function ServiceRequestsPage() {
             // relación `workOrder` que sí trae la lista) y pisarlo entero borraría
             // el bloque "OT de origen" del modal abierto.
             onSaved={updated => { reload(); setSelected(prev => (prev ? { ...prev, ...updated } : updated)); }}
+            onSentToApprove={setSentSsCode}
           />
         );
         // Sólo la SS que llegó dentro de un flujo guiado queda "en asistencia".
@@ -763,6 +1006,22 @@ export function ServiceRequestsPage() {
           ? <CopilotFlowProvider name="ss" flowKey={copilotFlow}>{modal}</CopilotFlowProvider>
           : modal;
       })()}
+
+      {/* Confirmación de "Enviar a aprobar": el modal de la SS ya se cerró. */}
+      {sentSsCode && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-3" role="dialog" aria-modal="true">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              <CheckCheck className="w-5 h-5 text-success-sea" /> {t("ss.guide.sent.title")}
+            </h2>
+            <p className="text-sm text-text-industrial/80">{t("ss.guide.sent.body").replace("{code}", sentSsCode)}</p>
+            <div className="flex justify-end">
+              <button type="button" autoFocus onClick={() => setSentSsCode(null)}
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1167,10 +1426,12 @@ function openProviderEmailDraft(sr: ServiceRequest, vesselName: string) {
 // Modal
 // ---------------------------------------------------------------------------
 
-function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
+function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToApprove }: {
   sr: ServiceRequest;
   role: string;
   onClose: () => void;
+  /** Se envió a aprobar: la página muestra la confirmación (este modal se cierra). */
+  onSentToApprove?: (serviceRequestCode: string) => void;
   /** Avanzó el estado: refresca la lista y cierra el modal. */
   onChanged: () => void;
   /** Se guardaron campos: refresca la lista y el registro, SIN cerrar el modal. */
@@ -1653,43 +1914,446 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
       setActionError(e instanceof Error ? e.message : "No se pudo completar la acción."));
   };
 
+  // ═══ Vista guiada ══════════════════════════════════════════════════════════
+  // Misma SS, mismos campos y mismo guardado que la hoja REGI-LOG-01.3: cambia
+  // el orden (por etapa: preparar → aprobación → autorización → envío al taller
+  // → recepción) y se marca en naranja todo lo que falta para avanzar. La hoja
+  // sigue disponible, editable, en la otra vista. Pedido del usuario, sep 2026
+  // (preview V8).
+  const [ssView, setSsView] = useState<"guided" | "paper">("guided");
+  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({});
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  const [sendAsk, setSendAsk] = useState(false);
+  const [leaveAsk, setLeaveAsk] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [showCreatedIntro, setShowCreatedIntro] = useState(() => editable && sr.status === "DRAFT" && isJustCreated("ss", sr.id));
+  React.useEffect(() => { if (showCreatedIntro) clearJustCreated("ss"); }, [showCreatedIntro]);
+
+  /** 0 preparar · 1 aprobación · 2 autorización · 3 envío · 4 recepción · 5 completada. */
+  const ssStep = ({ DRAFT: 0, SOLICITADA: 1, APROBADA: 2, AUTORIZADA: 3, IN_PROGRESS: 4, COMPLETED: 5 } as Record<string, number>)[sr.status]
+    ?? (sr.status === "REJECTED" ? (sr.aprobadoAt ? 2 : 1) : 0);
+
+  // Todo lo que hay que tener antes de enviarla a aprobar (guía, no bloqueo:
+  // se puede "Enviar igual", como antes).
+  const tallerOk = otroTaller ? !!form.tallerNotes.trim() : !!form.providerId;
+  const prepChecks = [
+    { key: "description", label: t("ss.guide.chip.description"), ok: !!form.description.trim() },
+    { key: "causes",      label: t("ss.guide.chip.causes"),      ok: !!form.causes.trim() },
+    { key: "provider",    label: t("ss.guide.chip.provider"),    ok: tallerOk },
+    { key: "department",  label: t("ss.guide.chip.dept"),        ok: !!form.department },
+    { key: "capitan",     label: t("ss.guide.field.capitan"),    ok: !!form.capitan.trim() },
+    { key: "jefeMaq",     label: t("ss.guide.field.jefeMaq"),    ok: !!form.jefeMaq.trim() },
+  ];
+  const prepMissing = prepChecks.filter(c => !c.ok);
+  const recvChecks = [
+    { key: "item",     label: t("ss.guide.field.item"),     ok: !!form.recepcionItem.trim() },
+    { key: "recibe",   label: t("ss.guide.field.recibe"),   ok: !!form.recibe.trim() },
+    { key: "conforme", label: t("ss.guide.chip.conforme"),  ok: form.conforme !== null },
+  ];
+  const recvMissing = recvChecks.filter(c => !c.ok);
+  const missingKeys = new Set(
+    (editable && ssStep === 0 ? prepMissing : editable && ssStep === 4 ? recvMissing : []).map(c => c.key),
+  );
+  const FIELD_SECTION: Record<string, string> = {
+    description: "what", causes: "what", provider: "shop", department: "shop",
+    capitan: "signs", jefeMaq: "signs", item: "recv", recibe: "recv", conforme: "recv",
+  };
+  // Abiertos por defecto los bloques de la etapa en curso (y los del pedido
+  // mientras se aprueba/autoriza: quien firma tiene que poder leerlo).
+  const secOpen = (id: string) => openSecs[id] ?? (
+    ["what", "shop", "signs"].includes(id) ? ssStep <= 2
+    : id === "route" ? ssStep >= 3
+    : ssStep >= 4
+  );
+  const toggleSec = (id: string) => setOpenSecs(prev => ({ ...prev, [id]: !secOpen(id) }));
+  const goField = (key: string) => {
+    setSsView("guided");
+    const sec = FIELD_SECTION[key];
+    if (sec) setOpenSecs(prev => ({ ...prev, [sec]: true }));
+    window.setTimeout(() => {
+      document.getElementById(`ss-field-${key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashKey(key);
+      window.setTimeout(() => setFlashKey(null), 1600);
+    }, 80);
+  };
+  const field = (key: string, children: React.ReactNode) => (
+    <GuideField id={`ss-field-${key}`} missing={missingKeys.has(key)} flash={flashKey === key}>{children}</GuideField>
+  );
+  const fieldLabel = (text: React.ReactNode, key?: string) => (
+    <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{text}{key && missingKeys.has(key) && <GuideNeedTag label={t("wo.guide.needTag")} />}</label>
+  );
+  const pill = (keys: string[]) => (
+    <GuidePill missing={keys.filter(k => missingKeys.has(k)).length} completeLabel={t("wo.guide.complete")}
+      missingOne={t("wo.guide.missingOne")} missingMany={t("wo.guide.missingMany")} />
+  );
+  const chip = (c: { key: string; label: string; ok: boolean }) => (
+    <button key={c.key} type="button" onClick={() => goField(c.key)}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+        c.ok ? "border-success-sea/30 bg-success-sea/10 text-success-sea"
+             : "border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-200 hover:bg-amber-200"
+      }`}>
+      {c.ok ? <Check className="w-3.5 h-3.5" /> : <CircleDashed className="w-3.5 h-3.5" />}
+      {c.label}
+    </button>
+  );
+  const segMany = (options: string[], selected: string[], onToggle: (v: string) => void) => (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(o => {
+        const on = selected.includes(o);
+        return (
+          <button key={o} type="button" disabled={!editable} onClick={() => onToggle(o)}
+            className={`px-3 py-1.5 rounded-lg border-[1.5px] text-xs font-semibold transition-colors disabled:opacity-60 ${
+              on ? "bg-accent border-accent text-accent-fg" : "bg-surface border-fg/15 text-fg hover:border-accent/40"
+            }`}>
+            {o}
+          </button>
+        );
+      })}
+    </div>
+  );
+  const toggleIn = (list: string[], v: string) => list.includes(v) ? list.filter(x => x !== v) : [...list, v];
+
+  const canSendToApprove = editable && sr.status === "DRAFT";
+  const sendToApprove = () => {
+    setLeaveAsk(false);
+    if (prepMissing.length > 0) { setSendAsk(true); return; }
+    openTramita("SOLICITA");
+  };
+  const handleCloseClick = () => {
+    if (canSendToApprove) { setLeaveAsk(true); return; }
+    requestClose();
+  };
+
+  const providerLabel = otroTaller
+    ? form.tallerNotes
+    : providers.find(p => p.id === form.providerId)?.name ?? "";
+  const prepDone = prepChecks.length - prepMissing.length;
+  const btnPrimary = "flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-accent-fg text-sm font-bold hover:brightness-110 disabled:opacity-50 transition-all";
+  const btnSoft = "flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-semibold text-fg hover:border-accent/30 disabled:opacity-40 transition-all";
+  const btnGreen = "flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold bg-success-sea text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all";
+  const btnRed = "px-4 py-2.5 rounded-xl border text-sm font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 hover:bg-red-500/20 disabled:opacity-40 transition-colors";
+  const kicker = (icon: React.ReactNode, text: string, cls = "text-accent") => (
+    <p className={`flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest ${cls}`}>{icon}{text}</p>
+  );
+  const cardCls = (ok: boolean) => `rounded-2xl border-[1.5px] p-4 space-y-2.5 ${ok ? "border-success-sea/40 bg-success-sea/5" : "border-accent/35 bg-accent/[0.05]"}`;
+
+  const nextStepCard = sr.status === "DRAFT" ? (
+    <div className={cardCls(prepMissing.length === 0)}>
+      <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+        <span className="flex items-center gap-1.5 text-accent">
+          <span className="w-5 h-5 rounded-full border-[1.5px] border-accent bg-accent/10 flex items-center justify-center text-[10px]">1</span>
+          {t("ss.guide.flow.complete")}
+        </span>
+        <ArrowRight className="w-3.5 h-3.5 text-text-industrial/40" />
+        <span className={`flex items-center gap-1.5 ${prepMissing.length === 0 ? "text-success-sea" : "text-text-industrial/50"}`}>
+          <span className={`w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center text-[10px] ${prepMissing.length === 0 ? "border-success-sea bg-success-sea text-white" : "border-fg/25"}`}>2</span>
+          {t("wo.guide.flow.send")}
+        </span>
+      </div>
+      <p className="text-[15px] font-extrabold text-fg">
+        {prepMissing.length > 0 ? t("wo.guide.prep.titleMissing") : t("wo.guide.prep.titleReady")}
+      </p>
+      <div className="h-1.5 rounded-full bg-fg/10 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${prepMissing.length === 0 ? "bg-success-sea" : "bg-accent"}`}
+          style={{ width: `${(prepDone / prepChecks.length) * 100}%` }} />
+      </div>
+      <p className="text-xs text-text-industrial/60">
+        {t("wo.guide.prep.progress").replace("{done}", String(prepDone)).replace("{total}", String(prepChecks.length))}
+        {prepMissing.length > 0 && t("wo.guide.prep.progressHint")}
+      </p>
+      <div className="flex flex-wrap gap-1.5">{[...prepMissing, ...prepChecks.filter(c => c.ok)].map(chip)}</div>
+      {canSendToApprove && (
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button type="button" onClick={sendToApprove} disabled={busy || saving} className={btnPrimary}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {t("wo.guide.send")}
+          </button>
+          <span className="text-xs text-text-industrial/60">{t("wo.guide.sendHint")}</span>
+        </div>
+      )}
+    </div>
+  ) : sr.status === "SOLICITADA" ? (
+    <div className={cardCls(false)}>
+      {kicker(<Hourglass className="w-3 h-3" />, STATUS_LABELS.SOLICITADA)}
+      <p className="text-[15px] font-extrabold text-fg">
+        {t("wo.guide.approval.sentBy").replace("{name}", sr.solicitaByName ?? sr.createdByName ?? "—")}
+      </p>
+      <p className="text-xs text-text-industrial/60">{t("ss.guide.approval.who")}</p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {canApprove && (
+          <button type="button" onClick={() => openTramita("APRUEBA")} disabled={busy} className={btnGreen}>
+            <CheckCheck className="w-4 h-4" /> {t("wo.guide.approve")}
+          </button>
+        )}
+        {(canApprove || canAuthorize) && (
+          <button type="button" onClick={() => openTramita("RECHAZA")} disabled={busy} className={btnRed}>{t("ss.guide.reject")}</button>
+        )}
+        <button type="button" onClick={() => { runAct("unsubmit"); }} disabled={busy} className={btnSoft}>
+          <Undo2 className="w-3.5 h-3.5" /> {t("ss.guide.backToDraft")}
+        </button>
+      </div>
+    </div>
+  ) : sr.status === "APROBADA" ? (
+    <div className={cardCls(false)}>
+      {kicker(<ShieldCheck className="w-3 h-3" />, t("ss.guide.auth.title"))}
+      <p className="text-[15px] font-extrabold text-fg">
+        {t("wo.guide.exec.approvedBy").replace("{name}", sr.aprobadoByName ?? "—")}
+        {sr.aprobadoAt ? ` · ${fmtDate(sr.aprobadoAt)}` : ""}
+      </p>
+      <p className="text-xs text-text-industrial/60">{t("ss.guide.auth.who")}</p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {canAuthorize && (
+          <button type="button" onClick={() => openTramita("AUTORIZA")} disabled={busy} className={btnGreen}>
+            <ShieldCheck className="w-4 h-4" /> {t("wo.guide.authorize")}
+          </button>
+        )}
+        {(canApprove || canAuthorize) && (
+          <button type="button" onClick={() => openTramita("RECHAZA")} disabled={busy} className={btnRed}>{t("ss.guide.reject")}</button>
+        )}
+      </div>
+    </div>
+  ) : sr.status === "AUTORIZADA" ? (
+    <div className={cardCls(!!providerLabel)}>
+      {kicker(<Flag className="w-3 h-3" />, STATUS_LABELS.AUTORIZADA, providerLabel ? "text-success-sea" : "text-accent")}
+      <p className="text-[15px] font-extrabold text-fg">{t("ss.guide.send.title")}</p>
+      <p className="text-xs text-text-industrial/60">
+        {providerLabel ? t("ss.guide.send.body").replace("{provider}", providerLabel) : t("ss.guide.send.noProvider")}
+      </p>
+      {!providerLabel && <div className="flex flex-wrap gap-1.5">{chip({ key: "provider", label: t("ss.guide.chip.provider"), ok: false })}</div>}
+      <button type="button" onClick={() => { void sendToProvider({}); }} disabled={busy} className={btnPrimary}>
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} {t("ss.guide.sendProvider")}
+      </button>
+    </div>
+  ) : sr.status === "IN_PROGRESS" ? (
+    <div className={cardCls(recvMissing.length === 0)}>
+      {kicker(<PackageCheck className="w-3 h-3" />, t("ss.guide.shop.kicker"), recvMissing.length === 0 ? "text-success-sea" : "text-accent")}
+      <p className="text-[15px] font-extrabold text-fg">
+        {recvMissing.length > 0 ? t("ss.guide.shop.titleMissing") : t("ss.guide.shop.titleReady")}
+      </p>
+      <p className="text-xs text-text-industrial/60">
+        {recvMissing.length > 0 ? t("ss.guide.shop.missing").replace("{n}", String(recvMissing.length)) : t("ss.guide.shop.ready")}
+      </p>
+      {recvMissing.length > 0 && <div className="flex flex-wrap gap-1.5">{recvMissing.map(chip)}</div>}
+      <button type="button" onClick={() => setReceiving(true)} disabled={busy || recvMissing.length > 0} className={btnGreen}>
+        <PackageCheck className="w-4 h-4" /> {t("ss.guide.received")}
+      </button>
+    </div>
+  ) : (
+    <div className={`rounded-2xl border-[1.5px] p-4 space-y-1 ${sr.status === "REJECTED" ? "border-red-500/40 bg-red-500/[0.06]" : "border-fg/15 bg-fg/[0.03]"}`}>
+      {kicker(<CheckCheck className="w-3 h-3" />,
+        sr.status === "COMPLETED" ? t("ss.guide.done.title") : sr.status === "REJECTED" ? t("ss.guide.rejected.title") : t("ss.guide.cancelled.title"),
+        sr.status === "COMPLETED" ? "text-success-sea" : sr.status === "REJECTED" ? "text-red-700 dark:text-red-400" : "text-text-industrial/60")}
+      {sr.status === "REJECTED" && sr.rechazoReason && <p className="text-xs text-red-700 dark:text-red-300">{t("wo.guide.reason")}: {sr.rechazoReason}</p>}
+      <p className="text-xs text-text-industrial/60">{t("wo.guide.closed.hint")}</p>
+    </div>
+  );
+
+  const guidedBody = (
+    <>
+      {nextStepCard}
+
+      <GuideStageLabel text={t("ss.guide.stage.prepare")} />
+
+      <GuideSection n={1} title={t("ss.guide.sec.what")} subtitle={t("ss.guide.sec.whatSub")}
+        pill={pill(["description", "causes"])} open={secOpen("what")} onToggle={() => toggleSec("what")}>
+        {field("description", <>
+          {fieldLabel(<>{t("ss.guide.field.description")} *</>, "description")}
+          <AutoTextArea rows={2} value={form.description} disabled={!editable}
+            onChange={e => patchForm({ description: e.target.value })}
+            className={`${inputCls} resize-y`} placeholder={t("ss.guide.field.descriptionPh")} />
+        </>)}
+        {field("causes", <>
+          {fieldLabel(<>{t("ss.guide.field.causes")} *</>, "causes")}
+          <AutoTextArea rows={3} value={form.causes} disabled={!editable}
+            onChange={e => patchForm({ causes: e.target.value })}
+            className={`${inputCls} resize-y`} placeholder={t("ss.guide.field.causesPh")} />
+        </>)}
+        {sr.workOrder && (
+          <div className="space-y-1.5">
+            {fieldLabel(t("ss.guide.field.wo"))}
+            <Link to={`/work-orders?autoCode=${sr.workOrder.workOrderCode}`}
+              className="flex items-center gap-2 rounded-xl border border-fg/10 bg-fg/5 px-3 py-2 text-xs hover:border-accent/40 transition-colors">
+              <span className="font-mono font-bold text-accent shrink-0">{sr.workOrder.workOrderCode}</span>
+              <span className="flex-1 min-w-0 truncate text-fg">{sr.workOrder.title}{sr.workOrder.assetName ? ` · ${sr.workOrder.assetName}` : ""}</span>
+              <ExternalLink className="w-3.5 h-3.5 text-accent shrink-0" />
+            </Link>
+          </div>
+        )}
+      </GuideSection>
+
+      <GuideSection n={2} title={t("ss.guide.sec.shop")} subtitle={t("ss.guide.sec.shopSub")}
+        pill={pill(["provider", "department"])} open={secOpen("shop")} onToggle={() => toggleSec("shop")}>
+        {field("provider", <>
+          {fieldLabel(<>{t("ss.guide.field.provider")} *</>, "provider")}
+          <select className={inputCls} disabled={!editable}
+            value={otroTaller ? OTRO_TALLER : form.providerId}
+            onChange={e => {
+              if (e.target.value === OTRO_TALLER) { setOtroTaller(true); patchForm({ providerId: "" }); return; }
+              setOtroTaller(false);
+              patchForm({ providerId: e.target.value, tallerNotes: "" });
+            }}>
+            <option value="">{t("ss.guide.field.providerPh")}</option>
+            {providers.map(p => (
+              <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+            ))}
+            <option value={OTRO_TALLER}>{t("ss.guide.field.otherProvider")}</option>
+          </select>
+          {otroTaller && (
+            <input className={inputCls} value={form.tallerNotes} disabled={!editable} autoFocus
+              onChange={e => patchForm({ tallerNotes: e.target.value })} placeholder={t("ss.guide.field.otherProviderPh")} />
+          )}
+        </>)}
+        {field("department", <>
+          {fieldLabel(<>{t("ss.guide.field.dept")} *</>, "department")}
+          <div className="flex flex-wrap gap-1.5">
+            {doc.config.departments.map(d => {
+              const on = form.department === d;
+              return (
+                <button key={d} type="button" disabled={!editable}
+                  onClick={() => patchForm({ department: on ? "" : d })}
+                  className={`px-3 py-1.5 rounded-lg border-[1.5px] text-xs font-semibold transition-colors disabled:opacity-60 ${
+                    on ? "bg-accent border-accent text-accent-fg" : "bg-surface border-fg/15 text-fg hover:border-accent/40"
+                  }`}>
+                  {ssDepartmentLabel(d)}
+                </button>
+              );
+            })}
+          </div>
+        </>)}
+        <div className="space-y-1.5">
+          {fieldLabel(t("ss.guide.field.purchase"))}
+          {segMany(doc.config.purchaseRequest, form.compras, v => patchForm({ compras: toggleIn(form.compras, v) }))}
+        </div>
+        {labSamples && labSamples.items.length > 0 && (
+          <LabSamplesPanel srId={sr.id} data={labSamples} editable={editable} vesselCode={sr.vesselCode} onChanged={reloadLabSamples} />
+        )}
+      </GuideSection>
+
+      <GuideSection n={3} title={t("ss.guide.sec.signs")} subtitle={t("ss.guide.sec.signsSub")}
+        pill={pill(["capitan", "jefeMaq"])} open={secOpen("signs")} onToggle={() => toggleSec("signs")}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          {field("capitan", <>
+            {fieldLabel(<>{t("ss.guide.field.capitan")} *</>, "capitan")}
+            <input className={inputCls} value={form.capitan} disabled={!editable}
+              onChange={e => patchForm({ capitan: e.target.value })} placeholder="Ej. CAP. WILLIAM RIQUELME" />
+          </>)}
+          {field("jefeMaq", <>
+            {fieldLabel(<>{t("ss.guide.field.jefeMaq")} *</>, "jefeMaq")}
+            <input className={inputCls} value={form.jefeMaq} disabled={!editable}
+              onChange={e => patchForm({ jefeMaq: e.target.value })} placeholder="Ej. J.M. CRISTHIAN VERON" />
+          </>)}
+        </div>
+        <p className="text-[11px] text-text-industrial/50">{t("ss.guide.field.signHint")}</p>
+        <div className="space-y-1.5">
+          {fieldLabel(t("ss.guide.field.comm"))}
+          {segMany(doc.config.communicationMethods, form.comunicacion, v => patchForm({ comunicacion: toggleIn(form.comunicacion, v) }))}
+        </div>
+        <div className="space-y-1.5">
+          {fieldLabel(t("ss.guide.field.distribution"))}
+          {segMany(doc.config.distribution, form.distribucion, v => patchForm({ distribucion: toggleIn(form.distribucion, v) }))}
+        </div>
+        <div className="space-y-1.5">
+          {fieldLabel(t("ss.guide.field.comments"))}
+          <AutoTextArea rows={2} value={form.observations} disabled={!editable}
+            onChange={e => patchForm({ observations: e.target.value })}
+            className={`${inputCls} resize-y`} placeholder={t("ss.guide.field.commentsPh")} />
+        </div>
+      </GuideSection>
+
+      <GuideStageLabel text={t("ss.guide.step.send")} lockedHint={ssStep < 3 ? t("ss.guide.stage.lockedShop") : null} />
+
+      <GuideSection n={4} title={t("ss.guide.sec.route")} subtitle={t("ss.guide.sec.routeSub")}
+        open={secOpen("route")} onToggle={() => toggleSec("route")}
+        locked={ssStep < 3} lockedLabel={t("wo.guide.locked")} lockedText={t("ss.guide.lockedShop")}>
+        <HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} />
+      </GuideSection>
+
+      <GuideStageLabel text={t("ss.guide.step.reception")} lockedHint={ssStep < 4 ? t("ss.guide.stage.lockedRecv") : null} />
+
+      <GuideSection n={5} title={t("ss.guide.sec.recv")} subtitle={t("ss.guide.sec.recvSub")}
+        pill={editable && ssStep === 4 ? pill(["item", "recibe", "conforme"]) : undefined}
+        open={secOpen("recv")} onToggle={() => toggleSec("recv")}
+        locked={ssStep < 4} lockedLabel={t("wo.guide.locked")} lockedText={t("ss.guide.lockedRecv")}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          {field("item", <>
+            {fieldLabel(<>{t("ss.guide.field.item")} *</>, "item")}
+            <input className={inputCls} value={form.recepcionItem} disabled={!editable}
+              onChange={e => patchForm({ recepcionItem: e.target.value })} placeholder={t("ss.guide.field.itemPh")} />
+          </>)}
+          {field("recibe", <>
+            {fieldLabel(<>{t("ss.guide.field.recibe")} *</>, "recibe")}
+            <input className={inputCls} value={form.recibe} disabled={!editable}
+              onChange={e => patchForm({ recibe: e.target.value })} placeholder={t("ss.guide.field.recibePh")} />
+          </>)}
+        </div>
+        {field("conforme", <>
+          {fieldLabel(<>{t("ss.guide.field.conforme")} *</>, "conforme")}
+          <div className="flex gap-2">
+            {([[true, t("ss.guide.field.conformeYes"), "bg-success-sea/10 text-success-sea border-success-sea/40"],
+               [false, t("ss.guide.field.conformeNo"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/40"]] as const).map(([val, label, cls]) => (
+              <button key={String(val)} type="button" disabled={!editable}
+                onClick={() => patchForm({ conforme: form.conforme === val ? null : val })}
+                className={`flex-1 py-2.5 rounded-xl border-[1.5px] text-sm font-bold transition-all disabled:opacity-50 ${form.conforme === val ? cls : "bg-surface text-text-industrial/60 border-fg/15 hover:border-fg/30"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </>)}
+      </GuideSection>
+    </>
+  );
+
   // El clic fuera de la ventana NO cierra: el formulario es largo y se completa
   // por partes, cerrarlo sin querer costaba rehacer la carga. Se cierra solo con
   // la X o Escape (que sí avisan si hay cambios sin guardar). Por eso el div de
   // fondo no tiene onClick.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
-        {/* sticky: el formulario es largo — el código, el estado y la X tienen que
-            seguir a la vista mientras se scrollea. El scroll lo hace la tarjeta. */}
-        <div className={`sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-4 bg-bg border-b border-fg/10 ${recordHeaderClass("serviceRequest")}`}>
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Identidad del registro: la OT y la SS son la misma hoja de
-                documento controlado, y sin esto sólo las distinguía el código del
-                formulario en letra chica. Ver lib/record-identity.tsx. */}
-            <Handshake className={`w-4 h-4 shrink-0 ${RECORD_IDENTITY.serviceRequest.text}`} />
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("ss.entityLabel")}</p>
-              <p className={`font-mono text-sm font-bold ${RECORD_IDENTITY.serviceRequest.text}`}>{sr.serviceRequestCode}</p>
-              {sr.workOrder?.assetName && (
-                <p className="text-sm font-semibold text-fg truncate">{sr.workOrder.assetName}</p>
-              )}
-              {/* Sigue al campo mientras se tipea: el encabezado y la DESCRIPCIÓN
-                  DEL SERVICIO son el mismo dato, no pueden decir cosas distintas. */}
-              <p className="text-xs text-text-industrial/60 truncate">{form.description || sr.title || "—"}</p>
+      <div className="w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden rounded-2xl bg-bg border border-fg/10" onClick={e => e.stopPropagation()}>
+        <div className={`shrink-0 px-6 pt-4 pb-3 bg-bg border-b border-fg/10 ${recordHeaderClass("serviceRequest")}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Identidad del registro: la OT y la SS son la misma hoja de
+                  documento controlado. Ver lib/record-identity.tsx. */}
+              <Handshake className={`w-4 h-4 shrink-0 ${RECORD_IDENTITY.serviceRequest.text}`} />
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("ss.entityLabel")}</p>
+                <p className="flex items-baseline gap-1.5 min-w-0">
+                  <span className={`font-mono text-sm font-bold shrink-0 ${RECORD_IDENTITY.serviceRequest.text}`}>{sr.serviceRequestCode}</span>
+                  {sr.workOrder?.assetName && <span className="text-sm text-text-industrial/70 truncate">· {sr.workOrder.assetName}</span>}
+                </p>
+                {/* Sigue al campo mientras se tipea: el encabezado y la DESCRIPCIÓN
+                    DEL SERVICIO son el mismo dato. */}
+                <p className="text-xs text-text-industrial/60 truncate">{form.description || sr.title || "—"}</p>
+              </div>
+              <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[sr.status] ?? STATUS_COLORS.DRAFT}`}>
+                {STATUS_LABELS[sr.status] ?? sr.status}
+              </span>
             </div>
+            <ModalCloseButton onClose={handleCloseClick} />
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold ${STATUS_COLORS[sr.status] ?? STATUS_COLORS.DRAFT}`}>
-              {STATUS_LABELS[sr.status] ?? sr.status}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="inline-flex items-center gap-1.5 mt-2.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg">
+              <Ship className="w-3 h-3" /><b className="font-bold">{vesselName}</b>
             </span>
-            <ModalCloseButton onClose={requestClose} />
+            <WizardStepper
+              labels={[t("ss.guide.step.prepare"), t("ss.guide.step.approval"), t("ss.guide.step.authorization"), t("ss.guide.step.send"), t("ss.guide.step.reception")]}
+              current={ssStep}
+            />
+            <div className="ml-auto mt-2.5 flex rounded-lg border border-fg/10 bg-fg/5 p-0.5">
+              {([["guided", t("wo.guide.view.guided"), ListChecks], ["paper", `${t("wo.guide.view.paper")} ${doc.meta.formCode}`, FileText]] as const).map(([v, label, Icon]) => (
+                <button key={v} type="button" onClick={() => setSsView(v)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${ssView === v ? "bg-surface text-fg shadow-sm" : "text-text-industrial/60 hover:text-fg"}`}>
+                  <Icon className="w-3.5 h-3.5" /> {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* La pantalla ES el formulario REGI-LOG-01.3: las mismas secciones, en
-            el mismo orden, con las mismas listas que imprime el PDF. */}
-        <div className="px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3.5">
+          {ssView === "guided" ? guidedBody : (
+            <>
+              <p className="text-xs text-text-industrial/60 text-center">{t("ss.guide.paperNote")}</p>
           <SsPaperForm
             meta={doc.meta}
             config={doc.config}
@@ -1783,112 +2447,152 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
               Sólo el DPA / Director de Operaciones puede autorizar esta solicitud.
             </p>
           )}
+            </>
+          )}
         </div>
 
-        <div className="flex flex-wrap gap-2 px-6 py-4 border-t border-fg/10">
-          <button
-            onClick={() => { void printServiceRequest(sr); }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30"
-          >
+        <div className="shrink-0 flex flex-wrap items-center gap-2 px-6 py-3.5 border-t border-fg/10">
+          <button onClick={() => { void printServiceRequest(sr); }} className={btnSoft}>
             <FileDown className="w-3.5 h-3.5" /> PDF
           </button>
-
           {/* Copia editable en Word. El PDF sigue siendo el documento oficial:
               esto es para retocar el pedido antes de mandárselo al taller. */}
-          <button
-            onClick={() => { void descargarWord(); }}
-            disabled={bajandoWord}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50"
-          >
-            {bajandoWord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} Word (.docx)
+          <button onClick={() => { void descargarWord(); }} disabled={bajandoWord} className={btnSoft}>
+            {bajandoWord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} Word
           </button>
-
+          {(sr.status === "DRAFT" || editable) && (
+            <div className="relative">
+              <button type="button" onClick={() => setMoreOpen(v => !v)} className={btnSoft}>
+                <MoreHorizontal className="w-3.5 h-3.5" /> {t("wo.guide.more")}
+              </button>
+              {moreOpen && (
+                <div className="absolute bottom-full left-0 mb-2 min-w-[13rem] rounded-xl border border-fg/10 bg-surface dark:bg-[#0D1B2A] shadow-xl p-1.5 z-10">
+                  {/* Eliminar sólo existe en borrador; después, lo que corresponde
+                      es cancelar (deja el antecedente con su motivo). */}
+                  {sr.status === "DRAFT" && (
+                    <button type="button" onClick={() => { setMoreOpen(false); setDeleting(true); }} disabled={busy}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-red-700 dark:text-red-400 hover:bg-fg/5 disabled:opacity-40">
+                      <Trash2 className="w-3.5 h-3.5" /> {t("ss.guide.deleteDraft")}
+                    </button>
+                  )}
+                  {editable && (
+                    <button type="button" onClick={() => { setMoreOpen(false); setCancelling(true); }} disabled={busy}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-red-700 dark:text-red-400 hover:bg-fg/5 disabled:opacity-40">
+                      <Ban className="w-3.5 h-3.5" /> {t("ss.guide.cancelSs")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <span className="flex-1" />
+          {editable && (
+            <span className="text-[11px] font-bold" aria-live="polite">
+              {dirty
+                ? <span className="text-amber-700 dark:text-amber-400">{t("ss.guide.unsaved")}</span>
+                : <span className="flex items-center gap-1 text-success-sea"><CheckCheck className="w-3.5 h-3.5" />{t("wo.guide.saved")}</span>}
+            </span>
+          )}
           {editable && (
             <button onClick={() => { void save().then(saved => { if (saved) offerPdfAfterSave(saved); }); }} disabled={saving || !dirty}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-40">
-              <Save className="w-3.5 h-3.5" /> {saving ? "Guardando…" : "Guardar"}
+              className={canSendToApprove ? btnSoft : "flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110 disabled:opacity-40"}>
+              <Save className="w-3.5 h-3.5" /> {saving ? t("wo.guide.saving") : t("common.save")}
             </button>
           )}
-
-          {sr.status === "DRAFT" && (
-            <button onClick={() => openTramita("SOLICITA")} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20 text-accent text-xs font-bold hover:bg-accent/20 disabled:opacity-50">
-              <Send className="w-3.5 h-3.5" /> Enviar a aprobar
+          {canSendToApprove && (
+            <button type="button" onClick={sendToApprove} disabled={busy || saving} className={btnPrimary}>
+              <Send className="w-4 h-4" /> {t("wo.guide.send")}
+              {prepMissing.length > 0 && <span className="text-[10px] font-semibold opacity-85">({prepDone}/{prepChecks.length})</span>}
             </button>
           )}
+        </div>
+      </div>
 
-          {/* Corregir antes de que la firme nadie. Después de aprobada ya no:
-              habría que rechazar o cancelar, que sí quedan registrados. */}
-          {sr.status === "SOLICITADA" && (
-            <button onClick={() => { runAct("unsubmit"); }} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 disabled:opacity-50">
-              <Undo2 className="w-3.5 h-3.5" /> Volver a borrador
-            </button>
-          )}
+      {/* ── Vista guiada: avisos ── */}
+      {actionError && <AlertDialog message={actionError} onClose={() => setActionError(null)} />}
 
-          {sr.status === "SOLICITADA" && canApprove && (
-            <button onClick={() => openTramita("APRUEBA")} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-bold hover:bg-blue-500/20 disabled:opacity-50">
-              <CheckCheck className="w-3.5 h-3.5" /> Aprobar
-            </button>
-          )}
-
-          {/* Gate del gasto: habilita mandar el trabajo al taller */}
-          {sr.status === "APROBADA" && canAuthorize && (
-            <button onClick={() => openTramita("AUTORIZA")} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-700 dark:text-violet-400 text-xs font-bold hover:bg-violet-500/20 disabled:opacity-50">
-              <ShieldCheck className="w-3.5 h-3.5" /> Autorizar
-            </button>
-          )}
-
-          {sr.status === "AUTORIZADA" && (
-            <button onClick={() => { void sendToProvider({}); }} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/20 disabled:opacity-50">
-              <Play className="w-3.5 h-3.5" /> Enviar al Proveedor
-            </button>
-          )}
-
-          {sr.status === "IN_PROGRESS" && (
-            <button onClick={() => { setReceiving(true); }} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea text-xs font-bold hover:bg-success-sea/20 disabled:opacity-50">
-              <PackageCheck className="w-3.5 h-3.5" /> Servicio recibido
-            </button>
-          )}
-
-          {["SOLICITADA", "APROBADA"].includes(sr.status) && (canApprove || canAuthorize) && (
-            <button onClick={() => openTramita("RECHAZA")} disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 disabled:opacity-50">
-              <XCircle className="w-3.5 h-3.5" /> Rechazar
-            </button>
-          )}
-
-          {/* Bajas, separadas del flujo normal: se van a la derecha para no
-              quedar al lado de "Solicitar" / "Aprobar" y clickearse por error.
-              Eliminar sólo existe en borrador; después, lo que corresponde es
-              cancelar (deja el antecedente con su motivo). */}
-          <div className="ml-auto flex flex-wrap gap-2">
-            {sr.status === "DRAFT" && (
-              <button onClick={() => setDeleting(true)} disabled={busy}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial/60 hover:text-red-600 hover:border-red-500/30 disabled:opacity-50">
-                <Trash2 className="w-3.5 h-3.5" /> Eliminar
+      {showCreatedIntro && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" role="dialog" aria-modal="true">
+            <div className="flex items-center gap-3">
+              <span className="w-12 h-12 rounded-full bg-success-sea/15 flex items-center justify-center shrink-0">
+                <Check className="w-6 h-6 text-success-sea" strokeWidth={3} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-base font-extrabold text-fg">{t("ss.guide.created.title")}</h2>
+                <p className="text-xs text-text-industrial/60 mt-0.5 truncate">
+                  <span className="font-mono font-bold text-accent">{sr.serviceRequestCode}</span>
+                  {providerLabel ? ` · ${providerLabel}` : ""}
+                  {sr.workOrder ? ` · ${sr.workOrder.workOrderCode}` : ""}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-fg">{t("wo.guide.created.lead")}</p>
+            <ol className="space-y-3">
+              {([
+                [1, t("ss.guide.created.step1"), t("ss.guide.created.step1Hint"), "border-accent bg-accent/10 text-accent"],
+                [2, t("wo.guide.created.step2"), t("wo.guide.created.step2Hint"), "border-fg/25 text-text-industrial/70"],
+              ] as const).map(([n, head, hint, dotCls]) => (
+                <li key={n} className="flex items-start gap-2.5 text-sm">
+                  <span className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center text-[11px] font-extrabold shrink-0 ${dotCls}`}>{n}</span>
+                  <span><b className="text-fg">{head}</b><span className="block text-xs text-text-industrial/60">{hint}</span></span>
+                </li>
+              ))}
+              <li className="flex items-start gap-2.5 text-sm text-text-industrial/50">
+                <span className="w-6 h-6 rounded-full border-[1.5px] border-dashed border-fg/25 flex items-center justify-center text-[11px] font-extrabold shrink-0">3</span>
+                <span>{t("ss.guide.created.step3")}</span>
+              </li>
+            </ol>
+            <div className="flex justify-end">
+              <button type="button" autoFocus onClick={() => setShowCreatedIntro(false)} className={btnPrimary}>
+                {t("ss.guide.created.go")} <ArrowRight className="w-4 h-4" />
               </button>
-            )}
-
-            {editable && (
-              <button onClick={() => setCancelling(true)} disabled={busy}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs text-text-industrial/60 hover:text-red-600 hover:border-red-500/30 disabled:opacity-50">
-                <Ban className="w-3.5 h-3.5" /> Cancelar SS
-              </button>
-            )}
+            </div>
           </div>
         </div>
+      )}
 
-        {actionError && (
-          <p className="mx-6 mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-400">
-            {actionError}
-          </p>
-        )}
-      </div>
+      {sendAsk && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-3" role="alertdialog" aria-modal="true">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              <AlertTriangle className="w-4 h-4 text-amber-600" /> {t("wo.guide.sendAsk.title")}
+            </h2>
+            <p className="text-sm text-text-industrial/80">
+              {t("wo.guide.sendAsk.body").replace("{list}", prepMissing.map(c => c.label).join(", "))}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => { setSendAsk(false); openTramita("SOLICITA"); }}
+                className="px-3.5 py-2 rounded-xl text-xs text-fg hover:bg-fg/5">
+                {t("wo.guide.sendAnyway")}
+              </button>
+              <button type="button" autoFocus onClick={() => { setSendAsk(false); if (prepMissing[0]) goField(prepMissing[0].key); }} className={btnPrimary}>
+                {t("wo.guide.completeMissing")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {leaveAsk && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-5 space-y-3" role="alertdialog" aria-modal="true">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              <AlertTriangle className="w-4 h-4 text-amber-600" /> {t("wo.guide.leave.title")}
+            </h2>
+            <p className="text-sm text-text-industrial/80">{t("ss.guide.leave.body")}</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => { setLeaveAsk(false); requestClose(); }}
+                className="px-3.5 py-2 rounded-xl text-xs text-fg hover:bg-fg/5">
+                {t("wo.guide.leave.exit")}
+              </button>
+              <button type="button" autoFocus onClick={sendToApprove} className={btnPrimary}>
+                <Send className="w-4 h-4" /> {t("wo.guide.leave.send")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {receiving && (
         <ReceiveServiceModal
@@ -1920,7 +2624,11 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved }: {
           step={tramita}
           role={role}
           onClose={() => setTramita(null)}
-          onDone={() => { setTramita(null); onChanged(); }}
+          onDone={() => {
+            if (tramita === "SOLICITA") onSentToApprove?.(sr.serviceRequestCode);
+            setTramita(null);
+            onChanged();
+          }}
         />
       )}
       {/* Faltan números de muestra: se avisa antes de despachar el envío. No es
