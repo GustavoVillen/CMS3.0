@@ -24,8 +24,10 @@ export function Screen({ head, foot, children, scrollKey }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo({ top: 0 }); }, [scrollKey]);
+  // h-dvh y no h-screen: en el celular 100vh no descuenta las barras del
+  // navegador y el pie con el botón principal quedaba tapado.
   return (
-    <div className="h-screen flex flex-col bg-bg text-fg">
+    <div className="h-dvh flex flex-col bg-bg text-fg">
       {head}
       <div ref={ref} data-ob-scroll className="flex-1 overflow-y-auto overscroll-contain p-4 flex flex-col gap-3.5">
         {children}

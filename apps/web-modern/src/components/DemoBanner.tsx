@@ -26,6 +26,7 @@ export const DemoBanner: React.FC = () => {
       <style>{`
         body { padding-top: ${BANNER_H}px; }
         .h-screen { height: calc(100vh - ${BANNER_H}px) !important; }
+        .h-dvh { height: calc(100dvh - ${BANNER_H}px) !important; }
         .min-h-screen { min-height: calc(100vh - ${BANNER_H}px) !important; }
       `}</style>
       <div

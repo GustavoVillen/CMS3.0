@@ -166,7 +166,7 @@ function OnboardHome({ onOpen, onProgress }: { onOpen: (v: View) => void; onProg
   };
 
   return (
-    <div className="h-screen overflow-y-auto overscroll-contain bg-bg text-fg">
+    <div className="h-dvh overflow-y-auto overscroll-contain bg-bg text-fg">
       {/* Encabezado: buque, saludo y fecha */}
       <section className="bg-[#0D1B2A] text-[#E0E1DD] px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-14">
         <div className="flex items-center justify-between gap-3">
