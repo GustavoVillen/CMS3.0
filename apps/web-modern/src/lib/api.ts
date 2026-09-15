@@ -1,3 +1,4 @@
+import { clearUndoHistory } from "./undo-manager";
 // ---------------------------------------------------------------------------
 // API client — thin fetch wrapper
 // Base URL is empty (Vite proxy handles /auth and /app in dev)
@@ -134,6 +135,9 @@ async function rawFetch(method: string, path: string, body?: unknown, retried = 
   return res;
 }
 
+/** Consultas que no guardan nada aunque vayan por POST (IA, búsquedas, vistas previas). */
+const NON_SAVING_POST = /suggest|analy[sz]|scan|search|preview|classif|copiloto|extract|parse|draft-text|translate|\/ai\//i;
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await rawFetch(method, path, body);
 
@@ -148,6 +152,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     if (res.status === 401) onUnauthorized?.();
     throw new ApiError(res.status, code, message);
   }
+
+  // Lo guardado no se deshace con Ctrl+Z: el historial de cambios empieza de cero.
+  if (method !== "GET" && !(method === "POST" && NON_SAVING_POST.test(path))) clearUndoHistory();
 
   if (res.status === 204) return undefined as T;
   return res.json();

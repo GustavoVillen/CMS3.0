@@ -2131,6 +2131,13 @@ const dict = {
   "asset.v23.search": { es: "Buscar equipo, código, marca, modelo o serie…", en: "Search equipment, code, brand, model or serial…", pt: "Buscar equipamento, código, marca, modelo ou série…" },
   "asset.v23.loadingDetail": { es: "Abriendo el equipo…", en: "Opening equipment…", pt: "Abrindo o equipamento…" },
   "rcp.v24.pickOrNew": { es: "Elegí el repuesto del stock o confirmá que es nuevo", en: "Pick the spare from stock or confirm it is new", pt: "Escolha a peça do estoque ou confirme que é nova" },
+  "undo.done": { es: "Deshecho: {field}", en: "Undone: {field}", pt: "Desfeito: {field}" },
+  "undo.doneGeneric": { es: "Cambio deshecho", en: "Change undone", pt: "Alteração desfeita" },
+  "undo.redone": { es: "Rehecho: {field}", en: "Redone: {field}", pt: "Refeito: {field}" },
+  "undo.redoneGeneric": { es: "Cambio rehecho", en: "Change redone", pt: "Alteração refeita" },
+  "undo.nothing": { es: "No hay nada para deshacer", en: "Nothing to undo", pt: "Nada para desfazer" },
+  "undo.nothingRedo": { es: "No hay nada para rehacer", en: "Nothing to redo", pt: "Nada para refazer" },
+  "undo.redoBtn": { es: "Rehacer", en: "Redo", pt: "Refazer" },
   "pm.tabGasTests":          { es: "Gas Tests",             en: "Gas Tests",                pt: "Gas Tests" },
 
   // Respaldos del permiso: el scan del permiso firmado en papel y sus anexos

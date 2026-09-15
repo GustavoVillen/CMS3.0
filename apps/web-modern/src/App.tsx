@@ -6,6 +6,7 @@ import { I18nProvider, type Locale } from "./lib/i18n";
 import { VesselProvider } from "./lib/vessel-context";
 import { EscapeGuardProvider } from "./lib/escape-guard";
 import { NotificationsProvider } from "./lib/notifications";
+import { UndoToastHost } from "./components/UndoToastHost";
 // Marco y entrada — EAGER (se necesitan de inmediato, no ganan nada lazy).
 import { Layout } from "./components/Layout";
 import { PlatformLayout } from "./components/PlatformLayout";
@@ -326,6 +327,7 @@ function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
           <EscapeGuardProvider>
             <DemoBanner />
             {children}
+            <UndoToastHost />
           </EscapeGuardProvider>
         </NotificationsProvider>
       </VesselProvider>
