@@ -55,6 +55,14 @@ import {
   Wrench,
   X,
   Zap,
+  AlarmClock,
+  CalendarDays,
+  CalendarPlus,
+  Layers,
+  MoreHorizontal,
+  PlayCircle,
+  PowerOff,
+  Truck,
 } from "lucide-react";
 import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
@@ -108,6 +116,10 @@ export interface MaintenancePlan {
   activeWorkOrderCode?: string | null;
   deferredWorkOrderCode?: string | null;
   assetCurrentHours?: number | null;
+  /** Fecha estimada de vencimiento de una tarea por horas (según el uso del equipo). Sólo en la lista. */
+  projectedDueDate?: string | null;
+  /** La lista no trae el texto del criterio: sólo si existe. */
+  hasAcceptanceCriteria?: boolean;
   taskCode: string;
   title: string;
   description: string | null;
@@ -195,6 +207,55 @@ function computeStatus(plan: MaintenancePlan): string {
   }
   if (neverExecuted) return "NEVER_EXECUTED";
   return plan.executionStatus ?? "FUTURE";
+}
+
+// ── Lista del plan (preview V27) ─────────────────────────────────────────────
+
+/** Por evento o condición no hay vencimiento que calcular: no es un faltante. */
+function isEventDriven(plan: MaintenancePlan): boolean {
+  const tt = (plan.triggerType || "").toUpperCase();
+  return tt === "EVENT" || tt === "CONDITION";
+}
+
+/** Sin fecha ni horas de vencimiento: la tarea nunca va a avisar. */
+function hasNoDue(plan: MaintenancePlan): boolean {
+  return plan.nextDueDate == null && plan.nextDueHours == null && !isEventDriven(plan);
+}
+
+type PlanBucket = "over" | "now" | "soon" | "ok" | "nodue" | "oos";
+
+/** En qué montón cae la tarea. Sale de displayStatus: cuenta lo mismo que el Dashboard. */
+function planBucket(plan: MaintenancePlan, assetOutOfService: boolean): PlanBucket {
+  const st = displayStatus(plan, assetOutOfService);
+  if (st === "OUT_OF_SERVICE") return "oos";
+  if (st === "OVERDUE") return "over";
+  if (st === "DUE" || st === "IN_WINDOW") return "now";
+  if (hasNoDue(plan)) return "nodue";
+  if (st === "UPCOMING") return "soon";
+  return "ok";
+}
+
+/** "vencida hace 3 días", "pasada por 180 h", "faltan 400 h · ~50 días". */
+function dueRelative(plan: MaintenancePlan, t: ReturnType<typeof useT>): string | null {
+  if (plan.nextDueHours != null) {
+    const diff = Math.round(plan.nextDueHours - (plan.assetCurrentHours ?? 0));
+    if (diff <= 0) return t("mp.v27.hoursOver").replace("{n}", Math.abs(diff).toLocaleString());
+    let txt = t("mp.v27.hoursLeft").replace("{n}", diff.toLocaleString());
+    if (plan.projectedDueDate) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = Math.round((parseLocalDate(plan.projectedDueDate).getTime() - today.getTime()) / 86_400_000);
+      if (days >= 0) txt += ` · ${t("mp.v27.approxDays").replace("{n}", String(days))}`;
+    }
+    return txt;
+  }
+  if (plan.nextDueDate) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const days = Math.round((parseLocalDate(plan.nextDueDate).getTime() - today.getTime()) / 86_400_000);
+    if (days < 0) return t("mp.v27.daysOver").replace("{n}", String(-days));
+    if (days === 0) return t("mp.v27.today");
+    return t("mp.v27.daysLeft").replace("{n}", String(days));
+  }
+  return null;
 }
 
 // Vencimientos/ejecuciones por FECHA y por HORAS de equipo no son comparables
@@ -3462,6 +3523,19 @@ export const MaintenancePlansPage: React.FC = () => {
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [pageError,     setPageError]     = useState<string | null>(null);
 
+  // ── Lista (preview V27) ──
+  // Abre en "Para hacer". Si se llega con un filtro en el link (Dashboard, TMSA,
+  // semana, equipo…) se respeta ese filtro y se muestran todas.
+  const arrivedFiltered = !!(executionFilter || overdueOnly || weekStartFilter || assetFilter || sfiTabParam || searchParams.get("tmsa"));
+  const [stageSel, setStageSel] = useState<"todo" | "soon" | "ok" | "all">(() => (arrivedFiltered ? "all" : "todo"));
+  const [cardSel, setCardSel] = useState<"" | PlanBucket>("");
+  const [qualitySel, setQualitySel] = useState<"" | "nodue" | "criteria" | "responsible" | "risk">("");
+  const [typeSel, setTypeSel] = useState<"" | "MAINTENANCE" | "INSPECTION">("");
+  const [whoSel, setWhoSel] = useState<"" | "onboard" | "provider">("");
+  const [qualityOpen, setQualityOpen] = useState(() => { try { return localStorage.getItem("mp.quality") !== "0"; } catch { return true; } });
+  const toggleQuality = () => setQualityOpen(v => { try { localStorage.setItem("mp.quality", v ? "0" : "1"); } catch { /* sin almacenamiento */ } return !v; });
+  const [moreOpen, setMoreOpen] = useState(false);
+
   const updateFilters = (next: { status?: string; vesselCode?: string; executionStatus?: string }) => {
     const params = new URLSearchParams(searchParams);
     const ns = next.status          !== undefined ? next.status          : statusFilter;
@@ -3604,8 +3678,49 @@ export const MaintenancePlansPage: React.FC = () => {
     if (weekStartFilter) {
       items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
+    if (typeSel) items = items.filter(p => p.taskType === typeSel);
+    if (whoSel) items = items.filter(p => (whoSel === "provider") === planHasProvider(p));
     return { items, total: items.length };
-  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds]);
+  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds, typeSel, whoSel]);
+
+  // Etapa, tarjeta y "Calidad del plan" se aplican sobre la base ya filtrada; los
+  // contadores salen de la base, así cada tarjeta dice cuántas hay de verdad.
+  const bucketOf = useCallback((p: MaintenancePlan) => planBucket(p, oosAssetIds.has(p.assetId)), [oosAssetIds]);
+  const qualityMatch = useCallback((p: MaintenancePlan, k: string) => {
+    if (p.status === "INACTIVE") return false;
+    switch (k) {
+      case "nodue":       return hasNoDue(p);
+      case "criteria":    return p.hasAcceptanceCriteria === false;
+      case "responsible": return !(p.responsible ?? "").trim();
+      case "risk":        return !p.riskLevel;
+      default:            return true;
+    }
+  }, []);
+  const shownItems = useMemo(() => {
+    const items = data?.items ?? [];
+    if (qualitySel) return items.filter(p => qualityMatch(p, qualitySel));
+    if (cardSel) return items.filter(p => bucketOf(p) === cardSel);
+    switch (stageSel) {
+      case "todo": return items.filter(p => { const b = bucketOf(p); return b === "over" || b === "now"; });
+      case "soon": return items.filter(p => bucketOf(p) === "soon");
+      case "ok":   return items.filter(p => { const b = bucketOf(p); return b === "ok" || b === "oos"; });
+      default:     return items;
+    }
+  }, [data, qualitySel, cardSel, stageSel, bucketOf, qualityMatch]);
+  const bucketCounts = useMemo(() => {
+    const c: Record<PlanBucket, number> = { over: 0, now: 0, soon: 0, ok: 0, nodue: 0, oos: 0 };
+    for (const p of data?.items ?? []) c[bucketOf(p)] += 1;
+    return c;
+  }, [data, bucketOf]);
+  const qualityCounts = useMemo(() => {
+    const items = (data?.items ?? []).filter(p => p.status !== "INACTIVE");
+    return {
+      nodue: items.filter(p => qualityMatch(p, "nodue")).length,
+      criteria: items.filter(p => qualityMatch(p, "criteria")).length,
+      responsible: items.filter(p => qualityMatch(p, "responsible")).length,
+      risk: items.filter(p => qualityMatch(p, "risk")).length,
+    };
+  }, [data, qualityMatch]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -3723,13 +3838,20 @@ export const MaintenancePlansPage: React.FC = () => {
     [oosAssetIds],
   );
   const renderStatus = useCallback((row: MaintenancePlan) => (
-    <StatusBadgeInline
-      plan={row}
-      assetOutOfService={oosAssetIds.has(row.assetId)}
-      hideWhenValid
-      onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)}
-    />
-  ), [navigate, oosAssetIds]);
+    <div className="flex flex-col items-start gap-1">
+      {hasNoDue(row) && !oosAssetIds.has(row.assetId) && (
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/35 whitespace-nowrap" title={t("mp.v27.noDueHint")}>
+          <CalendarX className="w-2.5 h-2.5" /> {t("mp.v27.noDue")}
+        </span>
+      )}
+      <StatusBadgeInline
+        plan={row}
+        assetOutOfService={oosAssetIds.has(row.assetId)}
+        hideWhenValid
+        onOpenWo={(code) => navigate(`/work-orders?autoCode=${code}`)}
+      />
+    </div>
+  ), [navigate, oosAssetIds, t]);
 
   /**
    * UNA SOLA OT PARA VARIOS ÍTEMS DEL PDM. Una parada de astillero cubre varios
@@ -3793,8 +3915,24 @@ export const MaintenancePlansPage: React.FC = () => {
     }
   }, [userName, reload, navigate]);
 
+  const openFromRowRef = useRef<(row: MaintenancePlan) => void>(() => {});
+  openFromRowRef.current = openFromRow;
   const renderActions = useCallback((row: MaintenancePlan) => {
     if (row.status === "INACTIVE" || row.status === "DRAFT") return null;
+    // Sin vencimiento: lo primero es darle de dónde contar, en la ventana de la tarea.
+    if (hasNoDue(row) && !row.activeWorkOrderCode) {
+      return (
+        <button
+          onClick={e => { e.stopPropagation(); openFromRowRef.current(row); }}
+          title={t("mp.v27.setStartHint")}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all whitespace-nowrap border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20"
+        >
+          <CalendarPlus className="w-3 h-3" /> {t("mp.v27.setStart")}
+        </button>
+      );
+    }
+    // Ya hay una OT en curso: el enlace va en Situación; no se ofrece abrir otra.
+    if (row.activeWorkOrderCode) return null;
     const needsWO = row.triggerResultMode === "AUTO_WO" || row.triggerResultMode === "APPROVAL_WO";
     const hasActiveWo = !!row.activeWorkOrderCode && row.executionStatus === "IN_WINDOW";
     // El botón sigue estando en todas las filas —siempre se puede adelantar una
@@ -3846,6 +3984,7 @@ export const MaintenancePlansPage: React.FC = () => {
       </button>
     );
   }, [t, woTerms, expressRowId, openExpressFromRow, openWoForPlan, oosAssetIds]);
+
 
   const columns: Column<MaintenancePlan>[] = useMemo(() => [
     // ── Col 0: marcar para juntar en UNA sola OT (parada de astillero) ──────
@@ -3938,6 +4077,11 @@ export const MaintenancePlansPage: React.FC = () => {
           <span className="flex items-center gap-1.5 text-[10px] font-mono text-text-industrial/45 leading-tight whitespace-nowrap">
             <span>{row.taskCode}</span>
             {row.sfiGroupNumber != null && <span>· G{row.sfiGroupNumber}</span>}
+            {planHasProvider(row) && !(row.samplingKind || row.samplingFluidType) && (row.providerName || row.providerRequests?.[0]?.providerName) && (
+              <span className="inline-flex items-center gap-0.5 font-sans font-semibold text-violet-700 dark:text-violet-300">
+                · <Truck className="w-2.5 h-2.5" /> {row.providerName || row.providerRequests?.[0]?.providerName}
+              </span>
+            )}
             {(row.riskLevel === "HIGH" || row.riskLevel === "CRITICAL") && (
               <span
                 title={t("mp.col.highRisk")}
@@ -4027,10 +4171,14 @@ export const MaintenancePlansPage: React.FC = () => {
         const next = needsHours(row.triggerType)
           ? (row.nextDueHours != null ? `${row.nextDueHours.toLocaleString()} hs` : null)
           : (row.nextDueDate ? fmtDate(row.nextDueDate) : null);
+        const rel = dueRelative(row, t);
         return (
-          <span className={`font-mono text-xs font-bold tabular-nums whitespace-nowrap ${tone}`}>
-            {next ?? <span className="text-text-industrial/30 font-normal">—</span>}
-          </span>
+          <div className="flex flex-col">
+            <span className={`font-mono text-xs font-bold tabular-nums whitespace-nowrap ${tone}`}>
+              {next ?? <span className="text-text-industrial/30 font-normal">—</span>}
+            </span>
+            {rel && <span className={`text-[10.5px] font-semibold whitespace-nowrap ${st === "OVERDUE" || st === "DUE" ? tone : "text-text-industrial/55"}`}>{rel}</span>}
+          </div>
         );
       },
     },
@@ -4145,169 +4293,187 @@ export const MaintenancePlansPage: React.FC = () => {
     return { vessel, asset, group };
   }, [vesselFilter, selectedVesselCode, assetFilter, sfiTab, data]);
 
+  const summaryCards: { key: PlanBucket; label: string; hint: string; icon: typeof Wrench; cls: string; num: string }[] = [
+    { key: "over", label: t("mp.v27.sum.over"), hint: t("mp.v27.sum.overHint"), icon: AlarmClock, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
+    { key: "now", label: t("mp.v27.sum.now"), hint: t("mp.v27.sum.nowHint"), icon: PlayCircle, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
+    { key: "soon", label: t("mp.v27.sum.soon"), hint: t("mp.v27.sum.soonHint"), icon: CalendarClock, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+    { key: "nodue", label: t("mp.v27.sum.nodue"), hint: t("mp.v27.sum.nodueHint"), icon: CalendarX, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
+    { key: "oos", label: t("mp.v27.sum.oos"), hint: t("mp.v27.sum.oosHint"), icon: PowerOff, cls: "border-l-slate-400", num: "text-text-industrial/70" },
+  ];
+  const qualityItems: { key: "nodue" | "criteria" | "responsible" | "risk"; tone: string; label: string; hint: string }[] = [
+    { key: "nodue", tone: "text-red-700 dark:text-red-400", label: t("mp.v27.q.nodue"), hint: t("mp.v27.q.nodueHint") },
+    { key: "criteria", tone: "text-amber-700 dark:text-amber-400", label: t("mp.v27.q.criteria"), hint: t("mp.v27.q.criteriaHint") },
+    { key: "responsible", tone: "text-amber-700 dark:text-amber-400", label: t("mp.v27.q.responsible"), hint: t("mp.v27.q.responsibleHint") },
+    { key: "risk", tone: "text-amber-700 dark:text-amber-400", label: t("mp.v27.q.risk"), hint: t("mp.v27.q.riskHint") },
+  ];
+  const qualityTopics = qualityItems.filter(q => qualityCounts[q.key] > 0).length;
+  const stageCount = (k: typeof stageSel) => {
+    const items = data?.items ?? [];
+    if (k === "todo") return bucketCounts.over + bucketCounts.now;
+    if (k === "soon") return bucketCounts.soon;
+    if (k === "ok") return bucketCounts.ok + bucketCounts.oos;
+    return items.length;
+  };
+  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
+  const anyListFilter = !!(searchText || typeSel || whoSel || sfiTab !== "ALL" || overdueOnly || cardSel || qualitySel);
+  const clearListFilters = () => { setOverdueOnly(false); setSfiTab("ALL"); setSearchText(""); setTypeSel(""); setWhoSel(""); setCardSel(""); setQualitySel(""); };
+
   return (
     <div className="space-y-4">
-      <PageHeader kind="plan" icon={ClipboardList} title={t("page.maintenancePlans")} total={data?.total} onReload={reload}>
-        {/* Nueva tarea */}
+      <PageHeader kind="plan" icon={ClipboardList} title={t("page.maintenancePlans")} total={shownItems.length} onReload={reload}>
+        {/* Vista: Lista o Calendario (el Gantt de carga). Planilla y Matriz siguen
+            ocultas por pedido del usuario (sep 2026); su código queda montado. */}
+        <div className="inline-flex overflow-hidden rounded-lg border border-fg/10">
+          <button type="button" className="inline-flex items-center gap-1.5 bg-fg px-3 py-1.5 text-xs font-bold text-surface">
+            <ListTree className="w-3.5 h-3.5" /> {t("mp.v27.viewList")}
+          </button>
+          <button type="button" onClick={() => navigate("/maintenance-gantt")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-text-industrial/70 hover:text-fg">
+            <CalendarDays className="w-3.5 h-3.5" /> {t("mp.v27.viewCalendar")}
+          </button>
+        </div>
+        {/* Más: Excel y planilla del buque */}
+        <div className="relative">
+          <button type="button" onClick={() => setMoreOpen(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+            {exportingSheet ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <MoreHorizontal className="w-3.5 h-3.5" />} {t("mp.v27.more")}
+          </button>
+          {moreOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
+              <div className="absolute right-0 z-40 mt-1 w-64 overflow-hidden rounded-xl border border-fg/10 bg-surface shadow-xl">
+                <button type="button" onClick={() => { setMoreOpen(false); setShowExcel(true); }} className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-fg/5">
+                  <FileSpreadsheet className="w-4 h-4 text-accent shrink-0" /><span><b className="block text-fg">Excel</b><span className="text-text-industrial/55">{t("mp.v27.moreExcel")}</span></span>
+                </button>
+                {/* Planilla de Mantenimiento (.xlsx) del buque elegido en el header:
+                    la planilla ES el plan en papel, se busca donde está el plan. */}
+                <button type="button" disabled={exportingSheet || !selectedVesselCode} onClick={() => { setMoreOpen(false); void exportSheet(); }}
+                  title={selectedVesselCode ? t("mp.page.exportSheetHint").replace("{vessel}", selectedVessel?.name ?? selectedVesselCode) : t("mp.page.exportSheetNoVessel")}
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-fg/5 disabled:opacity-45 disabled:cursor-not-allowed">
+                  <FileDown className="w-4 h-4 text-accent shrink-0" /><span><b className="block text-fg">{t("mp.page.exportSheet")}</b><span className="text-text-industrial/55">{selectedVesselCode ? (selectedVessel?.name ?? selectedVesselCode) : t("mp.page.exportSheetNoVessel")}</span></span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <button
           onClick={() => { setEditing(null); setShowModal(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
         >
           <Plus className="w-3.5 h-3.5" /> {t("mp.page.newTask")}
         </button>
-        {/* Excel (import/export) */}
-        <button
-          onClick={() => setShowExcel(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
-        </button>
-        {/* Planilla de Mantenimiento (.xlsx) del buque elegido en el header.
-            Vivía en el Gantt; se movió acá (sep 2026, pedido del usuario): la
-            planilla ES el plan de mantenimiento en papel, y se busca donde está
-            el plan. El Gantt ya no la ofrece. */}
-        <button
-          onClick={() => { void exportSheet(); }}
-          disabled={exportingSheet || !selectedVesselCode}
-          title={selectedVesselCode
-            ? t("mp.page.exportSheetHint").replace("{vessel}", selectedVessel?.name ?? selectedVesselCode)
-            : t("mp.page.exportSheetNoVessel")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {exportingSheet
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-            : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />}
-          {exportingSheet ? t("mp.page.exportSheetBusy") : t("mp.page.exportSheet")}
-        </button>
-
-        {/* ── Vista Planilla y Vista Matriz — OCULTAS por pedido del usuario
-            (sep 2026). El código de las dos queda intacto y montado más abajo:
-            para recuperarlas alcanza con descomentar estos dos botones. Mismo
-            criterio que los módulos dormantes del Sidebar: se saca el acceso,
-            no la funcionalidad. */}
-        {/*
-        <button
-          onClick={() => { const nv = !gridView; setGridView(nv); if (nv) setShowMatrix(false); }}
-          title={t("mp.page.gridView")}
-          aria-label={t("mp.page.gridView")}
-          aria-pressed={gridView}
-          className={`flex items-center justify-center p-1.5 rounded-lg border transition-all ${
-            gridView
-              ? "bg-accent/20 border-accent/40 text-accent"
-              : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30"
-          }`}
-        >
-          <Table2 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => { const nv = !showMatrix; setShowMatrix(nv); if (nv) setGridView(false); }}
-          title={t("mp.matrix.title")}
-          aria-pressed={showMatrix}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-            showMatrix
-              ? "bg-accent/20 border-accent/40 text-accent"
-              : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
-          }`}
-        >
-          <CalendarRange className="w-3.5 h-3.5" /> {t("mp.page.matrixView")}
-        </button>
-        */}
-        {/* Agrupar por equipo + expandir/colapsar todo (solo en la lista default) */}
-        {!showMatrix && !gridView && (
-          <>
-            <button
-              onClick={() => setGroupByEquipment(v => !v)}
-              title={t("mp.page.groupByEquipment")}
-              aria-pressed={groupByEquipment}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                groupByEquipment
-                  ? "bg-accent/20 border-accent/40 text-accent"
-                  : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
-              }`}
-            >
-              <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
-            </button>
-            {groupByEquipment && (
-              <button
-                onClick={toggleAllGroups}
-                title={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
-                aria-label={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
-                className="flex items-center justify-center p-1.5 rounded-lg border bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30 transition-all"
-              >
-                {allCollapsed ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
-              </button>
-            )}
-          </>
-        )}
-        {/* Buscador global */}
-        <div className="flex items-center gap-1.5 bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5">
-          <Search className="w-3 h-3 text-text-industrial/40 shrink-0" />
-          <input
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            placeholder={t("mp.page.searchPlaceholder")}
-            className="w-56 bg-transparent text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none"
-          />
-          {searchText && (
-            <button onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-fg transition-colors">
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-        {/* Filtro por buque: usa el selector global del header (VesselContext).
-            Filtro por estado: removido — ACTIVE es el caso 99% del tiempo. */}
-        {(overdueOnly || searchText) && (
-          <button
-            onClick={() => {
-              setOverdueOnly(false);
-              setSfiTab("ALL");
-              setSearchText("");
-            }}
-            className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg hover:border-red-400/40 transition-all"
-          >
-            {t("common.clear")}
-          </button>
-        )}
+        {/* ── Vista Planilla y Vista Matriz — OCULTAS por pedido del usuario (sep 2026).
+            Para recuperarlas: volver a ofrecer setGridView / setShowMatrix. */}
       </PageHeader>
 
-      {/* ── Tabs SFI ─────────────────────────────────────────────────────────
-          Ocultas cuando se llega ya filtrado desde el acceso del Dashboard
-          (?sfiTab= o ?assetId=): esa selección ya se hizo ahí, repetirla acá
-          es ruido. Sólo se muestran entrando por el menú lateral (sin esos
-          params en la URL). */}
-      {!sfiTabParam && !assetFilter && (
-      <div className="flex items-center gap-1 flex-wrap">
-        {SFI_TABS.map(tab => {
-          const count = tab.key === "ALL" ? (sfiTabCounts["ALL"] ?? rawData?.total ?? 0) : (sfiTabCounts[String(tab.key)] ?? 0);
-          const isActive = sfiTab === tab.key;
-          // Un grupo sin planes no se muestra: el chip no lleva a ningún lado y
-          // sólo agrega ruido. El activo se mantiene aunque quede en cero (por
-          // ejemplo al cambiar de buque) para no dejar la selección huérfana.
-          if (tab.key !== "ALL" && count === 0 && !isActive) return null;
+      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
+        {summaryCards.map(c => {
+          const on = cardSel === c.key && !qualitySel;
           return (
-            <button
-              key={String(tab.key)}
-              onClick={() => setSfiTab(tab.key)}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                isActive
-                  ? "bg-accent text-accent-fg border-accent"
-                  : "bg-fg/5 text-text-industrial/60 border-fg/10 hover:bg-fg/10 hover:text-fg"
-              }`}
-            >
-              {/* El chip lleva el nombre completo del grupo: "G7" solo no dice
-                  nada si no te sabés la numeración SFI de memoria. */}
-              {tab.key === "ALL"
-                ? t("mp.sfiTab.all")
-                : <>{tab.label} <span className="font-semibold">{t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])}</span></>}
-              {count > 0 && (
-                <span className={`ml-1 text-[10px] ${isActive ? "opacity-70" : "text-text-industrial/40"}`}>
-                  ({count})
-                </span>
-              )}
+            <button key={c.key} type="button" onClick={() => { setQualitySel(""); setCardSel(on ? "" : c.key); }}
+              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{loading && !data ? "…" : bucketCounts[c.key]}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
+              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
             </button>
           );
         })}
       </div>
+
+      {/* Calidad del plan: lo que falta para que avise y se pueda auditar. */}
+      {qualityTopics > 0 && (
+        <div className="rounded-2xl border border-fg/10 bg-surface px-4 py-2.5">
+          <button type="button" onClick={toggleQuality} className="flex w-full items-center gap-2 text-left">
+            <ClipboardCheck className="w-4 h-4 text-fg" />
+            <span className="text-sm font-extrabold text-fg">{t("mp.v27.qualityTitle")}</span>
+            <span className="hidden sm:inline text-[11.5px] text-text-industrial/55">· {t("mp.v27.qualitySub")}</span>
+            <span className="ml-auto rounded-full border border-amber-400/60 bg-amber-500/10 px-2 py-0.5 text-[10.5px] font-extrabold text-amber-800 dark:text-amber-300">
+              {t("mp.v27.qualityTopics").replace("{n}", String(qualityTopics))}
+            </span>
+          </button>
+          {qualityOpen && (
+            <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {qualityItems.map(q => {
+                const on = qualitySel === q.key;
+                return (
+                  <button key={q.key} type="button" disabled={qualityCounts[q.key] === 0} onClick={() => { setCardSel(""); setQualitySel(on ? "" : q.key); }}
+                    className={`flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition-all disabled:opacity-45 ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
+                    <span className={`text-lg font-black ${qualityCounts[q.key] ? q.tone : "text-emerald-700 dark:text-emerald-400"}`}>{qualityCounts[q.key]}</span>
+                    <span className="text-xs font-bold text-fg">{q.label}</span>
+                    <span className="text-[10.5px] text-text-industrial/50">{q.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {([["todo", t("mp.v27.stageTodo")], ["soon", t("mp.v27.stageSoon")], ["ok", t("mp.v27.stageOk")], ["all", t("mp.v27.stageAll")]] as const).map(([k, label]) => {
+            const on = stageSel === k && !cardSel && !qualitySel;
+            return (
+              <button key={k} type="button" onClick={() => { setCardSel(""); setQualitySel(""); setStageSel(k); }}
+                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
+                {label}
+                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{stageCount(k)}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sistema (grupo SFI). Se oculta si se llegó ya filtrado desde el Dashboard. */}
+          {!sfiTabParam && !assetFilter && (
+            <select value={String(sfiTab)} onChange={e => setSfiTab((e.target.value === "ALL" || e.target.value === "NONE" ? e.target.value : Number(e.target.value)) as SfiTab)}
+              className={`${selCls(sfiTab !== "ALL")} max-w-[15rem]`}>
+              <option value="ALL">{t("mp.v27.sfiAll")}</option>
+              {SFI_TABS.filter(tab => tab.key !== "ALL" && (sfiTabCounts[String(tab.key)] ?? 0) > 0).map(tab => (
+                <option key={String(tab.key)} value={String(tab.key)}>{tab.key} · {t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])} ({sfiTabCounts[String(tab.key)]})</option>
+              ))}
+            </select>
+          )}
+          <select value={typeSel} onChange={e => setTypeSel(e.target.value as typeof typeSel)} className={selCls(!!typeSel)}>
+            <option value="">{t("mp.v27.typeAll")}</option>
+            <option value="MAINTENANCE">{t("mp.taskType.MAINTENANCE" as Parameters<typeof t>[0])}</option>
+            <option value="INSPECTION">{t("mp.taskType.INSPECTION" as Parameters<typeof t>[0])}</option>
+          </select>
+          <select value={whoSel} onChange={e => setWhoSel(e.target.value as typeof whoSel)} className={selCls(!!whoSel)}>
+            <option value="">{t("mp.v27.whoAll")}</option>
+            <option value="onboard">{t("mp.v27.whoOnboard")}</option>
+            <option value="provider">{t("mp.v27.whoProvider")}</option>
+          </select>
+          <button type="button" onClick={() => setGroupByEquipment(v => !v)} aria-pressed={groupByEquipment}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${groupByEquipment ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
+            <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
+          </button>
+          {groupByEquipment && (
+            <button type="button" onClick={toggleAllGroups} title={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
+              className="flex items-center justify-center p-1.5 rounded-lg border bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30 transition-all">
+              {allCollapsed ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+            </button>
+          )}
+          {anyListFilter && (
+            <button type="button" onClick={clearListFilters} className="rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 text-xs text-text-industrial/80 hover:text-fg">{t("common.clear")}</button>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder={t("mp.page.searchPlaceholder")}
+              className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {searchText && <button type="button" onClick={() => setSearchText("")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+          </div>
+        </div>
+      </div>
+
+      {/* Guía para las tareas sin vencimiento */}
+      {qualitySel === "nodue" && (
+        <div className="flex items-start gap-3 rounded-2xl border-[1.5px] border-amber-400/60 bg-amber-500/[0.07] px-3.5 py-3">
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 bg-amber-600"><CalendarX className="w-4.5 h-4.5" /></span>
+          <div>
+            <p className="text-sm font-black text-fg">{t("mp.v27.nodueGuideTitle").replace("{n}", String(qualityCounts.nodue))}</p>
+            <p className="text-[12.5px] text-text-industrial/70">{t("mp.v27.nodueGuideDesc")}</p>
+          </div>
+        </div>
       )}
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
@@ -4320,57 +4486,20 @@ export const MaintenancePlansPage: React.FC = () => {
           {weekPlanIdsLoading
             ? <Loader2 className="w-3 h-3 animate-spin text-accent" />
             : <span className="text-[10px] text-text-industrial/50">({data?.total ?? 0})</span>}
-          <button
-            onClick={clearWeekFilter}
-            title={t("mp.page.weekFilterClear")}
-            className="text-text-industrial/50 hover:text-fg transition-colors"
-          >
+          <button onClick={clearWeekFilter} title={t("mp.page.weekFilterClear")} className="text-text-industrial/50 hover:text-fg transition-colors">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Barra de "juntar en una sola OT": aparece al marcar ítems del PDM. */}
-      {bundlePlans.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap rounded-xl border border-accent/30 bg-accent/[0.07] px-3 py-2">
-          <span className="text-xs font-bold text-fg">
-            {bundlePlans.length} {bundlePlans.length === 1 ? "ítem marcado" : "ítems marcados"}
-            {bundleVessel ? <span className="text-text-industrial/60 font-normal"> · {vesselNameMap.get(bundleVessel) ?? bundleVessel}</span> : null}
-          </span>
-          <span className="text-[11px] text-text-industrial/60 font-mono truncate max-w-[40%]">
-            {bundlePlans.map(p => p.taskCode).join(" / ")}
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { setBundleIds([]); }}
-              className="px-3 py-1.5 rounded-lg text-xs text-text-industrial hover:text-fg"
-            >
-              Limpiar
-            </button>
-            <button
-              type="button"
-              disabled={!bundlePlans[0] || openingWoId !== null}
-              onClick={() => { if (bundlePlans[0]) void openWoForPlan(bundlePlans[0]); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 disabled:opacity-50 transition-colors"
-            >
-              {openingWoId !== null && <Loader2 className="w-3 h-3 animate-spin" />}
-              Generar una sola {woTerms.abbr}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {pageError && (
-        <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{pageError}</p>
-      )}
+      {pageError && <AlertDialog message={pageError} onClose={() => setPageError(null)} />}
       {loadingDetailId && (
         <div className="flex items-center gap-2 text-xs text-text-industrial/60">
           <Loader2 className="w-4 h-4 animate-spin text-accent" /> {t("mp.page.loadingDetail")}
         </div>
       )}
 
-      <TmsaFilterBanner filter={tmsaFilter} shown={data?.items?.length ?? 0} total={rawData?.items?.length ?? 0} />
+      <TmsaFilterBanner filter={tmsaFilter} shown={shownItems.length} total={rawData?.items?.length ?? 0} />
 
       {showMatrix ? (
         loading && !data ? (
@@ -4381,7 +4510,7 @@ export const MaintenancePlansPage: React.FC = () => {
           <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{String(error)}</p>
         ) : (
           <MaintenancePlansMatrix
-            plans={data?.items ?? []}
+            plans={shownItems}
             vesselNameMap={vesselNameMap}
             getStatus={computeStatus}
             onOpenPlan={code => { const r = rawData?.items?.find(p => p.taskCode === code); if (r) openFromRow(r); else openLink(code, { replace: window.location.pathname.startsWith("/maintenance-plans/") }); }}
@@ -4396,7 +4525,7 @@ export const MaintenancePlansPage: React.FC = () => {
           <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{String(error)}</p>
         ) : (
           <MaintenancePlansGrid
-            plans={data?.items ?? []}
+            plans={shownItems}
             isAdmin={isAdmin}
             canEditMilestones={user?.role === "TENANT_ADMIN"}
             vesselNameMap={vesselNameMap}
@@ -4411,26 +4540,70 @@ export const MaintenancePlansPage: React.FC = () => {
           />
         )
       ) : (
-        <DataTable
-          columns={columns}
-          data={data?.items ?? null}
-          loading={loading}
-          error={error}
-          keyFn={row => row.id}
-          emptyText={t("empty.maintenancePlans")}
-          // Si ya hay un plan activo en la URL (su ventana aún no se dibujó por el
-          // gap de render), reemplazamos en vez de apilar: clickear otro plan
-          // dejaba /A y /B en el historial y cerrar el 2º reabría el 1º.
-          onRowClick={openFromRow}
-          layoutFixed
-          groupBy={planGroupBy}
-          collapsedGroups={collapsedGroups}
-          onToggleGroup={toggleGroup}
-          // Agrupación y orden por columna se pisan: si el usuario ordena por
-          // una columna estando agrupado por equipo, gana el orden y la lista
-          // pasa a verse de corrido.
-          onSortUngroup={() => setGroupByEquipment(false)}
-        />
+        <>
+          <div className="hidden md:block">
+            <DataTable
+              columns={columns}
+              data={data ? shownItems : null}
+              loading={loading}
+              error={error}
+              keyFn={row => row.id}
+              emptyText={stageSel === "todo" && !cardSel && !qualitySel ? t("mp.v27.emptyTodo") : t("empty.maintenancePlans")}
+              // Si ya hay un plan activo en la URL (su ventana aún no se dibujó por el
+              // gap de render), reemplazamos en vez de apilar: clickear otro plan
+              // dejaba /A y /B en el historial y cerrar el 2º reabría el 1º.
+              onRowClick={openFromRow}
+              rowClassName={row => { const b = bucketOf(row); return b === "over" ? "bg-red-500/[0.05] shadow-[inset_4px_0_0_rgb(220,38,38)]" : b === "now" ? "shadow-[inset_4px_0_0_rgb(234,88,12)]" : ""; }}
+              layoutFixed
+              groupBy={planGroupBy}
+              collapsedGroups={collapsedGroups}
+              onToggleGroup={toggleGroup}
+              // Agrupación y orden por columna se pisan: si el usuario ordena por
+              // una columna estando agrupado por equipo, gana el orden y la lista
+              // pasa a verse de corrido.
+              onSortUngroup={() => setGroupByEquipment(false)}
+            />
+          </div>
+          {/* Celular: tarjetas con la acción a mano. */}
+          <div className="md:hidden flex flex-col gap-2">
+            {loading && !data && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>}
+            {data && shownItems.length === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{stageSel === "todo" && !cardSel && !qualitySel ? t("mp.v27.emptyTodo") : t("empty.maintenancePlans")}</p>}
+            {shownItems.slice(0, 150).map(p => {
+              const b = bucketOf(p);
+              const rel = dueRelative(p, t);
+              return (
+                <div key={p.id} onClick={() => openFromRow(p)}
+                  className={`rounded-xl border border-fg/10 border-l-4 bg-surface px-3 py-2.5 space-y-1.5 cursor-pointer ${b === "over" ? "border-l-red-600 bg-red-500/[0.05]" : b === "now" ? "border-l-orange-500" : b === "nodue" ? "border-l-amber-500" : "border-l-fg/10"}`}>
+                  <p className="text-[11px] text-text-industrial/55 truncate">{p.assetName ?? ""}</p>
+                  <b className="block text-[13px] text-fg leading-tight">{p.title}</b>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {renderStatus(p)}
+                    {rel && <span className={`text-[11px] font-bold ${b === "over" ? "text-red-700 dark:text-red-400" : b === "now" ? "text-orange-700 dark:text-orange-400" : "text-text-industrial/60"}`}>{rel}</span>}
+                  </div>
+                  <div onClick={e => e.stopPropagation()}>{renderActions(p)}</div>
+                </div>
+              );
+            })}
+            {shownItems.length > 150 && <p className="text-center text-[11px] text-text-industrial/45">{t("mp.v27.mobileMore").replace("{n}", String(shownItems.length - 150))}</p>}
+          </div>
+        </>
+      )}
+
+      {/* Juntar varias tareas en UNA sola OT (parada o astillero): barra fija abajo. */}
+      {bundlePlans.length > 0 && (
+        <div className="sticky bottom-3 z-20 mx-auto flex max-w-3xl flex-wrap items-center gap-2.5 rounded-2xl bg-[#1A1D24] px-3.5 py-2.5 text-white shadow-2xl">
+          <Layers className="w-4 h-4 shrink-0" />
+          <b className="text-sm">{t("mp.v27.bundleN").replace("{n}", String(bundlePlans.length))}</b>
+          <span className="min-w-0 flex-1 truncate text-xs text-white/70">
+            {bundleVessel ? `${vesselNameMap.get(bundleVessel) ?? bundleVessel} · ` : ""}{t("mp.v27.bundleHint")} · <span className="font-mono">{bundlePlans.map(p => p.taskCode).join(" / ")}</span>
+          </span>
+          <button type="button" onClick={() => setBundleIds([])} className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold hover:bg-white/25">{t("mp.v27.bundleClear")}</button>
+          <button type="button" disabled={!bundlePlans[0] || openingWoId !== null} onClick={() => { if (bundlePlans[0]) void openWoForPlan(bundlePlans[0]); }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold hover:brightness-110 disabled:opacity-50">
+            {openingWoId !== null ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+            {t("mp.v27.bundleOpen").replace("{n}", String(bundlePlans.length)).replace("{abbr}", woTerms.abbr)}
+          </button>
+        </div>
       )}
 
       {deleteTarget && (

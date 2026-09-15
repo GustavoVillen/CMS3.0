@@ -151,8 +151,10 @@ export async function handleMaintenanceRoutes(
     const light = items.map((p) => {
       const { loto, acceptanceCriteria, riskAnalysisResult, consequenceRationale, ...rest } =
         p as Record<string, unknown>;
-      void loto; void acceptanceCriteria; void riskAnalysisResult; void consequenceRationale;
-      return rest;
+      void loto; void riskAnalysisResult; void consequenceRationale;
+      // El texto del criterio no viaja, pero la lista necesita saber si falta
+      // (recuadro "Calidad del plan").
+      return { ...rest, hasAcceptanceCriteria: typeof acceptanceCriteria === "string" && acceptanceCriteria.trim().length > 0 };
     });
     sendJson(response, 200, { items: light, total: light.length }, request);
     return true;
