@@ -606,6 +606,20 @@ export function ServiceRequestsPage() {
   const setViewParam = (key: string) => {
     const params = new URLSearchParams(searchParams);
     if (key) params.set("view", key); else params.delete("view");
+    // Una tarjeta es una vista completa: no se suma al ?status= del Dashboard.
+    // Si no, "Autorizada" + "En el taller +15 días" no dejaba ninguna SS y el
+    // tablero quedaba vacío aunque la tarjeta dijera que había.
+    if (key) params.delete("status");
+    setSearchParams(params, { replace: true });
+    if (key) setStageSel("");
+  };
+  /** Elegir una etapa también reemplaza el filtro de estado y la tarjeta. */
+  const pickStage = (key: SsStageKey) => {
+    setStageSel(key);
+    if (!statusParam && !cardSel) return;
+    const params = new URLSearchParams(searchParams);
+    params.delete("status");
+    params.delete("view");
     setSearchParams(params, { replace: true });
   };
   const clearStatusParam = () => {
@@ -876,7 +890,7 @@ export function ServiceRequestsPage() {
             const on = stageSel === b.key;
             const count = stageFilter(beforeStage, b.key).length;
             return (
-              <button key={b.key || "open"} type="button" onClick={() => setStageSel(b.key)}
+              <button key={b.key || "open"} type="button" onClick={() => pickStage(b.key)}
                 className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
                   on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
                 }`}>
