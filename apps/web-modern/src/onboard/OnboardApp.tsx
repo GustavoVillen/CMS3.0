@@ -148,17 +148,38 @@ function OnboardHome({ onOpen, onProgress }: { onOpen: (v: View) => void; onProg
   const firstName = (user?.name ?? "").split(" ")[0];
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "numeric" });
 
-  const tiles: Array<{ v: View | "progress"; show: boolean; icon: React.ReactNode; title: string; sub: string; primary?: boolean; warn?: boolean }> = [
-    { v: "newwo", show: canWo, primary: true, icon: <Plus className="w-[22px] h-[22px]" />, title: t("ob.tile.newWo").replace("{wo}", woTerms.abbr), sub: t("ob.tile.newWoSub") },
-    { v: "progress", show: !readOnly, icon: <MessageSquarePlus className="w-[22px] h-[22px]" />, title: t("ob.tile.progress"),
-      sub: openWos.items.length ? t("ob.tile.progressSub").replace("{n}", String(openWos.items.length)).replace("{wo}", woTerms.abbr) : t("ob.tile.progressNone") },
-    { v: "hours", show: can("assetHours.write"), icon: <Gauge className="w-[22px] h-[22px]" />, title: t("ob.tile.hours"),
-      sub: staleHours ? t("ob.tile.hoursStale").replace("{n}", String(staleHours)) : t("ob.tile.hoursSub"), warn: staleHours > 0 },
+  // Orden de la pantalla por uso real (Preview V36, aprobada 2026-09-16):
+  //   1. Planes para abrir y Horómetros — lo de todos los días, arriba y grandes.
+  //   2. Registrar avance.
+  //   3. "Lo demás", chico y en gris (incluida Nueva OT/SS, que dejó de ser el
+  //      botón destacado: si todo resalta, no resalta nada).
+  const mainTiles: Array<{ v: View; show: boolean; icon: React.ReactNode; tone: string; title: string; lines: React.ReactNode }> = [
+    {
+      v: "plans", show: canWo, tone: "bg-danger/15 text-danger",
+      icon: <CalendarClock className="w-[26px] h-[26px]" />, title: t("ob.plans.title"),
+      lines: <>
+        <span className="block text-sm font-extrabold text-danger">{t("ob.plans.overN").replace("{n}", String(planCounts.over))}</span>
+        <span className="block text-sm font-extrabold text-warning">{t("ob.plans.soonN").replace("{n}", String(planCounts.soon))}</span>
+      </>,
+    },
+    {
+      v: "hours", show: can("assetHours.write"), tone: "bg-accent/10 text-accent",
+      icon: <Gauge className="w-[26px] h-[26px]" />, title: t("ob.tile.hours"),
+      lines: staleHours
+        ? <span className="block text-sm font-extrabold text-warning">{t("ob.tile.hoursStale").replace("{n}", String(staleHours))}</span>
+        : <span className="block text-sm font-semibold text-text-industrial/60">{t("ob.tile.hoursSub")}</span>,
+    },
+  ];
+  const visibleMain = mainTiles.filter(x => x.show);
+
+  const tiles: Array<{ v: View | "progress"; show: boolean; icon: React.ReactNode; title: string; sub: string; warn?: boolean }> = [
+    { v: "newwo", show: canWo, icon: <Plus className="w-[22px] h-[22px]" />, title: t("ob.tile.newWo").replace("{wo}", woTerms.abbr), sub: t("ob.tile.newWoSub") },
     { v: "permit", show: can("permit.manage"), icon: <ShieldCheck className="w-[22px] h-[22px]" />, title: t("ob.tile.permit"), sub: t("ob.tile.permitSub") },
     { v: "checklist", show: !readOnly, icon: <ClipboardCheck className="w-[22px] h-[22px]" />, title: t("ob.tile.checklist"),
       sub: openChecks ? t("ob.tile.checklistOpen").replace("{n}", String(openChecks)) : t("ob.tile.checklistSub"), warn: openChecks > 0 },
     { v: "spares", show: can("stock.manage"), icon: <PackageMinus className="w-[22px] h-[22px]" />, title: t("ob.tile.spares"), sub: t("ob.tile.sparesSub") },
   ];
+  const restTiles = tiles.filter(x => x.show);
 
   const openDesktop = () => {
     try { sessionStorage.setItem(OB_DESKTOP_KEY, "1"); } catch { /* sin storage: igual navega */ }
@@ -200,36 +221,56 @@ function OnboardHome({ onOpen, onProgress }: { onOpen: (v: View) => void; onProg
             pidió sacarlo (2026-09-16). El componente y el modo "agent" del
             copiloto siguen en el código: para volver a probarlo, alcanza con
             renderizar <OnboardAgent /> acá. */}
-        {canWo && (
-          <button type="button" onClick={() => go("plans")}
-            className="w-full bg-surface border border-fg/10 rounded-[18px] p-3.5 flex items-center gap-3 text-left shadow-[0_10px_24px_-14px_rgba(13,27,42,0.35)]">
-            <span className="w-[46px] h-[46px] shrink-0 rounded-[13px] bg-danger/15 text-danger grid place-items-center"><CalendarClock className="w-[23px] h-[23px]" /></span>
-            <span className="min-w-0 flex-1 flex flex-col gap-0.5">
-              <b className="text-base font-bold">{t("ob.plans.title")}</b>
-              <span className="text-sm text-text-industrial/60">
-                <em className="not-italic font-extrabold text-danger">{t("ob.plans.overN").replace("{n}", String(planCounts.over))}</em>
-                {" · "}
-                <em className="not-italic font-extrabold text-warning">{t("ob.plans.soonN").replace("{n}", String(planCounts.soon))}</em>
-              </span>
+        {/* 1 · Lo de todos los días: lado a lado. Si el rol sólo ve uno de los
+            dos, ocupa el ancho completo en vez de quedar media tarjeta suelta. */}
+        {visibleMain.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {visibleMain.map(x => (
+              <button key={x.v} type="button" onClick={() => go(x.v)}
+                className={`min-h-[158px] rounded-[20px] border-[1.5px] border-fg/10 bg-surface p-3.5 flex flex-col items-start justify-between gap-2.5 text-left active:bg-fg/5 shadow-[0_14px_30px_-18px_rgba(13,27,42,0.45)] ${
+                  visibleMain.length === 1 ? "col-span-2" : ""
+                }`}>
+                <span className={`w-[54px] h-[54px] rounded-2xl grid place-items-center ${x.tone}`}>{x.icon}</span>
+                <span className="w-full min-w-0">
+                  <b className="block text-[16.5px] font-extrabold leading-tight">{x.title}</b>
+                  <span className="block mt-1">{x.lines}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 2 · Registrar avance */}
+        {!readOnly && (
+          <button type="button" onClick={() => go("progress")}
+            className="w-full bg-surface border border-fg/10 rounded-2xl p-3 flex items-center gap-3 text-left active:bg-fg/5">
+            <span className="w-[42px] h-[42px] shrink-0 rounded-xl bg-accent/10 text-accent grid place-items-center"><MessageSquarePlus className="w-[21px] h-[21px]" /></span>
+            <span className="min-w-0 flex-1">
+              <b className="block text-[15.5px] font-bold leading-tight">{t("ob.tile.progress")}</b>
+              <small className="block text-[12.5px] text-text-industrial/60 mt-0.5">
+                {openWos.items.length ? t("ob.tile.progressSub").replace("{n}", String(openWos.items.length)).replace("{wo}", woTerms.abbr) : t("ob.tile.progressNone")}
+              </small>
             </span>
-            <ChevronRight className="w-5 h-5 text-text-industrial/40" />
+            <ChevronRight className="w-5 h-5 shrink-0 text-text-industrial/40" />
           </button>
         )}
 
-        <div className="grid grid-cols-2 gap-2.5">
-          {tiles.filter(x => x.show).map(x => (
-            <button key={x.v} type="button" onClick={() => go(x.v)}
-              className={`min-h-[116px] rounded-[18px] border p-3.5 flex flex-col items-start justify-between gap-2.5 text-left ${
-                x.primary ? "bg-accent border-accent text-accent-fg" : "bg-surface border-fg/10 text-fg active:bg-fg/5"
-              }`}>
-              <span className={`w-[42px] h-[42px] rounded-xl grid place-items-center ${x.primary ? "bg-white/20" : "bg-accent/10 text-accent"}`}>{x.icon}</span>
-              <span>
-                <b className="block text-[15.5px] font-bold leading-tight">{x.title}</b>
-                <small className={`block text-[12.5px] mt-0.5 ${x.primary ? "opacity-85" : x.warn ? "text-warning font-bold" : "text-text-industrial/60"}`}>{x.sub}</small>
-              </span>
-            </button>
-          ))}
-        </div>
+        {/* 3 · Lo demás */}
+        {restTiles.length > 0 && <>
+          <p className="text-xs font-extrabold uppercase tracking-[0.07em] text-text-industrial/45 mt-1.5 -mb-1.5 px-0.5">{t("ob.home.rest")}</p>
+          <div className="grid grid-cols-2 gap-2.5">
+            {restTiles.map(x => (
+              <button key={x.v} type="button" onClick={() => go(x.v)}
+                className="min-h-[100px] rounded-[18px] border border-fg/10 bg-surface text-fg p-3 flex flex-col items-start justify-between gap-2 text-left active:bg-fg/5">
+                <span className="w-[38px] h-[38px] rounded-xl bg-fg/5 text-text-industrial/70 grid place-items-center">{x.icon}</span>
+                <span>
+                  <b className="block text-[14.5px] font-bold leading-tight">{x.title}</b>
+                  <small className={`block text-xs mt-0.5 ${x.warn ? "text-warning font-bold" : "text-text-industrial/50"}`}>{x.sub}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>}
 
         {(mine.data?.items.length ?? 0) > 0 && (
           <>
