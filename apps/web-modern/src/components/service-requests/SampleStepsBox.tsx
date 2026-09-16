@@ -159,7 +159,7 @@ export function SampleStepsBox({ srId, srStatus, providerName, onChanged, onDete
       {/* 1 · Se toma la muestra */}
       <Step n={1} state={taken ? "done" : "now"}
         title={t("ss.samp.step1")}
-        sub={taken ? t("ss.samp.step1done").replace("{n}", String(pending.length)) : t("ss.samp.step1sub")}>
+        sub={taken ? (pending.length === 1 ? t("ss.samp.step1doneOne") : t("ss.samp.step1done").replace("{n}", String(pending.length))) : t("ss.samp.step1sub")}>
         {pending.map(s => (
           <div key={s.id} className="flex gap-2.5 items-center p-2.5 rounded-xl bg-fg/5">
             <span className="min-w-0 flex-1">

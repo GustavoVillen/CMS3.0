@@ -5109,6 +5109,7 @@ const dict = {
   "ss.samp.step1": { es: "Se toma la muestra", en: "Sample taken", pt: "Amostra coletada" },
   "ss.samp.step1sub": { es: "Anotá el número de cada frasco", en: "Write down each bottle number", pt: "Anote o número de cada frasco" },
   "ss.samp.step1done": { es: "{n} frascos numerados", en: "{n} bottles numbered", pt: "{n} frascos numerados" },
+  "ss.samp.step1doneOne": { es: "1 frasco numerado", en: "1 bottle numbered", pt: "1 frasco numerado" },
   "ss.samp.numberPh": { es: "N° frasco", en: "Bottle no.", pt: "Nº frasco" },
   "ss.samp.numberOf": { es: "Número de muestra de {asset}", en: "Sample number for {asset}", pt: "Número da amostra de {asset}" },
   "ss.samp.registerAll": { es: "Registrar los números", en: "Save the numbers", pt: "Registrar os números" },
