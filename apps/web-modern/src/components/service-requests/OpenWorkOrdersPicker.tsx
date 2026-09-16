@@ -12,6 +12,11 @@
 // se exportan: el "Registro de Avance" del Dashboard (ProgressFlow) arma su
 // propia lista por equipo mezclando las OT con las SS, y tiene que mostrar
 // exactamente las mismas órdenes y con la misma cara.
+//
+// El chip de estado ya no va en el renglón de estas listas (queda para el
+// asistente de la SS): a bordo el renglón se lee en el celular y lo que importa
+// es el título, no un globito. Por eso el renglón se parte en dos en pantalla
+// chica — título arriba, número y fecha abajo — y vuelve a una línea en `sm`.
 
 import React from "react";
 import { ChevronDown, Wrench, Loader2 } from "lucide-react";
@@ -155,12 +160,21 @@ export function OpenWorkOrdersList({ onPick, empty }: {
                     onClick={() => onPick({ id: wo.id, workOrderCode: wo.workOrderCode })}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-fg/[0.03] border border-fg/10 hover:border-accent/40 hover:bg-fg/[0.07] transition-all text-left"
                   >
-                    <span className="font-mono text-[11px] font-bold text-accent shrink-0">{wo.workOrderCode}</span>
-                    <span className="flex-1 min-w-0 truncate text-xs text-fg">{wo.title || "—"}</span>
+                    {/* En el celular el renglón se parte en dos: arriba el título, abajo
+                        el número y la fecha. De `sm` para arriba, una sola línea. Misma
+                        forma que el Registro de Avance (ProgressFlow). */}
+                    <span className="flex-1 min-w-0 flex flex-col-reverse sm:flex-row sm:items-center sm:gap-2">
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-[11px] font-bold text-accent">{wo.workOrderCode}</span>
+                        {wo.dueDate && (
+                          <span className="sm:hidden text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(wo.dueDate)}</span>
+                        )}
+                      </span>
+                      <span className="min-w-0 sm:flex-1 truncate text-xs text-fg">{wo.title || "—"}</span>
+                    </span>
                     {wo.dueDate && (
-                      <span className="shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(wo.dueDate)}</span>
+                      <span className="hidden sm:inline shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(wo.dueDate)}</span>
                     )}
-                    <WoStatusChip wo={wo} />
                   </button>
                 ))}
               </div>

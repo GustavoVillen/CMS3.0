@@ -29,7 +29,6 @@ import { ModalCloseButton } from "./ModalCloseButton";
 import { fmtDate } from "../lib/utils";
 import {
   WO_OPEN_STATUSES,
-  WoStatusChip,
   type PickerWorkOrder,
 } from "./service-requests/OpenWorkOrdersPicker";
 import { HojaRutaBox } from "./service-requests/HojaRutaBox";
@@ -191,12 +190,21 @@ function Picker({ onClose, onPickWo, onPickSr }: {
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-fg/[0.03] border border-fg/10 hover:border-accent/40 hover:bg-fg/[0.07] transition-all text-left"
                       >
                         <Wrench className="w-3.5 h-3.5 text-accent/70 shrink-0" />
-                        <span className="font-mono text-[11px] font-bold text-accent shrink-0">{w.workOrderCode}</span>
-                        <span className="flex-1 min-w-0 truncate text-xs text-fg">{w.title || "—"}</span>
+                        {/* En el celular el renglón se parte en dos: arriba el título, que
+                            es lo que se busca, y abajo el número y la fecha. De `sm` para
+                            arriba vuelve a ser una sola línea, como el resto del sistema. */}
+                        <span className="flex-1 min-w-0 flex flex-col-reverse sm:flex-row sm:items-center sm:gap-2">
+                          <span className="flex items-center gap-2 shrink-0">
+                            <span className="font-mono text-[11px] font-bold text-accent">{w.workOrderCode}</span>
+                            {w.dueDate && (
+                              <span className="sm:hidden text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(w.dueDate)}</span>
+                            )}
+                          </span>
+                          <span className="min-w-0 sm:flex-1 truncate text-xs text-fg">{w.title || "—"}</span>
+                        </span>
                         {w.dueDate && (
-                          <span className="shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(w.dueDate)}</span>
+                          <span className="hidden sm:inline shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(w.dueDate)}</span>
                         )}
-                        <WoStatusChip wo={w} />
                       </button>
                     ))}
 
@@ -209,14 +217,20 @@ function Picker({ onClose, onPickWo, onPickSr }: {
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-fg/[0.03] border border-fg/10 hover:border-accent/40 hover:bg-fg/[0.07] transition-all text-left"
                       >
                         <Handshake className="w-3.5 h-3.5 text-accent/70 shrink-0" />
-                        <span className="font-mono text-[11px] font-bold text-accent shrink-0">{s.serviceRequestCode}</span>
-                        <span className="flex-1 min-w-0 truncate text-xs text-fg">{srServicio(s) || "—"}</span>
-                        {s.openDate && (
-                          <span className="shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(s.openDate)}</span>
-                        )}
-                        <span className="shrink-0 inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">
-                          {t("dashboard.progress.ssChip")}
+                        {/* Misma forma que la OT de arriba: en el celular, título y debajo
+                            el número. La SS se reconoce por el ícono y por el código. */}
+                        <span className="flex-1 min-w-0 flex flex-col-reverse sm:flex-row sm:items-center sm:gap-2">
+                          <span className="flex items-center gap-2 shrink-0">
+                            <span className="font-mono text-[11px] font-bold text-accent">{s.serviceRequestCode}</span>
+                            {s.openDate && (
+                              <span className="sm:hidden text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(s.openDate)}</span>
+                            )}
+                          </span>
+                          <span className="min-w-0 sm:flex-1 truncate text-xs text-fg">{srServicio(s) || "—"}</span>
                         </span>
+                        {s.openDate && (
+                          <span className="hidden sm:inline shrink-0 text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(s.openDate)}</span>
+                        )}
                       </button>
                     ))}
                   </div>
