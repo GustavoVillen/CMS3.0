@@ -240,7 +240,8 @@ export function renderOpeningHtml(d: OpeningReportData): string {
     ? ""
     : section("Dónde está el atraso", d.backlogNote) + bars;
 
-  const body = masthead("Resumen semanal &middot; Mantenimiento",
+  // El eyebrow pasa por esc(): va el carácter, no la entidad HTML (si no se ve "&middot;" literal).
+  const body = masthead("Resumen semanal · Mantenimiento",
                         titulo, d.dateline, d.logoUrl)
     + `<tr><td style="padding:24px 28px 0;font:400 14px/1.6 ${SANS};color:${INK};">`
     + `${hola} As&iacute; arranca la semana del <strong>${esc(d.weekLabel)}</strong>.</td></tr>`
@@ -292,7 +293,7 @@ export function renderClosingHtml(d: ClosingReportData): string {
       + doneRows + `</table></td></tr>`
     : emptyNote("No se cerró ninguna orden de trabajo esta semana.");
 
-  const body = masthead("Cierre de semana &middot; Mantenimiento",
+  const body = masthead("Cierre de semana · Mantenimiento",
                         titulo, d.dateline, d.logoUrl)
     + `<tr><td style="padding:24px 28px 0;font:400 14px/1.6 ${SANS};color:${INK};">`
     + `${hola} es lo que qued&oacute; hecho entre el <strong>${esc(d.weekLabel)}</strong>.</td></tr>`
