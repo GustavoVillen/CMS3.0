@@ -3726,7 +3726,6 @@ const dict = {
   "dashboard.progress.back":        { es: "Elegir otra", en: "Pick another one", pt: "Escolher outra" },
   "dashboard.progress.empty":       { es: "No hay órdenes de trabajo abiertas ni solicitudes de servicio en ejecución.", en: "No open work orders and no service requests in progress.", pt: "Não há ordens de serviço abertas nem solicitações de serviço em execução." },
   "dashboard.progress.noAsset":     { es: "Sin equipo", en: "No equipment", pt: "Sem equipamento" },
-  "dashboard.progress.ssChip":      { es: "En el taller", en: "At the workshop", pt: "Na oficina" },
   "dashboard.ssProgress.hojaRuta":  { es: "Hoja de ruta del pedido", en: "Order tracking log", pt: "Folha de rota do pedido" },
   // ── Dashboard: consumo de repuestos sobre una OT (descuenta stock) ──────────
   "dashboard.spareUse.button":       { es: "Consumo de Repuestos/Materiales", en: "Spare/material consumption", pt: "Consumo de Sobressalentes/Materiais" },
@@ -4946,11 +4945,6 @@ const dict = {
   "ob.plans.title": { es: "Planes para abrir", en: "Plans to open", pt: "Planos para abrir" },
   "ob.plans.overN": { es: "{n} vencidos", en: "{n} overdue", pt: "{n} vencidos" },
   "ob.plans.soonN": { es: "{n} por vencer", en: "{n} due soon", pt: "{n} a vencer" },
-  "ob.plans.tabOver": { es: "Vencidos · {n}", en: "Overdue · {n}", pt: "Vencidos · {n}" },
-  "ob.plans.tabSoon": { es: "Por vencer · {n}", en: "Due soon · {n}", pt: "A vencer · {n}" },
-  "ob.plans.hint": { es: "Tocá una tarea para abrir la {wo}. Si hay otras del mismo equipo, se suman a la misma orden.", en: "Tap a task to open the {wo}. Other tasks on the same equipment can join the same order.", pt: "Toque uma tarefa para abrir a {wo}. Outras do mesmo equipamento podem entrar na mesma ordem." },
-  "ob.plans.emptyOver": { es: "No hay planes vencidos.", en: "No overdue plans.", pt: "Não há planos vencidos." },
-  "ob.plans.emptySoon": { es: "No hay planes por vencer en los próximos 30 días.", en: "No plans due in the next 30 days.", pt: "Não há planos a vencer nos próximos 30 dias." },
   "ob.plans.hasWo": { es: "Este plan ya tiene la {code} abierta: registrá el avance desde ahí.", en: "This plan already has {code} open: log progress there.", pt: "Este plano já tem a {code} aberta: registre o avanço nela." },
   "ob.plans.hasWoShort": { es: "En ejecución · {code}", en: "In progress · {code}", pt: "Em execução · {code}" },
   "ob.plans.openWo": { es: "Abrir {wo}", en: "Open {wo}", pt: "Abrir {wo}" },
@@ -5093,6 +5087,22 @@ const dict = {
   "ob.spares.partial": { es: "Se descontaron {n} antes del error; ya no están en la lista.", en: "{n} were deducted before the error; they are no longer on the list.", pt: "{n} foram baixadas antes do erro; já não estão na lista." },
   "ob.spares.noteWo": { es: "Consumo cargado desde el celular · {code}", en: "Usage logged from the phone · {code}", pt: "Consumo lançado pelo celular · {code}" },
   "ob.spares.noteGeneral": { es: "Consumo general cargado desde el celular", en: "General usage logged from the phone", pt: "Consumo geral lançado pelo celular" },
+
+  // ── Agenda de mantenimiento del celular (Preview V31) ──
+  "ob.ag.hint": { es: "Cuándo se puede empezar cada tarea y cuándo vence. Tocá una para abrir la {wo}.", en: "When each task can start and when it is due. Tap one to open the {wo}.", pt: "Quando cada tarefa pode começar e quando vence. Toque numa para abrir a {wo}." },
+  "ob.ag.all": { es: "Todas", en: "All", pt: "Todas" },
+  "ob.ag.onlyReady": { es: "Ya se pueden hacer", en: "Ready to do", pt: "Já podem ser feitas" },
+  "ob.ag.overdue": { es: "Vencidas", en: "Overdue", pt: "Vencidas" },
+  "ob.ag.byHours": { es: "Por horas de equipo, sin fecha", en: "By running hours, no date", pt: "Por horas de equipamento, sem data" },
+  "ob.ag.window": { es: "Ventana {from} → {to}", en: "Window {from} → {to}", pt: "Janela {from} → {to}" },
+  "ob.ag.estimated": { es: "estimada", en: "estimated", pt: "estimada" },
+  "ob.ag.canDoNow": { es: "Ya se puede hacer", en: "Ready to do", pt: "Já pode ser feita" },
+  "ob.ag.fromDate": { es: "Se puede desde el {d}", en: "Can start on {d}", pt: "Pode ser feita a partir de {d}" },
+  "ob.ag.dueToday": { es: "Vence hoy", en: "Due today", pt: "Vence hoje" },
+  "ob.ag.overdueOn": { es: "Venció el {d}", en: "Was due on {d}", pt: "Venceu em {d}" },
+  "ob.ag.horizon": { es: "Se muestran los próximos 6 meses y todo lo vencido.", en: "Showing the next 6 months and everything overdue.", pt: "Mostra os próximos 6 meses e tudo o que está vencido." },
+  "ob.ag.empty": { es: "No hay tareas vencidas ni en los próximos 6 meses.", en: "No tasks overdue or due in the next 6 months.", pt: "Não há tarefas vencidas nem nos próximos 6 meses." },
+  "ob.ag.emptyReady": { es: "No hay ninguna tarea lista para hacer hoy.", en: "No task is ready to do today.", pt: "Nenhuma tarefa está pronta para hoje." },
 
 } satisfies Record<string, Record<Locale, string>>;
 

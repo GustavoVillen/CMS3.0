@@ -1,14 +1,20 @@
-// Planes vencidos y por vencer → abrir la OT → mandarla a aprobar.
+// Agenda de mantenimiento (Preview V31) → abrir la OT → mandarla a aprobar.
 //
-// El plan ya trae la tarea, el criterio de aceptación, el bloqueo de energía y
-// el riesgo: acá sólo se completan los recuadros del formulario que el plan no
-// define (solicitado por, asignado a, sistema, ubicación). Si al plan le falta
-// alguno de los tres de seguridad, se piden también: la aprobación los necesita.
-// Repuestos planificados, fechas y adjuntos quedan para la PC.
+// La agenda reemplazó a la lista de "vencidos / por vencer": una sola lista por
+// fecha, agrupada por mes, que muestra las DOS fechas de cada tarea — desde
+// cuándo se puede hacer (apertura de la ventana) y cuándo vence. Lo vencido va
+// agrupado arriba de todo; hacia adelante, seis meses.
+//
+// Al abrir la OT: el plan ya trae la tarea, el criterio de aceptación, el
+// bloqueo de energía y el riesgo, así que acá sólo se completan los recuadros
+// del formulario que el plan no define (solicitado por, asignado a, sistema,
+// ubicación). Si al plan le falta alguno de los tres de seguridad, se piden
+// también: la aprobación los necesita. Repuestos planificados, fechas y
+// adjuntos quedan para la PC.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarClock, CircleCheck, ListChecks, Send, Sparkles, Loader2, Monitor, UserCheck, AlertTriangle, Building2, Wrench } from "lucide-react";
-import { useT, useWoTerms } from "../lib/i18n";
+import { CalendarClock, CalendarRange, CircleCheck, Clock, ListChecks, Send, Sparkles, Loader2, Monitor, UserCheck, AlertTriangle, Building2, Wrench } from "lucide-react";
+import { useT, useWoTerms, useLocale } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
@@ -19,6 +25,7 @@ import {
   Screen, Head, Field, Chips, MainButton, DoneScreen, SectionLabel, Note, inputCls, textareaCls, scrollToMissing,
 } from "./ui";
 import { errorText, suggestWoSafety, RISK_LEVELS } from "./shared";
+import { windowOpenOf, parseDateOrNull } from "../lib/maintenance-window";
 
 export interface OnboardPlan {
   id: string;
@@ -34,6 +41,14 @@ export interface OnboardPlan {
   assetCurrentHours: number | null;
   activeWorkOrderCode: string | null;
   providerRequests?: Array<{ providerId: string; providerName: string | null }>;
+  // Para la agenda: cuándo se abre la ventana y qué fecha usar en el renglón.
+  lastExecutionDate?: string | null;
+  /** Planes por horas sin fecha propia: la estima el backend por el uso del equipo. */
+  projectedDueDate?: string | null;
+  frequencyMonths?: number | null;
+  windowMode?: "AUTO" | "MANUAL" | null;
+  windowLeadDays?: number | null;
+  windowOpenDate?: string | null;
 }
 
 interface PlanDetail {
@@ -80,72 +95,221 @@ export function useDueLabel() {
   };
 }
 
+/** Hacia adelante la agenda llega hasta acá (decisión del usuario). */
+const HORIZON_MONTHS = 6;
+
+type AgendaState = "run" | "over" | "open" | "wait";
+
+interface AgendaItem {
+  plan: OnboardPlan;
+  /** Vencimiento a mostrar. Null = plan por horas sin fecha ni estimación. */
+  due: Date | null;
+  /** Desde cuándo se puede hacer. Null = el plan no da con qué calcularlo. */
+  open: Date | null;
+  /** La fecha sale del uso promedio del equipo, no del plan. */
+  estimated: boolean;
+  state: AgendaState;
+}
+
+const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+
+/**
+ * Arma la agenda: fecha de vencimiento, apertura de ventana y estado de cada
+ * plan. La regla de la ventana es la misma del Gantt (lib/maintenance-window).
+ */
+function buildAgenda(plans: OnboardPlan[]): { dated: AgendaItem[]; undated: AgendaItem[] } {
+  const today = startOfDay(new Date());
+  const limit = new Date(today.getFullYear(), today.getMonth() + HORIZON_MONTHS, today.getDate());
+  const dated: AgendaItem[] = [];
+  const undated: AgendaItem[] = [];
+
+  for (const plan of plans) {
+    const real = parseDateOrNull(plan.nextDueDate);
+    const projected = parseDateOrNull(plan.projectedDueDate ?? null);
+    const due = real ? startOfDay(real) : projected ? startOfDay(projected) : null;
+    const estimated = !real && !!projected;
+    const open = due ? windowOpenOf(plan, due, parseDateOrNull(plan.lastExecutionDate ?? null)) : null;
+    const state: AgendaState = plan.activeWorkOrderCode ? "run"
+      : due && due < today ? "over"
+      : !open || startOfDay(open) <= today ? "open"
+      : "wait";
+    const item: AgendaItem = { plan, due, open: open ? startOfDay(open) : null, estimated, state };
+
+    if (!due) {
+      // Plan por horas sin fecha: sólo entra si ya vence o está por vencer.
+      if (classifyPlan(plan)) undated.push(item);
+      continue;
+    }
+    // Lo vencido entra siempre; hacia adelante, hasta el horizonte.
+    if (due < today || due <= limit) dated.push(item);
+  }
+
+  dated.sort((a, b) => (a.due!.getTime() - b.due!.getTime()) || a.plan.taskCode.localeCompare(b.plan.taskCode));
+  undated.sort((a, b) => (classifyPlan(a.plan)?.sort ?? 0) - (classifyPlan(b.plan)?.sort ?? 0));
+  return { dated, undated };
+}
+
 export const OnboardPlans: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   const t = useT();
+  const locale = useLocale();
   const woTerms = useWoTerms();
   const dueLabel = useDueLabel();
   const { selectedVessel } = useVesselContext();
   const { data, loading, reload } = useFetch<{ items: OnboardPlan[] }>("/app/pms/maintenance-plans?status=ACTIVE");
-  const [tab, setTab] = useState<"over" | "soon">("over");
+  const [onlyReady, setOnlyReady] = useState(false);
   const [open, setOpen] = useState<OnboardPlan | null>(null);
   const [alert, setAlert] = useState<string | null>(null);
 
+  const { dated, undated } = useMemo(() => buildAgenda(data?.items ?? []), [data]);
   const classified = useMemo(() => (data?.items ?? [])
     .map(p => ({ p, c: classifyPlan(p) }))
-    .filter((x): x is { p: OnboardPlan; c: NonNullable<ReturnType<typeof classifyPlan>> } => !!x.c)
-    .sort((a, b) => a.c.sort - b.c.sort), [data]);
-  const over = classified.filter(x => x.c.group === "over");
-  const soon = classified.filter(x => x.c.group === "soon");
-  const list = tab === "over" ? over : soon;
+    .filter((x): x is Classified => !!x.c), [data]);
+
+  const visible = onlyReady ? dated.filter(i => i.state === "over" || i.state === "open") : dated;
+  const overdue = visible.filter(i => i.state === "over");
+  const ahead = visible.filter(i => i.state !== "over");
+  const undatedVisible = onlyReady ? undated.filter(i => i.state !== "wait") : undated;
+
+  // Meses, en el idioma del tenant: "septiembre 2026".
+  const monthFmt = new Intl.DateTimeFormat(locale === "en" ? "en-US" : locale === "pt" ? "pt-BR" : "es-AR", { month: "long", year: "numeric" });
+  const months: Array<{ key: string; label: string; items: AgendaItem[] }> = [];
+  for (const item of ahead) {
+    const key = `${item.due!.getFullYear()}-${item.due!.getMonth()}`;
+    const last = months[months.length - 1];
+    if (last?.key === key) last.items.push(item);
+    else months.push({ key, label: monthFmt.format(item.due!), items: [item] });
+  }
+
+  const openPlan = (p: OnboardPlan) => p.activeWorkOrderCode
+    ? setAlert(t("ob.plans.hasWo").replace("{code}", p.activeWorkOrderCode))
+    : setOpen(p);
 
   if (open) {
     const siblings = classified.filter(x => x.p.assetId === open.assetId && x.p.id !== open.id && !x.p.activeWorkOrderCode);
     return <PlanOpenForm plan={open} siblings={siblings} onBack={() => { setOpen(null); void reload(); }} onExit={onExit} />;
   }
 
+  const groupLabel = (label: string, n: number) => (
+    <p className="flex justify-between items-center text-xs font-extrabold uppercase tracking-[0.07em] text-text-industrial/45 mt-2 -mb-1.5 px-0.5">
+      <span>{label}</span><span>{n}</span>
+    </p>
+  );
+
   return (
     <Screen head={<Head title={t("ob.plans.title")} sub={selectedVessel?.name} onBack={onExit} />}>
-      <div className="grid grid-cols-2 gap-1 bg-fg/5 p-1 rounded-2xl">
-        {(["over", "soon"] as const).map(k => (
-          <button key={k} type="button" onClick={() => setTab(k)} aria-pressed={tab === k}
-            className={`min-h-11 rounded-xl text-[14.5px] font-extrabold ${tab === k ? "bg-surface text-fg shadow-sm" : "text-text-industrial/60"}`}>
-            {(k === "over" ? t("ob.plans.tabOver") : t("ob.plans.tabSoon")).replace("{n}", String(k === "over" ? over.length : soon.length))}
+      <p className="text-[12.5px] text-text-industrial/60">{t("ob.ag.hint").replace("{wo}", woTerms.abbr)}</p>
+      <div className="flex flex-wrap gap-2">
+        {([[false, t("ob.ag.all")], [true, t("ob.ag.onlyReady")]] as const).map(([v, label]) => (
+          <button key={String(v)} type="button" onClick={() => setOnlyReady(v)} aria-pressed={onlyReady === v}
+            className={`min-h-10 px-3.5 rounded-xl border-[1.5px] text-[13.5px] font-bold ${
+              onlyReady === v ? "bg-fg text-bg border-fg" : "bg-surface text-fg border-fg/10"
+            }`}>
+            {label}
           </button>
         ))}
       </div>
-      <p className="text-[12.5px] text-text-industrial/60">{t("ob.plans.hint").replace("{wo}", woTerms.abbr)}</p>
 
       {loading && !data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
-      ) : list.length === 0 ? (
+      ) : visible.length === 0 && undatedVisible.length === 0 ? (
         <div className="py-10 flex flex-col items-center gap-2 text-text-industrial/50 text-sm text-center">
-          <CalendarClock className="w-7 h-7" />{tab === "over" ? t("ob.plans.emptyOver") : t("ob.plans.emptySoon")}
+          <CalendarClock className="w-7 h-7" />{onlyReady ? t("ob.ag.emptyReady") : t("ob.ag.empty")}
         </div>
-      ) : list.map(({ p, c }) => (
-        // El trabajo YA EN MARCHA se distingue en verde: no es algo que falte
-        // hacer, y tocarlo no abre otra orden (avisa cuál está abierta).
-        <button key={p.id} type="button"
-          onClick={() => p.activeWorkOrderCode ? setAlert(t("ob.plans.hasWo").replace("{code}", p.activeWorkOrderCode)) : setOpen(p)}
-          className={`w-full text-left rounded-2xl p-3.5 flex flex-col gap-1 border ${
-            p.activeWorkOrderCode ? "bg-success/5 border-success/40" : "bg-surface border-fg/10 active:bg-fg/5"
-          }`}>
-          <span className="text-[12.5px] font-semibold text-text-industrial/60">{p.assetName ?? "—"}</span>
-          <span className="text-base font-extrabold leading-snug">{p.title}</span>
-          <span className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 ${
-              p.activeWorkOrderCode ? "bg-success/15 text-success" : c.group === "over" ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning"
-            }`}>
-              {p.activeWorkOrderCode && <Wrench className="w-3.5 h-3.5" />}
-              {p.activeWorkOrderCode ? t("ob.plans.hasWoShort").replace("{code}", p.activeWorkOrderCode) : dueLabel(c)}
-            </span>
-            <span className="font-mono text-xs font-semibold text-text-industrial/60">{p.taskCode}</span>
-          </span>
-        </button>
-      ))}
+      ) : (
+        <>
+          {overdue.length > 0 && groupLabel(t("ob.ag.overdue"), overdue.length)}
+          {overdue.map(item => <AgendaRow key={item.plan.id} item={item} onOpen={openPlan} />)}
+          {months.map(m => (
+            <React.Fragment key={m.key}>
+              {groupLabel(m.label, m.items.length)}
+              {m.items.map(item => <AgendaRow key={item.plan.id} item={item} onOpen={openPlan} />)}
+            </React.Fragment>
+          ))}
+          {undatedVisible.length > 0 && <>
+            {groupLabel(t("ob.ag.byHours"), undatedVisible.length)}
+            {undatedVisible.map(item => (
+              <AgendaRow key={item.plan.id} item={item} onOpen={openPlan}
+                hoursLabel={(() => { const c = classifyPlan(item.plan); return c ? dueLabel(c) : null; })()} />
+            ))}
+          </>}
+          <p className="text-[12.5px] text-text-industrial/50 text-center mt-1">{t("ob.ag.horizon")}</p>
+        </>
+      )}
       {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
     </Screen>
   );
 };
+
+const dm = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+/** Un renglón de la agenda: el día del vencimiento, la tarea y su ventana. */
+function AgendaRow({ item, onOpen, hoursLabel }: {
+  item: AgendaItem; onOpen: (p: OnboardPlan) => void; hoursLabel?: string | null;
+}) {
+  const t = useT();
+  const locale = useLocale();
+  const { plan, due, open, estimated, state } = item;
+  const monthShort = due
+    ? new Intl.DateTimeFormat(locale === "en" ? "en-US" : locale === "pt" ? "pt-BR" : "es-AR", { month: "short" })
+        .format(due).replace(".", "").slice(0, 3)
+    : null;
+
+  const tone = state === "over" ? "bg-danger/5 border-danger/40"
+    : state === "run" ? "bg-success/5 border-success/40"
+    : "bg-surface border-fg/10 active:bg-fg/5";
+  const badge = state === "over" ? "bg-danger/15 text-danger"
+    : state === "run" ? "bg-success/15 text-success"
+    : "bg-fg/5 text-text-industrial/70";
+
+  const today = startOfDay(new Date());
+  const pill = state === "run"
+    ? { cls: "bg-success/15 text-success", icon: <Wrench className="w-3.5 h-3.5" />, text: t("ob.plans.hasWoShort").replace("{code}", plan.activeWorkOrderCode ?? "") }
+    : state === "over"
+      ? { cls: "bg-danger/15 text-danger", icon: <AlertTriangle className="w-3.5 h-3.5" />, text: hoursLabel ?? t("ob.ag.overdueOn").replace("{d}", due ? dm(due) : "") }
+      : due && due.getTime() === today.getTime()
+        ? { cls: "bg-warning/15 text-warning", icon: <AlertTriangle className="w-3.5 h-3.5" />, text: t("ob.ag.dueToday") }
+        : state === "open"
+          ? { cls: "bg-accent/15 text-accent", icon: <CircleCheck className="w-3.5 h-3.5" />, text: hoursLabel ?? t("ob.ag.canDoNow") }
+          : { cls: "bg-fg/5 text-text-industrial/70", icon: <Clock className="w-3.5 h-3.5" />, text: t("ob.ag.fromDate").replace("{d}", open ? dm(open) : "") };
+
+  // Cuánto de la ventana ya pasó (sólo cuando hay ventana y no está vencida).
+  let progress: number | null = null;
+  if (open && due && state !== "over" && state !== "run") {
+    const total = Math.max(1, due.getTime() - open.getTime());
+    progress = Math.min(100, Math.max(0, ((today.getTime() - open.getTime()) / total) * 100));
+  }
+
+  return (
+    <button type="button" onClick={() => onOpen(plan)}
+      className={`w-full text-left rounded-2xl border p-3 flex gap-3 items-stretch ${tone}`}>
+      <span className={`w-[52px] shrink-0 rounded-xl flex flex-col items-center justify-center py-1.5 ${badge}`}>
+        {due ? <>
+          <b className="text-xl font-extrabold leading-none tabular-nums">{String(due.getDate()).padStart(2, "0")}</b>
+          <span className="text-[10.5px] font-extrabold uppercase tracking-wide mt-0.5">{monthShort}</span>
+        </> : <Clock className="w-5 h-5" />}
+      </span>
+      <span className="min-w-0 flex-1 flex flex-col gap-0.5">
+        <span className="text-[12.5px] font-semibold text-text-industrial/60 truncate">{plan.assetName ?? "—"}</span>
+        <span className="text-[15px] font-extrabold leading-snug">{plan.title}</span>
+        {open && due && (
+          <span className="flex items-center gap-1.5 text-[12.5px] text-text-industrial/60 mt-0.5">
+            <CalendarRange className="w-3.5 h-3.5 shrink-0" />
+            {t("ob.ag.window").replace("{from}", dm(open)).replace("{to}", dm(due))}
+            {estimated && <span className="text-[11px] font-bold px-1.5 py-px rounded-full bg-warning/15 text-warning">{t("ob.ag.estimated")}</span>}
+          </span>
+        )}
+        <span className={`self-start mt-1 text-xs font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 ${pill.cls}`}>
+          {pill.icon}{pill.text}
+        </span>
+        {progress !== null && (
+          <span className="block h-1.5 rounded-full bg-fg/10 mt-1.5 overflow-hidden">
+            <span className="block h-full rounded-full bg-accent" style={{ width: `${progress}%` }} />
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
 
 type Classified = { p: OnboardPlan; c: NonNullable<ReturnType<typeof classifyPlan>> };
 

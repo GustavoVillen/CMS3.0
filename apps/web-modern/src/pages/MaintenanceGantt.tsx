@@ -6,6 +6,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useVesselContext } from "../lib/vessel-context";
 import { useT } from "../lib/i18n";
 import { compareSfiGroup, dominantSfiGroup, sfiGroupDigit } from "../lib/utils";
+import { windowOpenOf as windowOpen } from "../lib/maintenance-window";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,35 +111,11 @@ const DAYS_PER_MONTH = 30.44;
  * Ej: una renovación de clase cada 60 meses con 365 días de ventana se dibuja
  * como un año, no como cinco.
  *
- * Prioridad (misma semántica que el modal del plan y que execution-windows):
- *   1. windowOpenDate cargada a mano → manda.
- *   2. MANUAL con windowLeadDays → vencimiento − esos días.
- *   3. AUTO → ~10% del ciclo (frequencyMonths, o el largo real última→próxima).
- * Se recorta contra la última ejecución: la ventana nunca puede abrir antes de
- * que la tarea se haya hecho por última vez.
+ * La regla vive en lib/maintenance-window: la comparte con la agenda del
+ * celular, para que las dos pantallas digan lo mismo.
  */
-function windowOpenOf(p: MaintenancePlan, nextD: Date | null, lastD: Date | null): Date | null {
-  if (!nextD) return null;
-
-  const explicit = parseDate(p.windowOpenDate);
-  if (explicit) return explicit;
-
-  let leadDays: number | null = null;
-  if (p.windowMode === "MANUAL" && p.windowLeadDays && p.windowLeadDays > 0) {
-    leadDays = p.windowLeadDays;
-  } else if (p.frequencyMonths && p.frequencyMonths > 0) {
-    leadDays = p.frequencyMonths * DAYS_PER_MONTH * 0.1;
-  } else if (lastD) {
-    // Planes por horas: no hay frecuencia en meses, pero el largo del ciclo
-    // se puede leer del propio tramo última ejecución → próximo vencimiento.
-    leadDays = ((nextD.getTime() - lastD.getTime()) / DAY_MS) * 0.1;
-  }
-  if (leadDays == null || !(leadDays > 0)) return null;
-
-  const open = new Date(nextD.getTime() - leadDays * DAY_MS);
-  if (lastD && open < lastD) return lastD;
-  return open;
-}
+const windowOpenOf = (p: MaintenancePlan, nextD: Date | null, lastD: Date | null): Date | null =>
+  windowOpen(p, nextD, lastD);
 
 // ─── Legend ───────────────────────────────────────────────────────────────────
 
