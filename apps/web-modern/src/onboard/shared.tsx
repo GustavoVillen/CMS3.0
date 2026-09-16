@@ -1,12 +1,13 @@
 // Datos y controles que comparten varias pantallas de la App a bordo.
 
-import React, { useMemo, useRef } from "react";
-import { Mic, Square, Camera, X } from "lucide-react";
+import React, { useMemo, useRef, useState } from "react";
+import { Mic, Square, Camera, X, Search, Building2, Info } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { useSpeechToText } from "../lib/use-speech-to-text";
 import { WO_OPEN_STATUSES, type PickerWorkOrder } from "../components/service-requests/OpenWorkOrdersPicker";
+import { Field, Chips, RadioRow, Note, inputCls } from "./ui";
 
 /** Mensaje legible de un error de la API, con respaldo en el idioma del tenant. */
 export function errorText(e: unknown, fallback: string): string {
@@ -84,6 +85,75 @@ export function PhotoStrip({ photos, onChange }: { photos: PickedPhoto[]; onChan
         </div>
       ))}
     </div>
+  );
+}
+
+export interface ProviderOption { id: string; name: string; category?: string | null }
+
+/** Tipo de solicitud del formulario de SS (`purchaseRequestKinds`). */
+export const SR_KINDS = [
+  { value: "NORMAL", key: "ob.srKind.normal" },
+  { value: "AFECTA SEGURIDAD", key: "ob.srKind.safety" },
+  { value: "AFECTA SERVICIO", key: "ob.srKind.service" },
+] as const;
+
+/**
+ * Los dos recuadros que aparecen al marcar "Tercerizado": a qué taller se le
+ * encarga y qué tipo de solicitud es. Los comparten el alta de OT y la apertura
+ * de la OT desde un plan, así el pedido al taller se carga igual por las dos
+ * puertas y la SS sale con los mismos datos.
+ *
+ * La lista de talleres se pide sólo cuando el recuadro se muestra: en el
+ * celular, no traerla hasta que hace falta es un viaje menos.
+ */
+export function ProviderFields({ provider, onProvider, kinds, onKinds, missProvider, missKinds, note }: {
+  provider: ProviderOption | null;
+  onProvider: (p: ProviderOption | null) => void;
+  kinds: string[];
+  onKinds: (kinds: string[]) => void;
+  missProvider?: boolean;
+  missKinds?: boolean;
+  /** Aviso al pie (qué pasa con la SS al enviar). */
+  note?: string;
+}) {
+  const t = useT();
+  const [query, setQuery] = useState("");
+  const providers = useFetch<{ items: ProviderOption[] }>("/app/providers?status=ACTIVE");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = providers.data?.items ?? [];
+    return (q ? list.filter(p => `${p.name} ${p.category ?? ""}`.toLowerCase().includes(q)) : list).slice(0, 40);
+  }, [providers.data, query]);
+
+  return (
+    <>
+      <Field label={t("ob.provider")} missing={missProvider}>
+        {provider ? (
+          <div className="flex items-center gap-3 px-3.5 py-3 rounded-2xl bg-accent/10 border-[1.5px] border-accent">
+            <Building2 className="w-5 h-5 text-accent shrink-0" />
+            <div className="min-w-0 flex-1">
+              <b className="block text-[15px] font-bold">{provider.name}</b>
+              {provider.category && <span className="block text-[12.5px] text-text-industrial/60 truncate">{provider.category}</span>}
+            </div>
+            <button type="button" onClick={() => onProvider(null)} className="min-h-9 px-3 rounded-xl border border-fg/10 bg-surface text-[13px] font-semibold">{t("ob.change")}</button>
+          </div>
+        ) : <>
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-industrial/40" />
+            <input id="ob-provider-q" className={`${inputCls} pl-9`} value={query} onChange={e => setQuery(e.target.value)} placeholder={t("ob.providerSearch")} />
+          </div>
+          <div className="flex flex-col gap-2">
+            {filtered.map(p => <RadioRow key={p.id} on={false} onClick={() => onProvider(p)} title={p.name} sub={p.category} />)}
+            {!providers.loading && filtered.length === 0 && <p className="text-[13px] text-text-industrial/50 text-center py-3">{t("ob.noResults")}</p>}
+          </div>
+        </>}
+      </Field>
+      <Field label={t("ob.srKind")} hint={t("ob.srKindHint")} missing={missKinds}>
+        <Chips options={SR_KINDS.map(k => ({ value: k.value, label: t(k.key) }))} value={kinds}
+          onChange={v => onKinds(kinds.includes(v) ? kinds.filter(x => x !== v) : [...kinds, v])} />
+      </Field>
+      {note && <Note icon={<Info className="w-[17px] h-[17px] shrink-0 mt-px" />}>{note}</Note>}
+    </>
   );
 }
 

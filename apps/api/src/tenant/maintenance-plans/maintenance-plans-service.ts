@@ -236,6 +236,16 @@ export interface OpenFormalWorkOrderInput {
    * Clave = providerId original del plan, valor = providerId elegido.
    */
   providerOverride?: Record<string, string> | null;
+  /**
+   * Taller para un plan que NO define ninguno: quien abre la OT marcó
+   * "Tercerizado" y eligió a quién encargárselo (App a bordo). Abre su SS
+   * junto con la OT, igual que los planes de área PROVEEDOR. Se IGNORA si los
+   * planes ya resuelven talleres propios — ésos mandan, y cambiarlos es
+   * `providerOverride`.
+   */
+  providerId?: string | null;
+  /** Tipo de solicitud de esa SS (Normal / Afecta seguridad / Afecta servicio). */
+  purchaseRequestKinds?: string[] | null;
 }
 
 interface RecalculatePlanInput {
@@ -2118,7 +2128,37 @@ export async function openFormalWorkOrder(
     }
   }
   /** Un pedido por taller; `entries` son los ítems del PDM que le tocan. */
-  const providerRequests = [...byProvider.entries()].map(([providerId, entries]) => ({ providerId, entries }));
+  const providerRequests: Array<{
+    providerId: string;
+    entries: Array<{ purpose: string | null; plan: MaintenancePlanRecord }>;
+    /** Taller elegido a mano al abrir la OT, no configurado en el plan. */
+    manual?: boolean;
+  }> = [...byProvider.entries()].map(([providerId, entries]) => ({ providerId, entries }));
+
+  // Ningún plan define taller y quien abre la OT eligió uno: se le encarga a él
+  // todo lo que la OT cubre (una sola SS, misma regla de "una SS por taller").
+  // Va acá arriba para que TODO lo que sigue —el proveedor de la OT, la
+  // exclusión del express, la creación de la SS y la auditoría— lo trate igual
+  // que a un taller que viniera del plan.
+  const manualProviderId = providerRequests.length === 0
+    ? normalizeOptionalText(payload.providerId)
+    : null;
+  if (manualProviderId) {
+    const exists = await (prismaRaw as any).provider.findFirst({
+      where: { id: manualProviderId, tenantId: plan.tenantId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!exists) throw new RouteError(400, "PROVIDER_NOT_FOUND", "El proveedor indicado no existe en esta empresa.");
+    providerRequests.push({
+      providerId: manualProviderId,
+      entries: allPlans.map((p) => ({ purpose: null, plan: p })),
+      manual: true,
+    });
+  }
+  const purchaseRequestKinds = Array.isArray(payload.purchaseRequestKinds)
+    ? payload.purchaseRequestKinds.map((v) => String(v).trim()).filter(Boolean)
+    : [];
+
   const woProviderId = collapseProviderId(providerRequests.map(r => ({ providerId: r.providerId, purpose: null })));
 
   // ── OT Express ──────────────────────────────────────────────────────────────
@@ -2330,6 +2370,9 @@ export async function openFormalWorkOrder(
             description: servicio,
             causes: causas,
             priority: payload.priority ?? "MEDIUM",
+            // Sólo el taller elegido a mano trae el tipo de solicitud: los del
+            // plan no lo preguntan y se completa después, desde la PC.
+            ...(req.manual && purchaseRequestKinds.length > 0 ? { purchaseRequestKinds } : {}),
             ...ssStamps,
           },
         });
@@ -2364,6 +2407,9 @@ export async function openFormalWorkOrder(
       inspectionAutoAuthorized: isInspection || undefined,
       // Cuántas SS se crearon solas (una por proveedor del plan).
       autoServiceRequests: providerRequests.length || undefined,
+      // Taller elegido a mano al abrir la OT (el plan no definía ninguno): la
+      // SS compromete gasto, así que queda explícito quién lo eligió y a quién.
+      manualProviderId: manualProviderId ?? undefined,
     },
   });
   return woTxResult;

@@ -8,7 +8,7 @@
 // OT; presupuestos, adjuntos y seguimiento del taller quedan para la PC.
 
 import React, { useMemo, useState } from "react";
-import { Users, Building2, Send, ArrowRight, Sparkles, Loader2, Search, Cog, UserCheck, Monitor, AlertTriangle, Info } from "lucide-react";
+import { Users, Building2, Send, ArrowRight, Sparkles, Loader2, Search, Cog, UserCheck, Monitor, AlertTriangle } from "lucide-react";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useFetch } from "../lib/hooks";
@@ -19,20 +19,17 @@ import {
   WO_REQUESTED_BY, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_PRIORITY_FORM_LABELS,
 } from "../lib/wo-form-catalog";
 import {
-  Screen, Head, Field, Chips, MainButton, DoneScreen, RadioRow, OptionCard, Note, inputCls, textareaCls, scrollToMissing,
+  Screen, Head, Field, Chips, MainButton, DoneScreen, RadioRow, OptionCard, inputCls, textareaCls, scrollToMissing,
 } from "./ui";
-import { DictateButton, PhotoButton, PhotoStrip, errorText, suggestWoSafety, type PickedPhoto } from "./shared";
+import {
+  DictateButton, PhotoButton, PhotoStrip, ProviderFields, errorText, suggestWoSafety,
+  type PickedPhoto, type ProviderOption,
+} from "./shared";
 import { LocationField, RiskButtons } from "./OnboardPlans";
 
 interface AssetOption { id: string; assetCode: string; name: string | null }
-interface ProviderOption { id: string; name: string; category?: string | null }
 
 const PRIORITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
-const SR_KINDS = [
-  { value: "NORMAL", key: "ob.srKind.normal" },
-  { value: "AFECTA SEGURIDAD", key: "ob.srKind.safety" },
-  { value: "AFECTA SERVICIO", key: "ob.srKind.service" },
-] as const;
 
 /** Título de la OT: la primera oración de lo que hay que hacer, sin pasarse de largo. */
 function titleFrom(text: string): string {
@@ -52,7 +49,6 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
   const { selectedVesselCode, selectedVessel } = useVesselContext();
 
   const assets = useFetch<{ items: AssetOption[] }>("/app/pms/assets?limit=500");
-  const providers = useFetch<{ items: ProviderOption[] }>("/app/providers?status=ACTIVE");
 
   const [step, setStep] = useState(1);
   const [tried, setTried] = useState(false);
@@ -65,7 +61,6 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
   const [priority, setPriority] = useState<string | null>(null);
   // Paso 2
   const [who, setWho] = useState<"TRIPULACION" | "TERCERIZADO" | null>(null);
-  const [providerQuery, setProviderQuery] = useState("");
   const [provider, setProvider] = useState<ProviderOption | null>(null);
   const [srKinds, setSrKinds] = useState<string[]>([]);
   // Paso 3
@@ -87,12 +82,6 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
     const list = assets.data?.items ?? [];
     return (q ? list.filter(a => `${a.name ?? ""} ${a.assetCode}`.toLowerCase().includes(q)) : list).slice(0, 40);
   }, [assets.data, assetQuery]);
-  const filteredProviders = useMemo(() => {
-    const q = providerQuery.trim().toLowerCase();
-    const list = providers.data?.items ?? [];
-    return (q ? list.filter(p => `${p.name} ${p.category ?? ""}`.toLowerCase().includes(q)) : list).slice(0, 40);
-  }, [providers.data, providerQuery]);
-
   const missing1 = { asset: !asset, text: !text.trim(), kind: !kind, priority: !priority };
   const missing2 = { who: !who, provider: who === "TERCERIZADO" && !provider, srKinds: who === "TERCERIZADO" && srKinds.length === 0 };
   const missing3 = {
@@ -275,31 +264,13 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
               title={t("ob.newWo.shop")} sub={t("ob.newWo.shopSub").replace("{wo}", woTerms.abbr)} />
           </div>
         </Field>
-        {who === "TERCERIZADO" && <>
-          <Field label={t("ob.provider")} missing={miss(missing2, "provider")}>
-            {provider ? (
-              <div className="flex items-center gap-3 px-3.5 py-3 rounded-2xl bg-accent/10 border-[1.5px] border-accent">
-                <Building2 className="w-5 h-5 text-accent shrink-0" />
-                <div className="min-w-0 flex-1"><b className="block text-[15px] font-bold">{provider.name}</b>{provider.category && <span className="block text-[12.5px] text-text-industrial/60 truncate">{provider.category}</span>}</div>
-                <button type="button" onClick={() => setProvider(null)} className="min-h-9 px-3 rounded-xl border border-fg/10 bg-surface text-[13px] font-semibold">{t("ob.change")}</button>
-              </div>
-            ) : <>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-industrial/40" />
-                <input id="ob-provider-q" className={`${inputCls} pl-9`} value={providerQuery} onChange={e => setProviderQuery(e.target.value)} placeholder={t("ob.providerSearch")} />
-              </div>
-              <div className="flex flex-col gap-2">
-                {filteredProviders.map(p => <RadioRow key={p.id} on={false} onClick={() => setProvider(p)} title={p.name} sub={p.category} />)}
-                {!providers.loading && filteredProviders.length === 0 && <p className="text-[13px] text-text-industrial/50 text-center py-3">{t("ob.noResults")}</p>}
-              </div>
-            </>}
-          </Field>
-          <Field label={t("ob.srKind")} hint={t("ob.srKindHint")} missing={miss(missing2, "srKinds")}>
-            <Chips options={SR_KINDS.map(k => ({ value: k.value, label: t(k.key) }))} value={srKinds}
-              onChange={v => setSrKinds(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])} />
-          </Field>
-          <Note icon={<Info className="w-[17px] h-[17px] shrink-0 mt-px" />}>{t("ob.newWo.srNote")}</Note>
-        </>}
+        {who === "TERCERIZADO" && (
+          <ProviderFields
+            provider={provider} onProvider={setProvider}
+            kinds={srKinds} onKinds={setSrKinds}
+            missProvider={miss(missing2, "provider")} missKinds={miss(missing2, "srKinds")}
+            note={t("ob.newWo.srNote")} />
+        )}
       </>}
 
       {step === 3 && <>

@@ -24,7 +24,7 @@ import { WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS } from "../lib/wo-form
 import {
   Screen, Head, Field, Chips, MainButton, DoneScreen, SectionLabel, Note, inputCls, textareaCls, scrollToMissing,
 } from "./ui";
-import { errorText, suggestWoSafety, RISK_LEVELS } from "./shared";
+import { errorText, suggestWoSafety, ProviderFields, RISK_LEVELS, type ProviderOption } from "./shared";
 import { windowOpenOf, parseDateOrNull } from "../lib/maintenance-window";
 
 export interface OnboardPlan {
@@ -328,6 +328,9 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
   const [extra, setExtra] = useState<Set<string>>(new Set());
   const [requestedBy, setRequestedBy] = useState<string | null>(null);
   const [assignedTo, setAssignedTo] = useState<string | null>(plan.department === "PROVEEDOR" ? "TERCERIZADO" : "TRIPULACION");
+  // Taller elegido a mano: sólo cuando el plan no trae el suyo (ver `pideTaller`).
+  const [provider, setProvider] = useState<ProviderOption | null>(null);
+  const [srKinds, setSrKinds] = useState<string[]>([]);
   const [system, setSystem] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [criteria, setCriteria] = useState("");
@@ -351,9 +354,14 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
   const needLoto = !!detail && !detail.loto?.trim();
   const needRisk = !!detail && !detail.riskLevel;
   const providers = (plan.providerRequests ?? []).map(r => r.providerName).filter(Boolean) as string[];
+  // El plan de taller ya sabe a quién se le encarga y su SS se abre sola. Si el
+  // plan NO trae taller y quien abre la OT marca "Tercerizado", hay que
+  // preguntarlo: sin taller no hay SS y el pedido quedaría sin hacer.
+  const pideTaller = assignedTo === "TERCERIZADO" && (plan.providerRequests ?? []).length === 0;
 
   const missing = {
     requestedBy: !requestedBy, assignedTo: !assignedTo, system: !system, location: !location.trim(),
+    provider: pideTaller && !provider, srKinds: pideTaller && srKinds.length === 0,
     criteria: needCriteria && !criteria.trim(), loto: needLoto && !loto.trim(), risk: needRisk && !risk,
   };
   const missingCount = Object.values(missing).filter(Boolean).length + (detail ? 0 : 1);
@@ -388,6 +396,9 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
         systemArea: system,
         location: location.trim(),
         additionalPlanIds: [...extra],
+        // Taller elegido a mano: el backend abre la SS junto con la OT, misma
+        // vía que usan los planes que ya traen taller.
+        ...(pideTaller && provider ? { providerId: provider.id, purchaseRequestKinds: srKinds } : {}),
         // Sólo lo que el plan no traía: undefined = heredar del plan.
         acceptanceCriteria: needCriteria ? criteria.trim() : undefined,
         loto: needLoto ? loto.trim() : undefined,
@@ -505,6 +516,13 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
         <Field label={t("wo.modal.assignedTo")} missing={req("assignedTo")} hint={t("ob.plans.assignedHint")}>
           <Chips options={WO_ASSIGNED_TO} value={assignedTo} onChange={v => setAssignedTo(v === assignedTo ? null : v)} />
         </Field>
+        {pideTaller && (
+          <ProviderFields
+            provider={provider} onProvider={setProvider}
+            kinds={srKinds} onKinds={setSrKinds}
+            missProvider={req("provider")} missKinds={req("srKinds")}
+            note={t("ob.plans.srNote")} />
+        )}
         <Field label={t("wo.modal.system")} missing={req("system")}>
           <Chips options={WO_SYSTEM_AREAS} value={system} onChange={v => setSystem(v === system ? null : v)} />
         </Field>
