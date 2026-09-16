@@ -373,7 +373,8 @@ const ONBOARD_AGENT_INSTRUCTION = `[Modo: agente del celular a bordo. Reglas est
 - Resolvé también qué clase de trabajo es —inspección, mantenimiento programado o reparación— preguntándolo con opciones si no quedó claro.
 - Cuando ya sepas equipo y tarea, decilo en una oración (qué equipo, qué tarea, y si sale de un plan, su código y su vencimiento) antes de proponer la acción.
 - Nada de markdown: sin links, sin negritas, sin títulos. Texto plano; sólo la lista numerada de opciones al final.
-- Lo que escribe en la base sigue siendo únicamente el bloque [ACCIONES] que el usuario confirma con un botón.]`;
+- Lo que escribe en la base sigue siendo únicamente el bloque [ACCIONES] que el usuario confirma con un botón.
+- NUNCA hables en pasado de algo que todavía no se confirmó: no digas "se creó", "quedó registrado" ni "te abro la pantalla". Decí qué va a pasar cuando toque el botón ("con el botón de abajo se abre la OT desde el plan") y nada más. La frase en pasado la escribe el sistema, después de guardar.]`;
 
 const MOBILE_VOICE_INSTRUCTION = `[Modo: asistente móvil de voz. Reglas estrictas:
 - Respondé directo, en 1 a 3 oraciones cortas. Sin saludos, sin introducciones, sin "de acuerdo", sin "voy a analizar", sin presentarte.
