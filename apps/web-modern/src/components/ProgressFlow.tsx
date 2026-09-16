@@ -22,6 +22,7 @@
 import React from "react";
 import { ChevronDown, Handshake, Wrench, Loader2, ChevronLeft } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { api } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -32,12 +33,15 @@ import {
   type PickerWorkOrder,
 } from "./service-requests/OpenWorkOrdersPicker";
 import { HojaRutaBox } from "./service-requests/HojaRutaBox";
+import { SampleStepsBox } from "./service-requests/SampleStepsBox";
 import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
 
 /** Sólo lo que la lista necesita mostrar. */
 interface ProgressSr {
   id: string;
   serviceRequestCode: string;
+  /** Define qué paso de la muestra está habilitado (AUTORIZADA → IN_PROGRESS → COMPLETED). */
+  status: string;
   title: string | null;
   description: string | null;
   vesselCode: string;
@@ -104,10 +108,29 @@ function Picker({ onClose, onPickWo, onPickSr }: {
   // usuario: nunca se ve una OT ni una SS de un buque ajeno.
   const wo = useFetch<{ items: PickerWorkOrder[] }>("/app/work-orders");
   const sr = useFetch<{ items: ProgressSr[] }>("/app/pms/service-requests?status=IN_PROGRESS");
+  // Los pedidos AUTORIZADOS todavía no salieron del buque, pero si llevan
+  // muestras al laboratorio hay algo que registrar antes de mandarlos: los
+  // números de los frascos. Sólo esos se suman a la lista (el resto sigue
+  // apareciendo recién cuando está en ejecución).
+  const srAuth = useFetch<{ items: ProgressSr[] }>("/app/pms/service-requests?status=AUTORIZADA");
+  const [conMuestras, setConMuestras] = React.useState<ProgressSr[]>([]);
+  React.useEffect(() => {
+    const candidatas = (srAuth.data?.items ?? []).slice(0, 12);
+    if (candidatas.length === 0) { setConMuestras([]); return; }
+    let vivo = true;
+    void Promise.all(candidatas.map(async s => {
+      try {
+        const res = await api.get<{ carriesSamples: boolean }>(`/app/pms/service-requests/${s.id}/lab-samples`);
+        return res.carriesSamples ? s : null;
+      } catch { return null; }
+    })).then(rows => { if (vivo) setConMuestras(rows.filter((x): x is ProgressSr => !!x)); });
+    return () => { vivo = false; };
+  }, [srAuth.data]);
+
   const cargando = wo.loading || sr.loading;
 
   const abiertas = (wo.data?.items ?? []).filter(w => WO_OPEN_STATUSES.includes(w.status));
-  const solicitudes = sr.data?.items ?? [];
+  const solicitudes = [...(sr.data?.items ?? []), ...conMuestras];
   const grupos = groupByAsset(abiertas, solicitudes, t("dashboard.progress.noAsset"));
   // El buque se nombra en el equipo sólo cuando hay más de uno a la vista (el
   // selector en "Todos los buques"): con un buque elegido sería repetirlo en
@@ -222,6 +245,12 @@ function Picker({ onClose, onPickWo, onPickSr }: {
                         <span className="flex-1 min-w-0 flex flex-col-reverse sm:flex-row sm:items-center sm:gap-2">
                           <span className="flex items-center gap-2 shrink-0">
                             <span className="font-mono text-[11px] font-bold text-accent">{s.serviceRequestCode}</span>
+                            {/* Todavía no salió del buque: lo que hay para hacer son los frascos. */}
+                            {s.status === "AUTORIZADA" && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                                {t("ss.samp.toSend")}
+                              </span>
+                            )}
                             {s.openDate && (
                               <span className="sm:hidden text-[10px] text-text-industrial/40 tabular-nums">{fmtDate(s.openDate)}</span>
                             )}
@@ -256,6 +285,19 @@ function SsHojaRuta({ sr, onBack, onClose }: {
   // Sólo para gatear el borrado de novedades, igual que en el formulario de la SS.
   const isAdmin = user?.role === "TENANT_ADMIN";
   const vesselName = vessels.find(v => v.code === sr.vesselCode)?.name ?? sr.vesselCode;
+  // Pedido al laboratorio: arriba van los tres pasos de la muestra y la hoja de
+  // ruta queda plegada, de historial. En los demás pedidos no cambia nada.
+  const [status, setStatus] = React.useState(sr.status);
+  const [llevaMuestras, setLlevaMuestras] = React.useState<boolean | null>(null);
+  const [verHoja, setVerHoja] = React.useState(false);
+  const [hojaKey, setHojaKey] = React.useState(0);
+  const refrescar = React.useCallback(async () => {
+    setHojaKey(k => k + 1);
+    try {
+      const fresh = await api.get<{ status: string }>(`/app/pms/service-requests/${sr.id}`);
+      if (fresh?.status) setStatus(fresh.status);
+    } catch { /* si falla, el estado queda como estaba */ }
+  }, [sr.id]);
 
   return (
     // El clic afuera NO cierra: perder la novedad a medio escribir por un clic al costado
@@ -277,14 +319,38 @@ function SsHojaRuta({ sr, onBack, onClose }: {
           <ModalCloseButton onClose={onClose} />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="border border-fg/25 rounded-lg overflow-hidden">
-            <div className="px-2 py-1 bg-fg/10 text-[10px] font-bold tracking-widest text-text-industrial uppercase">
-              {t("dashboard.ssProgress.hojaRuta")}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
+          {/* Sólo aparece si el pedido lleva muestras al laboratorio. */}
+          <SampleStepsBox
+            srId={sr.id}
+            srStatus={status}
+            providerName={srTaller(sr) || null}
+            onChanged={refrescar}
+            onDetected={setLlevaMuestras}
+          />
+
+          {/* Con muestras, la hoja de ruta pasa a ser el historial y arranca
+              plegada; en cualquier otro pedido se ve como siempre. */}
+          {llevaMuestras && (
+            <button
+              type="button"
+              onClick={() => setVerHoja(v => !v)}
+              className="self-center flex items-center gap-1.5 min-h-11 text-[13px] font-bold text-accent"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${verHoja ? "" : "-rotate-90"}`} />
+              {verHoja ? t("ss.samp.hideLog") : t("ss.samp.showLog")}
+            </button>
+          )}
+
+          {(llevaMuestras === false || verHoja) && (
+            <div className="border border-fg/25 rounded-lg overflow-hidden">
+              <div className="px-2 py-1 bg-fg/10 text-[10px] font-bold tracking-widest text-text-industrial uppercase">
+                {t("dashboard.ssProgress.hojaRuta")}
+              </div>
+              {/* Las novedades a mano siguen disponibles, como siempre. */}
+              <HojaRutaBox key={hojaKey} srId={sr.id} editable isAdmin={!!isAdmin} />
             </div>
-            {/* La SS está EN EJECUCIÓN: siempre admite novedades nuevas. */}
-            <HojaRutaBox srId={sr.id} editable isAdmin={!!isAdmin} />
-          </div>
+          )}
         </div>
 
         <button

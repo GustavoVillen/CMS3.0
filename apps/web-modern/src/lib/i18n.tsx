@@ -5104,6 +5104,37 @@ const dict = {
   "ob.ag.empty": { es: "No hay tareas vencidas ni en los próximos 6 meses.", en: "No tasks overdue or due in the next 6 months.", pt: "Não há tarefas vencidas nem nos próximos 6 meses." },
   "ob.ag.emptyReady": { es: "No hay ninguna tarea lista para hacer hoy.", en: "No task is ready to do today.", pt: "Nenhuma tarefa está pronta para hoje." },
 
+  // ── La muestra en tres pasos: registro de avance del pedido al laboratorio (V33) ──
+  "ss.samp.toSend": { es: "Por enviar", en: "To send", pt: "Para enviar" },
+  "ss.samp.step1": { es: "Se toma la muestra", en: "Sample taken", pt: "Amostra coletada" },
+  "ss.samp.step1sub": { es: "Anotá el número de cada frasco", en: "Write down each bottle number", pt: "Anote o número de cada frasco" },
+  "ss.samp.step1done": { es: "{n} frascos numerados", en: "{n} bottles numbered", pt: "{n} frascos numerados" },
+  "ss.samp.numberPh": { es: "N° frasco", en: "Bottle no.", pt: "Nº frasco" },
+  "ss.samp.numberOf": { es: "Número de muestra de {asset}", en: "Sample number for {asset}", pt: "Número da amostra de {asset}" },
+  "ss.samp.registerAll": { es: "Registrar los números", en: "Save the numbers", pt: "Registrar os números" },
+  "ss.samp.registerSome": { es: "Registrar {n} de {total} números", en: "Save {n} of {total} numbers", pt: "Registrar {n} de {total} números" },
+  "ss.samp.missingHint": { es: "Quedan {n} sin número. Se puede guardar igual y completarlos después.", en: "{n} still have no number. You can save anyway and complete them later.", pt: "Faltam {n} sem número. Pode salvar assim mesmo e completar depois." },
+  "ss.samp.step2": { es: "Se envía al laboratorio", en: "Sent to the lab", pt: "Enviada ao laboratório" },
+  "ss.samp.step2sub": { es: "Con la fecha de hoy", en: "With today's date", pt: "Com a data de hoje" },
+  "ss.samp.step2done": { es: "Enviada a {lab}", en: "Sent to {lab}", pt: "Enviada a {lab}" },
+  "ss.samp.step2locked": { es: "Primero registrá la toma", en: "Log the sampling first", pt: "Registre primeiro a coleta" },
+  "ss.samp.sendToday": { es: "Enviar hoy ({d})", en: "Send today ({d})", pt: "Enviar hoje ({d})" },
+  "ss.samp.sendNote": { es: "Queda asentado en la hoja de ruta y el pedido pasa a En ejecución. El correo al laboratorio se manda desde la PC.", en: "It is logged in the tracking sheet and the request moves to In progress. The email to the lab is sent from the PC.", pt: "Fica registrado na folha de rota e o pedido passa a Em execução. O e-mail ao laboratório é enviado pelo PC." },
+  "ss.samp.step3": { es: "Se recibe el resultado", en: "Result received", pt: "Resultado recebido" },
+  "ss.samp.step3sub": { es: "Cuando llega el informe del laboratorio", en: "When the lab report arrives", pt: "Quando chega o laudo do laboratório" },
+  "ss.samp.step3done": { es: "Pedido cerrado", en: "Request closed", pt: "Pedido fechado" },
+  "ss.samp.step3locked": { es: "Primero enviala al laboratorio", en: "Send it to the lab first", pt: "Envie primeiro ao laboratório" },
+  "ss.samp.markReceived": { es: "Marcar resultado recibido", en: "Mark result received", pt: "Marcar resultado recebido" },
+  "ss.samp.whoReceives": { es: "¿Quién lo recibe?", en: "Who receives it?", pt: "Quem recebe?" },
+  "ss.samp.conform": { es: "¿Conforme con el servicio?", en: "Satisfied with the service?", pt: "Conforme com o serviço?" },
+  "ss.samp.closesRequest": { es: "Esto cierra el pedido al laboratorio. Los valores del informe se cargan después, desde la PC.", en: "This closes the lab request. The report values are loaded later, from the PC.", pt: "Isto fecha o pedido ao laboratório. Os valores do laudo são carregados depois, pelo PC." },
+  "ss.samp.resultOnPc": { es: "Los valores del informe (viscosidad, hierro, agua…) se cargan desde la PC, en Muestreos y Análisis.", en: "The report values (viscosity, iron, water…) are loaded from the PC, in Sampling and Analysis.", pt: "Os valores do laudo (viscosidade, ferro, água…) são carregados pelo PC, em Amostragens e Análises." },
+  "ss.samp.showLog": { es: "Ver la hoja de ruta del pedido", en: "Show the request tracking sheet", pt: "Ver a folha de rota do pedido" },
+  "ss.samp.hideLog": { es: "Ocultar la hoja de ruta", en: "Hide the tracking sheet", pt: "Ocultar a folha de rota" },
+  "ss.samp.saveFailed": { es: "No se pudieron guardar los números.", en: "The numbers could not be saved.", pt: "Não foi possível salvar os números." },
+  "ss.samp.sendFailed": { es: "No se pudo enviar al laboratorio.", en: "It could not be sent to the lab.", pt: "Não foi possível enviar ao laboratório." },
+  "ss.samp.receiveFailed": { es: "No se pudo cerrar el pedido.", en: "The request could not be closed.", pt: "Não foi possível fechar o pedido." },
+
 } satisfies Record<string, Record<Locale, string>>;
 
 export type TranslationKey = keyof typeof dict;
