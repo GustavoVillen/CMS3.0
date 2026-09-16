@@ -45,7 +45,13 @@ export interface PickerWorkOrder {
  */
 export const WO_OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
 
-function groupByAsset(items: PickerWorkOrder[]) {
+/**
+ * Las OT, agrupadas por equipo. Compartido con la App a bordo (el paso "¿para
+ * qué trabajo?" del consumo de repuestos), para que la PC y el celular agrupen
+ * con el mismo criterio. Sale ordenado alfabéticamente; quien lo use puede
+ * reordenar.
+ */
+export function groupByAsset(items: PickerWorkOrder[]) {
   const map = new Map<string, { label: string; items: PickerWorkOrder[] }>();
   for (const w of items) {
     const key = w.assetId ?? w.assetName ?? "—";

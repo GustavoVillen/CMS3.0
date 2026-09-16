@@ -14,12 +14,13 @@
 // pero no bloquea, igual que en la PC: queda para revisar el inventario.
 
 import React, { useMemo, useState } from "react";
-import { PackageMinus, Package, History, Minus, Plus, X, Loader2, Search, AlertTriangle, ArrowLeft, Boxes } from "lucide-react";
-import { useT, useWoTerms } from "../lib/i18n";
+import { PackageMinus, Package, History, Minus, Plus, X, Loader2, Search, AlertTriangle, ArrowLeft, Boxes, Cog, ChevronRight } from "lucide-react";
+import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useVesselContext } from "../lib/vessel-context";
 import { AlertDialog } from "../components/AlertDialog";
+import { groupByAsset, type PickerWorkOrder } from "../components/service-requests/OpenWorkOrdersPicker";
 import { Screen, Head, MainButton, DoneScreen, Sheet, inputCls } from "./ui";
 import { errorText, useOpenWorkOrders } from "./shared";
 
@@ -58,6 +59,17 @@ function categoryKey(name: string): string {
 }
 const hasAccent = (s: string) => (/[áéíóúüñÁÉÍÓÚÜÑ]/.test(s) ? 1 : 0);
 
+/**
+ * Estado de una OT en la lista de "¿para qué trabajo?". Mismo criterio que el
+ * selector de la PC (WoStatusChip): diferida, vencida o abierta. Acá se pinta
+ * aparte porque en el celular ningún texto baja de 13px.
+ */
+function woState(w: PickerWorkOrder, t: (k: TranslationKey) => string): { cls: string; text: string } {
+  if (w.status === "ON_HOLD" || w.status === "DEFERRED") return { cls: "bg-warning/15 text-warning", text: t("wo.status.postponed") };
+  if (w.dueDate && new Date(w.dueDate) < new Date()) return { cls: "bg-danger/15 text-danger", text: t("wo.status.overdue") };
+  return { cls: "bg-success/15 text-success", text: t("wo.status.open") };
+}
+
 interface CategoryGroup { key: string; label: string; items: SpareRow[] }
 
 /** Agrupa el pañol por categoría, primero las que más repuestos tienen. */
@@ -92,6 +104,7 @@ export const OnboardSpares: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   const spares = useFetch<{ items: SpareRow[] }>(selectedVesselCode ? `/app/pms/spares?vesselCode=${encodeURIComponent(selectedVesselCode)}` : null);
 
   const [cat, setCat] = useState<string | null>(null);
+  const [asset, setAsset] = useState<string | null>(null);   // equipo elegido en el último paso
   const [query, setQuery] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [pick, setPick] = useState<{ spare: SpareRow; qty: string } | null>(null);
@@ -162,26 +175,73 @@ export const OnboardSpares: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   }
 
   // ── Último paso: ¿a qué trabajo se le carga el consumo? ────────────────────
+  // Primero el EQUIPO y después sus tareas (Preview V39): las órdenes abiertas
+  // se amontonan por equipo — cuatro motores principales con la misma tarea
+  // "cambio de aceite" — y en una lista plana hay que leer el código para saber
+  // cuál es cuál. Con un solo equipo se saltea el paso, igual que el selector
+  // de la PC cuando hay un solo grupo.
   if (asking) {
     const choose = (target: Target) => { if (!busy) void save(target); };
+    const groups = groupByAsset(openWos.items)
+      // Las OT sin equipo caen en "—": acá se le pone nombre. Primero los
+      // equipos con más órdenes abiertas.
+      .map(g => ({ ...g, label: g.label === "—" ? t("ob.spares.noAsset") : g.label }))
+      .sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label));
+    const onlyOne = groups.length === 1 ? groups[0]! : null;
+    const group = (asset ? groups.find(g => g.key === asset) : null) ?? onlyOne;
+    const subtitle = (lines.length === 1 ? t("ob.spares.saveOne") : t("ob.spares.saveN")).replace("{n}", String(lines.length));
+
     return (
-      <Screen head={<Head title={t("ob.spares.forWhat")} sub={(lines.length === 1 ? t("ob.spares.saveOne") : t("ob.spares.saveN")).replace("{n}", String(lines.length))} onBack={() => setAsking(false)} />}>
+      <Screen head={<Head title={t("ob.spares.forWhat")} sub={subtitle} onBack={() => { if (group && !onlyOne) setAsset(null); else { setAsset(null); setAsking(false); } }} />}>
         {busy && <div className="flex justify-center py-4"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}
         {openWos.loading && openWos.items.length === 0 && <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}
-        {openWos.items.map(w => (
-          <button key={w.id} type="button" disabled={busy} onClick={() => choose({ id: w.id, code: w.workOrderCode, title: w.title ?? w.workOrderCode })}
-            className="w-full text-left bg-surface border border-fg/10 rounded-2xl p-3.5 flex flex-col gap-1 active:bg-fg/5 disabled:opacity-50">
-            <span className="text-[12.5px] font-semibold text-text-industrial/60">{w.assetName ?? "—"}</span>
-            <span className="text-base font-extrabold leading-snug">{w.title ?? w.workOrderCode}</span>
-            <span className="font-mono text-xs font-semibold text-text-industrial/60">{w.workOrderCode}</span>
-          </button>
-        ))}
-        <button type="button" disabled={busy} onClick={() => choose({ id: null, code: null, title: t("ob.spares.general") })}
+
+        {group ? <>
+          {!onlyOne && (
+            <button type="button" onClick={() => setAsset(null)}
+              className="self-start min-h-10 px-3.5 rounded-full border border-fg/10 bg-surface text-[13px] font-bold inline-flex items-center gap-1.5 active:bg-fg/5">
+              <ArrowLeft className="w-4 h-4" />{group.label} · {t("ob.spares.backToAssets")}
+            </button>
+          )}
+          <p className="text-xs font-extrabold uppercase tracking-[0.07em] text-text-industrial/45 px-0.5">{t("ob.spares.forWhatWo")}</p>
+          {group.items.map(w => {
+            const st = woState(w, t);
+            return (
+              <button key={w.id} type="button" disabled={busy} onClick={() => choose({ id: w.id, code: w.workOrderCode, title: w.title ?? w.workOrderCode })}
+                className="w-full text-left bg-surface border border-fg/10 rounded-2xl p-3.5 flex flex-col gap-1 active:bg-fg/5 disabled:opacity-50">
+                <span className="flex items-start gap-2.5">
+                  <span className="flex-1 text-base font-extrabold leading-snug">{w.title ?? w.workOrderCode}</span>
+                  <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${st.cls}`}>{st.text}</span>
+                </span>
+                <span className="font-mono text-xs font-semibold text-text-industrial/60">{w.workOrderCode}</span>
+              </button>
+            );
+          })}
+        </> : <>
+          {groups.length > 0 && <p className="text-xs font-extrabold uppercase tracking-[0.07em] text-text-industrial/45 px-0.5">{t("ob.spares.forWhatAsset")}</p>}
+          {groups.map(g => (
+            <button key={g.key} type="button" onClick={() => setAsset(g.key)}
+              className="w-full text-left bg-surface border border-fg/10 rounded-2xl p-3.5 flex items-center gap-3 active:bg-fg/5">
+              <span className="w-11 h-11 shrink-0 rounded-[13px] bg-accent/10 text-accent grid place-items-center"><Cog className="w-[22px] h-[22px]" /></span>
+              <span className="min-w-0 flex-1">
+                <b className="block text-[15.5px] font-extrabold leading-tight">{g.label}</b>
+                <small className="block text-[12.5px] font-semibold text-text-industrial/60 mt-0.5">
+                  {(g.items.length === 1 ? t("ob.spares.openOne") : t("ob.spares.openN")).replace("{n}", String(g.items.length))}
+                </small>
+              </span>
+              <ChevronRight className="w-5 h-5 shrink-0 text-text-industrial/40" />
+            </button>
+          ))}
+        </>}
+
+        {/* Va en la lista de equipos. Con un solo equipo no hay lista, así que
+            se muestra igual: si no, el consumo general quedaría inalcanzable. */}
+        {(!group || !!onlyOne) && <button type="button" disabled={busy} onClick={() => choose({ id: null, code: null, title: t("ob.spares.general") })}
           className="w-full text-left bg-surface border border-dashed border-fg/20 rounded-2xl p-3.5 flex flex-col gap-1 active:bg-fg/5 disabled:opacity-50">
           <span className="text-[12.5px] font-semibold text-text-industrial/60">{t("ob.spares.noWo").replace("{wo}", woTerms.abbr)}</span>
           <span className="text-base font-extrabold">{t("ob.spares.general")}</span>
           <span className="text-[12.5px] text-text-industrial/60">{t("ob.spares.generalHint")}</span>
-        </button>
+        </button>}
         {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
       </Screen>
     );
