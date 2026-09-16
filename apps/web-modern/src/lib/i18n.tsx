@@ -5117,6 +5117,8 @@ const dict = {
   "ss.samp.step2": { es: "Se envía al laboratorio", en: "Sent to the lab", pt: "Enviada ao laboratório" },
   "ss.samp.step2sub": { es: "Con la fecha de hoy", en: "With today's date", pt: "Com a data de hoje" },
   "ss.samp.step2done": { es: "Enviada a {lab}", en: "Sent to {lab}", pt: "Enviada a {lab}" },
+  "ss.samp.noNumbersYet": { es: "Todavía no tengo los números", en: "I don't have the numbers yet", pt: "Ainda não tenho os números" },
+  "ss.samp.step2notAuth": { es: "El pedido todavía no está autorizado", en: "The request is not authorized yet", pt: "O pedido ainda não está autorizado" },
   "ss.samp.step2locked": { es: "Primero registrá la toma", en: "Log the sampling first", pt: "Registre primeiro a coleta" },
   "ss.samp.sendToday": { es: "Enviar hoy ({d})", en: "Send today ({d})", pt: "Enviar hoje ({d})" },
   "ss.samp.sendNote": { es: "Queda asentado en la hoja de ruta y el pedido pasa a En ejecución. El correo al laboratorio se manda desde la PC.", en: "It is logged in the tracking sheet and the request moves to In progress. The email to the lab is sent from the PC.", pt: "Fica registrado na folha de rota e o pedido passa a Em execução. O e-mail ao laboratório é enviado pelo PC." },

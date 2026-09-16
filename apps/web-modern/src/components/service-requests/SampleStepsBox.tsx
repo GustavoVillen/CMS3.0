@@ -164,7 +164,7 @@ export function SampleStepsBox({ srId, srStatus, providerName, onChanged, onDete
           <div key={s.id} className="flex gap-2.5 items-center p-2.5 rounded-xl bg-fg/5">
             <span className="min-w-0 flex-1">
               <b className="block text-sm font-bold leading-snug text-fg">{s.assetName ?? s.assetId}</b>
-              <small className="text-xs text-text-industrial/60">{sampleSubtitle(s)} · <span className="font-mono">{s.sampleCode}</span></small>
+              <small className="block text-xs text-text-industrial/60 truncate">{sampleSubtitle(s)} · <span className="font-mono">{s.sampleCode}</span></small>
             </span>
             {sent || taken ? (
               <span className="font-mono text-[15px] font-bold text-success bg-success/10 px-2.5 py-1.5 rounded-lg">{s.labReference}</span>
@@ -191,15 +191,25 @@ export function SampleStepsBox({ srId, srStatus, providerName, onChanged, onDete
             <span>{t("ss.samp.missingHint").replace("{n}", String(missing))}</span>
           </p>
         )}
+        {/* Salida para el caso real de a bordo: los frascos ya salieron y los
+            números los tiene el laboratorio. Es lo mismo que ofrece la PC y
+            queda asentado en la hoja de ruta. */}
+        {!taken && !sent && srStatus === "AUTORIZADA" && (
+          <button type="button" onClick={() => void send()} disabled={busy}
+            className="min-h-11 text-[13px] font-bold text-text-industrial/70 underline underline-offset-2">
+            {t("ss.samp.noNumbersYet")}
+          </button>
+        )}
       </Step>
 
       {/* 2 · Se envía al laboratorio */}
-      <Step n={2} state={sent ? "done" : srStatus === "AUTORIZADA" ? "now" : "locked"}
+      <Step n={2} state={sent ? "done" : srStatus === "AUTORIZADA" && taken ? "now" : "locked"}
         title={t("ss.samp.step2")}
         sub={sent ? t("ss.samp.step2done").replace("{lab}", providerName ?? "—")
-          : srStatus === "AUTORIZADA" ? (providerName ?? t("ss.samp.step2sub"))
-          : t("ss.samp.step2locked")}>
-        {!sent && srStatus === "AUTORIZADA" && <>
+          : srStatus !== "AUTORIZADA" ? t("ss.samp.step2notAuth")
+          : !taken ? t("ss.samp.step2locked")
+          : (providerName ?? t("ss.samp.step2sub"))}>
+        {!sent && srStatus === "AUTORIZADA" && taken && <>
           <button type="button" onClick={() => void send()} disabled={busy} className={`${btn} bg-violet-600 text-white`}>
             {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-[18px] h-[18px]" />}
             {t("ss.samp.sendToday").replace("{d}", new Date().toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" }))}
