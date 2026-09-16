@@ -127,6 +127,15 @@ export const OnboardAgent: React.FC = () => {
   }, [messages, streaming, locale, selectedVesselCode, t]);
 
   // ── Dictado mientras el botón está apretado ───────────────────────────────
+  //
+  // Dos cosas que en el teléfono real fallaban y hay que cuidar:
+  //  · El dictado del navegador CORTA solo en cuanto hay una pausa (onend), aunque
+  //    el dedo siga apretando. Mientras `holdingRef` esté en true se vuelve a
+  //    arrancar, así el que habla puede pensar en el medio de la frase.
+  //  · Si la pantalla cambia debajo del dedo, el "soltar" se pierde. Por eso el
+  //    botón captura el puntero y la conversación no se abre hasta soltar.
+  const holdingRef = useRef(false);
+
   const startListening = useCallback(() => {
     if (!canSpeak || listening || streaming) return;
     const SR: any = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
@@ -136,6 +145,7 @@ export const OnboardAgent: React.FC = () => {
       recognition.continuous = true;
       recognition.interimResults = true;
       finalRef.current = "";
+      holdingRef.current = true;
       recognition.onresult = (ev: any) => {
         let interim = "";
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -145,18 +155,24 @@ export const OnboardAgent: React.FC = () => {
         }
         setHeard(`${finalRef.current} ${interim}`.trim());
       };
+      recognition.onend = () => {
+        // Cortó por una pausa pero el dedo sigue apretado: seguimos escuchando.
+        if (holdingRef.current && recognitionRef.current === recognition) {
+          try { recognition.start(); } catch { /* ya estaba arrancando */ }
+        }
+      };
       recognition.onerror = () => { /* al soltar se manda lo que haya */ };
       recognitionRef.current = recognition;
       recognition.start();
       setListening(true);
-      setOpen(true);
     } catch {
       setError(t("ob.agent.micFailed"));
     }
   }, [canSpeak, listening, streaming, locale, t]);
 
   const stopListening = useCallback(() => {
-    if (!listening) return;
+    if (!holdingRef.current) return;
+    holdingRef.current = false;
     const r = recognitionRef.current;
     recognitionRef.current = null;
     setListening(false);
@@ -165,12 +181,12 @@ export const OnboardAgent: React.FC = () => {
     setTimeout(() => {
       const text = finalRef.current.trim();
       finalRef.current = "";
-      if (text) void send(text);
+      if (text) { setOpen(true); void send(text); }
       else setHeard("");
-    }, 350);
-  }, [listening, send]);
+    }, 400);
+  }, [send]);
 
-  useEffect(() => () => { try { recognitionRef.current?.abort(); } catch { /* noop */ } }, []);
+  useEffect(() => () => { holdingRef.current = false; try { recognitionRef.current?.abort(); } catch { /* noop */ } }, []);
 
   // ── Confirmar una acción ──────────────────────────────────────────────────
   const applyAction = useCallback(async (msgIdx: number, actIdx: number) => {
@@ -216,9 +232,15 @@ export const OnboardAgent: React.FC = () => {
   const bigButton = (
     <button
       type="button"
-      onPointerDown={e => { e.preventDefault(); if (canSpeak) startListening(); else { setOpen(true); setTyping(true); } }}
+      onPointerDown={e => {
+        e.preventDefault();
+        // Capturar el dedo: aunque la pantalla cambie debajo, el "soltar" llega
+        // igual a este botón (sin esto el dictado quedaba prendido).
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* sin captura, sigue igual */ }
+        if (canSpeak) startListening(); else { setOpen(true); setTyping(true); }
+      }}
       onPointerUp={() => { if (canSpeak) stopListening(); }}
-      onPointerLeave={() => { if (listening) stopListening(); }}
+      onPointerCancel={() => { if (canSpeak) stopListening(); }}
       onContextMenu={e => e.preventDefault()}
       className={`w-full min-h-[104px] rounded-[22px] p-4 flex gap-3.5 items-center text-left text-white select-none touch-none shadow-[0_14px_30px_-14px_rgba(124,58,237,0.75)] ${
         listening ? "bg-gradient-to-br from-danger to-red-700" : "bg-gradient-to-br from-violet-600 to-indigo-600"
@@ -313,20 +335,22 @@ export const OnboardAgent: React.FC = () => {
                   <TriangleAlert className="w-4 h-4 shrink-0 mt-px" />{error}
                 </p>
               )}
-            </div>
 
-            <div className="border-t border-fg/10 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2 bg-surface">
               {/* Las opciones de la última respuesta, como botones grandes.
-                  Van siempre: también cuando se está escribiendo (en iPhone,
-                  que no dicta, el teclado es el modo normal). */}
-              {options.length > 0 && options.map(o => (
+                  Van DENTRO de la conversación (no en el pie fijo): con cinco
+                  equipos el pie se comía la pantalla y no se podía scrollear.
+                  Se muestran siempre, también con el teclado abierto: en iPhone,
+                  que no dicta, el teclado es el modo normal. */}
+              {options.map(o => (
                 <button key={o.n} type="button" onClick={() => void send(o.label)}
-                  className="w-full min-h-[56px] rounded-2xl border-[1.5px] border-fg/10 bg-surface text-[15.5px] font-bold flex items-center gap-2.5 px-3.5 text-left">
+                  className="w-full min-h-[56px] rounded-2xl border-[1.5px] border-fg/10 bg-surface text-[15.5px] font-bold flex items-center gap-2.5 px-3.5 text-left shrink-0">
                   <span className="w-[26px] h-[26px] shrink-0 rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-300 grid place-items-center text-[12.5px] font-extrabold">{o.n}</span>
                   <span className="min-w-0">{o.label}</span>
                 </button>
               ))}
+            </div>
 
+            <div className="border-t border-fg/10 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2 bg-surface shrink-0">
               {typing || !canSpeak ? (
                 <div className="flex gap-2">
                   <input value={draft} onChange={e => setDraft(e.target.value)} autoFocus
@@ -346,9 +370,14 @@ export const OnboardAgent: React.FC = () => {
               ) : (
                 <div className="flex gap-2">
                   <button type="button"
-                    onPointerDown={e => { e.preventDefault(); startListening(); }}
+                    onPointerDown={e => {
+                      e.preventDefault();
+                      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* sin captura, sigue igual */ }
+                      startListening();
+                    }}
                     onPointerUp={stopListening}
-                    onPointerLeave={() => { if (listening) stopListening(); }}
+                    onPointerCancel={stopListening}
+                    onContextMenu={e => e.preventDefault()}
                     disabled={streaming}
                     className={`flex-1 min-h-[54px] rounded-2xl font-extrabold text-[15px] flex items-center justify-center gap-2 select-none touch-none disabled:opacity-45 ${
                       listening ? "bg-danger text-white" : "bg-violet-500/15 text-violet-700 dark:text-violet-300"
