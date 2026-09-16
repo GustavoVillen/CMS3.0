@@ -80,7 +80,7 @@ export const OnboardAgent: React.FC = () => {
       const reader = await api.stream("/app/copiloto/chat", {
         capability: "knowledge_assistant",
         locale,
-        mode: "voice",
+        mode: "agent",
         messages: history.filter(m => m.role !== "system").map(m => ({ role: m.role, content: m.content })),
         screenContext: {
           module: "DASHBOARD",
@@ -106,7 +106,8 @@ export const OnboardAgent: React.FC = () => {
             if (parsed.error) { setError(parsed.error); done = true; break; }
             if (parsed.text) raw += parsed.text;
             if (parsed.stripText) raw = raw.replace(parsed.stripText, "");
-            const shown = stripAiBlocks(raw);
+            // Los links de la PC no sirven en el celular: queda el texto.
+            const shown = stripAiBlocks(raw).replace(/\[([^\]]+)\]\((?:\/|https?:)[^)]*\)/g, "$1");
             const actions = parsed.actions?.map(a => ({ ...a, state: "idle" as const }));
             setMessages(prev => {
               const next = [...prev];

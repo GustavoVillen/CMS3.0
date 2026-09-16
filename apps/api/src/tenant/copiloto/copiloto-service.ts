@@ -341,7 +341,7 @@ export interface CopilotoRequest {
    * appended to the system prompt server-side (was previously embedded in
    * the client bundle — moved here for R-18). Default: undefined (text mode).
    */
-  mode?: "voice" | null;
+  mode?: "voice" | "agent" | null;
   /**
    * Si es false, NO se inyecta la base documental del tenant (AiDocuments) en el
    * system prompt. Lo usan las acciones one-shot que no necesitan los manuales y
@@ -356,6 +356,24 @@ export interface CopilotoRequest {
    */
   abortSignal?: AbortSignal;
 }
+
+/**
+ * Agente del celular a bordo (app /abordo, Preview V34).
+ *
+ * La diferencia con el modo voz: acá la respuesta NO se lee en voz alta, se
+ * muestra en una pantalla chica donde cada opción numerada se convierte en un
+ * botón. Por eso se le exige preguntar de a una cosa y terminar siempre con las
+ * opciones numeradas — es lo que hace que el de a bordo no tenga que escribir.
+ */
+const ONBOARD_AGENT_INSTRUCTION = `[Modo: agente del celular a bordo. Reglas estrictas:
+- El usuario está en cubierta o en la sala de máquinas, con una mano. Respondé en 1 a 3 oraciones cortas, sin saludos ni presentaciones.
+- Preguntá UNA sola cosa por mensaje. Nunca pidas dos datos juntos.
+- SIEMPRE que la pregunta se pueda contestar eligiendo (qué equipo, cuál de dos, qué tipo de trabajo, sí o no, confirmar un valor), terminá el mensaje con las opciones como lista numerada, una por línea, en la forma "1. <opción>". La app las muestra como botones grandes y el usuario las toca: no le pidas que escriba ni que diga el número.
+- Si el usuario nombra un equipo de forma incompleta ("del motor", "la bomba"), no adivines: buscá los equipos del buque con query_assets y ofrecé los que coincidan como opciones numeradas, de lo general a lo particular (primero Motor Principal / Motor Auxiliar; después Babor / Estribor o N°1 / N°2).
+- Resolvé también qué clase de trabajo es —inspección, mantenimiento programado o reparación— preguntándolo con opciones si no quedó claro.
+- Cuando ya sepas equipo y tarea, decilo en una oración (qué equipo, qué tarea, y si sale de un plan, su código y su vencimiento) antes de proponer la acción.
+- Nada de markdown: sin links, sin negritas, sin títulos. Texto plano; sólo la lista numerada de opciones al final.
+- Lo que escribe en la base sigue siendo únicamente el bloque [ACCIONES] que el usuario confirma con un botón.]`;
 
 const MOBILE_VOICE_INSTRUCTION = `[Modo: asistente móvil de voz. Reglas estrictas:
 - Respondé directo, en 1 a 3 oraciones cortas. Sin saludos, sin introducciones, sin "de acuerdo", sin "voy a analizar", sin presentarte.
@@ -1689,6 +1707,11 @@ export async function streamCopilotoChat(
 
   // ── Volatile system blocks (per-request, after the cache breakpoint) ──
   const volatileSystemBlocks: Anthropic.TextBlockParam[] = [];
+
+  // Agente del celular: pide de a una cosa y siempre con opciones numeradas.
+  if (req.mode === "agent") {
+    volatileSystemBlocks.push({ type: "text", text: ONBOARD_AGENT_INSTRUCTION });
+  }
 
   // ── Vessel access scope (per-user) ──
   // TENANT_ADMIN ve toda la flota. El resto queda acotado a sus assigned vessels.
