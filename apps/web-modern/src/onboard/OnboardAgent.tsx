@@ -181,7 +181,10 @@ export const OnboardAgent: React.FC = () => {
     setTimeout(() => {
       const text = finalRef.current.trim();
       finalRef.current = "";
-      if (text) { setOpen(true); void send(text); }
+      // Se abre igual aunque no se haya entendido nada: así el que apretó ve
+      // qué pasó y puede repetir o escribir, en vez de quedarse sin respuesta.
+      setOpen(true);
+      if (text) void send(text);
       else setHeard("");
     }, 400);
   }, [send]);
