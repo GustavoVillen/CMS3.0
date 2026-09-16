@@ -555,19 +555,19 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
   );
 }
 
-const LOCATION_SUGGESTIONS = ["ob.loc.engineRoom", "ob.loc.mainDeck", "ob.loc.bridge", "ob.loc.bow", "ob.loc.stern"] as const;
-
+/**
+ * UBICACIÓN del formulario de OT: dónde está el BUQUE mientras se hace el
+ * trabajo (ciudad, puerto o km de la vía navegable), no en qué parte del buque.
+ * Es el mismo dato que el escritorio pide como "Ciudad / Km…" y que se imprime
+ * en el PDF. Sin botones de sugerencia a propósito (Preview V37): los que había
+ * ofrecían lugares de a bordo — Sala de máquinas, Proa — e invitaban a cargar
+ * otra cosa.
+ */
 export function LocationField({ value, onChange, missing }: { value: string; onChange: (v: string) => void; missing?: boolean }) {
   const t = useT();
   return (
-    <Field label={t("wo.modal.location")} missing={missing}>
+    <Field label={t("wo.modal.location")} hint={t("ob.locationHint")} missing={missing}>
       <input id="ob-location" className={inputCls} value={value} onChange={e => onChange(e.target.value)} placeholder={t("ob.locationPh")} />
-      <div className="flex flex-wrap gap-2">
-        {LOCATION_SUGGESTIONS.map(k => (
-          <button key={k} type="button" onClick={() => onChange(t(k))}
-            className="min-h-9 px-3 rounded-xl border border-fg/10 bg-surface text-[13px] font-semibold text-fg">{t(k)}</button>
-        ))}
-      </div>
     </Field>
   );
 }
