@@ -5138,6 +5138,25 @@ const dict = {
   "ss.samp.sendFailed": { es: "No se pudo enviar al laboratorio.", en: "It could not be sent to the lab.", pt: "Não foi possível enviar ao laboratório." },
   "ss.samp.receiveFailed": { es: "No se pudo cerrar el pedido.", en: "The request could not be closed.", pt: "Não foi possível fechar o pedido." },
 
+  // ── El agente de voz de la app a bordo (Preview V34) ──
+  "ob.agent.title": { es: "Decime qué querés hacer", en: "Tell me what you need", pt: "Diga o que você quer fazer" },
+  "ob.agent.holdToTalk": { es: "Mantené apretado y hablá", en: "Hold down and talk", pt: "Mantenha pressionado e fale" },
+  "ob.agent.listening": { es: "Te escucho…", en: "Listening…", pt: "Estou ouvindo…" },
+  "ob.agent.release": { es: "Soltá cuando termines", en: "Release when you're done", pt: "Solte quando terminar" },
+  "ob.agent.typeInstead": { es: "Tocá para escribir", en: "Tap to type", pt: "Toque para escrever" },
+  "ob.agent.typePh": { es: "Escribí qué querés hacer…", en: "Type what you need…", pt: "Escreva o que você quer fazer…" },
+  "ob.agent.useVoice": { es: "Volver a la voz", en: "Back to voice", pt: "Voltar à voz" },
+  "ob.agent.name": { es: "Agente", en: "Agent", pt: "Agente" },
+  "ob.agent.restart": { es: "Empezar de nuevo", en: "Start over", pt: "Começar de novo" },
+  "ob.agent.empty": { es: "Mantené apretado el botón y decí qué querés hacer. Si le falta algún dato, te lo pregunta con botones.", en: "Hold the button and say what you need. If something is missing, it asks with buttons.", pt: "Mantenha o botão pressionado e diga o que quer fazer. Se faltar algum dado, ele pergunta com botões." },
+  "ob.agent.thinking": { es: "Buscando en el buque…", en: "Searching the vessel…", pt: "Procurando na embarcação…" },
+  "ob.agent.failed": { es: "No se pudo hablar con el agente. Revisá la conexión.", en: "Could not reach the agent. Check the connection.", pt: "Não foi possível falar com o agente. Verifique a conexão." },
+  "ob.agent.micFailed": { es: "No se pudo usar el micrófono. Probá escribiendo.", en: "The microphone could not be used. Try typing.", pt: "Não foi possível usar o microfone. Tente escrever." },
+  "ob.agent.applyFailed": { es: "No se pudo hacer. Probá de nuevo.", en: "It could not be done. Try again.", pt: "Não foi possível. Tente de novo." },
+  "ob.agent.done": { es: "Hecho: {label}", en: "Done: {label}", pt: "Feito: {label}" },
+  "ob.agent.doneWithCode": { es: "Hecho: {label} · {code}", en: "Done: {label} · {code}", pt: "Feito: {label} · {code}" },
+  "ob.agent.confirmNote": { es: "El agente propone; nada se guarda hasta que toques el botón.", en: "The agent proposes; nothing is saved until you tap the button.", pt: "O agente propõe; nada é salvo até você tocar no botão." },
+
 } satisfies Record<string, Record<Locale, string>>;
 
 export type TranslationKey = keyof typeof dict;

@@ -143,6 +143,9 @@ import { useCopilotScreenContext, notifyCopilotDataChanged, type CopilotScreenCo
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
+import {
+  extractNumberedOptions, extractCamposBlock, extractRecalcBlock, extractOpenScreenBlock, stripAiBlocks,
+} from "../lib/copilot-blocks";
 import { useT, useWoTerms, type WoTerms } from "../lib/i18n";
 
 // ---------------------------------------------------------------------------
@@ -177,19 +180,6 @@ interface ChatMessage {
   answered?: string;
 }
 
-/**
- * Opciones numeradas de una respuesta del copiloto ("1. Mantenimiento", "2)
- * Reparación"): se muestran como botones para que el usuario toque en vez de
- * escribir el número. Hacen falta al menos dos para que sea una elección.
- */
-function extractNumberedOptions(text: string): Array<{ n: string; label: string }> {
-  const out: Array<{ n: string; label: string }> = [];
-  for (const line of text.split("\n")) {
-    const m = line.match(/^\s*(\d{1,2})[.)]\s+(.+?)\s*$/);
-    if (m) out.push({ n: m[1]!, label: m[2]!.replace(/\*\*/g, "") });
-  }
-  return out.length >= 2 ? out.slice(0, 30) : [];
-}
 
 /** Respuestas escritas que valen como "sí" / "no" a una pregunta con botones. */
 const YES_RE = /^\s*(s[ií]|dale|ok(ay)?|bueno|claro|de una|imprim|gener|por favor)\b/i;
@@ -254,72 +244,9 @@ const LS_EXPANDED = "gpms_copilot_expanded";
 // [CAMPOS] block helpers — structured field values emitted by the AI
 // ---------------------------------------------------------------------------
 
-/** Extract the JSON payload from a [CAMPOS]{...}[/CAMPOS] block, or null if absent/invalid. */
-function extractCamposBlock(text: string): Record<string, string> | null {
-  const match = text.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
-  if (!match) return null;
-  try {
-    const parsed: unknown = JSON.parse(match[1].trim());
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, string>;
-    }
-  } catch { /* invalid JSON */ }
-  return null;
-}
 
-/**
- * Asistentes del formulario que la IA pide correr:
- * [RECALCULAR]["acceptanceCriteria","loto","risk"][/RECALCULAR].
- *
- * No los redacta el copiloto: dispara el MISMO generador que el rótulo con la
- * chispita del formulario, para que el texto salga igual venga de donde venga.
- */
-function extractRecalcBlock(text: string): string[] | null {
-  const match = text.match(/\[RECALCULAR\]([\s\S]*?)\[\/RECALCULAR\]/);
-  if (!match) return null;
-  try {
-    const parsed: unknown = JSON.parse(match[1].trim());
-    if (Array.isArray(parsed)) {
-      const names = parsed.filter((v): v is string => typeof v === "string");
-      return names.length > 0 ? names : null;
-    }
-  } catch { /* invalid JSON */ }
-  return null;
-}
 
-/**
- * Pantalla que la IA pide abrir: [ABRIR]/asset-hours[/ABRIR].
- *
- * Es sólo navegación — la misma que si el usuario tocara el ítem del menú — así
- * que no pide confirmación: abrir una pantalla no cambia ningún dato. Todo lo
- * que SÍ escribe sigue pasando por el botón "Aplicar" de las acciones.
- *
- * Se acepta únicamente una ruta interna (empieza con "/" y sin "//"): con esto
- * el modelo no puede mandar al usuario a un sitio de afuera.
- */
-function extractOpenScreenBlock(text: string): string | null {
-  const match = text.match(/\[ABRIR\]([\s\S]*?)\[\/ABRIR\]/);
-  if (!match) return null;
-  const path = match[1].trim();
-  if (!path.startsWith("/") || path.startsWith("//")) return null;
-  return path;
-}
 
-/**
- * Texto que se ve en el globo del chat: sin los bloques de máquina.
- * También corta un bloque a medio llegar (el chat streamea de a pedazos), para
- * que el usuario no vea el marcador crudo por un instante.
- */
-function stripAiBlocks(text: string): string {
-  return text
-    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
-    .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
-    .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
-    .replace(/\[(?:CAMPOS|RECALCULAR|ABRIR)\][\s\S]*$/, "")
-    // Avisos internos del panel a la IA: si el modelo los repite, no se muestran.
-    .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA)\]/g, "")
-    .trim();
-}
 
 // ---------------------------------------------------------------------------
 // Module → capability auto-routing
