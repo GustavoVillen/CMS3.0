@@ -14,7 +14,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Ship, CalendarClock, ChevronRight, Plus, MessageSquarePlus, Gauge, ShieldCheck,
-  ClipboardCheck, PackageMinus, Monitor, LogOut,
+  ClipboardCheck, PackageMinus, Monitor, LogOut, TriangleAlert,
 } from "lucide-react";
 import { useAuth, useCan } from "../lib/auth";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
@@ -30,9 +30,10 @@ import { OnboardHours, type HoursRow, STALE_DAYS } from "./OnboardHours";
 import { OnboardPermit } from "./OnboardPermit";
 import { OnboardChecklist } from "./OnboardChecklist";
 import { OnboardSpares } from "./OnboardSpares";
+import { OnboardDefect } from "./OnboardDefect";
 import { OB_DESKTOP_KEY } from "./entry";
 
-type View = "home" | "plans" | "newwo" | "hours" | "permit" | "checklist" | "spares";
+type View = "home" | "plans" | "newwo" | "hours" | "permit" | "checklist" | "spares" | "defect";
 
 interface Submission {
   kind: "WO" | "SR" | "PTW";
@@ -100,6 +101,7 @@ export const OnboardApp: React.FC = () => {
     case "permit":    return <OnboardPermit onExit={home} />;
     case "checklist": return <OnboardChecklist onExit={home} />;
     case "spares":    return <OnboardSpares onExit={home} />;
+    case "defect":    return <OnboardDefect onExit={home} />;
     default:
       return (
         <>
@@ -174,6 +176,7 @@ function OnboardHome({ onOpen, onProgress }: { onOpen: (v: View) => void; onProg
 
   const tiles: Array<{ v: View | "progress"; show: boolean; icon: React.ReactNode; title: string; sub: string; warn?: boolean }> = [
     { v: "newwo", show: canWo, icon: <Plus className="w-[22px] h-[22px]" />, title: t("ob.tile.newWo").replace("{wo}", woTerms.abbr), sub: t("ob.tile.newWoSub") },
+    { v: "defect", show: can("defect.write"), icon: <TriangleAlert className="w-[22px] h-[22px]" />, title: t("ob.tile.defect"), sub: t("ob.tile.defectSub") },
     { v: "permit", show: can("permit.manage"), icon: <ShieldCheck className="w-[22px] h-[22px]" />, title: t("ob.tile.permit"), sub: t("ob.tile.permitSub") },
     { v: "checklist", show: !readOnly, icon: <ClipboardCheck className="w-[22px] h-[22px]" />, title: t("ob.tile.checklist"),
       sub: openChecks ? t("ob.tile.checklistOpen").replace("{n}", String(openChecks)) : t("ob.tile.checklistSub"), warn: openChecks > 0 },

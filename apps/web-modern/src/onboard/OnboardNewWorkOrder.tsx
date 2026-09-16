@@ -8,7 +8,7 @@
 // OT; presupuestos, adjuntos y seguimiento del taller quedan para la PC.
 
 import React, { useMemo, useState } from "react";
-import { Users, Building2, Send, ArrowRight, Sparkles, Loader2, Search, Cog, UserCheck, Monitor, AlertTriangle } from "lucide-react";
+import { Users, Building2, Send, ArrowRight, Sparkles, Loader2, Search, Cog, UserCheck, Monitor, AlertTriangle, Link2 } from "lucide-react";
 import { useT, useWoTerms } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useFetch } from "../lib/hooks";
@@ -19,7 +19,7 @@ import {
   WO_REQUESTED_BY, WO_SYSTEM_AREAS, WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_PRIORITY_FORM_LABELS,
 } from "../lib/wo-form-catalog";
 import {
-  Screen, Head, Field, Chips, MainButton, DoneScreen, RadioRow, OptionCard, inputCls, textareaCls, scrollToMissing,
+  Screen, Head, Field, Chips, MainButton, DoneScreen, RadioRow, OptionCard, Note, inputCls, textareaCls, scrollToMissing,
 } from "./ui";
 import {
   DictateButton, PhotoButton, PhotoStrip, ProviderFields, errorText, suggestWoSafety,
@@ -27,9 +27,26 @@ import {
 } from "./shared";
 import { LocationField, RiskButtons } from "./OnboardPlans";
 
-interface AssetOption { id: string; assetCode: string; name: string | null }
+export interface AssetOption { id: string; assetCode: string; name: string | null }
 
 const PRIORITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+
+/**
+ * La OT no nace en blanco: viene de otra pantalla que ya sabe el equipo y el
+ * problema (hoy, el reporte de defecto). Se arranca igual en el paso 1 y no se
+ * saltea: el tipo y el plazo los propone quien manda el prefill, pero los
+ * confirma quien abre la orden.
+ */
+export interface NewWoPrefill {
+  asset: AssetOption;
+  description: string;
+  kind?: string;
+  priority?: string;
+  /** Aviso arriba del paso 1: de dónde viene esta orden. */
+  note?: string;
+  /** Renglón extra en la pantalla final. */
+  doneNote?: string;
+}
 
 /** Título de la OT: la primera oración de lo que hay que hacer, sin pasarse de largo. */
 function titleFrom(text: string): string {
@@ -37,12 +54,22 @@ function titleFrom(text: string): string {
   return first.length > 90 ? `${first.slice(0, 87).trimEnd()}…` : first;
 }
 
-export const OnboardNewWorkOrder: React.FC<{ onExit: () => void }> = ({ onExit }) => {
+export const OnboardNewWorkOrder: React.FC<{
+  onExit: () => void;
+  prefill?: NewWoPrefill;
+  /** Se llama con la OT ya creada y enviada; si tira, el aviso va a la pantalla final. */
+  onCreated?: (wo: { id: string; workOrderCode: string }) => Promise<void> | void;
+}> = ({ onExit, prefill, onCreated }) => {
   const [round, setRound] = useState(0);
-  return <NewWorkOrderFlow key={round} onExit={onExit} onAgain={() => setRound(r => r + 1)} />;
+  return <NewWorkOrderFlow key={round} onExit={onExit} onAgain={() => setRound(r => r + 1)} prefill={prefill} onCreated={onCreated} />;
 };
 
-function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: () => void }) {
+function NewWorkOrderFlow({ onExit, onAgain, prefill, onCreated }: {
+  onExit: () => void;
+  onAgain: () => void;
+  prefill?: NewWoPrefill;
+  onCreated?: (wo: { id: string; workOrderCode: string }) => Promise<void> | void;
+}) {
   const t = useT();
   const woTerms = useWoTerms();
   const { user } = useAuth();
@@ -54,11 +81,11 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
   const [tried, setTried] = useState(false);
   // Paso 1
   const [assetQuery, setAssetQuery] = useState("");
-  const [asset, setAsset] = useState<AssetOption | null>(null);
-  const [text, setText] = useState("");
+  const [asset, setAsset] = useState<AssetOption | null>(prefill?.asset ?? null);
+  const [text, setText] = useState(prefill?.description ?? "");
   const [photos, setPhotos] = useState<PickedPhoto[]>([]);
-  const [kind, setKind] = useState<string | null>(null);
-  const [priority, setPriority] = useState<string | null>(null);
+  const [kind, setKind] = useState<string | null>(prefill?.kind ?? null);
+  const [priority, setPriority] = useState<string | null>(prefill?.priority ?? null);
   // Paso 2
   const [who, setWho] = useState<"TRIPULACION" | "TERCERIZADO" | null>(null);
   const [provider, setProvider] = useState<ProviderOption | null>(null);
@@ -173,6 +200,14 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
     } catch (e) {
       warnings.push(t("ob.warn.woNotSent").replace("{code}", wo.workOrderCode).replace("{msg}", errorText(e, "")));
     }
+
+    // La pantalla que mandó el prefill cierra su parte (p. ej. el defecto se
+    // vincula a esta OT). La orden ya existe: si falla, se avisa y no se pierde.
+    if (onCreated) {
+      try { await onCreated(wo); }
+      catch (e) { warnings.push(errorText(e, t("ob.sendFailed"))); }
+    }
+
     photos.forEach(p => URL.revokeObjectURL(p.preview));
     setBusy(false);
     setDone({ woCode: wo.workOrderCode, srCode, warnings });
@@ -187,6 +222,7 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
         code={[done.woCode, done.srCode].filter(Boolean).join(" · ")}
         lines={[
           { icon: <Cog className="w-[17px] h-[17px]" />, text: `${asset?.name ?? asset?.assetCode ?? ""} · ${priority ? WO_PRIORITY_FORM_LABELS[priority] : ""}` },
+          ...(prefill?.doneNote ? [{ icon: <Link2 className="w-[17px] h-[17px]" />, text: prefill.doneNote }] : []),
           ...(withSr && provider ? [{ icon: <Building2 className="w-[17px] h-[17px]" />, text: t("ob.done.srFor").replace("{name}", provider.name) }] : []),
           ...done.warnings.map(w => ({ icon: <AlertTriangle className="w-[17px] h-[17px]" />, text: w })),
           { icon: <UserCheck className="w-[17px] h-[17px]" />, text: t("ob.done.approver") },
@@ -219,6 +255,9 @@ function NewWorkOrderFlow({ onExit, onAgain }: { onExit: () => void; onAgain: ()
       </>}
     >
       {step === 1 && <>
+        {prefill?.note && (
+          <Note icon={<Link2 className="w-[17px] h-[17px] shrink-0 mt-px" />}>{prefill.note}</Note>
+        )}
         <Field label={t("ob.asset")} missing={miss(missing1, "asset")}>
           {asset ? (
             <div className="flex items-center gap-3 px-3.5 py-3 rounded-2xl bg-accent/10 border-[1.5px] border-accent">
