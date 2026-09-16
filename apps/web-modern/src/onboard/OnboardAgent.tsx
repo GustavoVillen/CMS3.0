@@ -315,8 +315,10 @@ export const OnboardAgent: React.FC = () => {
             </div>
 
             <div className="border-t border-fg/10 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-2 bg-surface">
-              {/* Las opciones de la última respuesta, como botones grandes. */}
-              {options.length > 0 && !typing && options.map(o => (
+              {/* Las opciones de la última respuesta, como botones grandes.
+                  Van siempre: también cuando se está escribiendo (en iPhone,
+                  que no dicta, el teclado es el modo normal). */}
+              {options.length > 0 && options.map(o => (
                 <button key={o.n} type="button" onClick={() => void send(o.label)}
                   className="w-full min-h-[56px] rounded-2xl border-[1.5px] border-fg/10 bg-surface text-[15.5px] font-bold flex items-center gap-2.5 px-3.5 text-left">
                   <span className="w-[26px] h-[26px] shrink-0 rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-300 grid place-items-center text-[12.5px] font-extrabold">{o.n}</span>
