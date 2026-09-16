@@ -291,7 +291,8 @@ function AgendaRow({ item, onOpen, hoursLabel }: {
       <span className="min-w-0 flex-1 flex flex-col gap-0.5">
         <span className="text-[12.5px] font-semibold text-text-industrial/60 truncate">{plan.assetName ?? "—"}</span>
         <span className="text-[15px] font-extrabold leading-snug">{plan.title}</span>
-        {open && due && (
+        {/* Sin ventana (abre el mismo día que vence) la línea no dice nada. */}
+        {open && due && open < due && (
           <span className="flex items-center gap-1.5 text-[12.5px] text-text-industrial/60 mt-0.5">
             <CalendarRange className="w-3.5 h-3.5 shrink-0" />
             {t("ob.ag.window").replace("{from}", dm(open)).replace("{to}", dm(due))}
