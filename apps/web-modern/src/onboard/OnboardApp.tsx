@@ -31,7 +31,6 @@ import { OnboardPermit } from "./OnboardPermit";
 import { OnboardChecklist } from "./OnboardChecklist";
 import { OnboardSpares } from "./OnboardSpares";
 import { OB_DESKTOP_KEY } from "./entry";
-import { OnboardAgent } from "./OnboardAgent";
 
 type View = "home" | "plans" | "newwo" | "hours" | "permit" | "checklist" | "spares";
 
@@ -196,9 +195,11 @@ function OnboardHome({ onOpen, onProgress }: { onOpen: (v: View) => void; onProg
       </section>
 
       <div className="px-4 pb-8 -mt-11 flex flex-col gap-3.5">
-        {/* El agente: se mantiene apretado, se dice qué se quiere hacer y él
-            arma el resto (Preview V34). Va arriba de todo, a propósito. */}
-        <OnboardAgent />
+        {/* El agente de voz (Preview V34) queda FUERA de la pantalla: el
+            mantener-apretado no funcionó bien en el teléfono real y Gustavo
+            pidió sacarlo (2026-09-16). El componente y el modo "agent" del
+            copiloto siguen en el código: para volver a probarlo, alcanza con
+            renderizar <OnboardAgent /> acá. */}
         {canWo && (
           <button type="button" onClick={() => go("plans")}
             className="w-full bg-surface border border-fg/10 rounded-[18px] p-3.5 flex items-center gap-3 text-left shadow-[0_10px_24px_-14px_rgba(13,27,42,0.35)]">
