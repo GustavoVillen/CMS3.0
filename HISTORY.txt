@@ -1,5 +1,29 @@
 HISTORY.txt
 
+[2026-09-17] Tableros de OT y SS: barra en una fila, tarjetas comprimidas y grupo SFI
+Agent: Claude Opus 5
+- Previews V51 + V52 aprobados por Gustavo (claude/mockups/tarjetas-ot/).
+- Tarjetas: sin la etiqueta de etapa (la dice la columna; quedan "En proceso" y
+  "Rechazada"), tipo abreviado, y equipo/vencimiento/SS/responsable en un renglon
+  que BAJA de linea en vez de cortarse. De 3 a ~6 tarjetas por columna.
+- Barra de filtros en UNA fila: Grupo G0-G9 + "Sin filtro", "Solo vencidas" (solo OT),
+  "Agrupar por equipo", "Ver cerradas" y el buscador. Se quitaron las 5 tarjetas de
+  resumen, los botones de etapa y los desplegables (tipo/prioridad/responsable/equipo
+  en OT; taller/equipo/prioridad en SS). El buscador ya cubre equipo, responsable,
+  taller y codigos; tipo y prioridad ya no se filtran.
+- "Ver cerradas" pasa a modo lista: en OT las cerradas, en SS completadas +
+  rechazadas + canceladas.
+- Grupo SFI: el listado de OT devuelve sfiGroupNumber (del plan que la origino o,
+  sin plan, del primer digito del sfiCode del equipo) y la SS lo hereda de su OT.
+  Sin cambios de schema.
+- Barra reservada (scrollbar-gutter: stable) en el <main> del Layout y en las
+  columnas y la ventana de la SS: la pantalla no se corre al aparecer el scroll.
+- Dashboard: "Nueva OT" y "Nueva SS" con la cuadricula que abre el listado.
+- Parte semanal: el eyebrow del correo mostraba "&MIDDOT;" (pasa por esc(), va el
+  caracter, no la entidad).
+- Deploy 2026-09-17: commit d2f8971 en v3, produccion y demo (pull + db push +
+  generate + build + restart). Health 200 en :3106 y :3107.
+
 [2026-09-04] Planes de Mantenimiento: equipos ordenados por grupo SFI
 Agent: Claude Opus 5
 - Pedido del usuario: en la lista de Planes de Mantenimiento los equipos venian
