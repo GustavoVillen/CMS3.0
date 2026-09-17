@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-09-17] Muestreos y Analisis: filtros en una fila
+Agent: Claude Opus 5
+- Mismo criterio que los tableros de OT y SS: fuera las 4 tarjetas de resumen y los
+  botones de estado convertidos en un desplegable con el conteo adentro (incluye
+  Archivada, que antes solo se alcanzaba por chip). Estado + que se analiza + equipo
+  + resultado + buscador en UNA fila: la lista arranca ~200 px mas arriba.
+- Se quito el filtro por tarjeta (cardSel/faMatchCard): las muestras demoradas se
+  siguen viendo en rojo en la lista, pero ya no se filtran. Si hace falta, va como
+  opcion "Demoradas" del desplegable de estado.
+- Barra reservada en la ventana de la muestra. Solo frontend: deploy = build web.
+
 [2026-09-17] Tableros de OT y SS: barra en una fila, tarjetas comprimidas y grupo SFI
 Agent: Claude Opus 5
 - Previews V51 + V52 aprobados por Gustavo (claude/mockups/tarjetas-ot/).

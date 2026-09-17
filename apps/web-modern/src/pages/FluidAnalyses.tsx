@@ -78,8 +78,6 @@ const FA_STATUS_CLS: Record<string, string> = {
   REPORTED: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
   ARCHIVED: "bg-fg/5 text-text-industrial/60",
 };
-type FaCardKey = "draft" | "sent" | "bad" | "caution";
-
 /** Días desde una fecha ISO hasta hoy (0 si no hay fecha). */
 function faDaysSince(iso: string | null | undefined): number {
   if (!iso) return 0;
@@ -92,15 +90,6 @@ const faWaitDays = (s: FluidSample) => (s.status === "SENT" ? faDaysSince(s.sent
 const faIsLate = (s: FluidSample) =>
   (s.status === "DRAFT" && faWaitDays(s) > FA_DRAFT_LATE_DAYS) || (s.status === "SENT" && faWaitDays(s) > FA_SENT_LATE_DAYS);
 const faIsBad = (s: FluidSample) => s.result?.verdict === "CRITICAL" || s.result?.verdict === "ACTION_REQUIRED";
-
-function faMatchCard(s: FluidSample, key: FaCardKey): boolean {
-  switch (key) {
-    case "draft":   return s.status === "DRAFT";
-    case "sent":    return s.status === "SENT";
-    case "bad":     return s.status === "REPORTED" && faIsBad(s);
-    case "caution": return s.status === "REPORTED" && s.result?.verdict === "CAUTION";
-  }
-}
 
 export const FluidAnalysesPage: React.FC = () => {
   const t = useT();
@@ -119,8 +108,7 @@ export const FluidAnalysesPage: React.FC = () => {
   const [batchUpload, setBatchUpload] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
 
-  // ── Filtros (preview V18) ──
-  const [cardSel, setCardSel] = useState<FaCardKey | "">("");
+  // ── Filtros (preview V18; las tarjetas de resumen se sacaron el 17-sep) ──
   const [stageSel, setStageSel] = useState<string>(() => ((SAMPLE_STATUSES as readonly string[]).includes(statusParam) ? statusParam : ""));
   const [kindSel, setKindSel] = useState("");
   const [assetSel, setAssetSel] = useState("");
@@ -186,7 +174,6 @@ export const FluidAnalysesPage: React.FC = () => {
   /** Todo menos el estado: base de los contadores de los botones de estado. */
   const beforeStage = useMemo(() => {
     let items = scoped;
-    if (cardSel) items = items.filter(s => faMatchCard(s, cardSel));
     if (kindSel) items = items.filter(s => s.kind === kindSel);
     if (assetSel) items = items.filter(s => s.assetId === assetSel);
     if (verdictSel) items = items.filter(s => s.result?.verdict === verdictSel);
@@ -200,7 +187,7 @@ export const FluidAnalysesPage: React.FC = () => {
     }
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoped, cardSel, kindSel, assetSel, verdictSel, search, assets, contextVessels]);
+  }, [scoped, kindSel, assetSel, verdictSel, search, assets, contextVessels]);
 
   /** "Activas" deja afuera las archivadas, salvo que se esté buscando. */
   const stageFilter = useCallback((items: FluidSample[], key: string) => {
@@ -228,12 +215,6 @@ export const FluidAnalysesPage: React.FC = () => {
     return items;
   }, [beforeStage, stageFilter, stageSel, sortKey, sortDir, assets]);
 
-  const summary = useMemo(() => ({
-    draft: scoped.filter(s => faMatchCard(s, "draft")).length,
-    sent: scoped.filter(s => faMatchCard(s, "sent")).length,
-    bad: scoped.filter(s => faMatchCard(s, "bad")).length,
-    caution: scoped.filter(s => faMatchCard(s, "caution")).length,
-  }), [scoped]);
   const assetOptions = useMemo(() => {
     const ids = [...new Set(scoped.map(s => s.assetId))];
     return ids.map(id => ({ id, label: assetLabel(id, assets) })).sort((a, b) => a.label.localeCompare(b.label));
@@ -315,12 +296,6 @@ export const FluidAnalysesPage: React.FC = () => {
     </span>
   );
 
-  const summaryCards: { key: FaCardKey; n: number; label: string; hint: string; icon: typeof FlaskConical; cls: string; num: string }[] = [
-    { key: "draft", n: summary.draft, label: t("fa.sum.draft"), hint: t("fa.sum.draftHint"), icon: TestTube, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
-    { key: "sent", n: summary.sent, label: t("fa.sum.sent"), hint: t("fa.sum.sentHint"), icon: Hourglass, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "bad", n: summary.bad, label: t("fa.sum.bad"), hint: t("fa.sum.badHint"), icon: AlertOctagon, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    { key: "caution", n: summary.caution, label: t("fa.sum.caution"), hint: t("fa.sum.cautionHint"), icon: AlertTriangle, cls: "border-l-yellow-600", num: "text-yellow-700 dark:text-yellow-400" },
-  ];
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
 
   return (
@@ -387,36 +362,17 @@ export const FluidAnalysesPage: React.FC = () => {
         <ExportExcelButton module="fluid_samples" />
       </PageHeader>
 
-      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Filtros */}
-      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
-        <div className="flex flex-wrap gap-1.5">
-          {(["", ...SAMPLE_STATUSES] as string[]).map(k => {
-            const on = stageSel === k;
-            return (
-              <button key={k || "active"} type="button" onClick={() => setStageSel(k)}
-                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
-                {k ? t(`fa.st.${k}` as TranslationKey) : t("fa.list.active")}
-                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{stageFilter(beforeStage, k).length}</span>
-              </button>
-            );
-          })}
-        </div>
+      {/* Filtros en UNA sola fila (17-sep): se sacaron las 4 tarjetas de resumen y
+          los botones de estado pasaron a un desplegable, para ganar alto de lista.
+          Los enlaces que llegan con ?status= siguen funcionando. */}
+      <div className="rounded-2xl border border-fg/10 bg-surface px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
+          <select value={stageSel} onChange={e => setStageSel(e.target.value)} className={selCls(!!stageSel)}>
+            <option value="">{`${t("fa.list.active")} (${stageFilter(beforeStage, "").length})`}</option>
+            {(SAMPLE_STATUSES as readonly string[]).map(k => (
+              <option key={k} value={k}>{`${t(`fa.st.${k}` as TranslationKey)} (${stageFilter(beforeStage, k).length})`}</option>
+            ))}
+          </select>
           <select value={kindSel} onChange={e => setKindSel(e.target.value)} className={selCls(!!kindSel)}>
             <option value="">{t("fa.list.kindAll")}</option>
             {Object.keys(SAMPLE_KIND_LABELS).map(k => <option key={k} value={k}>{t(`mp.samp.kind.${k}` as TranslationKey)}</option>)}
@@ -875,7 +831,7 @@ function SampleDetailModal({
           )}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1fr] gap-4 p-5">
             {/* Izquierda: resultado y valores */}
             <div className="space-y-4 min-w-0">
