@@ -149,11 +149,19 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
       const lblW = doc.font("Helvetica-Bold").fontSize(9.5).widthOfString(label);
       // Subrayado manual (la opción underline de pdfkit con lineBreak:false rompe).
       doc.moveTo(ML, y0 + 12).lineTo(ML + lblW, y0 + 12).strokeColor(BLACK).lineWidth(0.6).stroke();
+      // El título de la tarea puede no entrar en una línea (los códigos del
+      // armador son largos): se deja envolver y el recuadro baja lo que haga
+      // falta, en vez de que la segunda línea se pise con el borde de arriba.
       if (inline) {
-        doc.font("Helvetica-Bold").fillColor(NAVY)
-          .text(sanitizePdfText(inline), ML + lblW + 10, y0, { width: W - lblW - 10, lineBreak: false, ellipsis: true });
+        const x = ML + lblW + 10;
+        const w = W - lblW - 10;
+        const txt = sanitizePdfText(inline);
+        const h = doc.font("Helvetica-Bold").fontSize(9.5).heightOfString(txt, { width: w });
+        doc.fillColor(NAVY).text(txt, x, y0, { width: w });
+        canvas.y = y0 + Math.max(15, h + 4);
+      } else {
+        canvas.y = y0 + 15;
       }
-      canvas.y = y0 + 15;
     }
     function section(label: string, content: string, inline?: string, minH = 36) {
       // El título baja junto con al menos minH de su contenido; el textArea pagina el resto.

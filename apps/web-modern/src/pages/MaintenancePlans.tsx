@@ -1625,9 +1625,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     }
   }, [readOnly, acceptanceCriteria, description, title, taskType, loadingCriteria, resolveAssetLabel, t]);
 
-  const handleLotoClick = useCallback(async () => {
-    if (readOnly || loadingLoto) return;
+  const handleLotoClick = useCallback(async (): Promise<string> => {
+    if (readOnly || loadingLoto) return loto;
     const prev = loto;
+    let lotoSugerido = prev;
     setLoadingLoto(true);
     setLoto(t("mp.modal.analyzing"));
     try {
@@ -1639,7 +1640,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           acceptanceCriteria: acceptanceCriteria || null,
           vesselCode: vesselCode || null,
         });
-      setLoto(res.text || prev);
+      const nuevo = res.text || prev;
+      setLoto(nuevo);
+      lotoSugerido = nuevo;
       // La misma sugerencia decide el permiso de trabajo: si hace falta, lo
       // enciende y deja tildados los tipos; si no, lo apaga.
       const tipos = (res.permitTypes ?? []).filter(x => (PLAN_PERMIT_TYPES as readonly string[]).includes(x));
@@ -1655,9 +1658,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     } finally {
       setLoadingLoto(false);
     }
+    return lotoSugerido;
   }, [readOnly, loto, description, title, taskType, acceptanceCriteria, loadingLoto, resolveAssetLabel, t]);
 
-  const handleRiskClick = useCallback(async () => {
+  const handleRiskClick = useCallback(async (lotoOverride?: string) => {
     if (readOnly || loadingRisk) return;
     setLoadingRisk(true);
     try {
@@ -1666,7 +1670,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         taskDesc: description || title || null,
         taskType,
         acceptanceCriteria: acceptanceCriteria || null,
-        loto: loto || null,
+        loto: (lotoOverride ?? loto) || null,
         vesselCode: vesselCode || null,
       });
       // Si la IA devolvió los dos ejes de la matriz, los cargamos y derivamos el
@@ -1713,6 +1717,20 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     }
   }, [readOnly, plan, title, description, taskType, loadingConsequence, resolveAssetLabel, sfiGroupNumber]);
 
+  /**
+   * El botón de IA de la sección Seguridad hace TODO junto (pedido del usuario):
+   * LOTO + permiso de trabajo, y con ese LOTO el nivel de riesgo, el resultado
+   * del análisis y la consecuencia RCM. El riesgo va después porque usa el LOTO;
+   * el RCM no depende de él y va en paralelo.
+   */
+  const handleSafetyAiClick = useCallback(async () => {
+    if (readOnly) return;
+    const nuevoLoto = await handleLotoClick();
+    await Promise.all([handleRiskClick(nuevoLoto), handleConsequenceClick()]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, handleLotoClick, handleRiskClick, handleConsequenceClick]);
+
+
   const onSave = async () => {
     setSaving(true);
     setActionError(null);
@@ -1736,6 +1754,13 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       }
       if (requiresPermit && requiredPermitTypes.length === 0) {
         setActionError(t("mp.ptw.typesRequired"));
+        setSaving(false);
+        return;
+      }
+      // Muestreo en "Sí" sin laboratorio cargado: al abrir la OT no se le pide
+      // el análisis a nadie, así que no se guarda hasta elegirlo.
+      if (samplingKind && labRows.length === 0) {
+        setActionError(t("mp.samp.labRequired"));
         setSaving(false);
         return;
       }
@@ -3098,7 +3123,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 {/* El botón de IA va en el encabezado, a la izquierda de "Completo":
                     la misma sugerencia resuelve el LOTO y si la tarea necesita permiso. */}
                 <GuideSection n={4} title={sectionMeta.safety.title} subtitle={sectionMeta.safety.sub} pill={sectionPill("safety")}
-                  action={aiPill(() => { void handleLotoClick(); }, loadingLoto, t("mp.ai.safetyTooltip"))}
+                  action={aiPill(() => { void handleSafetyAiClick(); }, loadingLoto || loadingRisk || loadingConsequence, t("mp.ai.safetyTooltip"))}
                   open={openSecs.safety} onToggle={() => setOpenSecs(s => ({ ...s, safety: !s.safety }))}>
                   <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
                     {permitBlock}
@@ -4175,12 +4200,19 @@ export const MaintenancePlansPage: React.FC = () => {
           .map(r => r.providerName)
           .filter((n): n is string => !!n && n.trim().length > 0);
         if (labNames.length === 0 && row.providerName) labNames.push(row.providerName);
-        const labIcon = isSampling && labNames.length > 0 && (
+        // El matraz sale en TODO plan de muestreo: verde con el laboratorio que
+        // lo analiza y ámbar cuando todavía no se eligió (desde la lista se ve
+        // qué tarea va a quedar sin pedido al abrir la OT).
+        const labIcon = isSampling && (
           <span
-            title={`${t("mp.samplingLab")}: ${labNames.join(", ")}`}
+            title={labNames.length > 0
+              ? `${t("mp.samplingLab")}: ${labNames.join(", ")}`
+              : t("mp.samp.labMissingTitle")}
             className="shrink-0 inline-flex"
           >
-            <FlaskConical className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <FlaskConical className={`w-3.5 h-3.5 ${labNames.length > 0
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-amber-600 dark:text-amber-400"}`} />
           </span>
         );
         // Identificación de la tarea (código + grupo SFI + aviso de riesgo alto).

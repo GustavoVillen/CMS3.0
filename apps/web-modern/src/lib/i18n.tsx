@@ -3169,6 +3169,7 @@ const dict = {
   "mp.samp.lab":              { es: "Laboratorio",            en: "Laboratory",            pt: "Laboratório" },
   "mp.samp.labOkHint":        { es: "Al abrir la OT se le manda la SS.", en: "Opening the WO sends it the SR.", pt: "Ao abrir a OS, envia-se a SS." },
   "mp.samp.labChange":        { es: "Cambiar",                en: "Change",                pt: "Alterar" },
+  "mp.samp.labRequired":      { es: "Elegí el laboratorio que va a analizar la muestra. Sin laboratorio, al abrir la OT no se le pide el análisis a nadie.", en: "Pick the lab that will analyze the sample. Without it, opening the WO won't request the analysis from anyone.", pt: "Escolha o laboratório que vai analisar a amostra. Sem ele, ao abrir a OS ninguém recebe o pedido." },
   "mp.samp.labMissingTitle":  { es: "Sin laboratorio: al abrir la OT no se le pide el análisis a nadie", en: "No lab: opening the WO won't request the analysis from anyone", pt: "Sem laboratório: ao abrir a OS ninguém recebe o pedido de análise" },
   "mp.samp.labMissingHint":   { es: "Se carga como proveedor del plan (área Proveedor).", en: "It's set as the plan's provider (Provider area).", pt: "É cadastrado como fornecedor do plano (área Fornecedor)." },
   "mp.samp.labPick":          { es: "Elegir laboratorio",     en: "Choose lab",            pt: "Escolher laboratório" },

@@ -1,5 +1,24 @@
 HISTORY.txt
 
+[2026-09-17] Planes: la IA de Seguridad hace todo junto + guarda con laboratorio
+Agent: Claude Opus 5
+- "Sugerir con IA" de la seccion 4 ahora resuelve de una: LOTO + permiso de trabajo,
+  y con ese LOTO el nivel de riesgo, el resultado del analisis y la consecuencia RCM.
+  handleLotoClick devuelve el texto nuevo y se lo pasa a handleRiskClick (si no, el
+  riesgo se calculaba con el LOTO viejo por el closure del render). El RCM va en
+  paralelo. El boton gira mientras dure cualquiera de las tres.
+- No se guarda un plan con "Muestra para laboratorio = Si" sin laboratorio elegido:
+  aviso en ventanita (mp.samp.labRequired) y no sale ninguna llamada al servidor.
+- El matraz del listado ahora sale en TODO plan de muestreo: verde con el nombre del
+  laboratorio, ambar cuando falta elegirlo (antes solo aparecia si habia laboratorio,
+  y por eso "no aparecia el icono" en un plan recien creado).
+- PDF Mercurio del plan: corregido el titulo largo que se pisaba con el recuadro
+  (labelLine deja envolver y baja el cuadro). OJO: ese formato TODAVIA NO SE USA en
+  mercurio — resolveTenantForm compara style === "MERCURIO" y el tenant tiene
+  workOrderPdfTemplate = "MERCURIO_OT", asi que el plan (y el diferimiento) caen al
+  layout estandar. La activacion quedo esperando el OK de Gustavo; comparacion de los
+  dos PDF en claude/mockups/pdf-plan/.
+
 [2026-09-17] Tarjetas de resumen fuera de todas las pantallas + permiso de trabajo con IA
 Agent: Claude Opus 5
 - Pedido de Gustavo: "sacar estos en todos los formularios, ocupan mucho espacio y no
