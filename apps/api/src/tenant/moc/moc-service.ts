@@ -3,6 +3,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { archiveIfFinal } from "../settings/pdf-archive-service";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 
@@ -324,6 +325,7 @@ export async function transitionMoc(session: TenantAccessSession, id: string, in
     action: `Moc.${next.toLowerCase()}`, entityType: "MocRecord", entityId: id,
     metadata: { mocCode: current.mocCode, vesselCode: current.vesselCode, previousStatus: current.status, newStatus: next },
   });
+  archiveIfFinal(session, "MOC", current.id, next);
   return updated;
 }
 

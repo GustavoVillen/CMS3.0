@@ -5,6 +5,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard } from "../lib/escape-guard";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 
 interface CrewCert {
   id: string;
@@ -149,15 +150,19 @@ export const MobileCrewCerts: React.FC<MobileCrewCertsProps> = ({ initialFilter,
               Vencimiento actual: {selected.expiryDate ? String(selected.expiryDate).slice(0, 10) : "—"}
             </p>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Nuevo vencimiento</label>
+          {/* Obligatorio: sin fecha no se puede guardar (botón deshabilitado). */}
+          <GuideField id="cc-expiry" missing={!newExpiry}>
+            <label className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">
+              Nuevo vencimiento<RequiredMark />
+              {!newExpiry && <GuideNeedTag label="Falta" />}
+            </label>
             <input
               type="date"
               value={newExpiry}
               onChange={e => setNewExpiry(e.target.value)}
               className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"
             />
-          </div>
+          </GuideField>
           {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
           <button
             type="button"

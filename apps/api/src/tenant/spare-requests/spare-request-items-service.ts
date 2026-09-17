@@ -1,7 +1,11 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { archiveIfFinal } from "../settings/pdf-archive-service";
 import { assertVesselAccess, assertSpareLinkable } from "./spare-request-scope";
+import { hasPermission } from "../auth/role-permissions";
+import { getOnHandMap } from "../pms/stock-calc-service";
+import { splitNameForEquipment } from "../pms/department-mapping";
 
 export interface AddRequestItemInput {
   spareId?: string | null;
@@ -19,8 +23,11 @@ export interface UpdateRequestItemInput {
   notes?: string | null;
 }
 
+// Mismo permiso que crear y enviar la solicitud. Antes era una lista fija de
+// roles: un rol habilitado en la matriz creaba la solicitud pero no le podía
+// cargar ítems.
 function canManage(session: TenantAccessSession): boolean {
-  return ["TENANT_ADMIN", "MAINTENANCE_MANAGER", "PROCUREMENT_STORE", "TECHNICIAN_OPERATOR"].includes(session.user.role);
+  return hasPermission(session, "spareRequest.manage");
 }
 
 async function assertRequestAccess(session: TenantAccessSession, spareRequestId: string) {
@@ -49,18 +56,39 @@ export async function listRequestItems(session: TenantAccessSession, spareReques
     orderBy: { createdAt: "asc" },
   });
 
-  // Enrich with spareSku/spareName
+  // Datos del repuesto para el formulario: código, N° de parte, equipo y stock a bordo.
   const spareIds = items.map(i => i.spareId).filter(Boolean) as string[];
   const spares = spareIds.length > 0
-    ? await prisma.spare.findMany({ where: { id: { in: spareIds }, tenantId: req.tenantId }, select: { id: true, sku: true, name: true, unit: true } })
+    ? await prisma.spare.findMany({
+        where: { id: { in: spareIds }, tenantId: req.tenantId },
+        select: { id: true, sku: true, name: true, unit: true, manufacturerPartNumber: true, internalPartNumber: true, linkedAssetId: true },
+      })
     : [];
   const spareMap = new Map(spares.map(s => [s.id, s]));
+  const assetIds = [...new Set(spares.map(s => s.linkedAssetId).filter(Boolean))] as string[];
+  const assets = assetIds.length > 0
+    ? await prisma.asset.findMany({ where: { id: { in: assetIds }, tenantId: req.tenantId }, select: { id: true, name: true, manufacturer: true, model: true } })
+    : [];
+  const assetLabel = new Map(assets.map(a => [a.id, [a.name, a.manufacturer, a.model].filter(Boolean).join(" ")]));
+  const onHand = await getOnHandMap(prisma, spareIds);
 
-  return items.map(i => ({
-    ...i,
-    spareSku:  i.spareId ? (spareMap.get(i.spareId)?.sku  ?? null) : null,
-    spareName: i.spareId ? (spareMap.get(i.spareId)?.name ?? null) : null,
-  }));
+  return items.map(i => {
+    const spare = i.spareId ? spareMap.get(i.spareId) : undefined;
+    const split = spare && !spare.linkedAssetId ? splitNameForEquipment(spare.name) : null;
+    return {
+      ...i,
+      spareSku:  spare?.sku  ?? null,
+      spareName: spare?.name ?? null,
+      /** Nombre sin el "para <equipo>" cuando el equipo sale del propio nombre. */
+      itemLabel: split?.equipment ? split.item : (spare?.name ?? i.description),
+      partNumber: spare ? (spare.manufacturerPartNumber ?? spare.internalPartNumber ?? null) : null,
+      equipment: spare
+        ? (spare.linkedAssetId ? assetLabel.get(spare.linkedAssetId) ?? null : split?.equipment ?? null)
+        : null,
+      // Un stock negativo es un error de carga: a bordo cuenta como 0.
+      onHand: spare ? Math.max(0, onHand.get(spare.id) ?? 0) : null,
+    };
+  });
 }
 
 export async function addRequestItem(session: TenantAccessSession, spareRequestId: string, payload: AddRequestItemInput) {
@@ -196,6 +224,7 @@ export async function fulfillItem(
     );
   }
 
+  let requestStatus: string | null = null;
   await prisma.$transaction(async (tx) => {
     // CONC-001 (mismo patrón en fulfillItem): el `status === "FULFILLED"` de
     // arriba se leyó FUERA de la transacción. Dos entregas simultáneas pasaban
@@ -251,8 +280,10 @@ export async function fulfillItem(
         data: { status: newStatus as any, updatedByUserId: session.user.id },
       });
     }
+    requestStatus = newStatus;
   });
 
+  archiveIfFinal(session, "REQ", req.id, requestStatus);
   return { ok: true };
 }
 

@@ -95,6 +95,7 @@ import { serveDoc } from "./doc-export";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 import { buildDueSoonPlansXlsx } from "./maintenance-plans-due-excel-service";
 import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { resolveTenantForm } from "./tenant-forms-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
@@ -708,6 +709,7 @@ export async function handleMaintenanceRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "PLAN", id: (plan as any).id ?? id, buffer });
     return true;
   }
 
@@ -738,6 +740,7 @@ export async function handleMaintenanceRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OT", id: wo.id, buffer });
     return true;
   }
 

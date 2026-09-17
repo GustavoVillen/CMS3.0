@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Muestreos y Análisis — Preview V18</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --surface:#fff; --fg:#1A1D24; --accent:#0284C7;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select{font-family:inherit} button{cursor:pointer}
+  i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .app{display:flex;min-height:calc(100vh - 46px)}
+  .side{width:210px;background:#0F172A;color:#CBD5E1;padding:16px 10px;flex-shrink:0} @media(max-width:800px){.side{display:none}}
+  .side .logo{color:#fff;font-weight:800;font-size:15px;margin:0 8px 18px}
+  .side a{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;font-size:13px;color:#CBD5E1}
+  .side a.on{background:rgba(56,189,248,.15);color:#fff}
+  .main{flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px} @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px}
+  .ph .right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.violet{background:#6D28D9;border-color:#6D28D9;color:#fff}
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media(max-width:900px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:#fff;border:1.5px solid var(--fg10);border-left-width:4px;border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .sc.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.18)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center} .sc .h{font-size:10.5px;color:var(--faint)}
+  .sc.amber{border-left-color:#D97706} .sc.amber .n{color:#B45309}
+  .sc.blue{border-left-color:#2563EB} .sc.blue .n{color:#1D4ED8}
+  .sc.red{border-left-color:#DC2626} .sc.red .n{color:#B91C1C}
+  .sc.yellow{border-left-color:#CA8A04} .sc.yellow .n{color:#A16207}
+  .fbar{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px}
+  .sel.on{border-color:var(--accent);color:var(--accent);font-weight:700;background:rgba(2,132,199,.06)}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:240px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)}
+  @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .tbl{background:#fff;border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:980px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12.5px;vertical-align:middle}
+  tr.crit td{background:#FEF2F2} tr.crit td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr:hover td{background:rgba(2,132,199,.04);cursor:pointer}
+  .code{font-family:ui-monospace,monospace;font-weight:800;color:var(--accent);font-size:12px}
+  .sub{font-size:10.5px;color:var(--faint)}
+  .kind{display:inline-flex;gap:5px;align-items:center;font-weight:600}
+  .st{font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 8px;white-space:nowrap}
+  .st-DRAFT{background:#FEF3C7;color:#92400E} .st-SENT{background:#DBEAFE;color:#1E40AF} .st-REPORTED{background:#D1FAE5;color:#065F46} .st-ARCHIVED{background:var(--fg5);color:var(--muted)}
+  .vd{font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 8px;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .vd-NORMAL{background:#DCFCE7;color:#166534} .vd-CAUTION{background:#FEF9C3;color:#854D0E} .vd-CRITICAL{background:#DC2626;color:#fff} .vd-ACTION_REQUIRED{background:#B91C1C;color:#fff}
+  .wait{font-size:11px;color:var(--muted)} .wait.late{color:#B91C1C;font-weight:800}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .act.violet{border-color:rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9}
+  .act.red{border-color:rgba(220,38,38,.4);background:#FEF2F2;color:#B91C1C}
+  .wo{font-family:ui-monospace,monospace;font-size:11px;color:var(--accent);font-weight:700}
+  .cards{display:none;flex-direction:column;gap:8px} @media(max-width:700px){.tbl{display:none}.cards{display:flex}}
+  .card{background:#fff;border:1px solid var(--fg10);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;border-left:4px solid var(--fg10)}
+  .card.crit{border-left-color:#DC2626;background:#FEF2F2}
+  .card .top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .empty{text-align:center;padding:30px;color:var(--faint)}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#fff;border:1px solid var(--fg10);border-radius:12px;padding:10px;font-size:12px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Muestreos y Análisis · Preview V18</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Ver como:</span><button data-r="admin" class="on">Puede cargar</button><button data-r="ro">Sólo lectura</button>
+</div>
+<div class="app">
+  <nav class="side"><div class="logo">CMS3.0</div>
+    <a>Tablero</a><a>Órdenes de Trabajo</a><a>Plan de Mantenimiento</a><a class="on">Muestreos y Análisis</a>
+  </nav>
+  <main class="main" id="root"></main>
+</div>
+<script>
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"new",r:"admin",card:"",stage:"",kind:"",asset:"",verdict:"",q:"",toast:null};
+const KIND={FLUID:["droplets","Fluido"],VIBRATION:["activity","Vibración"],THERMAL:["thermometer","Termografía"],ULTRASOUND:["audio-lines","Ultrasonido"],OTHER:["flask-conical","Otro"]};
+const ST={DRAFT:"Por tomar y enviar",SENT:"En el laboratorio",REPORTED:"Con informe",ARCHIVED:"Archivada"};
+const VD={NORMAL:["check-circle-2","Normal"],CAUTION:["triangle-alert","Precaución"],CRITICAL:["octagon-alert","Crítico"],ACTION_REQUIRED:["octagon-alert","Acción requerida"]};
+const D=[
+ {c:"FA-DEM-0112",v:"BUQUE DEMO I",a:"Motor principal babor",k:"FLUID",f:"Aceite motor",t:null,h:null,st:"DRAFT",vd:null,wo:"OT-DEM-26-0061",days:2},
+ {c:"FA-DEM-0111",v:"BUQUE DEMO I",a:"Motor principal estribor",k:"VIBRATION",f:"",t:null,h:null,st:"DRAFT",vd:null,wo:"OT-DEM-26-0060",days:9},
+ {c:"FA-DEM-0109",v:"BUQUE DEMO I",a:"Generador auxiliar 1",k:"FLUID",f:"Aceite motor",t:"02/09/2026",h:"18.420",st:"SENT",vd:null,wo:"OT-DEM-26-0052",days:13},
+ {c:"FA-DEM-0108",v:"BUQUE DEMO II",a:"Reductora babor",k:"FLUID",f:"Reductora",t:"28/08/2026",h:"9.110",st:"SENT",vd:null,wo:"OT-DEM-26-0049",days:18},
+ {c:"FA-DEM-0105",v:"BUQUE DEMO I",a:"Motor principal babor",k:"FLUID",f:"Aceite motor",t:"10/08/2026",h:"21.300",st:"REPORTED",vd:"CRITICAL",wo:"OT-DEM-26-0041",days:0,def:"DEF-DEM-26-014"},
+ {c:"FA-DEM-0104",v:"BUQUE DEMO II",a:"Bomba de lastre",k:"VIBRATION",f:"",t:"08/08/2026",h:null,st:"REPORTED",vd:"CAUTION",wo:"OT-DEM-26-0039",days:0},
+ {c:"FA-DEM-0101",v:"BUQUE DEMO I",a:"Generador auxiliar 2",k:"FLUID",f:"Gasoil",t:"01/08/2026",h:"17.950",st:"REPORTED",vd:"NORMAL",wo:"OT-DEM-26-0035",days:0},
+ {c:"FA-DEM-0098",v:"BUQUE DEMO I",a:"Motor principal estribor",k:"FLUID",f:"Aceite motor",t:"15/07/2026",h:"20.880",st:"ARCHIVED",vd:"NORMAL",wo:"OT-DEM-26-0028",days:0},
+];
+const LATE=14;
+const late=x=>(x.st==="DRAFT"&&x.days>7)||(x.st==="SENT"&&x.days>LATE);
+function cardMatch(x,k){ return k==="draft"?x.st==="DRAFT":k==="sent"?x.st==="SENT":k==="bad"?(x.st==="REPORTED"&&(x.vd==="CRITICAL"||x.vd==="ACTION_REQUIRED")):k==="caution"?(x.st==="REPORTED"&&x.vd==="CAUTION"):true; }
+function list(ignoreStage){
+  const q=S.q.toLowerCase();
+  return D.filter(x=>{
+    if(S.card&&!cardMatch(x,S.card)) return false;
+    if(!ignoreStage){ if(S.stage){ if(x.st!==S.stage) return false; } else if(x.st==="ARCHIVED"&&!q) return false; }
+    if(S.kind&&x.k!==S.kind) return false; if(S.asset&&x.a!==S.asset) return false; if(S.verdict&&x.vd!==S.verdict) return false;
+    if(q&&!(x.c+x.a+x.wo+x.f+x.v).toLowerCase().includes(q)) return false; return true;});
+}
+function action(x){
+  if(S.r!=="admin") return "";
+  if(x.st==="DRAFT") return `<button class="act" onclick="event.stopPropagation();toast('Abre la muestra para cargar fecha, horas y N° de frasco (demo)')">${I("pencil",12)}Cargar la toma</button>`;
+  if(x.st==="SENT") return `<button class="act violet" onclick="event.stopPropagation();toast('Abre Registrar informe con IA (demo)')">${I("scan-line",12)}Cargar informe</button>`;
+  if(x.def) return `<button class="act red" onclick="event.stopPropagation();toast('Abre el defecto (demo)')">${I("octagon-alert",12)}Ver ${x.def}</button>`;
+  return "";
+}
+function wait(x){
+  if(x.st==="DRAFT") return `<span class="wait ${late(x)?'late':''}">Creada hace ${x.days} d</span>`;
+  if(x.st==="SENT") return `<span class="wait ${late(x)?'late':''}">${late(x)?I("clock-alert",12)+" ":""}Enviada hace ${x.days} d</span>`;
+  return `<span class="sub">—</span>`;
+}
+const kindCell=x=>`<span class="kind">${I(KIND[x.k][0],14)}${KIND[x.k][1]}</span>${x.f?`<div class="sub">${x.f}</div>`:""}`;
+const vdCell=x=>x.vd?`<span class="vd vd-${x.vd}">${I(VD[x.vd][0],11)}${VD[x.vd][1]}</span>`:`<span class="sub">—</span>`;
+function page(){
+  const L=list(); const all=D;
+  const cnt=k=>all.filter(x=>cardMatch(x,k)).length;
+  const sc=(k,cls,ic,l,h)=>`<button class="sc ${cls} ${S.card===k?'on':''}" onclick="S.card=S.card==='${k}'?'':'${k}';render()"><span class="n">${cnt(k)}</span><span class="l">${I(ic,13)}${l}</span><span class="h">${h}</span></button>`;
+  const stCnt=k=>list(true).filter(x=>k?x.st===k:x.st!=="ARCHIVED").length;
+  const assets=[...new Set(D.map(x=>x.a))];
+  return `<div class="ph"><h1>${I("flask-conical",20)}Muestreos y Análisis</h1><span class="count">${L.length} a la vista</span>
+    <div class="right">${S.r==="admin"?`<button class="btn">${I("plus",14)}Nueva muestra</button><button class="btn">${I("files",14)}Cargar varios informes</button><button class="btn violet">${I("scan-line",14)}Registrar informe con IA</button>`:""}<button class="btn">${I("file-spreadsheet",14)}Excel</button></div></div>
+  <div class="sum">
+    ${sc("draft","amber","test-tube","Por tomar y enviar","Se crearon al autorizar la OT")}
+    ${sc("sent","blue","hourglass","Esperando informe","Enviadas al laboratorio")}
+    ${sc("bad","red","octagon-alert","Críticas / acción requerida","Revisar el defecto que se abrió")}
+    ${sc("caution","yellow","triangle-alert","En precaución","Seguir de cerca en la próxima")}
+  </div>
+  <div class="fbar">
+    <div class="stage">
+      <button class="${S.stage===''?'on':''}" onclick="S.stage='';render()">Activas <span class="c">${stCnt('')}</span></button>
+      ${Object.entries(ST).map(([k,l])=>`<button class="${S.stage===k?'on':''}" onclick="S.stage='${k}';render()">${l} <span class="c">${stCnt(k)}</span></button>`).join("")}
+    </div>
+    <div class="frow">
+      <select class="sel ${S.kind?'on':''}" onchange="S.kind=this.value;render()"><option value="">Qué se analiza: todo</option>${Object.entries(KIND).map(([k,[,l]])=>`<option value="${k}" ${S.kind===k?'selected':''}>${l}</option>`).join("")}</select>
+      <select class="sel ${S.asset?'on':''}" onchange="S.asset=this.value;render()"><option value="">Equipo: todos</option>${assets.map(a=>`<option ${S.asset===a?'selected':''}>${a}</option>`).join("")}</select>
+      <select class="sel ${S.verdict?'on':''}" onchange="S.verdict=this.value;render()"><option value="">Resultado: todos</option>${Object.entries(VD).map(([k,[,l]])=>`<option value="${k}" ${S.verdict===k?'selected':''}>${l}</option>`).join("")}</select>
+      <div class="search">${I("search")}<input id="q" placeholder="Buscar muestra, equipo u OT…" value="${S.q}" oninput="S.q=this.value;keep()"></div>
+    </div>
+  </div>
+  <div class="tbl"><table><tr><th>Muestra</th><th>Equipo</th><th>Qué se analiza</th><th>Toma</th><th>Estado</th><th>Resultado</th><th>OT de origen</th><th></th></tr>
+    ${L.map(x=>`<tr class="${x.vd==='CRITICAL'||x.vd==='ACTION_REQUIRED'?'crit':''}" onclick="toast('Abre la muestra ${x.c} (demo)')">
+      <td><span class="code">${x.c}</span><div class="sub">${x.v}</div></td>
+      <td><b style="font-weight:600">${x.a}</b></td><td>${kindCell(x)}</td>
+      <td>${x.t?`${x.t}${x.h?`<div class="sub">${x.h} h</div>`:""}`:`<span class="sub">Sin tomar</span>`}</td>
+      <td><span class="st st-${x.st}">${ST[x.st]}</span><div>${wait(x)}</div></td>
+      <td>${vdCell(x)}</td><td><span class="wo">${x.wo}</span></td><td>${action(x)}</td></tr>`).join("")||`<tr><td colspan="8" class="empty">No hay muestras con estos filtros</td></tr>`}
+  </table></div>
+  <div class="cards">${L.map(x=>`<div class="card ${x.vd==='CRITICAL'||x.vd==='ACTION_REQUIRED'?'crit':''}">
+      <div class="top"><span class="code">${x.c}</span><span class="st st-${x.st}">${ST[x.st]}</span>${x.vd?vdCell(x):""}</div>
+      <div style="font-weight:700">${x.a}</div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">${kindCell(x)}${wait(x)}<span class="wo" style="margin-left:auto">${x.wo}</span></div>
+      ${action(x)}</div>`).join("")}</div>`;
+}
+function ref(){
+  return `<div class="ph"><h1>${I("flask-conical",20)}Muestreos y Análisis</h1><span class="count">8</span><div class="right"><button class="btn">Excel</button><select class="sel"><option>Todos los fluidos</option></select><button class="btn">${I("camera",14)}Registrar análisis (foto/PDF)</button><button class="btn primary">${I("plus",14)}Nueva muestra</button></div></div>
+  <div class="refbox" style="overflow-x:auto"><table style="min-width:900px"><tr><th>Código</th><th>Buque</th><th>Equipo</th><th>Tipo</th><th>Toma</th><th>Creado</th><th>Horas</th><th>Estado</th><th>Veredicto</th><th>OT origen</th></tr>
+  ${D.slice(0,5).map(x=>`<tr><td class="code">${x.c}</td><td>DEM</td><td>${x.a}</td><td>${x.f||KIND[x.k][1]}</td><td>${x.t??"14/09/2026"}</td><td>14/09/2026</td><td>${x.h??"—"}</td><td><span class="st st-ARCHIVED">${x.st}</span></td><td>${x.vd?`<span class="vd vd-${x.vd}">${x.vd==='CRITICAL'?'CRÍTICO':x.vd==='CAUTION'?'PRECAUCIÓN':'NORMAL'}</span>`:'—'}</td><td class="wo">${x.wo}</td></tr>`).join("")}</table></div>
+  <div><span class="note">No hay resumen: no se ve cuántas esperan informe o salieron críticas</span><span class="note">Estado en inglés (DRAFT, SENT, REPORTED)</span><span class="note">Código del buque (DEM) en vez del nombre</span><span class="note">Sólo filtra por tipo de fluido; no por estado, equipo ni resultado</span><span class="note">No marca las muestras demoradas en el laboratorio</span><span class="note">Las críticas no se destacan</span><span class="note">“Cargar varios informes” sólo está en el Tablero</span><span class="note">No hay buscador</span><span class="note">En celular la tabla no entra</span></div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  document.querySelectorAll(".pv-bar [data-r]").forEach(b=>b.classList.toggle("on",b.dataset.r===S.r));
+  const y=window.scrollY; document.getElementById("root").innerHTML=S.v==="ref"?ref():page(); window.scrollTo(0,y);
+  document.querySelectorAll(".toast").forEach(x=>x.remove()); if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function keep(){ const el=document.getElementById("q"),p=el.selectionStart; render(); const n=document.getElementById("q"); n.focus(); n.setSelectionRange(p,p); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll(".toast").forEach(x=>x.remove());},1700); }
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.v=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar [data-r]").forEach(b=>b.onclick=()=>{S.r=b.dataset.r;render();});
+render();
+</script>
+</body>
+</html>

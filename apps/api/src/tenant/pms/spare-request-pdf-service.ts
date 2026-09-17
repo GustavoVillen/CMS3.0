@@ -1,352 +1,253 @@
+// Formulario "Solicitud de repuestos": lo que el buque le manda al departamento
+// de Compras (va adjunto al correo de "Enviar a Compras"). Aprobado en Preview V4
+// (claude/mockups/inventario-formularios). Sin aprobación ni recepción: lo que
+// llega entra por Recepción con remito.
+
 import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getSpareRequest } from "../spare-requests/spare-requests-service";
 import { listRequestItems } from "../spare-requests/spare-request-items-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments } from "./pdf-helpers";
+import { LOGO_PATH, renderLabeledTextBox, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
 import { fmtDate as fmtDateTz } from "../../common/tenant-time";
 
-// Delegado al helper común: además de la zona horaria aplica la regla de
-// fecha-sola (una fecha de calendario no se convierte, si no se corre un día).
-function fmt(d: Date | string | null | undefined, tz = "UTC", locale = "es-AR"): string {
-  return fmtDateTz(d, tz, locale);
+const PW       = 595.28;
+const PAGE_H   = 841.89;
+const ML       = 36;
+const W        = PW - ML * 2;
+const MARGIN_T = 36;
+const FOOTER_H = 30;
+const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 10;
+
+const NAVY  = "#0C2461";
+const WHITE = "#FFFFFF";
+const BLACK = "#111111";
+const GRAY  = "#6B7280";
+const LINE  = "#555555";
+const LABEL_BG = "#F2F2F2";
+
+const PRIORITY: Record<string, { label: string; color: string }> = {
+  LOW: { label: "BAJA", color: BLACK },
+  MEDIUM: { label: "MEDIA", color: BLACK },
+  HIGH: { label: "ALTA", color: "#B45309" },
+  CRITICAL: { label: "CRÍTICA", color: "#B91C1C" },
+};
+
+const STATUS: Record<string, string> = {
+  DRAFT: "BORRADOR", SUBMITTED: "ENVIADA A COMPRAS", CANCELLED: "ANULADA",
+  APPROVED: "APROBADA", REJECTED: "RECHAZADA", PARTIALLY_FULFILLED: "PARCIALMENTE ENTREGADA", FULFILLED: "ENTREGADA",
+};
+
+/** "04 UN", "20 L" — como se escribe en los formularios de papel. */
+function fmtQty(qty: number, unit: string): string {
+  const n = Number.isInteger(qty) ? String(qty).padStart(2, "0") : String(qty);
+  const u = unit.trim().toLowerCase();
+  return `${n} ${u === "ud" || u === "u" || u === "unidad" || u === "unidades" ? "UN" : unit.trim().toUpperCase()}`;
 }
 
-function val(v: string | null | undefined): string {
-  return (v?.trim() || "—").replace(/[ð☐☑☒□■✓✔✘]/g, "[ ]");
-}
-
-function priorityLabel(p: string): string {
-  const m: Record<string, string> = { LOW: "Baja", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Crítica" };
-  return m[p] ?? p;
-}
-
-function statusLabel(s: string): string {
-  const m: Record<string, string> = {
-    DRAFT: "Borrador", SUBMITTED: "Enviada", APPROVED: "Aprobada",
-    REJECTED: "Rechazada", PARTIALLY_FULFILLED: "Parcialmente atendida",
-    FULFILLED: "Atendida", CANCELLED: "Cancelada",
-  };
-  return m[s] ?? s;
-}
-
-function itemStatusLabel(s: string, receivedAt: Date | string | null | undefined, fmtFn: (d: Date | string | null | undefined) => string): string {
-  if (s === "FULFILLED") return `Recibido el ${fmtFn(receivedAt)}`;
-  if (s === "CANCELLED") return "Cancelado";
-  return "No recibido";
-}
-
-const PAGE_H         = 841.89;
-const CM             = 72 / 2.54;
-const MARGIN_V       = Math.round(1.5 * CM);
-const FOOTER_SIZE    = 40;
-const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
-
-export async function buildSpareRequestPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
+/**
+ * `forSending`: el PDF se arma ANTES de pasar a Enviada (el correo tiene que salir
+ * primero), así que el adjunto ya se rotula como enviado.
+ */
+export async function buildSpareRequestPdf(session: TenantAccessSession, id: string, opts: { forSending?: boolean } = {}): Promise<Buffer> {
   const req = await getSpareRequest(session, id);
   if (!req) throw new Error("Solicitud no encontrada.");
-
   const items = await listRequestItems(session, id);
 
-  // Resolve tenant timezone, locale, and logo
-  let tenantTz     = "UTC";
+  let tenantTz = "UTC";
   let tenantLocale = "es-AR";
-  let tenantName   = "Copilot Management System";
+  let tenantName = session.tenantSlug;
   let tenantLogoBuffer: Buffer | null = null;
+  let vesselName = req.requestedForVesselCode ?? "—";
   const prisma = getPrismaClient();
   if (prisma) {
     const tenantRow = await (prisma as any).tenant.findUnique({
       where: { slug: session.tenantSlug },
-      select: { settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, timezone: true, defaultLocale: true } } },
+      select: { id: true, settings: { select: { displayName: true, logoUrl: true, logoUrlLight: true, timezone: true, defaultLocale: true } } },
     });
     const ts = tenantRow?.settings;
     if (ts?.displayName) tenantName = ts.displayName;
     if (ts?.timezone) tenantTz = ts.timezone;
-    if (ts?.defaultLocale) {
-      const loc = ts.defaultLocale;
-      tenantLocale = loc === "en" ? "en-GB" : loc === "pt" ? "pt-BR" : "es-AR";
-    }
+    if (ts?.defaultLocale) tenantLocale = ts.defaultLocale === "en" ? "en-GB" : ts.defaultLocale === "pt" ? "pt-BR" : "es-AR";
     tenantLogoBuffer = await resolveTenantLogo(session.tenantSlug, ts?.logoUrl, ts?.logoUrlLight);
+    // Nombre del buque, nunca el código.
+    if (tenantRow?.id && req.requestedForVesselCode) {
+      const v = await (prisma as any).vessel.findFirst({ where: { tenantId: tenantRow.id, code: req.requestedForVesselCode }, select: { name: true } });
+      if (v?.name) vesselName = v.name;
+    }
   }
-
-  const f = (d: Date | string | null | undefined) => fmt(d, tenantTz, tenantLocale);
-
-  // Resolve requester, approver, and receiver names
-  let requesterName: string | null = null;
-  let approverName:  string | null = null;
-  let receiverName:  string | null = null;
-  if (prisma) {
-    const resolveUser = async (userId: string | null): Promise<string | null> => {
-      if (!userId) return null;
-      try {
-        const u = await (prisma as any).user.findUnique({
-          where: { id: userId },
-          select: { firstName: true, lastName: true },
-        });
-        return u ? (`${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || null) : null;
-      } catch { return null; }
-    };
-    // Receiver: updatedByUserId of any FULFILLED item
-    const fulfilledItem = items.find((i: any) => i.status === "FULFILLED");
-    [requesterName, approverName, receiverName] = await Promise.all([
-      resolveUser(req.requestedByUserId),
-      resolveUser((req as any).approvedByUserId ?? null),
-      resolveUser(fulfilledItem ? (fulfilledItem as any).updatedByUserId ?? null : null),
-    ]);
-  }
+  const f = (d: Date | string | null | undefined) => fmtDateTz(d, tenantTz, tenantLocale);
+  const requestedBy = req.requestedByName ?? "—";
+  const status = opts.forSending ? "SUBMITTED" : req.status;
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: req.requestCode } });
+    // bufferPages: el pie (con "Página N de M") se dibuja al final en todas las hojas,
+    // también en las que agrega renderLabeledTextBox por su cuenta.
+    const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, info: { Title: req.requestCode } });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end",  () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const ML  = 48;
-    const PW  = 595.28;
-    const W   = PW - ML * 2;
+    let y = MARGIN_T;
 
-    const navy  = "#0f2744";
-    const black = "#0f172a";
-    const gray  = "#64748b";
-    const border= "#cbd5e1";
-    const bgBox = "#f8fafc";
-    const bgHead= "#0f2744";
+    function cell(cx: number, cy: number, cw: number, ch: number, text: string, opts: {
+      bold?: boolean; fontSize?: number; align?: "left" | "center" | "right"; bg?: string; color?: string; font?: string;
+    } = {}) {
+      if (opts.bg) doc.rect(cx, cy, cw, ch).fillColor(opts.bg).fill();
+      doc.rect(cx, cy, cw, ch).strokeColor(LINE).lineWidth(0.5).stroke();
+      if (!text) return;
+      const fs = opts.fontSize ?? 8.5;
+      doc.fontSize(fs).font(opts.font ?? (opts.bold ? "Helvetica-Bold" : "Helvetica"));
+      const h = doc.heightOfString(text, { width: cw - 8, align: opts.align ?? "left" });
+      doc.fillColor(opts.color ?? BLACK).text(text, cx + 4, cy + Math.max(2.5, (ch - h) / 2), { width: cw - 8, align: opts.align ?? "left" });
+    }
 
-    let y = MARGIN_V;
+    function drawFooter(page: number, total: number) {
+      const fy = PAGE_H - FOOTER_H;
+      doc.moveTo(ML, fy).lineTo(ML + W, fy).strokeColor(LINE).lineWidth(0.5).stroke();
+      let tx = ML;
+      if (existsSync(LOGO_PATH)) { try { doc.image(LOGO_PATH, ML, fy + 6, { width: 12, height: 12 }); tx = ML + 16; } catch {} }
+      doc.fontSize(7).font("Helvetica").fillColor(GRAY)
+        .text(sanitizePdfText(`${tenantName} — Solicitud de repuestos`), tx, fy + 9, { width: W / 2, lineBreak: false });
+      doc.text(sanitizePdfText(`${req!.requestCode} · ${vesselName} · Página ${page} de ${total}`), ML, fy + 9, { width: W, align: "right", lineBreak: false });
+    }
 
-    doc.on("pageAdded", () => {
-      (doc as any).y = MARGIN_V;
-      y = MARGIN_V;
+    function newPage() {
+      doc.addPage();
+      y = MARGIN_T;
+    }
+
+    function ensureSpace(h: number, onNewPage?: () => void) {
+      if (y + h > CONTENT_BOTTOM) { newPage(); onNewPage?.(); }
+    }
+
+    // ── Encabezado ───────────────────────────────────────────────────────────
+    const HDR_H = 60;
+    const LOGO_W = 110;
+    const META_W = 150;
+    const CTR_W = W - LOGO_W - META_W;
+    doc.rect(ML, y, W, HDR_H).strokeColor(LINE).lineWidth(0.6).stroke();
+    doc.rect(ML, y, LOGO_W, HDR_H).strokeColor(LINE).lineWidth(0.5).stroke();
+    const logo = tenantLogoBuffer ?? (existsSync(LOGO_PATH) ? LOGO_PATH : null);
+    if (logo) {
+      try { doc.image(logo, ML + 6, y + 6, { fit: [LOGO_W - 12, HDR_H - 12], align: "center", valign: "center" }); } catch {}
+    }
+    doc.rect(ML + LOGO_W, y, CTR_W, HDR_H).strokeColor(LINE).lineWidth(0.5).stroke();
+    doc.fontSize(14).font("Times-Bold").fillColor(NAVY)
+      .text("SOLICITUD DE REPUESTOS", ML + LOGO_W, y + 14, { width: CTR_W, align: "center" });
+    doc.fontSize(9).font("Helvetica").fillColor(BLACK)
+      .text("Buque a Departamento de Compras", ML + LOGO_W, y + 36, { width: CTR_W, align: "center" });
+    const mx = ML + LOGO_W + CTR_W;
+    cell(mx, y, META_W, HDR_H / 3, sanitizePdfText(`N° ${req.requestCode}`), { bold: true, fontSize: 8.5 });
+    cell(mx, y + HDR_H / 3, META_W, HDR_H / 3, sanitizePdfText(`Fecha ${f(req.requestedAt)}`), { fontSize: 8.5 });
+    cell(mx, y + (2 * HDR_H) / 3, META_W, HDR_H / 3, STATUS[status] ?? status, {
+      bold: true, fontSize: 7.5, color: status === "CANCELLED" ? "#B91C1C" : NAVY,
     });
+    y += HDR_H + 10;
 
-    function ensureSpace(needed: number) {
-      if (y + needed > CONTENT_BOTTOM) { doc.addPage(); y = MARGIN_V; }
-    }
+    // ── Datos ────────────────────────────────────────────────────────────────
+    const ROW = 18;
+    const LBL = W * 0.18;
+    const prio = PRIORITY[req.priority] ?? { label: req.priority, color: BLACK };
+    cell(ML, y, LBL, ROW, "BUQUE", { bold: true, fontSize: 8, bg: LABEL_BG });
+    cell(ML + LBL, y, W / 2 - LBL, ROW, sanitizePdfText(vesselName.toUpperCase()), { bold: true });
+    cell(ML + W / 2, y, LBL, ROW, "PRIORIDAD", { bold: true, fontSize: 8, bg: LABEL_BG });
+    cell(ML + W / 2 + LBL, y, W / 2 - LBL, ROW, sanitizePdfText(prio.label), { bold: true, color: prio.color });
+    y += ROW;
+    cell(ML, y, LBL, ROW, "PEDIDO POR", { bold: true, fontSize: 8, bg: LABEL_BG });
+    cell(ML + LBL, y, W - LBL, ROW, sanitizePdfText(requestedBy));
+    y += ROW + 10;
 
-    function sectionHeader(title: string) {
-      ensureSpace(22);
-      doc.rect(ML, y, W, 18).fillColor(bgHead).fill();
-      doc.fontSize(8).font("Helvetica-Bold").fillColor("#ffffff")
-        .text(title.toUpperCase(), ML + 10, y + 5, { width: W - 20, characterSpacing: 1.2 });
-      y += 18;
-    }
-
-    function inlineRow(fields: Array<{ label: string; value: string; color?: string }>) {
-      const boxH = 42;
-      ensureSpace(boxH);
-      const colW = W / fields.length;
-      fields.forEach((f, i) => {
-        const bx = ML + i * colW;
-        doc.roundedRect(bx, y, colW, boxH, 0).fillColor(bgBox).fill();
-        doc.roundedRect(bx, y, colW, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
-        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-          .text(f.label.toUpperCase(), bx + 10, y + 7, { width: colW - 20, characterSpacing: 0.5 });
-        doc.fontSize(10.5).font("Helvetica-Bold").fillColor(f.color ?? black)
-          .text(f.value, bx + 10, y + 19, { width: colW - 20 });
-      });
-      y += boxH;
-    }
-
-    // Renderiza un cuadro con label arriba y texto. Si el contenido excede
-    // la página, se parte en segmentos con caja propia (con "(cont.)" en el
-    // label de las continuaciones).
-    function textRow(label: string, rawText: string) {
-      const text  = val(rawText);
-      const color = text === "—" ? gray : black;
-      const innerW = W - 20;
-      const LABEL_H = 18;
-      const TOP_PAD = 6;
-      const BOTTOM_PAD = 4;
-
-      if (text === "—") {
-        doc.fontSize(10).font("Helvetica");
-        const oneH = doc.heightOfString("—", { width: innerW, lineGap: 2 });
-        const boxH = Math.max(38, oneH + LABEL_H + BOTTOM_PAD);
-        ensureSpace(boxH);
-        doc.roundedRect(ML, y, W, boxH, 0).fillColor(bgBox).fill();
-        doc.roundedRect(ML, y, W, boxH, 0).strokeColor(border).lineWidth(0.5).stroke();
-        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-          .text(label.toUpperCase(), ML + 10, y + TOP_PAD, { width: innerW, characterSpacing: 0.5 });
-        doc.fontSize(10).font("Helvetica").fillColor(color)
-          .text("—", ML + 10, y + LABEL_H, { width: innerW, lineGap: 2 });
-        y += boxH;
-        return;
-      }
-
-      const firstAvailable = CONTENT_BOTTOM - y - LABEL_H - BOTTOM_PAD;
-      const continuationAvailable = CONTENT_BOTTOM - MARGIN_V - LABEL_H - BOTTOM_PAD;
-      const segments = splitTextIntoPageSegments(
-        doc, text, innerW,
-        { font: "Helvetica", fontSize: 10, lineGap: 2 },
-        firstAvailable, continuationAvailable,
-      );
-
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (i > 0) { doc.addPage(); y = MARGIN_V; }
-        const segH = Math.max(segments.length === 1 ? 38 : LABEL_H + 8,
-                              LABEL_H + seg.contentHeight + BOTTOM_PAD);
-        const segLabel = seg.isContinuation ? `${label.toUpperCase()} (CONT.)` : label.toUpperCase();
-        doc.roundedRect(ML, y, W, segH, 0).fillColor(bgBox).fill();
-        doc.roundedRect(ML, y, W, segH, 0).strokeColor(border).lineWidth(0.5).stroke();
-        doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-          .text(segLabel, ML + 10, y + TOP_PAD, { width: innerW, characterSpacing: 0.5 });
-        doc.fontSize(10).font("Helvetica").fillColor(black)
-          .text(seg.text, ML + 10, y + LABEL_H, { width: innerW, lineGap: 2 });
-        y += segH;
-      }
-    }
-
-    // ── HEADER ──────────────────────────────────────────────────────────────────
-    const HEADER_H = 56;
-    const TENANT_LOGO_MAX_W = 90;
-    doc.rect(ML, y, 4, HEADER_H).fillColor("#1e40af").fill();
-
-    // Tenant logo — top-right, proportional to header height
-    if (tenantLogoBuffer) {
-      try {
-        doc.image(tenantLogoBuffer, ML + W - TENANT_LOGO_MAX_W, y,
-          { fit: [TENANT_LOGO_MAX_W, HEADER_H], align: "right", valign: "center" });
-      } catch {}
-    }
-
-    doc.fontSize(17).font("Helvetica-Bold").fillColor(navy)
-      .text("SOLICITUD DE REPUESTOS", ML + 14, y + 4, { width: W * 0.55, lineGap: 2 });
-
-    // Tenant name fallback when no logo
-    if (!tenantLogoBuffer) {
-      doc.fontSize(8.5).font("Helvetica").fillColor(gray)
-        .text(tenantName, ML + 14, y + 34, { width: W * 0.55 });
-    }
-
-    const metaX = ML + W * 0.58;
-    const metaW = ML + W - TENANT_LOGO_MAX_W - 8 - metaX;
-    doc.fontSize(7.5).font("Helvetica").fillColor(gray)
-      .text("Código:", metaX, y, { width: metaW, align: "right" });
-    doc.fontSize(12).font("Helvetica-Bold").fillColor(navy)
-      .text(req.requestCode, metaX, y + 10, { width: metaW, align: "right" });
-    doc.fontSize(7.5).font("Helvetica").fillColor(gray)
-      .text(`Generado: ${new Date().toLocaleString(tenantLocale, { timeZone: tenantTz })}`, metaX, y + 38, { width: metaW, align: "right" });
-
-    y += 64;
-    doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
-    y += 12;
-
-    // ── SECCIÓN 1: INFORMACIÓN GENERAL ─────────────────────────────────────────
-    sectionHeader("Información General");
-    inlineRow([
-      { label: "Vessel",     value: val(req.requestedForVesselCode), color: "#1d4ed8" },
-      { label: "Estado",     value: statusLabel(req.status) },
-      { label: "Prioridad",  value: priorityLabel(req.priority) },
-    ]);
-    inlineRow([
-      { label: "Solicitado por",  value: requesterName ?? "—" },
-      { label: "Fecha solicitud", value: f(req.requestedAt) },
-      { label: "Fecha aprobación",value: req.approvedAt ? f(req.approvedAt) : "—" },
-    ]);
-    if (req.notes) textRow("Notas / Observaciones", req.notes);
-    if (req.rejectionReason) textRow("Motivo de rechazo", req.rejectionReason);
-    y += 8;
-
-    // ── SECCIÓN 2: ÍTEMS SOLICITADOS ────────────────────────────────────────────
-    sectionHeader("Ítems Solicitados");
-
-    const ROW_H = 28;
-    const COL_DESC  = W * 0.42;
-    const COL_SKU   = W * 0.18;
-    const COL_QTY   = W * 0.10;
-    const COL_UNIT  = W * 0.10;
-    const COL_STAT  = W * 0.20;
-
-    // Table header
-    ensureSpace(ROW_H);
-    const hBg = "#e2e8f0";
-    doc.rect(ML, y, W, ROW_H - 4).fillColor(hBg).fill();
-    doc.fontSize(7).font("Helvetica-Bold").fillColor(gray);
-    doc.text("DESCRIPCIÓN",        ML + 8,                   y + 8, { width: COL_DESC - 8 });
-    doc.text("SKU",                ML + COL_DESC,            y + 8, { width: COL_SKU });
-    doc.text("CANT.",              ML + COL_DESC + COL_SKU,  y + 8, { width: COL_QTY, align: "right" });
-    doc.text("UNIDAD",             ML + COL_DESC + COL_SKU + COL_QTY, y + 8, { width: COL_UNIT });
-    doc.text("ESTADO",             ML + COL_DESC + COL_SKU + COL_QTY + COL_UNIT, y + 8, { width: COL_STAT });
-    y += ROW_H - 4;
+    // ── Ítems ────────────────────────────────────────────────────────────────
+    const cols = [W * 0.05, W * 0.3, W * 0.16, W * 0.27, W * 0.09, W * 0.13];
+    const colX = (i: number) => ML + cols.slice(0, i).reduce((a, b) => a + b, 0);
+    const itemHeader = () => {
+      ["#", "REPUESTO", "N° DE PARTE", "PARA QUÉ (EQUIPO)", "A BORDO", "CANTIDAD"].forEach((h, i) =>
+        cell(colX(i), y, cols[i]!, 16, sanitizePdfText(h), { bold: true, fontSize: 7.5, bg: LABEL_BG, align: "center" }));
+      y += 16;
+    };
+    ensureSpace(18 + 16 + 16);
+    cell(ML, y, W, 18, "REPUESTOS SOLICITADOS", { bold: true, fontSize: 8.5, bg: NAVY, color: WHITE, align: "center" });
+    y += 18;
+    itemHeader();
 
     if (items.length === 0) {
-      ensureSpace(30);
-      doc.fontSize(10).font("Helvetica").fillColor(gray)
-        .text("Sin ítems registrados.", ML + 8, y + 8, { width: W });
-      y += 30;
-    } else {
-      items.forEach((item, idx) => {
-        const receiptNotes: string | null = (item as any).receiptNotes ?? null;
-        const hasNotes = item.status === "FULFILLED" && receiptNotes;
-        const noteH = hasNotes ? 14 : 0;
-        const totalH = ROW_H + noteH;
-        const rowBg = idx % 2 === 0 ? bgBox : "#ffffff";
-        ensureSpace(totalH);
-        doc.rect(ML, y, W, totalH).fillColor(rowBg).fill();
-        doc.moveTo(ML, y + totalH).lineTo(ML + W, y + totalH).strokeColor(border).lineWidth(0.3).stroke();
+      cell(ML, y, W, 18, "Sin ítems cargados.", { color: GRAY, align: "center" });
+      y += 18;
+    }
+    items.forEach((it, idx) => {
+      const texts = [
+        String(idx + 1),
+        sanitizePdfText(it.itemLabel.toUpperCase()),
+        sanitizePdfText(it.partNumber ?? ""),
+        sanitizePdfText((it.equipment ?? "").toUpperCase()),
+        it.onHand == null ? "—" : String(it.onHand),
+        sanitizePdfText(fmtQty(it.quantity, it.unit)),
+      ];
+      doc.fontSize(8).font("Helvetica");
+      const rowH = Math.max(16, ...texts.map((t, i) => doc.heightOfString(t, { width: cols[i]! - 8 }) + 6));
+      ensureSpace(rowH, itemHeader);
+      texts.forEach((t, i) => cell(colX(i), y, cols[i]!, rowH, t, {
+        fontSize: 8, bold: i === 5, align: i === 0 || i >= 4 ? "center" : "left",
+      }));
+      y += rowH;
+      if (it.notes) {
+        const note = sanitizePdfText(`Obs.: ${it.notes}`);
+        doc.fontSize(7.5).font("Helvetica-Oblique");
+        const nh = doc.heightOfString(note, { width: W - cols[0]! - 8 }) + 5;
+        ensureSpace(nh, itemHeader);
+        cell(colX(0), y, cols[0]!, nh, "");
+        doc.rect(colX(1), y, W - cols[0]!, nh).strokeColor(LINE).lineWidth(0.5).stroke();
+        doc.fillColor(GRAY).text(note, colX(1) + 4, y + 2.5, { width: W - cols[0]! - 8 });
+        y += nh;
+      }
+    });
+    y += 10;
 
-        doc.fontSize(9).font("Helvetica").fillColor(black)
-          .text(item.description || "—", ML + 8, y + 8, { width: COL_DESC - 8, ellipsis: true });
-        doc.fontSize(8).font("Helvetica").fillColor("#1d4ed8")
-          .text(item.spareSku ?? "—", ML + COL_DESC, y + 8, { width: COL_SKU });
-        doc.fontSize(9).font("Helvetica-Bold").fillColor(black)
-          .text(String(item.quantity), ML + COL_DESC + COL_SKU, y + 8, { width: COL_QTY, align: "right" });
-        doc.fontSize(9).font("Helvetica").fillColor(gray)
-          .text(item.unit || "—", ML + COL_DESC + COL_SKU + COL_QTY + 4, y + 8, { width: COL_UNIT });
-        const isFulfilled = item.status === "FULFILLED";
-        const statusColor = isFulfilled ? "#15803d" : item.status === "CANCELLED" ? "#b91c1c" : "#b45309";
-        doc.fontSize(8).font("Helvetica").fillColor(statusColor)
-          .text(itemStatusLabel(item.status, (item as any).receivedAt, f), ML + COL_DESC + COL_SKU + COL_QTY + COL_UNIT, y + 8, { width: COL_STAT });
-
-        if (hasNotes) {
-          doc.fontSize(7.5).font("Helvetica-Oblique").fillColor(gray)
-            .text(`Obs.: ${receiptNotes}`, ML + 8, y + ROW_H + 2, { width: W - 16, ellipsis: true });
-        }
-        y += totalH;
+    // ── Motivo (texto libre: puede ocupar más de una página) ─────────────────
+    y = renderLabeledTextBox(doc, {
+      label: "MOTIVO / JUSTIFICACIÓN", text: req.notes ?? "—",
+      x: ML, y, width: W, pageBottom: CONTENT_BOTTOM, pageTop: MARGIN_T,
+      fontSize: 9, bg: "#FFFFFF", border: LINE, cornerRadius: 0, sectionGap: 10,
+    });
+    if (req.status === "CANCELLED" && req.rejectionReason) {
+      y = renderLabeledTextBox(doc, {
+        label: "ANULADA — MOTIVO", text: req.rejectionReason,
+        x: ML, y, width: W, pageBottom: CONTENT_BOTTOM, pageTop: MARGIN_T,
+        fontSize: 9, labelColor: "#B91C1C", bg: "#FEF2F2", border: "#FCA5A5", cornerRadius: 0, sectionGap: 10,
       });
     }
-
-    y += 8;
-    doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(0.5).stroke();
-    y += 16;
-
-    // ── FIRMAS ───────────────────────────────────────────────────────────────────
-    ensureSpace(72);
-    const sigW = W / 3;
-    const sigH = 64;
-    const sigDefs = [
-      { label: "Solicitado por", name: requesterName },
-      { label: "Aprobado por",   name: approverName  },
-      { label: "Almacenes / Recibido por", name: receiverName },
-    ];
-    sigDefs.forEach(({ label, name }, i) => {
-      const bx = ML + i * sigW;
-      doc.roundedRect(bx, y, sigW, sigH, 0).fillColor(bgBox).fill();
-      doc.roundedRect(bx, y, sigW, sigH, 0).strokeColor(border).lineWidth(0.5).stroke();
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(gray)
-        .text(label.toUpperCase(), bx + 10, y + 8, { width: sigW - 20, characterSpacing: 0.5 });
-      if (name) {
-        doc.fontSize(9).font("Helvetica-Bold").fillColor(black)
-          .text(name, bx + 10, y + 22, { width: sigW - 20 });
-      }
-      doc.moveTo(bx + 10, y + 50).lineTo(bx + sigW - 10, y + 50).strokeColor("#aaaaaa").lineWidth(0.8).stroke();
-    });
-    y += sigH + 8;
-
-    // ── FOOTER ────────────────────────────────────────────────────────────────────
-    const footerY = PAGE_H - FOOTER_SIZE;
-    doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();
-    if (existsSync(LOGO_PATH)) {
-      try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch {}
+    if (req.sentAt) {
+      ensureSpace(14);
+      doc.fontSize(7.5).font("Helvetica").fillColor(GRAY)
+        .text(sanitizePdfText(`Enviada a Compras${req.sentTo ? ` (${req.sentTo})` : ""} el ${f(req.sentAt)}${req.sentByName ? ` por ${req.sentByName}` : ""}.`), ML, y, { width: W });
+      y += 14;
     }
-    doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text("Copilot Management System — Documento generado automáticamente. No requiere firma digital.", ML + 18, footerY, { width: W / 2 - 18 });
-    doc.fontSize(8).font("Helvetica").fillColor(gray)
-      .text(`${req.requestCode} · ${val(req.requestedForVesselCode)} · ${f(new Date())}`, ML, footerY, { width: W, align: "right" });
 
+    // ── Firmas ───────────────────────────────────────────────────────────────
+    const SIG_H = 58;
+    ensureSpace(SIG_H + 8);
+    y += 8;
+    [["FIRMA JEFE DE MÁQUINAS / CAPITÁN", requestedBy], ["RECIBIDO COMPRAS (firma y fecha)", ""]].forEach(([label, name], i) => {
+      const bx = ML + i * (W / 2);
+      doc.rect(bx, y, W / 2, SIG_H).strokeColor(LINE).lineWidth(0.5).stroke();
+      if (name) {
+        doc.fontSize(8.5).font("Helvetica-Bold").fillColor(BLACK)
+          .text(sanitizePdfText(name!), bx + 4, y + 8, { width: W / 2 - 8, align: "center" });
+      }
+      doc.moveTo(bx + 20, y + SIG_H - 18).lineTo(bx + W / 2 - 20, y + SIG_H - 18).strokeColor("#999999").lineWidth(0.6).stroke();
+      doc.fontSize(7.5).font("Helvetica").fillColor(BLACK)
+        .text(sanitizePdfText(label!), bx + 4, y + SIG_H - 13, { width: W / 2 - 8, align: "center" });
+    });
+    y += SIG_H;
+
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      drawFooter(i + 1, range.count);
+    }
     doc.end();
   });
 }

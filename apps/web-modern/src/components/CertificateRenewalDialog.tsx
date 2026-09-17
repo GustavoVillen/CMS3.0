@@ -14,6 +14,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { ExternalLink, Folder, Loader2, RefreshCw } from "lucide-react";
 import { ModalCloseButton } from "./ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "./GuideKit";
 import { api, ApiError } from "../lib/api";
 import { AutoTextArea } from "./AutoTextArea";
 
@@ -176,19 +177,19 @@ export const CertificateRenewalDialog: React.FC<{
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className={labelCls}>Nueva emisión *</label>
+            <GuideField id="cert-renew-issue" missing={!issueDate}>
+              <label className={labelCls}>Nueva emisión<RequiredMark />{!issueDate && <GuideNeedTag label="Falta" />}</label>
               <input type="date" value={issueDate} onChange={e => handleIssueChange(e.target.value)} className={inputCls} />
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelCls}>Nuevo vencimiento *</label>
+            </GuideField>
+            <GuideField id="cert-renew-expiry" missing={!expiryDate}>
+              <label className={labelCls}>Nuevo vencimiento<RequiredMark />{!expiryDate && <GuideNeedTag label="Falta" />}</label>
               <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={inputCls} />
               {!validityDays && (
                 <p className="text-[11px] text-text-industrial/40">
                   No se pudo deducir la vigencia anterior: cargalo a mano.
                 </p>
               )}
-            </div>
+            </GuideField>
           </div>
 
           <div className="space-y-1.5">

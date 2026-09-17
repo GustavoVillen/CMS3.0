@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview V3 — Pedir varios repuestos juntos</title>
+<style>
+  :root { --accent:#0891b2; --violet:#7c3aed; --fg:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: Inter, "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--fg); font-size:13px; }
+  .wrap { max-width:1150px; margin:0 auto; padding:20px 16px 60px; }
+  .banner { background:#fff3cd; border:1px solid #e0b100; border-radius:8px; padding:10px 14px; margin-bottom:14px; }
+  .demo { background:#fde68a; color:#7c5800; font-size:10px; font-weight:bold; padding:1px 6px; border-radius:4px; }
+  .note { background:#fff; border-radius:8px; padding:10px 14px; line-height:1.55; margin-bottom:10px; }
+  .note ul { margin:4px 0 0 18px; padding:0; }
+  h2 { font-size:15px; margin:24px 0 8px; }
+  .hi { outline:2px dashed #e0a800; outline-offset:2px; }
+  .app { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; position:relative; overflow:hidden; }
+  .hdr { display:flex; align-items:center; gap:10px; }
+  .hdr h1 { font-size:18px; margin:0; }
+  .count { background:#e2e8f0; border-radius:10px; padding:1px 8px; font-size:11px; color:var(--muted); }
+  .btns { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .b { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:#f8fafc; font-size:12px; white-space:nowrap; }
+  .b.new { background:var(--violet); color:#fff; border-color:var(--violet); font-weight:700; }
+  .b.req { background:#ea580c; color:#fff; border-color:#ea580c; font-weight:700; }
+  .b.off { opacity:.4; }
+  .ic { color:var(--accent); }
+  .selbar { margin-top:12px; display:flex; align-items:center; gap:12px; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:7px 12px; font-size:12px; }
+  .selbar a { color:#c2410c; font-weight:600; text-decoration:none; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  th { text-align:left; font-size:10.5px; letter-spacing:.06em; color:var(--muted); padding:9px 10px; border-bottom:1px solid var(--line); background:#f8fafc; }
+  td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tr.crit td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
+  tr.crit { background:#fdf2f2; }
+  tr.sel { background:#fff7ed !important; }
+  .name b { display:block; font-size:12.5px; }
+  .name small { font-family:monospace; color:var(--muted); font-size:10.5px; }
+  .chip { display:inline-block; border-radius:5px; padding:1px 6px; font-size:10.5px; font-weight:900; }
+  .A { background:#b91c1c; color:#fff; } .B { background:#fef3c7; color:#92400e; } .C { background:#f1f5f9; color:#64748b; }
+  .stock b { color:#b91c1c; }
+  .stock small { display:block; font-size:10px; color:var(--muted); }
+  .pedir { border:1px solid #fdba74; background:#fff7ed; color:#c2410c; border-radius:7px; padding:3px 8px; font-size:11px; font-weight:700; }
+  .cb { width:15px; height:15px; border:1.5px solid #94a3b8; border-radius:4px; display:inline-block; vertical-align:middle; }
+  .cb.on { background:#ea580c; border-color:#ea580c; position:relative; }
+  .cb.on::after { content:"✓"; color:#fff; font-size:11px; position:absolute; left:2px; top:-2px; font-weight:bold; }
+  .cb.dis { background:#f1f5f9; border-color:#e2e8f0; }
+  /* modal */
+  .overlay { background:rgba(15,23,42,.55); border-radius:14px; padding:30px 0; display:flex; justify-content:center; }
+  .modal { width:720px; background:#fff; border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.35); overflow:hidden; }
+  .mh { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--line); }
+  .mh h3 { margin:0; font-size:14px; } .mh p { margin:2px 0 0; font-size:11px; color:var(--muted); }
+  .x { width:26px; height:26px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+  .mb { padding:14px 18px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  label { display:block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:4px; }
+  .in { border:1px solid var(--line); background:#f8fafc; border-radius:8px; padding:6px 9px; font-size:12px; }
+  .mt td, .mt th { padding:6px 8px; font-size:12px; }
+  .qty { width:62px; border:1px solid var(--line); border-radius:6px; padding:3px 6px; text-align:right; background:#fff; }
+  .rm { color:#dc2626; font-weight:bold; }
+  .mf { display:flex; justify-content:space-between; align-items:center; padding:12px 18px; border-top:1px solid var(--line); }
+  .go { background:#ea580c; color:#fff; font-weight:700; border-radius:8px; padding:8px 14px; font-size:12px; }
+  .alert { width:380px; margin:0 auto; background:#fff; border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+  .alert .ok { float:right; background:var(--accent); color:#fff; border-radius:8px; padding:6px 16px; font-weight:700; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner"><b>Preview V3</b> — pedir varios repuestos en una sola solicitud. Datos <span class="demo">DEMO</span> de MAO 02. Lo nuevo va resaltado en amarillo punteado.</div>
+
+  <div class="note">
+    <b>Cómo funciona</b>
+    <ul>
+      <li>Cada fila tiene una <b>casilla</b> a la izquierda. Tildás los repuestos que querés pedir.</li>
+      <li>En la barra de arriba aparece <b>Generar solicitud de repuestos (N)</b>, apagado hasta que tildes al menos uno.</li>
+      <li>Una solicitud es de <b>un solo buque</b>: al tildar el primero, las casillas de repuestos de otros buques quedan apagadas.</li>
+      <li>La franja naranja muestra cuántos hay tildados, con "Tildar los sin stock" y "Quitar selección".</li>
+      <li>El botón abre una ventanita para revisar cantidades, prioridad y comentario. Al confirmar se crea <b>una</b> solicitud en <b>Borrador</b> con todos los ítems, en Solicitudes de repuestos, donde se envía y aprueba como siempre.</li>
+      <li>La cantidad sugerida es lo que falta para llegar al stock objetivo (o al punto de reposición); se puede cambiar.</li>
+      <li>El botón "Pedir" de cada fila queda como está.</li>
+      <li><b>Quién puede:</b> sólo quien ya puede crear solicitudes (permiso "Gestionar solicitudes de repuestos": Admin, Jefe de mantenimiento, Tripulación, Compras según la matriz). El resto no ve casillas ni botón. Aprobar sigue siendo de quien aprueba hoy.</li>
+    </ul>
+  </div>
+
+  <h2>1 · Lista con 3 repuestos tildados</h2>
+  <div class="app">
+    <div class="hdr">
+      <h1>📦 Repuestos &amp; Stock <span class="count">65</span></h1>
+      <div class="btns">
+        <span class="b"><span class="ic">📋</span> Formularios/ PDF</span>
+        <span class="b"><span class="ic">▦</span> Excel</span>
+        <span class="b req hi">🛒 Generar solicitud de repuestos (3)</span>
+        <span class="b new">＋ Nuevo repuesto</span>
+      </div>
+    </div>
+    <div class="selbar hi"><b>3 repuestos de MAO 02 seleccionados</b> <a href="#">Tildar los sin stock</a> <a href="#">Quitar selección</a></div>
+    <table>
+      <tr><th class="hi" style="width:34px"></th><th>REPUESTO</th><th>CATEGORÍA</th><th>CRITICIDAD</th><th>STOCK ACTUAL</th><th>DÓNDE ESTÁ</th><th></th></tr>
+      <tr class="sel"><td><span class="cb on"></span></td><td class="name"><b>Abrazaderas heavy duty aire de carga para Volvo Penta D16 MH</b><small>ABR-AIRE-01 · MAO 02</small></td><td>Abrazadera</td><td><span class="chip B">B</span></td><td class="stock"><b>0</b> jgo<small>mín 1 · reponer en 1</small></td><td>Pañol Maquinas</td><td><span class="pedir">🛒 Pedir</span></td></tr>
+      <tr><td><span class="cb"></span></td><td class="name"><b>Abrazaderas inoxidables varias para Volvo Penta D16 MH</b><small>ABR-INOX-01 · MAO 02</small></td><td>Abrazadera</td><td><span class="chip C">C</span></td><td class="stock"><b>0</b> jgo<small>mín 1 · reponer en 1</small></td><td>Pañol Maquinas</td><td><span class="pedir">🛒 Pedir</span></td></tr>
+      <tr class="crit sel"><td><span class="cb on"></span></td><td class="name"><b>Aceite lubricante aprobado para Volvo Penta D16 MH</b><small>ACE-MOT-01 · MAO 02</small></td><td>Lubricante</td><td><span class="chip A">A</span></td><td class="stock"><b>0</b> l<small>mín 1 · reponer en 1</small></td><td>Pañol Maquinas</td><td><span class="pedir">🛒 Pedir</span></td></tr>
+      <tr class="crit sel"><td><span class="cb on"></span></td><td class="name"><b>Regulador automatico de tension (AVR tipo 'VOLTS') para alternador CRAMACO G2R</b><small>ALT-AVR-01 · MAO 02</small></td><td>Electronico</td><td><span class="chip A">A</span></td><td class="stock"><b>0</b> ud<small>mín 1 · reponer en 1</small></td><td>Panol Maquinas</td><td><span class="pedir">🛒 Pedir</span></td></tr>
+      <tr><td><span class="cb dis" title="Otro buque"></span></td><td class="name"><b>Filtro de aceite spin-on para caja Twin Disc MG-5170DC</b><small>CR-FIL-01 · DON CHICUETO</small></td><td>Filtro</td><td><span class="chip B">B</span></td><td class="stock"><b>0</b> ud<small>mín 1 · reponer en 1</small></td><td>Pañol Maquinas</td><td><span class="pedir">🛒 Pedir</span></td></tr>
+    </table>
+  </div>
+
+  <h2>2 · Ventanita al tocar "Generar solicitud de repuestos"</h2>
+  <div class="overlay">
+    <div class="modal">
+      <div class="mh"><div><h3>Generar solicitud de repuestos</h3><p>MAO 02 · se crea en Borrador con 3 ítems</p></div><span class="x">✕</span></div>
+      <div class="mb">
+        <div class="grid">
+          <div><label>Prioridad</label><div class="in">Media ▾</div></div>
+          <div><label>Buque</label><div class="in" style="background:#f1f5f9">MAO 02</div></div>
+        </div>
+        <table class="mt" style="margin-top:12px">
+          <tr><th>REPUESTO</th><th style="text-align:right">A BORDO</th><th style="text-align:right">CANTIDAD</th><th>UNIDAD</th><th></th></tr>
+          <tr><td><b>Abrazaderas heavy duty aire de carga</b><br><small style="color:#64748b;font-family:monospace">ABR-AIRE-01</small></td><td style="text-align:right">0</td><td style="text-align:right"><input class="qty" value="1"></td><td>jgo</td><td class="rm">✕</td></tr>
+          <tr><td><b>Aceite lubricante aprobado</b><br><small style="color:#64748b;font-family:monospace">ACE-MOT-01</small></td><td style="text-align:right">0</td><td style="text-align:right"><input class="qty" value="1"></td><td>l</td><td class="rm">✕</td></tr>
+          <tr><td><b>Regulador automatico de tension (AVR)</b><br><small style="color:#64748b;font-family:monospace">ALT-AVR-01</small></td><td style="text-align:right">0</td><td style="text-align:right"><input class="qty" value="1"></td><td>ud</td><td class="rm">✕</td></tr>
+        </table>
+        <div style="margin-top:12px"><label>Comentario</label><div class="in" style="height:48px;color:#94a3b8">Motivo o aclaración para compras (opcional)</div></div>
+      </div>
+      <div class="mf"><span style="font-size:11px;color:#64748b">Después la enviás a aprobación desde Solicitudes de repuestos.</span><span class="go">🛒 Crear solicitud</span></div>
+    </div>
+  </div>
+
+  <h2>3 · Al confirmar</h2>
+  <div class="overlay" style="padding:24px 0">
+    <div class="alert"><b>Solicitud creada</b><p style="margin:6px 0 0">Se creó <b>REQ-M02-26-0004</b> en Borrador con 3 ítems.</p><span class="ok">OK</span><div style="clear:both"></div></div>
+  </div>
+  <div class="note" style="margin-top:10px">Al tocar OK se abre Solicitudes de repuestos. Si alguna validación falla (por ejemplo una cantidad en 0), el aviso sale en la misma ventanita con botón OK y no se crea nada.</div>
+</div>
+</body>
+</html>

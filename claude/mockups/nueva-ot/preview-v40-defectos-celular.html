@@ -1,0 +1,494 @@
+<title>Defectos en el celular</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --vio:#7C3AED; --viosoft:rgba(124,58,237,.10); --viofg:#6D28D9;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --vio:#A78BFA; --viosoft:rgba(167,139,250,.14); --viofg:#C4B5FD;
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --vio:#A78BFA; --viosoft:rgba(167,139,250,.14); --viofg:#C4B5FD;
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:30px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.head .bk{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps{display:flex;gap:6px;padding:0 16px 10px;background:var(--surface);border-bottom:1px solid var(--line)}
+.steps i{flex:1;height:5px;border-radius:99px;background:var(--surface2)}
+.steps i.on{background:var(--ac)}
+.scr{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.foot{flex:none;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px}
+.mainb{width:100%;min-height:54px;border:0;border-radius:16px;background:var(--ac);color:var(--acfg);font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.mainb.miss{background:color-mix(in srgb,var(--warn) 15%,transparent);border:1.5px solid var(--warn);color:var(--warnfg)}
+.ghost{width:100%;min-height:48px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);font-size:15px;font-weight:700;cursor:pointer}
+.foot small{text-align:center;font-size:12.5px;color:var(--muted)}
+.lbl{font-size:14.5px;font-weight:800;margin:0}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.ta{width:100%;min-height:104px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:11px 12px;font-size:16px;resize:none}
+.inp{width:100%;min-height:50px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 12px;font-size:16px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tool{min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:14.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer}
+.tool.rec{background:var(--bad);border-color:var(--bad);color:#fff}
+.photos{display:flex;gap:8px;flex-wrap:wrap}
+.ph{width:62px;height:62px;border-radius:12px;background:var(--surface2);display:grid;place-items:center;color:var(--faint);border:1px solid var(--line)}
+.aibox{border:1.5px solid color-mix(in srgb,var(--vio) 40%,transparent);background:var(--viosoft);border-radius:18px;padding:12px 13px;display:flex;flex-direction:column;gap:10px}
+.aihdr{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--viofg)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 12px;display:flex;align-items:center;gap:10px}
+.card .tx{min-width:0;flex:1}
+.card .k{display:block;font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+.card .v{display:block;font-size:15px;font-weight:800;line-height:1.25;margin-top:2px}
+.card .v.small{font-size:14px;font-weight:600;line-height:1.35}
+.edit{flex:none;min-height:34px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);font-size:12.5px;font-weight:700;cursor:pointer}
+.card.miss{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 8%,var(--surface))}
+.chips{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:7px}
+.chip{min-height:44px;padding:5px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;line-height:1.15;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-align:center;overflow-wrap:anywhere}
+.chip.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.sev-1.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.sev-2.on{background:var(--warn);border-color:var(--warn);color:#000}
+.sev-3.on{background:#EA580C;border-color:#EA580C;color:#fff}
+.sev-4.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.opt{width:100%;text-align:left;border-radius:18px;border:1.5px solid var(--line);background:var(--surface);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.opt .ic{width:48px;height:48px;flex:none;border-radius:14px;display:grid;place-items:center}
+.opt b{display:block;font-size:16px;font-weight:800;line-height:1.2}
+.opt small{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.ic-wo{background:var(--acsoft);color:var(--ac)}
+.ic-fix{background:var(--oksoft);color:var(--ok)}
+.ic-open{background:var(--surface2);color:var(--muted)}
+.done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:16px 0}
+.done .circ{width:80px;height:80px;border-radius:99px;background:var(--oksoft);color:var(--ok);display:grid;place-items:center}
+.done h2{margin:8px 0 0;font-size:23px;font-weight:800;line-height:1.15}
+.done .codes{font-size:14px;font-weight:600;color:var(--muted)}
+.done ul{list-style:none;margin:10px 0 0;padding:0;width:100%;display:flex;flex-direction:column;gap:8px;text-align:left}
+.done li{display:flex;gap:10px;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.done li i{color:var(--faint);flex:none;margin-top:1px}
+.guide{width:340px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.opts2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.optb{min-height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;padding:6px}
+.optb.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.ref{max-width:880px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.col{display:flex;flex-direction:column;gap:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Defectos en el celular <small>· Preview V40</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+
+const TEXTO_DEMO = "El motor principal de babor está perdiendo aceite por la tapa de balancines, gotea sobre el colector de escape. Le puse una bandeja y bajé revoluciones.";
+// Lo que devuelve la IA del sistema (mismo endpoint que ya usa la vista de tripulación).
+const IA = {
+  equipo: "Motor Principal Babor",
+  descripcion: "Pérdida de aceite por la junta de la tapa de balancines del motor principal de babor, con goteo sobre el colector de escape.",
+  clasificacion: "Mecánico",
+  gravedad: 3,           // 1 Baja · 2 Media · 3 Alta · 4 Crítica
+  estado: 2,             // 1 Normal · 2 Degradado · 3 Restringido · 4 No operar
+  accion: "Se colocó bandeja de contención y se redujeron revoluciones para limitar el goteo sobre el escape.",
+  confianza: "alta",
+};
+const SEV = ["Baja","Media","Alta","Crítica"];
+const EST = ["Normal","Degradado","Restringido","No operar"];
+
+const S = {v:"app", paso:"1", texto:"", fotos:0, pensando:false, ia:null, sinEquipo:false,
+           reparo:{que:"", check:null}, theme:"system"};
+
+const head = (titulo, sub, paso) => `
+  <div class="head">
+    <button class="bk" data-a="atras">${I("arrow-left",20)}</button>
+    <div style="min-width:0"><h1>${titulo}</h1><p>${sub}</p></div>
+  </div>
+  ${paso?`<div class="steps">${[1,2,3].map(i=>`<i class="${i<=paso?"on":""}"></i>`).join("")}</div>`:""}`;
+
+/* ── Paso 1: contar qué pasó ─────────────────────────────────────────────── */
+function paso1(){
+  return head("Reportar un defecto","Paso 1 de 3 · ¿Qué pasó?",1) + `
+  <div class="scr">
+    <p class="lbl">Contá qué encontraste</p>
+    <p class="hint">Escribilo, dictalo o sacá una foto. Con eso la IA completa el resto y vos lo revisás.</p>
+    <textarea class="ta" data-a="texto" placeholder="Ej.: el motor de babor pierde aceite por la tapa de balancines…">${S.texto}</textarea>
+    <div class="tools">
+      <button class="tool" data-a="dictar">${I("mic",17)}Dictar</button>
+      <button class="tool" data-a="foto">${I("camera",17)}Foto${S.fotos?` (${S.fotos})`:""}</button>
+    </div>
+    ${S.fotos?`<div class="photos">${Array.from({length:S.fotos},()=>`<span class="ph">${I("image",20)}</span>`).join("")}</div>
+      <p class="hint">${I("sparkles",13)} La IA mira la foto y propone la descripción.</p>`:""}
+  </div>
+  <div class="foot">
+    <button class="mainb ${S.texto.trim()?"":"miss"}" data-a="analizar">
+      ${S.pensando ? `${I("loader-2",18)}Analizando…` : S.texto.trim() ? `${I("sparkles",18)}Continuar` : `${I("alert-triangle",18)}Contá qué pasó`}
+    </button>
+  </div>`;
+}
+
+/* ── Paso 2: lo que entendió la IA, para aprobar ─────────────────────────── */
+function fila(k, v, editable=true, falta=false){
+  return `<div class="card ${falta?"miss":""}">
+    <span class="tx"><span class="k">${k}</span><span class="v ${v.length>40?"small":""}">${v}</span></span>
+    ${editable?`<button class="edit" data-a="nada">${falta?"Elegir":"Cambiar"}</button>`:""}
+  </div>`;
+}
+function paso2(){
+  const ia = S.ia;
+  const faltaEquipo = S.sinEquipo;
+  return head("Reportar un defecto","Paso 2 de 3 · Revisá y confirmá",2) + `
+  <div class="scr">
+    <div class="aibox">
+      <span class="aihdr">${I("sparkles",14)} Esto entendí — revisalo</span>
+      ${faltaEquipo
+        ? fila("Equipo","No pude identificarlo. Elegilo vos.",true,true)
+        : fila("Equipo", ia.equipo)}
+      ${fila("Qué pasó", ia.descripcion)}
+      ${fila("Clasificación", ia.clasificacion)}
+      ${fila("Acción inmediata", ia.accion)}
+      <p class="hint" style="color:var(--viofg)">Sugerido por la IA a partir de lo que contaste. Nada se guarda hasta que confirmes.</p>
+    </div>
+
+    <div>
+      <p class="lbl">Gravedad</p>
+      <div class="chips" style="--n:4;margin-top:8px">
+        ${SEV.map((s,i)=>`<button class="chip sev-${i+1} ${ia.gravedad===i+1?"on":""}" data-a="sev" data-p="${i+1}">${s}</button>`).join("")}
+      </div>
+    </div>
+    <div>
+      <p class="lbl">¿Cómo queda el equipo?</p>
+      <div class="chips" style="--n:2;margin-top:8px">
+        ${EST.map((s,i)=>`<button class="chip ${ia.estado===i+1?"on":""}" data-a="est" data-p="${i+1}">${s}</button>`).join("")}
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <button class="mainb ${faltaEquipo?"miss":""}" data-a="registrar">
+      ${faltaEquipo ? `${I("alert-triangle",18)}Falta el equipo` : `${I("check",18)}Registrar el defecto`}
+    </button>
+    <small>Queda a tu nombre, con la fecha y la hora.</small>
+  </div>`;
+}
+
+/* ── Paso 3: ¿cómo se repara? ────────────────────────────────────────────── */
+function paso3(){
+  return head("¿Cómo se repara?","DEF-M02-26-0034 · registrado",3) + `
+  <div class="scr">
+    <p class="hint">El defecto ya quedó registrado. Falta decir cómo se resuelve.</p>
+    <button class="opt" data-a="ot">
+      <span class="ic ic-wo">${I("wrench",24)}</span>
+      <span style="min-width:0"><b>Crear la OT</b><small>Abre la orden de trabajo con el equipo y el problema ya cargados. El defecto queda vinculado a esa orden.</small></span>
+      ${I("chevron-right",18)}
+    </button>
+    <button class="opt" data-a="reparado">
+      <span class="ic ic-fix">${I("check-check",24)}</span>
+      <span style="min-width:0"><b>Ya se reparó</b><small>Se arregló en el momento. Pide qué se hizo y cómo se comprobó, y cierra el defecto.</small></span>
+      ${I("chevron-right",18)}
+    </button>
+    <button class="opt" data-a="listo-abierto">
+      <span class="ic ic-open">${I("clock",24)}</span>
+      <span style="min-width:0"><b>Lo dejo abierto</b><small>Queda reportado para que lo vea el jefe de máquinas o tierra.</small></span>
+      ${I("chevron-right",18)}
+    </button>
+  </div>`;
+}
+
+/* ── "Ya se reparó" ──────────────────────────────────────────────────────── */
+const CHECKS = ["Se probó en marcha","Funcionó normal durante la guardia","Lo verificó el jefe de máquinas","Otra"];
+function reparado(){
+  const falta = !S.reparo.check;
+  return head("Ya se reparó","DEF-M02-26-0034") + `
+  <div class="scr">
+    <p class="lbl">¿Qué se hizo?</p>
+    <textarea class="ta" style="min-height:88px" data-a="que" placeholder="Ej.: se cambió la junta de la tapa de balancines y se ajustó al torque.">${S.reparo.que}</textarea>
+    <div>
+      <p class="lbl">¿Cómo se comprobó que quedó bien?</p>
+      <p class="hint" style="margin-top:4px">Es la constancia del cierre: sin esto el defecto no se puede cerrar.</p>
+      <div class="chips" style="--n:1;margin-top:8px">
+        ${CHECKS.map((c,i)=>`<button class="chip ${S.reparo.check===i?"on":""}" data-a="check" data-p="${i}" style="justify-content:flex-start;text-align:left;padding-left:12px">${c}</button>`).join("")}
+      </div>
+      ${S.reparo.check===3?`<input class="inp" style="margin-top:8px" placeholder="Contá cómo se comprobó…">`:""}
+    </div>
+  </div>
+  <div class="foot">
+    <button class="mainb ${falta?"miss":""}" data-a="cerrar">
+      ${falta ? `${I("alert-triangle",18)}Falta 1 dato` : `${I("check",18)}Cerrar el defecto`}
+    </button>
+    <small>Firma como Juan Pérez · Jefe de Máquinas</small>
+  </div>`;
+}
+
+/* ── "Crear la OT": entra al flujo de OT nueva con el paso 1 ya cargado ──── */
+const KIND = ["Preventivo","Correctivo programado","Correctivo no programado","Predictivo","Emergencia","Inspección"];
+const PLAZO = ["Inmediato","Dentro de las 24hs","Dentro de la semana","Dentro del mes"];
+function otPaso1(){
+  return head("Nueva OT","Paso 1 de 3 · ¿Qué pasa?",1) + `
+  <div class="scr">
+    <div class="aibox" style="border-color:color-mix(in srgb,var(--ac) 40%,transparent);background:var(--acsoft)">
+      <span class="aihdr" style="color:var(--ac)">${I("link",14)} Viene del defecto DEF-M02-26-0034</span>
+      <p class="hint" style="margin:0">Equipo, problema y plazo ya vienen cargados. Revisalos y seguí con los pasos de siempre.</p>
+    </div>
+    <div class="card"><span class="tx"><span class="k">Equipo</span><span class="v">${IA.equipo}</span></span><button class="edit" data-a="nada">Cambiar</button></div>
+    <p class="lbl">Qué hay que hacer</p>
+    <textarea class="ta">${IA.descripcion}</textarea>
+    <div>
+      <p class="lbl">Tipo de mantenimiento</p>
+      <div class="chips" style="--n:3;margin-top:8px">
+        ${KIND.map((k,i)=>`<button class="chip ${i===2?"on":""}" data-a="nada">${k}</button>`).join("")}
+      </div>
+    </div>
+    <div>
+      <p class="lbl">¿Para cuándo?</p>
+      <div class="chips" style="--n:2;margin-top:8px">
+        ${PLAZO.map((k,i)=>`<button class="chip ${i===1?"on":""}" data-a="nada">${k}</button>`).join("")}
+      </div>
+      <p class="hint" style="margin-top:6px">Sale de la gravedad del defecto (Alta → dentro de las 24 hs). Cambialo si hace falta.</p>
+    </div>
+  </div>
+  <div class="foot">
+    <button class="mainb" data-a="ot-seguir">${I("arrow-right",18)}Continuar</button>
+    <small>Siguen los pasos de siempre: quién lo hace y los datos para aprobar.</small>
+  </div>`;
+}
+
+/* ── Pantallas finales ───────────────────────────────────────────────────── */
+function fin(tipo){
+  const conf = {
+    ot:      {t:"Defecto y OT abiertos", c:"DEF-M02-26-0034 · OT-M02-26-0478",
+              l:["La orden quedó enviada a aprobar.","El defecto queda vinculado a esa orden.","El resto se completa en la PC."]},
+    cerrado: {t:"Defecto cerrado", c:"DEF-M02-26-0034",
+              l:["Quedó registrado qué se hizo y cómo se comprobó.","A los 30 días el sistema va a pedir confirmar que el problema no volvió.","El resto se completa en la PC."]},
+    abierto: {t:"Defecto registrado", c:"DEF-M02-26-0034",
+              l:["Queda abierto, a la vista del jefe de máquinas y de tierra.","Podés crear la OT más tarde, desde la PC o desde acá.","El resto se completa en la PC."]},
+  }[tipo];
+  return head("Listo","") + `
+  <div class="scr">
+    <div class="done">
+      <span class="circ">${I("check",40)}</span>
+      <h2>${conf.t}</h2>
+      <span class="codes mono">${conf.c}</span>
+      <ul>${conf.l.map(x=>`<li>${I("info",17)}<span>${x}</span></li>`).join("")}</ul>
+    </div>
+  </div>
+  <div class="foot">
+    <button class="mainb" data-a="reiniciar">${I("home",18)}Volver al inicio</button>
+  </div>`;
+}
+
+/* ── El botón en el inicio ───────────────────────────────────────────────── */
+function inicio(){
+  return head("Buen día, Juan","Jefe de Máquinas · martes, 16/9") + `
+  <div class="scr">
+    <p class="hint">Así queda el botón nuevo dentro de "Lo demás", el grupo de abajo del inicio.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${[["plus","Nueva OT / SS","Abrir y mandar a aprobar"],
+         ["triangle-alert","Reportar un defecto","Algo se rompió o falla"],
+         ["shield-check","Permiso de trabajo","Pedir aprobación"],
+         ["clipboard-check","Check list","Responder y firmar"],
+         ["package-minus","Consumo de repuestos","Descontar del stock"]].map(([ic,t2,s],i)=>`
+        <button class="opt" style="flex-direction:column;align-items:flex-start;gap:8px;padding:12px;${i===1?"border-color:var(--bad);background:color-mix(in srgb,var(--bad) 5%,var(--surface))":""}" data-a="${i===1?"empezar":"nada"}">
+          <span class="ic ${i===1?"":"ic-open"}" style="width:38px;height:38px;border-radius:11px;${i===1?"background:var(--badsoft);color:var(--bad)":""}">${I(ic,19)}</span>
+          <span><b style="font-size:14.5px">${t2}</b><small style="font-size:12px">${s}</small></span>
+        </button>`).join("")}
+    </div>
+  </div>`;
+}
+
+function pantalla(){
+  switch(S.paso){
+    case "inicio": return inicio();
+    case "1": return paso1();
+    case "2": return paso2();
+    case "3": return paso3();
+    case "ot1": return otPaso1();
+    case "reparado": return reparado();
+    case "fin-ot": return fin("ot");
+    case "fin-cerrado": return fin("cerrado");
+    case "fin-abierto": return fin("abierto");
+  }
+}
+
+function app(){
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      ${pantalla()}
+    </div>
+    <aside class="guide">
+      <div><h2>Reportar un defecto, en tres pantallas</h2>
+      <p style="margin-top:8px">Contás qué pasó (escrito, dictado o con una foto), la IA completa equipo, descripción, clasificación, gravedad, estado del equipo y acción inmediata, y vos lo revisás antes de guardar. Al final pregunta cómo se repara.</p></div>
+      <div><p class="gl">Para probar</p><ol class="ol">
+        <li>Tocá <b>Dictar</b>: carga un ejemplo de lo que diría un jefe de máquinas.</li>
+        <li><b>Continuar</b>: la IA devuelve lo que entendió. Cambiá la gravedad o el estado del equipo si no coincide.</li>
+        <li><b>Registrar</b> y después probá los tres caminos: crear la OT, ya se reparó, o dejarlo abierto.</li>
+      </ol></div>
+      <div><p class="gl">Ver también</p>
+        <div class="opts2">
+          <button class="optb ${S.paso==="inicio"?"on":""}" data-a="ir" data-p="inicio">El botón en el inicio</button>
+          <button class="optb ${S.sinEquipo?"on":""}" data-a="sinEquipo">IA sin equipo</button>
+        </div>
+        <p class="hint" style="margin-top:8px">"IA sin equipo" muestra qué pasa cuando la IA no logra identificar el equipo: el dato queda marcado y hay que elegirlo a mano.</p>
+      </div>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Defectos en el celular · Preview V40</h2>
+  <p>Pedido: llevar <b>Defectos</b> a la app a bordo, que <b>la IA complete lo que pueda y el usuario apruebe</b>, y que después de registrar el defecto pregunte <b>cómo se va a reparar</b> (crear OT o ya se reparó).</p>
+
+  <section><h3>El camino</h3>
+  <ol>
+    <li><b>¿Qué pasó?</b> Un solo campo: escribir, dictar o sacar una foto. Nada más.</li>
+    <li><b>Esto entendí.</b> La IA propone <b>equipo, descripción redactada, clasificación, gravedad, estado del equipo y acción inmediata</b>. Todo se puede cambiar y nada se guarda hasta confirmar. Si no identifica el equipo, ese dato queda marcado y el botón dice "Falta el equipo".</li>
+    <li><b>¿Cómo se repara?</b> Tres caminos: <b>Crear la OT</b>, <b>Ya se reparó</b> o <b>Lo dejo abierto</b>.</li>
+  </ol></section>
+
+  <section><h3>Qué hace cada camino (igual que en la PC)</h3>
+  <table>
+    <tr><th>Camino</th><th>Qué hace el sistema</th></tr>
+    <tr><td><b>Crear la OT</b></td><td>Abre la orden de trabajo con el equipo, el problema y la prioridad ya cargados, y sigue por el mismo formulario que ya usa "OT nueva" (solicitado por, sistema, ubicación, riesgo, bloqueo de energía, criterio). Al enviarla, el defecto queda <b>vinculado a esa orden</b> y se cierra con la constancia "reparación permanente derivada a una orden de trabajo nueva" — exactamente lo que hace hoy el escritorio.</td></tr>
+    <tr><td><b>Ya se reparó</b></td><td>Pide <b>qué se hizo</b> y <b>cómo se comprobó</b> (se probó en marcha / funcionó normal durante la guardia / lo verificó el jefe de máquinas / otra). El sistema pasa el defecto a resuelto y lo cierra con esa constancia. La comprobación es <b>obligatoria</b>: es la regla del backend, no un invento de esta pantalla.</td></tr>
+    <tr><td><b>Lo dejo abierto</b></td><td>No hace nada más: el defecto queda abierto para que lo vea el jefe de máquinas o tierra. <i>Esta tercera opción la agregué yo: sin ella, quien sólo quiere reportar estaría obligado a cerrar o a abrir una OT.</i></td></tr>
+  </table></section>
+
+  <section><h3>Lo que ya existe y se reutiliza</h3>
+  <ul>
+    <li>La IA de defectos <b>ya está construida</b> y en uso en la vista de tripulación: interpreta el relato y completa los campos, mira la foto y redacta, y propone la clasificación. Esta pantalla usa esos mismos servicios, no se agrega ninguno.</li>
+    <li>El alta, el cierre y el vínculo con la OT son los endpoints de siempre: no se toca la base, ni los permisos, ni las reglas.</li>
+    <li>El botón nuevo aparece sólo si el usuario tiene permiso de escribir defectos.</li>
+  </ul></section>
+
+  <section><h3>Para decidir</h3>
+  <div class="col">
+    <div class="rcard"><b>Dónde va el botón</b>Propuesta: en "Lo demás", junto a Nueva OT / SS, Permiso y Check list. Si querés que sea uno de los principales de arriba, se cambia.</div>
+    <div class="rcard"><b>La tercera opción</b>"Lo dejo abierto". Si preferís forzar siempre OT o cierre, se saca.</div>
+    <div class="rcard"><b>Ver los defectos abiertos</b>Esta pantalla sólo <b>reporta</b>. Mirar la lista de defectos del buque desde el celular sería un agregado aparte; decime si lo querés.</div>
+  </div></section>
+
+  <p class="hint">Preview. No se tocó nada de la aplicación.</p>
+  </article>`;
+}
+
+function render(){
+  const prev = document.querySelector(".scr");
+  const y = prev ? prev.scrollTop : 0;
+  const k = `${S.v}|${S.paso}`;
+  const misma = !!prev && k === render.k;
+  render.k = k;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML = `${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref" ? ref() : app();
+  if (window.lucide) lucide.createIcons();
+  const sc = document.querySelector(".scr");
+  if (sc && misma && y) sc.scrollTop = y;
+}
+document.addEventListener("input", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  if (el.dataset.a==="texto") S.texto = el.value;
+  else if (el.dataset.a==="que") S.reparo.que = el.value;
+});
+document.addEventListener("click", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const a = el.dataset.a, p = el.dataset.p;
+  if (a==="tab") S.v = p;
+  else if (a==="theme") { S.theme = {system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if (a==="ir") S.paso = p;
+  else if (a==="sinEquipo") { S.sinEquipo = !S.sinEquipo; }
+  else if (a==="empezar") S.paso = "1";
+  else if (a==="dictar") S.texto = TEXTO_DEMO;
+  else if (a==="foto") S.fotos = Math.min(3, S.fotos+1);
+  else if (a==="analizar") {
+    if (!S.texto.trim()) return;
+    S.pensando = true; render();
+    setTimeout(()=>{ S.pensando=false; S.ia = {...IA}; S.paso="2"; render(); }, 700);
+    return;
+  }
+  else if (a==="sev") S.ia.gravedad = Number(p);
+  else if (a==="est") S.ia.estado = Number(p);
+  else if (a==="registrar") { if (!S.sinEquipo) S.paso = "3"; }
+  else if (a==="ot") S.paso = "ot1";
+  else if (a==="ot-seguir") S.paso = "fin-ot";
+  else if (a==="reparado") S.paso = "reparado";
+  else if (a==="listo-abierto") S.paso = "fin-abierto";
+  else if (a==="check") S.reparo.check = Number(p);
+  else if (a==="cerrar") { if (S.reparo.check!==null) S.paso = "fin-cerrado"; }
+  else if (a==="reiniciar") { S.paso="1"; S.texto=""; S.fotos=0; S.ia=null; S.reparo={que:"",check:null}; }
+  else if (a==="atras") {
+    S.paso = {"2":"1","3":"2","reparado":"3","ot1":"3","fin-ot":"ot1","fin-cerrado":"reparado","fin-abierto":"3","1":"inicio","inicio":"inicio"}[S.paso] ?? "1";
+  }
+  render();
+});
+render();
+</script>

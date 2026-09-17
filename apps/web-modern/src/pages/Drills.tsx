@@ -6,6 +6,7 @@ import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
@@ -288,14 +289,14 @@ const DrillModal: React.FC<{
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>{t("drill.vessel")}</label>
+            <GuideField id="drill-vessel" missing={!vesselCode}>
+              <label className={labelCls}>{t("drill.vessel")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
                 {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>{t("drill.type")}</label>
+            </GuideField>
+            <GuideField id="drill-type" missing={!requirementId}>
+              <label className={labelCls}>{t("drill.type")}<RequiredMark />{!requirementId && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={requirementId} onChange={e => setRequirementId(e.target.value)} disabled={isLocked} className={inputCls}>
                 {!requirementId && <option value="">{t("common.select")}</option>}
                 {availableRequirements.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
@@ -306,11 +307,11 @@ const DrillModal: React.FC<{
               {currentReq?.solasRegulation && (
                 <p className="mt-1 text-[10px] text-text-industrial/40">{t("drill.ref")}: {currentReq.solasRegulation}</p>
               )}
-            </div>
-            <div>
-              <label className={labelCls}>{t("drill.scheduledDate")}</label>
+            </GuideField>
+            <GuideField id="drill-scheduled-date" missing={!scheduledDate}>
+              <label className={labelCls}>{t("drill.scheduledDate")}<RequiredMark />{!scheduledDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input type="date" value={scheduledDate} onChange={e => setScheduled(e.target.value)} disabled={isLocked} className={inputCls} />
-            </div>
+            </GuideField>
             <div>
               <label className={labelCls}>{t("drill.scheduledTime")}</label>
               <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} disabled={isLocked} className={inputCls} />
@@ -759,19 +760,21 @@ const DrillRequirementsModal: React.FC<{ onClose: () => void; onSaved: () => voi
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className={labelCls}>{t("drill.typeName")}</label>
-                  <input value={editing.title} onChange={e => setEditing(d => d ? { ...d, title: e.target.value } : d)} className={inputCls} placeholder={t("drill.typeNamePh")} />
+                  <GuideField id="drill-req-title" missing={!editing.title.trim()}>
+                    <label className={labelCls}>{t("drill.typeName")}<RequiredMark />{!editing.title.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                    <input value={editing.title} onChange={e => setEditing(d => d ? { ...d, title: e.target.value } : d)} className={inputCls} placeholder={t("drill.typeNamePh")} />
+                  </GuideField>
                 </div>
                 <div>
                   <label className={labelCls}>{t("drill.regRef")}</label>
                   <input value={editing.solasRegulation} onChange={e => setEditing(d => d ? { ...d, solasRegulation: e.target.value } : d)} className={inputCls} placeholder={t("drill.regRefPh")} />
                 </div>
-                <div>
-                  <label className={labelCls}>{t("drill.freqDays")}</label>
+                <GuideField id="drill-req-freq" missing={editing.frequencyDays < 1}>
+                  <label className={labelCls}>{t("drill.freqDays")}<RequiredMark />{editing.frequencyDays < 1 && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input type="number" min={1} max={3650} value={editing.frequencyDays}
                     onChange={e => setEditing(d => d ? { ...d, frequencyDays: Math.max(1, parseInt(e.target.value, 10) || 0) } : d)}
                     className={inputCls} />
-                </div>
+                </GuideField>
                 <div className="col-span-2">
                   <label className={labelCls}>{t("drill.intervalLabel")}</label>
                   <input value={editing.intervalLabel} onChange={e => setEditing(d => d ? { ...d, intervalLabel: e.target.value } : d)} className={inputCls} placeholder={t("drill.intervalLabelPh")} />

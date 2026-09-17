@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview V2 — Botón Formularios en Repuestos</title>
+<style>
+  :root { --accent:#0891b2; --violet:#7c3aed; --fg:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --surface:#fff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: Inter, "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--fg); font-size:13px; }
+  .wrap { max-width: 1100px; margin:0 auto; padding:20px 16px 60px; }
+  .banner { background:#fff3cd; border:1px solid #e0b100; border-radius:8px; padding:10px 14px; margin-bottom:16px; }
+  .demo { background:#fde68a; color:#7c5800; font-size:10px; font-weight:bold; padding:1px 6px; border-radius:4px; }
+  h2 { font-size:15px; margin:26px 0 8px; }
+  .note { background:#fff; border-radius:8px; padding:10px 14px; line-height:1.5; margin-bottom:10px; }
+  .note ul { margin:4px 0 0 18px; padding:0; }
+  /* Pantalla */
+  .app { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; position:relative; }
+  .hdr { display:flex; align-items:center; gap:10px; }
+  .hdr h1 { font-size:18px; margin:0; display:flex; gap:8px; align-items:center; }
+  .count { background:#e2e8f0; border-radius:10px; padding:1px 8px; font-size:11px; color:var(--muted); }
+  .btns { margin-left:auto; display:flex; gap:8px; }
+  .b { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:#f8fafc; font-size:12px; }
+  .b.new { background:var(--violet); color:#fff; border-color:var(--violet); font-weight:700; }
+  .b.hi { outline:2px dashed #e0a800; outline-offset:3px; }
+  .ic { color:var(--accent); }
+  .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px; opacity:.45; }
+  .card { border:1.5px solid var(--line); border-left:4px solid #dc2626; border-radius:14px; padding:10px; }
+  .card b { font-size:22px; display:block; }
+  .rows { margin-top:12px; opacity:.45; }
+  .rows div { height:30px; border-bottom:1px solid var(--line); }
+  /* Modal */
+  .overlay { position:absolute; inset:0; background:rgba(15,23,42,.55); border-radius:14px; display:flex; align-items:flex-start; justify-content:center; padding-top:50px; }
+  .modal { width:560px; background:#fff; border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.35); overflow:hidden; }
+  .mh { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--line); }
+  .mh h3 { margin:0; font-size:14px; }
+  .mh p { margin:2px 0 0; font-size:11px; color:var(--muted); }
+  .x { width:26px; height:26px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px; }
+  .mb { padding:16px 18px; }
+  .choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .opt { border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .opt.on { border-color:var(--accent); background:#ecfeff; box-shadow:0 0 0 3px #a5f3fc66; }
+  .opt .t { font-weight:700; font-size:12.5px; }
+  .opt .d { font-size:11px; color:var(--muted); margin-top:3px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  label { display:block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:4px; }
+  .in { border:1px solid var(--line); background:#f8fafc; border-radius:8px; padding:6px 9px; font-size:12px; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg span { flex:1; text-align:center; padding:6px; font-size:12px; font-weight:600; color:var(--muted); }
+  .seg span.on { background:var(--accent); color:#fff; }
+  .sum { margin-top:14px; display:flex; gap:10px; }
+  .pill { flex:1; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:#f8fafc; }
+  .pill small { display:block; font-size:9.5px; text-transform:uppercase; color:var(--muted); letter-spacing:.05em; }
+  .pill b { font-size:18px; }
+  .pill.warn { background:#fffbeb; border-color:#fcd34d; } .pill.warn b { color:#b45309; }
+  .hint { margin-top:10px; font-size:11px; color:var(--muted); }
+  .mf { display:flex; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid var(--line); }
+  .dl { background:var(--accent); color:#fff; font-weight:700; border-radius:8px; padding:8px 14px; font-size:12px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .two .modal { width:100%; }
+  .cap { font-size:11px; font-weight:700; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner"><b>Preview V2</b> — cambia sólo <b>dónde</b> se piden los formularios. Los PDFs son los de la V1 (ya implementados y probados). Datos <span class="demo">DEMO</span> de DON CHICUETO.</div>
+
+  <div class="note">
+    <b>Por qué hay V2:</b> la pantalla "Reportes" con pestañas que mostraba la V1 existe en el código pero no está en el menú. Elegiste poner los formularios en <b>Repuestos &amp; Stock</b>.
+    <ul>
+      <li>Botón nuevo <b>Formularios</b> en la barra de arriba, al lado de "Generar PDF" y "Excel" (resaltado en amarillo).</li>
+      <li>Abre una ventanita: elegís el formulario, el buque y el departamento, y se descarga el PDF.</li>
+      <li>El "Generar PDF" del <b>Reporte Mensual</b> sigue funcionando igual y ya sale con el formato nuevo del REGI-MAN-04.1.</li>
+      <li>Lo puede usar cualquiera que ve Repuestos, sólo para los buques que tiene asignados (igual que hoy el inventario).</li>
+    </ul>
+  </div>
+
+  <h2>1 · Repuestos &amp; Stock con el botón nuevo</h2>
+  <div class="app" style="min-height:230px">
+    <div class="hdr">
+      <h1>📦 Repuestos &amp; Stock <span class="count">65</span></h1>
+      <div class="btns">
+        <span class="b"><span class="ic">⬇</span> Generar PDF</span>
+        <span class="b hi"><span class="ic">📋</span> Formularios</span>
+        <span class="b"><span class="ic">▦</span> Excel</span>
+        <span class="b new">＋ Nuevo repuesto</span>
+      </div>
+    </div>
+    <div class="cards">
+      <div class="card"><b>12</b>Sin stock</div><div class="card" style="border-left-color:#f97316"><b>4</b>Stock bajo</div>
+      <div class="card" style="border-left-color:#7c3aed"><b>6</b>Reponer</div><div class="card" style="border-left-color:#2563eb"><b>9</b>Críticos A</div>
+    </div>
+    <div class="rows"><div></div><div></div><div></div></div>
+  </div>
+
+  <h2>2 · La ventanita, con cada formulario elegido</h2>
+  <div class="two">
+    <div>
+      <p class="cap">Inventario elegido</p>
+      <div class="modal">
+        <div class="mh"><div><h3>Formularios de papel</h3><p>PDF con el formato controlado de la empresa</p></div><span class="x">✕</span></div>
+        <div class="mb">
+          <div class="choice">
+            <div class="opt on"><div class="t">Inventario REGI-MAN-04.1</div><div class="d">Repuestos y herramientas a bordo</div></div>
+            <div class="opt"><div class="t">Estándar para viaje</div><div class="d">Filtros, lubricantes y artículos a pedir</div></div>
+          </div>
+          <div class="grid">
+            <div><label>Buque</label><div class="in">DON CHICUETO ▾</div></div>
+            <div><label>Departamento</label><div class="in">MÁQUINAS ▾</div></div>
+          </div>
+          <div class="sum">
+            <div class="pill"><small>Ítems con stock a bordo</small><b>0</b></div>
+            <div class="pill"><small>Herramientas</small><b>0</b></div>
+          </div>
+          <p class="hint">Sólo salen los ítems con stock mayor a cero. El PDF trae renglones libres para completar a mano.</p>
+        </div>
+        <div class="mf"><span class="dl">⬇ Descargar PDF</span></div>
+      </div>
+    </div>
+    <div>
+      <p class="cap">Estándar elegido</p>
+      <div class="modal">
+        <div class="mh"><div><h3>Formularios de papel</h3><p>PDF con el formato controlado de la empresa</p></div><span class="x">✕</span></div>
+        <div class="mb">
+          <div class="choice">
+            <div class="opt"><div class="t">Inventario REGI-MAN-04.1</div><div class="d">Repuestos y herramientas a bordo</div></div>
+            <div class="opt on"><div class="t">Estándar para viaje</div><div class="d">Filtros, lubricantes y artículos a pedir</div></div>
+          </div>
+          <div class="grid">
+            <div><label>Buque</label><div class="in">DON CHICUETO ▾</div></div>
+            <div><label>Departamento</label><div class="in">MÁQUINAS ▾</div></div>
+            <div><label>Tipo de pedido</label><div class="seg"><span class="on">Estándar</span><span>Medio estándar</span></div></div>
+            <div><label>Viaje N°</label><div class="in">14</div></div>
+          </div>
+          <div class="sum">
+            <div class="pill"><small>Ítems con estándar</small><b>19</b></div>
+            <div class="pill warn"><small>Ítems a solicitar</small><b>19</b></div>
+          </div>
+          <p class="hint">A bordo = stock del sistema. Si el conteo real no coincide, ajustá el stock antes de descargar.</p>
+        </div>
+        <div class="mf"><span class="dl">⬇ Descargar PDF</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:14px">
+    <b>Dato real que vas a ver:</b> hoy DON CHICUETO tiene todos sus repuestos en <b>stock 0</b> en el sistema, así que el Inventario sale con la tabla vacía y el Estándar pide todo. No es un error del formulario: faltan cargar las existencias.
+  </div>
+</div>
+</body>
+</html>

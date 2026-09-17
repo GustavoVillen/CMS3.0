@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Completar OT — Preview V7</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --accent:#0284C7; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer} button:disabled{cursor:not-allowed}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px}
+  .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600}
+  .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px}
+  .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .overlay{position:fixed;inset:46px 0 0 0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{width:100%;max-width:880px;background:var(--surface);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35);display:flex;flex-direction:column;max-height:calc(100vh - 80px);overflow:hidden;border-top:3px solid var(--accent)}
+  .m-head{padding:14px 22px 12px;border-bottom:1px solid var(--fg10)}
+  .h-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .code{font-family:ui-monospace,monospace;font-weight:700;color:var(--accent);font-size:14px}
+  .ent{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .badge{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid}
+  .b-prep{background:rgba(26,29,36,.05);color:var(--muted);border-color:var(--fg10)}
+  .b-sol{background:rgba(37,99,235,.08);color:#1D4ED8;border-color:rgba(37,99,235,.25)}
+  .b-auth{background:rgba(14,159,110,.1);color:#047857;border-color:rgba(14,159,110,.3)}
+  .b-close{background:rgba(14,159,110,.15);color:#065F46;border-color:rgba(14,159,110,.4)}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;border:1px solid rgba(2,132,199,.25);background:rgba(2,132,199,.05);border-radius:99px;padding:3px 9px}
+  .chip b{font-weight:700}
+  .iconbtn{background:none;border:1px solid var(--fg10);border-radius:8px;padding:5px 8px;font-size:11px;color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .close{width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center}
+  .ic{width:16px;height:16px}
+  /* ciclo de vida */
+  .life{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .ls{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--faint)}
+  .ls .d{width:22px;height:22px;border-radius:99px;border:1.5px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+  .ls.done{color:var(--success)} .ls.done .d{background:var(--success);border-color:var(--success);color:#fff}
+  .ls.cur{color:var(--accent)} .ls.cur .d{border-color:var(--accent);background:rgba(2,132,199,.1)}
+  .ll{width:26px;height:1.5px;background:var(--fg10)}
+  .viewsw{margin-left:auto;display:flex;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:2px}
+  .viewsw button{border:0;background:none;padding:5px 10px;font-size:11px;font-weight:700;border-radius:8px;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .viewsw button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .m-body{overflow-y:auto;flex:1;padding:18px 22px}
+  /* próximo paso */
+  .next{border:1.5px solid rgba(2,132,199,.35);background:linear-gradient(0deg,rgba(2,132,199,.03),rgba(2,132,199,.07));border-radius:14px;padding:14px 16px;margin-bottom:16px}
+  .next.ok{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.06)}
+  .next .nt{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);display:flex;gap:6px;align-items:center}
+  .next.ok .nt{color:var(--success)}
+  .next .nh{font-size:15px;font-weight:800;margin:4px 0 2px}
+  .next .ns{font-size:12px;color:var(--muted)}
+  .todo{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}
+  .todo button{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:99px;padding:4px 10px;border:1px solid}
+  .todo .miss{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.35);color:#B45309}
+  .todo .done{background:rgba(14,159,110,.08);border-color:rgba(14,159,110,.3);color:#047857}
+  .next-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .btn-primary{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:10px 18px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-green{background:var(--success);color:#fff;border:0;border-radius:12px;padding:10px 18px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-red{background:rgba(220,38,38,.08);color:#B91C1C;border:1px solid rgba(220,38,38,.3);border-radius:12px;padding:10px 16px;font-weight:700;font-size:13px}
+  .btn-soft{background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn-ghost{background:none;border:0;border-radius:10px;padding:8px 12px;font-size:12px;color:var(--fg)}
+  .btn-ghost:hover{background:var(--fg5)}
+  /* etapas */
+  .stage{margin-top:18px}
+  .stage-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .stage-h::after{content:"";flex:1;height:1px;background:var(--fg10)}
+  .stage-h .lock{font-size:10px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--faint);display:flex;gap:4px;align-items:center}
+  .sec{border:1px solid var(--fg10);border-radius:14px;margin-bottom:10px;background:var(--surface)}
+  .sec.locked{background:var(--fg5);opacity:.75}
+  .sec-h{display:flex;align-items:center;gap:10px;padding:11px 14px;width:100%;background:none;border:0;text-align:left;color:var(--fg)}
+  .sec-h .n{width:22px;height:22px;border-radius:99px;background:var(--fg);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .sec-h .n.ok{background:var(--success)}
+  .sec-h .t{font-size:13px;font-weight:800}
+  .sec-h .s{font-size:11px;color:var(--muted)}
+  .sec-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .sec-b{padding:2px 14px 14px}
+  .pill{font-size:10px;font-weight:700;border-radius:99px;padding:2px 8px;white-space:nowrap}
+  .p-ok{background:rgba(14,159,110,.12);color:#047857}
+  .p-miss{background:#D97706;color:#fff;font-size:11px;padding:3px 9px}
+  .p-lock{background:var(--fg10);color:var(--muted)}
+  .f{margin-top:12px}
+  .lr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  .lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .lbl .req{color:var(--danger)}
+  .in{width:100%;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:8px 12px;font-size:14px;color:var(--fg);font-family:inherit}
+  .in:focus{outline:none;border-color:rgba(2,132,199,.5)}
+  .in.flash{box-shadow:0 0 0 3px rgba(217,119,6,.35);border-color:#D97706}
+  textarea.in{resize:vertical;line-height:1.45}
+  .row{display:grid;gap:12px} .c2{grid-template-columns:1fr 1fr} .c3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:680px){.c2,.c3{grid-template-columns:1fr}.viewsw{margin-left:0}}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{background:var(--fg5);border:1.5px solid var(--fg10);border-radius:10px;padding:6px 11px;font-size:12px;font-weight:600;color:var(--fg)}
+  .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .seg.flash button{border-color:#D97706}
+  .seg.prio button.on[data-v="CRITICAL"]{background:#B91C1C;border-color:#B91C1C}
+  .seg.prio button.on[data-v="HIGH"]{background:#EA580C;border-color:#EA580C}
+  .seg.prio button.on[data-v="MEDIUM"]{background:#CA8A04;border-color:#CA8A04}
+  .seg.prio button.on[data-v="LOW"]{background:var(--success);border-color:var(--success)}
+  .risk button{width:44px;height:38px;border-radius:10px;border:1.5px solid var(--fg10);background:var(--fg5);font-weight:800;font-size:13px}
+  .risk button.on[data-v="L"]{background:var(--success);color:#0B132B;border-color:var(--success)}
+  .risk button.on[data-v="M"]{background:#FACC15;color:#0B132B;border-color:#FACC15}
+  .risk button.on[data-v="H"]{background:#EF4444;color:#fff;border-color:#EF4444}
+  .risk button.on[data-v="C"]{background:#B91C1C;color:#fff;border-color:#B91C1C}
+  .big{display:flex;gap:8px}
+  .big button{flex:1;padding:12px;border-radius:12px;border:1.5px solid var(--fg10);background:var(--fg5);font-weight:800;font-size:14px;color:var(--muted)}
+  .big button.on.y{background:rgba(14,159,110,.12);border-color:rgba(14,159,110,.5);color:#047857}
+  .big button.on.n{background:rgba(234,88,12,.1);border-color:rgba(234,88,12,.45);color:#C2410C}
+  .ai{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--accent);background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);border-radius:99px;padding:2px 9px}
+  .ai svg{width:12px;height:12px}
+  .listrow{display:flex;align-items:center;gap:10px;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:12px;margin-top:6px}
+  .mono{font-family:ui-monospace,monospace;font-weight:700;font-size:11px;color:var(--accent)}
+  .st{font-size:10px;font-weight:700;border-radius:8px;padding:2px 7px;border:1px solid}
+  .drop{border:1.5px dashed var(--fg25);border-radius:12px;padding:12px;text-align:center;font-size:12px;color:var(--muted)}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px}
+  .warnbox{border:1px solid rgba(234,179,8,.35);background:rgba(234,179,8,.07);border-radius:10px;padding:8px 10px;font-size:12px;color:#854D0E;display:flex;gap:6px;margin-top:8px}
+  table.sp{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+  table.sp th{text-align:left;font-size:10px;color:var(--faint);font-weight:600;border-bottom:1px solid var(--fg10);padding:4px}
+  table.sp td{padding:6px 4px;border-bottom:1px solid var(--fg5)}
+  /* pie */
+  .m-foot{display:flex;align-items:center;gap:8px;padding:12px 22px;border-top:1px solid var(--fg10);flex-wrap:wrap}
+  .saved{font-size:11px;font-weight:700;color:#047857;display:flex;gap:4px;align-items:center;margin-right:auto}
+  .menu{position:relative}
+  .menu-pop{position:absolute;bottom:40px;left:0;background:var(--surface);border:1px solid var(--fg10);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.15);padding:6px;min-width:200px;z-index:10}
+  .menu-pop button{display:flex;width:100%;gap:8px;align-items:center;border:0;background:none;padding:8px 10px;border-radius:8px;font-size:12px;text-align:left}
+  .menu-pop button:hover{background:var(--fg5)}
+  /* hoja papel (resumen) */
+  .sheet{max-width:720px;margin:0 auto;border:1px solid var(--fg25);background:#fff;font-size:12px}
+  .sheet .bar{background:#0f172a;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;text-align:center;padding:5px}
+  .sheet .kv{display:flex;border-bottom:1px solid var(--fg25)}
+  .sheet .kv .l{background:#0f172a;color:#fff;font-size:10px;font-weight:700;width:110px;padding:6px 8px}
+  .sheet .kv .v{flex:1;padding:6px 8px}
+  .sheet .ta{padding:8px;min-height:44px;border-bottom:1px solid var(--fg25);color:var(--muted)}
+  /* referencia actual */
+  .cur-block{border:1px solid var(--fg10);border-radius:12px;padding:10px 12px;margin-bottom:8px;position:relative;background:var(--surface)}
+  .cur-block h4{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;display:flex;gap:8px;align-items:center}
+  .cur-block .n{width:20px;height:20px;border-radius:99px;background:rgba(2,132,199,.15);color:var(--accent);font-size:10px;display:inline-flex;align-items:center;justify-content:center}
+  .cur-block p{margin:4px 0 0;font-size:11px;color:var(--muted)}
+  .note{position:absolute;right:10px;top:8px;background:#DC2626;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;max-width:55%;text-align:right}
+  .alert-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .alert{background:#fff;border-radius:16px;max-width:400px;width:100%;padding:20px}
+  .alert h3{margin:0 0 6px;font-size:14px;display:flex;gap:8px;align-items:center}
+  .alert p{margin:0 0 14px;font-size:13px;color:var(--muted)}
+  .d2{width:22px;height:22px;border-radius:99px;border:1.5px solid var(--fg25);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;color:var(--muted)}
+  .d2.cur2{border-color:var(--accent);background:rgba(2,132,199,.1);color:var(--accent)}
+  .d2.ok2{border-color:var(--success);background:var(--success);color:#fff}
+  .steps2{display:flex;flex-direction:column;gap:10px}
+  .steps2>div{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+  .prog{height:6px;border-radius:99px;background:var(--fg10);margin:8px 0 6px;overflow:hidden}
+  .prog>div{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+  .next.ok .prog>div{background:var(--success)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(2,132,199,.5)}70%{box-shadow:0 0 0 10px rgba(2,132,199,0)}100%{box-shadow:0 0 0 0 rgba(2,132,199,0)}}
+  .pulse{animation:pulse 1.8s infinite}
+  .need{position:relative;border-left:4px solid #F59E0B;background:#FFFBEB;border-radius:0 12px 12px 0;padding:10px 12px 12px 12px;margin-left:-4px}
+  .need .in{border-color:rgba(217,119,6,.55);background:#fff}
+  .need .seg button:not(.on), .need .risk button:not(.on), .need .big button:not(.on){border-color:rgba(217,119,6,.45);background:#fff}
+  .needtag{display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#D97706;border-radius:99px;padding:2px 7px;vertical-align:1px}
+  .row > .need{margin-left:0;border-radius:12px;border-left-width:4px}
+  .todo .miss{font-size:12px;padding:6px 12px;background:#FEF3C7;border-color:#F59E0B;color:#92400E}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Completar la OT · Preview V7</b><span class="tag">DEMO · DATOS FICTICIOS</span>
+  <span class="sep"></span>
+  <button data-created="1">★ Recién creada</button>
+  <span class="lab">Estado de la OT:</span>
+  <button data-stage="prep" class="on">En preparación</button>
+  <button data-stage="approval">Esperando aprobación</button>
+  <button data-stage="exec">Autorizada (en ejecución)</button>
+  <button data-stage="close">Lista para cerrar</button>
+  <span class="sep"></span>
+  <button data-ref="1">Hoy (referencia)</button>
+</div>
+<div class="overlay" id="root"></div>
+
+<script>
+const S = {
+  stage:"prep", view:"guided", ref:false, menu:false, alert:null, toast:null, open:{}, created:true,
+  v:{ title:"Cambio de sello mecánico del eje", request:"Pérdida de agua por el sello de popa", criteria:"", req:"", asg:"TRIPULACION",
+      prio:"MEDIUM", kind:"PREVENTIVO", system:"MAQUINAS", location:"", voyage:"", cond:"", risk:"", loto:"", riskText:"",
+      taskDone:"", result:"", executedBy:"", execDate:"", hours:"", obs:"", pending:"" },
+};
+const STAGES = [["prep","Preparar"],["approval","Aprobación"],["exec","Ejecución"],["close","Cierre"]];
+const idx = s => STAGES.findIndex(x=>x[0]===s);
+
+function prepMissing(){
+  const v=S.v, m=[];
+  if(!v.title.trim()) m.push(["title","Tarea"]);
+  if(!v.req) m.push(["req","Solicitado por"]);
+  if(!v.criteria.trim()) m.push(["criteria","Criterios de aceptación"]);
+  if(!v.risk) m.push(["risk","Nivel de riesgo"]);
+  if(!v.loto.trim()) m.push(["loto","LOTO"]);
+  return m;
+}
+function closeMissing(){
+  const v=S.v, m=[];
+  if(!v.taskDone) m.push(["taskDone","Tarea concluida"]);
+  if(!v.result) m.push(["result","Resultado"]);
+  if(!v.executedBy.trim()) m.push(["executedBy","Ejecutó"]);
+  if(!v.execDate) m.push(["execDate","Fecha de ejecución"]);
+  return m;
+}
+
+function render(){
+  document.querySelectorAll(".pv-bar button[data-stage]").forEach(b=>b.classList.toggle("on", !S.ref && b.dataset.stage===S.stage));
+  document.querySelector('.pv-bar button[data-ref]').classList.toggle("on", S.ref);
+  const root=document.getElementById("root");
+  root.style.top = document.querySelector(".pv-bar").offsetHeight + "px";
+  const prev=root.querySelector(".m-body"); const key=S.ref+":"+S.view; const keep = prev && render.k===key ? prev.scrollTop : 0; render.k=key;
+  root.innerHTML = S.ref ? current() : modal();
+  if (S.created && !S.ref) root.insertAdjacentHTML("beforeend", createdDlg());
+  if (S.alert) root.insertAdjacentHTML("beforeend", `<div class="alert-ov"><div class="alert"><h3><i data-lucide="${S.alert.icon||'alert-triangle'}" class="ic" style="color:${S.alert.color||'var(--warning)'}"></i>${S.alert.t}</h3><p>${S.alert.m}</p><div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${
+    S.alert.buttons ? S.alert.buttons.map(b=>`<button class="${b.cls}" onclick="${b.on}">${b.label}</button>`).join("") : `<button class="btn-primary" onclick="S.alert=null;render()">OK</button>`}</div></div></div>`);
+  if (S.toast) root.insertAdjacentHTML("beforeend", `<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+  const b=root.querySelector(".m-body"); if(b) b.scrollTop=keep;
+}
+
+/* ───────── componentes ───────── */
+function seg(key, opts, cls=""){ return `<div class="seg ${cls}" id="f-${key}">${opts.map(([v,l])=>`<button data-v="${v}" class="${S.v[key]===v?'on':''}" ${locked('prep')?'disabled':''} onclick="S.v['${key}']=S.v['${key}']==='${v}'&&'${key}'!=='prio'?'':'${v}';render()">${l}</button>`).join("")}</div>`; }
+function inp(key, ph, type="text", stage="prep"){ return `<input id="f-${key}" type="${type}" class="in" placeholder="${ph}" value="${S.v[key]}" ${locked(stage)?'disabled':''} oninput="S.v['${key}']=this.value;renderKeep('f-${key}')">`; }
+function ta(key, ph, rows=2, stage="prep"){ return `<textarea id="f-${key}" class="in" rows="${rows}" placeholder="${ph}" ${locked(stage)?'disabled':''} oninput="S.v['${key}']=this.value;renderKeep('f-${key}')">${S.v[key]}</textarea>`; }
+function ai(){ return `<button class="ai" onclick="toast('La IA completó el campo (demo)')"><i data-lucide="sparkles"></i>Sugerir</button>`; }
+function locked(stage){
+  if (stage==="prep") return idx(S.stage) >= 1 && S.stage!=="prep" && false; // preparación sigue editable (como hoy) mientras la OT está abierta
+  return idx(S.stage) < idx("exec");
+}
+function section(id, n, title, sub, status, body, isLocked=false, lockText=""){
+  // Abiertos por defecto sólo los bloques de la etapa en curso; el resto plegado.
+  const defOpen = ["que","form","seg","prev"].includes(id) ? idx(S.stage) < 2
+    : ["av","usados"].includes(id) ? idx(S.stage) >= 2 : S.stage === "close";
+  const open = !isLocked && (S.open[id] ?? defOpen);
+  return `<div class="sec ${isLocked?'locked':''}" id="sec-${id}"><button class="sec-h" onclick="${isLocked?'':`S.open['${id}']=${!open};render()`}">
+    <span class="n ${status==='ok'?'ok':''}">${status==='ok'?'✓':n}</span><span><div class="t">${title}</div><div class="s">${isLocked?lockText:sub}</div></span>
+    <span class="r">${isLocked?'<span class="pill p-lock"><i data-lucide="lock" style="width:10px;height:10px"></i> Bloqueado</span>':status==='ok'?'<span class="pill p-ok">Completo</span>':status?`<span class="pill p-miss">${status}</span>`:''}
+    ${isLocked?'':`<i data-lucide="${open?'chevron-up':'chevron-down'}" class="ic" style="color:var(--faint)"></i>`}</span></button>
+    ${open?`<div class="sec-b">${body}</div>`:''}</div>`;
+}
+
+/* Campos pendientes: se remarcan en naranja dentro del formulario. */
+function isMissing(key){
+  const list = S.stage==="prep" ? prepMissing() : S.stage==="close" ? closeMissing() : [];
+  return list.some(x=>x[0]===key);
+}
+function faltan(keys){ const n=keys.filter(isMissing).length; return n===1?'Falta 1 dato':`Faltan ${n} datos`; }
+function need(key){ return isMissing(key) ? " need" : ""; }
+function tag(key){ return isMissing(key) ? `<span class="needtag"><i data-lucide="pencil" style="width:9px;height:9px"></i>Completar</span>` : ""; }
+
+/* ───────── próximo paso ───────── */
+function nextCard(){
+  if (S.stage==="prep"){
+    const m=prepMissing(), total=5, done=total-m.length;
+    return `<div class="next ${m.length?'':'ok'}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700">
+        <span style="display:flex;gap:6px;align-items:center;color:var(--accent)"><span class="d2 cur2">1</span>Completá la OT</span>
+        <i data-lucide="arrow-right" style="width:14px;height:14px;color:var(--faint)"></i>
+        <span style="display:flex;gap:6px;align-items:center;color:${m.length?'var(--faint)':'var(--success)'}"><span class="d2 ${m.length?'':'ok2'}">2</span>Enviala a aprobar</span>
+      </div>
+      <div class="nh" style="margin-top:8px">${m.length?'Completá los datos y, al terminar, tocá “Enviar a aprobar”':'¡Lista! Ya podés enviarla a aprobar'}</div>
+      <div class="prog"><div style="width:${done/total*100}%"></div></div>
+      <div class="ns">${done} de ${total} datos cargados${m.length?' · tocá lo que falta para ir al campo':''}.</div>
+      <div class="todo">${m.map(([k,l])=>`<button class="miss" onclick="goField('${k}')"><i data-lucide="circle-dashed" style="width:12px;height:12px"></i>${l}</button>`).join("")}
+        ${[["title","Tarea"],["req","Solicitado por"],["criteria","Criterios"],["risk","Riesgo"],["loto","LOTO"]].filter(([k])=>!m.find(x=>x[0]===k)).map(([k,l])=>`<button class="done" onclick="goField('${k}')"><i data-lucide="check" style="width:12px;height:12px"></i>${l}</button>`).join("")}</div>
+      <div class="next-actions"><button class="btn-primary ${m.length?'':'pulse'}" onclick="send()"><i data-lucide="send" style="width:15px;height:15px"></i>Enviar a aprobar</button>
+        <span class="ns" style="align-self:center">Se guarda sola antes de enviarse. También está abajo, siempre a mano.</span></div></div>`;
+  }
+  if (S.stage==="approval"){
+    return `<div class="next"><div class="nt"><i data-lucide="hourglass" style="width:12px;height:12px"></i>Esperando aprobación</div>
+      <div class="nh">La envió Capitán Demo · 14/09/2026</div>
+      <div class="ns">Aprueba el Superintendente técnico o el DPA. Después la autoriza el DPA / Director de Operaciones.</div>
+      <div class="next-actions" style="margin-top:12px"><button class="btn-green" onclick="toast('Aprobada (demo)')"><i data-lucide="check" style="width:15px;height:15px"></i>Aprobar</button><button class="btn-red" onclick="toast('Abre el motivo del rechazo (demo)')">No aprobar</button></div></div>`;
+  }
+  if (S.stage==="exec"){
+    return `<div class="next"><div class="nt"><i data-lucide="hammer" style="width:12px;height:12px"></i>En ejecución</div>
+      <div class="nh">Registrá los avances y los repuestos a medida que se trabaja</div>
+      <div class="ns">Aprobó: Superintendente Demo · Autorizó: DPA Demo · 15/09/2026</div>
+      <div class="next-actions" style="margin-top:12px"><button class="btn-primary" onclick="toast('Abre Registrar avance (demo)')"><i data-lucide="camera" style="width:15px;height:15px"></i>Registrar avance</button><button class="btn-soft" onclick="S.stage='close';S.open={};render()"><i data-lucide="flag" style="width:14px;height:14px"></i>Terminé el trabajo → ir al cierre</button></div></div>`;
+  }
+  const m=closeMissing();
+  return `<div class="next ${m.length?'':'ok'}"><div class="nt"><i data-lucide="flag" style="width:12px;height:12px"></i>Próximo paso</div>
+    <div class="nh">${m.length?'Completá el cierre para poder cerrar la OT':'Todo listo para cerrar la OT'}</div>
+    <div class="ns">${m.length?`Faltan ${m.length} datos obligatorios del cierre.`:'Antes de cerrar, la IA revisa el cierre y te avisa si falta algo.'}</div>
+    <div class="todo">${m.map(([k,l])=>`<button class="miss" onclick="goField('${k}')"><i data-lucide="circle-dashed" style="width:12px;height:12px"></i>${l}</button>`).join("")}</div>
+    <div class="next-actions"><button class="btn-green" ${m.length?'disabled style="opacity:.45"':''} onclick="toast('Abre quién cierra + fecha y la revisión de IA (demo)')"><i data-lucide="check-check" style="width:15px;height:15px"></i>Cerrar OT</button></div></div>`;
+}
+
+/* ───────── modal propuesto ───────── */
+function modal(){
+  const st = {prep:["b-prep","En preparación"],approval:["b-sol","Pendiente de aprobación"],exec:["b-auth","Autorizada · en proceso"],close:["b-auth","Autorizada · en proceso"]}[S.stage];
+  const cur = idx(S.stage);
+  const pm = prepMissing();
+  const head = `<div class="m-head">
+    <div class="h-row">
+      <i data-lucide="wrench" class="ic" style="color:var(--accent)"></i>
+      <div><div class="ent">Orden de trabajo</div><div><span class="code">OT-DEM-26-0045</span> <span style="color:var(--muted)">· Hélice #1</span></div></div>
+      <span class="badge ${st[0]}">${st[1]}</span>
+      <span class="chip"><i data-lucide="ship" style="width:11px;height:11px"></i><b>BUQUE DEMO I</b></span>
+      <span class="chip"><i data-lucide="calendar" style="width:11px;height:11px"></i>Vence <b>30/09/2026</b></span>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center"><button class="iconbtn"><i data-lucide="link" style="width:12px;height:12px"></i>Copiar link</button><button class="iconbtn"><i data-lucide="maximize-2" style="width:12px;height:12px"></i></button><button class="close" onclick="askLeave()"><i data-lucide="x" style="width:18px;height:18px"></i></button></span>
+    </div>
+    <div class="life">
+      ${STAGES.map(([k,l],i)=>`${i?'<span class="ll"></span>':''}<span class="ls ${i<cur?'done':i===cur?'cur':''}"><span class="d">${i<cur?'✓':i+1}</span>${l}</span>`).join("")}
+      <div class="viewsw"><button class="${S.view==='guided'?'on':''}" onclick="S.view='guided';render()"><i data-lucide="list-checks" style="width:12px;height:12px"></i>Completar</button><button class="${S.view==='paper'?'on':''}" onclick="S.view='paper';render()"><i data-lucide="file-text" style="width:12px;height:12px"></i>Hoja REGI-MAN-02.4</button></div>
+    </div></div>`;
+
+  const body = S.view==="paper" ? paper() : guided(pm);
+  const foot = `<div class="m-foot">
+    <button class="btn-soft"><i data-lucide="file-down" style="width:14px;height:14px"></i>PDF</button>
+    <div class="menu"><button class="btn-soft" onclick="S.menu=!S.menu;render()"><i data-lucide="more-horizontal" style="width:14px;height:14px"></i>Más acciones</button>
+      ${S.menu?`<div class="menu-pop"><button><i data-lucide="pause" style="width:14px;height:14px;color:#A16207"></i>Postergar (diferir)</button><button><i data-lucide="x-circle" style="width:14px;height:14px;color:#B91C1C"></i>Cancelar OT</button><button disabled style="opacity:.4"><i data-lucide="rotate-ccw" style="width:14px;height:14px"></i>Reabrir (sólo admin, OT cerrada)</button></div>`:''}</div>
+    <span style="flex:1"></span>
+    <span class="saved" style="margin-right:0"><i data-lucide="check" style="width:13px;height:13px"></i>Guardado</span>
+    ${S.stage==="prep"
+      ? `<button class="btn-soft" onclick="toast('Guardado (demo)')">Guardar</button>
+         <button class="btn-primary ${pm.length?'':'pulse'}" style="padding:9px 18px" onclick="send()"><i data-lucide="send" style="width:14px;height:14px"></i>Enviar a aprobar${pm.length?` <span style="font-size:10px;font-weight:600;opacity:.85">(${5-pm.length}/5)</span>`:''}</button>`
+      : `<button class="btn-primary" style="padding:8px 16px;font-size:12px" onclick="toast('Guardado (demo)')">Guardar</button>`}
+  </div>`;
+  return `<div class="modal">${head}<div class="m-body">${body}</div>${foot}</div>`;
+}
+
+function guided(pm){
+  const v=S.v, execLocked = idx(S.stage) < idx("exec");
+  const s1ok = v.title.trim() && v.criteria.trim();
+  const s2ok = !!v.req;
+  const s3ok = v.risk && v.loto.trim();
+  const lockMsg = "Se habilita cuando la OT esté autorizada";
+
+  const A1 = section("que",1,"Qué hay que hacer","Solicitud, tarea, criterios e ítems del plan", s1ok?'ok':faltan(["title","criteria"]),`
+    <div class="f"><div class="lr"><span class="lbl">Solicitud · qué se pide o qué falló</span></div>${ta("request","Qué se pide o qué falló")}</div>
+    <div class="f${need("title")}"><div class="lr"><span class="lbl">Tarea · qué hay que hacer <span class="req">*</span>${tag("title")}</span>${ai()}</div>${ta("title","Qué hay que hacer",2)}</div>
+    <div class="f${need("criteria")}"><div class="lr"><span class="lbl">Criterios de aceptación${tag("criteria")}</span>${ai()}</div>${ta("criteria","Cómo se sabe que quedó bien")}</div>
+    <div class="f"><div class="lr"><span class="lbl">Ítems del plan que ejecuta</span><button class="ai" style="background:none"><i data-lucide="plus"></i>Agregar</button></div>
+      <div class="listrow"><span class="mono">DEM-HELICE-BR-01</span><span style="flex:1">Mantenimiento cada 5 años (varada)</span><span class="pill" style="background:rgba(2,132,199,.1);color:var(--accent)">PRINCIPAL</span></div></div>`);
+
+  const A2 = section("form",2,"Datos del formulario","Dónde, quién pide, quién hace, prioridad y tipo", s2ok?'ok':faltan(["req"]),`
+    <div class="row c3 f">
+      <div><div class="lr"><span class="lbl">Ubicación</span></div>${inp("location","Ciudad / Km…")}</div>
+      <div><div class="lr"><span class="lbl">Nro de viaje</span></div>${inp("voyage","Ej. V-2026-014")}</div>
+      <div><div class="lr"><span class="lbl">Condición</span></div><select class="in"><option>—</option><option>Navegación</option><option>Puerto</option><option>Fondeado</option><option>Dique</option></select></div>
+    </div>
+    <div class="f${need("req")}"><div class="lr"><span class="lbl">Solicitado por <span class="req">*</span>${tag("req")}</span></div>${seg("req",[["CUBIERTA","Cubierta"],["MAQUINAS","Máquinas"],["TECNICA","Técnica"],["OPS_SSMA","Ops / SSMA"]])}</div>
+    <div class="f"><div class="lr"><span class="lbl">Asignado a</span></div>${seg("asg",[["TRIPULACION","Tripulación"],["TERCERIZADO","Tercerizado"],["TECNICA","Técnica"],["OPS_SSMA","Ops / SSMA"]])}</div>
+    <div class="row c2 f">
+      <div><div class="lr"><span class="lbl">Técnico responsable</span></div><select class="in"><option>— Sin asignar —</option><option>Jefe de Máquinas Demo</option></select></div>
+      <div><div class="lr"><span class="lbl">Fecha de apertura</span></div><input type="date" class="in" value="2026-09-14"></div>
+    </div>
+    ${v.asg==="TERCERIZADO"?`<div class="f"><div class="lr"><span class="lbl">Solicitudes de servicio (taller externo)</span><button class="ai" style="background:none"><i data-lucide="plus"></i>Nueva SS</button></div>
+      <div class="listrow"><span class="mono">SS-12-DEM-2026</span><span style="flex:1">Rectificado de eje</span><b>Taller Naval Demo S.A.</b><span class="st" style="background:var(--fg5);border-color:var(--fg10)">Borrador</span></div></div>`:''}
+    <div class="f"><div class="lr"><span class="lbl">Prioridad</span></div>${seg("prio",[["CRITICAL","Inmediato"],["HIGH","Dentro de las 24 hs"],["MEDIUM","Dentro de la semana"],["LOW","Dentro del mes"]],"prio")}</div>
+    <div class="f"><div class="lr"><span class="lbl">Tipo de mantenimiento</span></div>${seg("kind",[["PREVENTIVO","Preventivo"],["CORRECTIVO_PROGRAMADO","Correctivo programado"],["CORRECTIVO_NO_PROGRAMADO","Correctivo no programado"],["PREDICTIVO","Predictivo"],["EMERGENCIA","Emergencia"],["INSPECTION","Inspección"]])}</div>
+    <div class="f"><div class="lr"><span class="lbl">Sistema</span></div>${seg("system",[["MAQUINAS","Máquinas"],["RE_CUBIERTA","R/E Cubierta"],["BARCAZAS","Barcazas"]])}</div>`);
+
+  const A3 = section("seg",3,"Seguridad antes de empezar","Riesgo, LOTO y permisos de trabajo", s3ok?'ok':faltan(["risk","loto"]),`
+    <div class="row c2 f">
+      <div id="f-risk" class="${need("risk")}"><div class="lr"><span class="lbl">Nivel de riesgo (JSA)${tag("risk")}</span>${ai()}</div>
+        <div class="seg risk">${[["L","Bajo"],["M","Medio"],["H","Alto"],["C","Crítico"]].map(([k,l])=>`<button data-v="${k}" title="${l}" class="${v.risk===k?'on':''}" onclick="S.v.risk=S.v.risk==='${k}'?'':'${k}';render()">${k}</button>`).join("")}</div>
+        <div class="hint">¿Qué riesgo tiene HACER la tarea?</div></div>
+      <div><div class="lr"><span class="lbl">Permisos de trabajo</span></div>
+        ${idx(S.stage)>=1?`<button class="btn-soft"><i data-lucide="plus" style="width:13px;height:13px"></i>Nuevo permiso</button>`:`<div class="hint" style="margin-top:0">Se cargan con la OT ya aprobada.</div>`}
+        <div class="warnbox"><i data-lucide="shield-alert" style="width:14px;height:14px;flex-shrink:0"></i><span>Por el trabajo, podría requerir: <b>Trabajo en caliente</b>.</span></div></div>
+    </div>
+    <div class="f"><div class="lr"><span class="lbl">Resultado del análisis de riesgo</span></div>${ta("riskText","Peligros y medidas")}</div>
+    <div class="f${need("loto")}"><div class="lr"><span class="lbl">LOTO · bloqueo y etiquetado${tag("loto")}</span>${ai()}</div>${ta("loto","Qué se aísla y cómo")}</div>`);
+
+  const A4 = section("prev",4,"Repuestos, materiales y checklist","Lo que se va a necesitar y cuándo", '',`
+    <div class="f"><div class="lr"><span class="lbl">Repuestos y materiales previstos</span><button class="ai" style="background:none"><i data-lucide="plus"></i>Agregar</button></div>
+      <table class="sp"><tr><th>Tipo</th><th>Código</th><th>Descripción</th><th style="text-align:right">Cant.</th></tr>
+      <tr><td>Repuesto</td><td class="mono">SP-0231</td><td>Sello mecánico 45 mm</td><td style="text-align:right">1 u</td></tr>
+      <tr><td>Material</td><td>—</td><td>Grasa marina</td><td style="text-align:right">2 kg</td></tr></table></div>
+    <div class="row c2 f">
+      <div><div class="lr"><span class="lbl">Inicio previsto</span></div><input type="date" class="in"></div>
+      <div><div class="lr"><span class="lbl">Fin previsto</span></div><input type="date" class="in"></div>
+    </div>
+    <div class="f"><div class="lr"><span class="lbl">Documento checklist</span></div><div class="drop"><i data-lucide="upload" class="ic"></i> Arrastrá el checklist acá o <b style="color:var(--accent)">elegí un archivo</b></div></div>`);
+
+  const B1 = section("av",5,"Avances","Texto, fotos, videos y audios del trabajo", '',`
+    <div class="listrow"><i data-lucide="image" style="width:14px;height:14px;color:#7C3AED"></i><span style="flex:1">Se desmontó el cubo, se ven marcas en el eje.</span><span style="color:var(--faint)">15/09 · 3 fotos</span></div>
+    <div class="f"><button class="btn-soft"><i data-lucide="plus" style="width:13px;height:13px"></i>Registrar avance</button></div>`, execLocked, lockMsg);
+
+  const B2 = section("usados",6,"Repuestos utilizados","Descuenta del stock del buque", '',`
+    <table class="sp"><tr><th>Repuesto</th><th style="text-align:right">Cant.</th><th>Stock</th></tr>
+    <tr><td><span class="mono">SP-0231</span> Sello mecánico 45 mm</td><td style="text-align:right"><input class="in" style="width:70px;text-align:right;padding:4px 8px" value="1"></td><td style="color:var(--muted)">Quedan 2</td></tr></table>
+    <div class="f"><button class="btn-soft"><i data-lucide="plus" style="width:13px;height:13px"></i>Agregar repuesto usado</button></div>`, execLocked, lockMsg);
+
+  const cm = closeMissing();
+  const C1 = section("cierre",7,"Cierre y resultado","Tarea concluida, resultado, quién ejecutó y horas", cm.length?`Faltan ${cm.length}`:'ok',`
+    <div class="row c2 f">
+      <div id="f-taskDone" class="${need("taskDone")}"><div class="lr"><span class="lbl">¿Tarea concluida? <span class="req">*</span>${tag("taskDone")}</span></div>
+        <div class="big"><button class="y ${v.taskDone==='YES'?'on':''}" onclick="S.v.taskDone='YES';render()">SÍ</button><button class="n ${v.taskDone==='NO'?'on':''}" onclick="S.v.taskDone='NO';render()">NO</button></div></div>
+      <div id="f-result" class="${need("result")}"><div class="lr"><span class="lbl">Resultado <span class="req">*</span>${tag("result")}</span></div>
+        <div class="big"><button class="y ${v.result==='OK'?'on':''}" onclick="S.v.result='OK';render()">Satisfactorio</button><button class="n ${v.result==='DEF'?'on':''}" onclick="S.v.result='DEF';render()">Con deficiencias</button></div></div>
+    </div>
+    ${v.taskDone==='NO'?`<div class="f"><div class="lr"><span class="lbl">Pendientes · qué quedó y por qué</span></div>${ta("pending","Qué quedó pendiente y por qué",2,"exec")}</div>`:''}
+    ${v.result==='DEF'?`<div class="f"><div class="lr"><span class="lbl">Deficiencias encontradas</span>${ai().replace('Sugerir','Redactar con IA')}</div><textarea class="in" rows="2" style="border-color:rgba(234,88,12,.35)" placeholder="Qué se encontró"></textarea>
+      <div class="warnbox" style="background:rgba(234,88,12,.06);border-color:rgba(234,88,12,.3);color:#9A3412"><i data-lucide="alert-triangle" style="width:14px;height:14px"></i><span>¿Abrir un registro de defecto? <button class="btn-soft" style="padding:2px 8px;margin-left:6px">Abrir defecto</button></span></div></div>`:''}
+    <div class="row c3 f">
+      <div class="${need("executedBy")}"><div class="lr"><span class="lbl">Ejecutó <span class="req">*</span>${tag("executedBy")}</span></div>${inp("executedBy","Nombre y apellido","text","exec")}</div>
+      <div class="${need("execDate")}"><div class="lr"><span class="lbl">Fecha de ejecución <span class="req">*</span>${tag("execDate")}</span></div>${inp("execDate","","date","exec")}</div>
+      <div><div class="lr"><span class="lbl">Horas reales</span></div>${inp("hours","Estimadas: 6 h","number","exec")}</div>
+    </div>
+    <div class="f"><div class="lr"><span class="lbl">Observaciones</span></div>${ta("obs","Algo más para dejar asentado",2,"exec")}</div>
+    <div class="f"><div class="lr"><span class="lbl">Documento de respaldo</span></div><div class="drop"><i data-lucide="upload" class="ic"></i> Arrastrá el archivo o <b style="color:var(--accent)">elegí uno</b></div></div>`, execLocked, lockMsg);
+
+  return `${nextCard()}
+    <div class="stage"><div class="stage-h">Preparar la OT</div>${A1}${A2}${A3}${A4}</div>
+    <div class="stage"><div class="stage-h">Ejecución ${execLocked?'<span class="lock"><i data-lucide="lock" style="width:11px;height:11px"></i>se habilita al autorizarla</span>':''}</div>${B1}${B2}</div>
+    <div class="stage"><div class="stage-h">Cierre ${execLocked?'<span class="lock"><i data-lucide="lock" style="width:11px;height:11px"></i>se habilita al autorizarla</span>':''}</div>${C1}</div>`;
+}
+
+function paper(){
+  const v=S.v;
+  const kv=(l,val,l2,v2)=>`<div class="kv"><div class="l">${l}</div><div class="v">${val}</div><div class="l">${l2}</div><div class="v">${v2}</div></div>`;
+  return `<div class="hint" style="text-align:center;margin:0 0 10px">Misma hoja que se imprime. Lo que cargues acá o en <b>Completar</b> es el mismo dato.</div>
+  <div class="sheet">
+    <div style="display:flex;border-bottom:1px solid var(--fg25)"><div style="width:120px;padding:12px;border-right:1px solid var(--fg25);text-align:center;color:var(--faint)">LOGO</div><div style="flex:1;text-align:center;padding:12px"><div style="color:var(--accent);font-weight:700">REGI-MAN-02.4</div><div style="font-weight:700">Orden de trabajo</div></div></div>
+    ${kv("UNIDAD","BUQUE DEMO I","NRO DE OT",'<span class="mono">OT-DEM-26-0045</span>')}
+    ${kv("EQUIPO","Hélice #1","NRO DE SS/SC","")}
+    ${kv("UBICACIÓN",v.location||'<span style="color:var(--faint)">Ciudad / Km…</span>',"FECHA","14/09/2026")}
+    <div class="bar">Solicitado por</div><div class="ta">${v.req||'—'}</div>
+    <div class="bar">Asignado a</div><div class="ta">${v.asg}</div>
+    <div class="bar">Solicitud</div><div class="ta">${v.request||''}</div>
+    <div class="bar">Tarea</div><div class="ta">${v.title||''}</div>
+    <div class="bar">Análisis de riesgo</div><div class="ta">Nivel: <b>${v.risk||'—'}</b></div>
+    <div class="ta" style="text-align:center;font-style:italic">… resto de la hoja igual que hoy …</div>
+  </div>`;
+}
+
+/* ───────── referencia actual ───────── */
+function current(){
+  const b=(n,t,p,note)=>`<div class="cur-block">${note?`<span class="note">${note}</span>`:''}<h4>${n?`<span class="n">${n}</span>`:''}${t}</h4><p>${p}</p></div>`;
+  return `<div class="modal"><div class="m-head"><div class="h-row"><i data-lucide="wrench" class="ic" style="color:var(--accent)"></i><div><div class="ent">Orden de trabajo</div><span class="code">OT-DEM-26-0045</span> · Hélice #1</div><span class="badge b-sol">Planificada</span><span style="font-size:10px;color:var(--faint)">F. VENCIMIENTO</span><input type="date" class="in" style="width:140px;padding:3px 6px;font-size:12px"></div></div>
+  <div class="m-body">
+    ${b("","Tramitación","Completala y enviala a aprobar cuando esté lista. [ENVIAR A APROBAR]","No dice qué falta completar")}
+    ${b(1,"Plan","Ítems del PDM")}
+    ${b(2,"Documento checklist","[Seleccionar archivo] Ningún archivo seleccionado")}
+    ${b(3,"Solicitudes de servicio","Sin solicitudes de servicio…","Aparece aunque la OT no se terceriza")}
+    ${b("","Hoja REGI-MAN-02.4 (larga, en el medio)","Unidad, equipo, ubicación, solicitado por, asignado a, prioridad/tipo/sistema, permisos, solicitud, tarea, repuestos, materiales, programación, tarea concluida, pendientes, riesgo, firmas, anexo LOTO","Dice 'se registran más abajo' y 'se marca más abajo'")}
+    ${b(3,"Repuestos y materiales","Planilla de repuestos previstos","Otra vez el número 3")}
+    ${b(4,"Avances","Aparece recién con la OT aprobada")}
+    ${b(5,"Tarea concluida y resultado","SÍ / NO · Satisfactorio / Con deficiencias")}
+    ${b(6,"Resultado","Deficiencias, ejecutó, fecha de ejecución, horas, observaciones, documento, repuestos utilizados","Fecha de fin repetida con la de la hoja")}
+    <div class="cur-block" style="border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06)"><span class="note">Error en recuadro rojo</span><p style="color:#B91C1C">No se pudo guardar…</p></div>
+  </div>
+  <div class="m-foot" style="position:relative"><span class="note" style="top:-12px;left:22px;right:auto">6 botones del mismo peso · la hoja se guarda sola pero el resto necesita "Guardar"</span>
+    <button class="btn-soft">Generar PDF</button><button class="btn-soft" style="color:#047857">Cerrar OT</button><span style="flex:1"></span><button class="btn-soft" style="color:#A16207">Postergar</button><button class="btn-soft" style="color:#B91C1C">Cancelar OT</button><button class="btn-primary" style="padding:8px 14px;font-size:12px">Guardar</button></div></div>`;
+}
+
+/* ───────── acciones demo ───────── */
+function goField(k){
+  const secOf={title:"que",criteria:"que",req:"form",risk:"seg",loto:"seg",taskDone:"cierre",result:"cierre",executedBy:"cierre",execDate:"cierre"}[k];
+  S.open[secOf]=true; render();
+  const el=document.getElementById("f-"+k); if(!el) return;
+  el.scrollIntoView({behavior:"smooth",block:"center"});
+  const t = el.matches("input,textarea")?el:(el.querySelector(".seg")||el);
+  t.classList.add("flash"); if(el.focus && el.matches("input,textarea")) el.focus();
+  setTimeout(()=>t.classList.remove("flash"),1600);
+}
+function doSend(){ S.alert=null; S.stage="approval"; S.open={};
+  S.alert={t:"OT enviada a aprobar", icon:"check-circle-2", color:"var(--success)",
+    m:"Se guardó y quedó <b>Pendiente de aprobación</b>. Ahora la aprueba el Superintendente técnico o el DPA. La seguís viendo en Órdenes de Trabajo."};
+  render(); }
+function send(){
+  const m=prepMissing();
+  if(m.length){ S.alert={t:"Faltan datos recomendados",
+    m:`Todavía falta: <b>${m.map(x=>x[1]).join(", ")}</b>. Podés completarlos antes o enviarla igual.`,
+    buttons:[{label:"Enviar igual",cls:"btn-ghost",on:"doSend()"},{label:"Completar lo que falta",cls:"btn-primary",on:`S.alert=null;goField('${m[0][0]}')`}]}; render(); return; }
+  doSend();
+}
+function askLeave(){
+  if (S.stage!=="prep"){ toast("Cerrar (demo)"); return; }
+  S.alert={t:"Todavía no la enviaste a aprobar",
+    m:"La OT queda guardada <b>En preparación</b>: nadie la ve para aprobarla hasta que la envíes.",
+    buttons:[{label:"Salir sin enviar",cls:"btn-ghost",on:"S.alert=null;toast('Se cierra la OT (demo)')"},{label:"Enviar a aprobar ahora",cls:"btn-primary",on:"S.alert=null;send()"}]};
+  render();
+}
+function createdDlg(){
+  return `<div class="alert-ov" style="z-index:150"><div class="alert" style="max-width:460px;padding:24px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="width:46px;height:46px;border-radius:99px;background:rgba(14,159,110,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="check" style="width:26px;height:26px;color:var(--success)"></i></span>
+      <div><div style="font-size:16px;font-weight:800">¡Orden de trabajo abierta!</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px"><span class="code" style="font-size:12px">OT-DEM-26-0045</span> · Hélice #1 · BUQUE DEMO I</div></div>
+    </div>
+    <p style="margin:16px 0 10px;color:var(--fg);font-size:13px">A continuación la vamos a <b>completar</b>. Son dos pasos:</p>
+    <div class="steps2">
+      <div><span class="d2 cur2">1</span><span><b>Completá los datos de la OT.</b><br><span class="ns">Te marcamos qué falta y la IA te ayuda con “Sugerir”.</span></span></div>
+      <div><span class="d2">2</span><span><b>Al terminar, tocá “Enviar a aprobar”.</b><br><span class="ns">Está arriba y abajo de la pantalla, siempre a mano.</span></span></div>
+      <div style="opacity:.6"><span class="d2" style="border-style:dashed">3</span><span>Después la aprueba el Superintendente y la autoriza el DPA.</span></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:18px"><button class="btn-primary" onclick="S.created=false;render()">Completar la OT <i data-lucide="arrow-right" style="width:15px;height:15px"></i></button></div>
+  </div></div>`;
+}
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;render();},2000); }
+function renderKeep(id){ const el=document.getElementById(id); const pos=el?.selectionStart; render(); const n=document.getElementById(id); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch{}} }
+document.querySelector('.pv-bar button[data-created]').onclick=()=>{ S.ref=false; S.stage="prep"; S.open={}; S.created=true; render(); };
+document.querySelectorAll(".pv-bar button[data-stage]").forEach(b=>b.onclick=()=>{ S.ref=false; S.created=false; S.stage=b.dataset.stage; S.open={};
+  if(S.stage==="close"){ Object.assign(S.v,{req:"MAQUINAS",criteria:"Sin pérdidas a 1500 rpm",risk:"M",loto:"Bloqueo del arranque del MCP"}); }
+  render(); });
+document.querySelector('.pv-bar button[data-ref]').onclick=()=>{ S.ref=true; render(); };
+render();
+</script>
+</body>
+</html>

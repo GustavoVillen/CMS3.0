@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Completar SS — Preview V8</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --accent:#0284C7; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer} button:disabled{cursor:not-allowed}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px}
+  .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600}
+  .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px}
+  .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .overlay{position:fixed;inset:46px 0 0 0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{width:100%;max-width:880px;background:var(--surface);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35);display:flex;flex-direction:column;max-height:calc(100vh - 80px);overflow:hidden;border-top:3px solid var(--accent)}
+  .m-head{padding:14px 22px 12px;border-bottom:1px solid var(--fg10)}
+  .h-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .code{font-family:ui-monospace,monospace;font-weight:700;color:var(--accent);font-size:14px}
+  .ent{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .badge{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid}
+  .b-prep{background:rgba(26,29,36,.05);color:var(--muted);border-color:var(--fg10)}
+  .b-sol{background:rgba(37,99,235,.08);color:#1D4ED8;border-color:rgba(37,99,235,.25)}
+  .b-auth{background:rgba(14,159,110,.1);color:#047857;border-color:rgba(14,159,110,.3)}
+  .b-close{background:rgba(14,159,110,.15);color:#065F46;border-color:rgba(14,159,110,.4)}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;border:1px solid rgba(2,132,199,.25);background:rgba(2,132,199,.05);border-radius:99px;padding:3px 9px}
+  .chip b{font-weight:700}
+  .iconbtn{background:none;border:1px solid var(--fg10);border-radius:8px;padding:5px 8px;font-size:11px;color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .close{width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center}
+  .ic{width:16px;height:16px}
+  /* ciclo de vida */
+  .life{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+  .ls{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--faint)}
+  .ls .d{width:22px;height:22px;border-radius:99px;border:1.5px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+  .ls.done{color:var(--success)} .ls.done .d{background:var(--success);border-color:var(--success);color:#fff}
+  .ls.cur{color:var(--accent)} .ls.cur .d{border-color:var(--accent);background:rgba(2,132,199,.1)}
+  .ll{width:26px;height:1.5px;background:var(--fg10)}
+  .viewsw{margin-left:auto;display:flex;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:2px}
+  .viewsw button{border:0;background:none;padding:5px 10px;font-size:11px;font-weight:700;border-radius:8px;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .viewsw button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .m-body{overflow-y:auto;flex:1;padding:18px 22px}
+  /* próximo paso */
+  .next{border:1.5px solid rgba(2,132,199,.35);background:linear-gradient(0deg,rgba(2,132,199,.03),rgba(2,132,199,.07));border-radius:14px;padding:14px 16px;margin-bottom:16px}
+  .next.ok{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.06)}
+  .next .nt{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);display:flex;gap:6px;align-items:center}
+  .next.ok .nt{color:var(--success)}
+  .next .nh{font-size:15px;font-weight:800;margin:4px 0 2px}
+  .next .ns{font-size:12px;color:var(--muted)}
+  .todo{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}
+  .todo button{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:99px;padding:4px 10px;border:1px solid}
+  .todo .miss{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.35);color:#B45309}
+  .todo .done{background:rgba(14,159,110,.08);border-color:rgba(14,159,110,.3);color:#047857}
+  .next-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .btn-primary{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:10px 18px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-green{background:var(--success);color:#fff;border:0;border-radius:12px;padding:10px 18px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-red{background:rgba(220,38,38,.08);color:#B91C1C;border:1px solid rgba(220,38,38,.3);border-radius:12px;padding:10px 16px;font-weight:700;font-size:13px}
+  .btn-soft{background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn-ghost{background:none;border:0;border-radius:10px;padding:8px 12px;font-size:12px;color:var(--fg)}
+  .btn-ghost:hover{background:var(--fg5)}
+  /* etapas */
+  .stage{margin-top:18px}
+  .stage-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .stage-h::after{content:"";flex:1;height:1px;background:var(--fg10)}
+  .stage-h .lock{font-size:10px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--faint);display:flex;gap:4px;align-items:center}
+  .sec{border:1px solid var(--fg10);border-radius:14px;margin-bottom:10px;background:var(--surface)}
+  .sec.locked{background:var(--fg5);opacity:.75}
+  .sec-h{display:flex;align-items:center;gap:10px;padding:11px 14px;width:100%;background:none;border:0;text-align:left;color:var(--fg)}
+  .sec-h .n{width:22px;height:22px;border-radius:99px;background:var(--fg);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .sec-h .n.ok{background:var(--success)}
+  .sec-h .t{font-size:13px;font-weight:800}
+  .sec-h .s{font-size:11px;color:var(--muted)}
+  .sec-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .sec-b{padding:2px 14px 14px}
+  .pill{font-size:10px;font-weight:700;border-radius:99px;padding:2px 8px;white-space:nowrap}
+  .p-ok{background:rgba(14,159,110,.12);color:#047857}
+  .p-miss{background:#D97706;color:#fff;font-size:11px;padding:3px 9px}
+  .p-lock{background:var(--fg10);color:var(--muted)}
+  .f{margin-top:12px}
+  .lr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  .lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .lbl .req{color:var(--danger)}
+  .in{width:100%;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:8px 12px;font-size:14px;color:var(--fg);font-family:inherit}
+  .in:focus{outline:none;border-color:rgba(2,132,199,.5)}
+  .in.flash{box-shadow:0 0 0 3px rgba(217,119,6,.35);border-color:#D97706}
+  textarea.in{resize:vertical;line-height:1.45}
+  .row{display:grid;gap:12px} .c2{grid-template-columns:1fr 1fr} .c3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:680px){.c2,.c3{grid-template-columns:1fr}.viewsw{margin-left:0}}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{background:var(--fg5);border:1.5px solid var(--fg10);border-radius:10px;padding:6px 11px;font-size:12px;font-weight:600;color:var(--fg)}
+  .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .seg.flash button{border-color:#D97706}
+  .seg.prio button.on[data-v="CRITICAL"]{background:#B91C1C;border-color:#B91C1C}
+  .seg.prio button.on[data-v="HIGH"]{background:#EA580C;border-color:#EA580C}
+  .seg.prio button.on[data-v="MEDIUM"]{background:#CA8A04;border-color:#CA8A04}
+  .seg.prio button.on[data-v="LOW"]{background:var(--success);border-color:var(--success)}
+  .risk button{width:44px;height:38px;border-radius:10px;border:1.5px solid var(--fg10);background:var(--fg5);font-weight:800;font-size:13px}
+  .risk button.on[data-v="L"]{background:var(--success);color:#0B132B;border-color:var(--success)}
+  .risk button.on[data-v="M"]{background:#FACC15;color:#0B132B;border-color:#FACC15}
+  .risk button.on[data-v="H"]{background:#EF4444;color:#fff;border-color:#EF4444}
+  .risk button.on[data-v="C"]{background:#B91C1C;color:#fff;border-color:#B91C1C}
+  .big{display:flex;gap:8px}
+  .big button{flex:1;padding:12px;border-radius:12px;border:1.5px solid var(--fg10);background:var(--fg5);font-weight:800;font-size:14px;color:var(--muted)}
+  .big button.on.y{background:rgba(14,159,110,.12);border-color:rgba(14,159,110,.5);color:#047857}
+  .big button.on.n{background:rgba(234,88,12,.1);border-color:rgba(234,88,12,.45);color:#C2410C}
+  .ai{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--accent);background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);border-radius:99px;padding:2px 9px}
+  .ai svg{width:12px;height:12px}
+  .listrow{display:flex;align-items:center;gap:10px;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:12px;margin-top:6px}
+  .mono{font-family:ui-monospace,monospace;font-weight:700;font-size:11px;color:var(--accent)}
+  .st{font-size:10px;font-weight:700;border-radius:8px;padding:2px 7px;border:1px solid}
+  .drop{border:1.5px dashed var(--fg25);border-radius:12px;padding:12px;text-align:center;font-size:12px;color:var(--muted)}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px}
+  .warnbox{border:1px solid rgba(234,179,8,.35);background:rgba(234,179,8,.07);border-radius:10px;padding:8px 10px;font-size:12px;color:#854D0E;display:flex;gap:6px;margin-top:8px}
+  table.sp{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+  table.sp th{text-align:left;font-size:10px;color:var(--faint);font-weight:600;border-bottom:1px solid var(--fg10);padding:4px}
+  table.sp td{padding:6px 4px;border-bottom:1px solid var(--fg5)}
+  /* pie */
+  .m-foot{display:flex;align-items:center;gap:8px;padding:12px 22px;border-top:1px solid var(--fg10);flex-wrap:wrap}
+  .saved{font-size:11px;font-weight:700;color:#047857;display:flex;gap:4px;align-items:center;margin-right:auto}
+  .menu{position:relative}
+  .menu-pop{position:absolute;bottom:40px;left:0;background:var(--surface);border:1px solid var(--fg10);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.15);padding:6px;min-width:200px;z-index:10}
+  .menu-pop button{display:flex;width:100%;gap:8px;align-items:center;border:0;background:none;padding:8px 10px;border-radius:8px;font-size:12px;text-align:left}
+  .menu-pop button:hover{background:var(--fg5)}
+  /* hoja papel (resumen) */
+  .sheet{max-width:720px;margin:0 auto;border:1px solid var(--fg25);background:#fff;font-size:12px}
+  .sheet .bar{background:#0f172a;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;text-align:center;padding:5px}
+  .sheet .kv{display:flex;border-bottom:1px solid var(--fg25)}
+  .sheet .kv .l{background:#0f172a;color:#fff;font-size:10px;font-weight:700;width:110px;padding:6px 8px}
+  .sheet .kv .v{flex:1;padding:6px 8px}
+  .sheet .ta{padding:8px;min-height:44px;border-bottom:1px solid var(--fg25);color:var(--muted)}
+  /* referencia actual */
+  .cur-block{border:1px solid var(--fg10);border-radius:12px;padding:10px 12px;margin-bottom:8px;position:relative;background:var(--surface)}
+  .cur-block h4{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;display:flex;gap:8px;align-items:center}
+  .cur-block .n{width:20px;height:20px;border-radius:99px;background:rgba(2,132,199,.15);color:var(--accent);font-size:10px;display:inline-flex;align-items:center;justify-content:center}
+  .cur-block p{margin:4px 0 0;font-size:11px;color:var(--muted)}
+  .note{position:absolute;right:10px;top:8px;background:#DC2626;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;max-width:55%;text-align:right}
+  .alert-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .alert{background:#fff;border-radius:16px;max-width:400px;width:100%;padding:20px}
+  .alert h3{margin:0 0 6px;font-size:14px;display:flex;gap:8px;align-items:center}
+  .alert p{margin:0 0 14px;font-size:13px;color:var(--muted)}
+  .d2{width:22px;height:22px;border-radius:99px;border:1.5px solid var(--fg25);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;color:var(--muted)}
+  .d2.cur2{border-color:var(--accent);background:rgba(2,132,199,.1);color:var(--accent)}
+  .d2.ok2{border-color:var(--success);background:var(--success);color:#fff}
+  .steps2{display:flex;flex-direction:column;gap:10px}
+  .steps2>div{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+  .prog{height:6px;border-radius:99px;background:var(--fg10);margin:8px 0 6px;overflow:hidden}
+  .prog>div{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+  .next.ok .prog>div{background:var(--success)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(2,132,199,.5)}70%{box-shadow:0 0 0 10px rgba(2,132,199,0)}100%{box-shadow:0 0 0 0 rgba(2,132,199,0)}}
+  .pulse{animation:pulse 1.8s infinite}
+  .need{position:relative;border-left:4px solid #F59E0B;background:#FFFBEB;border-radius:0 12px 12px 0;padding:10px 12px 12px 12px;margin-left:-4px}
+  .need .in{border-color:rgba(217,119,6,.55);background:#fff}
+  .need .seg button:not(.on), .need .risk button:not(.on), .need .big button:not(.on){border-color:rgba(217,119,6,.45);background:#fff}
+  .needtag{display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#D97706;border-radius:99px;padding:2px 7px;vertical-align:1px}
+  .row > .need{margin-left:0;border-radius:12px;border-left-width:4px}
+  .todo .miss{font-size:12px;padding:6px 12px;background:#FEF3C7;border-color:#F59E0B;color:#92400E}
+  .b-close{background:rgba(14,159,110,.15);color:#065F46;border-color:rgba(14,159,110,.4)}
+  select.in.flash,input.in.flash{box-shadow:0 0 0 3px rgba(217,119,6,.35)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Completar la SS · Preview V8</b><span class="tag">DEMO · DATOS FICTICIOS</span>
+  <span class="sep"></span>
+  <button data-created="1">★ Recién creada</button>
+  <span class="lab">Estado de la SS:</span>
+  <button data-stage="prep" class="on">En preparación</button>
+  <button data-stage="approval">Pendiente de aprobación</button>
+  <button data-stage="auth">Aprobada (falta autorizar)</button>
+  <button data-stage="send">Autorizada</button>
+  <button data-stage="shop">En el taller</button>
+  <button data-stage="done">Recibida</button>
+  <span class="sep"></span>
+  <button data-ref="1">Hoy (referencia)</button>
+</div>
+<div class="overlay" id="root"></div>
+
+<script>
+const S = {
+  stage:"prep", view:"guided", ref:false, menu:false, alert:null, toast:null, open:{}, created:true,
+  v:{ description:"Rectificado del eje de cola", causes:"", provider:"", dept:"MAQUINAS", compras:[], capitan:"", jefeMaq:"",
+      comm:[], obs:"", item:"", recibe:"", conforme:null },
+};
+const STAGES = [["prep","Preparar"],["approval","Aprobación"],["auth","Autorización"],["send","Envío al taller"],["shop","Recepción"]];
+const stageIdx = s => s==="done" ? 5 : STAGES.findIndex(x=>x[0]===s);
+const PROVIDERS = ["Taller Naval Demo S.A.","Servicios Hidráulicos Demo","Electro Marine Demo"];
+
+function prepMissing(){
+  const v=S.v, m=[];
+  if(!v.description.trim()) m.push(["description","Servicio"]);
+  if(!v.causes.trim()) m.push(["causes","Detalle del trabajo"]);
+  if(!v.provider) m.push(["provider","Taller"]);
+  if(!v.capitan.trim()) m.push(["capitan","Capitán"]);
+  if(!v.jefeMaq.trim()) m.push(["jefeMaq","Jefe de Máquinas"]);
+  return m;
+}
+function recvMissing(){
+  const v=S.v, m=[];
+  if(!v.item.trim()) m.push(["item","Qué se recibió"]);
+  if(!v.recibe.trim()) m.push(["recibe","Quién recibe"]);
+  if(v.conforme===null) m.push(["conforme","Conformidad"]);
+  return m;
+}
+function isMissing(key){
+  const list = S.stage==="prep" ? prepMissing() : S.stage==="shop" ? recvMissing() : [];
+  return list.some(x=>x[0]===key);
+}
+function faltan(keys){ const n=keys.filter(isMissing).length; return n===0?'ok':n===1?'Falta 1 dato':`Faltan ${n} datos`; }
+function need(key){ return isMissing(key) ? " need" : ""; }
+function tag(key){ return isMissing(key) ? `<span class="needtag"><i data-lucide="pencil" style="width:9px;height:9px"></i>Completar</span>` : ""; }
+function inp(key, ph, dis=false){ return `<input id="f-${key}" class="in" placeholder="${ph}" value="${S.v[key]}" ${dis?'disabled':''} oninput="S.v['${key}']=this.value;renderKeep('f-${key}')">`; }
+function ta(key, ph, rows=2, dis=false){ return `<textarea id="f-${key}" class="in" rows="${rows}" placeholder="${ph}" ${dis?'disabled':''} oninput="S.v['${key}']=this.value;renderKeep('f-${key}')">${S.v[key]}</textarea>`; }
+function ai(){ return `<button class="ai" onclick="toast('La IA completó el campo (demo)')"><i data-lucide="sparkles"></i>Sugerir</button>`; }
+function multi(key, opts){ return `<div class="seg">${opts.map(o=>`<button class="${S.v[key].includes(o)?'on':''}" onclick="S.v['${key}']=S.v['${key}'].includes('${o}')?S.v['${key}'].filter(x=>x!=='${o}'):[...S.v['${key}'],'${o}'];render()">${o}</button>`).join("")}</div>`; }
+
+function render(){
+  document.querySelectorAll(".pv-bar button[data-stage]").forEach(b=>b.classList.toggle("on", !S.ref && b.dataset.stage===S.stage));
+  document.querySelector('.pv-bar button[data-ref]').classList.toggle("on", S.ref);
+  const root=document.getElementById("root");
+  root.style.top = document.querySelector(".pv-bar").offsetHeight + "px";
+  const prev=root.querySelector(".m-body"); const key=S.ref+":"+S.view; const keep = prev && render.k===key ? prev.scrollTop : 0; render.k=key;
+  root.innerHTML = S.ref ? current() : modal();
+  if (S.created && !S.ref) root.insertAdjacentHTML("beforeend", createdDlg());
+  if (S.alert) root.insertAdjacentHTML("beforeend", `<div class="alert-ov"><div class="alert"><h3><i data-lucide="${S.alert.icon||'alert-triangle'}" class="ic" style="color:${S.alert.color||'var(--warning)'}"></i>${S.alert.t}</h3><p>${S.alert.m}</p><div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${
+    S.alert.buttons ? S.alert.buttons.map(b=>`<button class="${b.cls}" onclick="${b.on}">${b.label}</button>`).join("") : `<button class="btn-primary" onclick="S.alert=null;render()">OK</button>`}</div></div></div>`);
+  if (S.toast) root.insertAdjacentHTML("beforeend", `<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+  const b=root.querySelector(".m-body"); if(b) b.scrollTop=keep;
+}
+
+function section(id, n, title, sub, status, body, isLocked=false, lockText=""){
+  const defOpen = ["que","taller","firmas"].includes(id) ? stageIdx(S.stage) < 1
+    : id==="ruta" ? stageIdx(S.stage) >= 3 : stageIdx(S.stage) >= 4;
+  const open = !isLocked && (S.open[id] ?? defOpen);
+  return `<div class="sec ${isLocked?'locked':''}"><button class="sec-h" onclick="${isLocked?'':`S.open['${id}']=${!open};render()`}">
+    <span class="n">${n}</span><span><div class="t">${title}</div><div class="s">${isLocked?lockText:sub}</div></span>
+    <span class="r">${isLocked?'<span class="pill p-lock"><i data-lucide="lock" style="width:10px;height:10px"></i> Bloqueado</span>':status==='ok'?'<span class="pill p-ok">Completo</span>':status?`<span class="pill p-miss">${status}</span>`:''}
+    ${isLocked?'':`<i data-lucide="${open?'chevron-up':'chevron-down'}" class="ic" style="color:var(--faint)"></i>`}</span></button>
+    ${open?`<div class="sec-b">${body}</div>`:''}</div>`;
+}
+
+/* ───────── próximo paso ───────── */
+function nextCard(){
+  const flow = (a,b,okB)=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700">
+      <span style="display:flex;gap:6px;align-items:center;color:var(--accent)"><span class="d2 cur2">1</span>${a}</span>
+      <i data-lucide="arrow-right" style="width:14px;height:14px;color:var(--faint)"></i>
+      <span style="display:flex;gap:6px;align-items:center;color:${okB?'var(--success)':'var(--faint)'}"><span class="d2 ${okB?'ok2':''}">2</span>${b}</span></div>`;
+  if (S.stage==="prep"){
+    const m=prepMissing(), total=5, done=total-m.length;
+    return `<div class="next ${m.length?'':'ok'}">${flow("Completá la SS","Enviala a aprobar",!m.length)}
+      <div class="nh" style="margin-top:8px">${m.length?'Completá los datos y, al terminar, tocá “Enviar a aprobar”':'¡Lista! Ya podés enviarla a aprobar'}</div>
+      <div class="prog"><div style="width:${done/total*100}%"></div></div>
+      <div class="ns">${done} de ${total} datos cargados${m.length?' · tocá lo que falta para ir al campo':''}.</div>
+      <div class="todo">${m.map(([k,l])=>`<button class="miss" onclick="goField('${k}')"><i data-lucide="circle-dashed" style="width:12px;height:12px"></i>${l}</button>`).join("")}
+        ${[["description","Servicio"],["causes","Detalle"],["provider","Taller"],["capitan","Capitán"],["jefeMaq","Jefe de Máquinas"]].filter(([k])=>!m.find(x=>x[0]===k)).map(([k,l])=>`<button class="done" onclick="goField('${k}')"><i data-lucide="check" style="width:12px;height:12px"></i>${l}</button>`).join("")}</div>
+      <div class="next-actions"><button class="btn-primary ${m.length?'':'pulse'}" onclick="send()"><i data-lucide="send" style="width:15px;height:15px"></i>Enviar a aprobar</button>
+        <span class="ns" style="align-self:center">Se guarda sola antes de enviarse. También está abajo, siempre a mano.</span></div></div>`;
+  }
+  if (S.stage==="approval"){
+    return `<div class="next"><div class="nt"><i data-lucide="hourglass" style="width:12px;height:12px"></i>Pendiente de aprobación</div>
+      <div class="nh">La envió Capitán Demo · 14/09/2026</div>
+      <div class="ns">La aprueba el Superintendente técnico. Después la autoriza el DPA / Director de Operaciones: recién ahí se puede mandar al taller.</div>
+      <div class="next-actions" style="margin-top:12px"><button class="btn-green" onclick="toast('Aprobada (demo)')"><i data-lucide="check" style="width:15px;height:15px"></i>Aprobar</button><button class="btn-red" onclick="toast('Abre el motivo del rechazo (demo)')">Rechazar</button><button class="btn-soft" onclick="toast('Vuelve a En preparación (demo)')"><i data-lucide="undo-2" style="width:14px;height:14px"></i>Volver a borrador</button></div></div>`;
+  }
+  if (S.stage==="auth"){
+    return `<div class="next"><div class="nt"><i data-lucide="shield-check" style="width:12px;height:12px"></i>Falta autorizar</div>
+      <div class="nh">Aprobó: Superintendente Demo · 15/09/2026</div>
+      <div class="ns">Autorizar es sólo del DPA / Director de Operaciones. Es el permiso del gasto: sin esto no se manda al taller.</div>
+      <div class="next-actions" style="margin-top:12px"><button class="btn-green" onclick="toast('Autorizada (demo)')"><i data-lucide="shield-check" style="width:15px;height:15px"></i>Autorizar</button><button class="btn-red" onclick="toast('Abre el motivo del rechazo (demo)')">Rechazar</button></div></div>`;
+  }
+  if (S.stage==="send"){
+    return `<div class="next ok"><div class="nt"><i data-lucide="flag" style="width:12px;height:12px"></i>Próximo paso</div>
+      <div class="nh">Autorizada. Ya la podés mandar al taller</div>
+      <div class="ns">Se envía a <b>${S.v.provider||'Taller Naval Demo S.A.'}</b> y queda asentado en la hoja de ruta.</div>
+      <div class="next-actions" style="margin-top:12px"><button class="btn-primary pulse" onclick="toast('Enviada al proveedor (demo)')"><i data-lucide="truck" style="width:15px;height:15px"></i>Enviar al proveedor</button></div></div>`;
+  }
+  if (S.stage==="shop"){
+    const m=recvMissing();
+    return `<div class="next ${m.length?'':'ok'}"><div class="nt"><i data-lucide="package-check" style="width:12px;height:12px"></i>En el taller</div>
+      <div class="nh">${m.length?'Cuando vuelva el trabajo, completá la recepción':'Todo listo para dar el servicio por recibido'}</div>
+      <div class="ns">${m.length?`Faltan ${m.length} datos de la recepción.`:'Se cierra la SS con esta recepción.'}</div>
+      <div class="todo">${m.map(([k,l])=>`<button class="miss" onclick="goField('${k}')"><i data-lucide="circle-dashed" style="width:12px;height:12px"></i>${l}</button>`).join("")}</div>
+      <div class="next-actions"><button class="btn-green" ${m.length?'disabled style="opacity:.45"':''} onclick="toast('Servicio recibido: SS completada (demo)')"><i data-lucide="package-check" style="width:15px;height:15px"></i>Servicio recibido</button></div></div>`;
+  }
+  return `<div class="next ok"><div class="nt"><i data-lucide="check-check" style="width:12px;height:12px"></i>Completada</div>
+    <div class="nh">Servicio recibido · 22/09/2026</div><div class="ns">Sólo lectura.</div></div>`;
+}
+
+/* ───────── modal ───────── */
+function modal(){
+  const st = {prep:["b-prep","En preparación"],approval:["b-sol","Pendiente de aprobación"],auth:["b-sol","Aprobada · falta autorizar"],send:["b-auth","Autorizada"],shop:["b-auth","En ejecución"],done:["b-close","Completada"]}[S.stage];
+  const cur = stageIdx(S.stage);
+  const pm = prepMissing();
+  const head = `<div class="m-head" style="border-top-color:#0891B2">
+    <div class="h-row">
+      <i data-lucide="handshake" class="ic" style="color:#0891B2"></i>
+      <div><div class="ent">Solicitud de servicio</div><div><span class="code" style="color:#0891B2">SS-12-DEM-2026</span> <span style="color:var(--muted)">· Hélice #1</span></div></div>
+      <span class="badge ${st[0]}">${st[1]}</span>
+      <span class="chip"><i data-lucide="ship" style="width:11px;height:11px"></i><b>BUQUE DEMO I</b></span>
+      <span class="chip"><i data-lucide="clipboard-check" style="width:11px;height:11px"></i>OT <b>OT-DEM-26-0045</b></span>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center"><button class="close" onclick="askLeave()"><i data-lucide="x" style="width:18px;height:18px"></i></button></span>
+    </div>
+    <div class="life">
+      ${STAGES.map(([k,l],i)=>`${i?'<span class="ll"></span>':''}<span class="ls ${i<cur?'done':i===cur?'cur':''}"><span class="d">${i<cur?'✓':i+1}</span>${l}</span>`).join("")}
+      <div class="viewsw"><button class="${S.view==='guided'?'on':''}" onclick="S.view='guided';render()"><i data-lucide="list-checks" style="width:12px;height:12px"></i>Completar</button><button class="${S.view==='paper'?'on':''}" onclick="S.view='paper';render()"><i data-lucide="file-text" style="width:12px;height:12px"></i>Hoja REGI-LOG-01.3</button></div>
+    </div></div>`;
+  const body = S.view==="paper" ? paper() : guided();
+  const foot = `<div class="m-foot">
+    <button class="btn-soft"><i data-lucide="file-down" style="width:14px;height:14px"></i>PDF</button>
+    <button class="btn-soft"><i data-lucide="file-type" style="width:14px;height:14px"></i>Word</button>
+    <div class="menu"><button class="btn-soft" onclick="S.menu=!S.menu;render()"><i data-lucide="more-horizontal" style="width:14px;height:14px"></i>Más acciones</button>
+      ${S.menu?`<div class="menu-pop">${S.stage==="prep"?`<button><i data-lucide="trash-2" style="width:14px;height:14px;color:#B91C1C"></i>Eliminar borrador</button>`:''}<button><i data-lucide="ban" style="width:14px;height:14px;color:#B91C1C"></i>Cancelar SS</button></div>`:''}</div>
+    <span style="flex:1"></span>
+    <span class="saved" style="margin-right:0"><i data-lucide="check" style="width:13px;height:13px"></i>Guardado</span>
+    ${S.stage==="prep"
+      ? `<button class="btn-soft" onclick="toast('Guardado (demo)')">Guardar</button>
+         <button class="btn-primary ${pm.length?'':'pulse'}" style="padding:9px 18px" onclick="send()"><i data-lucide="send" style="width:14px;height:14px"></i>Enviar a aprobar${pm.length?` <span style="font-size:10px;font-weight:600;opacity:.85">(${5-pm.length}/5)</span>`:''}</button>`
+      : S.stage==="done" ? '' : `<button class="btn-primary" style="padding:8px 16px;font-size:12px" onclick="toast('Guardado (demo)')">Guardar</button>`}
+  </div>`;
+  return `<div class="modal" style="border-top-color:#0891B2">${head}<div class="m-body">${body}</div>${foot}</div>`;
+}
+
+function guided(){
+  const v=S.v, cur=stageIdx(S.stage), dis = cur>=1;
+  const shopLocked = cur < 3, recvLocked = cur < 4;
+
+  const A1 = section("que",1,"Qué se le pide al taller","Servicio y detalle del trabajo", faltan(["description","causes"]),`
+    <div class="f${need("description")}" id="f-description-w"><div class="lr"><span class="lbl">Descripción del servicio <span class="req">*</span>${tag("description")}</span>${ai()}</div>${ta("description","Qué se le pide al taller",2,dis)}</div>
+    <div class="f${need("causes")}"><div class="lr"><span class="lbl">Detalle del trabajo / causas${tag("causes")}</span>${ai()}</div>${ta("causes","Detalle del trabajo a realizar",3,dis)}</div>
+    <div class="f"><div class="lr"><span class="lbl">Orden de trabajo de origen</span></div>
+      <div class="listrow"><span class="mono">OT-DEM-26-0045</span><span style="flex:1">Mantenimiento cada 5 años (varada) · Hélice #1</span><i data-lucide="external-link" style="width:13px;height:13px;color:var(--accent)"></i></div></div>`);
+
+  const A2 = section("taller",2,"Taller y compras","A quién se le pide, qué área y qué hay que comprar", faltan(["provider"]),`
+    <div class="f${need("provider")}"><div class="lr"><span class="lbl">Taller / proveedor <span class="req">*</span>${tag("provider")}</span></div>
+      <select id="f-provider" class="in" ${dis?'disabled':''} onchange="S.v.provider=this.value;render()"><option value="">Seleccionar taller / proveedor…</option>${PROVIDERS.map(p=>`<option ${v.provider===p?'selected':''}>${p}</option>`).join("")}<option>Otro taller (no está en la lista)…</option></select></div>
+    <div class="f"><div class="lr"><span class="lbl">Asignado a (departamento)</span></div>
+      <div class="seg">${[["CUBIERTA","Cubierta"],["MAQUINAS","Máquinas"],["BARCAZA","Barcaza"],["OTROS","Otros"]].map(([k,l])=>`<button class="${v.dept===k?'on':''}" onclick="S.v.dept='${k}';render()">${l}</button>`).join("")}</div></div>
+    <div class="f"><div class="lr"><span class="lbl">Pedido de compras</span></div>${multi("compras",["Repuestos","Materiales","Servicio"])}</div>
+    <div class="f"><div class="lr"><span class="lbl">Muestras para el laboratorio</span></div>
+      <div class="listrow"><i data-lucide="flask-conical" style="width:14px;height:14px;color:#0891B2"></i><span style="flex:1">Aceite del reductor</span><span class="mono">N° 000123</span></div></div>`);
+
+  const A3 = section("firmas",3,"Firmas y comunicación","Capitán, Jefe de Máquinas, cómo se comunica y a quién", faltan(["capitan","jefeMaq"]),`
+    <div class="row c2 f">
+      <div class="${need("capitan")}"><div class="lr"><span class="lbl">Capitán <span class="req">*</span>${tag("capitan")}</span></div>${inp("capitan","Ej. CAP. JUAN DEMO",dis)}</div>
+      <div class="${need("jefeMaq")}"><div class="lr"><span class="lbl">Jefe de Máquinas <span class="req">*</span>${tag("jefeMaq")}</span></div>${inp("jefeMaq","Ej. J.M. PEDRO DEMO",dis)}</div>
+    </div>
+    <div class="hint">Deben firmar y registrarse el Jefe de Máquinas y el Capitán.</div>
+    <div class="f"><div class="lr"><span class="lbl">Método de comunicación</span></div>${multi("comm",["Correo","WhatsApp","Teléfono","Radio"])}</div>
+    <div class="f"><div class="lr"><span class="lbl">Comentarios</span></div>${ta("obs","Lo que haga falta aclarar del pedido",2,dis)}</div>`);
+
+  const B1 = section("ruta",4,"Hoja de ruta","Envío al taller y seguimiento", '',`
+    <div class="listrow"><i data-lucide="send" style="width:14px;height:14px;color:var(--accent)"></i><span style="flex:1">Enviada a aprobar · Capitán Demo</span><span style="color:var(--faint)">14/09</span></div>
+    <div class="listrow"><i data-lucide="check" style="width:14px;height:14px;color:var(--success)"></i><span style="flex:1">Aprobada · Superintendente Demo</span><span style="color:var(--faint)">15/09</span></div>
+    <div class="listrow"><i data-lucide="truck" style="width:14px;height:14px;color:#B45309"></i><span style="flex:1">Enviada al proveedor · Taller Naval Demo S.A.</span><span style="color:var(--faint)">16/09</span></div>
+    <div class="f"><button class="btn-soft"><i data-lucide="plus" style="width:13px;height:13px"></i>Agregar movimiento</button></div>`, shopLocked, "Se habilita cuando la SS esté autorizada");
+
+  const B2 = section("recep",5,"Entrega y recepción","Qué se recibió, quién lo recibe y si hay conformidad", faltan(["item","recibe","conforme"]),`
+    <div class="row c2 f">
+      <div class="${need("item")}"><div class="lr"><span class="lbl">Qué se recibió <span class="req">*</span>${tag("item")}</span></div>${inp("item","Ej. Eje rectificado")}</div>
+      <div class="${need("recibe")}"><div class="lr"><span class="lbl">Quién recibe <span class="req">*</span>${tag("recibe")}</span></div>${inp("recibe","Nombre y apellido")}</div>
+    </div>
+    <div class="f${need("conforme")}" id="f-conforme"><div class="lr"><span class="lbl">¿Conforme con el trabajo? <span class="req">*</span>${tag("conforme")}</span></div>
+      <div class="big"><button class="y ${v.conforme===true?'on':''}" onclick="S.v.conforme=true;render()">SÍ, conforme</button><button class="n ${v.conforme===false?'on':''}" onclick="S.v.conforme=false;render()">NO conforme</button></div></div>`, recvLocked, "Se habilita cuando el trabajo esté en el taller");
+
+  return `${nextCard()}
+    <div class="stage"><div class="stage-h">Preparar la SS</div>${A1}${A2}${A3}</div>
+    <div class="stage"><div class="stage-h">Envío al taller ${shopLocked?'<span class="lock"><i data-lucide="lock" style="width:11px;height:11px"></i>se habilita al autorizarla</span>':''}</div>${B1}</div>
+    <div class="stage"><div class="stage-h">Recepción ${recvLocked?'<span class="lock"><i data-lucide="lock" style="width:11px;height:11px"></i>se habilita al enviarla al taller</span>':''}</div>${B2}</div>`;
+}
+
+function paper(){
+  const v=S.v;
+  const kv=(l,val,l2,v2)=>`<div class="kv"><div class="l">${l}</div><div class="v">${val}</div><div class="l">${l2}</div><div class="v">${v2}</div></div>`;
+  return `<div class="hint" style="text-align:center;margin:0 0 10px">Misma hoja que se imprime. Lo que cargues acá o en <b>Completar</b> es el mismo dato.</div>
+  <div class="sheet">
+    <div style="display:flex;border-bottom:1px solid var(--fg25)"><div style="width:120px;padding:12px;border-right:1px solid var(--fg25);text-align:center;color:var(--faint)">LOGO</div><div style="flex:1;text-align:center;padding:12px"><div style="color:var(--accent);font-weight:700">REGI-LOG-01.3</div><div style="font-weight:700">Solicitud de servicio</div></div></div>
+    ${kv("REMOLCADOR","BUQUE DEMO I","SOLICITUD N°",'<span class="mono">SS-12-DEM-2026</span>')}
+    <div class="bar">Descripción del servicio</div><div class="ta">${v.description||''}</div>
+    <div class="bar">Taller</div><div class="ta">${v.provider||'—'}</div>
+    <div class="bar">Tramitación</div><div class="ta">SOLICITA · APRUEBA · AUTORIZA</div>
+    <div class="ta" style="text-align:center;font-style:italic">… resto de la hoja igual que hoy …</div>
+  </div>`;
+}
+
+function current(){
+  const b=(t,p,note)=>`<div class="cur-block">${note?`<span class="note">${note}</span>`:''}<h4>${t}</h4><p>${p}</p></div>`;
+  return `<div class="modal"><div class="m-head"><div class="h-row"><i data-lucide="handshake" class="ic" style="color:#0891B2"></i><div><div class="ent">Solicitud de servicio</div><span class="code">SS-12-DEM-2026</span><div style="font-size:12px;color:var(--muted)">Hélice #1 · Rectificado del eje de cola</div></div><span class="badge b-prep" style="margin-left:auto">En preparación</span></div></div>
+  <div class="m-body">
+    ${b("Hoja REGI-LOG-01.3 completa (toda la pantalla)","Remolcador, departamento, asignado a, equipo, OT, descripción, causas, pedido de compras, tramitación, hoja de ruta, taller, entrega y recepción, comentarios, firmas, comunicación, distribución","No dice qué falta ni qué sigue")}
+    ${b("Entrega y recepción","Se puede escribir desde el principio, aunque todavía no se mandó nada al taller","Mezcla lo del pedido con lo de la recepción")}
+    ${b("Taller","Selector al medio de la hoja","El dato clave de la SS queda perdido")}
+    <div class="cur-block" style="border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06)"><span class="note">Error en recuadro rojo</span><p style="color:#B91C1C">No se pudo…</p></div>
+  </div>
+  <div class="m-foot" style="position:relative"><span class="note" style="top:-12px;left:22px;right:auto">Hasta 8 botones del mismo peso</span>
+    <button class="btn-soft">PDF</button><button class="btn-soft">Word</button><button class="btn-primary" style="padding:8px 14px;font-size:12px">Guardar</button><button class="btn-soft" style="color:var(--accent)">Enviar a aprobar</button><span style="flex:1"></span><button class="btn-soft">Eliminar</button><button class="btn-soft">Cancelar SS</button></div></div>`;
+}
+
+/* ───────── acciones demo ───────── */
+function goField(k){
+  const secOf={description:"que",causes:"que",provider:"taller",capitan:"firmas",jefeMaq:"firmas",item:"recep",recibe:"recep",conforme:"recep"}[k];
+  S.open[secOf]=true; render();
+  const el=document.getElementById("f-"+k); if(!el) return;
+  el.scrollIntoView({behavior:"smooth",block:"center"});
+  el.classList.add("flash"); if(el.matches("input,textarea,select")) el.focus();
+  setTimeout(()=>el.classList.remove("flash"),1600);
+}
+function doSend(){ S.stage="approval"; S.open={};
+  S.alert={t:"SS enviada a aprobar", icon:"check-circle-2", color:"var(--success)",
+    m:"Se guardó y quedó <b>Pendiente de aprobación</b>. Ahora la aprueba el Superintendente técnico y después la autoriza el DPA."};
+  render(); }
+function send(){
+  const m=prepMissing();
+  if(m.length){ S.alert={t:"Faltan datos recomendados",
+    m:`Todavía falta: <b>${m.map(x=>x[1]).join(", ")}</b>. Podés completarlos antes o enviarla igual.`,
+    buttons:[{label:"Enviar igual",cls:"btn-ghost",on:"S.alert=null;doSend()"},{label:"Completar lo que falta",cls:"btn-primary",on:`S.alert=null;goField('${m[0][0]}')`}]}; render(); return; }
+  doSend();
+}
+function askLeave(){
+  if (S.stage!=="prep"){ toast("Cerrar (demo)"); return; }
+  S.alert={t:"Todavía no la enviaste a aprobar",
+    m:"La SS queda guardada <b>En preparación</b>: nadie la ve para aprobarla hasta que la envíes.",
+    buttons:[{label:"Salir sin enviar",cls:"btn-ghost",on:"S.alert=null;toast('Se cierra la SS (demo)')"},{label:"Enviar a aprobar ahora",cls:"btn-primary",on:"S.alert=null;send()"}]};
+  render();
+}
+function createdDlg(){
+  return `<div class="alert-ov" style="z-index:150"><div class="alert" style="max-width:460px;padding:24px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="width:46px;height:46px;border-radius:99px;background:rgba(14,159,110,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="check" style="width:26px;height:26px;color:var(--success)"></i></span>
+      <div><div style="font-size:16px;font-weight:800">¡Solicitud de servicio abierta!</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px"><span class="code" style="font-size:12px;color:#0891B2">SS-12-DEM-2026</span> · Taller Naval Demo S.A. · OT-DEM-26-0045</div></div>
+    </div>
+    <p style="margin:16px 0 10px;color:var(--fg);font-size:13px">A continuación la vamos a <b>completar</b>. Son dos pasos:</p>
+    <div class="steps2">
+      <div><span class="d2 cur2">1</span><span><b>Completá los datos de la SS.</b><br><span class="ns">Te marcamos qué falta: servicio, detalle, taller y firmas.</span></span></div>
+      <div><span class="d2">2</span><span><b>Al terminar, tocá “Enviar a aprobar”.</b><br><span class="ns">Está arriba y abajo de la pantalla, siempre a mano.</span></span></div>
+      <div style="opacity:.6"><span class="d2" style="border-style:dashed">3</span><span>Después la aprueba el Superintendente, la autoriza el DPA y se manda al taller.</span></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:18px"><button class="btn-primary" onclick="S.created=false;render()">Completar la SS <i data-lucide="arrow-right" style="width:15px;height:15px"></i></button></div>
+  </div></div>`;
+}
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;render();},2000); }
+function renderKeep(id){ const el=document.getElementById(id); const pos=el?.selectionStart; render(); const n=document.getElementById(id); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch{}} }
+document.querySelector('.pv-bar button[data-created]').onclick=()=>{ S.ref=false; S.stage="prep"; S.open={}; S.created=true; render(); };
+document.querySelectorAll(".pv-bar button[data-stage]").forEach(b=>b.onclick=()=>{ S.ref=false; S.created=false; S.stage=b.dataset.stage; S.open={};
+  if(S.stage!=="prep"){ Object.assign(S.v,{causes:"Desgaste en zona del sello",provider:"Taller Naval Demo S.A.",capitan:"CAP. JUAN DEMO",jefeMaq:"J.M. PEDRO DEMO"}); }
+  render(); });
+document.querySelector('.pv-bar button[data-ref]').onclick=()=>{ S.ref=true; render(); };
+render();
+</script>
+</body>
+</html>

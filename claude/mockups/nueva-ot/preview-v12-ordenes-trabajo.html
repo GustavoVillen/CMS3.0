@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Órdenes de Trabajo — Preview V12</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --surface:#fff; --fg:#1A1D24; --accent:#0284C7; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer} select,input{font-family:inherit}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .app{display:flex;min-height:calc(100vh - 46px)}
+  .side{width:210px;background:#0F172A;color:#CBD5E1;padding:16px 10px;flex-shrink:0}
+  .side .logo{color:#fff;font-weight:800;font-size:15px;margin:0 8px 18px}
+  .side a{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;font-size:13px;color:#CBD5E1;text-decoration:none}
+  .side a.on{background:rgba(56,189,248,.15);color:#fff}
+  @media(max-width:800px){.side{display:none}}
+  .main{flex:1;min-width:0;padding:20px 24px}
+  @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px}
+  .ph .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn-primary{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-soft{background:var(--surface);border:1px solid var(--fg10);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .menu{position:relative} .menu-pop{position:absolute;top:40px;right:0;background:#fff;border:1px solid var(--fg10);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.12);padding:6px;min-width:230px;z-index:20}
+  .menu-pop button{display:flex;gap:8px;align-items:center;width:100%;border:0;background:none;padding:8px 10px;border-radius:8px;font-size:12px;text-align:left}
+  .menu-pop button:hover{background:var(--fg5)}
+  .viewsw{display:flex;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:2px}
+  .viewsw button{border:0;background:none;padding:6px 10px;font-size:12px;font-weight:700;border-radius:8px;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .viewsw button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+  /* resumen */
+  .sum{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:1000px){.sum{grid-template-columns:repeat(3,1fr)}} @media(max-width:560px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:var(--surface);border:1.5px solid var(--fg10);border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px;transition:.15s}
+  .sc:hover{border-color:var(--fg25)} .sc.on{box-shadow:0 0 0 3px rgba(2,132,199,.18);border-color:var(--accent)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:600;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .sc .h{font-size:10px;color:var(--faint)}
+  .sc.red .n{color:#B91C1C} .sc.red{border-left:4px solid #DC2626}
+  .sc.blue .n{color:#1D4ED8} .sc.blue{border-left:4px solid #2563EB}
+  .sc.amber .n{color:#B45309} .sc.amber{border-left:4px solid #D97706}
+  .sc.green .n{color:#047857} .sc.green{border-left:4px solid #0E9F6E}
+  .sc.yellow .n{color:#A16207} .sc.yellow{border-left:4px solid #CA8A04}
+  /* filtros */
+  .fbar{background:var(--surface);border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:var(--surface);border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--fg)}
+  .sel.on{border-color:var(--accent);background:rgba(2,132,199,.06);color:var(--accent);font-weight:700}
+  .tog{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;border:1px solid var(--fg10);border-radius:10px;padding:6px 10px;background:var(--surface)}
+  .tog.on{border-color:#DC2626;color:#B91C1C;background:#FEF2F2}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:230px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)}
+  @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .active{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted)}
+  .achip{display:inline-flex;gap:5px;align-items:center;background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);color:var(--accent);border-radius:99px;padding:2px 4px 2px 9px;font-weight:700}
+  .achip button{border:0;background:rgba(2,132,199,.15);color:var(--accent);border-radius:99px;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  .clear{border:0;background:none;color:var(--muted);font-size:11px;text-decoration:underline}
+  /* tablero */
+  .board{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:12px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory}
+  .col{background:rgba(26,29,36,.03);border-radius:14px;padding:8px;scroll-snap-align:start;min-width:240px}
+  .colh{display:flex;align-items:center;gap:6px;padding:4px 4px 8px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+  .colh .c{margin-left:auto;background:var(--fg10);border-radius:99px;padding:0 7px;font-size:11px;color:var(--muted)}
+  .colh .dot{width:8px;height:8px;border-radius:99px}
+  .grp{font-size:11px;font-weight:700;color:var(--muted);padding:6px 4px 4px;display:flex;gap:5px;align-items:center}
+  .card{background:var(--surface);border:1px solid var(--fg10);border-radius:12px;padding:9px 10px;margin-bottom:7px;display:flex;flex-direction:column;gap:5px;cursor:pointer;border-left:4px solid var(--fg10)}
+  .card:hover{box-shadow:0 4px 14px rgba(0,0,0,.07)}
+  .card.p-CRITICAL{border-left-color:#B91C1C} .card.p-HIGH{border-left-color:#EA580C} .card.p-MEDIUM{border-left-color:#CA8A04} .card.p-LOW{border-left-color:#0E9F6E}
+  .card.over{background:#FEF2F2}
+  .ctop{display:flex;align-items:center;gap:6px}
+  .code{font-family:ui-monospace,monospace;font-size:12px;font-weight:800;color:var(--fg)}
+  .prio{font-size:9px;font-weight:800;border-radius:99px;padding:1px 7px;text-transform:uppercase;margin-left:auto;white-space:nowrap}
+  .prio.CRITICAL{background:#B91C1C;color:#fff} .prio.HIGH{background:#FFEDD5;color:#C2410C} .prio.MEDIUM{background:#FEF9C3;color:#A16207} .prio.LOW{background:#DCFCE7;color:#047857}
+  .ttl{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .asset{font-size:11px;color:var(--muted);display:flex;gap:4px;align-items:center}
+  .cfoot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .due{font-size:11px;font-weight:700;display:inline-flex;gap:3px;align-items:center}
+  .due.over{color:#B91C1C} .due.soon{color:#B45309} .due.ok{color:var(--muted);font-weight:500}
+  .av{width:22px;height:22px;border-radius:99px;background:#E0E7FF;color:#3730A3;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-left:auto}
+  .av.none{background:var(--fg5);color:var(--faint)}
+  .ss{font-size:10px;font-family:ui-monospace,monospace;font-weight:700;color:#0891B2;background:rgba(8,145,178,.08);border:1px solid rgba(8,145,178,.25);border-radius:6px;padding:0 5px}
+  .type{font-size:9px;font-weight:800;border-radius:99px;padding:1px 6px;border:1px solid}
+  .t-P{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .t-C{color:#C2410C;border-color:rgba(234,88,12,.3);background:rgba(234,88,12,.06)} .t-I{color:#0F766E;border-color:rgba(13,148,136,.3);background:rgba(13,148,136,.06)}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;width:100%;justify-content:center}
+  .act.green{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.08);color:#047857}
+  .rej{font-size:10px;font-weight:800;color:#B91C1C;background:#FEE2E2;border-radius:6px;padding:1px 6px}
+  .empty{text-align:center;color:var(--faint);font-size:12px;padding:18px 0}
+  /* lista */
+  .tbl-wrap{background:var(--surface);border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:900px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12px;vertical-align:middle}
+  tr.over td{background:#FEF2F2} tr.over td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr:hover td{background:rgba(2,132,199,.04)}
+  .stg{font-size:10px;font-weight:700;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .s-prep{color:var(--muted);border-color:var(--fg10);background:var(--fg5)} .s-sol{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .s-apr{color:#6D28D9;border-color:rgba(124,58,237,.3);background:rgba(124,58,237,.06)} .s-aut{color:#047857;border-color:rgba(14,159,110,.3);background:rgba(14,159,110,.06)} .s-dif{color:#A16207;border-color:rgba(202,138,4,.3);background:rgba(202,138,4,.08)} .s-clo{color:var(--faint);border-color:var(--fg10);background:var(--fg5)}
+  /* referencia */
+  .note{background:#DC2626;color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 4px 0}
+  .refbox{background:var(--surface);border:1px solid var(--fg10);border-radius:12px;padding:12px;margin-bottom:10px}
+  .mini-chip{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;border:1px solid var(--fg10);background:var(--fg5);border-radius:99px;padding:3px 7px;margin:2px;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Órdenes de Trabajo · Preview V12</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Ver como:</span>
+  <button data-role="admin" class="on">Superintendente (aprueba)</button><button data-role="crew">Tripulación</button>
+</div>
+<div class="app">
+  <nav class="side"><div class="logo">CMS3.0</div>
+    <a><i data-lucide="layout-dashboard" style="width:15px;height:15px"></i>Tablero</a>
+    <a class="on"><i data-lucide="wrench" style="width:15px;height:15px"></i>Órdenes de Trabajo</a>
+    <a><i data-lucide="handshake" style="width:15px;height:15px"></i>Solicitudes de Servicio</a>
+    <a><i data-lucide="clipboard-list" style="width:15px;height:15px"></i>Plan de Mantenimiento</a>
+    <a><i data-lucide="gauge" style="width:15px;height:15px"></i>Horas de Equipos</a>
+  </nav>
+  <main class="main" id="root"></main>
+</div>
+<script>
+const WOS=[
+ {code:"OT-DEM-26-0045",title:"Mantenimiento cada 5 años (varada)",asset:"Hélice #1",type:"P",prio:"MEDIUM",stage:"prep",due:6,who:"JP",whoN:"Juan Pérez",ss:[]},
+ {code:"OT-DEM-26-0046",title:"Pérdida de agua por sello de popa",asset:"Eje de cola",type:"C",prio:"HIGH",stage:"prep",due:-2,who:"",whoN:"—",ss:[]},
+ {code:"OT-DEM-26-0047",title:"Cambio de aceite y filtros",asset:"Motor principal babor",type:"P",prio:"MEDIUM",stage:"prep",due:12,who:"MG",whoN:"Mario Gómez",ss:[]},
+ {code:"OT-DEM-26-0040",title:"Servo timón con ruido al girar",asset:"Servo timón",type:"C",prio:"HIGH",stage:"sol",due:1,who:"JP",whoN:"Juan Pérez",ss:["SS-12"]},
+ {code:"OT-DEM-26-0041",title:"Inspección de clase anual",asset:"Casco",type:"I",prio:"MEDIUM",stage:"sol",due:20,who:"",whoN:"—",ss:[]},
+ {code:"OT-DEM-26-0038",title:"Reparación bomba contraincendio",asset:"Bomba contraincendio",type:"C",prio:"CRITICAL",stage:"sol",due:-5,who:"MG",whoN:"Mario Gómez",ss:["SS-10","SS-11"],rej:true},
+ {code:"OT-DEM-26-0035",title:"Rectificado de eje",asset:"Eje de cola",type:"C",prio:"HIGH",stage:"apr",due:3,who:"JP",whoN:"Juan Pérez",ss:["SS-09"]},
+ {code:"OT-DEM-26-0030",title:"Muestreo de aceite — laboratorio",asset:"Reductor babor",type:"P",prio:"LOW",stage:"aut",due:9,who:"MG",whoN:"Mario Gómez",ss:["SS-07"]},
+ {code:"OT-DEM-26-0029",title:"Cambio de rodamientos",asset:"Generador auxiliar N°1",type:"C",prio:"MEDIUM",stage:"aut",due:-1,who:"JP",whoN:"Juan Pérez",ss:[],inprog:true},
+ {code:"OT-DEM-26-0027",title:"Calibración de manómetros",asset:"Sala de máquinas",type:"P",prio:"LOW",stage:"aut",due:15,who:"",whoN:"—",ss:[]},
+ {code:"OT-DEM-26-0020",title:"Pintura de bodega",asset:"Casco",type:"P",prio:"LOW",stage:"dif",due:40,who:"",whoN:"—",ss:[]},
+ {code:"OT-DEM-26-0012",title:"Cambio de filtros de combustible",asset:"Motor principal estribor",type:"P",prio:"MEDIUM",stage:"clo",due:-30,who:"MG",whoN:"Mario Gómez",ss:[]},
+];
+const STAGES=[["prep","En preparación","#94A3B8"],["sol","Pendiente de aprobación","#2563EB"],["apr","Pendiente de autorización","#7C3AED"],["aut","Autorizada · en proceso","#0E9F6E"],["dif","Diferida","#CA8A04"]];
+const STAGE_CLS={prep:"s-prep",sol:"s-sol",apr:"s-apr",aut:"s-aut",dif:"s-dif",clo:"s-clo"};
+const STAGE_LBL={prep:"En preparación",sol:"Pend. aprobación",apr:"Pend. autorización",aut:"Autorizada",dif:"Diferida",clo:"Cerrada"};
+const PRIO_LBL={CRITICAL:"Inmediato",HIGH:"24 hs",MEDIUM:"Semana",LOW:"Mes"};
+const TYPE_LBL={P:"Preventivo",C:"Correctivo",I:"Inspección"};
+const S={view:"new",role:"admin",mode:"board",stage:"",card:"",type:"",prio:"",who:"",asset:"",overdue:false,q:"",group:false,menu:false,toast:null};
+
+const isOver=w=>w.stage!=="clo"&&w.stage!=="dif"&&w.due<0;
+function dueTxt(w){
+  if(w.stage==="clo") return `<span class="due ok">Cerrada</span>`;
+  if(w.due<0) return `<span class="due over"><i data-lucide="alert-circle" style="width:12px;height:12px"></i>Vencida hace ${-w.due} d</span>`;
+  if(w.due===0) return `<span class="due soon">Vence hoy</span>`;
+  if(w.due<=3) return `<span class="due soon"><i data-lucide="clock" style="width:12px;height:12px"></i>Vence en ${w.due} d</span>`;
+  return `<span class="due ok">Vence en ${w.due} d</span>`;
+}
+function filtered(ignoreStage=false){
+  const q=S.q.toLowerCase();
+  return WOS.filter(w=>{
+    if(!ignoreStage && S.stage && w.stage!==S.stage) return false;
+    if(!ignoreStage && !S.stage && w.stage==="clo") return false;
+    if(S.card==="overdue" && !isOver(w)) return false;
+    if(S.card==="mine" && !(S.role==="admin" ? w.stage==="sol"||w.stage==="apr" : w.who==="JP" && w.stage!=="clo")) return false;
+    if(S.card==="notsent" && w.stage!=="prep") return false;
+    if(S.card==="inprog" && !w.inprog) return false;
+    if(S.card==="dif" && w.stage!=="dif") return false;
+    if(S.overdue && !isOver(w)) return false;
+    if(S.type && w.type!==S.type) return false;
+    if(S.prio && w.prio!==S.prio) return false;
+    if(S.who && w.whoN!==S.who) return false;
+    if(S.asset && w.asset!==S.asset) return false;
+    if(q && !(w.code+w.title+w.asset+w.whoN).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function render(){
+  document.querySelectorAll(".pv-bar button[data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.view));
+  document.querySelectorAll(".pv-bar button[data-role]").forEach(b=>b.classList.toggle("on",b.dataset.role===S.role));
+  document.getElementById("root").innerHTML = S.view==="ref" ? ref() : page();
+  if(S.toast) document.getElementById("root").insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function page(){
+  const list=filtered();
+  const over=WOS.filter(isOver).length;
+  const mine= S.role==="admin" ? WOS.filter(w=>w.stage==="sol"||w.stage==="apr").length : WOS.filter(w=>w.who==="JP"&&w.stage!=="clo").length;
+  const card=(key,cls,icon,n,l,h)=>`<button class="sc ${cls} ${S.card===key?'on':''}" onclick="S.card=S.card==='${key}'?'':'${key}';render()"><span class="n">${n}</span><span class="l"><i data-lucide="${icon}" style="width:13px;height:13px"></i>${l}</span><span class="h">${h}</span></button>`;
+  const opts=(arr,cur,ph)=>`<option value="">${ph}</option>`+arr.map(([v,l])=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`).join("");
+  const people=[...new Set(WOS.map(w=>w.whoN).filter(x=>x!=="—"))];
+  const assets=[...new Set(WOS.map(w=>w.asset))];
+  const actives=[];
+  if(S.card) actives.push(["card",{overdue:"Vencidas",mine:S.role==="admin"?"Esperando mi firma":"Asignadas a mí",notsent:"Sin enviar a aprobar",inprog:"En ejecución",dif:"Diferidas"}[S.card]]);
+  if(S.stage) actives.push(["stage",STAGE_LBL[S.stage]]);
+  if(S.type) actives.push(["type",TYPE_LBL[S.type]]);
+  if(S.prio) actives.push(["prio","Prioridad: "+PRIO_LBL[S.prio]]);
+  if(S.who) actives.push(["who",S.who]);
+  if(S.asset) actives.push(["asset",S.asset]);
+  if(S.overdue) actives.push(["overdue","Sólo vencidas"]);
+  const stageCount=k=>filtered(true).filter(w=>k?w.stage===k:w.stage!=="clo").length;
+
+  return `
+  <div class="ph">
+    <h1><i data-lucide="wrench" style="width:20px;height:20px;color:var(--accent)"></i>Órdenes de Trabajo</h1>
+    <span class="count">${list.length} a la vista</span>
+    <span class="count"><i data-lucide="ship" style="width:11px;height:11px;vertical-align:-1px"></i> BUQUE DEMO I</span>
+    <div class="right">
+      <div class="viewsw"><button class="${S.mode==='board'?'on':''}" onclick="S.mode='board';render()"><i data-lucide="columns-3" style="width:13px;height:13px"></i>Tablero</button><button class="${S.mode==='list'?'on':''}" onclick="S.mode='list';render()"><i data-lucide="list" style="width:13px;height:13px"></i>Lista</button></div>
+      <div class="menu"><button class="btn-soft" onclick="S.menu=!S.menu;render()"><i data-lucide="download" style="width:14px;height:14px"></i>Exportar<i data-lucide="chevron-down" style="width:13px;height:13px"></i></button>
+        ${S.menu?`<div class="menu-pop"><button onclick="S.menu=false;toast('Excel (demo)')"><i data-lucide="file-spreadsheet" style="width:14px;height:14px;color:var(--success)"></i>Excel de lo que se ve</button><button onclick="S.menu=false;toast('Reporte PDF (demo)')"><i data-lucide="file-text" style="width:14px;height:14px;color:var(--accent)"></i>Reporte de OT abiertas · BUQUE DEMO I</button></div>`:''}</div>
+      <button class="btn-primary"><i data-lucide="plus" style="width:15px;height:15px"></i>Nueva OT</button>
+    </div>
+  </div>
+
+  <div class="sum">
+    ${card("overdue","red","alert-circle",over,"Vencidas","No cerradas y fuera de fecha")}
+    ${card("mine","blue",S.role==="admin"?"pen-line":"user",mine,S.role==="admin"?"Esperando mi firma":"Asignadas a mí",S.role==="admin"?"Para aprobar o autorizar":"Donde sos responsable")}
+    ${card("notsent","amber","send",WOS.filter(w=>w.stage==="prep").length,"Sin enviar a aprobar","En preparación")}
+    ${card("inprog","green","hammer",WOS.filter(w=>w.inprog).length,"En ejecución","Autorizadas con trabajo iniciado")}
+    ${card("dif","yellow","pause-circle",WOS.filter(w=>w.stage==="dif").length,"Diferidas","Postergadas con APL")}
+  </div>
+
+  <div class="fbar">
+    <div class="frow">
+      <div class="stage">
+        <button class="${S.stage===''?'on':''}" onclick="S.stage='';render()">Abiertas <span class="c">${stageCount('')}</span></button>
+        ${[["prep","En preparación"],["sol","Por aprobar"],["apr","Por autorizar"],["aut","Autorizadas"],["dif","Diferidas"],["clo","Cerradas"]].map(([k,l])=>`<button class="${S.stage===k?'on':''}" onclick="S.stage='${k}';render()">${l} <span class="c">${stageCount(k)}</span></button>`).join("")}
+      </div>
+    </div>
+    <div class="frow">
+      <select class="sel ${S.type?'on':''}" onchange="S.type=this.value;render()">${opts([["P","Preventivo"],["C","Correctivo"],["I","Inspección"]],S.type,"Tipo: todos")}</select>
+      <select class="sel ${S.prio?'on':''}" onchange="S.prio=this.value;render()">${opts(Object.entries(PRIO_LBL).map(([k,v])=>[k,v]),S.prio,"Prioridad: todas")}</select>
+      <select class="sel ${S.who?'on':''}" onchange="S.who=this.value;render()">${opts(people.map(p=>[p,p]),S.who,"Responsable: todos")}</select>
+      <select class="sel ${S.asset?'on':''}" onchange="S.asset=this.value;render()">${opts(assets.map(a=>[a,a]),S.asset,"Equipo: todos")}</select>
+      <button class="tog ${S.overdue?'on':''}" onclick="S.overdue=!S.overdue;render()"><i data-lucide="alert-circle" style="width:13px;height:13px"></i>Sólo vencidas</button>
+      ${S.mode==='board'?`<button class="tog ${S.group?'on':''}" style="${S.group?'border-color:var(--accent);color:var(--accent);background:rgba(2,132,199,.06)':''}" onclick="S.group=!S.group;render()"><i data-lucide="layers" style="width:13px;height:13px"></i>Agrupar por equipo</button>`:''}
+      <div class="search"><i data-lucide="search"></i><input id="q" placeholder="Buscar N° de OT, título, equipo o responsable…" value="${S.q}" oninput="S.q=this.value;renderKeep('q')"></div>
+    </div>
+    ${actives.length?`<div class="active">Filtrando por: ${actives.map(([k,l])=>`<span class="achip">${l}<button onclick="clearF('${k}')">✕</button></span>`).join("")}<button class="clear" onclick="clearAll()">Quitar filtros</button></div>`:''}
+  </div>
+
+  ${S.mode==="board" ? board(list) : table(list)}`;
+}
+function action(w){
+  if(w.stage==="prep") return `<button class="act" onclick="event.stopPropagation();toast('Abre Enviar a aprobar (demo)')"><i data-lucide="send" style="width:12px;height:12px"></i>Enviar a aprobar</button>`;
+  if(S.role==="admin"&&w.stage==="sol") return `<button class="act green" onclick="event.stopPropagation();toast('Abre Aprobar (demo)')"><i data-lucide="check" style="width:12px;height:12px"></i>Aprobar</button>`;
+  if(S.role==="admin"&&w.stage==="apr") return `<button class="act green" onclick="event.stopPropagation();toast('Abre Autorizar (demo)')"><i data-lucide="shield-check" style="width:12px;height:12px"></i>Autorizar</button>`;
+  if(w.stage==="aut"&&!w.inprog) return `<button class="act" onclick="event.stopPropagation();toast('Abre Registrar avance (demo)')"><i data-lucide="camera" style="width:12px;height:12px"></i>Registrar avance</button>`;
+  return "";
+}
+function cardHtml(w){
+  return `<div class="card p-${w.prio} ${isOver(w)?'over':''}" onclick="toast('Abre ${w.code} (demo)')">
+    <div class="ctop"><span class="code">${w.code.replace('OT-DEM-26-','OT-')}</span><span class="type t-${w.type}">${TYPE_LBL[w.type]}</span><span class="prio ${w.prio}">${PRIO_LBL[w.prio]}</span></div>
+    ${w.rej?`<span class="rej">No aprobada · ver motivo</span>`:''}
+    <div class="ttl">${w.title}</div>
+    ${S.group?'':`<div class="asset"><i data-lucide="cog" style="width:11px;height:11px"></i>${w.asset}</div>`}
+    <div class="cfoot">${dueTxt(w)}${w.ss.map(s=>`<span class="ss">${s}</span>`).join("")}<span class="av ${w.who?'':'none'}" title="${w.whoN}">${w.who||'?'}</span></div>
+    ${action(w)}
+  </div>`;
+}
+function board(list){
+  const stages = S.stage ? STAGES.filter(s=>s[0]===S.stage) : STAGES;
+  if (S.stage==="clo") return table(list);
+  return `<div class="board" style="${S.stage?'grid-template-columns:minmax(260px,420px)':''}">${stages.map(([k,l,c])=>{
+    const items=list.filter(w=>w.stage===k);
+    let body;
+    if(!items.length) body=`<div class="empty">Nada acá</div>`;
+    else if(S.group){ const g={}; items.forEach(w=>(g[w.asset]=g[w.asset]||[]).push(w));
+      body=Object.entries(g).map(([a,ws])=>`<div class="grp"><i data-lucide="cog" style="width:11px;height:11px"></i>${a} · ${ws.length}</div>${ws.map(cardHtml).join("")}`).join(""); }
+    else body=items.map(cardHtml).join("");
+    return `<div class="col"><div class="colh"><span class="dot" style="background:${c}"></span>${l}<span class="c">${items.length}</span></div>${body}</div>`;
+  }).join("")}</div>`;
+}
+function table(list){
+  return `<div class="tbl-wrap"><table><tr><th>N° OT</th><th>Equipo / Tarea</th><th>Tipo</th><th>Prioridad</th><th>Responsable</th><th>Vencimiento</th><th>Etapa</th><th>SS</th><th></th></tr>
+  ${list.map(w=>`<tr class="${isOver(w)?'over':''}" style="cursor:pointer" onclick="toast('Abre ${w.code} (demo)')">
+    <td><span class="code">${w.code}</span></td>
+    <td><b style="font-weight:600">${w.asset}</b><div style="color:var(--muted);font-size:11px">${w.title}</div></td>
+    <td><span class="type t-${w.type}">${TYPE_LBL[w.type]}</span></td>
+    <td><span class="prio ${w.prio}" style="margin:0">${PRIO_LBL[w.prio]}</span></td>
+    <td>${w.whoN}</td><td>${dueTxt(w)}</td>
+    <td><span class="stg ${STAGE_CLS[w.stage]}">${STAGE_LBL[w.stage]}</span>${w.rej?` <span class="rej">No aprobada</span>`:''}</td>
+    <td>${w.ss.map(s=>`<span class="ss">${s}</span>`).join(" ")||'—'}</td>
+    <td style="width:130px">${action(w)}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No hay órdenes con estos filtros</td></tr>`}
+  </table></div>`;
+}
+function ref(){
+  return `<div class="ph"><h1><i data-lucide="wrench" style="width:20px;height:20px;color:var(--accent)"></i>Órdenes de Trabajo</h1><span class="count">5 registros</span>
+    <div class="right"><button class="btn-primary"><i data-lucide="plus" style="width:15px;height:15px"></i>Nueva OT</button><button class="btn-soft">Excel</button><button class="btn-soft">OTs Abiertas (DCH)</button><div class="viewsw"><button><i data-lucide="list" style="width:13px;height:13px"></i></button><button class="on"><i data-lucide="layout-grid" style="width:13px;height:13px"></i></button></div></div></div>
+  <div style="margin-bottom:10px"><span class="note">No hay resumen de lo que necesita atención</span><span class="note">Los 12 filtros sólo existen en la lista y se borran al pasar al tablero</span><span class="note">No se filtra por tipo / prioridad / responsable / equipo</span><span class="note">Código del buque (DCH) en vez del nombre</span></div>
+  <div class="refbox"><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Vista lista · filtros:</div>
+    ${["Todas","En preparación","A aprobar","A autorizar","Autorizadas","En ejecución","Abiertas","Vencidas","Diferidas","Diferimiento pendiente","Diferimiento rechazado","Cerradas"].map(x=>`<span class="mini-chip">${x}</span>`).join("")}</div>
+  <div class="board">${STAGES.map(([k,l,c])=>`<div class="col"><div class="colh"><span class="dot" style="background:${c}"></span>${l}<span class="c">${WOS.filter(w=>w.stage===k).length}</span></div>
+    ${[...new Set(WOS.filter(w=>w.stage===k).map(w=>w.asset))].map(a=>`<div class="refbox" style="padding:7px 9px;margin-bottom:6px;font-size:12px;font-weight:700;display:flex;gap:5px;align-items:center"><i data-lucide="chevron-right" style="width:12px;height:12px"></i><i data-lucide="wrench" style="width:11px;height:11px;color:var(--accent)"></i>${a}<span style="margin-left:auto;font-size:10px;color:var(--faint)">${WOS.filter(w=>w.stage===k&&w.asset===a).length}</span></div>`).join("")}</div>`).join("")}</div>
+  <div style="margin-top:8px"><span class="note">Grupos por equipo cerrados: las OT no se ven hasta abrirlos</span><span class="note">Aprobar = arrastrar la tarjeta (oculto, no anda en celular)</span><span class="note">En celular las 5 columnas se aprietan</span><span class="note">Errores en recuadro rojo</span></div>`;
+}
+function clearF(k){ if(k==="card")S.card=""; else if(k==="overdue")S.overdue=false; else S[k]=""; render(); }
+function clearAll(){ Object.assign(S,{stage:"",card:"",type:"",prio:"",who:"",asset:"",overdue:false,q:""}); render(); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;render();},1800); }
+function renderKeep(id){ const el=document.getElementById(id); const pos=el?.selectionStart; render(); const n=document.getElementById(id); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch{}} }
+document.querySelectorAll(".pv-bar button[data-v]").forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar button[data-role]").forEach(b=>b.onclick=()=>{S.role=b.dataset.role;S.card="";render();});
+render();
+</script>
+</body>
+</html>

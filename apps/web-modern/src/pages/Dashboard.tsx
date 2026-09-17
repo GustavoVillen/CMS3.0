@@ -951,20 +951,44 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             registro de avance de una SS que ya está en el taller. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           onClickCapture={() => setCopilotFlow(createCopilotFlowKey("dashboard"))}>
-          <button
-            onClick={() => setShowNewWoWizard(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-          >
-            <Wrench className="w-6 h-6 text-success-sea shrink-0" />
-            <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
-          </button>
-          <button
-            onClick={() => setShowSsWizard(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-          >
-            <Handshake className="w-6 h-6 text-success-sea shrink-0" />
-            <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
-          </button>
+          {/* Mismo par que "Cargar análisis de laboratorio": el cuerpo abre el
+              asistente y la cuadrícula va al listado. */}
+          <div className="flex items-center rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all">
+            <button
+              onClick={() => setShowNewWoWizard(true)}
+              className="flex-1 min-w-0 flex items-center gap-3 pl-5 pr-2 py-4 text-left"
+            >
+              <Wrench className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/work-orders")}
+              title={t("dashboard.newWorkOrder.listLink")}
+              aria-label={t("dashboard.newWorkOrder.listLink")}
+              className="mr-3 p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors shrink-0"
+            >
+              <LayoutGrid className="w-7 h-7" />
+            </button>
+          </div>
+          <div className="flex items-center rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all">
+            <button
+              onClick={() => setShowSsWizard(true)}
+              className="flex-1 min-w-0 flex items-center gap-3 pl-5 pr-2 py-4 text-left"
+            >
+              <Handshake className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/service-requests")}
+              title={t("dashboard.newServiceRequest.listLink")}
+              aria-label={t("dashboard.newServiceRequest.listLink")}
+              className="mr-3 p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors shrink-0"
+            >
+              <LayoutGrid className="w-7 h-7" />
+            </button>
+          </div>
           <button
             onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
@@ -1022,13 +1046,26 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               los lee, descarta los que ya estaban cargados y pide confirmación
               antes de guardar (ver FluidBatchUploadModal). */}
           {canLoadFluidBatch && (
-            <button
-              onClick={() => setShowFluidBatch(true)}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-            >
-              <FlaskConical className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.fluidBatch.button")}</span>
-            </button>
+            // Dos botones hermanos (no anidados): el cuerpo abre la carga y la
+            // cuadrícula va al listado, como en la tarjeta de SS (preview V43).
+            <div className="flex items-center rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all">
+              <button
+                onClick={() => setShowFluidBatch(true)}
+                className="flex-1 min-w-0 flex items-center gap-3 pl-5 pr-2 py-4 text-left"
+              >
+                <FlaskConical className="w-6 h-6 text-success-sea shrink-0" />
+                <span className="font-bold text-sm text-fg">{t("dashboard.fluidBatch.button")}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/fluid-analyses")}
+                title={t("dashboard.fluidBatch.listLink")}
+                aria-label={t("dashboard.fluidBatch.listLink")}
+                className="mr-3 p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors shrink-0"
+              >
+                <LayoutGrid className="w-7 h-7" />
+              </button>
+            </div>
           )}
           {/* Registrar lo que llegó al buque. La ventana busca primero en el
               stock existente para no duplicar el repuesto (ver SpareReceiptModal). */}

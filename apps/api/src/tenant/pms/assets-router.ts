@@ -15,6 +15,7 @@ import {
 } from "../assets/assets-service";
 import { suggestAssetCriticality } from "../assets/assets-criticality-ai";
 import { buildAssetPdf } from "./asset-pdf-service";
+import { archivePdf } from "../settings/pdf-archive-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -92,6 +93,42 @@ export async function handleAssetRoutes(
     return true;
   }
 
+  // Informe de salud del equipo (IA). Historial inmutable: POST agrega uno nuevo.
+  // Permisos y alcance por buque se validan en asset-health-service.
+  const healthMatch = url.pathname.match(/^\/app\/pms\/assets\/([^/]+)\/health-reports(?:\/([^/]+))?(\/pdf)?$/);
+  if (healthMatch) {
+    const assetId = healthMatch[1]!;
+    const reportId = healthMatch[2] ?? null;
+    const {
+      listAssetHealthReports, getAssetHealthReport, generateAssetHealthReport,
+    } = await import("../assets/asset-health-service");
+    if (!reportId && method === "GET") {
+      sendJson(response, 200, await listAssetHealthReports(session, assetId));
+      return true;
+    }
+    if (!reportId && method === "POST") {
+      enforceRateLimit(request, `ai-health:${session.user.id}`, { maxRequests: 5, windowMs: 60_000 });
+      sendJson(response, 201, await generateAssetHealthReport(session, assetId));
+      return true;
+    }
+    if (reportId && !healthMatch[3] && method === "GET") {
+      sendJson(response, 200, await getAssetHealthReport(session, assetId, reportId));
+      return true;
+    }
+    if (reportId && healthMatch[3] && method === "GET") {
+      enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+      const { buildAssetHealthReportPdf } = await import("./asset-health-pdf-service");
+      const { buffer, fileName } = await buildAssetHealthReportPdf(session, assetId, reportId);
+      response.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${fileName}"`,
+        "Content-Length": buffer.length,
+      });
+      response.end(buffer);
+      return true;
+    }
+  }
+
   if (method === "GET" && /^\/app\/pms\/assets\/[^/]+\/pdf$/.test(url.pathname)) {
     enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     const id = url.pathname.split("/")[4]!;
@@ -104,6 +141,7 @@ export async function handleAssetRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer });
     return true;
   }
 

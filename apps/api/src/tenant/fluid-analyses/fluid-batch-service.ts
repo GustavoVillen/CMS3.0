@@ -24,6 +24,10 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { saveFluidReportFile } from "./fluid-uploads-service";
 import { claimUploadedFile } from "../files/file-access-service";
 import { extractFluidReport } from "./fluid-analyses-ai-extractor";
+import {
+  extractVibrationReport, verdictForVibrationSeverity, worseSeverity, worsePriority,
+  type VibrationReportItem, type VibrationSeverity, type VibrationPriority,
+} from "./vibration-report-ai-extractor";
 import { matchAssetByAi, loadVesselAssets, type AssetCandidate } from "../ai/asset-ai-match";
 import {
   ensureCanManageFluidAnalyses, createFluidSample, updateFluidSample, upsertFluidResult,
@@ -56,9 +60,28 @@ export type AttachMatch =
   | "SAMPLE_NUMBER"    // el número anotado al despachar el envío: cruce exacto
   | "ASSET_AND_DATE";  // equipo + fecha dentro de 45 días: inferencia
 
+/** Tipos de análisis que sabe leer la carga masiva. */
+export type BatchKind = "FLUID" | "VIBRATION";
+
 export interface BatchScanRow {
   fileName: string;
   file: { url: string; name: string; mime: string };
+
+  /**
+   * FLUID: un reporte = una muestra = un equipo.
+   * VIBRATION: un informe cubre varios equipos, así que el mismo archivo vuelve
+   * como varias filas (una por equipo), todas con el mismo `file`.
+   */
+  kind: BatchKind;
+  /** Nº de informe del analista (vibraciones). No es clave anti-duplicado: lo comparten todas las filas del informe. */
+  labReference: string | null;
+  /** Lo que escribió el analista de vibraciones, tal cual, para mostrarlo junto al veredicto traducido. */
+  vibration: {
+    severity: VibrationSeverity;
+    priority: VibrationPriority;
+    finding: string | null;
+    recommendation: string | null;
+  } | null;
 
   sampleNumber: string | null;
   vesselCode: string | null;
@@ -70,7 +93,8 @@ export interface BatchScanRow {
   assetConfidence: "high" | "medium" | "low" | null;
   assetReason: string | null;
 
-  fluidType: FluidType;
+  /** null cuando kind no es FLUID. */
+  fluidType: FluidType | null;
   fluidProduct: string | null;
   sampledAt: string | null;   // YYYY-MM-DD
   receivedAt: string | null;
@@ -105,10 +129,12 @@ export interface BatchScanRow {
 export interface BatchCommitRow {
   fileName: string;
   file: { url: string; name: string; mime: string };
+  kind?: BatchKind;
+  labReference?: string | null;
   sampleNumber: string | null;
   vesselCode: string;
   assetId: string;
-  fluidType: FluidType;
+  fluidType: FluidType | null;
   fluidProduct: string | null;
   sampledAt: string;
   receivedAt: string | null;
@@ -138,10 +164,14 @@ export interface BatchCommitResult {
 
 // ── Paso 1: escanear un reporte ──────────────────────────────────────────────
 
+/**
+ * Devuelve una lista: un reporte de fluidos da UNA fila; un informe de
+ * vibraciones da una fila por equipo medido.
+ */
 export async function scanFluidReportForBatch(
   session: TenantAccessSession,
   input: { buffer: Buffer; originalName: string; vesselCodeHint?: string | null },
-): Promise<BatchScanRow> {
+): Promise<BatchScanRow[]> {
   ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -166,6 +196,13 @@ export async function scanFluidReportForBatch(
     referenceDate: hints.date,
     sampleNumber: hints.sampleNumber,
   });
+
+  // Informe de vibraciones: varios equipos en un documento, otro lector.
+  if (extracted.documentKind === "VIBRATION") {
+    return scanVibrationReport(session, prisma, tenantId, {
+      buffer: input.buffer, fileName, saved, vessels, preVessel,
+    });
+  }
 
   const vesselFromReport = preVessel ?? pickVessel(vessels, null, [
     extracted.vesselReferenceText.value ?? "",
@@ -274,7 +311,7 @@ export async function scanFluidReportForBatch(
   // Primero el número (exacto, y trae su propio equipo); si no hay número
   // anotado, se cae a la heurística de equipo + fecha, que es una conjetura.
   const heuristic = (!duplicateOf && !pendingByNumber && vesselCode && assetId && sampledAt)
-    ? await findPendingSample(prisma, tenantId, vesselCode, assetId, sampledAt, fluidType)
+    ? await findPendingSample(prisma, tenantId, vesselCode, assetId, sampledAt, "FLUID", fluidType)
     : null;
   const attachTo = pendingByNumber
     ? await describeAttachTarget(prisma, tenantId, pendingByNumber, "SAMPLE_NUMBER")
@@ -282,9 +319,12 @@ export async function scanFluidReportForBatch(
       ? await describeAttachTarget(prisma, tenantId, heuristic, "ASSET_AND_DATE")
       : null;
 
-  return {
+  return [{
     fileName,
     file: { url: saved.url, name: saved.name, mime: saved.mime },
+    kind: "FLUID",
+    labReference: null,
+    vibration: null,
     sampleNumber,
     vesselCode,
     vesselReferenceText: extracted.vesselReferenceText.value,
@@ -306,7 +346,122 @@ export async function scanFluidReportForBatch(
     attachTo,
     aiNotes: extracted.notes ?? null,
     warnings,
-  };
+  }];
+}
+
+/**
+ * Informe de vibraciones → una fila por equipo.
+ *
+ * El equipo se resuelve por IA fila por fila (el analista escribe "Reductor 4",
+ * el maestro dice "Caja reductora #4"). Si dos filas del informe caen en el mismo
+ * equipo —el eje porta hélice medido en la bocina en una hoja y su desplazamiento
+ * en otra— se juntan: un análisis por equipo y por fecha, no dos.
+ */
+async function scanVibrationReport(
+  session: TenantAccessSession,
+  prisma: unknown,
+  tenantId: string,
+  input: {
+    buffer: Buffer;
+    fileName: string;
+    saved: { url: string; name: string; mime: string };
+    vessels: Array<{ code: string; name: string | null }>;
+    preVessel: string | null;
+  },
+): Promise<BatchScanRow[]> {
+  const { fileName, saved, vessels } = input;
+  const report = await extractVibrationReport(session, {
+    buffer: input.buffer, mime: saved.mime, vesselCode: input.preVessel,
+  });
+  if (report.items.length === 0) {
+    throw new RouteError(422, "VIBRATION_NO_ITEMS", "No se pudo leer ningún equipo del informe de vibraciones.");
+  }
+
+  const vesselCode = input.preVessel
+    ?? pickVessel(vessels, null, [report.vesselReferenceText ?? "", fileName]);
+  const candidates: AssetCandidate[] = vesselCode ? await loadVesselAssets(session, vesselCode) : [];
+
+  // Equipo de cada fila del informe. De a 4 en paralelo: un informe trae una
+  // docena de equipos y en serie la lectura se hace larga.
+  const matches: Array<{ id: string; name: string; confidence: "high" | "medium" | "low"; reason: string | null } | null> = [];
+  for (let i = 0; i < report.items.length; i += 4) {
+    const chunk = report.items.slice(i, i + 4);
+    matches.push(...await Promise.all(chunk.map(item => vesselCode
+      ? matchAssetByAi(session, vesselCode, item.assetReferenceText, { candidates, feature: "fluid_analyses" })
+      : Promise.resolve(null))));
+  }
+
+  // Agrupar por equipo resuelto. Lo no resuelto queda en su propia fila, para
+  // que el usuario elija el equipo a mano.
+  const groups: Array<{ items: VibrationReportItem[]; match: (typeof matches)[number] }> = [];
+  report.items.forEach((item, i) => {
+    const match = matches[i] ?? null;
+    const same = match ? groups.find(g => g.match?.id === match.id) : undefined;
+    if (same) {
+      same.items.push(item);
+      // Se queda con la confianza más baja: la fila junta vale lo que su parte más dudosa.
+      if (same.match && rankConfidence(match!.confidence) < rankConfidence(same.match.confidence)) same.match = match;
+    } else {
+      groups.push({ items: [item], match });
+    }
+  });
+
+  const sampledAt = report.sampledAt ?? parseFileNameHints(fileName).date;
+  const rows: BatchScanRow[] = [];
+
+  for (const group of groups) {
+    const severity = group.items.map(i => i.severity).reduce(worseSeverity);
+    const priority = group.items.map(i => i.priority).reduce(worsePriority);
+    const finding = joinTexts(group.items.map(i => i.finding));
+    const recommendation = joinTexts(group.items.map(i => i.recommendation));
+    const parameters = mergeParameters(group.items.map(i => i.parameters));
+
+    const warnings: BatchWarning[] = [];
+    if (!vesselCode) warnings.push("VESSEL_NOT_RESOLVED");
+    const match = group.match;
+    if (!match) warnings.push("ASSET_NOT_RESOLVED");
+    else if (match.confidence === "low") warnings.push("ASSET_LOW_CONFIDENCE");
+    if (!sampledAt) warnings.push("SAMPLED_AT_MISSING");
+    if (Object.keys(parameters).length === 0) warnings.push("NO_PARAMETERS");
+
+    const duplicateOf = (vesselCode && match && sampledAt)
+      ? await findLoadedVibration(prisma, tenantId, vesselCode, match.id, sampledAt)
+      : null;
+    const pending = (!duplicateOf && vesselCode && match && sampledAt)
+      ? await findPendingSample(prisma, tenantId, vesselCode, match.id, sampledAt, "VIBRATION", null)
+      : null;
+
+    rows.push({
+      fileName,
+      file: { url: saved.url, name: saved.name, mime: saved.mime },
+      kind: "VIBRATION",
+      labReference: report.reportNumber,
+      vibration: { severity, priority, finding, recommendation },
+      sampleNumber: null,
+      vesselCode,
+      vesselReferenceText: report.vesselReferenceText,
+      assetId: match?.id ?? null,
+      assetName: match?.name ?? null,
+      assetReferenceText: group.items.map(i => i.assetReferenceText).join(" / "),
+      assetConfidence: match?.confidence ?? null,
+      assetReason: match?.reason ?? null,
+      fluidType: null,
+      fluidProduct: null,
+      sampledAt,
+      receivedAt: sampledAt,
+      runningHours: null,
+      labName: report.labName,
+      verdict: verdictForVibrationSeverity(severity),
+      summary: vibrationSummary(finding, recommendation, priority),
+      parameters,
+      duplicateOf,
+      attachTo: pending ? await describeAttachTarget(prisma, tenantId, pending, "ASSET_AND_DATE") : null,
+      aiNotes: report.notes,
+      warnings,
+    });
+  }
+
+  return rows;
 }
 
 // ── Paso 2: guardar las filas confirmadas ────────────────────────────────────
@@ -357,7 +512,28 @@ export async function commitFluidBatch(
         continue;
       }
 
-      const sampleNumber = baseSampleNumber(row?.sampleNumber);
+      const kind: BatchKind = row?.kind === "VIBRATION" ? "VIBRATION" : "FLUID";
+
+      // Vibraciones: no hay número de muestra por equipo. La clave es equipo +
+      // fecha de medición, en el lote y contra la base.
+      if (kind === "VIBRATION") {
+        const key = `V|${vesselCode}|${assetId}|${sampledAt}`;
+        if (seenNumbers.has(key)) {
+          items.push({ ...base, status: "skipped", reason: "DUPLICATE" });
+          continue;
+        }
+        const existing = await findLoadedVibration(prisma, tenantId, vesselCode, assetId, sampledAt);
+        if (existing) {
+          items.push({
+            ...base, status: "skipped", reason: "DUPLICATE",
+            sampleId: existing.id, sampleCode: existing.sampleCode,
+          });
+          continue;
+        }
+        seenNumbers.add(key);
+      }
+
+      const sampleNumber = kind === "FLUID" ? baseSampleNumber(row?.sampleNumber) : null;
       if (sampleNumber) {
         if (seenNumbers.has(sampleNumber)) {
           items.push({ ...base, status: "skipped", reason: "DUPLICATE" });
@@ -377,7 +553,10 @@ export async function commitFluidBatch(
         seenNumbers.add(sampleNumber);
       }
 
-      const fluidType = FLUID_TYPES.includes(row?.fluidType as FluidType) ? row.fluidType : "ENGINE_OIL";
+      const fluidType: FluidType | null = kind !== "FLUID"
+        ? null
+        : FLUID_TYPES.includes(row?.fluidType as FluidType) ? row.fluidType : "ENGINE_OIL";
+      const labReference = kind === "FLUID" ? sampleNumber : normText(row?.labReference);
       const runningHours = Number.isFinite(Number(row?.runningHours)) && row?.runningHours != null
         ? Number(row.runningHours)
         : null;
@@ -405,18 +584,19 @@ export async function commitFluidBatch(
           && baseSampleNumber(pending.labReference) === sampleNumber;
         await updateFluidSample(session, pending.id, {
           assetId: numberMatches ? pending.assetId : assetId,
-          fluidType, fluidProduct, sampledAt, labName,
+          ...(fluidType ? { fluidType } : {}),
+          fluidProduct, sampledAt, labName,
           // Sólo se escribe si el reporte trajo número: si no, se conserva el
           // que se anotó al mandar la muestra al laboratorio.
-          ...(sampleNumber ? { labReference: sampleNumber } : {}),
+          ...(labReference ? { labReference } : {}),
         });
         sampleId = pending.id;
         sampleCode = pending.sampleCode;
         attached = true;
       } else {
         const created = await createFluidSample(session, {
-          vesselCode, assetId, fluidType, fluidProduct, sampledAt,
-          labName, labReference: sampleNumber, runningHours,
+          vesselCode, assetId, kind, fluidType, fluidProduct, sampledAt,
+          labName, labReference, runningHours,
         });
         sampleId = created.id;
         sampleCode = created.sampleCode;
@@ -499,10 +679,10 @@ export async function openWorkOrderForFluidBatch(
 
   const samples: Array<{
     id: string; sampleCode: string; vesselCode: string; assetId: string;
-    fluidType: string | null; sourceWorkOrderId: string | null;
+    kind: string; fluidType: string | null; sourceWorkOrderId: string | null;
   }> = await (prisma as any).fluidSample.findMany({
     where: { id: { in: ids }, tenantId, deletedAt: null },
-    select: { id: true, sampleCode: true, vesselCode: true, assetId: true, fluidType: true, sourceWorkOrderId: true },
+    select: { id: true, sampleCode: true, vesselCode: true, assetId: true, kind: true, fluidType: true, sourceWorkOrderId: true },
     orderBy: { sampleCode: "asc" },
   });
   if (samples.length === 0) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "No se encontraron los análisis.");
@@ -517,14 +697,15 @@ export async function openWorkOrderForFluidBatch(
     throw new RouteError(403, "FORBIDDEN", "El buque de estos análisis está fuera de tu alcance.");
   }
 
-  // Rutinas de muestreo activas del buque, para cruzar por equipo.
-  const plans: Array<{ id: string; taskCode: string; title: string; assetId: string; samplingFluidType: string | null }> =
+  // Rutinas de muestreo activas del buque, para cruzar por equipo y por tipo de
+  // análisis: el de vibraciones ejecuta la rutina de vibraciones, no la de aceite.
+  const plans: Array<{ id: string; taskCode: string; title: string; assetId: string; samplingKind: string | null; samplingFluidType: string | null }> =
     await (prisma as any).maintenancePlan.findMany({
       where: {
         tenantId, vesselCode, deletedAt: null, status: "ACTIVE",
-        samplingKind: "FLUID",
+        samplingKind: { in: [...new Set(samples.map(s => s.kind))] },
       },
-      select: { id: true, taskCode: true, title: true, assetId: true, samplingFluidType: true },
+      select: { id: true, taskCode: true, title: true, assetId: true, samplingKind: true, samplingFluidType: true },
       orderBy: { taskCode: "asc" },
     });
 
@@ -536,13 +717,15 @@ export async function openWorkOrderForFluidBatch(
     if (sample.sourceWorkOrderId) { skipped.push({ sampleCode: sample.sampleCode, reason: "ALREADY_LINKED" }); continue; }
     if (sample.vesselCode !== vesselCode) { skipped.push({ sampleCode: sample.sampleCode, reason: "OTHER_VESSEL" }); continue; }
 
-    const ofAsset = plans.filter(p => p.assetId === sample.assetId);
+    const ofAsset = plans.filter(p => p.assetId === sample.assetId && p.samplingKind === sample.kind);
     // Preferencia: la rutina del mismo fluido. Si el plan no lo declara, sirve
     // igual (es "la rutina de muestreo de ese equipo"). Nunca una de otro fluido:
     // el análisis de aceite no ejecuta la rutina de refrigerante.
-    const plan = ofAsset.find(p => p.samplingFluidType === sample.fluidType)
-      ?? ofAsset.find(p => !p.samplingFluidType)
-      ?? null;
+    const plan = sample.kind !== "FLUID"
+      ? ofAsset[0] ?? null
+      : ofAsset.find(p => p.samplingFluidType === sample.fluidType)
+        ?? ofAsset.find(p => !p.samplingFluidType)
+        ?? null;
     if (!plan) { skipped.push({ sampleCode: sample.sampleCode, reason: "NO_PLAN" }); continue; }
 
     pairs.push({ sampleId: sample.id, planId: plan.id });
@@ -795,7 +978,8 @@ async function findPendingSample(
   vesselCode: string,
   assetId: string,
   sampledAt: string,
-  fluidType: FluidType,
+  kind: BatchKind,
+  fluidType: FluidType | null,
 ): Promise<{ id: string; sampleCode: string; sampledAt: string } | null> {
   const target = new Date(sampledAt);
   if (isNaN(target.getTime())) return null;
@@ -806,10 +990,10 @@ async function findPendingSample(
       where: {
         tenantId, vesselCode, assetId, deletedAt: null,
         result: { is: null },
-        kind: "FLUID",
+        kind,
         // La muestra que no declara fluido sirve igual ("la muestra de aceite de
         // ese equipo"); la que declara otro fluido, no.
-        OR: [{ fluidType }, { fluidType: null }],
+        ...(kind === "FLUID" && fluidType ? { OR: [{ fluidType }, { fluidType: null }] } : {}),
         sampledAt: { gte: new Date(target.getTime() - windowMs), lte: new Date(target.getTime() + windowMs) },
       },
       select: { id: true, sampleCode: true, sampledAt: true },
@@ -820,6 +1004,78 @@ async function findPendingSample(
     Math.abs(a.sampledAt.getTime() - target.getTime()) - Math.abs(b.sampledAt.getTime() - target.getTime()));
   const best = rows[0]!;
   return { id: best.id, sampleCode: best.sampleCode, sampledAt: best.sampledAt.toISOString().slice(0, 10) };
+}
+
+/**
+ * Análisis de vibraciones YA CARGADO del mismo equipo y la misma fecha de
+ * medición. Es la clave anti-duplicado de vibraciones: el informe no trae número
+ * de muestra por equipo, y el Nº de informe lo comparten todos los equipos.
+ */
+async function findLoadedVibration(
+  prisma: unknown,
+  tenantId: string,
+  vesselCode: string,
+  assetId: string,
+  sampledAt: string,
+): Promise<{ id: string; sampleCode: string; vesselCode: string } | null> {
+  const day = new Date(`${sampledAt}T00:00:00.000Z`);
+  if (isNaN(day.getTime())) return null;
+  return (prisma as any).fluidSample.findFirst({
+    where: {
+      tenantId, vesselCode, assetId, deletedAt: null,
+      kind: "VIBRATION",
+      result: { isNot: null },
+      sampledAt: { gte: day, lt: new Date(day.getTime() + 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true, sampleCode: true, vesselCode: true },
+  });
+}
+
+function rankConfidence(c: "high" | "medium" | "low"): number {
+  return c === "high" ? 2 : c === "medium" ? 1 : 0;
+}
+
+function joinTexts(texts: Array<string | null>): string | null {
+  const parts = [...new Set(texts.filter((t): t is string => !!t && !/^ninguna\.?$/i.test(t)))];
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** Junta los valores de las filas de un mismo equipo. Una clave repetida con otro valor no se pisa: va con sufijo. */
+function mergeParameters(
+  list: Array<Record<string, { value: number | string; unit?: string }>>,
+): Record<string, { value: number | string; unit?: string }> {
+  const out: Record<string, { value: number | string; unit?: string }> = {};
+  for (const params of list) {
+    for (const [k, v] of Object.entries(params)) {
+      if (!out[k]) { out[k] = v; continue; }
+      if (out[k]!.value === v.value) continue;
+      let n = 2;
+      while (out[`${k}_${n}`]) n++;
+      out[`${k}_${n}`] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * Resumen que queda guardado en el resultado: es el texto del analista (dato del
+ * informe, como el resumen del laboratorio en los de aceite), no un texto de la
+ * interfaz.
+ */
+function vibrationSummary(
+  finding: string | null,
+  recommendation: string | null,
+  priority: VibrationPriority,
+): string | null {
+  const PRIORITY_WORDS: Record<VibrationPriority, string | null> = {
+    NONE: null, SCHEDULED: "Programado", NORMAL: "Normal", URGENT: "Urgente",
+  };
+  const parts = [
+    finding,
+    recommendation ? `Recomendación: ${recommendation}` : null,
+    PRIORITY_WORDS[priority] ? `Prioridad: ${PRIORITY_WORDS[priority]}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(". ") : null;
 }
 
 /**

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview V51 · Tarjetas del tablero de OT comprimidas</title>
+<style>
+  :root{
+    --bg:#f3f5f8; --surface:#fff; --fg:#141c26; --ind:#5b6776; --line:#e3e7ec;
+    --accent:#1668b3; --em:#047857; --em-bg:#d1fae5; --em-bd:#86d7b5;
+    --or:#c2410c; --or-bg:#ffedd5; --or-bd:#fdc79a;
+    --bl:#1d4ed8; --bl-bg:#dbeafe; --bl-bd:#a9c3f5;
+    --te:#0f766e; --te-bg:#ccfbf1; --te-bd:#8fdcd2;
+    --vi:#6d28d9; --vi-bg:#ede9fe; --vi-bd:#c4b5fd;
+    --rd:#b91c1c; --rd-bg:#fee2e2;
+    --yl:#854d0e; --yl-bg:#fef3c7;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+    --sans:Inter,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 26px 40px;background:var(--bg);font-family:var(--sans);color:var(--fg)}
+  .demo{display:inline-block;background:#fff3cd;color:#7a5a00;border:1px solid #f0d58c;font-size:11px;
+    font-weight:700;padding:3px 8px;border-radius:6px;margin-bottom:8px}
+  h1{font-size:20px;margin:0 0 4px} .lead{color:var(--ind);font-size:13.5px;margin:0 0 16px;max-width:900px;line-height:1.5}
+  .ctrls{display:flex;gap:14px;align-items:center;margin-bottom:16px;font-size:13px;flex-wrap:wrap}
+  .ctrls label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+  .side h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 8px;color:var(--ind)}
+  .side h2 b{color:var(--fg)}
+  .board{display:grid;grid-template-columns:1fr 1fr;gap:10px;height:620px}
+  .col{background:#eef1f5;border-top:2px solid #c8d0da;border-radius:6px;padding:8px;overflow:hidden;display:flex;flex-direction:column}
+  .col.au{border-top-color:#6ee7b7}
+  .colh{display:flex;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:#6b7684;padding:2px 4px 8px}
+  .col.au .colh{color:var(--em)}
+  .cnt{background:#dfe4ea;border-radius:99px;padding:0 6px;font-size:10px}
+  .stack{display:flex;flex-direction:column;gap:8px;overflow:hidden}
+  .stat{font-size:12px;color:var(--ind);margin-top:8px}
+  .stat b{color:var(--fg)}
+
+  /* tarjeta común */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column}
+  .card.over{background:#fdf3f3}
+  .p-hi{border-left:4px solid #f97316} .p-md{border-left:4px solid #eab308}
+  .code{font-family:var(--mono);font-weight:700;font-size:12px;white-space:nowrap}
+  .chip{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;border:1px solid;line-height:1.3}
+  .c-or{color:var(--or);background:var(--or-bg);border-color:var(--or-bd)}
+  .c-bl{color:var(--bl);background:var(--bl-bg);border-color:var(--bl-bd)}
+  .c-te{color:var(--te);background:var(--te-bg);border-color:var(--te-bd)}
+  .prio{font-size:9px;font-weight:800;text-transform:uppercase;padding:1px 6px;border-radius:99px;white-space:nowrap}
+  .pr-hi{background:#ffedd5;color:#c2410c} .pr-md{background:#fef3c7;color:#854d0e}
+  .stage{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;border:1px solid}
+  .st-prep{background:#eceff3;color:#5b6776;border-color:#dfe3e8}
+  .st-au{background:#d1fae5;color:#047857;border-color:#a7e3c9}
+  .st-run{background:#059669;color:#fff;border-color:#047857}
+  .title{font-weight:600;color:var(--fg)}
+  .asset{color:#6b7684;display:flex;gap:4px;align-items:center;min-width:0}
+  .asset span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ini{display:flex;align-items:center;justify-content:center;border-radius:99px;font-weight:800}
+  .ini.on{background:#e0e7ff;color:#4338ca} .ini.off{background:#f0f2f5;color:#aab2bd}
+  .btn{display:flex;align-items:center;justify-content:center;gap:4px;border:1px solid;border-radius:8px;font-weight:700;cursor:pointer}
+  .b-ac{color:var(--accent);border-color:#9cc3e6;background:#f2f8fd}
+  .b-gr{color:var(--em);border-color:#86d7b5;background:#ecfdf5}
+  .ss{font-family:var(--mono);color:#7b8591}
+  .dot{width:6px;height:6px;border-radius:99px;display:inline-block;background:#f59e0b}
+  .due{color:var(--rd);font-weight:700}
+
+  /* ─── HOY ─── */
+  .old{padding:8px 10px;gap:6px}
+  .old .r1{display:flex;align-items:center;gap:6px}
+  .old .r1 .chip{max-width:130px}
+  .old .title{font-size:13px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .old .asset{font-size:11px}
+  .old .meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px}
+  .old .ssblk{border-top:1px solid #edf0f3;padding-top:6px;width:100%;display:flex;gap:6px;align-items:center;font-size:9px}
+  .old .ini{width:20px;height:20px;font-size:9px;margin-left:auto}
+  .old .btn{padding:4px 8px;font-size:11px}
+
+  /* ─── V51 ─── */
+  .nw{padding:5px 8px 6px;gap:3px}
+  .nw .r1{display:flex;align-items:center;gap:5px;min-width:0}
+  .nw .code{font-size:11px}
+  .nw .chip{font-size:9.5px;padding:0 6px;white-space:nowrap}
+  .nw .prio{margin-left:auto}
+  .nw .title{font-size:12.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  body.one .nw .title{-webkit-line-clamp:1}
+  .nw .meta{display:flex;align-items:center;gap:6px;font-size:10.5px;min-width:0}
+  .nw .asset{flex:1;min-width:0}
+  .nw .ss{font-size:9px;white-space:nowrap;display:inline-flex;gap:3px;align-items:center}
+  .nw .stage{font-size:9.5px;padding:0 6px;white-space:nowrap}
+  .nw .ini{width:17px;height:17px;font-size:8px;flex:none}
+  .nw .btn{padding:1px 8px;font-size:10.5px;border-radius:6px}
+  body.inline .nw .btn.full{display:none}
+  .nw .btn.mini{display:none;padding:1px 7px;flex:none}
+  body.inline .nw .btn.mini{display:flex}
+
+  .notes{margin-top:26px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 20px;font-size:13.5px;line-height:1.55;max-width:1100px}
+  .notes h3{margin:0 0 8px;font-size:14px}
+  .notes ul{margin:0;padding-left:18px} .notes li{margin-bottom:4px}
+  .ok{display:inline-block;background:#1668b3;color:#fff;border-radius:6px;padding:2px 8px;font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<span class="demo">DATOS DE EJEMPLO · copiados de tu captura del tablero de LATERE</span>
+<h1>Preview V51 · Tarjetas del tablero de Órdenes de Trabajo, comprimidas</h1>
+<p class="lead">A la izquierda, cómo es hoy. A la derecha, la propuesta. Mismo alto de columna en las dos:
+fijate cuántas tarjetas entran. No se saca ningún dato; se juntan renglones y se quita lo que la columna ya dice.</p>
+
+<div class="ctrls">
+  <label><input type="checkbox" id="one"> Título en <b>1 renglón</b> (hoy son 2)</label>
+  <label><input type="checkbox" id="inline"> Botón de acción <b>en el mismo renglón</b> que el equipo</label>
+</div>
+
+<div class="wrap">
+  <!-- ═══════════ HOY ═══════════ -->
+  <div class="side">
+    <h2><b>HOY</b></h2>
+    <div class="board">
+      <div class="col">
+        <div class="colh">En preparación <span class="cnt">10</span></div>
+        <div class="stack">
+          <div class="card old p-hi">
+            <div class="r1"><span class="code">OT-LTE-26-0048</span><span class="chip c-or">Mant. Correctivo / Reparación</span><span class="prio pr-hi" style="margin-left:auto">24 HS</span></div>
+            <span class="stage st-prep">En preparación</span>
+            <div class="title">Análisis de vibraciones y control de presión cilindros FA-LTE-0060</div>
+            <div class="asset">🔧<span>Motor Principal #4</span></div>
+            <div class="meta"><span class="ini on">CV</span></div>
+            <div class="btn b-ac">➤ Enviar a aprobar</div>
+          </div>
+          <div class="card old p-hi">
+            <div class="r1"><span class="code">OT-LTE-26-0047</span><span class="chip c-or">Mant. Correctivo / Reparación</span><span class="prio pr-hi" style="margin-left:auto">24 HS</span></div>
+            <span class="stage st-prep">En preparación</span>
+            <div class="title">Análisis vibratorio y revisión mecánica de caja reductora FA-LTE-0061</div>
+            <div class="asset">🔧<span>Caja reductora #4</span></div>
+            <div class="meta"><span class="ini off">?</span></div>
+            <div class="btn b-ac">➤ Enviar a aprobar</div>
+          </div>
+          <div class="card old p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0045</span><span class="chip c-bl">Mant. Preventivo</span><span class="prio pr-md" style="margin-left:auto">SEMANA</span></div>
+            <span class="stage st-prep">En preparación</span>
+            <div class="title">Mantenimiento CADA 5 AÑOS (varada)</div>
+            <div class="asset">🔧<span>Helice #1</span></div>
+            <div class="meta"><span class="ini off">?</span></div>
+            <div class="btn b-ac">➤ Enviar a aprobar</div>
+          </div>
+        </div>
+      </div>
+      <div class="col au">
+        <div class="colh">Autorizada y en proceso <span class="cnt">5</span></div>
+        <div class="stack">
+          <div class="card old p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0046</span><span class="chip c-te">Inspección</span><span class="prio pr-md" style="margin-left:auto">SEMANA</span></div>
+            <span class="stage st-au">Autorizada</span>
+            <div class="title">Inspeccion y Pruebas SEMANALES (MAQUINAS)</div>
+            <div class="asset">🔧<span>Equipos de Maquinas en General</span></div>
+            <div class="meta"><span class="ini off">?</span></div>
+            <div class="btn b-ac">📷 Registrar avance</div>
+          </div>
+          <div class="card old p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0044</span><span class="chip c-bl">Mant. Preventivo</span><span class="prio pr-md" style="margin-left:auto">SEMANA</span></div>
+            <span class="stage st-au">Autorizada</span>
+            <div class="title">CAMBIO: Magnetron 6KW</div>
+            <div class="asset">🔧<span>Radar de Estribor</span></div>
+            <div class="meta"><div class="ssblk"><span class="dot"></span><span class="ss">SS-37-LTE-2026</span><span class="ini off">?</span></div></div>
+            <div class="btn b-ac">📷 Registrar avance</div>
+          </div>
+          <div class="card old over p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0039</span><span class="chip c-bl">Mant. Preventivo</span><span class="prio pr-md" style="margin-left:auto">SEMANA</span></div>
+            <span class="stage st-run">En proceso</span>
+            <div class="title">CONTROL: Verificacion y calibracion del barometro</div>
+            <div class="asset">🔧<span>Barómetro</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ V51 ═══════════ -->
+  <div class="side">
+    <h2><b>PROPUESTA V51</b></h2>
+    <div class="board">
+      <div class="col">
+        <div class="colh">En preparación <span class="cnt">10</span></div>
+        <div class="stack">
+          <div class="card nw p-hi">
+            <div class="r1"><span class="code">OT-LTE-26-0048</span><span class="chip c-or">Correctivo</span><span class="prio pr-hi">24 HS</span></div>
+            <div class="title">Análisis de vibraciones y control de presión cilindros FA-LTE-0060</div>
+            <div class="meta"><span class="asset">🔧<span>Motor Principal #4</span></span><div class="btn b-ac mini">➤ Enviar</div><span class="ini on">CV</span></div>
+            <div class="btn b-ac full">➤ Enviar a aprobar</div>
+          </div>
+          <div class="card nw p-hi">
+            <div class="r1"><span class="code">OT-LTE-26-0047</span><span class="chip c-or">Correctivo</span><span class="prio pr-hi">24 HS</span></div>
+            <div class="title">Análisis vibratorio y revisión mecánica de caja reductora FA-LTE-0061</div>
+            <div class="meta"><span class="asset">🔧<span>Caja reductora #4</span></span><div class="btn b-ac mini">➤ Enviar</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">➤ Enviar a aprobar</div>
+          </div>
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0045</span><span class="chip c-bl">Preventivo</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">Mantenimiento CADA 5 AÑOS (varada)</div>
+            <div class="meta"><span class="asset">🔧<span>Helice #1</span></span><div class="btn b-ac mini">➤ Enviar</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">➤ Enviar a aprobar</div>
+          </div>
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0043</span><span class="chip c-bl">Preventivo</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">CAMBIO: Filtro de combustible primario</div>
+            <div class="meta"><span class="asset">🔧<span>Motor Auxiliar #2</span></span><div class="btn b-ac mini">➤ Enviar</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">➤ Enviar a aprobar</div>
+          </div>
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0042</span><span class="chip c-te">Inspección</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">Inspección mensual de botes salvavidas</div>
+            <div class="meta"><span class="asset">🔧<span>Bote de rescate</span></span><div class="btn b-ac mini">➤ Enviar</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">➤ Enviar a aprobar</div>
+          </div>
+        </div>
+      </div>
+      <div class="col au">
+        <div class="colh">Autorizada y en proceso <span class="cnt">5</span></div>
+        <div class="stack">
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0046</span><span class="chip c-te">Inspección</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">Inspeccion y Pruebas SEMANALES (MAQUINAS)</div>
+            <div class="meta"><span class="asset">🔧<span>Equipos de Maquinas en General</span></span><div class="btn b-ac mini">📷 Avance</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">📷 Registrar avance</div>
+          </div>
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0044</span><span class="chip c-bl">Preventivo</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">CAMBIO: Magnetron 6KW</div>
+            <div class="meta"><span class="asset">🔧<span>Radar de Estribor</span></span><span class="ss"><span class="dot"></span>SS-37-LTE-2026</span><div class="btn b-ac mini">📷 Avance</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">📷 Registrar avance</div>
+          </div>
+          <div class="card nw over p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0039</span><span class="chip c-bl">Preventivo</span><span class="stage st-run">En proceso</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">CONTROL: Verificacion y calibracion del barometro</div>
+            <div class="meta"><span class="asset">🔧<span>Barómetro</span></span><span class="ss"><span class="dot"></span>SS-38-LTE-2026</span><div class="btn b-ac mini">📷 Avance</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">📷 Registrar avance</div>
+          </div>
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0036</span><span class="chip c-bl">Preventivo</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">Engrase general de guinche de proa</div>
+            <div class="meta"><span class="asset">🔧<span>Guinche de proa</span></span><div class="btn b-ac mini">📷 Avance</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">📷 Registrar avance</div>
+          </div>
+          <div class="card nw p-md">
+            <div class="r1"><span class="code">OT-LTE-26-0035</span><span class="chip c-te">Inspección</span><span class="prio pr-md">SEMANA</span></div>
+            <div class="title">Prueba de luces de navegación</div>
+            <div class="meta"><span class="asset">🔧<span>Luces de navegación</span></span><div class="btn b-ac mini">📷 Avance</div><span class="ini off">?</span></div>
+            <div class="btn b-ac full">📷 Registrar avance</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>Qué cambia en cada tarjeta</h3>
+  <ul>
+    <li><b>Se va la etiqueta de etapa</b> ("En preparación", "Autorizada"): repetía el título de la columna. Queda sólo cuando dice algo que la columna no dice: <b>En proceso</b> (ahora en el primer renglón) y <b>Rechazada</b>.</li>
+    <li><b>Tipo más corto</b>: "Correctivo" / "Preventivo" / "Inspección" en vez de "Mant. Correctivo / Reparación", que ocupaba dos renglones. El nombre completo aparece al pasar el mouse.</li>
+    <li><b>Equipo, SS, vencimiento y responsable en un solo renglón</b> (hoy son dos o tres).</li>
+    <li><b>Letra y márgenes más chicos</b>, y el botón de acción más finito.</li>
+    <li>Queda igual: el borde de color por prioridad, el fondo rojo de las vencidas, el título en negrita, abrir con clic y arrastrar entre columnas.</li>
+  </ul>
+  <p style="margin:12px 0 0">Hoy entran unas <b>3</b> tarjetas por columna en pantalla; con V51, <b>5</b>. Con las dos casillas de arriba tildadas, más de <b>6</b>.</p>
+  <p style="margin:8px 0 0">Si querés que lo implemente así, escribí <span class="ok">APROBAR-CAMBIO</span> y decime si van tildadas las casillas.</p>
+</div>
+
+<script>
+  document.getElementById('one').onchange    = e => document.body.classList.toggle('one', e.target.checked);
+  document.getElementById('inline').onchange = e => document.body.classList.toggle('inline', e.target.checked);
+</script>
+</body>
+</html>

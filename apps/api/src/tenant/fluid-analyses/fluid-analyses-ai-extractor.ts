@@ -18,6 +18,12 @@ export interface ExtractedField<T> {
 }
 
 export interface ExtractedReport {
+  /**
+   * Qué clase de documento es. Un informe de VIBRACIONES cubre varios equipos y
+   * no entra en este esquema de una muestra: quien llama lo deriva al lector de
+   * vibraciones (vibration-report-ai-extractor.ts).
+   */
+  documentKind: "FLUID" | "VIBRATION" | "OTHER";
   fluidType: ExtractedField<FluidType>;
   sampledAt: ExtractedField<string>;          // ISO date
   receivedAt: ExtractedField<string>;
@@ -38,7 +44,9 @@ const SYSTEM_PROMPT = `Sos un experto en interpretar reportes de laboratorio de 
 
 Tu tarea: extraer del documento (PDF o imagen) los siguientes campos en JSON estricto. Si un campo no está presente o no podés determinarlo, devolvé null.
 
-Para cada campo top-level (excepto "parameters", "notes" y "assetIdSuggestion"), devolvés un objeto con esta forma:
+Primero, "documentKind" (string plano, no objeto): "FLUID" si es un análisis de fluidos; "VIBRATION" si es un informe de análisis de vibraciones (mm/s, m/s², espectros, severidad por equipo); "OTHER" si no es ninguno. Si es "VIBRATION", devolvé sólo { "documentKind": "VIBRATION" } y nada más.
+
+Para cada campo top-level (excepto "documentKind", "parameters", "notes" y "assetIdSuggestion"), devolvés un objeto con esta forma:
   { "value": ..., "confidence": "high" | "medium" | "low" }
 
 Para "parameters", devolvés un objeto donde cada clave es el código del parámetro normalizado (ej: "fe", "cu", "tbn", "viscosity100", "water", "ph", "nitrites", "sediment", "sulfur", "density", "iso", etc.) y el valor es:
@@ -46,6 +54,7 @@ Para "parameters", devolvés un objeto donde cada clave es el código del parám
 
 CAMPOS A EXTRAER (esquema exacto):
 {
+  "documentKind":      "FLUID"|"VIBRATION"|"OTHER",
   "fluidType":         { value: "ENGINE_OIL"|"HYDRAULIC_OIL"|"GEARBOX_OIL"|"TRANSMISSION_OIL"|"FUEL_DIESEL"|"FUEL_GASOIL"|"COOLING_WATER"|"BOILER_WATER"|"POTABLE_WATER"|"REFRIGERANT"|"OTHER"|null, confidence },
   "sampledAt":         { value: "YYYY-MM-DD"|null, confidence },        // fecha de toma de muestra
   "receivedAt":        { value: "YYYY-MM-DD"|null, confidence },        // fecha de recepción/análisis del lab
@@ -195,7 +204,8 @@ export async function extractFluidReport(
 
   // Sanitize and shape
   const result: ExtractedReport = {
-    fluidType:          shapeField(parsed.fluidType, (v) => FLUID_TYPES.includes(v as FluidType) ? (v as FluidType) : null),
+    documentKind:       parsed.documentKind === "VIBRATION" ? "VIBRATION" : parsed.documentKind === "OTHER" ? "OTHER" : "FLUID",
+    fluidType:         shapeField(parsed.fluidType, (v) => FLUID_TYPES.includes(v as FluidType) ? (v as FluidType) : null),
     sampledAt:          shapeField(parsed.sampledAt,  (v) => normDate(v)),
     receivedAt:         shapeField(parsed.receivedAt, (v) => normDate(v)),
     runningHours:       shapeField(parsed.runningHours, (v) => Number.isFinite(Number(v)) ? Number(v) : null),

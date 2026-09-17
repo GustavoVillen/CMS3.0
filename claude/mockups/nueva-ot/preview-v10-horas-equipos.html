@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horas de equipos — Preview V10</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --surface:#fff; --fg:#1A1D24; --accent:#0284C7; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer} button:disabled{cursor:not-allowed}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px}
+  .overlay{position:fixed;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{width:100%;max-width:760px;background:var(--surface);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35);display:flex;flex-direction:column;max-height:calc(100vh - 90px);overflow:hidden}
+  .head{padding:14px 20px 12px;border-bottom:1px solid var(--fg10)}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ico{width:34px;height:34px;border-radius:10px;background:rgba(2,132,199,.1);border:1px solid rgba(2,132,199,.2);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+  .title{font-size:16px;font-weight:800} .sub{font-size:12px;color:var(--muted)}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;border:1px solid rgba(2,132,199,.25);background:rgba(2,132,199,.05);border-radius:99px;padding:3px 9px}
+  .close{width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center;margin-left:auto}
+  .dates{display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .seg{display:flex;gap:4px;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:3px}
+  .seg button{border:0;background:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;color:var(--muted)}
+  .seg button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+  .in-date{background:var(--fg5);border:1px solid var(--fg10);border-radius:8px;padding:5px 8px;font-size:12px;font-family:inherit}
+  .prog-wrap{margin-top:12px}
+  .prog{height:7px;border-radius:99px;background:var(--fg10);overflow:hidden} .prog>div{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+  .prog.ok>div{background:var(--success)}
+  .prog-t{display:flex;justify-content:space-between;font-size:12px;margin-top:5px;color:var(--muted)} .prog-t b{color:var(--fg)}
+  .body{flex:1;overflow-y:auto;padding:14px 20px;background:#FAFBFC}
+  .filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .fbtn{border:1.5px solid var(--fg10);background:var(--surface);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .fbtn.on{border-color:var(--accent);color:var(--accent);background:rgba(2,132,199,.06)}
+  .cnt{background:var(--fg10);border-radius:99px;padding:0 7px;font-size:11px}
+  .fbtn.pend .cnt{background:#D97706;color:#fff}
+  .search{margin-left:auto;position:relative} .search input{border:1px solid var(--fg10);border-radius:99px;padding:6px 12px 6px 30px;font-size:12px;font-family:inherit;width:180px}
+  .search svg{position:absolute;left:10px;top:7px;width:14px;height:14px;color:var(--faint)}
+  .card{background:var(--surface);border:1px solid var(--fg10);border-radius:14px;padding:12px 14px;margin-bottom:8px;display:grid;grid-template-columns:1fr 210px;gap:12px;align-items:center}
+  .card.need{border-left:4px solid #F59E0B;background:#FFFBEB}
+  .card.done{border-left:4px solid var(--success)}
+  .card.dirty{border-left:4px solid var(--accent);background:rgba(2,132,199,.04)}
+  .card.warn{border-left:4px solid var(--danger);background:#FEF2F2}
+  @media(max-width:600px){.card{grid-template-columns:1fr}.search{margin-left:0}.search input{width:100%}}
+  .an{font-size:14px;font-weight:700} .ac{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint);margin-left:6px}
+  .meta{font-size:12px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{font-size:10px;font-weight:800;border-radius:99px;padding:2px 8px;text-transform:uppercase;letter-spacing:.03em}
+  .p-late{background:#D97706;color:#fff} .p-never{background:#B91C1C;color:#fff} .p-ok{background:rgba(14,159,110,.12);color:#047857} .p-new{background:rgba(2,132,199,.12);color:var(--accent)}
+  .inbox{position:relative}
+  .inbox input{width:100%;border:1.5px solid var(--fg25);border-radius:12px;padding:10px 34px 10px 12px;font-size:20px;font-weight:700;font-family:ui-monospace,monospace;text-align:right;background:#fff}
+  .card.need .inbox input{border-color:#F59E0B}
+  .inbox input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.15)}
+  .inbox .suf{position:absolute;right:12px;top:13px;font-size:13px;font-weight:700;color:var(--faint)}
+  .delta{font-size:12px;font-weight:700;margin-top:5px;text-align:right}
+  .d-ok{color:#047857} .d-warn{color:#B91C1C} .d-none{color:var(--faint);font-weight:500}
+  .rpm{display:flex;justify-content:flex-end;margin-top:4px}
+  .rpm button{border:0;background:none;color:var(--accent);font-size:11px;font-weight:700}
+  .rpm input{width:110px;border:1px solid var(--fg25);border-radius:8px;padding:5px 8px;font-size:13px;text-align:right;font-family:ui-monospace,monospace}
+  .foot{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--fg10);flex-wrap:wrap}
+  .link{border:0;background:none;color:var(--muted);font-size:12px;font-weight:600;display:inline-flex;gap:5px;align-items:center}
+  .btn-primary{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:10px 18px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-primary:disabled{opacity:.45}
+  .btn-ghost{background:none;border:0;border-radius:10px;padding:8px 12px;font-size:12px}
+  .pend{font-size:12px;font-weight:700;color:var(--accent)}
+  .empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:13px}
+  .alert-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .alert{background:#fff;border-radius:16px;max-width:420px;width:100%;padding:20px}
+  .alert h3{margin:0 0 6px;font-size:14px;display:flex;gap:8px;align-items:center} .alert p{margin:0 0 14px;font-size:13px;color:var(--muted);white-space:pre-line}
+  .toast{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:9px 14px;border-radius:12px;font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center}
+  .cur{font-size:11px}
+  .cur table{width:100%;border-collapse:collapse} .cur th{font-size:10px;text-transform:uppercase;color:var(--faint);text-align:left;padding:8px;border-bottom:1px solid var(--fg10)}
+  .cur td{padding:6px 8px;border-bottom:1px solid var(--fg5)} .cur .in{width:100%;border:1px solid var(--fg10);border-radius:8px;padding:5px 8px;text-align:right;font-family:monospace;background:var(--fg5)}
+  .note{background:#DC2626;color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:4px 4px 0 0}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Horas de equipos · Preview V10</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button>
+  <button data-v="ref">Hoy (referencia)</button>
+</div>
+<div class="overlay" id="root"></div>
+<script>
+const today="2026-09-14", yesterday="2026-09-13";
+const ASSETS=[
+  {id:"a1",name:"Motor principal babor",code:"MCP-BB",last:12450,lastDate:"2026-09-13",days:1,today:null},
+  {id:"a2",name:"Motor principal estribor",code:"MCP-EB",last:12398,lastDate:"2026-09-13",days:1,today:12410},
+  {id:"a3",name:"Generador auxiliar N°1",code:"GEN-01",last:8120,lastDate:"2026-09-04",days:10,today:null},
+  {id:"a4",name:"Generador auxiliar N°2",code:"GEN-02",last:7985,lastDate:"2026-09-13",days:1,today:7996},
+  {id:"a5",name:"Bomba contraincendio",code:"BOM-CI",last:null,lastDate:null,days:null,today:null},
+  {id:"a6",name:"Compresor de aire N°1",code:"CMP-01",last:3310,lastDate:"2026-09-12",days:2,today:null},
+  {id:"a7",name:"Reductor babor",code:"RED-BB",last:12440,lastDate:"2026-09-13",days:1,today:12451},
+  {id:"a8",name:"Bomba de lastre",code:"BOM-LA",last:1502,lastDate:"2026-08-29",days:16,today:null},
+];
+const S={view:"new", date:"today", filter:"pending", q:"", drafts:{}, rpm:{}, rpmOpen:{}, alert:null, toast:null};
+const fmt=n=>n==null?"—":n.toLocaleString("es-AR",{maximumFractionDigits:1});
+const loaded=a=>a.today!=null;
+const isDirty=a=>(S.drafts[a.id]??"")!=="" && Number(S.drafts[a.id])!==a.today;
+const dirtyList=()=>ASSETS.filter(isDirty);
+function deltaInfo(a){
+  const raw=S.drafts[a.id]; const v = raw!=null&&raw!=="" ? Number(raw) : a.today;
+  if (v==null || a.last==null) return null;
+  const d=v-a.last; const days=Math.max(1,a.days??1);
+  if (d<0) return {cls:"d-warn", txt:`${fmt(d)} h · menos que la última lectura`, warn:true};
+  if (d>days*24) return {cls:"d-warn", txt:`+${fmt(d)} h en ${days} día${days>1?'s':''} · revisá el número`, warn:true};
+  return {cls:"d-ok", txt:`+${fmt(d)} h desde la última`};
+}
+function render(){
+  document.querySelectorAll(".pv-bar button[data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.view));
+  const root=document.getElementById("root"); root.style.top=document.querySelector(".pv-bar").offsetHeight+"px";
+  const prev=root.querySelector(".body"); const keep=prev?prev.scrollTop:0;
+  root.innerHTML = S.view==="ref" ? current() : modal();
+  if (S.alert) root.insertAdjacentHTML("beforeend",`<div class="alert-ov"><div class="alert"><h3><i data-lucide="${S.alert.icon||'alert-triangle'}" style="width:16px;height:16px;color:${S.alert.color||'#D97706'}"></i>${S.alert.t}</h3><p>${S.alert.m}</p><div style="display:flex;gap:8px;justify-content:flex-end">${(S.alert.buttons||[{label:"OK",cls:"btn-primary",on:"S.alert=null;render()"}]).map(b=>`<button class="${b.cls}" onclick="${b.on}">${b.label}</button>`).join("")}</div></div></div>`);
+  lucide.createIcons();
+  const b=root.querySelector(".body"); if(b) b.scrollTop=keep;
+}
+function modal(){
+  const total=ASSETS.length, done=ASSETS.filter(a=>loaded(a)||isDirty(a)).length;
+  const pend=ASSETS.filter(a=>!loaded(a)&&!isDirty(a));
+  const late=ASSETS.filter(a=>a.days==null||a.days>7);
+  const q=S.q.toLowerCase();
+  let list = S.filter==="pending" ? ASSETS.filter(a=>!loaded(a)) : S.filter==="done" ? ASSETS.filter(loaded) : ASSETS;
+  if (q) list=list.filter(a=>(a.name+a.code).toLowerCase().includes(q));
+  const dl=dirtyList();
+  const dateLabel = S.date==="today" ? "hoy" : S.date==="yesterday" ? "ayer" : "el 10/09";
+  return `<div class="modal" style="position:relative">
+    <div class="head">
+      <div class="row"><span class="ico"><i data-lucide="gauge" style="width:18px;height:18px"></i></span>
+        <div><div class="title">Horas de equipos</div><div class="sub">Cargá el horómetro de cada equipo</div></div>
+        <span class="chip"><i data-lucide="ship" style="width:11px;height:11px"></i><b>BUQUE DEMO I</b></span>
+        <button class="close" onclick="askClose()"><i data-lucide="x" style="width:18px;height:18px"></i></button></div>
+      <div class="dates"><span class="sub" style="font-weight:600">Lectura de:</span>
+        <div class="seg"><button class="${S.date==='today'?'on':''}" onclick="changeDate('today')">Hoy 14/09</button><button class="${S.date==='yesterday'?'on':''}" onclick="changeDate('yesterday')">Ayer 13/09</button><button class="${S.date==='other'?'on':''}" onclick="changeDate('other')">Otra fecha…</button></div>
+        ${S.date==='other'?`<input type="date" class="in-date" value="2026-09-10" max="${today}">`:''}
+      </div>
+      <div class="prog-wrap"><div class="prog ${done===total?'ok':''}"><div style="width:${done/total*100}%"></div></div>
+        <div class="prog-t"><span><b>${done} de ${total}</b> equipos con lectura de ${dateLabel}</span>${late.length?`<span style="color:#B45309;font-weight:700"><i data-lucide="clock-alert" style="width:12px;height:12px;vertical-align:-2px"></i> ${late.length} atrasados (+7 días)</span>`:''}</div></div>
+    </div>
+    <div class="body">
+      <div class="filters">
+        <button class="fbtn pend ${S.filter==='pending'?'on':''}" onclick="S.filter='pending';render()">Faltan cargar <span class="cnt">${ASSETS.filter(a=>!loaded(a)).length}</span></button>
+        <button class="fbtn ${S.filter==='done'?'on':''}" onclick="S.filter='done';render()">Ya cargados <span class="cnt">${ASSETS.filter(loaded).length}</span></button>
+        <button class="fbtn ${S.filter==='all'?'on':''}" onclick="S.filter='all';render()">Todos <span class="cnt">${total}</span></button>
+        <div class="search"><i data-lucide="search"></i><input id="q" placeholder="Buscar equipo…" value="${S.q}" oninput="S.q=this.value;renderKeep('q')"></div>
+      </div>
+      ${list.length? list.map(card).join("") : `<div class="empty"><i data-lucide="party-popper" style="width:28px;height:28px;color:var(--success)"></i><br><b>¡Todos los equipos tienen lectura de ${dateLabel}!</b></div>`}
+    </div>
+    <div class="foot">
+      <button class="link" onclick="toast('Link copiado (demo)')"><i data-lucide="copy" style="width:13px;height:13px"></i>Copiar link</button>
+      <button class="link" style="color:var(--accent)">Pantalla completa (historial, Excel)</button>
+      <span style="flex:1"></span>
+      <span class="pend">${dl.length?`${dl.length} lectura${dl.length>1?'s':''} sin guardar`:'Sin cambios'}</span>
+      <button class="btn-primary" ${dl.length?'':'disabled'} onclick="save()"><i data-lucide="save" style="width:15px;height:15px"></i>Guardar${dl.length?` (${dl.length})`:''}</button>
+    </div>
+    ${S.toast?`<div class="toast"><i data-lucide="check-circle-2" style="width:15px;height:15px"></i>${S.toast}</div>`:''}
+  </div>`;
+}
+function card(a){
+  const d=deltaInfo(a), dirty=isDirty(a), done=loaded(a)&&!dirty;
+  const cls = d?.warn&&dirty ? "warn" : dirty ? "dirty" : done ? "done" : "need";
+  const age = a.days==null ? `<span class="pill p-never">Sin lecturas</span>` : a.days>7 ? `<span class="pill p-late">Atrasado ${a.days} días</span>` : "";
+  const status = done ? `<span class="pill p-ok">✓ Cargado</span>` : dirty ? `<span class="pill p-new">Sin guardar</span>` : `<span class="pill" style="background:#D97706;color:#fff">✎ Falta cargar</span>`;
+  return `<div class="card ${cls}">
+    <div><div><span class="an">${a.name}</span><span class="ac">${a.code}</span></div>
+      <div class="meta">${status} ${age}<span>Última: <b>${fmt(a.last)} h</b>${a.lastDate?` · ${a.days===1?'ayer':`hace ${a.days} días`}`:''}</span></div></div>
+    <div><div class="inbox"><input id="h-${a.id}" inputmode="decimal" placeholder="${a.last!=null?'Ej. '+fmt(a.last+8):'Horas'}" value="${S.drafts[a.id]??(a.today??'')}" oninput="S.drafts['${a.id}']=this.value;renderKeep('h-${a.id}')"><span class="suf">h</span></div>
+      <div class="delta ${d?d.cls:'d-none'}">${d?d.txt:(a.last==null?'Primera lectura de este equipo':'&nbsp;')}</div>
+      <div class="rpm">${S.rpmOpen[a.id]?`<input placeholder="RPM" value="${S.rpm[a.id]??''}" oninput="S.rpm['${a.id}']=this.value">`:`<button onclick="S.rpmOpen['${a.id}']=true;render()">＋ RPM (opcional)</button>`}</div></div>
+  </div>`;
+}
+function current(){
+  return `<div class="modal"><div class="head"><div class="row"><span class="ico"><i data-lucide="gauge" style="width:18px;height:18px"></i></span><div><div class="title">Horas de Equipos</div><div class="sub">BUQUE DEMO I</div></div>
+    <span style="margin-left:auto;font-size:11px;color:var(--muted)">Fecha de lectura <input type="date" class="in-date" value="${today}"></span><button class="close" style="margin-left:6px"><i data-lucide="x" style="width:18px;height:18px"></i></button></div></div>
+    <div class="body cur"><table><tr><th>Equipo</th><th>Última lectura</th><th>Fecha</th><th>Horas del día</th></tr>
+    ${ASSETS.map(a=>`<tr><td>${a.name}</td><td style="text-align:right;font-family:monospace">${fmt(a.last)} h</td><td>${a.lastDate??'—'}</td><td><div class="in">${a.today??`<span style="color:#bbb">${fmt(a.last)}</span>`}</div></td></tr>`).join("")}</table>
+    <div style="margin-top:10px"><span class="note">Letra chica, pensada para escritorio</span><span class="note">No dice cuáles faltan cargar hoy</span><span class="note">No marca los atrasados (columna oculta)</span><span class="note">El gris del casillero parece un valor ya cargado</span><span class="note">No muestra la diferencia hasta guardar</span><span class="note">Clic afuera cierra y se pierde lo tipeado</span></div></div>
+    <div class="foot"><span class="sub">2 cambios sin guardar</span><span style="flex:1"></span><button class="btn-primary">Guardar</button></div></div>`;
+}
+function changeDate(d){
+  if (dirtyList().length){ S.alert={t:"Tenés lecturas sin guardar",m:"Si cambiás la fecha, lo que tipeaste se pierde.",buttons:[{label:"Cambiar igual",cls:"btn-ghost",on:`S.alert=null;S.drafts={};S.date='${d}';render()`},{label:"Guardar primero",cls:"btn-primary",on:"S.alert=null;save()"}]}; render(); return; }
+  S.date=d; render();
+}
+function askClose(){
+  const n=dirtyList().length;
+  if(!n){ toast("Cerrar (demo)"); return; }
+  S.alert={t:`Tenés ${n} lectura${n>1?'s':''} sin guardar`,m:"Si salís ahora, se pierden.",buttons:[{label:"Salir sin guardar",cls:"btn-ghost",on:"S.alert=null;S.drafts={};toast('Cerrado (demo)')"},{label:"Guardar y salir",cls:"btn-primary",on:"S.alert=null;save()"}]};
+  render();
+}
+function save(){
+  const dl=dirtyList(); const warns=dl.map(a=>({a,d:deltaInfo(a)})).filter(x=>x.d?.warn);
+  if (warns.length){ S.alert={t:"Revisá estas lecturas",m:warns.map(x=>`• ${x.a.name}: ${x.d.txt}`).join("\n")+"\n\nSi el horómetro se cambió o el número está bien, guardala igual: queda con una nota.",buttons:[{label:"Corregir",cls:"btn-ghost",on:"S.alert=null;render()"},{label:"Guardar igual",cls:"btn-primary",on:"S.alert=null;commit()"}]}; render(); return; }
+  commit();
+}
+function commit(){ const dl=dirtyList(); dl.forEach(a=>{a.today=Number(S.drafts[a.id]); delete S.drafts[a.id];}); toast(`${dl.length} lectura${dl.length>1?'s':''} guardada${dl.length>1?'s':''}`); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;render();},2000); }
+function renderKeep(id){ const el=document.getElementById(id); const pos=el?.selectionStart; render(); const n=document.getElementById(id); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch{}} }
+document.querySelectorAll(".pv-bar button[data-v]").forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render();});
+render();
+</script>
+</body>
+</html>

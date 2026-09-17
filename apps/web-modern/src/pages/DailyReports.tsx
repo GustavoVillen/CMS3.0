@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -1246,17 +1247,17 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
             <div className="space-y-4">
               {isNew && (
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("dr.vesselReq")}</label>
+                  <GuideField id="dr-new-vessel" missing={!newVesselCode}>
+                    <label className={labelCls}>{t("dr.vesselReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!newVesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                     <select value={newVesselCode} onChange={e => setNewVesselCode(e.target.value)} className={selectCls}>
                       <option value="">— Seleccionar —</option>
                       {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                     </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>{t("dr.dateReq")}</label>
+                  </GuideField>
+                  <GuideField id="dr-new-date" missing={!newReportDate}>
+                    <label className={labelCls}>{t("dr.dateReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!newReportDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                     <input type="date" value={newReportDate} onChange={e => setNewReportDate(e.target.value)} className={inputCls} />
-                  </div>
+                  </GuideField>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">

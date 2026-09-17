@@ -1,0 +1,244 @@
+<title>Ubicación: dónde está el buque</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:30px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted)}
+.scr{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px}
+.foot{flex:none;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px}
+.mainb{width:100%;min-height:54px;border:0;border-radius:16px;background:var(--ac);color:var(--acfg);font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.sect{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:2px 2px 2px}
+.field{display:flex;flex-direction:column;gap:8px;padding:10px 0}
+.field > label{font-size:14.5px;font-weight:800}
+.field .fhint{font-size:12.5px;color:var(--muted);margin:-4px 0 0}
+.chips{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:7px}
+.chip{min-height:44px;padding:5px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;line-height:1.15;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-align:center;color:var(--fg);overflow-wrap:anywhere}
+.chip.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.inp{width:100%;min-height:50px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 12px;font-size:16px}
+.inp::placeholder{color:var(--faint)}
+.old{border:1.5px dashed color-mix(in srgb,var(--bad) 50%,transparent);background:color-mix(in srgb,var(--bad) 5%,transparent);border-radius:16px;padding:10px 12px}
+.new{border:1.5px dashed color-mix(in srgb,var(--ok) 55%,transparent);background:color-mix(in srgb,var(--ok) 5%,transparent);border-radius:16px;padding:10px 12px}
+.flag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:4px}
+.flag.bad{background:var(--badsoft);color:var(--badfg)}
+.flag.ok{background:var(--oksoft);color:var(--okfg)}
+.guide{width:340px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.optb{min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;cursor:pointer;padding:6px}
+.optb.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Ubicación <small>· Preview V37</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S = {v:"app", modo:"nuevo", theme:"system"};
+
+const campoViejo = () => `
+  <div class="old">
+    <span class="flag bad">Como está hoy</span>
+    <div class="field">
+      <label>Ubicación</label>
+      <input class="inp" placeholder="¿Dónde se hace el trabajo?">
+      <div class="chips" style="--n:3">
+        <span class="chip">Sala de máquinas</span><span class="chip">Cubierta principal</span><span class="chip">Puente</span>
+      </div>
+      <div class="chips" style="--n:3">
+        <span class="chip">Proa</span><span class="chip">Popa</span><span></span>
+      </div>
+    </div>
+    <p class="hint">Los botones invitan a poner un lugar del buque. El formulario pide otra cosa.</p>
+  </div>`;
+
+const campoNuevo = () => `
+  <div class="new">
+    <span class="flag ok">Propuesta</span>
+    <div class="field">
+      <label>Ubicación</label>
+      <p class="fhint">Dónde está el buque cuando se hace el trabajo.</p>
+      <input class="inp" placeholder="Asunción, Puerto Guyrati, Km 1574…">
+    </div>
+    <p class="hint">Sin botones: se escribe la ciudad, el puerto o el kilómetro del río.</p>
+  </div>`;
+
+function app(){
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      <div class="head">
+        <button class="iconb">${I("arrow-left",20)}</button>
+        <div><h1>Abrir OT</h1><p>Motor Principal Babor</p></div>
+      </div>
+      <div class="scr">
+        <p class="sect">Completá para enviar</p>
+        <div class="field">
+          <label>Sistema</label>
+          <div class="chips" style="--n:3">
+            <span class="chip on">Máquinas</span><span class="chip">R/E Cubierta</span><span class="chip">Barcazas</span>
+          </div>
+        </div>
+        ${S.modo==="nuevo" ? campoNuevo() : campoViejo()}
+        <div class="field">
+          <label>Riesgo</label>
+          <div class="chips" style="--n:4">
+            <span class="chip">Bajo</span><span class="chip on">Medio</span><span class="chip">Alto</span><span class="chip">Crítico</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="mainb">${I("send",18)}Enviar a aprobar</button>
+      </div>
+    </div>
+    <aside class="guide">
+      <div><h2>Ubicación = dónde está el buque</h2>
+      <p style="margin-top:8px">El recuadro "Ubicación" del formulario de OT es la <b>posición geográfica del buque</b> mientras se hace el trabajo: ciudad, puerto o kilómetro del río. En el celular se está preguntando "¿dónde se hace el trabajo?" y se ofrecen Sala de máquinas, Puente, Proa… que es otra cosa.</p></div>
+      <div><p class="gl">Comparar</p>
+        <div class="opts">
+          <button class="optb ${S.modo==="viejo"?"on":""}" data-a="modo" data-p="viejo">Como está hoy</button>
+          <button class="optb ${S.modo==="nuevo"?"on":""}" data-a="modo" data-p="nuevo">Propuesta</button>
+        </div>
+      </div>
+      <div><p class="gl">Qué se hace</p><ol class="steps">
+        <li>Se van los cinco botones de lugares del buque.</li>
+        <li>Debajo del título aclara: <b>"Dónde está el buque cuando se hace el trabajo."</b></li>
+        <li>El campo vacío sugiere el formato: <b>Asunción, Puerto Guyrati, Km 1574…</b></li>
+      </ol></div>
+      <p class="hint">Mismo texto en las dos pantallas del celular que lo piden: abrir la OT desde el plan y OT nueva.</p>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Ubicación: dónde está el buque · Preview V37</h2>
+  <p>En el formulario de OT (REGI-MAN-02.3), <b>Ubicación</b> es la posición geográfica del buque mientras se hace el trabajo. Así está cargado en las órdenes reales: “Puerto Guyrati, km 1574 Río Paraguay”, “Km 186, Pasaje Talavera”, “Astillero Los Hermanos, Asunción”. En el escritorio el campo sugiere “Ciudad / Km…”.</p>
+  <p>La app del celular pregunta otra cosa: <b>“¿Dónde se hace el trabajo?”</b> y ofrece Sala de máquinas, Cubierta principal, Puente, Proa y Popa. Son lugares <i>dentro</i> del buque.</p>
+
+  <section><h3>Qué cambia</h3>
+  <ul>
+    <li><b>Se sacan los cinco botones</b> de lugares del buque.</li>
+    <li><b>Aclaración bajo el título:</b> “Dónde está el buque cuando se hace el trabajo.”</li>
+    <li><b>Ejemplo dentro del campo vacío:</b> “Asunción, Puerto Guyrati, Km 1574…”.</li>
+    <li>Aplica a las dos pantallas del celular que piden el dato: abrir la OT desde el plan y OT nueva. El escritorio no se toca.</li>
+  </ul></section>
+
+  <section><h3>Lo ya cargado</h3>
+  <p>Hay <b>dos órdenes</b> abiertas desde el celular con un lugar del buque en ese recuadro:</p>
+  <table>
+    <tr><th>Orden</th><th>Dice</th><th>Debería decir</th></tr>
+    <tr><td class="mono">OT-M01-26-0565</td><td>PROA</td><td>el puerto o km donde estaba el buque</td></tr>
+    <tr><td class="mono">OT-M01-26-0564</td><td>PROA BABOR</td><td>ídem</td></tr>
+  </table>
+  <p class="hint">No se tocan solas: corregirlas es decisión tuya y hay que saber dónde estaba el buque esos días. Se pueden editar desde la PC, en la ficha de cada orden.</p></section>
+
+  <section><h3>Qué NO cambia</h3>
+  <ul>
+    <li>El campo sigue siendo obligatorio y se guarda igual; no se toca la base ni el PDF.</li>
+    <li>El escritorio y el copiloto ya lo tratan como ubicación geográfica: esto los alinea, no los cambia.</li>
+  </ul></section>
+
+  <p class="hint">Preview. No se tocó nada de la aplicación.</p>
+  </article>`;
+}
+
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML = `${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref" ? ref() : app();
+  if (window.lucide) lucide.createIcons();
+}
+document.addEventListener("click", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const a = el.dataset.a, p = el.dataset.p;
+  if (a==="tab") S.v = p;
+  else if (a==="theme") { S.theme = {system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if (a==="modo") S.modo = p;
+  render();
+});
+render();
+</script>

@@ -45,6 +45,7 @@ import {
   updateCapaRecord,
 } from "./capa-service";
 import { buildCapaPdf } from "./capa-pdf-service";
+import { archivePdf } from "../settings/pdf-archive-service";
 import {
   createFailureMode,
   getFailureMode,
@@ -158,6 +159,7 @@ export async function handleQualityRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "DEF", id: defect.id, buffer });
     return true;
   }
   if (method === "POST" && /^\/app\/pms\/defects\/[^/]+\/close$/.test(url.pathname)) {
@@ -241,6 +243,7 @@ export async function handleQualityRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "APL", id: deferral.id, buffer });
     return true;
   }
 

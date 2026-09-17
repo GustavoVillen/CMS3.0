@@ -1,0 +1,360 @@
+<title>Repuestos por categoría</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:30px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sticky{flex:none;background:var(--bg);padding:12px 16px 8px;border-bottom:1px solid var(--line)}
+.scr{flex:1;overflow-y:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.foot{flex:none;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px}
+.mainb{width:100%;min-height:54px;border:0;border-radius:16px;background:var(--ac);color:var(--acfg);font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.mainb:disabled{opacity:.45}
+.inpwrap{position:relative;display:flex;align-items:center}
+.inpwrap > i{position:absolute;left:11px;color:var(--faint)}
+.inp{width:100%;min-height:50px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 40px 0 34px;font-size:16px}
+.clr{position:absolute;right:8px;width:34px;height:34px;border:0;background:var(--surface2);border-radius:99px;display:grid;place-items:center;cursor:pointer;color:var(--muted)}
+.cats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cat{min-height:74px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);padding:11px 12px;display:flex;flex-direction:column;justify-content:center;gap:3px;text-align:left;cursor:pointer}
+.cat b{font-size:15px;font-weight:800;line-height:1.15}
+.cat small{font-size:12.5px;color:var(--muted);font-weight:600}
+.cat.all{grid-column:1 / -1;border-style:dashed;min-height:60px;flex-direction:row;align-items:center;justify-content:space-between}
+.row{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:11px 13px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.row .tx{min-width:0;flex:1}
+.row b{display:block;font-size:15px;font-weight:700;line-height:1.25}
+.row small{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{flex:none;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:99px;white-space:nowrap}
+.p-ok{background:var(--oksoft);color:var(--okfg)}
+.p-low{background:var(--warnsoft);color:var(--warnfg)}
+.p-no{background:var(--badsoft);color:var(--badfg)}
+.crumb{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:38px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer}
+.sect{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:2px}
+.cart{border:1.5px solid var(--ac);background:var(--surface);border-radius:16px;padding:8px 12px}
+.cart .ci{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+.cart .ci:first-of-type{border-top:0}
+.empty{text-align:center;color:var(--faint);font-size:13.5px;padding:24px 0}
+.guide{width:340px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.optb{min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;cursor:pointer;padding:6px}
+.optb.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Repuestos por categoría <small>· Preview V38</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+
+// Catálogo de ejemplo con la MISMA forma que el real del buque M02 (63 repuestos,
+// 24 categorías, con variantes escritas distinto: Electrico / Eléctrico / Electronico).
+const REP = [
+  ["Filtro de aceite motor principal","FIL-AC-001","Filtro",6,"u"],
+  ["Filtro de combustible primario","FIL-CO-002","Filtro",4,"u"],
+  ["Filtro de combustible secundario","FIL-CO-003","Filtro",0,"u"],
+  ["Filtro de aire motor principal","FIL-AI-004","Filtros",2,"u"],
+  ["Filtro hidráulico retorno","FIL-HI-005","Filtro",9,"u"],
+  ["Filtro separador de agua","FIL-SE-006","Filtro",1,"u"],
+  ["Aceite SAE 40 tambor","LUB-40-010","Lubricante",3,"tambor"],
+  ["Aceite hidráulico ISO 68","LUB-68-011","Lubricantes",2,"balde"],
+  ["Grasa multipropósito","LUB-GR-012","Lubricante",8,"kg"],
+  ["Sensor de temperatura agua","SEN-TE-020","Sensor",2,"u"],
+  ["Sensor de presión de aceite","SEN-PR-021","Sensor",1,"u"],
+  ["Sensor de nivel de combustible","SEN-NI-022","Sensores",0,"u"],
+  ["Kit de juntas tapa de cilindros","KIT-JU-030","Kit",1,"u"],
+  ["Kit de sellos bomba hidráulica","KIT-SE-031","Kit",2,"u"],
+  ["Manguera hidráulica 1/2\"","MAN-HI-040","Manguera",5,"m"],
+  ["Manguera de refrigeración","MAN-RE-041","Mangueras",3,"m"],
+  ["Correa de alternador","COR-AL-050","Correa",2,"u"],
+  ["Correa de bomba de agua","COR-BA-051","Correa",1,"u"],
+  ["Contactor 24V","ELE-CO-060","Electrico",2,"u"],
+  ["Fusible 30A","ELE-FU-061","Eléctrico",12,"u"],
+  ["Relé de arranque","ELE-RE-062","Electrico",0,"u"],
+  ["Módulo de control ECU","ELN-EC-070","Electronico",1,"u"],
+  ["Display de tablero","ELN-DI-071","Electrónico",1,"u"],
+  ["Impeller bomba de agua salada","IMP-AS-080","Impeller",3,"u"],
+  ["Ánodo de zinc casco","ANO-ZI-090","Anodo",6,"u"],
+  ["Batería 12V 100Ah","BAT-12-091","Bateria",2,"u"],
+  ["Termostato 82°C","TER-82-092","Termostato",1,"u"],
+  ["Rodamiento eje intermedio","ROD-EJ-093","Rodamiento",0,"u"],
+  ["Válvula de alivio","VAL-AL-094","Valvula",1,"u"],
+  ["Abrazadera inox 2\"","ABR-IN-095","Abrazadera",14,"u"],
+];
+
+// Agrupar: mismo nombre escrito distinto = una sola categoría (sin tildes,
+// minúsculas y sin el plural). Se muestra la forma más usada.
+// sin tildes, en minúscula y sin el plural: "Lubricantes" y "Lubricante" caen
+// en la misma clave, igual que "Filtro"/"Filtros" y "Electrico"/"Eléctrico".
+const clave = s => {
+  let k = s.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  if (k.endsWith("s")) k = k.slice(0,-1);
+  if (k.endsWith("e")) k = k.slice(0,-1);
+  return k;
+};
+/** Entre las formas escritas, gana la más usada; a igual uso, la que lleva tilde. */
+const tildes = s => /[áéíóúÁÉÍÓÚñÑ]/.test(s) ? 1 : 0;
+function categorias(){
+  const m = new Map();
+  for (const r of REP) {
+    const k = clave(r[2]);
+    const e = m.get(k) ?? { nombres:{}, items:[] };
+    e.nombres[r[2]] = (e.nombres[r[2]] ?? 0) + 1;
+    e.items.push(r);
+    m.set(k, e);
+  }
+  return [...m.entries()].map(([k,e]) => ({
+    k, items: e.items,
+    label: Object.entries(e.nombres).sort((a,b)=> b[1]-a[1] || tildes(b[0])-tildes(a[0]) || a[0].localeCompare(b[0]))[0][0],
+    variantes: Object.keys(e.nombres),
+  })).sort((a,b)=> b.items.length - a.items.length || a.label.localeCompare(b.label));
+}
+
+const S = {v:"app", orden:"trabajo", paso:"cat", cat:null, q:"", carrito:[], theme:"system"};
+
+const pill = n => n<=0 ? `<span class="pill p-no">Sin stock</span>`
+  : n<=2 ? `<span class="pill p-low">Quedan ${n}</span>`
+  : `<span class="pill p-ok">Hay ${n}</span>`;
+
+const buscador = () => `
+  <div class="inpwrap">${I("search",17)}
+    <input class="inp" placeholder="Buscar repuesto, P/N…" value="${S.q}" data-a="q">
+    ${S.q?`<button class="clr" data-a="limpiar">${I("x",16)}</button>`:""}
+  </div>`;
+
+function listaFiltrada(){
+  const q = S.q.trim().toLowerCase();
+  if (q) return REP.filter(r => (r[0]+" "+r[1]).toLowerCase().includes(q));
+  if (S.cat === "TODAS") return REP;
+  const c = categorias().find(c=>c.k===S.cat);
+  return c ? c.items : [];
+}
+
+function fila(r){
+  return `<button class="row" data-a="add" data-p="${r[1]}">
+    <span class="tx"><b>${r[0]}</b><small class="mono">P/N ${r[1]}</small></span>
+    ${pill(r[3])}
+  </button>`;
+}
+
+function pantalla(){
+  const cats = categorias();
+  const buscando = !!S.q.trim();
+  const enCat = S.paso==="lista" && S.cat;
+  const c = cats.find(x=>x.k===S.cat);
+  const cuerpo = (buscando || enCat)
+    ? (() => { const l = listaFiltrada();
+        return l.length ? l.map(fila).join("") : `<p class="empty">Sin resultados</p>`; })()
+    : `<p class="sect">¿Qué tipo de repuesto?</p>
+       <div class="cats">
+         ${cats.map(x=>`<button class="cat" data-a="cat" data-p="${x.k}">
+            <b>${x.label}</b><small>${x.items.length} ${x.items.length===1?"repuesto":"repuestos"}</small>
+          </button>`).join("")}
+         <button class="cat all" data-a="todas">
+           <b>Ver todos</b><small>${REP.length} repuestos</small>
+         </button>
+       </div>`;
+  return `
+  <div class="sticky">${buscador()}</div>
+  <div class="scr">
+    ${S.carrito.length?`<div class="cart">
+      <p class="sect" style="margin:2px 0 0">Para descontar</p>
+      ${S.carrito.map(r=>`<div class="ci"><span class="tx" style="min-width:0;flex:1"><b style="font-size:14px">${r[0]}</b></span><span class="pill p-ok mono">1 ${r[4]}</span></div>`).join("")}
+    </div>`:""}
+    ${(enCat && !buscando) ? `<button class="crumb" data-a="volvercat">${I("arrow-left",15)} ${S.cat==="TODAS" ? "Todos los repuestos" : c.label} · ver categorías</button>` : ""}
+    ${buscando ? `<p class="sect">Resultados en todo el pañol</p>` : ""}
+    ${cuerpo}
+  </div>
+  <div class="foot">
+    <button class="mainb" ${S.carrito.length?"":"disabled"}>${I("package-minus",19)}${S.carrito.length?`Descontar ${S.carrito.length}`:"Elegí un repuesto"}</button>
+  </div>`;
+}
+
+function app(){
+  const sub = S.orden==="trabajo" ? "OT-M02-26-0461 · Recorrido bomba hidráulica" : "Elegí el repuesto y después el trabajo";
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      <div class="head">
+        <button class="iconb">${I("arrow-left",20)}</button>
+        <div style="min-width:0"><h1>Consumo de repuestos</h1><p>${sub}</p></div>
+      </div>
+      ${pantalla()}
+    </div>
+    <aside class="guide">
+      <div><h2>Primero el tipo, después el repuesto</h2>
+      <p style="margin-top:8px">Hoy la pantalla abre con una lista de todo el pañol y un buscador. La propuesta: preguntar <b>qué tipo de repuesto</b> y mostrar un botón por categoría con cuántos tiene; al tocarlo, sólo los de esa categoría. El buscador queda <b>arriba de todo</b> y busca en todo el pañol, así el que ya sabe el nombre no pasa por las categorías.</p></div>
+      <div><p class="gl">¿Y el trabajo (la OT)?</p>
+        <div class="opts">
+          <button class="optb ${S.orden==="trabajo"?"on":""}" data-a="orden" data-p="trabajo">Trabajo primero (hoy)</button>
+          <button class="optb ${S.orden==="cat"?"on":""}" data-a="orden" data-p="cat">Repuesto primero</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Hay que elegir: la app pregunta para qué trabajo es el consumo. Puede seguir preguntándolo al entrar (como hoy) o preguntarlo al final, después de elegir los repuestos.</p>
+      </div>
+      <div><p class="gl">Para probar</p><ol class="steps">
+        <li>Tocá una categoría: quedan sólo esos repuestos y arriba aparece cómo volver.</li>
+        <li>Escribí <b>filtro</b> en el buscador: busca en todo el pañol, sin importar la categoría.</li>
+        <li>Mirá <b>Lubricante (3)</b> y <b>Electrico (3)</b>: juntan “Lubricante/Lubricantes” y “Electrico/Eléctrico”, que en el catálogo están escritos de las dos formas.</li>
+      </ol></div>
+      <p class="hint">Abrilo desde el celular: ocupa toda la pantalla.</p>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  const cats = categorias();
+  return `<article class="ref">
+  <h2>Repuestos por categoría · Preview V38</h2>
+  <p>Pedido: al entrar a <b>Consumo de repuestos</b>, que pregunte el tipo de repuesto y muestre un botón por categoría; al tocarlo, la lista de esa categoría. Con un buscador arriba de todo.</p>
+
+  <section><h3>Cómo queda</h3>
+  <ul>
+    <li><b>Buscador fijo arriba</b>, siempre visible. Busca en todo el pañol (nombre y P/N); mientras haya texto escrito, manda la búsqueda y las categorías se hacen a un lado.</li>
+    <li><b>Un botón por categoría</b>, en dos columnas, con cuántos repuestos tiene. Primero las que más tienen (Filtros, Lubricantes…), que es lo que más se consume.</li>
+    <li><b>“Ver todos”</b> al final: la lista completa de siempre, por si la categoría no ayuda.</li>
+    <li>Dentro de una categoría, un botón arriba para volver a las categorías.</li>
+    <li>El resto del camino no cambia: se toca el repuesto, se pone la cantidad y se descuenta.</li>
+  </ul></section>
+
+  <section><h3>Dos cosas que aparecieron mirando los datos reales</h3>
+  <div class="opt">
+    <div class="rcard"><b>1. Las categorías están escritas de varias formas</b>
+      En el catálogo conviven <span class="mono">Electrico</span>, <span class="mono">Eléctrico</span>, <span class="mono">Electronico</span> y <span class="mono">Electrónico</span>; también <span class="mono">Filtro</span>/<span class="mono">Filtros</span>, <span class="mono">Lubricante</span>/<span class="mono">Lubricantes</span>, <span class="mono">Bomba</span>/<span class="mono">Bombas</span>, <span class="mono">Manguera</span>/<span class="mono">Mangueras</span>, <span class="mono">Sensor</span>/<span class="mono">Sensores</span>.
+      Sin hacer nada saldrían dos botones para lo mismo. <b>Propuesta:</b> juntarlas para mostrarlas (ignorando mayúsculas, tildes y el plural) y usar la forma más frecuente. No toca el catálogo: es sólo cómo se agrupan en la pantalla. Aparte, conviene <b>emprolijar el catálogo desde la PC</b> — eso sí es un cambio de datos y lo decidís vos.</div>
+    <div class="rcard"><b>2. En el celular se ven repuestos de otros buques</b>
+      La pantalla pide el pañol sin filtrar por buque: al Capitán o al admin, que ven toda la flota, les aparecen los 620 repuestos de los 34 buques. Si eligen uno de otro buque, el descuento <b>falla al guardar</b> (“Spare no encontrado”) — el servidor lo rechaza bien, pero el usuario se entera tarde. <b>Se corrige junto con esto:</b> pedir sólo los del buque elegido. Eso además achica las categorías a lo que de verdad hay a bordo (M02: 63 repuestos, 24 categorías).</div>
+  </div></section>
+
+  <section><h3>Así quedarían las categorías del ejemplo</h3>
+  <table>
+    <tr><th>Botón</th><th>Repuestos</th><th>Junta</th></tr>
+    ${cats.slice(0,8).map(c=>`<tr><td><b>${c.label}</b></td><td>${c.items.length}</td><td class="mono" style="font-size:12.5px">${c.variantes.join(" · ")}</td></tr>`).join("")}
+  </table></section>
+
+  <section><h3>Para decidir</h3>
+  <div class="opt">
+    <div class="rcard"><b>¿Cuándo se pregunta el trabajo (la OT)?</b>Al entrar, como hoy, o al final después de elegir los repuestos. Probá las dos en la pestaña “Probar”.</div>
+    <div class="rcard"><b>Orden de los botones</b>Propuesta: primero los que más repuestos tienen. La alternativa es alfabético.</div>
+  </div></section>
+
+  <p class="hint">Preview. No se tocó nada de la aplicación.</p>
+  </article>`;
+}
+
+function render(){
+  const prev = document.querySelector(".scr");
+  const y = prev ? prev.scrollTop : 0;
+  const clave2 = `${S.v}|${S.paso}|${S.cat}|${!!S.q.trim()}`;
+  const misma = !!prev && clave2 === render.clave;
+  render.clave = clave2;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML = `${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref" ? ref() : app();
+  if (window.lucide) lucide.createIcons();
+  const sc = document.querySelector(".scr");
+  if (sc && misma && y) sc.scrollTop = y;
+}
+document.addEventListener("input", e=>{
+  const el = e.target.closest("[data-a]"); if(!el || el.dataset.a!=="q") return;
+  S.q = el.value; const p = el.selectionStart; render();
+  const n = document.querySelector('[data-a="q"]'); if(n){ n.focus(); n.setSelectionRange(p,p); }
+});
+document.addEventListener("click", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const a = el.dataset.a, p = el.dataset.p;
+  if (a==="tab") S.v = p;
+  else if (a==="theme") { S.theme = {system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if (a==="orden") S.orden = p;
+  else if (a==="cat") { S.cat = p; S.paso = "lista"; }
+  else if (a==="todas") { S.cat = "TODAS"; S.paso = "lista"; }
+  else if (a==="volvercat") { S.cat = null; S.paso = "cat"; S.q = ""; }
+  else if (a==="limpiar") S.q = "";
+  // La maqueta no abre la ventanita de cantidad: agrega 1 para mostrar el flujo.
+  else if (a==="add") { const r = REP.find(x=>x[1]===p); if (r && !S.carrito.includes(r)) S.carrito.push(r); }
+  else if (a==="q") return;
+  render();
+});
+render();
+</script>

@@ -23,6 +23,7 @@ import { api, ApiError } from "../lib/api";
 import { CmsLogo } from "../components/CmsLogo";
 import { AlertDialog } from "../components/AlertDialog";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 
 // ─── Tipos (espejo de approvals-service.ts) ──────────────────────────────────
 
@@ -497,21 +498,24 @@ const ConfirmSheet: React.FC<{
             )}
           </div>
 
-          <div className="space-y-1.5">
+          {/* Firmante y motivo (si rechaza) son obligatorios para confirmar (estándar V50). */}
+          <GuideField id="appr-signer" missing={!name.trim()}>
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
-              {t("approvals.signerName")}
+              {t("approvals.signerName")}<RequiredMark />
+              {!name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}
             </label>
             <input
               value={name}
               onChange={e => setName(e.target.value)}
               className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-accent/50"
             />
-          </div>
+          </GuideField>
 
           {reject && (
-            <div className="space-y-1.5">
+            <GuideField id="appr-reason" missing={!reason.trim()}>
               <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
-                {t("approvals.reason")}
+                {t("approvals.reason")}<RequiredMark />
+                {!reason.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}
               </label>
               <AutoTextArea
                 value={reason}
@@ -519,7 +523,7 @@ const ConfirmSheet: React.FC<{
                 rows={3}
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-accent/50 resize-none"
               />
-            </div>
+            </GuideField>
           )}
 
           <div className="grid grid-cols-2 gap-2 pt-1">

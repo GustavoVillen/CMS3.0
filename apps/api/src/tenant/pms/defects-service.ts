@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
@@ -394,7 +395,28 @@ export async function getDefect(session: TenantAccessSession, id: string) {
   if (!record) throw new RouteError(404, "NOT_FOUND", "Defect no encontrado.");
   const enriched = await attachWorkOrderCodes(prismaRaw, tenantId, [record]);
   const withOrigin = await attachAuditOrigin(prismaRaw, tenantId, enriched);
-  return withOrigin[0];
+  const out = withOrigin[0] as typeof withOrigin[0] & {
+    workOrderStatus?: string | null; originSampleId?: string | null; originSampleCode?: string | null;
+  };
+  // Para el flujograma del defecto (preview V49): en qué está la OT y, si nació
+  // de un análisis, qué muestra lo generó.
+  try {
+    if (out.workOrderId) {
+      const wo = await (prismaRaw as any).workOrder.findFirst({
+        where: { id: out.workOrderId, tenantId }, select: { status: true },
+      });
+      out.workOrderStatus = wo?.status ?? null;
+    }
+    if (out.classification === "PREDICTIVE_FLUID_ANALYSIS") {
+      const res = await (prismaRaw as any).fluidAnalysisResult.findFirst({
+        where: { tenantId, defectId: out.id },
+        select: { sample: { select: { id: true, sampleCode: true } } },
+      });
+      out.originSampleId = res?.sample?.id ?? null;
+      out.originSampleCode = res?.sample?.sampleCode ?? null;
+    }
+  } catch { /* complemento visual: el detalle sale igual */ }
+  return out;
 }
 
 export async function createDefect(session: TenantAccessSession, payload: CreateDefectInput) {
@@ -683,6 +705,7 @@ export async function closeDefect(session: TenantAccessSession, id: string, payl
   });
   // Cascade: cerrar el finding de auditoría externa de origen, si lo hubiera.
   void closeLinkedAuditFinding(prismaRaw, current, session.user.id);
+  void archivePdf(session, { kind: "DEF", id: current.id });
   return closed;
 }
 

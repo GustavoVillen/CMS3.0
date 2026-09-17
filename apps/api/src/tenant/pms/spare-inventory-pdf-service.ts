@@ -1,6 +1,8 @@
-// Mercurio Group spare-inventory form (REGI-MAN-04.1).
-// PDF renderer for the monthly inventory snapshot. Reuses Mercurio styling
-// from work-order-pdf/template-mercurio.ts (navy blue headers, dense layout).
+// Formulario Mercurio REGI-MAN-04.1 "Inventario de repuestos y herramientas"
+// (Revisión 3, desde 29.12.2025). Réplica del papel controlado: encabezado,
+// estado del buque, departamento, REPUESTOS (repuesto · detalles · para qué ·
+// cantidad), HERRAMIENTAS, comentarios, "generado por" y el pie
+// Elaborado / Revisado / Aprobado. Aprobado en Preview V1 (claude/mockups/inventario-formularios).
 
 import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
@@ -10,26 +12,30 @@ import { LOGO_PATH, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
 import { getSpareInventoryReport, type SpareInventoryFilters } from "./spare-reports-service";
 import { resolveTenantTime, fmtDate as fmtDateTz } from "../../common/tenant-time";
 
-// ── Layout constants (A4 portrait, dense like Mercurio WO PDF) ──────────────
+// Datos del documento controlado vigente (papel REGI-MAN-04.1).
+const FORM_CODE     = "REGI-MAN-04.1";
+const FORM_REVISION = "3";
+const FORM_SINCE    = "29.12.2025";
+
+// ── Layout (A4 vertical) ────────────────────────────────────────────────────
 const PW       = 595.28;
 const PAGE_H   = 841.89;
 const ML       = 36;
-const MR       = 36;
-const W        = PW - ML - MR;
-const MARGIN_T = 36;
-const FOOTER_H = 28;
+const W        = PW - ML * 2;
+const MARGIN_T = 30;
+const FOOTER_H = 30;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 
 const NAVY   = "#0C2461";
 const WHITE  = "#FFFFFF";
-const BLACK  = "#111827";
-const GRAY   = "#6B7280";
-const BORDER = "#9CA3AF";
-const RED    = "#B91C1C";
+const BLACK  = "#111111";
+const LINE   = "#555555";
+const LABEL_BG = "#F2F2F2";
 
 const ESTADOS = ["NAVEGACION", "AMARRADO", "PUERTO", "VARADERO"] as const;
+const DEPARTMENTS = ["CUBIERTA", "MAQUINAS", "COCINA", "BARCAZA"] as const;
 
-// Map DailyReport.operationalStatus → ESTADO checkbox
+// DailyReport.operationalStatus → casilla ESTADO DEL BUQUE
 function estadoFromOpStatus(opStatus: string | null): string | null {
   if (!opStatus) return null;
   const m: Record<string, string> = {
@@ -43,18 +49,23 @@ function estadoFromOpStatus(opStatus: string | null): string | null {
   return m[opStatus] ?? null;
 }
 
+/** "02 UND", "20 L", "1.5 KG" — como se escribe en el papel. */
+function fmtQuantity(qty: number, unit: string): string {
+  const n = Number.isInteger(qty) ? String(qty).padStart(2, "0") : String(qty);
+  const u = unit.trim().toLowerCase();
+  const label = u === "ud" || u === "un" || u === "u" || u === "unidad" || u === "unidades" ? "UND" : unit.trim().toUpperCase();
+  return `${n} ${label}`;
+}
 
 export async function buildSpareInventoryPdf(
   session: TenantAccessSession,
   filters: SpareInventoryFilters,
 ): Promise<Buffer> {
-  // Fechas y horas del documento en la hora de la EMPRESA: el servidor
-  // corre en UTC y sin esto el papel salía con la hora del servidor.
+  // Fechas en la hora de la EMPRESA (el servidor corre en UTC).
   const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const fmtDate = (d: Date | string | null | undefined) => fmtDateTz(d, tz, locale);
   const report = await getSpareInventoryReport(session, filters);
 
-  // Tenant logo
   let tenantName: string | null = null;
   let tenantLogoBuffer: Buffer | null = null;
   const prisma = getPrismaClient();
@@ -73,11 +84,17 @@ export async function buildSpareInventoryPdf(
     } catch { /* non-blocking */ }
   }
 
+  // Un inventario lista lo que HAY a bordo: sin stock no se imprime.
+  const onBoard = report.items.filter(it => it.onHand > 0);
+  const spares = onBoard.filter(it => it.kind !== "TOOL");
+  const tools  = onBoard.filter(it => it.kind === "TOOL");
+  const generatedBy = [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") || session.user.email;
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
       margin: 0,
-      info: { Title: `REGI-MAN-04.1 ${report.vessel.code}` },
+      info: { Title: `${FORM_CODE} ${report.vessel.name}` },
     });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
@@ -88,281 +105,213 @@ export async function buildSpareInventoryPdf(
     let page = 1;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
-    function ensureSpace(h: number) {
-      if (y + h > CONTENT_BOTTOM) { drawFooter(); doc.addPage(); }
-    }
-
     function cell(cx: number, cy: number, cw: number, ch: number, text: string, opts: {
       bold?: boolean; fontSize?: number; align?: "left" | "center" | "right";
       bg?: string; color?: string; wrap?: boolean;
     } = {}) {
       if (opts.bg) doc.rect(cx, cy, cw, ch).fillColor(opts.bg).fill();
-      doc.rect(cx, cy, cw, ch).strokeColor(BORDER).lineWidth(0.4).stroke();
-      if (text) {
-        const fs = opts.fontSize ?? 9;
-        const ty = opts.wrap ? cy + 3 : cy + (ch - fs) / 2;
-        doc.fontSize(fs)
-          .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
-          .fillColor(opts.color ?? BLACK)
-          .text(text, cx + 5, ty, {
-            width: cw - 10,
-            align: opts.align ?? "left",
-            lineBreak: !!opts.wrap,
-            ellipsis: !opts.wrap,
-          });
-      }
+      doc.rect(cx, cy, cw, ch).strokeColor(LINE).lineWidth(0.5).stroke();
+      if (!text) return;
+      const fs = opts.fontSize ?? 8;
+      doc.fontSize(fs).font(opts.bold ? "Helvetica-Bold" : "Helvetica");
+      const ty = opts.wrap ? cy + 3 : cy + (ch - fs) / 2 + 0.5;
+      doc.fillColor(opts.color ?? BLACK).text(text, cx + 4, ty, {
+        width: cw - 8,
+        align: opts.align ?? "left",
+        lineBreak: !!opts.wrap,
+        ellipsis: !opts.wrap,
+      });
     }
 
-    function measureH(text: string, fontName: "Helvetica" | "Helvetica-Bold", fontSize: number, colWidth: number): number {
+    function navyBar(text: string, h = 15) {
+      cell(ML, y, W, h, text, { bold: true, fontSize: 8.5, bg: NAVY, color: WHITE, align: "center" });
+      y += h;
+    }
+
+    function textH(text: string, fontSize: number, width: number): number {
       if (!text) return 0;
-      doc.fontSize(fontSize).font(fontName);
-      return doc.heightOfString(text, { width: colWidth - 10 });
+      doc.fontSize(fontSize).font("Helvetica-Bold");
+      return doc.heightOfString(text, { width: width - 8 });
     }
 
-    function checkbox(cx: number, cy: number, label: string, checked: boolean) {
-      const BOX = 8;
-      doc.rect(cx, cy, BOX, BOX).strokeColor(BORDER).lineWidth(0.6).stroke();
-      if (checked) {
-        doc.fontSize(6).font("Helvetica-Bold").fillColor(NAVY)
-          .text("X", cx + 1, cy + 1, { width: BOX - 2, align: "center", lineBreak: false });
+    function checkboxRow(labels: readonly string[], active: (l: string) => boolean) {
+      const h = 16;
+      const labelW = W / labels.length * 0.72;
+      const boxW = W / labels.length - labelW;
+      labels.forEach((l, i) => {
+        const x = ML + i * (labelW + boxW);
+        cell(x, y, labelW, h, l, { bold: true, fontSize: 8, align: "center" });
+        cell(x + labelW, y, boxW, h, "");
+        const B = 7;
+        const bx = x + labelW + (boxW - B) / 2;
+        const by = y + (h - B) / 2;
+        doc.rect(bx, by, B, B).strokeColor(BLACK).lineWidth(0.6).stroke();
+        if (active(l)) doc.rect(bx + 1.5, by + 1.5, B - 3, B - 3).fillColor(BLACK).fill();
+      });
+      y += h;
+    }
+
+    function drawHeader() {
+      const HDR_H = 76;
+      const top = MARGIN_T;
+      const LOGO_W = 96;
+      const META_W = 110;
+      const CTR_W = W - LOGO_W - META_W;
+      doc.rect(ML, top, W, HDR_H).strokeColor(LINE).lineWidth(0.6).stroke();
+      doc.rect(ML, top, LOGO_W, HDR_H).strokeColor(LINE).lineWidth(0.5).stroke();
+      const logo = tenantLogoBuffer ?? (existsSync(LOGO_PATH) ? LOGO_PATH : null);
+      if (logo) {
+        try { doc.image(logo, ML + 6, top + 6, { fit: [LOGO_W - 12, HDR_H - 12], align: "center", valign: "center" }); } catch {}
+      } else {
+        doc.fontSize(8).font("Helvetica-Bold").fillColor(NAVY)
+          .text(sanitizePdfText(tenantName ?? session.tenantSlug.toUpperCase()), ML + 4, top + 32, { width: LOGO_W - 8, align: "center" });
       }
-      doc.fontSize(8).font("Helvetica").fillColor(BLACK)
-        .text(label, cx + BOX + 4, cy + 0.5, { lineBreak: false });
+
+      const cx = ML + LOGO_W;
+      doc.rect(cx, top, CTR_W, HDR_H).strokeColor(LINE).lineWidth(0.5).stroke();
+      doc.fontSize(10).font("Times-Bold").fillColor(NAVY)
+        .text(FORM_CODE, cx + 4, top + 12, { width: CTR_W - 8, align: "center" });
+      doc.fontSize(10).font("Times-Bold").fillColor(BLACK)
+        .text("Inventario de repuestos y herramientas", cx + 4, top + 44, { width: CTR_W - 8, align: "center" });
+
+      const mx = cx + CTR_W;
+      const rowH = 14;
+      const halfW = 58;
+      [["Revisión N°", FORM_REVISION], ["Desde:", FORM_SINCE], ["Página:", String(page)]].forEach(([label, val], i) => {
+        const ry = top + i * rowH;
+        doc.rect(mx, ry, halfW, rowH).strokeColor(LINE).lineWidth(0.5).stroke();
+        doc.rect(mx + halfW, ry, META_W - halfW, rowH).strokeColor(LINE).lineWidth(0.5).stroke();
+        doc.fontSize(7).font("Helvetica").fillColor(NAVY).text(sanitizePdfText(label!), mx + 3, ry + 4, { width: halfW - 6, lineBreak: false });
+        doc.fontSize(7).font("Helvetica").fillColor(BLACK).text(val!, mx + halfW, ry + 4, { width: META_W - halfW, align: "center", lineBreak: false });
+      });
+      doc.fontSize(7.5).font("Helvetica-Bold").fillColor(NAVY)
+        .text("Documento Controlado", mx + 2, top + 3 * rowH + (HDR_H - 3 * rowH - 8) / 2, { width: META_W - 4, align: "center", lineBreak: false });
+      y = top + HDR_H + 12;
     }
 
     function drawFooter() {
       const fy = PAGE_H - FOOTER_H;
-      doc.moveTo(ML, fy).lineTo(ML + W, fy).strokeColor(BORDER).lineWidth(0.5).stroke();
-      let textX = ML;
-      if (existsSync(LOGO_PATH)) {
-        try { doc.image(LOGO_PATH, ML, fy + 6, { width: 14, height: 14 }); textX = ML + 18; } catch {}
-      }
-      doc.fontSize(7).font("Helvetica-Bold").fillColor(GRAY)
-        .text("Copilot Management System", textX, fy + 9, { width: W / 2 - 18, lineBreak: false });
-      doc.fontSize(7).font("Helvetica").fillColor(GRAY)
-        .text(`REGI-MAN-04.1 — Pagina ${page} — ${report.vessel.code} — ${fmtDate(new Date())}`,
-          ML, fy + 9, { width: W, align: "right" });
+      doc.rect(ML, fy, W, 13).strokeColor(LINE).lineWidth(0.5).stroke();
+      doc.fontSize(7.5).font("Helvetica").fillColor(BLACK);
+      const third = W / 3;
+      doc.text(sanitizePdfText(`Elaborado: ${tenantName ?? session.tenantSlug}`), ML + 6, fy + 3, { width: third - 6, lineBreak: false, ellipsis: true });
+      doc.text("Revisado: Persona Designada en Tierra", ML + third, fy + 3, { width: third, align: "center", lineBreak: false });
+      doc.text("Aprobado: Gerente General", ML + 2 * third, fy + 3, { width: third - 6, align: "right", lineBreak: false });
     }
 
-    doc.on("pageAdded", () => { page++; y = MARGIN_T; });
-
-    // ── HEADER ──────────────────────────────────────────────────────────────
-    const HDR_H = 72;
-    doc.rect(ML, y, W, HDR_H).strokeColor(BORDER).lineWidth(0.8).stroke();
-
-    const LOGO_W = Math.floor(W * 0.22);
-    doc.rect(ML, y, LOGO_W, HDR_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-    if (tenantLogoBuffer) {
-      try { doc.image(tenantLogoBuffer, ML + 4, y + 4, { fit: [LOGO_W - 8, HDR_H - 8], align: "center", valign: "center" }); } catch {}
-    } else if (existsSync(LOGO_PATH)) {
-      try { doc.image(LOGO_PATH, ML + 4, y + 4, { fit: [LOGO_W - 8, HDR_H - 8], align: "center", valign: "center" }); } catch {}
-    } else {
-      doc.fontSize(8).font("Helvetica-Bold").fillColor(NAVY)
-        .text(sanitizePdfText(tenantName ?? session.tenantSlug.toUpperCase()), ML + 4, y + 28, { width: LOGO_W - 8, align: "center" });
+    function newPage() {
+      drawFooter();
+      doc.addPage();
+      page++;
+      drawHeader();
     }
 
-    const INFO_W = Math.floor(W * 0.25);
-    const CTR_X  = ML + LOGO_W;
-    const CTR_W  = W - LOGO_W - INFO_W;
-    doc.rect(CTR_X, y, CTR_W, HDR_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-    doc.fontSize(9).font("Helvetica-Bold").fillColor(NAVY)
-      .text("REGI-MAN-04.1", CTR_X + 4, y + 14, { width: CTR_W - 8, align: "center" });
-    doc.fontSize(10).font("Helvetica-Bold").fillColor(NAVY)
-      .text("Inventario de repuestos y herramientas", CTR_X + 4, y + 32, { width: CTR_W - 8, align: "center" });
+    function ensureSpace(h: number, onNewPage?: () => void) {
+      if (y + h > CONTENT_BOTTOM) { newPage(); onNewPage?.(); }
+    }
 
-    const INFO_X = ML + LOGO_W + CTR_W;
-    const ROW_H_INFO = Math.floor(HDR_H / 4);
-    const infoRows = [
-      ["Revision N°", String(report.documentRevision)],
-      ["Desde:", "01.05.2025"],
-      ["Pagina:", String(page)],
-      ["Documento Controlado", ""],
-    ];
-    infoRows.forEach(([label, val2], i) => {
-      const iy = y + i * ROW_H_INFO;
-      const ih = i === 3 ? HDR_H - 3 * ROW_H_INFO : ROW_H_INFO;
-      doc.rect(INFO_X, iy, INFO_W, ih).strokeColor(BORDER).lineWidth(0.4).stroke();
-      if (i < 3) {
-        const halfW = Math.floor(INFO_W / 2);
-        doc.rect(INFO_X + halfW, iy, INFO_W - halfW, ih).strokeColor(BORDER).lineWidth(0.4).stroke();
-        doc.fontSize(7).font("Helvetica").fillColor(GRAY).text(label, INFO_X + 3, iy + (ih - 7) / 2 + 1, { width: halfW - 6, lineBreak: false });
-        doc.fontSize(8).font("Helvetica-Bold").fillColor(BLACK).text(val2, INFO_X + halfW + 3, iy + (ih - 8) / 2 + 1, { width: INFO_W - halfW - 6, lineBreak: false, align: "center" });
-      } else {
-        doc.fontSize(7).font("Helvetica-Bold").fillColor("#1d4ed8")
-          .text(label, INFO_X + 3, iy + (ih - 7) / 2 + 1, { width: INFO_W - 6, align: "center", lineBreak: false });
-      }
-    });
-    y += HDR_H;
+    drawHeader();
 
     // ── REMOLCADOR / FECHA ──────────────────────────────────────────────────
-    const ROW_H = 22;
-    ensureSpace(ROW_H);
-    const HALF = Math.floor(W / 2);
-    cell(ML, y, 100, ROW_H, "REMOLCADOR", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 100, y, HALF - 100, ROW_H, sanitizePdfText(report.vessel.name ?? report.vessel.code), { fontSize: 9 });
-    cell(ML + HALF, y, 80, ROW_H, "FECHA", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + HALF + 80, y, W - HALF - 80, ROW_H, fmtDate(report.filters.asOfDate), { fontSize: 9 });
-    y += ROW_H;
+    const ROW = 16;
+    const Q = W / 4;
+    cell(ML, y, Q * 0.85, ROW, report.vessel.isBarcaza ? "BARCAZA" : "REMOLCADOR", { bold: true, fontSize: 9, bg: NAVY, color: WHITE, align: "center" });
+    cell(ML + Q * 0.85, y, Q * 1.15, ROW, sanitizePdfText(report.vessel.name.toUpperCase()), { bold: true, fontSize: 8.5 });
+    cell(ML + 2 * Q, y, Q, ROW, "FECHA", { bold: true, fontSize: 8.5, bg: LABEL_BG, align: "center" });
+    cell(ML + 3 * Q, y, Q, ROW, fmtDate(report.filters.asOfDate), { bold: true, fontSize: 8.5, align: "center" });
+    y += ROW;
 
-    // ── ZONA / RIO / KM / MARGEN (4 columns, blank for manual fill) ─────────
-    ensureSpace(ROW_H);
-    const Q_W = Math.floor(W / 4);
-    cell(ML,           y, 50, ROW_H, "ZONA",   { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 50,      y, Q_W - 50, ROW_H, "", {});
-    cell(ML + Q_W,     y, 40, ROW_H, "RIO",    { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + Q_W + 40, y, Q_W - 40, ROW_H, "", {});
-    cell(ML + 2*Q_W,   y, 35, ROW_H, "KM",     { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 2*Q_W + 35, y, Q_W - 35, ROW_H, "", {});
-    cell(ML + 3*Q_W,   y, 60, ROW_H, "MARGEN", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 3*Q_W + 60, y, W - 3*Q_W - 60, ROW_H, "", {});
-    y += ROW_H;
+    // ── ZONA / RIO / KM / MARGEN (a mano: el sistema no los tiene) ──────────
+    const pairW = W / 8;
+    ["ZONA", "RIO", "KM", "MARGEN"].forEach((l, i) => {
+      cell(ML + i * 2 * pairW, y, pairW, 26, l, { bold: true, fontSize: 8, bg: LABEL_BG, align: "center" });
+      cell(ML + (i * 2 + 1) * pairW, y, pairW, 26, "");
+    });
+    y += 26;
 
-    // ── ESTADO DEL BUQUE (4 checkboxes) ─────────────────────────────────────
-    ensureSpace(ROW_H + 22);
-    cell(ML, y, W, ROW_H, "ESTADO DEL BUQUE", { bold: true, fontSize: 8, bg: NAVY, color: WHITE, align: "center" });
-    y += ROW_H;
+    // ── ESTADO DEL BUQUE ────────────────────────────────────────────────────
+    navyBar("ESTADO DEL BUQUE");
     const estadoActivo = estadoFromOpStatus(report.context.operationalStatus);
-    const ESTADO_ROW_H = 22;
-    doc.rect(ML, y, W, ESTADO_ROW_H).fillColor(WHITE).fill();
-    doc.rect(ML, y, W, ESTADO_ROW_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-    const estW = Math.floor(W / ESTADOS.length);
-    ESTADOS.forEach((e, i) => { checkbox(ML + i * estW + 8, y + 7, e, estadoActivo === e); });
-    y += ESTADO_ROW_H;
+    checkboxRow(ESTADOS, l => l === estadoActivo);
 
     // ── RIO / KM / CIUDAD ───────────────────────────────────────────────────
-    ensureSpace(ROW_H);
-    const T_W = Math.floor(W / 3);
-    cell(ML,         y, 40, ROW_H, "RIO",    { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 40,    y, T_W - 40, ROW_H, "", {});
-    cell(ML + T_W,   y, 35, ROW_H, "KM",     { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + T_W + 35, y, T_W - 35, ROW_H, "", {});
-    cell(ML + 2*T_W, y, 60, ROW_H, "CIUDAD", { bold: true, fontSize: 8, bg: NAVY, color: WHITE });
-    cell(ML + 2*T_W + 60, y, W - 2*T_W - 60, ROW_H, sanitizePdfText(report.context.currentPort ?? ""), { fontSize: 9 });
-    y += ROW_H;
-
-    // ── DEPARTAMENTO (4 checkboxes) ─────────────────────────────────────────
-    ensureSpace(ROW_H + 22);
-    cell(ML, y, W, ROW_H, "DEPARTAMENTO", { bold: true, fontSize: 8, bg: NAVY, color: WHITE, align: "center" });
-    y += ROW_H;
-    const DEPARTMENTS = report.vessel.isBarcaza
-      ? ["CUBIERTA", "MAQUINAS", "COCINA", "BARCAZA"]
-      : ["CUBIERTA", "MAQUINAS", "COCINA", "BARCAZA"];
-    const deptActivo = report.filters.department ?? (report.vessel.isBarcaza ? "BARCAZA" : null);
-    const DEPT_ROW_H = 22;
-    doc.rect(ML, y, W, DEPT_ROW_H).fillColor(WHITE).fill();
-    doc.rect(ML, y, W, DEPT_ROW_H).strokeColor(BORDER).lineWidth(0.4).stroke();
-    const dW = Math.floor(W / DEPARTMENTS.length);
-    DEPARTMENTS.forEach((d, i) => {
-      // BARCAZA only checkable when vessel is BARCAZA
-      const checked = d === "BARCAZA"
-        ? report.vessel.isBarcaza
-        : deptActivo === d;
-      checkbox(ML + i * dW + 8, y + 7, d, checked);
+    const sixth = W / 6;
+    [["RIO", ""], ["KM", ""], ["CIUDAD", report.context.currentPort ?? ""]].forEach(([l, v], i) => {
+      cell(ML + i * 2 * sixth, y, sixth, 30, "", {});
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(BLACK).text(l!, ML + i * 2 * sixth, y + 3, { width: sixth, align: "center" });
+      cell(ML + (i * 2 + 1) * sixth, y, sixth, 30, sanitizePdfText(v!.toUpperCase()), { bold: true, fontSize: 8, wrap: true });
     });
-    y += DEPT_ROW_H;
+    y += 30;
 
-    // ── TABLA REPUESTOS ─────────────────────────────────────────────────────
-    ensureSpace(ROW_H + 16);
-    cell(ML, y, W, ROW_H, "REPUESTOS", { bold: true, fontSize: 8, bg: NAVY, color: WHITE, align: "center" });
-    y += ROW_H;
+    // ── DEPARTAMENTO ────────────────────────────────────────────────────────
+    navyBar("DEPARTAMENTO");
+    checkboxRow(DEPARTMENTS, l => l === "BARCAZA" ? report.vessel.isBarcaza : l === report.filters.department);
 
-    // Column layout:
-    // REPUESTO 24% | DETALLES 28% | PARA QUE (SFI) 12% | CANT 8% | UN 6% | UBIC 12% | ULT MOV 10%
-    const colW = [
-      Math.floor(W * 0.24),
-      Math.floor(W * 0.28),
-      Math.floor(W * 0.12),
-      Math.floor(W * 0.08),
-      Math.floor(W * 0.06),
-      Math.floor(W * 0.12),
-      0, // last col gets remainder
-    ];
-    colW[6] = W - colW.slice(0, 6).reduce((a, b) => a + b, 0);
-    const colX = (i: number) => ML + colW.slice(0, i).reduce((a, b) => a + b, 0);
-    const headers = ["REPUESTO", "DETALLES", "PARA QUE (SFI)", "CANTIDAD", "UN", "UBICACION", "ULT.MOV"];
-
-    const HDR_ROW_H = 18;
-    ensureSpace(HDR_ROW_H);
-    headers.forEach((h, i) => {
-      cell(colX(i), y, colW[i], HDR_ROW_H, h, { bold: true, fontSize: 7, bg: "#E5E7EB", align: "center" });
-    });
-    y += HDR_ROW_H;
-
-    const ROW_H_MIN = 16;
-    const ROW_PADDING_V = 3;
-
-    // Strip boilerplate prefixes that some longDescription values carry from
-    // legacy imports (e.g. "Repuesto/consumible asociado: …", "Clasificación
-    // SFI asignada: 330." …). The SFI is rendered in its own column and the
-    // category/min already have their own labels, so duplicating them noise
-    // up the cell.
-    const cleanLongDescription = (raw: string | null): string => {
-      if (!raw) return "";
-      let s = raw;
-      // Drop "Clasificación SFI asignada: <digits>." anywhere.
-      s = s.replace(/Clasificaci[oó]n\s+SFI\s+asignada:\s*\d+\.?\s*/gi, "");
-      // Drop "Repuesto/consumible asociado:" lead-in.
-      s = s.replace(/^\s*Repuesto\/consumible\s+asociado:\s*/i, "");
-      // Collapse whitespace.
-      return s.replace(/\s{2,}/g, " ").trim();
+    // ── REPUESTOS ───────────────────────────────────────────────────────────
+    const spCols = [W * 0.28, W * 0.22, W * 0.36, W * 0.14];
+    const spX = (i: number) => ML + spCols.slice(0, i).reduce((a, b) => a + b, 0);
+    const spareHeader = () => {
+      ["REPUESTO", "DETALLES", "PARA QUE", "CANTIDAD"].forEach((h, i) =>
+        cell(spX(i), y, spCols[i]!, 13, h, { bold: true, fontSize: 8, bg: LABEL_BG, align: "center" }));
+      y += 13;
     };
+    ensureSpace(15 + 13 + 14);
+    navyBar("REPUESTOS");
+    spareHeader();
 
-    const detailsFor = (it: typeof report.items[number]): string => {
-      const parts = [];
-      const cleaned = cleanLongDescription(it.longDescription);
-      if (cleaned) parts.push(cleaned);
-      if (it.category) parts.push(`Cat: ${it.category}`);
-      if (it.minStock > 0) parts.push(`Mín: ${it.minStock}`);
-      return parts.join(" · ");
-    };
-
-    const sfiCellText = (it: typeof report.items[number]): string => {
-      if (!it.sfiCode) return "";
-      return it.sfiName ? `${it.sfiName} (${it.sfiCode})` : it.sfiCode;
-    };
-
-    for (const it of report.items) {
-      const color = it.belowReorder ? RED : BLACK;
-      const t0 = sanitizePdfText(`${it.sku} — ${it.name}`);
-      const t1 = sanitizePdfText(detailsFor(it));
-      const t2 = sanitizePdfText(sfiCellText(it));
-      const t5 = sanitizePdfText(it.location ?? "");
-
-      // Calculate row height from wrapping columns
-      const h0 = measureH(t0, "Helvetica", 8,   colW[0]) + 2 * ROW_PADDING_V;
-      const h1 = measureH(t1, "Helvetica", 7.5, colW[1]) + 2 * ROW_PADDING_V;
-      const h2 = measureH(t2, "Helvetica", 7.5, colW[2]) + 2 * ROW_PADDING_V;
-      const h5 = measureH(t5, "Helvetica", 7.5, colW[5]) + 2 * ROW_PADDING_V;
-      const rowH = Math.max(ROW_H_MIN, h0, h1, h2, h5);
-
-      ensureSpace(rowH);
-      cell(colX(0), y, colW[0], rowH, t0, { fontSize: 8, color, wrap: true });
-      cell(colX(1), y, colW[1], rowH, t1, { fontSize: 7.5, color, wrap: true });
-      cell(colX(2), y, colW[2], rowH, t2, { fontSize: 7.5, color, align: "center", wrap: true });
-      cell(colX(3), y, colW[3], rowH, String(it.onHand), { fontSize: 8, color, align: "right", bold: it.belowReorder });
-      cell(colX(4), y, colW[4], rowH, sanitizePdfText(it.unit), { fontSize: 7.5, color, align: "center" });
-      cell(colX(5), y, colW[5], rowH, t5, { fontSize: 7.5, color, wrap: true });
-      cell(colX(6), y, colW[6], rowH, fmtDate(it.lastMovementAt), { fontSize: 7.5, color, align: "center" });
+    const MIN_ROW = 13;
+    for (const it of spares) {
+      const texts = [
+        sanitizePdfText(it.itemLabel.toUpperCase()),
+        sanitizePdfText(it.partNumber ? `P/N ${it.partNumber}` : ""),
+        sanitizePdfText((it.equipmentLabel ?? "").toUpperCase()),
+        sanitizePdfText(fmtQuantity(it.onHand, it.unit)),
+      ];
+      const rowH = Math.max(MIN_ROW, ...texts.map((t, i) => textH(t, 7.5, spCols[i]!) + 5));
+      ensureSpace(rowH, spareHeader);
+      texts.forEach((t, i) => cell(spX(i), y, spCols[i]!, rowH, t, { bold: true, fontSize: 7.5, wrap: true }));
       y += rowH;
     }
-
-    // Fill remaining page with empty rows for handwritten additions (Mercurio style)
-    const minTotalRows = 18;
-    const filledRows = report.items.length;
-    const emptyRowsToDraw = Math.max(0, minTotalRows - filledRows);
-    for (let i = 0; i < emptyRowsToDraw; i++) {
-      if (y + ROW_H_MIN > CONTENT_BOTTOM) break;
-      headers.forEach((_, ci) => {
-        cell(colX(ci), y, colW[ci], ROW_H_MIN, "", {});
-      });
-      y += ROW_H_MIN;
+    // Renglones libres para anotar a mano, como el papel.
+    const spareBlank = Math.max(4, 12 - spares.length);
+    for (let i = 0; i < spareBlank && y + MIN_ROW <= CONTENT_BOTTOM; i++) {
+      spCols.forEach((w, ci) => cell(spX(ci), y, w, MIN_ROW, ""));
+      y += MIN_ROW;
     }
 
-    // ── SUMMARY (mejora sobre el original) ──────────────────────────────────
-    ensureSpace(ROW_H);
-    const sumText = `Total ítems: ${report.summary.totalItems}    ·    Bajo reorden: ${report.summary.belowReorderCount}`;
-    cell(ML, y, W, ROW_H, sumText, { bold: true, fontSize: 9, align: "center", bg: "#F3F4F6" });
-    y += ROW_H;
+    // ── HERRAMIENTAS ────────────────────────────────────────────────────────
+    const tlCols = [W * 0.85, W * 0.15];
+    const toolHeader = () => {
+      cell(ML, y, tlCols[0]!, 13, "NOMBRE Y DESCRIPCION", { bold: true, fontSize: 8, bg: LABEL_BG, align: "center" });
+      cell(ML + tlCols[0]!, y, tlCols[1]!, 13, "CANTIDAD", { bold: true, fontSize: 8, bg: LABEL_BG, align: "center" });
+      y += 13;
+    };
+    ensureSpace(15 + 13 + MIN_ROW * 2);
+    navyBar("HERRAMIENTAS");
+    toolHeader();
+    for (const it of tools) {
+      const name = sanitizePdfText(it.name.toUpperCase());
+      const qty = sanitizePdfText(fmtQuantity(it.onHand, it.unit));
+      const rowH = Math.max(MIN_ROW, textH(name, 7.5, tlCols[0]!) + 5);
+      ensureSpace(rowH, toolHeader);
+      cell(ML, y, tlCols[0]!, rowH, name, { bold: true, fontSize: 7.5, wrap: true });
+      cell(ML + tlCols[0]!, y, tlCols[1]!, rowH, qty, { bold: true, fontSize: 7.5, wrap: true });
+      y += rowH;
+    }
+    const toolBlank = Math.max(2, 6 - tools.length);
+    for (let i = 0; i < toolBlank && y + MIN_ROW <= CONTENT_BOTTOM; i++) {
+      tlCols.forEach((w, ci) => cell(ML + (ci === 0 ? 0 : tlCols[0]!), y, w, MIN_ROW, ""));
+      y += MIN_ROW;
+    }
+
+    // ── COMENTARIOS ADICIONALES / GENERADO POR ──────────────────────────────
+    ensureSpace(15 + 34 + 15 + 16);
+    navyBar("COMENTARIOS ADICIONALES");
+    cell(ML, y, W, 34, "");
+    y += 34;
+    navyBar("EL PRESENTE FUE GENERADO POR");
+    cell(ML, y, W, 16, sanitizePdfText(generatedBy.toUpperCase()), { bold: true, fontSize: 8.5 });
+    y += 16;
 
     drawFooter();
     doc.end();

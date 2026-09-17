@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
@@ -265,14 +266,14 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>{t("crew.field.vessel")}</label>
+                <GuideField id="crew-vessel" missing={!vesselCode}>
+                  <label className={labelCls}>{t("crew.field.vessel")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
                     {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className={labelCls}>{t("crew.field.rank")}</label>
+                </GuideField>
+                <GuideField id="crew-rank" missing={!rankId}>
+                  <label className={labelCls}>{t("crew.field.rank")}<RequiredMark />{!rankId && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <select value={rankId} onChange={e => setRankId(e.target.value)} disabled={isLocked} className={inputCls}>
                     <option value="">{t("crew.selectRank")}</option>
                     {ranks.map(r => {
@@ -292,15 +293,15 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                       return <option key={r.id} value={r.id}>{label}</option>;
                     })}
                   </select>
-                </div>
-                <div>
-                  <label className={labelCls}>{t("crew.field.firstName")}</label>
+                </GuideField>
+                <GuideField id="crew-first-name" missing={!firstName.trim()}>
+                  <label className={labelCls}>{t("crew.field.firstName")}<RequiredMark />{!firstName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input value={firstName} onChange={e => setFirstName(e.target.value)} disabled={isLocked} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>{t("crew.field.lastName")}</label>
+                </GuideField>
+                <GuideField id="crew-last-name" missing={!lastName.trim()}>
+                  <label className={labelCls}>{t("crew.field.lastName")}<RequiredMark />{!lastName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input value={lastName} onChange={e => setLastName(e.target.value)} disabled={isLocked} className={inputCls} />
-                </div>
+                </GuideField>
                 <div>
                   <label className={labelCls}>{t("crew.field.nationality")}</label>
                   <input value={nationality} onChange={e => setNationality(e.target.value)} disabled={isLocked} className={inputCls} placeholder="—" />
@@ -309,10 +310,10 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                   <label className={labelCls}>{t("crew.field.passport")}</label>
                   <input value={passportNumber} onChange={e => setPassportNumber(e.target.value)} disabled={isLocked} className={inputCls} placeholder="—" />
                 </div>
-                <div>
-                  <label className={labelCls}>{t("crew.field.signOnDate")}</label>
+                <GuideField id="crew-sign-on" missing={!signOnDate}>
+                  <label className={labelCls}>{t("crew.field.signOnDate")}<RequiredMark />{!signOnDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input type="date" value={signOnDate} onChange={e => setSignOnDate(e.target.value)} disabled={isLocked} className={inputCls} />
-                </div>
+                </GuideField>
                 <div>
                   <label className={labelCls}>{t("crew.field.signOffDate")}</label>
                   <input type="date" value={(crew?.signOffDate ?? "").slice(0, 10)} disabled className={inputCls} />

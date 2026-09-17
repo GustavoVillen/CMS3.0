@@ -1,7 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 
-export type MonthlyReportType = "INVENTORY" | "CONSUMPTION";
+export type MonthlyReportType = "INVENTORY" | "CONSUMPTION" | "STANDARD";
 
 export interface RecordMonthlyReportInput {
   type: MonthlyReportType;
@@ -12,7 +12,7 @@ export interface RecordMonthlyReportInput {
   /** CONSUMPTION only. */
   year?: number | null;
   month?: number | null;
-  /** INVENTORY only. */
+  /** INVENTORY / STANDARD. */
   department?: string | null;
 }
 

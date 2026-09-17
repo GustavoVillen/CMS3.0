@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { CertificateRenewalDialog } from "../components/CertificateRenewalDialog";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { api, ApiError } from "../lib/api";
@@ -319,8 +320,8 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
         )}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.code")} *</label>
+            <GuideField id="cert-code" missing={!certCode.trim()}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.code")}<RequiredMark />{!certCode.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input
                 value={certCode}
                 onChange={e => setCertCode(e.target.value.toUpperCase())}
@@ -328,9 +329,9 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
                 placeholder="CERT-001"
                 className={inputCls}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.vessel")} *</label>
+            </GuideField>
+            <GuideField id="cert-vessel" missing={!vesselCode}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.vessel")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select
                 value={vesselCode}
                 onChange={e => setVessel(e.target.value)}
@@ -343,25 +344,25 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
                   <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
                 ))}
               </select>
-            </div>
+            </GuideField>
           </div>
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.name")} *</label>
+          <GuideField id="cert-name" missing={!name.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.name")}<RequiredMark />{!name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input value={name} onChange={e => setName(e.target.value)} required placeholder="Certificado de Seguridad" className={inputCls} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.authority")} *</label>
+          </GuideField>
+          <GuideField id="cert-authority" missing={!authority.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.authority")}<RequiredMark />{!authority.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input value={authority} onChange={e => setAuthority(e.target.value)} required placeholder="Prefectura Naval Argentina" className={inputCls} />
-          </div>
+          </GuideField>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.issued")} *</label>
+            <GuideField id="cert-issue-date" missing={!issueDate}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.issued")}<RequiredMark />{!issueDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} required className={inputCls} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.expiry")} *</label>
+            </GuideField>
+            <GuideField id="cert-expiry-date" missing={!expiryDate}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.expiry")}<RequiredMark />{!expiryDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input type="date" value={expiryDate} onChange={e => setExpiry(e.target.value)} required className={inputCls} />
-            </div>
+            </GuideField>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Últ. Inspección</label>
               <input type="date" value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />

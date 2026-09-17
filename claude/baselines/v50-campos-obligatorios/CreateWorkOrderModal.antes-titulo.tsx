@@ -1,0 +1,1913 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Upload, Wrench, X } from "lucide-react";
+import { api, ApiError } from "../lib/api";
+import { useT, type TranslationKey } from "../lib/i18n";
+import { useAuth, useCan } from "../lib/auth";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { WO_MAINTENANCE_KINDS_OR_INSPECTION, WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS, WO_PRIORITY_OPTIONS, WO_OPERATING_CONDITIONS } from "../lib/wo-form-catalog";
+import { AssetSearchDropdown } from "./AssetSearchDropdown";
+import { ModalCloseButton } from "./ModalCloseButton";
+import { AlertDialog } from "./AlertDialog";
+import { markJustCreated } from "../lib/just-created";
+import { AssigneeSelect } from "./AssigneeSelect";
+import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
+import { AutoTextArea } from "./AutoTextArea";
+import { findClassInspectionAsset } from "../lib/class-inspection-asset";
+import { useCopilotAssist, type CopilotAssistField } from "../lib/copilot-context";
+import { useFetch } from "../lib/hooks";
+import { PersonSelect } from "./PersonSelect";
+import { GuideField, GuideNeedTag, RequiredMark } from "./GuideKit";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface WoPrefill {
+  source: "plan" | "defect" | "audit-finding" | "wo-deficiency";
+  sourceId: string;
+  sourceCode: string;
+  sourceLabel: string;
+  vesselCode: string;
+  assetId: string;
+  assetName?: string | null;
+  // Cuando el origen no trae un activo (ej. finding de auditoría externa), el usuario
+  // debe elegirlo: se renderiza un selector de activo dentro del modo prefill.
+  assetSelectable?: boolean;
+  type: string;
+  priority?: string;
+  criticality?: string;
+  title?: string | null;
+  description?: string | null;
+  dueDate?: string | null;
+  responsible?: string | null;
+  acceptanceCriteria?: string | null;
+  riskLevel?: string | null;
+  riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
+  estimatedHours?: number | null;
+  checklistDocUrl?: string | null;
+  loto?: string | null;
+  samplingFluidType?: string | null;
+  /**
+   * Otros ítems del PDM que ejecuta la MISMA OT (parada de astillero). El plan
+   * de `sourceId` es el principal: da equipo, título y datos heredados. Al
+   * cerrar la OT avanzan todos. Solo aplica con source = "plan".
+   */
+  additionalPlans?: Array<{ id: string; taskCode: string; title: string; assetName?: string | null }>;
+}
+
+/**
+ * Arma el `WoPrefill` de "abrir OT desde este ítem del plan" — mismo mapeo que
+ * ya usaba `MaintenancePlans.tsx` en dos lugares (fila de la lista y modal de
+ * detalle), centralizado acá para no triplicarlo cuando lo usa además el
+ * asistente de "Nueva OT" (`NewWorkOrderWizard`). `plan` tiene que venir del
+ * detalle completo (`GET /app/pms/maintenance-plans/:id`) — la lista general
+ * omite criterios/LOTO/riesgo/RCM para aligerar el payload.
+ */
+export function buildWoPrefillFromPlan(
+  plan: MaintenancePlanLike,
+  sourceLabel: string,
+  additionalPlans?: WoPrefill["additionalPlans"],
+): WoPrefill {
+  return {
+    source: "plan",
+    sourceId: plan.id,
+    sourceCode: plan.taskCode,
+    sourceLabel,
+    vesselCode: plan.vesselCode,
+    assetId: plan.assetId,
+    assetName: plan.assetName,
+    type: plan.taskType === "INSPECTION" ? "INSPECTION" : "PREVENTIVE",
+    title: plan.title,
+    description: plan.description,
+    dueDate: plan.nextDueDate,
+    acceptanceCriteria: plan.acceptanceCriteria,
+    responsible: plan.responsible,
+    loto: plan.loto,
+    riskLevel: plan.riskLevel,
+    riskAnalysisResult: plan.riskAnalysisResult,
+    consequenceCategory: plan.consequenceCategory,
+    consequenceRationale: plan.consequenceRationale,
+    estimatedHours: plan.estimatedHours,
+    checklistDocUrl: plan.checklistTemplate,
+    samplingFluidType: plan.samplingFluidType,
+    additionalPlans,
+  };
+}
+
+/** Subconjunto de `MaintenancePlan` (definido en pages/MaintenancePlans.tsx)
+ *  que necesita `buildWoPrefillFromPlan` — se tipa acá en vez de importar el
+ *  tipo completo desde una página, para no acoplar el componente a esa página. */
+interface MaintenancePlanLike {
+  id: string;
+  vesselCode: string;
+  assetId: string;
+  assetName?: string | null;
+  taskCode: string;
+  title: string;
+  description: string | null;
+  taskType: "MAINTENANCE" | "INSPECTION";
+  acceptanceCriteria?: string | null;
+  responsible?: string | null;
+  loto?: string | null;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  riskAnalysisResult?: string | null;
+  consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
+  consequenceRationale?: string | null;
+  estimatedHours: number | null;
+  checklistTemplate: string | null;
+  samplingFluidType?: string | null;
+  nextDueDate: string | null;
+}
+
+const FLUID_TYPE_KEYS: Record<string, TranslationKey> = {
+  ENGINE_OIL:    "fluid.type.engineOil",
+  HYDRAULIC_OIL: "fluid.type.hydraulicOil",
+  GEAR_OIL:      "fluid.type.gearOil",
+  FUEL:          "fluid.type.fuel",
+  COOLANT:       "fluid.type.coolant",
+  REFRIGERANT:   "fluid.type.coolant",
+  OTHER:         "fluid.type.other",
+};
+
+/**
+ * Valor de un campo que la OT hereda del plan. Vacío + el prefill nunca lo trajo
+ * (`undefined`) ⇒ se manda `undefined`: el backend hereda del plan. Vacío pero
+ * el prefill SÍ lo traía ⇒ el usuario lo borró a propósito, se manda `null`.
+ */
+function keepFromPlan(current: string, prefilled: string | null | undefined): string | null | undefined {
+  const text = current.trim();
+  if (text) return text;
+  return prefilled === undefined ? undefined : null;
+}
+
+/**
+ * Alto de un textarea según su contenido. Con varios ítems del PDM estos campos
+ * traen un bloque por ítem: con el alto fijo de antes se veía sólo el primero y
+ * parecía que faltaba el resto.
+ */
+function autoRows(text: string, min: number, max = 12): number {
+  return Math.min(max, Math.max(min, text.split("\n").length));
+}
+
+/** Taller configurado en los planes de la OT (con para qué se lo contrata). */
+interface PlanProviderPreview { id: string; name: string; purposes: string[]; taskCodes: string[] }
+
+interface Asset { id: string; assetCode: string; name: string; }
+interface Vessel { code: string; name: string; }
+interface PlanCandidateApi {
+  id: string; taskCode: string; title: string; triggerType: string;
+  nextDueDate?: string | null; nextDueHours?: number | null; executionStatus?: string | null;
+}
+interface ExtractedFieldApi<T> { value: T | null; confidence: "high" | "medium" | "low"; }
+interface ExtractedWorkOrderApi {
+  title: ExtractedFieldApi<string>;
+  description: ExtractedFieldApi<string>;
+  acceptanceCriteria: ExtractedFieldApi<string>;
+  priority: ExtractedFieldApi<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">;
+  dueDate: ExtractedFieldApi<string>;
+  assetReferenceText: ExtractedFieldApi<string>;
+  assetIdSuggestion: { id: string; name: string; score: number } | null;
+}
+
+interface CreateWorkOrderModalProps {
+  prefill?: WoPrefill;
+  initialVesselCode?: string;
+  /** Preset del tipo de mantenimiento (modo standalone) — accesos rápidos del Dashboard. */
+  initialMaintKind?: string;
+  /** Preset del título (modo standalone) — ej. "Inspección de Clase". */
+  initialTitle?: string;
+  /** Modo standalone: al cargar los equipos del buque elegido, preselecciona el
+   *  equipo de inspección de clase (el nombre cambia de buque en buque, se
+   *  resuelve por patrón — ver findClassInspectionAsset), sin esperar que el
+   *  usuario lo busque. */
+  autoSelectClassInspectionAsset?: boolean;
+  /** Modo standalone: equipo ya resuelto de antemano (ej. por el asistente de
+   *  "Nueva OT") — se preselecciona directo, sin esperar la carga de la lista. */
+  initialAssetId?: string;
+  /** Preset de prioridad (modo standalone) — ej. según el tipo de reparación
+   *  elegido en el asistente de "Nueva OT" (Emergencia → CRITICAL). */
+  initialPriority?: string;
+  /** Exige elegir proveedor para guardar: al crear la OT se abre también la SS a ese proveedor. */
+  requireProvider?: boolean;
+  /**
+   * Paso dentro de una tanda de órdenes ("Equipo 2 de 3"). Lo usa la Planilla
+   * cuando lo marcado abarca varios equipos y se abre una OT por cada uno: sin
+   * esto la ventana reaparece igual a la anterior y no se sabe en cuál se está.
+   */
+  stepLabel?: string;
+  /** Buque/equipo ya elegidos en un paso anterior (asistente de "Nueva OT"): el
+   *  "cambiar" de las etiquetas vuelve a ese paso. Sin esto, abre los selectores acá. */
+  onChangeContext?: () => void;
+  /** Alta desde el asistente de "Nueva SS": la ventana se presenta como Solicitud
+   *  de Servicio y los talleres ya vienen elegidos (`initialProviderIds`). */
+  serviceRequestMode?: boolean;
+  /** Talleres elegidos de antemano: se abre una SS por cada uno al guardar. */
+  initialProviderIds?: string[];
+  onClose: () => void;
+  onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider";
+const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
+// [value, label, activeCls, inactiveLabelCls]
+const RISK_LEVEL_OPTS: [string, string, string, string][] = [
+  ["LOW",      "L", "bg-success-sea text-[#0B132B] border-success-sea",       "text-success-sea border-success-sea/40"],
+  ["MEDIUM",   "M", "bg-yellow-400 text-[#0B132B] border-yellow-400",         "text-yellow-700 dark:text-yellow-400 border-yellow-400/40"],
+  ["HIGH",     "H", "bg-red-500 text-fg border-red-500",                    "text-red-700 dark:text-red-400 border-red-400/40"],
+  ["CRITICAL", "C", "bg-red-700 text-fg border-red-700",                    "text-red-600 border-red-600/40"],
+];
+
+// WO_KIND_OPTIONS (los 5 del papel + "Inspección") vive en wo-form-catalog.ts
+// como WO_MAINTENANCE_KINDS_OR_INSPECTION — compartido con WoRegiSections.
+
+/** Tipo grueso de un prefill (ej. OT correctiva nacida de un defecto) → opción fina. */
+function kindFromType(t?: string): string {
+  if (t === "INSPECTION") return "INSPECTION";
+  // Un correctivo que nace de un defecto es, por definición, no programado.
+  if (t === "CORRECTIVE") return "CORRECTIVO_NO_PROGRAMADO";
+  return "PREVENTIVO";
+}
+
+function TypeBadge({ type }: { type: string }) {
+  const t = useT();
+  if (type === "INSPECTION") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
+  if (type === "CORRECTIVE")  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
+  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+/** Color de la prioridad elegida (misma escala de urgencia en todos los tenants). */
+const PRIORITY_ACTIVE_CLS: Record<string, string> = {
+  CRITICAL: "bg-red-700 border-red-700 text-white",
+  HIGH:     "bg-orange-600 border-orange-600 text-white",
+  MEDIUM:   "bg-yellow-600 border-yellow-600 text-white",
+  LOW:      "bg-success-sea border-success-sea text-white",
+};
+
+/** Opciones de un toque (reemplaza selects y casilleros del papel en el alta).
+ *  Volver a tocar la opción activa la limpia, salvo `allowClear={false}`. */
+export function SegButtons({ options, value, onChange, disabled, allowClear = true, activeCls }: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  allowClear?: boolean;
+  activeCls?: (v: string) => string | undefined;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(o => {
+        const on = value === o.value;
+        return (
+          <button key={o.value} type="button" disabled={disabled}
+            onClick={() => onChange(on && allowClear ? "" : o.value)}
+            className={`px-3 py-1.5 rounded-lg border-[1.5px] text-xs font-semibold transition-colors disabled:opacity-60 ${
+              on ? (activeCls?.(o.value) ?? "bg-accent border-accent text-accent-fg") : "bg-fg/5 border-fg/10 text-fg hover:border-accent/40"
+            }`}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Bloque plegable numerado del formulario. */
+function FormSection({ n, title, subtitle, badge, children }: {
+  n: number; title: string; subtitle: string; badge?: React.ReactNode; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section className="rounded-2xl border border-fg/10 bg-surface dark:bg-white/[0.02]">
+      <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2.5 w-full text-left px-4 py-3">
+        <span className="w-[22px] h-[22px] rounded-full bg-fg text-surface text-[11px] font-bold flex items-center justify-center shrink-0">{n}</span>
+        <span className="min-w-0">
+          <span className="block text-[13px] font-extrabold text-fg">{title}</span>
+          <span className="block text-[11px] text-text-industrial/60">{subtitle}</span>
+        </span>
+        <span className="ml-auto flex items-center gap-2 shrink-0">
+          {badge}
+          {open ? <ChevronUp className="w-4 h-4 text-text-industrial/40" /> : <ChevronDown className="w-4 h-4 text-text-industrial/40" />}
+        </span>
+      </button>
+      {open && <div className="px-4 pb-4 pt-1 space-y-3.5">{children}</div>}
+    </section>
+  );
+}
+
+/** Botón "✨ Sugerir" de la IA junto al rótulo de un campo. `dim` = falta un dato
+ *  previo: se ve apagado pero sigue tocable, así el aviso explica qué falta. */
+function AiSuggestButton({ label, onClick, loading, dim, title }: {
+  label: string; onClick: () => void; loading?: boolean; dim?: boolean; title?: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={loading} title={title}
+      className={`inline-flex items-center gap-1 shrink-0 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-0.5 text-[11px] font-bold text-accent hover:bg-accent/15 transition-colors ${dim ? "opacity-40" : ""} ${loading ? "animate-pulse" : ""}`}>
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      {label}
+    </button>
+  );
+}
+
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onChangeContext, serviceRequestMode, initialProviderIds, onClose, onSaved }) => {
+  const t = useT();
+  const { user, tenant } = useAuth();
+  const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
+  // Solo TENANT_ADMIN puede backdatear la apertura y abrir en nombre de otro.
+  const isAdmin = user?.role === "TENANT_ADMIN";
+  const today = new Date().toISOString().slice(0, 10);
+
+  // "Abierta por (en nombre de)": queda como SOLICITA / createdByUserId.
+  const [onBehalfUserId, setOnBehalfUserId] = useState("");
+  const [teamUsers, setTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; role?: string; jobTitle?: string | null }[]>([]);
+
+  // ── INFO fields (standalone mode only) ────────────────────────────────────
+  const [vesselCode, setVesselCode]   = useState(prefill?.vesselCode ?? initialVesselCode ?? "");
+  const [vessels, setVessels]         = useState<Vessel[]>([]);
+  const [assetId, setAssetId]         = useState(prefill?.assetId ?? initialAssetId ?? "");
+  const [assets, setAssets]           = useState<Asset[]>([]);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [resolvedAssetName, setResolvedAssetName] = useState(prefill?.assetName ?? null);
+  const [type, setType]               = useState(prefill?.type ?? "PREVENTIVE");
+  // Mercurio elige el tipo FINO del REGI-MAN-02.3 (5 opciones) en vez del grueso
+  // (Preventivo/Correctivo/Inspección): es el que dice su formulario. El backend
+  // deriva el grueso desde éste, así MTTR / OT→Defecto / reportes no se enteran.
+  // "Inspección" no está en el papel pero se mantiene: la empresa la usa a mano
+  // (ej. "Inspección subacua del sistema de propulsión").
+  const [maintKind, setMaintKind]     = useState(prefill ? kindFromType(prefill.type) : (initialMaintKind ?? kindFromType(prefill?.type)));
+  const [priority, setPriority]       = useState(prefill?.priority ?? initialPriority ?? "MEDIUM");
+  const [criticality, setCriticality] = useState(prefill?.criticality ?? "B");
+  // Recuadros del formulario REGI-MAN-02.3 (Mercurio), modo standalone.
+  // assignedToArea arranca en TERCERIZADO cuando el flujo ya exige proveedor
+  // (ej. "Nueva Solicitud de Servicio"), para no pedir un clic de más.
+  const [requestedByArea, setRequestedByArea] = useState("");
+  const [assignedToArea, setAssignedToArea]   = useState(requireProvider ? "TERCERIZADO" : "");
+  // En modo prefill el valor por defecto lo trae el plan (Proveedor→Tercerizado,
+  // Cubierta/Máquinas/Barcaza→Tripulación); una vez que el usuario lo toca a
+  // mano, ese valor gana y el efecto de abajo deja de pisarlo.
+  const assignedToAreaTouchedRef = useRef(false);
+  const [systemArea, setSystemArea]           = useState("");
+  const [voyageNumber, setVoyageNumber]       = useState("");
+  const [operatingCondition, setOperatingCondition] = useState("");
+  const [location, setLocation]               = useState("");
+  const [openDate, setOpenDate]       = useState(today);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // ── PLAN fields ───────────────────────────────────────────────────────────
+  // Arranque optimista con lo que trae el listado; el efecto de más abajo pide
+  // al backend los textos combinados reales y los reemplaza.
+  const [title, setTitle] = useState(() => {
+    const extras = prefill?.additionalPlans ?? [];
+    if (extras.length === 0) return prefill?.title ?? initialTitle ?? "";
+    return [
+      `${prefill!.sourceCode} · ${prefill!.title ?? ""}`.trim(),
+      ...extras.map(p => `${p.taskCode} · ${p.title}`),
+    ].join("\n");
+  });
+  // Valor con el que se abrió el título: sirve para no pisar lo que el usuario
+  // haya escrito mientras llegaban los textos combinados del backend.
+  const titleInitialRef = useRef(title);
+  // Talleres a los que va este trabajo, según los planes. Se muestran debajo de
+  // la tarea: quien abre la OT tiene que ver a quién se le va a encargar antes
+  // de crearla (al guardar se abre una SS por taller).
+  const [planProviders, setPlanProviders] = useState<PlanProviderPreview[]>([]);
+  // Precarga "Asignado a" con lo que el plan define (mismo criterio que el
+  // backend deriva por defecto si nadie lo toca): Proveedor→Tercerizado,
+  // si no hay proveedores→Tripulación. Sólo en modo prefill.
+  useEffect(() => {
+    if (!prefill || assignedToAreaTouchedRef.current) return;
+    setAssignedToArea(planProviders.length > 0 ? "TERCERIZADO" : "TRIPULACION");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill, planProviders.length]);
+  // El usuario puede mandarlo a otro taller distinto del que trae el plan,
+  // ad hoc para esta OT (no toca la configuración del plan). Clave = providerId
+  // original que trajo el plan, valor = providerId elegido.
+  const [providerOverride, setProviderOverride] = useState<Record<string, string>>({});
+  const [availableProviders, setAvailableProviders] = useState<Array<{ id: string; name: string; providerCode?: string }>>([]);
+  useEffect(() => {
+    // Además de los talleres que trae un plan, en modo standalone se puede
+    // elegir proveedores libres (ver `standaloneProviderRequests`) — ahí
+    // también hace falta la lista.
+    if ((planProviders.length === 0 && prefill) || availableProviders.length > 0) return;
+    api.get<{ items: Array<{ id: string; name: string; providerCode?: string }> }>("/app/providers?status=ACTIVE")
+      .then(res => setAvailableProviders(res.items ?? []))
+      .catch(() => setAvailableProviders([]));
+  }, [planProviders.length, availableProviders.length, prefill]);
+  // Proveedores elegidos a mano en modo standalone (sin plan, o para completar
+  // uno): mismo formato {providerId, purpose} que usa el editor del Plan de
+  // Mantenimiento. Al guardar, la OT se manda a esos talleres y se abre una SS
+  // por cada uno.
+  const [standaloneProviderRequests, setStandaloneProviderRequests] = useState<{ providerId: string; purpose: string }[]>(
+    () => initialProviderIds?.length
+      ? initialProviderIds.map(providerId => ({ providerId, purpose: "" }))
+      : requireProvider ? [{ providerId: "", purpose: "" }] : [],
+  );
+  const [description, setDescription]           = useState(prefill?.description ?? "");
+  const [assignedTo, setAssignedTo]             = useState(prefill?.responsible ?? "");
+  const [dueDate, setDueDate]                   = useState(prefill?.dueDate ? prefill.dueDate.slice(0, 10) : "");
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState(prefill?.acceptanceCriteria ?? "");
+  const [loto, setLoto]                         = useState(prefill?.loto ?? "");
+  const [riskLevel, setRiskLevel]               = useState(prefill?.riskLevel ?? "");
+  const [riskAnalysisResult, setRiskAnalysisResult] = useState(prefill?.riskAnalysisResult ?? "");
+  const [consequenceCategory, setConsequenceCategory] = useState<string>(prefill?.consequenceCategory ?? "");
+  const [consequenceRationale, setConsequenceRationale] = useState(prefill?.consequenceRationale ?? "");
+  const [estimatedHours, setEstimatedHours] = useState(prefill?.estimatedHours != null ? String(prefill.estimatedHours) : "");
+  const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
+
+  /**
+   * Textos heredados de los planes, tal como van a quedar guardados.
+   *
+   * El listado de planes NO trae los campos pesados (criterios, LOTO, análisis
+   * de riesgo, justificación RCM) ni la tarea de los otros ítems, así que el
+   * formulario los mostraba vacíos o sólo con el ítem principal. Se piden al
+   * backend, que es el único que sabe combinarlos (un bloque por ítem, el
+   * riesgo más alto y la consecuencia más grave).
+   *
+   * Sólo pisa un campo si sigue con el valor con el que se abrió la ventana:
+   * si el usuario ya escribió algo mientras llegaba la respuesta, manda lo suyo.
+   */
+  useEffect(() => {
+    if (prefill?.source !== "plan") return;
+    const ids = [prefill.sourceId, ...(prefill.additionalPlans ?? []).map(p => p.id)];
+    let cancelled = false;
+    api.get<{
+      title: string | null; description: string | null; acceptanceCriteria: string | null;
+      loto: string | null; riskLevel: string | null; riskAnalysisResult: string | null;
+      consequenceCategory: string | null; consequenceRationale: string | null;
+      providers: PlanProviderPreview[];
+    }>(`/app/pms/maintenance-plans/merged-text?ids=${ids.map(encodeURIComponent).join(",")}`)
+      .then(m => {
+        if (cancelled) return;
+        setPlanProviders(m.providers ?? []);
+        const keep = (setter: (fn: (prev: string) => string) => void, initial: string, next: string | null) => {
+          setter(prev => (prev === initial ? (next ?? "") : prev));
+        };
+        keep(setTitle, titleInitialRef.current, m.title);
+        keep(setDescription, prefill.description ?? "", m.description);
+        keep(setAcceptanceCriteria, prefill.acceptanceCriteria ?? "", m.acceptanceCriteria);
+        keep(setLoto, prefill.loto ?? "", m.loto);
+        keep(setRiskLevel, prefill.riskLevel ?? "", m.riskLevel);
+        keep(setRiskAnalysisResult, prefill.riskAnalysisResult ?? "", m.riskAnalysisResult);
+        keep(setConsequenceCategory, prefill.consequenceCategory ?? "", m.consequenceCategory);
+        keep(setConsequenceRationale, prefill.consequenceRationale ?? "", m.consequenceRationale);
+      })
+      .catch(() => { /* se queda con lo que trajo el listado */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState<string | null>(null);
+
+  // ── AI: loading states + helpers para sugerir Criterios / LOTO / Riesgo / Consecuencia ──
+  const [loadingTask,        setLoadingTask]        = useState(false);
+  const [loadingTitle,       setLoadingTitle]       = useState(false);
+  const [loadingCriteria,    setLoadingCriteria]    = useState(false);
+  const [loadingLoto,        setLoadingLoto]        = useState(false);
+  const [loadingRisk,        setLoadingRisk]        = useState(false);
+  const [loadingConsequence, setLoadingConsequence] = useState(false);
+  // IA: detección del activo que mejor corresponde a la deficiencia (modo audit-finding).
+  const [suggestingAsset, setSuggestingAsset] = useState(false);
+  const [assetSuggested,  setAssetSuggested]  = useState(false);
+  const autoSuggestedAssetRef = useRef(false);
+
+  // IA: sugerencia automática de a qué ítem(s) del plan de mantenimiento del
+  // equipo podría corresponder esta OT (solo modo standalone). El vínculo real
+  // se crea recién al guardar, y solo si el usuario confirma en el popup.
+  const can = useCan();
+  const canLinkPlan = can("wo.operate") || can("wo.manage");
+  const [planLinkCandidates, setPlanLinkCandidates] = useState<PlanLinkCandidate[] | null>(null);
+  const [planLinkMode, setPlanLinkMode] = useState<"confirm" | "choose" | null>(null);
+  const [confirmedPlanIds, setConfirmedPlanIds] = useState<string[]>([]);
+  // Estado del botón "Detectar" (manual) y del intento automático: antes esto
+  // corría en silencio y si no encontraba nada no se enteraba nadie — por eso
+  // parecía que "a veces no funcionaba". Ahora siempre queda un rastro visible.
+  const [detectingPlanLink, setDetectingPlanLink] = useState(false);
+  const [planLinkNoMatch, setPlanLinkNoMatch] = useState(false);
+  // Guarda el assetId con el que ya se sugirió, para volver a sugerir si el
+  // usuario cambia de equipo (a diferencia de la sugerencia de activo, que
+  // corre una sola vez).
+  const suggestedPlanForAssetRef = useRef<string | null>(null);
+
+  // Etiqueta del activo a partir del prefill o de la lista cargada
+  const aiAssetLabel = prefill?.sourceLabel
+    ?? assets.find(a => a.id === assetId)?.name
+    ?? null;
+  const aiTaskDesc = description.trim() || title.trim() || null;
+  // Inspección vs mantenimiento: la IA calibra con esto el alcance de criterios,
+  // LOTO y riesgo (una inspección general no se analiza como un desarme).
+  const aiTaskType: "INSPECTION" | "MAINTENANCE" = type === "INSPECTION" ? "INSPECTION" : "MAINTENANCE";
+
+  // Sugerir las tareas a ejecutar. A diferencia del resto de las sugerencias,
+  // ésta parte del TÍTULO (la tarea todavía está vacía: es lo que se completa).
+  // Si ya hay texto escrito no se pisa: se agrega debajo.
+  const handleTaskClick = useCallback(async () => {
+    if (loadingTask) return;
+    const base = title.trim();
+    if (!base) {
+      setErr(t("wo.ai.completeTitleFirstError"));
+      return;
+    }
+    setLoadingTask(true);
+    setErr(null);
+    try {
+      const yaEscrito = description.trim();
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-task", {
+        assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
+        taskDesc: base,
+        existingTasks: yaEscrito || null,
+      });
+      // Reemplaza, no agrega: cuando ya había tareas la IA devuelve la lista
+      // completa con las del usuario integradas, así no quedan duplicadas ni
+      // desordenadas.
+      const sugerido = (res.text ?? "").trim();
+      if (sugerido) setDescription(sugerido);
+      else setErr(t("wo.ai.noText"));
+    } catch (e) {
+      console.error("[suggest-task] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.taskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingTask(false); }
+  }, [loadingTask, aiAssetLabel, title, description, t]);
+
+  // Sugerir el título en sí: a diferencia de Tarea, no requiere nada previo
+  // cargado — parte del equipo y, si ya hay algo escrito en Tarea, de eso.
+  const handleTitleClick = useCallback(async () => {
+    if (loadingTitle) return;
+    setLoadingTitle(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-title", {
+        assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
+        taskDesc: description.trim() || title.trim() || null,
+      });
+      const sugerido = (res.text ?? "").trim();
+      if (sugerido) setTitle(sugerido);
+      else setErr(t("wo.ai.noText"));
+    } catch (e) {
+      console.error("[suggest-title] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.taskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingTitle(false); }
+  }, [loadingTitle, aiAssetLabel, title, description, t]);
+
+  const handleCriteriaClick = useCallback(async () => {
+    if (loadingCriteria) return;
+    if (!aiTaskDesc) {
+      setErr(t("wo.ai.completeTaskFirstError"));
+      return;
+    }
+    setLoadingCriteria(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-acceptance-criteria", {
+        assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
+        taskDesc: aiTaskDesc,
+        taskType: aiTaskType,
+      });
+      if (res.text) setAcceptanceCriteria(res.text);
+      else setErr(t("wo.ai.noText"));
+    } catch (e) {
+      console.error("[suggest-acceptance] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.criteriaPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingCriteria(false); }
+  }, [loadingCriteria, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, t]);
+
+  const handleLotoClick = useCallback(async () => {
+    if (loadingLoto) return;
+    if (!aiTaskDesc) {
+      setErr(t("wo.ai.completeTaskFirstError"));
+      return;
+    }
+    setLoadingLoto(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ text: string }>("/app/pms/work-orders/suggest-loto", {
+        assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
+        taskDesc: aiTaskDesc,
+        taskType: aiTaskType,
+        acceptanceCriteria: acceptanceCriteria || null,
+      });
+      if (res.text) setLoto(res.text);
+      else setErr(t("wo.ai.noText"));
+    } catch (e) {
+      console.error("[suggest-loto] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.lotoPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingLoto(false); }
+  }, [loadingLoto, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, acceptanceCriteria, t]);
+
+  const handleRiskClick = useCallback(async () => {
+    if (loadingRisk) return;
+    if (!aiTaskDesc) {
+      setErr(t("wo.ai.completeTaskFirstError"));
+      return;
+    }
+    setLoadingRisk(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ level: string; analysis: string }>("/app/pms/work-orders/suggest-risk", {
+        assetLabel: aiAssetLabel,
+        vesselCode: vesselCode || null,
+        taskDesc: aiTaskDesc,
+        taskType: aiTaskType,
+        acceptanceCriteria: acceptanceCriteria || null,
+        loto: loto || null,
+      });
+      if (res.level && ["LOW","MEDIUM","HIGH","CRITICAL"].includes(res.level)) setRiskLevel(res.level);
+      if (res.analysis) setRiskAnalysisResult(res.analysis);
+    } catch (e) {
+      console.error("[suggest-risk] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.riskPrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingRisk(false); }
+  }, [loadingRisk, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, acceptanceCriteria, loto, t]);
+
+  const handleConsequenceClick = useCallback(async () => {
+    if (loadingConsequence) return;
+    if (!aiTaskDesc) {
+      setErr(t("wo.ai.completeTaskFirstError"));
+      return;
+    }
+    setLoadingConsequence(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ category: string; rationale: string }>("/app/pms/work-orders/suggest-consequence", {
+        assetName: aiAssetLabel ?? "",
+        planTitle: title.trim() || null,
+        planDescription: description.trim() || null,
+        taskType: aiTaskType,
+        vesselCode: vesselCode || null,
+      });
+      if (res.category) setConsequenceCategory(res.category);
+      if (res.rationale) setConsequenceRationale(res.rationale);
+    } catch (e) {
+      console.error("[suggest-consequence] failed:", e);
+      setErr(e instanceof ApiError ? `${t("wo.ai.consequencePrefix")}: ${e.message}` : t("wo.ai.suggestFailed"));
+    }
+    finally { setLoadingConsequence(false); }
+  }, [loadingConsequence, aiAssetLabel, aiTaskDesc, aiTaskType, vesselCode, title, description, t]);
+
+  // IA: detecta el activo que mejor corresponde a la deficiencia (solo modo audit-finding,
+  // donde el origen no trae activo). Elige entre los equipos ya cargados del buque.
+  const handleSuggestAsset = useCallback(async () => {
+    if (!prefill?.assetSelectable || suggestingAsset || assets.length === 0) return;
+    const taskDesc = (prefill.description ?? description).trim();
+    if (!taskDesc) return;
+    setSuggestingAsset(true);
+    try {
+      const res = await api.post<{ assetId: string | null }>("/app/pms/work-orders/suggest-asset", {
+        taskDesc,
+        assets: assets.map(a => ({ id: a.id, code: a.assetCode, name: a.name })),
+      });
+      if (res.assetId && assets.some(a => a.id === res.assetId)) {
+        setAssetId(res.assetId);
+        setAssetSuggested(true);
+      }
+    } catch (e) {
+      console.error("[suggest-asset] failed:", e);
+    } finally { setSuggestingAsset(false); }
+  }, [prefill, suggestingAsset, assets, description]);
+
+  // Auto-sugerir el activo una vez al abrir, cuando ya cargaron los equipos y no hay uno elegido.
+  useEffect(() => {
+    if (!prefill?.assetSelectable || autoSuggestedAssetRef.current) return;
+    if (assets.length === 0 || assetId) return;
+    if (!(prefill.description ?? "").trim()) return;
+    autoSuggestedAssetRef.current = true;
+    void handleSuggestAsset();
+  }, [prefill, assets, assetId, handleSuggestAsset]);
+
+  // IA: a qué ítem(s) del plan de mantenimiento del mismo equipo podría
+  // corresponder esta OT. Solo en creación libre (standalone): la OT que ya
+  // nace de un plan (prefill.source === "plan") ya viene vinculada.
+  const handleSuggestPlanLinks = useCallback(async () => {
+    if (prefill || !assetId || !canLinkPlan) return;
+    const taskDesc = title.trim() || description.trim();
+    if (!taskDesc) return;
+    setDetectingPlanLink(true);
+    setPlanLinkNoMatch(false);
+    try {
+      const plansRes = await api.get<{ items: PlanCandidateApi[] }>(
+        `/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=100`,
+      );
+      const items = plansRes.items ?? [];
+      if (items.length === 0) { setPlanLinkNoMatch(true); return; }
+      const res = await api.post<{ matches: { id: string; confidence: "high" | "medium" | "low" }[] }>(
+        "/app/pms/work-orders/suggest-plan-links",
+        {
+          assetLabel: assets.find(a => a.id === assetId)?.name ?? null,
+          title: title.trim() || null,
+          taskDesc: description.trim() || null,
+          plans: items.map(p => ({
+            id: p.id, taskCode: p.taskCode, title: p.title, triggerType: p.triggerType,
+            nextDueDate: p.nextDueDate, nextDueHours: p.nextDueHours, executionStatus: p.executionStatus,
+          })),
+        },
+      );
+      const matches = res.matches ?? [];
+      if (matches.length === 0) { setPlanLinkNoMatch(true); return; }
+      const candidates: PlanLinkCandidate[] = [];
+      for (const m of matches) {
+        const plan = items.find(p => p.id === m.id);
+        if (!plan) continue;
+        candidates.push({
+          id: plan.id, taskCode: plan.taskCode, title: plan.title,
+          nextDueDate: plan.nextDueDate, nextDueHours: plan.nextDueHours, confidence: m.confidence,
+        });
+      }
+      if (candidates.length === 0) { setPlanLinkNoMatch(true); return; }
+      const highs = candidates.filter(c => c.confidence === "high");
+      setPlanLinkCandidates(candidates);
+      setPlanLinkMode(candidates.length === 1 && highs.length === 1 ? "confirm" : "choose");
+    } catch (e) {
+      console.error("[suggest-plan-links] failed:", e);
+      setPlanLinkNoMatch(true);
+    } finally {
+      setDetectingPlanLink(false);
+    }
+  }, [prefill, assetId, canLinkPlan, title, description, assets]);
+
+  // Dispara la sugerencia automáticamente, sin que el usuario la pida, en
+  // cuanto hay equipo + título/descripción cargados. Se re-arma si el usuario
+  // cambia de equipo, para no sugerir en base a un equipo que ya no aplica.
+  // Debounce de 800ms: sin esto, el efecto disparaba con la PRIMERA letra
+  // tipeada (ej. "A" de "Análisis de Aceite") y marcaba el equipo como "ya
+  // sugerido", mandándole a la IA un texto sin sentido y sin volver a
+  // intentarlo aunque el usuario terminara de escribir el título real.
+  useEffect(() => {
+    // El equipo preseleccionado por `autoSelectClassInspectionAsset` ya lista
+    // TODOS sus planes activos apenas se elige, sin pasar por el matching de la
+    // IA — ver el efecto de "Asset lookup". Este detector por texto no aplica
+    // ahí (sería una segunda sugerencia redundante).
+    if (autoSelectClassInspectionAsset) return;
+    if (prefill || !assetId || !canLinkPlan) return;
+    if (!(title.trim() || description.trim())) return;
+    if (suggestedPlanForAssetRef.current === assetId) return;
+    const timer = setTimeout(() => {
+      suggestedPlanForAssetRef.current = assetId;
+      void handleSuggestPlanLinks();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [prefill, assetId, canLinkPlan, title, description, handleSuggestPlanLinks, autoSelectClassInspectionAsset]);
+
+  // El aviso de "sin coincidencias" queda desactualizado en cuanto el usuario
+  // sigue editando el título/tarea: se limpia para no sugerir que el texto
+  // nuevo tampoco tiene plan, cuando en realidad todavía no se volvió a buscar.
+  useEffect(() => { setPlanLinkNoMatch(false); }, [title, description]);
+
+  // Al confirmar, el usuario dijo "esta OT ES este ítem del plan": hereda los
+  // campos que el plan ya tiene definidos (criterios, LOTO, riesgo, RCM,
+  // talleres) usando el mismo endpoint y el mismo criterio "no pisar lo que
+  // el usuario ya escribió a mano" que usa el modo prefill=plan (ver
+  // useEffect de arriba). Título y tarea son la excepción: se reemplazan por
+  // los del plan aunque el usuario ya haya escrito algo — lo que había era
+  // sólo el texto con el que se buscó la coincidencia, no la identidad
+  // definitiva de la OT.
+  const handlePlanLinkConfirm = useCallback(async (planIds: string[]) => {
+    // El título pasa a ser "<código> <título del plan>" — misma identidad con
+    // la que ese ítem se ve en todos lados (Ítems del PDM, PDF, etc.).
+    const primary = planLinkCandidates?.find(c => c.id === planIds[0]);
+    if (primary) setTitle(`${primary.taskCode} ${primary.title}`.trim());
+
+    setConfirmedPlanIds(planIds);
+    setPlanLinkCandidates(null);
+    setPlanLinkMode(null);
+    try {
+      const merged = await api.get<{
+        description: string | null;
+        acceptanceCriteria: string | null; loto: string | null;
+        riskLevel: string | null; riskAnalysisResult: string | null;
+        consequenceCategory: string | null; consequenceRationale: string | null;
+        providers: PlanProviderPreview[];
+      }>(`/app/pms/maintenance-plans/merged-text?ids=${planIds.map(encodeURIComponent).join(",")}`);
+      if (merged.description) setDescription(merged.description);
+      if (!acceptanceCriteria.trim() && merged.acceptanceCriteria) setAcceptanceCriteria(merged.acceptanceCriteria);
+      if (!loto.trim() && merged.loto) setLoto(merged.loto);
+      if (!riskLevel && merged.riskLevel) setRiskLevel(merged.riskLevel);
+      if (!riskAnalysisResult.trim() && merged.riskAnalysisResult) setRiskAnalysisResult(merged.riskAnalysisResult);
+      if (!consequenceCategory && merged.consequenceCategory) setConsequenceCategory(merged.consequenceCategory);
+      if (!consequenceRationale.trim() && merged.consequenceRationale) setConsequenceRationale(merged.consequenceRationale);
+      if (merged.providers?.length) setPlanProviders(merged.providers);
+    } catch (e) {
+      console.error("[plan-link] merged-text failed:", e);
+    }
+  }, [planLinkCandidates, acceptanceCriteria, loto, riskLevel, riskAnalysisResult, consequenceCategory, consequenceRationale]);
+
+  const handlePlanLinkDismiss = useCallback(() => {
+    setPlanLinkCandidates(null);
+    setPlanLinkMode(null);
+  }, []);
+
+  // Si el usuario cambia de equipo, los vínculos confirmados (y cualquier
+  // sugerencia pendiente) quedaban referidos al equipo anterior: se descartan.
+  useEffect(() => {
+    setConfirmedPlanIds([]);
+    setPlanLinkCandidates(null);
+    setPlanLinkMode(null);
+    setPlanLinkNoMatch(false);
+  }, [assetId]);
+
+  // IA: escanear una OT llenada a mano en papel (foto o PDF) y precompletar el
+  // formulario. Solo en creación libre — nunca guarda nada por sí sola, el
+  // usuario revisa y confirma con el botón Guardar de siempre.
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
+
+  const handleScanFile = useCallback(async (file: File) => {
+    if (scanning) return;
+    setScanning(true);
+    setErr(null);
+    setScanNotice(null);
+    try {
+      const res = await api.uploadRaw<{ extracted: ExtractedWorkOrderApi }>(
+        "/app/pms/work-orders/extract-scan",
+        file,
+        {
+          "X-Filename": encodeURIComponent(file.name),
+          ...(vesselCode.trim() ? { "X-Vessel-Code": vesselCode.trim().toUpperCase() } : {}),
+        },
+      );
+      const ex = res.extracted;
+      const lowConfidenceLabels: string[] = [];
+      const apply = (field: ExtractedFieldApi<string>, label: string, setter: (v: string) => void) => {
+        if (!field.value) return;
+        setter(field.value);
+        if (field.confidence !== "high") lowConfidenceLabels.push(label);
+      };
+      apply(ex.title, t("wo.modal.titleField"), setTitle);
+      apply(ex.description, t("wo.modal.task"), setDescription);
+      apply(ex.acceptanceCriteria, t("wo.modal.acceptanceCriteria"), setAcceptanceCriteria);
+      if (ex.priority.value) setPriority(ex.priority.value);
+      if (ex.dueDate.value) setDueDate(ex.dueDate.value);
+      // Solo preselecciona el equipo si ya está en la lista cargada del buque
+      // (misma validación anti-alucinación que handleSuggestAsset): un id que
+      // no está en `assets` sería de otro buque o inexistente.
+      if (!assetId && ex.assetIdSuggestion && assets.some(a => a.id === ex.assetIdSuggestion!.id)) {
+        setAssetId(ex.assetIdSuggestion.id);
+        setAssetSuggested(true);
+      }
+      setScanNotice(lowConfidenceLabels.length > 0
+        ? `${t("wo.ai.scan.reviewFields")}: ${lowConfidenceLabels.join(", ")}`
+        : t("wo.ai.scan.done"));
+    } catch (e) {
+      console.error("[extract-scan] failed:", e);
+      setErr(e instanceof ApiError ? e.message : t("wo.ai.scan.failed"));
+    } finally { setScanning(false); }
+  }, [scanning, vesselCode, assetId, assets, t]);
+
+  // Usuarios del tenant para el selector "Abierta por (en nombre de)" — solo admin.
+  // El endpoint /app/team/members ya es admin-only.
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get<{ userId: string; firstName: string | null; lastName: string | null; role?: string; jobTitle?: string | null }[]>("/app/team/members")
+      .then(rows => setTeamUsers(Array.isArray(rows) ? rows : []))
+      .catch(() => setTeamUsers([]));
+  }, [isAdmin]);
+
+  // Vessel list for standalone mode
+  useEffect(() => {
+    if (prefill) return;
+    api.get<{ items: Vessel[] }>("/app/vessels?limit=200")
+      .then(res => setVessels(res.items ?? []))
+      .catch(() => setVessels([]));
+  }, [prefill]);
+
+  // Asset lookup for standalone mode
+  useEffect(() => {
+    if (prefill) return;
+    setAssets([]);
+    // Si el asistente ya resolvió el equipo de antemano, no se pisa con "".
+    setAssetId(initialAssetId ?? "");
+    clearTimeout(debounceRef.current);
+    const code = vesselCode.trim().toUpperCase();
+    if (!code) return;
+    debounceRef.current = setTimeout(async () => {
+      setLoadingAssets(true);
+      try {
+        const res = await api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(code)}&limit=200`);
+        const items = res.items ?? [];
+        setAssets(items);
+        if (autoSelectClassInspectionAsset) {
+          const match = findClassInspectionAsset(items);
+          if (match) {
+            setAssetId(match.id);
+            // Con el equipo ya identificado de antemano (no hace falta que la
+            // IA adivine de qué se trata), se listan TODOS sus planes activos
+            // para que el usuario elija el tipo de inspección correcto — no
+            // sólo el que la IA hubiera matcheado por texto.
+            suggestedPlanForAssetRef.current = match.id;
+            try {
+              const plansRes = await api.get<{ items: PlanCandidateApi[] }>(
+                `/app/pms/maintenance-plans?assetId=${encodeURIComponent(match.id)}&status=ACTIVE&limit=100`,
+              );
+              const plans = plansRes.items ?? [];
+              if (plans.length > 0) {
+                setPlanLinkCandidates(plans.map(p => ({
+                  id: p.id, taskCode: p.taskCode, title: p.title,
+                  nextDueDate: p.nextDueDate, nextDueHours: p.nextDueHours,
+                  confidence: "medium" as const,
+                })));
+                setPlanLinkMode("choose");
+              }
+            } catch { /* sin sugerencias automáticas; el usuario puede vincular a mano */ }
+          }
+        }
+      } catch { setAssets([]); }
+      finally { setLoadingAssets(false); }
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [vesselCode, prefill, autoSelectClassInspectionAsset, initialAssetId]);
+
+  // Asset list for prefill mode when the source has no asset (audit findings): user picks one.
+  useEffect(() => {
+    if (!prefill?.assetSelectable || !prefill.vesselCode) return;
+    setLoadingAssets(true);
+    api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(prefill.vesselCode)}&limit=200`)
+      .then(res => setAssets(res.items ?? []))
+      .catch(() => setAssets([]))
+      .finally(() => setLoadingAssets(false));
+  }, [prefill]);
+
+  // Resolve asset name from API when prefill has assetId but no assetName
+  useEffect(() => {
+    if (!prefill || prefill.assetSelectable || prefill.assetName || !prefill.assetId || !prefill.vesselCode) return;
+    api.get<{ items: Asset[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(prefill.vesselCode)}&limit=200`)
+      .then(res => {
+        const found = res.items?.find(a => a.id === prefill.assetId);
+        if (found) setResolvedAssetName(found.name);
+      })
+      .catch(() => {});
+  }, [prefill]);
+
+  // Filas con proveedor elegido (descarta las vacías, como en el editor del
+  // Plan de Mantenimiento). Si ya se confirmó un vínculo a un plan (que trae
+  // sus propios proveedores), no hace falta elegir uno más acá: sería pedir
+  // el mismo dato dos veces.
+  const cleanStandaloneProviders = standaloneProviderRequests.filter(r => r.providerId);
+  const hasAnyProvider = cleanStandaloneProviders.length > 0 || confirmedPlanIds.length > 0;
+
+  // Campos que hoy bloquean el guardado: se resaltan como guía (preview V24).
+  const missReq = {
+    vessel: !prefill && !vesselCode.trim(),
+    asset: (!prefill || !!prefill.assetSelectable) && !assetId,
+    provider: !prefill && requireProvider && !hasAnyProvider,
+  };
+  const missReqCount = Number(missReq.vessel) + Number(missReq.asset) + Number(missReq.provider);
+
+  const onSave = useCallback(async () => {
+    setErr(null);
+    if (!prefill) {
+      if (!vesselCode.trim()) { setErr(t("wo.modal.vesselRequired")); return; }
+      if (!assetId)           { setErr(t("wo.modal.equipmentRequired")); return; }
+      if (requireProvider && !hasAnyProvider) { setErr(t("wo.modal.providerRequired")); return; }
+    } else if (prefill.assetSelectable && !assetId) {
+      setErr(t("wo.modal.equipmentRequired")); return;
+    }
+    setSaving(true);
+    try {
+      let woId: string;
+      let woCode: string | undefined;
+
+      if (prefill?.source === "plan") {
+        const created = await api.post<{ id: string; workOrderCode: string }>(`/app/pms/maintenance-plans/${prefill.sourceId}/open-work-order`, {
+          title:              title.trim()              || undefined,
+          description:        description.trim()        || undefined,
+          assignedToUserId:   assignedTo.trim()         || undefined,
+          dueDate:            dueDate                   || null,
+          // Criterios, LOTO, análisis de riesgo y justificación RCM NO vienen en
+          // el listado de planes (son los campos pesados que la lista recorta).
+          // Si el prefill no los trajo, mandar null los borraría al abrir la OT:
+          // se manda undefined = "no opino" y el backend hereda del plan (y con
+          // varios ítems, arma el texto combinado de todos).
+          acceptanceCriteria: keepFromPlan(acceptanceCriteria, prefill.acceptanceCriteria),
+          loto:               keepFromPlan(loto, prefill.loto),
+          riskLevel:          riskLevel                 || null,
+          riskAnalysisResult: keepFromPlan(riskAnalysisResult, prefill.riskAnalysisResult),
+          consequenceCategory: consequenceCategory || null,
+          consequenceRationale: keepFromPlan(consequenceRationale, prefill.consequenceRationale),
+          estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
+          // Solo admin: fecha de apertura y abrir en nombre de otro (SOLICITA).
+          openDate:           isAdmin && openDate ? openDate : undefined,
+          createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
+          // Otros ítems del PDM que cubre la misma OT.
+          additionalPlanIds:  prefill.additionalPlans?.map(p => p.id),
+          providerOverride:   Object.keys(providerOverride).length > 0 ? providerOverride : undefined,
+          // Recuadros del papel que el plan no define, más "Asignado a" (trae un
+          // valor por defecto del plan, pero acá se puede pisar).
+          ...(isMercurio ? {
+            requestedByArea: requestedByArea || null,
+            assignedToArea:  assignedToArea  || null,
+            systemArea:      systemArea      || null,
+            voyageNumber:    voyageNumber.trim() || null,
+            operatingCondition: operatingCondition || null,
+            location:        location.trim()     || null,
+          } : {}),
+        });
+        woId = created.id;
+        woCode = created.workOrderCode;
+      } else {
+        const created = await api.post<{ id: string; workOrderCode: string }>("/app/pms/work-orders", {
+          vesselCode:         (prefill?.vesselCode ?? vesselCode).trim().toUpperCase(),
+          assetId:            prefill?.assetSelectable ? assetId : (prefill?.assetId ?? assetId),
+          // Mercurio manda el tipo fino y el backend deriva el grueso; el resto
+          // sigue mandando el grueso. "Inspección" no tiene fino: va como type.
+          ...(isMercurio
+            ? (maintKind === "INSPECTION"
+                ? { type: "INSPECTION" }
+                : { maintenanceKind: maintKind })
+            : { type: prefill?.type ?? type }),
+          priority:           prefill?.priority ?? priority,
+          criticality:        prefill?.criticality ?? criticality,
+          openDate,
+          dueDate:            dueDate || null,
+          title:              title.trim()              || null,
+          description:        description.trim()        || null,
+          assignedToUserId:   assignedTo.trim()         || null,
+          acceptanceCriteria: acceptanceCriteria.trim() || null,
+          loto,
+          riskLevel:          riskLevel                 || null,
+          riskAnalysisResult: riskAnalysisResult.trim() || null,
+          consequenceCategory: consequenceCategory || null,
+          consequenceRationale: consequenceRationale.trim() || null,
+          estimatedHours:     estimatedHours ? Number(estimatedHours) : null,
+          // Solo admin: abrir en nombre de otro usuario (SOLICITA). openDate ya va arriba.
+          createdByUserId:    isAdmin && onBehalfUserId ? onBehalfUserId : undefined,
+          // Recuadros del formulario REGI-MAN-02.3 (Mercurio). "Asignado a" es lo
+          // que gatilla el proveedor — mismo eje que usa el editor completo de la
+          // OT. Tenants sin ese formulario preservan el criterio anterior: sólo
+          // se manda TERCERIZADO si se cargó algún proveedor libre.
+          ...(isMercurio ? {
+            requestedByArea: requestedByArea || null,
+            assignedToArea:  assignedToArea  || null,
+            systemArea:      systemArea      || null,
+            voyageNumber:    voyageNumber.trim() || null,
+            operatingCondition: operatingCondition || null,
+            location:        location.trim()     || null,
+          } : (cleanStandaloneProviders.length > 0 ? { assignedToArea: "TERCERIZADO" } : {})),
+          // providerId de la OT sólo puede guardar UNO — con varios queda null,
+          // igual que en el Plan de Mantenimiento (cada SS igual lleva el suyo).
+          ...(cleanStandaloneProviders.length > 0 ? {
+            providerId: cleanStandaloneProviders.length === 1 ? cleanStandaloneProviders[0]!.providerId : undefined,
+          } : {}),
+        });
+        woId = created.id;
+        woCode = created.workOrderCode;
+      }
+
+      // Upload checklist doc after WO is created (needs id)
+      if (checklistDocFile && woId) {
+        try {
+          const res = await api.upload<{ url: string }>(`/app/attachments/upload?entityType=WorkOrder&entityId=${woId}`, checklistDocFile);
+          if (res.url) {
+            await api.patch(`/app/pms/work-orders/${woId}`, { checklistDocUrl: res.url });
+          }
+        } catch { /* non-blocking */ }
+      }
+
+      // Proveedor(es) libre(s) elegido(s) a mano: abre una Solicitud de
+      // Servicio por cada uno (mismo criterio "una SS por taller" que el plan).
+      // No bloqueante: si una falla, la OT ya quedó guardada y se puede abrir
+      // a mano después.
+      if (!prefill && cleanStandaloneProviders.length > 0 && woId) {
+        for (const r of cleanStandaloneProviders) {
+          const servicio = r.purpose.trim() || title.trim() || undefined;
+          try {
+            await api.post(`/app/pms/work-orders/${woId}/service-requests`, {
+              providerId:  r.providerId,
+              title:       servicio,
+              description: servicio,
+              priority:    prefill?.priority ?? priority,
+            });
+          } catch (e) { console.error("[create-sr] failed:", e); }
+        }
+      }
+
+      // Vincular los ítems del plan que el usuario confirmó en el popup de la
+      // IA. La OT ya quedó guardada: si un vínculo falla no se pierde el alta
+      // (se puede vincular a mano desde la orden después) — mismo criterio
+      // no bloqueante que el adjunto de checklist, arriba.
+      if (confirmedPlanIds.length > 0 && woId) {
+        const hasOverride = Object.keys(providerOverride).length > 0;
+        for (const planId of confirmedPlanIds) {
+          try {
+            await api.post(`/app/pms/work-orders/${woId}/plans`, {
+              planId, providerOverride: hasOverride ? providerOverride : undefined,
+            });
+          }
+          catch (e) { console.error("[link-plan] failed:", e); }
+        }
+      }
+
+      // La ficha de la OT muestra el aviso "¡Orden de trabajo abierta!" con los
+      // pasos que siguen. En el alta de SS el flujo termina en la solicitud.
+      if (!serviceRequestMode) markJustCreated("wo", woCode);
+      await onSaved(woId, woCode);
+    } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
+    finally { setSaving(false); }
+  }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
+      title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+      consequenceCategory, consequenceRationale, estimatedHours,
+      checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t,
+      standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio, serviceRequestMode,
+      requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location]);
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    vesselCode, assetId, type, priority, criticality, openDate, dueDate,
+    title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
+    consequenceCategory, consequenceRationale, estimatedHours,
+    checklistDocFileName: checklistDocFile?.name ?? "",
+    onBehalfUserId, standaloneProviderRequests,
+    requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location,
+  });
+  const requestClose = useEscapeGuard({ isDirty, onSave, onClose });
+
+  // ── Copiloto: el formulario completo, en el mismo orden que la pantalla ──
+  const { data: directory } = useFetch<Array<{ userId: string; name: string }>>("/app/team/directory");
+  const showsStandaloneProviders = !prefill && planProviders.length === 0 && (isMercurio ? assignedToArea === "TERCERIZADO" : requireProvider);
+  // Al marcar "Tercerizado" la sección del taller aparecía vacía, sólo con
+  // "+ Agregar": quien cargaba a mano tenía un clic de más, y el copiloto no
+  // tenía dónde poner el taller (lo "registraba" en la charla y la OT se
+  // guardaba sin taller, o sea sin SS). Ahora nace con un renglón listo.
+  useEffect(() => {
+    if (showsStandaloneProviders && standaloneProviderRequests.length === 0) {
+      setStandaloneProviderRequests([{ providerId: "", purpose: "" }]);
+    }
+  }, [showsStandaloneProviders, standaloneProviderRequests.length]);
+  const assistFields: CopilotAssistField[] = [];
+  if (!prefill) {
+    assistFields.push(
+      { key: "vesselCode", label: t("wo.modal.vessel"), value: vesselCode,
+        options: vessels.map(v => ({ value: v.code, label: v.name ?? v.code })), set: setVesselCode },
+    );
+    if (assets.length > 0) {
+      assistFields.push({ key: "assetId", label: t("wo.modal.equipment"), value: assetId,
+        options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: [a.assetCode] })), set: setAssetId });
+    }
+  } else if (prefill.assetSelectable && assets.length > 0) {
+    assistFields.push({ key: "assetId", label: t("wo.modal.equipment"), value: assetId,
+      options: assets.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: [a.assetCode] })), set: setAssetId });
+  }
+  if (isMercurio) {
+    assistFields.push(
+      { key: "voyageNumber", label: t("wo.modal.voyageNumber"), value: voyageNumber, set: setVoyageNumber },
+      { key: "location", label: t("wo.modal.location"), value: location, set: setLocation,
+        hint: "Geographic location of the vessel while the work is done: city/port or river km. NOT a place on board." },
+      { key: "operatingCondition", label: t("wo.modal.operatingCondition"), value: operatingCondition, set: setOperatingCondition,
+        options: WO_OPERATING_CONDITIONS.map(c => ({ value: c, label: t(`wo.condition.${c}` as TranslationKey) })) },
+      { key: "requestedByArea", label: t("wo.modal.requestedBy"), value: requestedByArea, options: WO_REQUESTED_BY, set: setRequestedByArea },
+      { key: "assignedToArea", label: t("wo.modal.assignedTo"), value: assignedToArea, options: WO_ASSIGNED_TO,
+        set: v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); } },
+    );
+    if (!prefill) {
+      assistFields.push(
+        { key: "priority", label: t("wo.modal.priority"), value: priority, options: WO_PRIORITY_OPTIONS, set: setPriority },
+        { key: "maintKind", label: t("wo.modal.type"), value: maintKind, options: WO_MAINTENANCE_KINDS_OR_INSPECTION, set: setMaintKind },
+      );
+    }
+    assistFields.push({ key: "systemArea", label: t("wo.modal.system"), value: systemArea, options: WO_SYSTEM_AREAS, set: setSystemArea });
+  } else if (!prefill) {
+    assistFields.push(
+      { key: "type", label: t("wo.modal.type"), value: type, set: setType, options: [
+        { value: "PREVENTIVE", label: t("wo.type.preventive") },
+        { value: "CORRECTIVE", label: t("wo.type.corrective") },
+        { value: "INSPECTION", label: t("wo.type.inspection") },
+      ] },
+      { key: "priority", label: t("wo.modal.priority"), value: priority, set: setPriority, options: [
+        { value: "LOW", label: t("priority.low") }, { value: "MEDIUM", label: t("priority.medium") },
+        { value: "HIGH", label: t("priority.high") }, { value: "CRITICAL", label: t("priority.critical") },
+      ] },
+    );
+  }
+  if (!prefill) {
+    assistFields.push({ key: "criticality", label: t("wo.modal.criticality"), value: criticality, set: setCriticality,
+      options: ["A", "B", "C"].map(v => ({ value: v, label: v })) });
+  }
+  assistFields.push(
+    { key: "title", label: t("wo.modal.titleField"), value: title, set: setTitle },
+    { key: "description", label: t("wo.modal.task"), value: description, set: setDescription },
+  );
+  if (showsStandaloneProviders) {
+    standaloneProviderRequests.forEach((row, i) => {
+      assistFields.push(
+        { key: `line.${i}.providerId`, label: `${t("wo.modal.provider")} ${i + 1}`, value: row.providerId,
+          hint: "Outside workshop that does the job. When the OT is saved, a Service Request (SS) is opened to it automatically — without it no SS is created. If the name the user gives is not in the list, say so and ask; do not skip this field.",
+          options: availableProviders.map(p => ({ value: p.id, label: p.name, aliases: p.providerCode ? [p.providerCode] : undefined })),
+          set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: v } : r)) },
+        { key: `line.${i}.purpose`, label: `${t("mp.providerRequests.purposePlaceholder")} (${i + 1})`, value: row.purpose,
+          set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: v } : r)) },
+      );
+    });
+  }
+  assistFields.push(
+    { key: "assignedTo", label: t("wo.modal.assignee"), value: assignedTo, set: setAssignedTo,
+      options: (Array.isArray(directory) ? directory : []).map(p => ({ value: p.userId, label: p.name })) },
+    { key: "dueDate", label: t("wo.modal.dueDate"), value: dueDate, set: setDueDate, hint: "Date as YYYY-MM-DD." },
+    { key: "acceptanceCriteria", label: t("wo.modal.acceptanceCriteria"), value: acceptanceCriteria, set: setAcceptanceCriteria,
+      hint: "Has an AI generator (action acceptanceCriteria): offer it instead of writing it yourself." },
+    { key: "loto", label: t("wo.modal.loto"), value: loto, set: setLoto,
+      hint: "Has an AI generator (action loto): offer it instead of writing it yourself." },
+    { key: "riskLevel", label: t("wo.modal.riskLevel"), value: riskLevel, set: setRiskLevel,
+      hint: "Filled together with the risk analysis by the AI generator (action risk).",
+      options: [
+        { value: "LOW", label: t("priority.low") }, { value: "MEDIUM", label: t("priority.medium") },
+        { value: "HIGH", label: t("priority.high") }, { value: "CRITICAL", label: t("priority.critical") },
+      ] },
+    { key: "riskAnalysisResult", label: t("wo.modal.riskAnalysisResult"), value: riskAnalysisResult, set: setRiskAnalysisResult,
+      hint: "Has an AI generator (action risk): offer it instead of writing it yourself." },
+    { key: "consequenceCategory", label: t("wo.modal.consequenceCategory"), value: consequenceCategory, set: setConsequenceCategory,
+      hint: "Filled with its rationale by the AI generator (action consequence).",
+      options: [
+        { value: "SAFETY", label: t("wo.modal.consequence.safety") },
+        { value: "ENVIRONMENTAL", label: t("wo.modal.consequence.environmental") },
+        { value: "OPERATIONAL", label: t("wo.modal.consequence.operational") },
+        { value: "NON_OPERATIONAL", label: t("wo.modal.consequence.nonOperational") },
+      ] },
+  );
+  if (consequenceCategory) {
+    assistFields.push({ key: "consequenceRationale", label: t("wo.modal.consequenceRationale"), value: consequenceRationale, set: setConsequenceRationale });
+  }
+  assistFields.push({ key: "estimatedHours", label: t("wo.modal.estimatedHours"), value: estimatedHours, set: setEstimatedHours });
+
+  useCopilotAssist({
+    module: "WORK_ORDERS",
+    screen: "WO_CREATE",
+    title: requireProvider ? t("dashboard.newServiceRequest") : t("dashboard.newWorkOrder"),
+    vesselCode: vesselCode || undefined,
+    fields: assistFields,
+    actions: {
+      title:              { label: t("wo.modal.titleField"),          run: handleTitleClick },
+      task:               { label: t("wo.modal.task"),                run: handleTaskClick },
+      acceptanceCriteria: { label: t("wo.modal.acceptanceCriteria"),  run: handleCriteriaClick },
+      loto:               { label: t("wo.modal.loto"),                run: handleLotoClick },
+      risk:               { label: t("wo.modal.riskLevel"),           run: handleRiskClick },
+      consequence:        { label: t("wo.modal.consequenceCategory"), run: handleConsequenceClick },
+      ...(showsStandaloneProviders ? {
+        addLine: { label: t("mp.providerRequests.add"), run: () => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }]) },
+      } : {}),
+    },
+  });
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  // Buque y equipo ya elegidos en el asistente: se muestran como etiquetas fijas
+  // arriba (con "cambiar") en vez de repetir los selectores.
+  const [editContext, setEditContext] = useState(false);
+  const showContextChips = !prefill && !!initialAssetId && !editContext && !!vesselCode && !!assetId;
+  const chipCls = "inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg";
+  const vesselLabel = (code: string) => vessels.find(v => v.code === code)?.name ?? code;
+  const assetLabel = assets.find(a => a.id === assetId)?.name ?? null;
+  // Talleres ya elegidos en el paso "Proveedor" del asistente de Nueva SS.
+  const providersPreselected = !!serviceRequestMode && !!initialProviderIds?.length && !!onChangeContext;
+  const providerName = (id: string) => availableProviders.find(p => p.id === id)?.name ?? "…";
+  // En SS el taller es el dato central: va en el bloque 1, no en "Asignado a".
+  const providersInFirstSection = !isMercurio || !!serviceRequestMode;
+
+  const priorityOptions = isMercurio ? WO_PRIORITY_OPTIONS : [
+    { value: "CRITICAL", label: t("priority.critical") }, { value: "HIGH", label: t("priority.high") },
+    { value: "MEDIUM", label: t("priority.medium") },     { value: "LOW", label: t("priority.low") },
+  ];
+  const criticalityOptions = ["A", "B", "C"].map(v => ({ value: v, label: v }));
+
+  const vesselAssetFields = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <GuideField id="wo-new-vessel" missing={missReq.vessel}>
+        <label className={labelCls}>{t("wo.modal.vessel")}<RequiredMark />{missReq.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+        <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
+          <option value="">{t("wo.modal.selectVessel")}</option>
+          {vessels.map(v => (
+            <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
+          ))}
+        </select>
+      </GuideField>
+      <GuideField id="wo-new-asset" missing={missReq.asset}>
+        <label className={labelCls}>{t("wo.modal.equipment")}<RequiredMark />{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+        {loadingAssets
+          ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
+          : assets.length > 0
+            ? <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId}
+                placeholder={t("wo.modal.selectEquipment")} />
+            : <input value={assetId} onChange={e => setAssetId(e.target.value)}
+                placeholder={vesselCode ? t("wo.modal.noEquipmentEnterId") : t("wo.modal.enterVesselFirst")}
+                className={inputCls} />
+        }
+      </GuideField>
+    </div>
+  );
+
+  // Talleres del trabajo: los que traen los planes (se abre una SS por cada
+  // uno al crear la OT) o, en alta libre, los que se eligen a mano.
+  const providersBlock = (
+    <>
+      {planProviders.length > 0 && (
+        <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
+            {planProviders.length === 1 ? "Proveedor" : `Proveedores (${planProviders.length})`}
+          </p>
+          {planProviders.map(p => (
+            <div key={p.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-fg">
+              {availableProviders.length > 0 ? (
+                <select
+                  value={providerOverride[p.id] ?? p.id}
+                  onChange={e => setProviderOverride(prev => ({ ...prev, [p.id]: e.target.value }))}
+                  className="bg-fg/5 border border-fg/10 rounded px-1.5 py-0.5 text-[11px] font-semibold text-fg focus:outline-none focus:border-accent/50"
+                >
+                  {!availableProviders.some(ap => ap.id === p.id) && <option value={p.id}>{p.name}</option>}
+                  {availableProviders.map(ap => <option key={ap.id} value={ap.id}>{ap.name}</option>)}
+                </select>
+              ) : (
+                <span className="font-semibold">{p.name}</span>
+              )}
+              {p.purposes.length > 0 && (
+                <span className="text-text-industrial/60">· {p.purposes.join(" / ")}</span>
+              )}
+              {p.taskCodes.length > 0 && (
+                <span className="text-text-industrial/45 font-mono">· {p.taskCodes.join(", ")}</span>
+              )}
+            </div>
+          ))}
+          <p className="text-[10px] text-text-industrial/50 pt-0.5">
+            {planProviders.length === 1
+              ? "Al crear la orden se abre una solicitud de servicio para este taller."
+              : "Al crear la orden se abre una solicitud de servicio por taller."}
+          </p>
+        </div>
+      )}
+      {/* Sólo en alta libre: en modo prefill (desde un plan) el proveedor ya lo
+          maneja el plan (caja de arriba) y el backend lo deriva solo al abrir
+          la OT — un editor acá se ignoraría en silencio. */}
+      {/* Asistente de "Nueva SS": los talleres ya se eligieron en su paso; acá
+          sólo se escribe qué servicio se le pide a cada uno. */}
+      {showsStandaloneProviders && providersPreselected && (
+        <div className="rounded-xl border border-accent/25 bg-accent/5 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label className={labelCls}>{t("wo.modal.ssServicePerProvider")}</label>
+            <button type="button" onClick={() => onChangeContext?.()}
+              className="shrink-0 rounded-full border border-accent/25 px-2.5 py-0.5 text-[11px] font-bold text-accent hover:bg-accent/10 transition-colors">
+              {t("wo.modal.changeProviders")}
+            </button>
+          </div>
+          {standaloneProviderRequests.map((row, i) => (
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,13rem)_1fr] items-center gap-2">
+              <span className="flex items-center gap-1.5 min-w-0 text-[13px] font-bold text-fg">
+                <Handshake className="w-3.5 h-3.5 text-accent shrink-0" />
+                <span className="truncate">{providerName(row.providerId)}</span>
+              </span>
+              <input
+                value={row.purpose}
+                onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                placeholder={t("mp.providerRequests.purposePlaceholder")}
+                className={inputCls}
+              />
+            </div>
+          ))}
+          <p className="text-[10px] text-text-industrial/50">{t("wo.modal.ssOnePerProvider")}</p>
+        </div>
+      )}
+      {showsStandaloneProviders && !providersPreselected && (
+        <div className={`rounded-xl border p-3 space-y-2 ${missReq.provider ? "border-amber-500/60 border-l-4 bg-amber-50 dark:bg-amber-500/10" : "border-accent/25 bg-accent/5"}`}>
+          <label className={labelCls}>{t("wo.modal.provider")}{requireProvider && <RequiredMark />}{missReq.provider && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          {standaloneProviderRequests.map((row, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                <select
+                  value={row.providerId}
+                  onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
+                  className={inputCls}
+                >
+                  <option value="">{t("wo.modal.providerSelect")}</option>
+                  {availableProviders.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
+                  ))}
+                </select>
+                <input
+                  value={row.purpose}
+                  onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                  placeholder={t("mp.providerRequests.purposePlaceholder")}
+                  className={inputCls}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setStandaloneProviderRequests(prev => prev.filter((_, j) => j !== i))}
+                title={t("mp.providerRequests.remove")}
+                className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
+          </button>
+          {cleanStandaloneProviders.length > 0 && (
+            <p className="text-[10px] text-text-industrial/50">{t("wo.modal.providerHint")}</p>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  let sectionNo = 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-fg/10 shrink-0">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              {serviceRequestMode ? <Handshake className="w-4 h-4 text-accent" /> : <Wrench className="w-4 h-4 text-accent" />}
+              {serviceRequestMode ? t("dashboard.newServiceRequest") : t("wo.modal.title")}
+              {stepLabel && (
+                <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">
+                  {stepLabel}
+                </span>
+              )}
+            </h2>
+            {prefill && (
+              <p className="text-[10px] text-text-industrial/50 mt-0.5">
+                {t("wo.modal.fromSource")} {prefill.sourceLabel}: <span className="font-mono text-accent">{prefill.sourceCode}</span>
+              </p>
+            )}
+            {(showContextChips || prefill) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className={chipCls}><Ship className="w-3 h-3" /><b className="font-bold">{vesselLabel(prefill?.vesselCode ?? vesselCode)}</b></span>
+                {prefill && !prefill.assetSelectable && (
+                  <span className={chipCls}><Cog className="w-3 h-3" /><b className="font-bold">{resolvedAssetName ?? prefill.assetId}</b></span>
+                )}
+                {showContextChips && (
+                  <>
+                    <span className={chipCls}><Cog className="w-3 h-3" /><b className="font-bold">{assetLabel ?? "…"}</b></span>
+                    {providersPreselected && (
+                      <span className={chipCls}><Handshake className="w-3 h-3" />
+                        <b className="font-bold">{standaloneProviderRequests.map(r => providerName(r.providerId)).join(", ")}</b>
+                      </span>
+                    )}
+                    <button type="button"
+                      onClick={() => { if (onChangeContext) onChangeContext(); else setEditContext(true); }}
+                      className="text-[11px] font-semibold text-accent hover:text-fg transition-colors px-1">
+                      {t("wo.wizard.change")}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <ModalCloseButton onClose={requestClose} />
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-3.5">
+
+          {/* Escanear la OT en papel (sólo alta libre) */}
+          {!prefill && (
+            <div className="rounded-xl border-[1.5px] border-dashed border-accent/40 bg-accent/[0.04] px-4 py-2.5">
+              <input ref={scanInputRef} type="file"
+                accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
+                capture="environment" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handleScanFile(f); e.target.value = ""; }} />
+              <div className="flex flex-wrap items-center gap-3">
+                <Camera className="w-[22px] h-[22px] text-accent shrink-0" />
+                <div className="flex-1 min-w-[10rem]">
+                  <p className="text-[13px] font-bold text-fg">{t("wo.modal.scanTitle")}</p>
+                  <p className="text-xs text-text-industrial/60">{t("wo.modal.scanDesc")}</p>
+                </div>
+                <button type="button" onClick={() => scanInputRef.current?.click()}
+                  disabled={scanning || !vesselCode.trim()}
+                  title={!vesselCode.trim() ? t("wo.ai.scan.selectVesselFirst") : t("wo.ai.scan.tooltip")}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-semibold text-fg hover:border-accent/40 disabled:opacity-40 transition-colors">
+                  {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                  {t("wo.ai.scan.button")}
+                </button>
+              </div>
+              {scanNotice && (
+                <p className="text-[10px] text-accent mt-1.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 shrink-0" /> {scanNotice}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 1 · Qué hay que hacer */}
+          <FormSection n={++sectionNo}
+            title={serviceRequestMode ? t("wo.modal.sec.whatSs") : t("wo.modal.sec.what")}
+            subtitle={serviceRequestMode ? t("wo.modal.sec.whatSsSub") : t("wo.modal.sec.whatSub")}>
+            {!prefill && !showContextChips && vesselAssetFields}
+
+            {prefill && (
+              <>
+                {/* Ítems del PDM que cubre esta OT. Solo aparece cuando se
+                    generó una sola orden desde varios planes (astillero). */}
+                {prefill.additionalPlans && prefill.additionalPlans.length > 0 && (
+                  <div className="rounded-xl border border-accent/25 bg-accent/[0.06] p-3 space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-widest text-accent font-bold">
+                      Ítems del PDM incluidos ({prefill.additionalPlans.length + 1})
+                    </p>
+                    <p className="text-[11px] text-fg">
+                      <span className="font-mono font-bold">{prefill.sourceCode}</span>
+                      <span className="text-text-industrial/60"> · {prefill.title}</span>
+                    </p>
+                    {prefill.additionalPlans.map(p => (
+                      <p key={p.id} className="text-[11px] text-fg">
+                        <span className="font-mono font-bold">{p.taskCode}</span>
+                        <span className="text-text-industrial/60"> · {p.title}{p.assetName ? ` · ${p.assetName}` : ""}</span>
+                      </p>
+                    ))}
+                    <p className="text-[10px] text-text-industrial/50 pt-0.5">
+                      Al cerrar la orden se dan por ejecutados todos estos ítems.
+                    </p>
+                  </div>
+                )}
+                {prefill.assetSelectable && (
+                  <GuideField id="wo-new-asset-prefill" missing={missReq.asset}>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className={labelCls}>{t("wo.modal.equipment")}<RequiredMark />{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      {assets.length > 0 && (
+                        <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={suggestingAsset}
+                          title={t("wo.ai.suggestAssetTooltip")} onClick={() => { void handleSuggestAsset(); }} />
+                      )}
+                    </div>
+                    {loadingAssets
+                      ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
+                      : assets.length > 0
+                        ? <AssetSearchDropdown assets={assets} value={assetId}
+                            onChange={id => { setAssetId(id); setAssetSuggested(false); }}
+                            placeholder={t("wo.modal.selectEquipment")} />
+                        : <input value={assetId} onChange={e => { setAssetId(e.target.value); setAssetSuggested(false); }}
+                            placeholder={t("wo.modal.noEquipmentEnterId")} className={inputCls} />
+                    }
+                    {assetSuggested && assetId && (
+                      <p className="text-[10px] text-accent flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> {t("wo.ai.assetSuggested")}
+                      </p>
+                    )}
+                  </GuideField>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {([
+                    [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
+                    [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-fg"],
+                    prefill.dueDate
+                      ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-fg"]
+                      : null,
+                  ].filter(Boolean) as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
+                    <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{label}</p>
+                      {node ?? <p className={`text-xs mt-0.5 ${cls ?? ""}`}>{value || "—"}</p>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.titleField")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingTitle}
+                  title={t("wo.ai.titleTooltip")} onClick={handleTitleClick} />
+              </div>
+              {/* Textarea, no input: cuando la OT cubre varios ítems del PDM el
+                  título es una línea por ítem y en un input se vería sólo la
+                  primera. Con un solo ítem se ve igual que antes (una fila). */}
+              <AutoTextArea
+                rows={Math.min(6, Math.max(1, title.split("\n").length))}
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                disabled={loadingTitle}
+                className={`${inputCls} resize-y`}
+                placeholder={t("wo.modal.titlePlaceholder")}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              {/* "Sugerir" = la IA propone las tareas a partir del equipo y el
+                  título (mismo gesto que Criterios / LOTO / Riesgo). */}
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.task")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingTask} dim={!title.trim()}
+                  title={!title.trim() ? t("wo.ai.completeTitleFirst") : t("wo.ai.taskTooltip")} onClick={handleTaskClick} />
+              </div>
+              <AutoTextArea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
+                disabled={loadingTask}
+                className={`${inputCls} resize-y`} />
+            </div>
+
+            {/* Detección de plan: corre sola una vez por equipo (silenciosa si
+                no encuentra nada), pero acá se puede repetir a mano en
+                cualquier momento — típicamente después de terminar de escribir
+                el título, que es cuando el intento automático ya pasó. */}
+            {!prefill && canLinkPlan && (
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => { void handleSuggestPlanLinks(); }}
+                  disabled={detectingPlanLink || !assetId || !(title.trim() || description.trim())}
+                  title={!assetId ? t("wo.ai.planLink.detectNeedsEquipment") : !(title.trim() || description.trim()) ? t("wo.ai.completeTitleFirst") : t("wo.ai.planLink.detectTooltip")}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs font-semibold text-fg hover:border-accent/40 disabled:opacity-40 transition-colors"
+                >
+                  {detectingPlanLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                  {t("wo.ai.planLink.detectButton")}
+                </button>
+                {planLinkNoMatch && (
+                  <p className="text-[10px] text-text-industrial/50">{t("wo.ai.planLink.noMatch")}</p>
+                )}
+              </div>
+            )}
+
+            {providersInFirstSection && providersBlock}
+          </FormSection>
+
+          {/* 2 · Prioridad, fechas y responsable */}
+          <FormSection n={++sectionNo} title={t("wo.modal.sec.when")} subtitle={t("wo.modal.sec.whenSub")}>
+            <div className="space-y-1.5">
+              <label className={labelCls} title={t("priority.hint")}>{t("wo.modal.priority")}</label>
+              {/* Desde un plan la prioridad viene fijada por el plan: se muestra, no se cambia. */}
+              <SegButtons options={priorityOptions} value={priority} disabled={!!prefill} allowClear={false}
+                onChange={v => { if (v) setPriority(v); }} activeCls={v => PRIORITY_ACTIVE_CLS[v]} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(!prefill || isAdmin) && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.openDate")}</label>
+                  <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.dueDate")}</label>
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
+                <input type="number" min="0" step="0.5" value={estimatedHours}
+                  onChange={e => setEstimatedHours(e.target.value)}
+                  className={inputCls} placeholder="—" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.assignee")}</label>
+                <AssigneeSelect value={assignedTo} onChange={setAssignedTo} className={inputCls} />
+              </div>
+              {/* Admin: abrir en nombre de otro usuario (SOLICITA). */}
+              {isAdmin && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className={labelCls}>{t("wo.modal.openedBy")}</label>
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">{t("wo.modal.adminOnly")}</span>
+                  </div>
+                  <PersonSelect value={onBehalfUserId} onChange={setOnBehalfUserId} className={inputCls}
+                    emptyLabel={t("wo.modal.openedBySelf")}
+                    options={teamUsers.map(u => ({
+                      value: u.userId,
+                      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.userId,
+                      role: u.role, jobTitle: u.jobTitle,
+                    }))} />
+                </div>
+              )}
+            </div>
+          </FormSection>
+
+          {/* 3 · Datos del formulario REGI-MAN-02.3 (Mercurio) — mismo orden que el papel */}
+          {isMercurio && (
+            <FormSection n={++sectionNo} title={t("wo.modal.sec.regi")} subtitle={t("wo.modal.sec.regiSub")}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
+                  <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
+                    placeholder="Ej. V-2026-014" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.location")}</label>
+                  <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
+                </div>
+                {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
+                  <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
+                    className={inputCls}>
+                    <option value="">—</option>
+                    {WO_OPERATING_CONDITIONS.map(c => (
+                      <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.requestedBy")}</label>
+                <SegButtons options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelCls}>{t("wo.modal.assignedTo")}</label>
+                  {serviceRequestMode && <span className="text-[10px] text-text-industrial/50">{t("wo.modal.ssAlwaysOutsourced")}</span>}
+                </div>
+                {/* En modo prefill viene precargado según el plan
+                    (Proveedor→Tercerizado, Cubierta/Máquinas/Barcaza→Tripulación),
+                    pero editable: quien abre la OT puede pisarlo. */}
+                <SegButtons options={WO_ASSIGNED_TO} value={assignedToArea}
+                  onChange={v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); }} />
+                {!providersInFirstSection && providersBlock}
+              </div>
+              {!prefill && (
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.type")}</label>
+                  <SegButtons options={WO_MAINTENANCE_KINDS_OR_INSPECTION} value={maintKind} onChange={setMaintKind} />
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.system")}</label>
+                  <SegButtons options={WO_SYSTEM_AREAS} value={systemArea} onChange={setSystemArea} />
+                </div>
+                {!prefill && (
+                  <div className="space-y-1.5">
+                    <label className={labelCls}>{t("wo.modal.criticality")}</label>
+                    <SegButtons options={criticalityOptions} value={criticality} allowClear={false} onChange={setCriticality} />
+                  </div>
+                )}
+              </div>
+            </FormSection>
+          )}
+
+          {/* 3 · Clasificación (resto de los tenants, alta libre) */}
+          {!isMercurio && !prefill && (
+            <FormSection n={++sectionNo} title={t("wo.modal.sec.classif")} subtitle={t("wo.modal.sec.classifSub")}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.type")}</label>
+                  <SegButtons allowClear={false} value={type} onChange={setType} options={[
+                    { value: "PREVENTIVE", label: t("wo.type.preventive") },
+                    { value: "CORRECTIVE", label: t("wo.type.corrective") },
+                    { value: "INSPECTION", label: t("wo.type.inspection") },
+                  ]} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>{t("wo.modal.criticality")}</label>
+                  <SegButtons options={criticalityOptions} value={criticality} allowClear={false} onChange={setCriticality} />
+                </div>
+              </div>
+            </FormSection>
+          )}
+
+          {/* 4 · Seguridad y criterio de cierre */}
+          <FormSection n={++sectionNo} title={t("wo.modal.sec.safety")} subtitle={t("wo.modal.sec.safetySub")}
+            badge={<span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">{t("wo.modal.recommended")}</span>}>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.acceptanceCriteria")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingCriteria} dim={!aiTaskDesc}
+                  title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.criteriaTooltip")} onClick={handleCriteriaClick} />
+              </div>
+              <AutoTextArea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
+                disabled={loadingCriteria}
+                className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls}>{t("wo.modal.loto")}</label>
+                <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingLoto} dim={!aiTaskDesc}
+                  title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.lotoTooltip")} onClick={handleLotoClick} />
+              </div>
+              <AutoTextArea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)}
+                disabled={loadingLoto}
+                className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelCls}>{t("wo.modal.riskLevel")}</label>
+                  <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingRisk} dim={!aiTaskDesc}
+                    title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.riskTooltip")} onClick={handleRiskClick} />
+                </div>
+                <div className="flex gap-1.5">
+                  {RISK_LEVEL_OPTS.map(([val, label, activeCls, inactiveLabelCls]) => (
+                    <button key={val} type="button"
+                      disabled={loadingRisk}
+                      onClick={() => setRiskLevel(riskLevel === val ? "" : val)}
+                      className={`w-10 h-9 rounded-lg border-[1.5px] font-bold text-sm transition-all disabled:opacity-50 ${riskLevel === val ? activeCls : `bg-fg/5 ${inactiveLabelCls} hover:bg-fg/10`}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-text-industrial/50">{t("wo.modal.riskLevelHint").replace(/^—\s*/, "")}</p>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelCls}>{t("wo.modal.consequenceCategory")}</label>
+                  <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingConsequence} dim={!aiTaskDesc}
+                    title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.modal.consequenceTooltip")} onClick={handleConsequenceClick} />
+                </div>
+                <select value={consequenceCategory} onChange={e => setConsequenceCategory(e.target.value)}
+                  disabled={loadingConsequence} className={inputCls}>
+                  <option value="">—</option>
+                  <option value="SAFETY">{t("wo.modal.consequence.safety")}</option>
+                  <option value="ENVIRONMENTAL">{t("wo.modal.consequence.environmental")}</option>
+                  <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
+                  <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
+              <AutoTextArea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
+                disabled={loadingRisk}
+                className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
+            </div>
+            {consequenceCategory && (
+              <div className="space-y-1.5">
+                <label className={labelCls}>{t("wo.modal.consequenceRationale")}</label>
+                <AutoTextArea rows={autoRows(consequenceRationale, 2)} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
+                  disabled={loadingConsequence}
+                  className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
+              </div>
+            )}
+          </FormSection>
+
+          {/* 5 · Adjuntos */}
+          <FormSection n={++sectionNo} title={t("wo.modal.sec.attach")} subtitle={t("wo.modal.sec.attachSub")}>
+            <div className="space-y-1.5">
+              <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
+              {prefill?.checklistDocUrl ? (
+                <a href={prefill.checklistDocUrl} target="_blank" rel="noreferrer"
+                  className="block text-xs text-accent underline truncate">{prefill.checklistDocUrl}</a>
+              ) : !prefill ? (
+                <label
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) setChecklistDocFile(f); }}
+                  className="flex flex-col items-center gap-1 rounded-xl border-[1.5px] border-dashed border-fg/25 px-4 py-3.5 text-center text-xs text-text-industrial/60 hover:border-accent/50 cursor-pointer transition-colors"
+                >
+                  <input type="file" className="hidden" onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)} />
+                  <Upload className="w-4 h-4" />
+                  {checklistDocFile
+                    ? <span className="font-semibold text-fg">{checklistDocFile.name}</span>
+                    : <span>{t("wo.modal.dropChecklist")}</span>}
+                </label>
+              ) : (
+                <p className="text-xs text-text-industrial/40 italic">{t("wo.modal.noChecklistDoc")}</p>
+              )}
+            </div>
+          </FormSection>
+
+          {prefill?.samplingFluidType && (
+            <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">
+              <Droplets className="w-4 h-4 text-teal-700 dark:text-teal-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-teal-700 dark:text-teal-300 leading-relaxed">
+                {t("wo.modal.fluidSampleNotice").split("{fluid}").map((part, i, arr) => (
+                  <React.Fragment key={i}>
+                    {part}
+                    {i < arr.length - 1 && (
+                      <span className="font-semibold">
+                        {FLUID_TYPE_KEYS[prefill.samplingFluidType!]
+                          ? t(FLUID_TYPE_KEYS[prefill.samplingFluidType!])
+                          : prefill.samplingFluidType}
+                      </span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex flex-wrap items-center gap-2 px-6 py-3.5 border-t border-fg/10 shrink-0">
+          <span className="mr-auto flex items-center gap-1.5 text-[11px] text-text-industrial/60">
+            <Info className="w-3.5 h-3.5 shrink-0" /> {serviceRequestMode ? t("wo.modal.footerNoteSs") : t("wo.modal.footerNote")}
+          </span>
+          <button onClick={requestClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg hover:bg-fg/5">{t("common.cancel")}</button>
+          <button onClick={() => { void onSave(); }} disabled={saving}
+            className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : serviceRequestMode ? t("wo.modal.createWoSs") : t("wo.modal.create")}
+            {!saving && missReqCount > 0 && <span className="ml-1 text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(missReqCount))}</span>}
+          </button>
+        </div>
+      </div>
+
+      {planLinkCandidates && planLinkMode && (
+        <PlanLinkSuggestionDialog
+          candidates={planLinkCandidates}
+          mode={planLinkMode}
+          onConfirm={handlePlanLinkConfirm}
+          onDismiss={handlePlanLinkDismiss}
+        />
+      )}
+
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
+    </div>
+  );
+};

@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nueva OT — Preview V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* Tokens LIGHT reales de apps/web-modern/src/index.css */
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --border:#E2E4E9;
+    --accent:#0284C7; --accent-fg:#fff; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25);
+    --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer}
+  button:disabled{cursor:not-allowed}
+
+  /* Barra del preview (NO es parte de la app) */
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:8px}
+  .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px;letter-spacing:.05em}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600}
+  .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sp{flex:1}
+  .pv-note{font-size:11px;color:#D1D5DB}
+
+  /* Fondo simulado de la pantalla OT */
+  .app-bg{min-height:calc(100vh - 48px);padding:24px 16px;position:relative}
+  .fake-page{max-width:1100px;margin:0 auto;opacity:.55}
+  .fake-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .fake-header h1{font-size:18px;margin:0}
+  .fake-row{height:38px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px}
+  .overlay{position:fixed;inset:48px 0 0 0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+
+  /* Modal */
+  .modal{width:100%;background:var(--surface);border:1px solid var(--fg10);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35);display:flex;flex-direction:column;max-height:calc(100vh - 96px)}
+  .w-2xl{max-width:672px}.w-3xl{max-width:820px}
+  .m-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-bottom:1px solid var(--fg10)}
+  .m-head h2{font-size:14px;font-weight:700;margin:0}
+  .m-body{padding:20px 24px;overflow-y:auto;flex:1}
+  .m-foot{display:flex;align-items:center;gap:8px;padding:14px 24px;border-top:1px solid var(--fg10);background:var(--surface);border-radius:0 0 16px 16px}
+  .close{width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .close:hover{background:#F43F5E}
+  .ic{width:16px;height:16px}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  .xs{font-size:12px} .xxs{font-size:10px}
+  .btn-primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:12px;padding:9px 18px;font-weight:700;font-size:12px}
+  .btn-primary:hover{filter:brightness(1.1)}
+  .btn-primary:disabled{opacity:.45}
+  .btn-ghost{background:transparent;border:0;border-radius:12px;padding:9px 14px;font-size:12px;color:var(--fg)}
+  .btn-ghost:hover{background:var(--fg5)}
+  .btn-soft{background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;align-items:center;gap:6px}
+  .btn-soft:hover{border-color:rgba(2,132,199,.4)}
+
+  /* ── Asistente ── */
+  .stepper{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .st{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--faint)}
+  .st .dot{width:20px;height:20px;border-radius:99px;border:1.5px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+  .st.done{color:var(--success)} .st.done .dot{background:var(--success);border-color:var(--success);color:#fff}
+  .st.cur{color:var(--accent)} .st.cur .dot{border-color:var(--accent);background:rgba(2,132,199,.1)}
+  .st-line{width:18px;height:1.5px;background:var(--fg10)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);color:var(--fg);border-radius:99px;padding:4px 10px;font-size:11px}
+  .chip b{font-weight:700}
+  .chip button{background:none;border:0;color:var(--accent);font-size:11px;font-weight:600;padding:0 0 0 2px}
+  .q{font-size:17px;font-weight:800;margin:4px 0 4px}
+  .q-sub{font-size:12px;color:var(--muted);margin:0 0 16px}
+  .opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--fg5);border:1.5px solid var(--fg10);border-radius:14px;padding:14px 16px;margin-bottom:10px;transition:.15s;color:var(--fg)}
+  .opt:hover{border-color:rgba(2,132,199,.5);background:rgba(2,132,199,.05)}
+  .opt.sel{border-color:var(--accent);background:rgba(2,132,199,.08);box-shadow:0 0 0 3px rgba(2,132,199,.12)}
+  .opt .oi{width:40px;height:40px;border-radius:10px;background:rgba(2,132,199,.12);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .opt .oi svg{width:22px;height:22px}
+  .opt .ot{font-weight:700;font-size:14px}
+  .opt .od{font-size:12px;color:var(--muted);margin-top:2px}
+  .opt .chev{margin-left:auto;color:var(--faint)}
+  .opt.red .oi{background:rgba(220,38,38,.1);color:var(--danger)}
+  .opt.amber .oi{background:rgba(217,119,6,.12);color:var(--warning)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr}}
+  .search{position:relative}
+  .search input{width:100%;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:11px 12px 11px 38px;font-size:14px;color:var(--fg);font-family:inherit}
+  .search input:focus{outline:none;border-color:rgba(2,132,199,.5)}
+  .search svg{position:absolute;left:12px;top:12px;width:17px;height:17px;color:var(--faint)}
+  .list{margin-top:10px;border:1px solid var(--fg10);border-radius:12px;max-height:300px;overflow:auto}
+  .li{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--fg10);background:var(--surface);padding:10px 12px;font-size:13px;color:var(--fg)}
+  .li:last-child{border-bottom:0}
+  .li:hover{background:rgba(2,132,199,.05)}
+  .li .code{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint)}
+  .plan{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--fg10);border-radius:12px;padding:12px 14px;margin-bottom:8px;color:var(--fg)}
+  .plan:hover{border-color:rgba(2,132,199,.45)}
+  .plan.sel{border-color:var(--accent);background:rgba(2,132,199,.06)}
+  .radio{width:18px;height:18px;border-radius:99px;border:2px solid var(--fg25);margin-top:1px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .plan.sel .radio{border-color:var(--accent)}
+  .plan.sel .radio::after{content:"";width:8px;height:8px;border-radius:99px;background:var(--accent)}
+  .due{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;border-radius:99px;padding:2px 8px;margin-top:5px}
+  .due.over{background:rgba(220,38,38,.1);color:#B91C1C}
+  .due.soon{background:rgba(217,119,6,.12);color:#B45309}
+  .due.ok{background:var(--fg5);color:var(--muted)}
+  .divider{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--faint);margin:14px 0 10px}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--fg10)}
+  .inherit{background:rgba(14,159,110,.07);border:1px solid rgba(14,159,110,.25);border-radius:12px;padding:10px 12px;font-size:12px;margin-top:10px;display:flex;gap:8px}
+  .inherit svg{color:var(--success);flex-shrink:0;width:16px;height:16px;margin-top:1px}
+
+  /* ── Formulario ── */
+  .ctx{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .scan{display:flex;align-items:center;gap:12px;border:1.5px dashed rgba(2,132,199,.4);background:rgba(2,132,199,.04);border-radius:12px;padding:10px 14px;margin-bottom:18px}
+  .scan svg{color:var(--accent)}
+  .sec{border:1px solid var(--fg10);border-radius:14px;margin-bottom:14px;background:var(--surface)}
+  .sec-h{display:flex;align-items:center;gap:10px;padding:12px 16px;width:100%;background:none;border:0;text-align:left;color:var(--fg)}
+  .sec-h .n{width:22px;height:22px;border-radius:99px;background:var(--fg);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .sec-h .t{font-size:13px;font-weight:800}
+  .sec-h .s{font-size:11px;color:var(--muted)}
+  .sec-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .sec-b{padding:4px 16px 16px}
+  .sec.closed .sec-b{display:none}
+  .pill{font-size:10px;font-weight:700;border-radius:99px;padding:2px 8px}
+  .pill.rec{background:rgba(217,119,6,.12);color:#B45309}
+  .pill.okp{background:rgba(14,159,110,.12);color:#047857}
+  .pill.adm{background:rgba(2,132,199,.12);color:var(--accent)}
+  .f{margin-top:12px}
+  .lbl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  .lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .req{color:var(--danger)}
+  .ai{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--accent);background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);border-radius:99px;padding:2px 9px}
+  .ai:hover{background:rgba(2,132,199,.15)}
+  .ai:disabled{opacity:.4}
+  .ai svg{width:12px;height:12px}
+  .in{width:100%;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:8px 12px;font-size:14px;color:var(--fg);font-family:inherit}
+  .in:focus{outline:none;border-color:rgba(2,132,199,.5)}
+  textarea.in{resize:vertical;min-height:40px;line-height:1.45}
+  .row{display:grid;gap:12px}
+  .c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:640px){.c2,.c3{grid-template-columns:1fr}}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{background:var(--fg5);border:1.5px solid var(--fg10);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--fg)}
+  .seg button:hover{border-color:rgba(2,132,199,.4)}
+  .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .seg.prio button.on[data-v="CRITICAL"]{background:#B91C1C;border-color:#B91C1C}
+  .seg.prio button.on[data-v="HIGH"]{background:#EA580C;border-color:#EA580C}
+  .seg.prio button.on[data-v="MEDIUM"]{background:#CA8A04;border-color:#CA8A04}
+  .seg.prio button.on[data-v="LOW"]{background:var(--success);border-color:var(--success)}
+  .risk button{width:40px;height:38px;border-radius:10px;border:1.5px solid var(--fg10);background:var(--fg5);font-weight:800;font-size:13px}
+  .risk button.on[data-v="L"]{background:var(--success);color:#0B132B;border-color:var(--success)}
+  .risk button.on[data-v="M"]{background:#FACC15;color:#0B132B;border-color:#FACC15}
+  .risk button.on[data-v="H"]{background:#EF4444;color:#fff;border-color:#EF4444}
+  .risk button.on[data-v="C"]{background:#B91C1C;color:#fff;border-color:#B91C1C}
+  .prov{background:rgba(2,132,199,.05);border:1px solid rgba(2,132,199,.25);border-radius:12px;padding:10px 12px;margin-top:10px}
+  .drop{border:1.5px dashed var(--fg25);border-radius:12px;padding:14px;text-align:center;font-size:12px;color:var(--muted)}
+  .foot-l{font-size:11px;color:var(--muted);margin-right:auto;display:flex;align-items:center;gap:6px}
+
+  /* AlertDialog (patrón de la app: ventanita con OK) */
+  .alert-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .alert{background:var(--surface);border-radius:16px;max-width:380px;width:100%;padding:20px;box-shadow:0 25px 50px -12px rgba(0,0,0,.4)}
+  .alert h3{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .alert p{margin:0 0 16px;font-size:13px;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300;display:flex;gap:8px;align-items:center}
+
+  /* ── Formulario ACTUAL (réplica de referencia) ── */
+  .cur .lblc{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .cur .lblai{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .cur .secl{font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--faint);font-weight:600;margin:0 0 12px}
+  .cur .fld{margin-bottom:14px}
+  .paperbar{background:#0f172a;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:6px}
+  .optrow{display:flex;border:1px solid var(--fg25);border-top:0}
+  .optrow span{flex:1;text-align:center;font-size:12px;padding:6px;border-right:1px solid var(--fg25)}
+  .optrow span:last-child{border-right:0}
+  .box{border:1px solid var(--fg25)}
+  .box .bh{font-size:11px;font-weight:700;text-transform:uppercase;text-align:center;padding:6px;border-bottom:1px solid var(--fg25)}
+  .box .bo{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px}
+  .box .bo i{width:12px;height:12px;border:1px solid var(--fg25);display:inline-block}
+  .dup{outline:2px dashed #DC2626;outline-offset:3px;border-radius:12px;position:relative}
+  .dup::after{content:attr(data-note);position:absolute;right:-4px;top:-22px;background:#DC2626;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;white-space:nowrap}
+  .errbox{font-size:12px;color:#B91C1C;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.2);border-radius:12px;padding:8px 12px}
+</style>
+</head>
+<body>
+
+<div class="pv-bar">
+  <b>Nueva Orden de Trabajo · Preview V1</b><span class="tag">DEMO · DATOS FICTICIOS</span>
+  <button data-view="wizard" class="on">1 · Asistente (propuesta)</button>
+  <button data-view="form">2 · Formulario (propuesta)</button>
+  <button data-view="current">Formulario actual (referencia)</button>
+  <span class="sp"></span>
+  <span class="pv-note">Barra negra = sólo del preview, no va en la app</span>
+</div>
+
+<div class="app-bg">
+  <div class="fake-page">
+    <div class="fake-header"><i data-lucide="wrench" class="ic" style="color:var(--accent)"></i><h1>Órdenes de Trabajo</h1></div>
+    <div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div>
+  </div>
+</div>
+<div class="overlay" id="root"></div>
+
+<script>
+/* ─────────────── DATOS DEMO (ficticios) ─────────────── */
+const VESSELS = [
+  { code:"DCH", name:"DON CHICUETO", kind:"Remolcador" },
+  { code:"DM2", name:"BUQUE DEMO II", kind:"Remolcador" },
+  { code:"BZ1", name:"BARCAZA DEMO 01", kind:"Barcaza" },
+  { code:"BZ2", name:"BARCAZA DEMO 02", kind:"Barcaza" },
+];
+const ASSETS = [
+  { id:"a1", code:"MCP-BB", name:"Motor principal babor", sfi:"601" },
+  { id:"a2", code:"MCP-EB", name:"Motor principal estribor", sfi:"601" },
+  { id:"a3", code:"GEN-01", name:"Generador auxiliar N°1", sfi:"651" },
+  { id:"a4", code:"TIM-01", name:"Servo timón", sfi:"551" },
+  { id:"a5", code:"BOM-CI", name:"Bomba contraincendio", sfi:"811" },
+];
+const PLANS = [
+  { id:"p1", code:"DCH-601-014", title:"Cambio de aceite y filtros", due:"Vencido hace 6 días", cls:"over" },
+  { id:"p2", code:"DCH-601-022", title:"Inspección de inyectores", due:"Vence en 12 días", cls:"soon" },
+  { id:"p3", code:"DCH-601-031", title:"Muestreo de aceite — laboratorio", due:"Vence 20/11/2026", cls:"ok" },
+  { id:"p4", code:"DCH-601-040", title:"Control de alineación de ejes", due:"Vence 500 h", cls:"ok" },
+];
+
+/* ─────────────── ESTADO ─────────────── */
+const S = {
+  view:"wizard", step:"category", category:null, vessel:null, asset:null, plan:null, repair:null,
+  assetQuery:"", form:{ prio:"MEDIUM", kind:"PREVENTIVO", crit:"B", system:"MAQUINAS", req:"MAQUINAS", asg:"TRIPULACION",
+    cond:"", risk:"", secOpen:{ seg:true }, title:"", task:"", providers:[] },
+  alert:null, toast:null,
+};
+const CAT = {
+  MAINTENANCE:{ t:"Para Registrar un Mantenimiento", d:"Una tarea del plan de mantenimiento del equipo.", icon:"clipboard-list" },
+  REPAIR:{ t:"Para una Reparación", d:"Algo se rompió o anda mal y hay que arreglarlo.", icon:"wrench" },
+  CLASS:{ t:"Para una Inspección de Clase", d:"Inspección pedida por la sociedad de clasificación.", icon:"shield-alert" },
+};
+const REPAIRS = [
+  { v:"CORRECTIVO_PROGRAMADO", t:"Correctivo programado", d:"Se puede planificar. Prioridad: dentro de la semana.", icon:"wrench", cls:"", prio:"MEDIUM" },
+  { v:"CORRECTIVO_NO_PROGRAMADO", t:"Correctivo no programado", d:"Hay que resolverlo pronto. Prioridad: dentro de las 24 hs.", icon:"alert-triangle", cls:"amber", prio:"HIGH" },
+  { v:"EMERGENCIA", t:"Emergencia", d:"Afecta la seguridad o la operación ya. Prioridad: inmediato.", icon:"zap", cls:"red", prio:"CRITICAL" },
+];
+
+const $ = (h) => h;
+function render(){
+  document.querySelectorAll(".pv-bar button[data-view]").forEach(b=>b.classList.toggle("on", b.dataset.view===S.view));
+  const root = document.getElementById("root");
+  root.innerHTML = S.view==="wizard" ? wizard() : S.view==="form" ? form() : current();
+  if (S.alert) root.insertAdjacentHTML("beforeend", alertDlg());
+  if (S.toast) root.insertAdjacentHTML("beforeend", `<div class="toast"><i data-lucide="check-circle-2" class="ic"></i>${S.toast}</div>`);
+  lucide.createIcons();
+}
+
+/* ─────────────── ASISTENTE ─────────────── */
+function stepsFor(){
+  const base = ["Para qué","Buque","Equipo"];
+  if (S.category==="REPAIR") return [...base,"Tipo de reparación","Formulario"];
+  return [...base,"Tarea del plan","Formulario"];
+}
+function stepIndex(){ return {category:0,vessel:1,asset:2,planItem:3,repairKind:3}[S.step]; }
+function stepper(){
+  const steps = stepsFor(), cur = stepIndex();
+  return `<div class="stepper">${steps.map((s,i)=>`
+    ${i?'<span class="st-line"></span>':''}
+    <span class="st ${i<cur?'done':i===cur?'cur':''}"><span class="dot">${i<cur?'✓':i+1}</span>${s}</span>`).join("")}</div>`;
+}
+function chips(){
+  const c=[];
+  if (S.category) c.push(`<span class="chip">${CAT[S.category].t.replace("Para ","").replace("Registrar un ","")} <button onclick="go('category')">cambiar</button></span>`);
+  if (S.vessel) c.push(`<span class="chip"><i data-lucide="ship" style="width:12px;height:12px"></i><b>${S.vessel.name}</b> <button onclick="go('vessel')">cambiar</button></span>`);
+  if (S.asset) c.push(`<span class="chip"><i data-lucide="cog" style="width:12px;height:12px"></i><b>${S.asset.name}</b> <button onclick="go('asset')">cambiar</button></span>`);
+  return c.length?`<div class="chips">${c.join("")}</div>`:"";
+}
+function wizard(){
+  let body="", foot="";
+  if (S.step==="category"){
+    body = `<p class="q">¿Para qué es esta Orden de Trabajo?</p><p class="q-sub">Elegí una opción. Después te pedimos el buque y el equipo.</p>
+      ${Object.entries(CAT).map(([k,c])=>`<button class="opt ${S.category===k?'sel':''}" onclick="pickCat('${k}')">
+        <span class="oi"><i data-lucide="${c.icon}"></i></span><span><div class="ot">${c.t}</div><div class="od">${c.d}</div></span>
+        <i data-lucide="chevron-right" class="chev"></i></button>`).join("")}`;
+  } else if (S.step==="vessel"){
+    body = `${chips()}<p class="q">¿Qué buque?</p><p class="q-sub">Si ya tenés un buque elegido arriba en la app, este paso se saltea solo.</p>
+      <div class="grid2">${VESSELS.map(v=>`<button class="opt" style="margin:0" onclick="pickVessel('${v.code}')">
+        <span class="oi"><i data-lucide="${v.kind==='Barcaza'?'container':'ship'}"></i></span><span><div class="ot">${v.name}</div><div class="od">${v.kind}</div></span></button>`).join("")}</div>`;
+  } else if (S.step==="asset"){
+    const q=S.assetQuery.toLowerCase();
+    const list=ASSETS.filter(a=>!q||(a.name+a.code).toLowerCase().includes(q));
+    body = `${chips()}<p class="q">¿Qué equipo?</p><p class="q-sub">Escribí parte del nombre o del código.</p>
+      <div class="search"><i data-lucide="search"></i><input id="aq" placeholder="Ej. motor, generador, bomba…" value="${S.assetQuery}" oninput="S.assetQuery=this.value;renderKeep('aq')"></div>
+      <div class="list">${list.map(a=>`<button class="li" onclick="pickAsset('${a.id}')"><i data-lucide="cog" class="ic faint"></i><span style="flex:1"><b style="font-weight:600">${a.name}</b></span><span class="code">${a.code} · SFI ${a.sfi}</span></button>`).join("") || '<div class="li faint">Sin coincidencias</div>'}</div>`;
+  } else if (S.step==="planItem"){
+    body = `${chips()}<p class="q">¿A cuál tarea del plan corresponde?</p><p class="q-sub">Tareas activas del plan de mantenimiento de <b>${S.asset.name}</b>. Las vencidas van primero.</p>
+      ${PLANS.map(p=>`<button class="plan ${S.plan===p.id?'sel':''}" onclick="S.plan='${p.id}';render()">
+        <span class="radio"></span><span style="flex:1;min-width:0"><div style="font-size:13px"><span class="code" style="font-family:ui-monospace,monospace;font-weight:700">${p.code}</span> · <b style="font-weight:600">${p.title}</b></div>
+        <span class="due ${p.cls}"><i data-lucide="calendar-clock" style="width:11px;height:11px"></i>${p.due}</span></span></button>`).join("")}
+      ${S.plan?`<div class="inherit"><i data-lucide="sparkles"></i><span>La OT se crea con todo lo de esta tarea: <b>título, tareas, criterios de aceptación, LOTO y riesgo</b>. Después la podés completar en la orden.</span></div>`:""}
+      <div class="divider">o</div>
+      <button class="opt" style="margin:0" onclick="toForm()"><span class="oi" style="background:var(--fg5);color:var(--muted)"><i data-lucide="file-plus"></i></span>
+        <span><div class="ot">No corresponde a ninguna tarea del plan</div><div class="od">Abrir el formulario en blanco</div></span><i data-lucide="chevron-right" class="chev"></i></button>`;
+    foot = `<div class="m-foot"><button class="btn-ghost" onclick="go('asset')">← Atrás</button><span style="flex:1"></span>
+      <button class="btn-primary" ${S.plan?'':'disabled'} onclick="createFromPlan()">Crear OT desde esta tarea</button></div>`;
+  } else if (S.step==="repairKind"){
+    body = `${chips()}<p class="q">¿Qué tipo de reparación es?</p><p class="q-sub">Define la prioridad. La podés cambiar en el formulario.</p>
+      ${REPAIRS.map(r=>`<button class="opt ${r.cls}" onclick="pickRepair('${r.v}')"><span class="oi"><i data-lucide="${r.icon}"></i></span>
+        <span><div class="ot">${r.t}</div><div class="od">${r.d}</div></span><i data-lucide="chevron-right" class="chev"></i></button>`).join("")}`;
+  }
+  if (!foot && S.step!=="category") foot = `<div class="m-foot"><button class="btn-ghost" onclick="back()">← Atrás</button></div>`;
+  return `<div class="modal w-2xl">
+    <div class="m-head"><div><h2 style="display:flex;align-items:center;gap:8px"><i data-lucide="wrench" class="ic" style="color:var(--accent)"></i>Nueva Orden de Trabajo</h2>${stepper()}</div>
+    <button class="close" title="Cerrar" onclick="toast('Cerrar (demo)')"><i data-lucide="x" style="width:18px;height:18px"></i></button></div>
+    <div class="m-body">${body}</div>${foot}</div>`;
+}
+
+/* ─────────────── FORMULARIO PROPUESTO ─────────────── */
+function seg(key, opts, cls=""){
+  return `<div class="seg ${cls}">${opts.map(([v,l])=>`<button data-v="${v}" class="${S.form[key]===v?'on':''}" onclick="S.form['${key}']=S.form['${key}']==='${v}'&&'${key}'==='cond'?'':'${v}';render()">${l}</button>`).join("")}</div>`;
+}
+function aiBtn(label, enabled=true, tip=""){
+  return `<button class="ai" ${enabled?'':'disabled'} title="${tip}" onclick="toast('La IA completó ${label} (demo)')"><i data-lucide="sparkles"></i>Sugerir</button>`;
+}
+function section(id, n, title, sub, right, body){
+  const open = S.form.secOpen[id] !== false;
+  return `<div class="sec ${open?'':'closed'}"><button class="sec-h" onclick="S.form.secOpen['${id}']=${!open};render()">
+    <span class="n">${n}</span><span><div class="t">${title}</div><div class="s">${sub}</div></span>
+    <span class="r">${right||""}<i data-lucide="${open?'chevron-up':'chevron-down'}" class="ic faint"></i></span></button>
+    <div class="sec-b">${body}</div></div>`;
+}
+function form(){
+  const v = S.vessel ?? VESSELS[0], a = S.asset ?? ASSETS[0];
+  const cat = S.category ?? "REPAIR";
+  const f = S.form, hasTitle = !!f.title.trim();
+  const segDone = [f.crit, f.task].filter(Boolean).length;
+  const provs = f.asg==="TERCERIZADO" ? `<div class="prov">
+      <div class="lbl-row"><span class="lbl">Taller / Proveedor <span class="req">*</span></span></div>
+      ${(f.providers.length?f.providers:[{p:"",w:""}]).map(()=>`<div class="row c2"><select class="in"><option>Elegí el taller…</option><option>Taller Naval Demo S.A.</option><option>Servicios Hidráulicos Demo</option></select>
+      <input class="in" placeholder="¿Para qué? Ej. reparar servo timón"></div>`).join("")}
+      <button class="btn-soft" style="margin-top:8px"><i data-lucide="plus" style="width:14px;height:14px"></i>Agregar otro taller</button>
+      <div class="xxs muted" style="margin-top:6px">Al crear la OT se abre una Solicitud de Servicio por cada taller.</div></div>` : "";
+
+  const s1 = section("que",1,"Qué hay que hacer","Título y tareas a ejecutar","",`
+    <div class="f"><div class="lbl-row"><span class="lbl">Título</span>${aiBtn("el título")}</div>
+      <input class="in" placeholder="Ej. Pérdida de aceite en junta de tapa de cilindros" value="${f.title}" oninput="S.form.title=this.value;renderKeep('ti')" id="ti"></div>
+    <div class="f"><div class="lbl-row"><span class="lbl">Tareas a ejecutar</span>${aiBtn("las tareas", hasTitle, hasTitle?"":"Completá primero el título")}</div>
+      <textarea class="in" rows="4" placeholder="1. …&#10;2. …"></textarea></div>
+    <div class="f"><button class="btn-soft"><i data-lucide="link" style="width:14px;height:14px"></i>¿Corresponde a una tarea del plan? Buscar coincidencias</button></div>`);
+
+  const s2 = section("cuando",2,"Prioridad, fechas y responsable","Cuándo y quién","",`
+    <div class="f"><div class="lbl-row"><span class="lbl">Prioridad</span></div>
+      ${seg("prio",[["CRITICAL","Inmediato"],["HIGH","Dentro de las 24 hs"],["MEDIUM","Dentro de la semana"],["LOW","Dentro del mes"]],"prio")}</div>
+    <div class="row c3 f">
+      <div><div class="lbl-row"><span class="lbl">Fecha de apertura</span></div><input type="date" class="in" value="2026-09-14"></div>
+      <div><div class="lbl-row"><span class="lbl">Fecha de vencimiento</span></div><input type="date" class="in"></div>
+      <div><div class="lbl-row"><span class="lbl">Horas estimadas</span></div><input type="number" class="in" placeholder="—"></div>
+    </div>
+    <div class="row c2 f">
+      <div><div class="lbl-row"><span class="lbl">Responsable</span></div><select class="in"><option>— Sin asignar —</option><option>Juan Pérez (Jefe de Máquinas)</option></select></div>
+      <div><div class="lbl-row"><span class="lbl">Abierta por (en nombre de)</span><span class="pill adm">Sólo admin</span></div><select class="in"><option>Yo mismo</option><option>Capitán Demo</option></select></div>
+    </div>`);
+
+  const s3 = section("regi",3,"Datos del formulario REGI-MAN-02.3","Mismos recuadros y mismo orden que el papel","",`
+    <div class="row c3 f">
+      <div><div class="lbl-row"><span class="lbl">Nro de viaje</span></div><input class="in" placeholder="Ej. V-2026-014"></div>
+      <div><div class="lbl-row"><span class="lbl">Ubicación</span></div><input class="in" placeholder="Ej. Sala de máquinas"></div>
+      <div><div class="lbl-row"><span class="lbl">Condición</span></div><select class="in"><option>—</option><option>Navegación</option><option>Puerto</option><option>Fondeado</option><option>Dique</option></select></div>
+    </div>
+    <div class="f"><div class="lbl-row"><span class="lbl">Solicitado por</span></div>${seg("req",[["CUBIERTA","Cubierta"],["MAQUINAS","Máquinas"],["TECNICA","Técnica"],["OPS_SSMA","Ops / SSMA"]])}</div>
+    <div class="f"><div class="lbl-row"><span class="lbl">Asignado a</span></div>${seg("asg",[["TRIPULACION","Tripulación"],["TERCERIZADO","Tercerizado"],["TECNICA","Técnica"],["OPS_SSMA","Ops / SSMA"]])}${provs}</div>
+    <div class="f"><div class="lbl-row"><span class="lbl">Tipo de mantenimiento</span></div>${seg("kind",[["PREVENTIVO","Preventivo"],["CORRECTIVO_PROGRAMADO","Correctivo programado"],["CORRECTIVO_NO_PROGRAMADO","Correctivo no programado"],["PREDICTIVO","Predictivo"],["EMERGENCIA","Emergencia"],["INSPECTION","Inspección"]])}</div>
+    <div class="row c2 f">
+      <div><div class="lbl-row"><span class="lbl">Sistema</span></div>${seg("system",[["MAQUINAS","Máquinas"],["RE_CUBIERTA","R/E Cubierta"],["BARCAZAS","Barcazas"]])}</div>
+      <div><div class="lbl-row"><span class="lbl">Criticidad del equipo</span></div>${seg("crit",[["A","A"],["B","B"],["C","C"]])}</div>
+    </div>`);
+
+  const s4 = section("seg",4,"Seguridad y criterio de cierre","Criterios de aceptación, LOTO, riesgo y consecuencia",
+    `<span class="pill rec">Recomendado</span>`,`
+    <div class="f"><div class="lbl-row"><span class="lbl">Criterios de aceptación</span>${aiBtn("los criterios", hasTitle, "Completá primero el título")}</div>
+      <textarea class="in" rows="2" placeholder="¿Cómo se sabe que quedó bien?"></textarea></div>
+    <div class="f"><div class="lbl-row"><span class="lbl">LOTO — bloqueo y etiquetado</span>${aiBtn("el LOTO", hasTitle, "Completá primero el título")}</div>
+      <textarea class="in" rows="2" placeholder="Qué se bloquea antes de trabajar"></textarea></div>
+    <div class="row c2 f">
+      <div><div class="lbl-row"><span class="lbl">Riesgo de hacer la tarea (JSA)</span>${aiBtn("el riesgo", hasTitle)}</div>
+        <div class="seg risk">${[["L","Bajo"],["M","Medio"],["H","Alto"],["C","Crítico"]].map(([k,l])=>`<button data-v="${k}" title="${l}" class="${f.risk===k?'on':''}" onclick="S.form.risk=S.form.risk==='${k}'?'':'${k}';render()">${k}</button>`).join("")}</div></div>
+      <div><div class="lbl-row"><span class="lbl">Consecuencia de la falla (RCM)</span>${aiBtn("la consecuencia", hasTitle)}</div>
+        <select class="in"><option>—</option><option>Seguridad</option><option>Ambiental</option><option>Operacional</option><option>No operacional</option></select></div>
+    </div>
+    <div class="f"><div class="lbl-row"><span class="lbl">Análisis de riesgo</span></div><textarea class="in" rows="2" placeholder="Peligros y medidas"></textarea></div>`);
+
+  const s5 = section("adj",5,"Adjuntos","Checklist u otro documento","",`
+    <div class="f drop"><i data-lucide="upload" class="ic"></i><div>Arrastrá el checklist acá o <b style="color:var(--accent)">elegí un archivo</b></div></div>`);
+
+  const catLabel = {MAINTENANCE:"Mantenimiento",REPAIR:"Reparación",CLASS:"Inspección de Clase"}[cat];
+  return `<div class="modal w-3xl">
+    <div class="m-head"><div><h2 style="display:flex;align-items:center;gap:8px"><i data-lucide="wrench" class="ic" style="color:var(--accent)"></i>Nueva Orden de Trabajo</h2>
+      <div class="ctx">
+        <span class="chip">${catLabel}</span>
+        <span class="chip"><i data-lucide="ship" style="width:12px;height:12px"></i><b>${v.name}</b></span>
+        <span class="chip"><i data-lucide="cog" style="width:12px;height:12px"></i><b>${a.name}</b></span>
+        <button class="chip" style="cursor:pointer;color:var(--accent);font-weight:600" onclick="S.view='wizard';S.step='asset';render()">cambiar</button>
+      </div></div>
+      <button class="close" title="Cerrar" onclick="askClose()"><i data-lucide="x" style="width:18px;height:18px"></i></button></div>
+    <div class="m-body">
+      <div class="scan"><i data-lucide="camera" style="width:22px;height:22px"></i><div style="flex:1"><div style="font-weight:700;font-size:13px">¿Tenés la OT en papel?</div><div class="xs muted">Sacale una foto y la IA completa el formulario.</div></div><button class="btn-soft">Escanear OT en papel</button></div>
+      ${s1}${s2}${s3}${s4}${s5}
+    </div>
+    <div class="m-foot"><span class="foot-l"><i data-lucide="info" style="width:13px;height:13px"></i>La OT nace “En preparación”: después se puede completar.</span>
+      <button class="btn-ghost" onclick="askClose()">Cancelar</button><button class="btn-primary" onclick="save()">Crear OT</button></div>
+  </div>`;
+}
+
+/* ─────────────── FORMULARIO ACTUAL (réplica) ─────────────── */
+function current(){
+  const inp = `<div class="in" style="height:38px"></div>`;
+  const box = (t,o)=>`<div class="box"><div class="bh">${t}</div>${o.map(x=>`<div class="bo"><i></i>${x}</div>`).join("")}</div>`;
+  const ai = (t)=>`<div class="lblai"><i data-lucide="sparkles" style="width:12px;height:12px"></i>${t}</div>`;
+  return `<div class="modal w-2xl cur">
+    <div class="m-head"><h2 style="display:flex;align-items:center;gap:10px"><i data-lucide="wrench" class="ic" style="color:var(--accent)"></i>Nueva Orden de Trabajo</h2>
+      <button class="close"><i data-lucide="x" style="width:18px;height:18px"></i></button></div>
+    <div class="m-body">
+      <p class="secl">Información</p>
+      <div class="lblai" style="text-transform:none"><i data-lucide="camera" style="width:14px;height:14px"></i>Escanear OT en papel</div>
+      <div class="row c2 fld dup" data-note="Repite buque y equipo ya elegidos en el asistente"><div><span class="lblc">Buque *</span><div class="in">DCH — DON CHICUETO</div></div><div><span class="lblc">Equipo *</span><div class="in">Motor principal babor</div></div></div>
+      <div class="row c2 fld"><div><span class="lblc">Nro de viaje</span>${inp}</div><div><span class="lblc">Ubicación</span>${inp}</div><div><span class="lblc">Condición</span>${inp}</div></div>
+      <div class="fld"><div class="paperbar">Solicitado por</div><div class="optrow"><span>Cubierta</span><span>Máquinas</span><span>Técnica</span><span>Ops / SSMA</span></div></div>
+      <div class="fld"><div class="paperbar">Asignado a</div><div class="optrow"><span>Tripulación</span><span>Tercerizado</span><span>Técnica</span><span>Ops / SSMA</span></div></div>
+      <div class="row c3 fld">${box("Prioridad",["Inmediato","Dentro de las 24hs","Dentro de la semana","Dentro del mes"])}${box("Tipo",["Preventivo","Correctivo programado","Correctivo no programado","Predictivo","Emergencia","Inspección"])}${box("Sistema",["Máquinas","R/E Cubierta","Barcazas"])}</div>
+      <div class="fld" style="max-width:8rem"><span class="lblc">Criticidad</span>${inp}</div>
+      <div class="row c2 fld"><div><span class="lblc">F. Apertura</span>${inp}</div><div class="dup" data-note="Vencimiento aparece 2 veces"><span class="lblc">F. Vencimiento</span>${inp}</div></div>
+      <p class="secl" style="border-top:1px solid var(--fg10);padding-top:16px">Plan</p>
+      <div class="fld">${ai("Título")}${inp}</div>
+      <div class="lblai" style="text-transform:none;margin-bottom:14px"><i data-lucide="sparkles" style="width:14px;height:14px"></i>Detectar plan de mantenimiento</div>
+      <div class="fld">${ai("Tarea")}<div class="in" style="height:72px"></div></div>
+      <div class="row c2 fld"><div><span class="lblc">Responsable</span>${inp}</div><div class="dup" data-note="2ª vez"><span class="lblc">F. Vencimiento</span>${inp}</div></div>
+      <div class="fld">${ai("Criterios de aceptación")}<div class="in" style="height:56px"></div></div>
+      <div class="fld">${ai("LOTO")}<div class="in" style="height:56px"></div></div>
+      <div class="fld">${ai("Nivel de riesgo")}<div style="display:flex;gap:6px">${["L","M","H","C"].map(x=>`<div class="in" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:700">${x}</div>`).join("")}</div></div>
+      <div class="fld"><span class="lblc">Resultado del análisis de riesgo</span><div class="in" style="height:56px"></div></div>
+      <div class="fld">${ai("Consecuencia (RCM)")}${inp}</div>
+      <div class="fld"><span class="lblc">Horas estimadas</span>${inp}</div>
+      <div class="fld"><span class="lblc">Documento checklist</span><div class="xs muted">[Elegir archivo] Ningún archivo seleccionado</div></div>
+      <div class="errbox dup" data-note="Error en recuadro rojo al pie">El equipo es obligatorio.</div>
+    </div>
+    <div class="m-foot" style="justify-content:flex-end"><button class="btn-ghost">Cancelar</button><button class="btn-primary">Crear OT</button></div>
+  </div>`;
+}
+
+/* ─────────────── DIÁLOGOS ─────────────── */
+function alertDlg(){
+  return `<div class="alert-ov"><div class="alert"><h3><i data-lucide="alert-triangle" class="ic" style="color:var(--warning)"></i>${S.alert.t}</h3><p>${S.alert.m}</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px">${S.alert.cancel?`<button class="btn-ghost" onclick="S.alert=null;render()">${S.alert.cancel}</button>`:""}
+    <button class="btn-primary" onclick="${S.alert.ok||'S.alert=null;render()'}">${S.alert.okLabel||"OK"}</button></div></div></div>`;
+}
+
+/* ─────────────── ACCIONES ─────────────── */
+function pickCat(k){ S.category=k; S.asset=null; S.plan=null; S.step = S.vessel ? "asset" : "vessel"; render(); }
+function pickVessel(c){ S.vessel=VESSELS.find(v=>v.code===c); S.asset=null; S.step="asset"; render(); }
+function pickAsset(id){ S.asset=ASSETS.find(a=>a.id===id); S.plan=null; S.step = S.category==="REPAIR" ? "repairKind" : "planItem"; render(); }
+function pickRepair(v){ const r=REPAIRS.find(x=>x.v===v); S.repair=v; S.form.prio=r.prio; S.form.kind=v; toForm(); }
+function toForm(){ if(S.category==="CLASS") S.form.kind="INSPECTION"; S.view="form"; render(); }
+function go(step){ S.step=step; S.view="wizard"; render(); }
+function back(){ const order={vessel:"category",asset:"vessel",planItem:"asset",repairKind:"asset"}; S.step=order[S.step]||"category"; render(); }
+function createFromPlan(){ toast("OT WO-DCH-26-0143 creada — se abre en el editor (demo)"); }
+function save(){
+  if (S.form.asg==="TERCERIZADO"){ S.alert={t:"Falta el taller",m:"Si el trabajo es Tercerizado, elegí al menos un taller o proveedor."}; render(); return; }
+  toast("OT WO-DCH-26-0144 creada (demo)");
+}
+function askClose(){ S.alert={t:"¿Salir sin guardar?",m:"Hay datos cargados en el formulario. Si salís, se pierden.",cancel:"Seguir cargando",okLabel:"Salir",ok:"S.alert=null;S.view='wizard';S.step='category';render()"}; render(); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;render();},2200); }
+function renderKeep(id){ const el=document.getElementById(id); const pos=el?.selectionStart; render(); const n=document.getElementById(id); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch{}} }
+document.querySelectorAll(".pv-bar button[data-view]").forEach(b=>b.onclick=()=>{
+  S.view=b.dataset.view;
+  if (S.view==="form" && !S.asset){ S.category=S.category||"REPAIR"; S.vessel=S.vessel||VESSELS[0]; S.asset=ASSETS[0]; }
+  render();
+});
+render();
+</script>
+</body>
+</html>

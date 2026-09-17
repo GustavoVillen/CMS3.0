@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V45 — OT correctiva desde el análisis</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:#e2e8f0; color:#0f172a; padding:24px 16px 60px; }
+  .wrap { max-width:980px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; }
+  h1 { font-size:20px; margin:10px 0 4px; } .lead { color:#475569; font-size:13px; margin:0 0 18px; max-width:780px; }
+  .step { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin:26px 0 8px; }
+  .modal { background:#fff; border-radius:16px; border-top:4px solid #7c3aed; box-shadow:0 10px 30px rgba(0,0,0,.15); overflow:hidden; }
+  .mh { display:flex; gap:10px; padding:12px 18px; border-bottom:1px solid #e5e7eb; align-items:flex-start; }
+  .kick { font-size:10.5px; font-weight:800; color:#6d28d9; text-transform:uppercase; letter-spacing:.05em; }
+  .mh h2 { margin:0; font-size:18px; font-weight:900; }
+  .chip { display:inline-block; font-size:11px; font-weight:700; border:1px solid #e5e7eb; background:#f8fafc; border-radius:99px; padding:1px 8px; margin:4px 4px 0 0; }
+  .x { margin-left:auto; width:26px; height:26px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }
+  .body { padding:14px 18px; }
+  .banner { display:flex; gap:10px; align-items:center; border:1.5px solid rgba(239,68,68,.4); background:rgba(239,68,68,.08); border-radius:12px; padding:10px 12px; }
+  .banner .i { width:34px; height:34px; border-radius:10px; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; }
+  .banner b { color:#b91c1c; } .banner small { display:block; color:#475569; font-size:12px; }
+  .def { margin-left:auto; font-size:11px; font-weight:700; border:1px solid rgba(239,68,68,.35); color:#b91c1c; background:#fff; border-radius:8px; padding:4px 8px; }
+  .dim { color:#94a3b8; font-size:12px; margin-top:10px; }
+  .foot { display:flex; align-items:center; gap:8px; padding:10px 18px; border-top:1px solid #e5e7eb; flex-wrap:wrap; }
+  .b { font-size:12px; font-weight:700; border-radius:8px; padding:6px 12px; border:1px solid #e5e7eb; background:#f8fafc; }
+  .trash { color:#b91c1c; background:rgba(239,68,68,.08); border-color:rgba(239,68,68,.2); padding:6px 9px; }
+  .ot { background:#ea580c; color:#fff; border-color:#ea580c; box-shadow:0 0 0 3px rgba(234,88,12,.25); }
+  .ot.done { background:#fff; color:#2563eb; border-color:rgba(37,99,235,.35); box-shadow:none; }
+  .close { background:#6d28d9; color:#fff; border-color:#6d28d9; }
+  .grow { flex:1; }
+  .form { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.15); padding:16px 18px; }
+  .from { font-size:12px; background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; border-radius:10px; padding:6px 10px; margin-bottom:12px; }
+  .row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:10px; }
+  @media (max-width:700px){ .row { grid-template-columns:1fr 1fr; } }
+  label { display:block; font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:3px; }
+  .f { border:1px solid #e5e7eb; background:#f8fafc; border-radius:10px; padding:7px 10px; font-size:13px; }
+  .ta { white-space:pre-line; line-height:1.5; }
+  .auto { outline:2px dashed #f59e0b; outline-offset:2px; }
+  .rules { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px 18px; font-size:13px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V45 · DATOS REALES DE FA-LTE-0060</span>
+  <h1>Abrir OT correctiva desde un resultado de análisis</h1>
+  <p class="lead">Se agrega un botón en el pie de la ventana de la muestra (Muestreos y Análisis). Abre la ventana de siempre para crear una OT, ya completada con los datos del resultado. Los campos marcados con borde naranja punteado vienen del análisis, y se pueden editar antes de guardar.</p>
+
+  <div class="step">1 · Ventana de la muestra — resultado no aceptable</div>
+  <div class="modal">
+    <div class="mh">
+      <div><div class="kick">Muestra · Vibración</div><h2>Motor Principal #4</h2>
+        <span class="chip">FA-LTE-0060</span><span class="chip">🚢 LATERE</span><span class="chip">Informada</span></div>
+      <span class="x">✕</span>
+    </div>
+    <div class="body">
+      <div class="banner"><span class="i">!</span><span><b>CRÍTICO</b><small>Anclajes: 11,3 mm/s. Pulso de potencia y armónicos…</small></span><span class="def">⚠ Defecto vinculado DEF-LTE-0014</span></div>
+      <div class="dim">(resto de la ventana sin cambios)</div>
+    </div>
+    <div class="foot">
+      <span class="b">📄 Guardar PDF</span><span class="b trash">🗑</span>
+      <span class="grow"></span>
+      <span class="b ot">🔧 Abrir OT correctiva</span>
+      <span class="b close">Cerrar</span>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:8px">Si ya existe una OT correctiva para el defecto de este resultado, el botón cambia a <span class="b ot done" style="padding:2px 8px">🔧 Ver OT-LTE-26-0123</span> y lleva a esa OT, para no duplicarla.</p>
+
+  <div class="step">2 · Nueva OT, completada con el resultado</div>
+  <div class="form">
+    <div class="from">Desde Defecto: <b>DEF-LTE-0014</b> · análisis FA-LTE-0060</div>
+    <div class="row">
+      <div><label>Buque</label><div class="f auto">LATERE</div></div>
+      <div><label>Equipo</label><div class="f auto">Motor Principal #4</div></div>
+      <div><label>Tipo</label><div class="f auto">Correctivo no programado</div></div>
+      <div><label>Prioridad</label><div class="f auto">Alta</div></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Título</label><div class="f auto">Correctivo por análisis de vibraciones FA-LTE-0060 — Motor Principal #4</div></div>
+    <div><label>Descripción</label><div class="f ta auto">Resultado del análisis de vibraciones FA-LTE-0060 (Informe 1/2026 · AB VIB - Ing. Aníbal Benítez · 15/09/2026)
+Veredicto: CRÍTICO — Severidad del analista: Alerta
+
+Mediciones:
+• Anclajes (velocidad): 11,3 mm/s
+
+Hallazgo: Anclajes: 11,3 mm/s. Pulso de potencia y armónicos.
+Recomendación:
+• Control de presión interna de cilindros
+Prioridad del analista: Programado</div></div>
+    <div class="dim">Fecha, responsable, área y demás campos: igual que hoy, los completa el usuario.</div>
+  </div>
+
+  <div class="step">Cómo funciona</div>
+  <div class="rules"><ul>
+    <li><b>Cuándo aparece:</b> cuando el resultado es <b>Crítico</b> o <b>Acción requerida</b>, que son los mismos casos en que hoy el sistema crea el defecto solo. No aparece con Normal ni con Precaución.</li>
+    <li><b>Quién lo ve:</b> los que pueden crear OT, o sea todos menos el auditor de sólo lectura.</li>
+    <li><b>Trazabilidad:</b> la OT queda vinculada al <b>defecto</b> del resultado, igual que cuando se abre desde Defectos. El defecto sigue abierto hasta que se cierre la OT. Si el resultado no tiene defecto, la OT se crea igual y en la descripción queda el código de la muestra.</li>
+    <li><b>Prioridad:</b> Acción requerida → Crítica · Crítico → Alta (la misma regla que usa el defecto).</li>
+  </ul></div>
+</div>
+</body>
+</html>

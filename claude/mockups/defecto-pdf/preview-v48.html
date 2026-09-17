@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V48 — Reporte de defecto Mercurio</title>
+<style>
+  :root { --navy:#0C2461; --black:#111827; --gray:#6B7280; --border:#9CA3AF; --light:#F3F4F6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#cbd5e1; font-family:Helvetica,Arial,sans-serif; color:var(--black); padding:20px 12px 60px; }
+  .note { max-width:794px; margin:0 auto 14px; font-family:system-ui,sans-serif; font-size:13px; color:#1e293b; background:#fff; border-radius:12px; padding:12px 16px; line-height:1.55; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; }
+  .page { width:794px; max-width:100%; margin:0 auto 18px; background:#fff; box-shadow:0 6px 24px rgba(0,0,0,.18); padding:48px 64px 0; min-height:1123px; display:flex; flex-direction:column; }
+  @media (max-width:820px){ .page { padding:24px 16px 0; min-height:auto; } }
+  .hdr { display:grid; grid-template-columns:22% 1fr 25%; border:1px solid var(--border); height:96px; }
+  .hdr > div { border-right:1px solid var(--border); display:flex; align-items:center; justify-content:center; }
+  .hdr > div:last-child { border-right:0; display:block; }
+  .logo { flex-direction:column; color:var(--navy); font-weight:800; font-size:15px; } .logo small { font-size:8px; letter-spacing:.2em; }
+  .ttl { color:var(--navy); font-weight:800; font-size:15px; text-align:center; }
+  .info div { display:grid; grid-template-columns:1fr 1fr; height:24px; border-bottom:1px solid var(--border); font-size:9.5px; }
+  .info div span { display:flex; align-items:center; padding:0 5px; } .info div span + span { border-left:1px solid var(--border); justify-content:center; font-weight:700; }
+  .info div.ctl { display:flex; align-items:center; justify-content:center; color:#1d4ed8; font-weight:700; border-bottom:0; }
+  .code { display:flex; justify-content:space-between; align-items:flex-end; margin-top:10px; font-size:10px; color:var(--gray); } .code strong { font-size:15px; color:var(--navy); }
+  .sec { background:var(--navy); color:#fff; font-size:10px; font-weight:700; letter-spacing:.12em; padding:5px 10px; margin-top:14px; }
+  .grid { display:grid; border-left:1px solid var(--border); }
+  .g3 { grid-template-columns:repeat(3,1fr); } .g2 { grid-template-columns:repeat(2,1fr); } .g1 { grid-template-columns:1fr; }
+  .cell { border-right:1px solid var(--border); border-bottom:1px solid var(--border); padding:6px 9px; min-height:40px; background:#f8fafc; }
+  .cell b { display:block; font-size:8px; color:var(--gray); letter-spacing:.06em; text-transform:uppercase; }
+  .cell span { font-size:12px; font-weight:700; }
+  .txt { border:1px solid var(--border); border-top:0; padding:7px 10px; font-size:11px; line-height:1.5; background:#f8fafc; white-space:pre-line; }
+  .txt b { display:block; font-size:8px; color:var(--gray); letter-spacing:.06em; margin-bottom:2px; }
+  .newtag { font-family:system-ui; font-size:9px; font-weight:800; color:#047857; background:#d1fae5; border-radius:4px; padding:1px 5px; margin-left:6px; letter-spacing:0; }
+  .spacer { flex:1; }
+  .ftr { border-top:1px solid var(--border); margin-top:24px; font-size:9px; color:var(--gray); }
+  .ftr .band { display:grid; grid-template-columns:repeat(3,1fr); text-align:center; padding:4px 0; border-bottom:1px solid var(--border); }
+  .ftr .info2 { display:flex; justify-content:space-between; padding:8px 0 14px; }
+</style>
+</head>
+<body>
+<div class="note">
+  <span class="tag">PREVIEW V48 · DATOS REALES DE DEF-LTE-0025 (base local)</span><br>
+  El reporte de defecto pasa al formato de documento controlado de Mercurio, igual que el informe de análisis. Además:
+  <b>(1)</b> todos los valores salen en español, porque hoy dice HIGH, CLOSED o PREDICTIVE_FLUID_ANALYSIS;
+  <b>(2)</b> se muestra el nombre del buque en lugar del código;
+  <b>(3)</b> se suma el análisis de causa raíz completo, que el sistema ya guarda pero el PDF no imprimía (marcado con <span class="newtag">NUEVO</span>).
+  Todo lo demás sigue igual.
+</div>
+
+<div class="page">
+  <div class="hdr">
+    <div class="logo">MERCURIO<small>NAVIERA</small></div>
+    <div class="ttl">REPORTE DE DEFECTO</div>
+    <div class="info"><div><span>Revisión N°</span><span>2</span></div><div><span>Desde:</span><span>01.05.2025</span></div><div><span>Página:</span><span>1</span></div><div class="ctl">Documento Controlado</div></div>
+  </div>
+  <div class="code"><span>Generado: 17/09/2026 11:40</span><span>Código: <strong>DEF-LTE-0025</strong></span></div>
+
+  <div class="sec">IDENTIFICACIÓN</div>
+  <div class="grid g3">
+    <div class="cell"><b>Buque</b><span style="color:#1d4ed8">LATERE</span></div>
+    <div class="cell"><b>Equipo</b><span>LTE-CR-#4 — Caja reductora #4</span></div>
+    <div class="cell"><b>Origen</b><span>Análisis de fluidos</span></div>
+    <div class="cell"><b>Fecha de reporte</b><span>17/09/2026</span></div>
+    <div class="cell"><b>Severidad</b><span style="color:#b91c1c">Alta</span></div>
+    <div class="cell"><b>Estado del equipo</b><span>Opera normal</span></div>
+  </div>
+
+  <div class="sec">ESTADO Y RESOLUCIÓN</div>
+  <div class="grid g3">
+    <div class="cell"><b>Estado del defecto</b><span style="color:#166534">Cerrado</span></div>
+    <div class="cell"><b>Resuelto vía OT</b><span style="color:#1d4ed8">OT-LTE-26-0047</span></div>
+    <div class="cell"><b>Estado de la OT</b><span>Planificada</span></div>
+  </div>
+
+  <div class="sec">QUÉ PASÓ</div>
+  <div class="txt"><b>DESCRIPCIÓN</b>Análisis de vibraciones FA-LTE-0061 — Veredicto: CRITICAL. Resumen del lab: Eje entrada: 8,5 mm/s radial, 2,5 mm/s axial (desbalance). Aceleración 43 m/s2 (roce por falta de lubricación)… Prioridad: Programado</div>
+  <div class="txt"><b>ACCIÓN INMEDIATA</b>- Detener inmediatamente la operación de la caja reductora #4 para evitar daños catastróficos.
+- Aplicar bloqueo LOTO en el interruptor principal del motor acoplado a la reductora.
+- Realizar una inspección visual externa detallada en busca de fugas o anomalías físicas.
+- Verificar niveles y calidad del lubricante en el visor de la reductora.
+- Solicitar asistencia técnica externa para realizar la medición de excentricidad solicitada.</div>
+
+  <div class="sec">ANÁLISIS DE CAUSA RAÍZ <span class="newtag">NUEVO</span></div>
+  <div class="grid g2">
+    <div class="cell"><b>Metodología</b><span>5 Porqués</span></div>
+    <div class="cell"><b>Aprobado</b><span>17/09/2026</span></div>
+  </div>
+  <div class="txt"><b>CAUSA INMEDIATA</b>Desbalance dinámico severo y roce mecánico interno por fallo en la película lubricante en los elementos internos de la caja reductora.</div>
+  <div class="txt"><b>CAUSA CONTRIBUYENTE</b>Falta de un programa robusto de análisis de aceite (oil analysis) para detectar degradación de lubricante o desgaste metálico antes de que se manifieste en vibraciones…</div>
+  <div class="txt"><b>CAUSA RAÍZ</b>Inexistencia de un sistema de monitoreo predictivo proactivo (mantenimiento basado en condición) que permitiera identificar el inicio de la degradación…</div>
+  <div class="txt"><b>ANÁLISIS</b>El análisis de vibraciones reveló valores críticos (8,5 mm/s radial y 43 m/s² de aceleración) en la caja reductora #4 del remolcador LATERE…</div>
+  <div class="txt"><b>ACCIONES PREVENTIVAS</b>1. Realizar alineación láser certificada y corregir excentricidad del acoplamiento… 2. Implementar un protocolo de muestreo de aceite mensual… 3. Instalar sensores de temperatura de rodamiento… 4. Actualizar el plan de mantenimiento preventivo…</div>
+
+  <div class="sec">VERIFICACIÓN DE EFICACIA (ISM 10.2.3)</div>
+  <div class="grid g1"><div class="cell"><b>Resultado</b><span style="color:#b45309">Pendiente · a revisar el 17/10/2026</span></div></div>
+
+  <div class="spacer"></div>
+  <div class="ftr">
+    <div class="band"><span>Elaborado: Departamento Tecnico Mercurio</span><span>Revisado: Gerente Mantenimiento</span><span>Aprobado: Gerencia General</span></div>
+    <div class="info2"><b>Copilot Management System</b><span>DEF-LTE-0025 — LATERE — Página 1 — 17/09/2026</span></div>
+  </div>
+</div>
+</body>
+</html>

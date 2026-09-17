@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan de Mantenimiento — Preview V27</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --fg:#1A1D24; --accent:#0284C7; --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer} i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:400;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .main{padding:20px 24px;display:flex;flex-direction:column;gap:14px;max-width:1400px;margin:0 auto} @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px} .ph .right{margin-left:auto;display:flex;gap:8px}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.orange{background:#EA580C;border-color:#EA580C;color:#fff} .btn.blue{background:var(--accent);border-color:var(--accent);color:#fff} .btn.green{background:#059669;border-color:#059669;color:#fff}
+  .btn.red{color:#B91C1C;border-color:rgba(220,38,38,.35)} .btn.ghost{border:0;background:none;color:var(--muted);font-weight:600}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media(max-width:900px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:#fff;border:1.5px solid var(--fg10);border-left-width:4px;border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .sc.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.18)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center} .sc .h{font-size:10.5px;color:var(--faint)}
+  .sc.green{border-left-color:#059669} .sc.green .n{color:#047857} .sc.blue{border-left-color:#2563EB} .sc.blue .n{color:#1D4ED8}
+  .sc.violet{border-left-color:#7C3AED} .sc.violet .n{color:#6D28D9} .sc.red{border-left-color:#DC2626} .sc.red .n{color:#B91C1C}
+  .fbar{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:240px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)} @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .tbl{background:#fff;border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:1050px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12.5px;vertical-align:middle}
+  tr.hot td{background:#FEF2F2} tr.hot td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr.live td:first-child{box-shadow:inset 4px 0 0 #059669}
+  tr:hover td{background:rgba(2,132,199,.04);cursor:pointer}
+  .code{font-family:ui-monospace,monospace;font-weight:800;font-size:12px} .sub{font-size:10.5px;color:var(--faint)}
+  .type{display:inline-flex;gap:6px;align-items:center;font-weight:700;font-size:12px} .type .ti{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+  .t-HOT{background:#FEE2E2;color:#B91C1C} .t-ENC{background:#E0F2FE;color:#0369A1} .t-ALOFT{background:#FEF3C7;color:#B45309} .t-ELEC{background:#FEF9C3;color:#A16207} .t-COLD{background:#E0E7FF;color:#4338CA}
+  .stg{font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .s-DRAFT{color:var(--muted);border-color:var(--fg10);background:var(--fg5)} .s-REQUESTED{color:#A16207;border-color:rgba(202,138,4,.35);background:rgba(202,138,4,.08)}
+  .s-APPROVED{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .s-ACTIVE{color:#fff;border-color:#059669;background:#059669}
+  .s-CLOSED{color:#047857;border-color:rgba(14,159,110,.3);background:rgba(14,159,110,.06)} .s-REJECTED,.s-CANCELLED{color:#B91C1C;border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06)}
+  .wo{font-family:ui-monospace,monospace;font-size:11px;color:var(--accent);font-weight:700}
+  .when{font-size:11.5px} .when.late{color:#B91C1C;font-weight:800} .when.live{color:#047857;font-weight:800}
+  .mini{display:inline-flex;gap:4px;align-items:center;font-size:11px;color:var(--muted);margin-right:8px} .mini.bad{color:#B91C1C;font-weight:700} .mini.ok{color:#047857;font-weight:700}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .act.green{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.08);color:#047857} .act.red{border-color:rgba(220,38,38,.4);background:#FEF2F2;color:#B91C1C} .act.orange{border-color:rgba(234,88,12,.35);background:rgba(234,88,12,.07);color:#C2410C}
+  .cards{display:none;flex-direction:column;gap:8px} @media(max-width:700px){.tbl{display:none}.cards{display:flex}}
+  .card{background:#fff;border:1px solid var(--fg10);border-left:4px solid var(--fg10);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+  .card.hot{border-left-color:#DC2626;background:#FEF2F2} .card.live{border-left-color:#059669}
+
+  .overlay{background:rgba(15,23,42,.55);min-height:calc(100vh - 46px);padding:18px;display:flex;justify-content:center} @media(max-width:600px){.overlay{padding:0}}
+  .modal{width:100%;max-width:1120px;background:#fff;border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);overflow:hidden;border-top:4px solid #EA580C;align-self:flex-start}
+  .mh{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid var(--fg10);align-items:flex-start}
+  .mh .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#C2410C}
+  .mh h1{margin:1px 0 0;font-size:19px;font-weight:900} .mh .d{font-size:12.5px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)} .chip.link{color:var(--accent);border-color:rgba(2,132,199,.3);background:rgba(2,132,199,.06);font-family:ui-monospace,monospace}
+  .close{margin-left:auto;width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .steps{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--fg10);background:rgba(26,29,36,.02)}
+  .stp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--faint)}
+  .stp .n{width:24px;height:24px;border-radius:99px;border:2px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp .dt{display:block;font-size:10px;font-weight:600;color:var(--faint)}
+  .stp.done{color:#047857} .stp.done .n{background:#10B981;border-color:#10B981;color:#fff} .stp.cur{color:var(--fg)} .stp.cur .n{background:#EA580C;border-color:#EA580C;color:#fff}
+  .stp .bar{width:18px;height:2px;background:var(--fg10)}
+  .next{margin:14px 18px 0;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .next .top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .next .ni{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .next .nt{font-size:15px;font-weight:900} .next .nd{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .next .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .checks{display:flex;flex-wrap:wrap;gap:6px}
+  .ck{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 10px;display:inline-flex;gap:5px;align-items:center;background:#fff;border:1px solid var(--fg10)}
+  .ck.ok{color:#047857;border-color:rgba(14,159,110,.35)} .ck.no{color:#B45309;border-color:#FCD34D;background:#FFFBEB}
+  .n-draft{background:#FFF7ED;border:1.5px solid #FDBA74} .n-draft .ni{background:#EA580C}
+  .n-req{background:#FEFCE8;border:1.5px solid #FDE047} .n-req .ni{background:#CA8A04}
+  .n-appr{background:#EFF6FF;border:1.5px solid #93C5FD} .n-appr .ni{background:#2563EB}
+  .n-live{background:#ECFDF5;border:1.5px solid #6EE7B7} .n-live .ni{background:#059669}
+  .n-late{background:#FEF2F2;border:1.5px solid #FCA5A5} .n-late .ni{background:#DC2626}
+  .vig{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:520px} @media(max-width:520px){.vig{grid-template-columns:1fr}}
+  .body{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:14px 18px 18px} @media(max-width:880px){.body{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .sec{border:1px solid var(--fg10);border-radius:14px}
+  .sech{display:flex;gap:8px;align-items:center;padding:10px 14px}
+  .num{width:22px;height:22px;border-radius:99px;background:#1A1D24;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .spill{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;background:#D97706;color:#fff} .spill.ok{background:rgba(14,159,110,.15);color:#047857} .spill.lock{background:var(--fg5);color:var(--muted)}
+  .secb{padding:2px 14px 14px;display:flex;flex-direction:column;gap:11px}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;align-items:center}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg)} textarea.inp{resize:vertical;line-height:1.45}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:520px){.row2{grid-template-columns:1fr}}
+  .ai{margin-left:auto;border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9;border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center}
+  .box{border:1px solid var(--fg10);border-radius:14px;overflow:hidden}
+  .box h3{margin:0;font-size:13.5px;font-weight:800;display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--fg10)}
+  .box h3 .r{margin-left:auto}
+  .box .bb{padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+  .person{display:flex;gap:8px;align-items:center;border:1px solid var(--fg10);border-radius:10px;padding:6px 9px}
+  .avatar{width:26px;height:26px;border-radius:99px;background:#E0E7FF;color:#3730A3;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .role{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:1px 8px;background:var(--fg5);color:var(--muted)}
+  .missing{font-size:11.5px;color:#B45309;font-weight:700;display:flex;gap:5px;align-items:center}
+  .gas{display:grid;grid-template-columns:repeat(4,1fr);gap:6px} .gas div{border:1px solid var(--fg10);border-radius:10px;padding:6px 8px;text-align:center} .gas small{display:block;font-size:10px;color:var(--faint);font-weight:700} .gas b{font-size:14px} .gas .lim{display:block;font-size:9.5px;color:var(--faint)}
+  .verdict{font-size:11px;font-weight:800;border-radius:99px;padding:2px 9px} .v-ok{background:#D1FAE5;color:#065F46} .v-bad{background:#FEE2E2;color:#B91C1C}
+  .file{display:flex;gap:8px;align-items:center;border:1px solid var(--fg10);border-radius:10px;padding:7px 9px;font-size:12px}
+  .mf{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap} .mf .sp{flex:1}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .dlg>div{background:#fff;border-radius:18px;max-width:480px;width:100%;overflow:hidden}
+  .dlg .dh{padding:14px 18px;border-bottom:1px solid var(--fg10);font-size:16px;font-weight:900;display:flex;gap:8px;align-items:center}
+  .dlg .db{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#fff;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+  .sum.five{grid-template-columns:repeat(5,1fr)} @media(max-width:900px){.sum.five{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:600px){.ph .right{margin-left:0;width:100%}.views{flex-wrap:wrap}.ph .right .sub{display:none}}
+  .views{display:inline-flex;border:1px solid var(--fg10);border-radius:10px;overflow:hidden;background:#fff}
+  .views button{border:0;background:none;padding:6px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:5px;align-items:center}
+  .views button.on{background:#1A1D24;color:#fff}
+  .quality{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:10px 14px}
+  .quality summary{cursor:pointer;font-size:13px;font-weight:800;display:flex;gap:8px;align-items:center;list-style:none}
+  .qgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px} @media(max-width:900px){.qgrid{grid-template-columns:1fr 1fr}}
+  .qi{border:1px solid var(--fg10);border-radius:12px;padding:8px 10px;text-align:left;background:#fff;display:flex;flex-direction:column;gap:2px}
+  .qi b{font-size:18px} .qi span{font-size:11.5px;font-weight:700} .qi small{font-size:10.5px;color:var(--faint)}
+  .qi.bad b{color:#B91C1C} .qi.warn b{color:#B45309} .qi.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.15)}
+  .grp td{background:rgba(26,29,36,.03);font-weight:800;font-size:12px}
+  .due{font-family:ui-monospace,monospace;font-size:12px;font-weight:800} .due small{display:block;font-family:Inter,sans-serif;font-size:10.5px;font-weight:700}
+  .d-over{color:#B91C1C} .d-win{color:#C2410C} .d-soon{color:#A16207} .d-ok{color:var(--fg)} .d-none{color:#B45309}
+  .chipst{font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .c-over{background:#FEE2E2;color:#B91C1C;border-color:#FCA5A5} .c-win{background:#FFEDD5;color:#C2410C;border-color:#FDBA74} .c-soon{background:#FEF9C3;color:#A16207;border-color:#FDE047}
+  .c-ok{background:#ECFDF5;color:#047857;border-color:#A7F3D0} .c-none{background:#FFFBEB;color:#B45309;border-color:#FCD34D} .c-oos{background:var(--fg5);color:var(--muted);border-color:var(--fg10)}
+  .wolink{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;color:var(--accent);display:inline-flex;gap:3px;align-items:center}
+  .bundlebar{position:sticky;bottom:12px;margin:0 auto;background:#1A1D24;color:#fff;border-radius:14px;padding:9px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:760px;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+  .bundlebar button{border:0;border-radius:9px;padding:6px 11px;font-size:12px;font-weight:800}
+  tr.over td:first-child{box-shadow:inset 4px 0 0 #DC2626} tr.over td{background:#FEF2F2} tr.win td:first-child{box-shadow:inset 4px 0 0 #EA580C}
+  .sfisel{max-width:220px}
+  .icoline{display:flex;gap:6px;align-items:center;font-size:10.5px;color:var(--faint);font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Plan de Mantenimiento · Preview V27</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Qué cambia</button>
+</div>
+<div id="root"></div>
+<script>
+const I=(n,s=14)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"new",card:"",stage:"todo",view:"list",q:"",qsel:"",marked:new Set(),qopen:true,toast:null};
+function toast(t){S.toast=t;render();setTimeout(()=>{S.toast=null;render();},1800);}
+// st: over | win | soon | ok | none | oos
+const P=[
+ {id:1,eq:"Motor principal Br",t:"Cambio de aceite y filtros",code:"DEM1-6-012",g:6,type:"M",freq:"500 h",last:"41.020 h",due:"41.520 h",dueTxt:"pasada por 180 h",st:"over",act:"wo",v:"BUQUE DEMO I",risk:true},
+ {id:2,eq:"Motor principal Br",t:"Toma de muestra de aceite",code:"DEM1-6-015",g:6,type:"M",freq:"250 h",last:"41.100 h",due:"41.350 h",dueTxt:"pasada por 10 h",st:"over",act:"wo",lab:"Laboratorio Demo",wo:"OT-DEM1-26-0088",v:"BUQUE DEMO I"},
+ {id:3,eq:"Generador auxiliar 2",t:"Inspección de acoplamiento",code:"DEM1-7-031",g:7,type:"I",freq:"3 meses",last:"12/06/2026",due:"12/09/2026",dueTxt:"vencida hace 3 días",st:"over",act:"report",v:"BUQUE DEMO I"},
+ {id:4,eq:"Bomba contra incendio",t:"Prueba de funcionamiento",code:"DEM1-8-004",g:8,type:"I",freq:"1 mes",last:"20/08/2026",due:"20/09/2026",dueTxt:"faltan 5 días · en ventana",st:"win",act:"report",v:"BUQUE DEMO I"},
+ {id:5,eq:"Separador de sentina",t:"Limpieza de filtro coalescente",code:"DEM1-7-044",g:7,type:"M",freq:"6 meses",last:"02/04/2026",due:"02/10/2026",dueTxt:"faltan 17 días",st:"soon",act:"wo",v:"BUQUE DEMO I"},
+ {id:6,eq:"Molinete de proa",t:"Engrase general",code:"DEM1-4-002",g:4,type:"M",freq:"1 mes",last:"01/09/2026",due:"01/10/2026",dueTxt:"faltan 16 días",st:"oos",act:"",v:"BUQUE DEMO I"},
+ {id:7,eq:"Hélice de proa",t:"Medición de huelgo axial",code:"DEM1-2-009",g:2,type:"I",freq:"12 meses",last:"—",due:"—",dueTxt:"sin fecha de inicio",st:"none",act:"start",v:"BUQUE DEMO I"},
+ {id:8,eq:"Motor principal Er",t:"Calibración de inyectores",code:"DEM1-6-020",g:6,type:"M",freq:"2.000 h",last:"—",due:"—",dueTxt:"sin horas de referencia",st:"none",act:"start",v:"BUQUE DEMO I",prov:"Taller Naval Demo"},
+ {id:9,eq:"Generador auxiliar 1",t:"Service 1.000 h",code:"DEM1-7-030",g:7,type:"M",freq:"1.000 h",last:"17.800 h",due:"18.800 h",dueTxt:"faltan 400 h · ~50 días",st:"ok",act:"",v:"BUQUE DEMO I"},
+];
+const STL={over:["Vencida","c-over"],win:["Hacer ahora","c-win"],soon:["Vence pronto","c-soon"],ok:["Al día","c-ok"],none:["Sin vencimiento","c-none"],oos:["Equipo parado","c-oos"]};
+const cardM=(p,k)=>k==="over"?p.st==="over":k==="win"?p.st==="win":k==="soon"?p.st==="soon":k==="none"?p.st==="none":k==="oos"?p.st==="oos":true;
+const stageM=(p,k)=>k==="todo"?(p.st==="over"||p.st==="win"):k==="next"?(p.st==="soon"):k==="ok"?(p.st==="ok"||p.st==="oos"):true;
+const Q={none:[561,"bad","Sin próximo vencimiento","Nunca van a avisar: falta la última ejecución o la fecha de inicio"],crit:[447,"warn","Sin criterio de aceptación","No dicen cómo se sabe si quedó bien"],resp:[20,"warn","Sin responsable","Nadie asignado a hacerla"],risk:[312,"warn","Sin nivel de riesgo","No se puede priorizar"]};
+function actionBtn(p){
+  if(p.act==="wo") return p.wo?`<a class="wolink" onclick="event.stopPropagation();toast('Abre ${p.wo} (demo)')">${I("external-link",11)}${p.wo} abierta</a>`:`<button class="act ${p.st==='over'?'red':''}" onclick="event.stopPropagation();toast('Abre la OT (demo)')">${I("zap",12)}Abrir OT</button>`;
+  if(p.act==="report") return `<button class="act green" onclick="event.stopPropagation();toast('Abre Reportar ejecución (demo)')">${I("check-circle-2",12)}Reportar</button>`;
+  if(p.act==="start") return `<button class="act orange" onclick="event.stopPropagation();toast('Abre la tarea en Cuándo se hace (demo)')">${I("calendar-plus",12)}Poner fecha de inicio</button>`;
+  return "";
+}
+function listPage(){
+  const q=S.q.toLowerCase();
+  let L=P.filter(p=>(!S.card||cardM(p,S.card))&&(S.card||S.qsel||stageM(p,S.stage))&&(!q||(p.eq+p.t+p.code).toLowerCase().includes(q)));
+  if(S.qsel==="none") L=P.filter(p=>p.st==="none");
+  const cnt=k=>({over:75,win:94,soon:128,none:561,oos:23})[k];
+  const sc=(k,cls,ic,l,h)=>`<button class="sc ${cls} ${S.card===k?'on':''}" onclick="S.card=S.card==='${k}'?'':'${k}';S.qsel='';render()"><span class="n">${cnt(k)}</span><span class="l">${I(ic,13)}${l}</span><span class="h">${h}</span></button>`;
+  const groups=[...new Set(L.map(p=>p.eq))];
+  const row=p=>`<tr class="${p.st==='over'?'over':p.st==='win'?'win':''}" onclick="toast('Abre la tarea (demo)')">
+    <td onclick="event.stopPropagation()"><input type="checkbox" ${S.marked.has(p.id)?'checked':''} onchange="S.marked.has(${p.id})?S.marked.delete(${p.id}):S.marked.add(${p.id});render()" title="Marcar para juntar en una OT"></td>
+    <td><div style="display:flex;gap:6px;align-items:center">${I(p.type==='I'?'shield-check':'wrench',13)}<b style="font-size:12.5px">${p.t}</b>${p.risk?'<span class="chipst c-over" style="padding:0 5px">riesgo alto</span>':''}</div>
+      <div class="icoline">${p.code} · G${p.g}${p.lab?` · <span style="color:#047857;font-family:Inter">${I("flask-conical",10)} ${p.lab}</span>`:''}${p.prov?` · <span style="color:#6D28D9;font-family:Inter">${I("truck",10)} ${p.prov}</span>`:''}</div></td>
+    <td style="font-family:ui-monospace,monospace;font-size:12px">${p.freq}</td>
+    <td style="font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)">${p.last}</td>
+    <td><span class="due d-${p.st==='oos'?'ok':p.st}">${p.due}<small>${p.dueTxt}</small></span></td>
+    <td><span class="chipst ${STL[p.st][1]}">${STL[p.st][0]}</span></td>
+    <td>${actionBtn(p)}</td></tr>`;
+  return `<div class="main">
+  <div class="ph"><h1>${I("clipboard-list",20)}Plan de Mantenimiento</h1><span class="count">${L.length} a la vista</span>
+   <div class="right" style="flex-wrap:wrap">
+    <div class="views">${[["list","list","Lista"],["sheet","table","Planilla"],["matrix","grid-3x3","Matriz"],["cal","calendar-days","Calendario"]].map(([k,ic,l])=>`<button class="${S.view===k?'on':''}" onclick="S.view='${k}';toast('Cambia a ${l} (demo)')">${I(ic,13)}${l}</button>`).join("")}</div>
+    <button class="btn">${I("more-horizontal",14)}Más <span class="sub">(Excel, importar, próximos a vencer)</span></button>
+    <button class="btn blue">${I("plus",14)}Nueva tarea</button></div></div>
+
+  <div class="sum five">${sc("over","red","alarm-clock","Vencidas","Pasaron la fecha u horas")}${sc("win","violet","play-circle","Hacer ahora","En su ventana de ejecución")}${sc("soon","blue","calendar-clock","Vencen en 30 días","Para planificar")}${sc("none","red","calendar-x","Sin vencimiento","Nunca van a avisar")}${sc("oos","green","power-off","Equipo parado","Tareas de equipos fuera de servicio")}</div>
+
+  <details class="quality" ${S.qopen?'open':''} ontoggle="S.qopen=this.open"><summary>${I("clipboard-check",15)}Calidad del plan <span class="sub" style="font-weight:600">· lo que falta para que el plan avise y se pueda auditar (ISM 10.1)</span><span style="margin-left:auto" class="chipst c-none">4 temas</span></summary>
+   <div class="qgrid">${Object.entries(Q).map(([k,[n,cls,l,h]])=>`<button class="qi ${cls} ${S.qsel===k?'on':''}" onclick="S.qsel=S.qsel==='${k}'?'':'${k}';S.card='';render()"><b>${n}</b><span>${l}</span><small>${h}</small></button>`).join("")}</div></details>
+
+  <div class="fbar"><div class="stage">
+    ${[["todo","Para hacer",169],["next","Próximas",128],["ok","Al día",2474],["all","Todas",3232]].map(([k,l,n])=>`<button class="${S.stage===k&&!S.card&&!S.qsel?'on':''}" onclick="S.stage='${k}';S.card='';S.qsel='';render()">${l} <span class="c">${n}</span></button>`).join("")}</div>
+   <div class="frow"><select class="sel"><option>Buque: BUQUE DEMO I</option></select><select class="sel sfisel"><option>Sistema: todos</option><option>6 · Máquina principal</option><option>7 · Sistemas de máquina</option></select><select class="sel"><option>Tipo: todos</option><option>Mantenimiento</option><option>Inspección</option></select><select class="sel"><option>Quién: todos</option><option>A bordo</option><option>Proveedor / laboratorio</option></select>
+    <label class="ck" style="padding:5px 9px;border-radius:10px"><input type="checkbox" checked> Agrupar por equipo</label>
+    <div class="search">${I("search")}<input id="q" placeholder="Buscar tarea, equipo o código…" value="${S.q}" oninput="S.q=this.value;render();const e=document.getElementById('q');e.focus();e.setSelectionRange(e.value.length,e.value.length)"></div></div></div>
+
+  ${S.qsel==="none"?`<div class="next n-draft" style="margin:0"><div class="top"><div class="ni">${I("calendar-x",20)}</div><div><div class="nt">561 tareas sin próximo vencimiento</div><div class="nd">Abrí cada una y en <b>Cuándo se hace</b> cargá la última vez que se hizo (fecha u horas). Desde ahí el sistema calcula el próximo vencimiento y empieza a avisar.</div></div></div></div>`:''}
+
+  <div class="tbl"><table style="min-width:980px"><tr><th style="width:30px" title="Marcar para juntar en una OT">${I("layers",12)}</th><th>Tarea</th><th>Cada</th><th>Última vez</th><th>Vence</th><th>Situación</th><th></th></tr>
+   ${groups.map(g=>`<tr class="grp"><td colspan="7">${I("cog",12)} ${g} <span class="sub">· ${L.filter(p=>p.eq===g).length} tareas</span></td></tr>${L.filter(p=>p.eq===g).map(row).join("")}`).join("")}
+  </table></div>
+  <div class="cards">${L.map(p=>`<div class="card ${p.st==='over'?'hot':''}"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="chipst ${STL[p.st][1]}">${STL[p.st][0]}</span><span class="sub">${p.eq}</span></div><b>${p.t}</b><span class="due d-${p.st==='oos'?'ok':p.st}">${p.due} <small>${p.dueTxt}</small></span>${actionBtn(p)}</div>`).join("")}</div>
+
+  ${S.marked.size?`<div class="bundlebar">${I("layers",16)}<b>${S.marked.size} tareas marcadas</b><span style="font-size:12px;opacity:.75">BUQUE DEMO I · se hacen juntas en una sola OT (p. ej. parada o astillero)</span><span style="flex:1"></span><button style="background:#374151;color:#fff" onclick="S.marked.clear();render()">Desmarcar</button><button style="background:#0284C7;color:#fff" onclick="toast('Abre una OT con las ${S.marked.size} tareas (demo)')">${I("zap",12)} Abrir una OT con las ${S.marked.size}</button></div>`:''}
+  </div>`;
+}
+function refPage(){
+  return `<div class="main"><div class="fix" style="background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:14px 18px;font-size:13px;line-height:1.55">
+  <b style="font-size:14px">Qué cambia respecto de hoy</b>
+  <ol style="padding-left:18px">
+   <li><b>Abre en "Para hacer"</b> (vencidas + en ventana) en lugar de mostrar todas las tareas mezcladas.</li>
+   <li><b>Tarjetas arriba</b>: vencidas, hacer ahora, vencen en 30 días, sin vencimiento y equipo parado. Tocar una filtra.</li>
+   <li><b>Vence contado</b>: "vencida hace 3 días", "pasada por 180 h", "faltan 400 h · ~50 días" (con el uso real del equipo).</li>
+   <li><b>OT ya abierta</b> visible en la fila con enlace; no se ofrece abrir otra.</li>
+   <li><b>Proveedor o laboratorio</b> visible cuando la tarea es tercerizada.</li>
+   <li><b>Tareas sin vencimiento</b> ya no se ven "al día": se marcan en naranja con el botón "Poner fecha de inicio".</li>
+   <li><b>Juntar en una OT</b>: al marcar tareas aparece una barra abajo con "Abrir una OT con las N" (hoy es una casilla sin explicación).</li>
+   <li><b>Encabezado ordenado</b>: selector de vista Lista / Planilla / Matriz / Calendario y un botón "Más" para Excel, importar y el reporte de próximos a vencer.</li>
+   <li><b>Calidad del plan</b> (plegable): sin próximo vencimiento, sin criterio, sin responsable, sin riesgo. Cada uno filtra la lista para corregir.</li>
+   <li><b>Filtros visibles</b>: buque, sistema, tipo y "quién lo hace" (a bordo / proveedor).</li>
+   <li><b>Celular</b>: tarjetas con la acción a mano.</li>
+  </ol>
+  <p class="sub">No cambia: la ventana de la tarea (V15–V17), Reportar ejecución (V16), la Planilla y la Matriz actuales, ni las reglas de vencimiento. "Calendario" abre la vista de carga que ya existe.</p>
+  <p class="sub">Cifras de la copia local de la base (31/08): 3.232 tareas activas, 75 vencidas, 94 en ventana, 561 sin vencimiento, 447 sin criterio, 20 sin responsable.</p>
+  </div></div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar button").forEach(b=>{const k=Object.keys(b.dataset)[0];b.classList.toggle("on",S[k]===b.dataset[k]);});
+  let h=S.v==="new"?listPage():refPage();
+  if(S.toast)h+=`<div class="toast">${S.toast}</div>`;
+  document.getElementById("root").innerHTML=h; lucide.createIcons();
+}
+document.querySelectorAll(".pv-bar button").forEach(b=>b.onclick=()=>{const k=Object.keys(b.dataset)[0];S[k]=b.dataset[k];render();});
+render();
+</script>
+</body>
+</html>

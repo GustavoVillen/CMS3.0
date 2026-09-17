@@ -12,6 +12,7 @@ import { VesselLabel } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 
 interface InspectionTemplateSummary {
   id: string;
@@ -284,8 +285,8 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
           <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.result")}</label>
+          <GuideField id="insp-result" missing={!result}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("insp.result")}<RequiredMark />{!result && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <select value={result} onChange={e => setResult(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50">
               <option value="">— Seleccionar —</option>
               <option value="SATISFACTORY">SATISFACTORY</option>
@@ -293,7 +294,7 @@ const CompleteExecutionModal: React.FC<CompleteExecutionModalProps> = ({ executi
               <option value="UNSATISFACTORY_FOLLOW_UP_REQUIRED">UNSATISFACTORY_FOLLOW_UP_REQUIRED</option>
               <option value="CRITICAL_DEFICIENCY_IMMEDIATE_ACTION">CRITICAL_DEFICIENCY_IMMEDIATE_ACTION</option>
             </select>
-          </div>
+          </GuideField>
           {shouldWarnDefect && (
             <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
               ⚠ Se creará automáticamente un Defecto en el sistema al completar esta inspección.

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V46 — Qué hacer con un resultado crítico</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:#e2e8f0; color:#0f172a; padding:24px 16px 60px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; }
+  h1 { font-size:20px; margin:10px 0 4px; } .lead { color:#475569; font-size:13px; margin:0 0 18px; max-width:800px; line-height:1.5; }
+  .step { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin:26px 0 8px; }
+  .modal { background:#fff; border-radius:16px; border-top:4px solid #7c3aed; box-shadow:0 10px 30px rgba(0,0,0,.15); overflow:hidden; }
+  .body { padding:16px 18px; display:grid; grid-template-columns:1.35fr 1fr; gap:16px; }
+  @media (max-width:760px){ .body { grid-template-columns:1fr; } }
+  .crit { border:1.5px solid rgba(239,68,68,.4); background:rgba(239,68,68,.08); border-radius:16px; padding:14px; }
+  .crit h3 { margin:0; color:#b91c1c; font-size:18px; font-weight:900; } .crit p { margin:4px 0 0; font-size:13px; color:#334155; }
+  .btns { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  .b { font-size:12px; font-weight:700; border-radius:8px; padding:5px 10px; border:1px solid #e5e7eb; background:#fff; }
+  .b.red { color:#b91c1c; border-color:rgba(239,68,68,.35); }
+  /* Flujograma */
+  .flow { margin-top:12px; background:#fff; border:1px solid #fecaca; border-radius:14px; padding:12px 14px; }
+  .flow h4 { margin:0 0 10px; font-size:12.5px; font-weight:900; display:flex; align-items:center; gap:6px; }
+  .chain { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; }
+  .node { flex:1; min-width:120px; display:flex; flex-direction:column; align-items:center; text-align:center; position:relative; padding:0 4px; }
+  .dot { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; border:2px solid #cbd5e1; color:#94a3b8; background:#fff; z-index:1; }
+  .done .dot { background:#10b981; border-color:#10b981; color:#fff; }
+  .cur .dot { background:#ea580c; border-color:#ea580c; color:#fff; box-shadow:0 0 0 4px rgba(234,88,12,.2); }
+  .node::after { content:""; position:absolute; top:15px; left:calc(50% + 15px); right:calc(-50% + 15px); height:2px; background:#cbd5e1; }
+  .node.done::after { background:#10b981; }
+  .node:last-child::after { display:none; }
+  .nt { font-size:11.5px; font-weight:800; margin-top:6px; } .ns { font-size:10.5px; color:#64748b; margin-top:2px; line-height:1.35; }
+  .cur .nt { color:#c2410c; }
+  .act { margin-top:12px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:8px 10px; font-size:12.5px; }
+  .act b { color:#9a3412; } .go { margin-left:auto; background:#ea580c; color:#fff; border:0; border-radius:8px; padding:6px 12px; font-weight:800; font-size:12px; }
+  .side { border:1px solid #e5e7eb; border-radius:14px; padding:12px; color:#94a3b8; font-size:12px; }
+  .foot { display:flex; gap:8px; padding:10px 18px; border-top:1px solid #e5e7eb; }
+  .grow { flex:1; } .close { background:#6d28d9; color:#fff; border-color:#6d28d9; }
+  .states { display:grid; grid-template-columns:1fr; gap:10px; }
+  .mini { background:#fff; border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .mini .lbl { font-size:11px; font-weight:800; color:#64748b; margin-bottom:6px; }
+  .desc { background:#fff; border-radius:14px; padding:14px 16px; box-shadow:0 4px 14px rgba(0,0,0,.08); display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:760px){ .desc { grid-template-columns:1fr; } }
+  .desc pre { margin:0; white-space:pre-wrap; font-family:inherit; font-size:12px; line-height:1.5; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
+  .desc h5 { margin:0 0 6px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; }
+  .old { color:#b91c1c; } .new { color:#047857; }
+  ul.r { background:#fff; border-radius:14px; padding:12px 30px; font-size:13px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V46 · DATOS REALES DE FA-LTE-0061</span>
+  <h1>Resultado crítico: guía paso a paso (la OT se abre desde el defecto)</h1>
+  <p class="lead">Se quita el botón "Abrir OT correctiva" del pie de la ventana (V45). En su lugar, debajo del recuadro rojo, aparece un pequeño flujograma: muestra en qué paso está este resultado y ofrece un solo botón con lo que hay que hacer ahora. La OT correctiva se crea <b>desde el defecto generado</b>.</p>
+
+  <div class="step">1 · Ventana de la muestra</div>
+  <div class="modal">
+    <div class="body">
+      <div>
+        <div class="crit">
+          <h3>Crítico</h3>
+          <p>Eje entrada: 8,5 mm/s radial, 2,5 mm/s axial (desbalance). Aceleración 43 m/s2…</p>
+          <div class="btns"><span class="b red">⚠ Defecto generado: DEF-LTE-0025</span><span class="b">Ver reporte original</span><span class="b">Modificar resultado</span></div>
+        </div>
+        <div class="flow">
+          <h4>🧭 ¿Qué hacer con este resultado?</h4>
+          <div class="chain">
+            <div class="node done"><span class="dot">✓</span><span class="nt">Resultado crítico</span><span class="ns">Informe 1/2026 cargado</span></div>
+            <div class="node done"><span class="dot">✓</span><span class="nt">Defecto generado</span><span class="ns">DEF-LTE-0025</span></div>
+            <div class="node cur"><span class="dot">3</span><span class="nt">OT correctiva</span><span class="ns">Se crea desde el defecto</span></div>
+            <div class="node"><span class="dot">4</span><span class="nt">Ejecutar y cerrar</span><span class="ns">OT y defecto</span></div>
+            <div class="node"><span class="dot">5</span><span class="nt">Nueva medición</span><span class="ns">Confirmar que quedó bien</span></div>
+          </div>
+          <div class="act"><span><b>Ahora:</b> abrí el defecto y creá la OT correctiva. Se completa con los datos del resultado.</span><button class="go">Ir al defecto y crear OT →</button></div>
+        </div>
+      </div>
+      <div class="side">Datos de la toma · Qué dice la IA (sin cambios)</div>
+    </div>
+    <div class="foot"><span class="b">📄 Guardar PDF</span><span class="b red">🗑</span><span class="grow"></span><span class="b close">Cerrar</span></div>
+  </div>
+
+  <div class="step">2 · Cómo avanza el flujograma</div>
+  <div class="states">
+    <div class="mini"><div class="lbl">OT ya creada y en curso</div>
+      <div class="act" style="margin:0;background:#eff6ff;border-color:#bfdbfe"><span><b style="color:#1e40af">Ahora:</b> ejecutar la OT-LTE-26-0142. Al terminar, cerrar la OT y después el defecto.</span><button class="go" style="background:#2563eb">Ver OT →</button></div></div>
+    <div class="mini"><div class="lbl">Defecto cerrado</div>
+      <div class="act" style="margin:0;background:#ecfdf5;border-color:#a7f3d0"><span><b style="color:#047857">Ahora:</b> programá una nueva medición del equipo para confirmar que la vibración volvió a valores normales.</span></div></div>
+  </div>
+
+  <div class="step">3 · La OT que se crea desde el defecto, completa con el resultado</div>
+  <p class="lead">Hoy la descripción del defecto sale en crudo, con el veredicto en inglés. Desde ahora los defectos que se generen por un análisis traen el texto ordenado, y la OT lo hereda. Los defectos que ya existen no cambian.</p>
+  <div class="desc">
+    <div><h5 class="old">Hoy</h5><pre>Análisis de vibraciones FA-LTE-0061 — Veredicto: CRITICAL. Resumen del lab: Eje entrada: 8,5 mm/s radial, 2,5 mm/s axial (desbalance). Aceleración 43 m/s2 (roce por falta de lubricación).. Recomendación: Control de alineación de ejes · control de excentricidad… Prioridad: Programado</pre></div>
+    <div><h5 class="new">Propuesto</h5><pre>Resultado del análisis de vibraciones FA-LTE-0061 (Informe 1/2026 · AB VIB - Ing. Aníbal Benítez · 15/09/2026)
+Veredicto: Crítico
+
+Mediciones:
+• Aceleración: 43 m/s2
+• Eje de entrada axial: 2,5 mm/s
+• Eje de entrada radial: 8,5 mm/s
+
+Hallazgo: Eje entrada: 8,5 mm/s radial, 2,5 mm/s axial (desbalance). Aceleración 43 m/s2 (roce por falta de lubricación).
+Recomendación:
+• Control de alineación de ejes
+• Control de excentricidad de acoplamiento con reloj comparador
+• Revisión de engranajes y rodamientos de caja reductora (visual)
+• Control de sistema de lubricación
+Prioridad del analista: Programado</pre></div>
+  </div>
+
+  <div class="step">Reglas</div>
+  <ul class="r">
+    <li>El flujograma aparece sólo en resultados <b>Crítico</b> o <b>Acción requerida</b>, que son los que generan defecto.</li>
+    <li>El botón "Ir al defecto y crear OT" abre el defecto con la ventana de nueva OT ya abierta, y guarda el vínculo como siempre. Quien no puede crear OT ve el paso, pero no el botón.</li>
+    <li>Si un resultado viejo no tiene defecto, el paso 2 dice "Sin defecto" y el botón lleva a <b>Defectos</b> para cargarlo.</li>
+    <li>Los textos del flujograma van en español, inglés y portugués, según el idioma de la empresa.</li>
+  </ul>
+</div>
+</body>
+</html>

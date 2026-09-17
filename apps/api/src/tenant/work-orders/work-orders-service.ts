@@ -11,6 +11,7 @@ import { addItemComment, findSpecItemForDeferral } from "../pms/drydock-spec-ite
 import { closeLinkedAuditFinding } from "../pms/defects-service";
 import { createFluidSampleFromWorkOrder, type FluidType as FluidTypeEnum } from "../fluid-analyses/fluid-analyses-service";
 import { log } from "../../common/logger";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "./wo-inspection-flow";
@@ -436,15 +437,21 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
       }))
     : [];
   const linkedPlanIds = [...new Set(planLinks.map(l => l.maintenancePlanId))];
-  const planAssetRows = linkedPlanIds.length > 0
+  // Se suma el plan principal (maintenancePlanId) sólo para leer su grupo SFI.
+  const planIdsToLoad = [...new Set([
+    ...linkedPlanIds,
+    ...orders.map(o => o.maintenancePlanId).filter((v): v is string => !!v),
+  ])];
+  const planAssetRows = planIdsToLoad.length > 0
     ? (await (prismaRaw as unknown as {
-        maintenancePlan: { findMany(a: unknown): Promise<{ id: string; assetId: string }[]> };
+        maintenancePlan: { findMany(a: unknown): Promise<{ id: string; assetId: string; sfiGroupNumber: number | null }[]> };
       }).maintenancePlan.findMany({
-        where: { id: { in: linkedPlanIds }, tenantId },
-        select: { id: true, assetId: true },
+        where: { id: { in: planIdsToLoad }, tenantId },
+        select: { id: true, assetId: true, sfiGroupNumber: true },
       }))
     : [];
   const planAssetMap = new Map(planAssetRows.map(p => [p.id, p.assetId]));
+  const planGroupMap = new Map(planAssetRows.map(p => [p.id, p.sfiGroupNumber]));
   // OT → equipos de sus ítems, en orden del papel y sin repetir.
   const linkedAssetsByWo = new Map<string, string[]>();
   for (const link of planLinks) {
@@ -469,8 +476,8 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
 
   const [assetRows, userRows, providerRows] = await Promise.all([
     assetIds.length > 0
-      ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
-      : Promise.resolve([] as { id: string; name: string | null }[]),
+      ? (prismaRaw as unknown as { asset: { findMany(a: unknown): Promise<{ id: string; name: string | null; sfiCode: string | null }[]> } }).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true, sfiCode: true } })
+      : Promise.resolve([] as { id: string; name: string | null; sfiCode: string | null }[]),
     userIds.length > 0
       ? (prismaRaw as unknown as { user: { findMany(a: unknown): Promise<{ id: string; firstName: string | null; lastName: string | null; formName: string | null }[]> } }).user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, formName: true } })
       : Promise.resolve([] as { id: string; firstName: string | null; lastName: string | null; formName: string | null }[]),
@@ -480,6 +487,23 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
   ]);
 
   const assetNameMap = new Map(assetRows.map(a => [a.id, a.name ?? null]));
+  const assetSfiMap  = new Map(assetRows.map(a => [a.id, a.sfiCode ?? null]));
+
+  // Grupo SFI de la OT (filtro G0…G9 del tablero). Lo declara el PLAN: el
+  // principal, o el primero de sus ítems que lo tenga. Sin plan (una correctiva
+  // suelta) se toma el primer dígito del código SFI del equipo principal.
+  const linkedPlansByWo = new Map<string, string[]>();
+  for (const link of planLinks) {
+    linkedPlansByWo.set(link.workOrderId, [...(linkedPlansByWo.get(link.workOrderId) ?? []), link.maintenancePlanId]);
+  }
+  const woSfiGroup = (o: { id: string; assetId: string; maintenancePlanId: string | null }): number | null => {
+    const fromPlan = [o.maintenancePlanId, ...(linkedPlansByWo.get(o.id) ?? [])]
+      .map(id => (id ? planGroupMap.get(id) : null))
+      .find((g): g is number => typeof g === "number");
+    if (fromPlan !== undefined) return fromPlan;
+    const digit = /^\s*(\d)/.exec(assetSfiMap.get(o.assetId) ?? "");
+    return digit ? Number(digit[1]) : null;
+  };
   // Mismo criterio que el desplegable de responsable (team-service.listTeamDirectory):
   // el nombre para formularios manda, si no nombre y apellido.
   const userNameMap  = new Map(userRows.map(u => [u.id, u.formName?.trim() || [u.firstName, u.lastName].filter(Boolean).join(" ") || null]));
@@ -493,6 +517,7 @@ export async function listTenantWorkOrders(session: TenantAccessSession, filters
     assetNames: [o.assetId, ...(linkedAssetsByWo.get(o.id) ?? [])]
       .filter((id, i, arr): id is string => !!id && arr.indexOf(id) === i)
       .map(id => assetNameMap.get(id) ?? id),
+    sfiGroupNumber: woSfiGroup(o),
     assignedToUserName: userNameMap.get((o as unknown as { assignedToUserId?: string | null }).assignedToUserId ?? "") ?? null,
     createdByName: userNameMap.get((o as unknown as { createdByUserId?: string | null }).createdByUserId ?? "") ?? null,
     // Mismo criterio que getTenantWorkOrder: catálogo, o el escrito a mano.
@@ -1395,7 +1420,55 @@ export async function setWorkOrderApproval(
     }
   }
 
-  return { ...updated, createdFluidSamples };
+  // Permisos de trabajo que exigen los planes de la OT (Preview V41): se crean
+  // en borrador al AUTORIZAR, igual que la muestra, para que a bordo los
+  // completen antes de trabajar. El cierre de la OT los exige (closeWorkOrder).
+  let createdPermits: Array<{ id: string; permitCode: string; type: string }> = [];
+  if (payload.step === "AUTORIZA") {
+    try {
+      const types = await requiredPermitTypesForWorkOrder(prismaRaw, current);
+      if (types.length > 0) {
+        const { createRequiredPermitsForWorkOrder } = await import("../permits/permits-service");
+        createdPermits = await createRequiredPermitsForWorkOrder({
+          tenantId: current.tenantId,
+          workOrder: current,
+          types,
+          actorUserId: session.user.id,
+        });
+      }
+    } catch (err) {
+      log.error("[setWorkOrderApproval] auto-create Permits failed", err);
+    }
+  }
+
+  return { ...updated, createdFluidSamples, createdPermits };
+}
+
+const PERMIT_TYPE_NAME: Record<string, string> = {
+  HOT_WORK: "Trabajo en caliente",
+  ENCLOSED_SPACE_ENTRY: "Espacio confinado",
+  WORKING_ALOFT: "Trabajo en altura",
+  ELECTRICAL_ISOLATION: "Aislamiento eléctrico",
+  COLD_WORK: "Trabajo en frío",
+  UNDERWATER_WORK: "Trabajo subacuático",
+};
+const PERMIT_STATUS_NAME: Record<string, string> = {
+  DRAFT: "Borrador", REQUESTED: "Solicitado", APPROVED: "Aprobado", ACTIVE: "Activo",
+};
+
+/** Unión de los permisos exigidos por TODOS los planes de la OT (una OT puede cubrir varios ítems del PDM). */
+async function requiredPermitTypesForWorkOrder(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  wo: { id: string; tenantId: string; maintenancePlanId?: string | null },
+): Promise<string[]> {
+  const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
+  const planIds = await listWorkOrderPlanIds(prismaRaw, wo);
+  if (planIds.length === 0) return [];
+  const plans = await (prismaRaw as any).maintenancePlan.findMany({
+    where: { id: { in: planIds }, tenantId: wo.tenantId, deletedAt: null },
+    select: { requiredPermitTypes: true },
+  }) as Array<{ requiredPermitTypes: string[] }>;
+  return [...new Set(plans.flatMap(p => p.requiredPermitTypes ?? []))];
 }
 
 export async function closeWorkOrder(session: TenantAccessSession, id: string, payload: CloseWorkOrderInput) {
@@ -1415,6 +1488,22 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
   }
 
   if (!payload.woResult) throw new RouteError(400, "VALIDATION_ERROR", "El resultado de la OT es requerido.");
+
+  // Si algún plan de la OT exige permisos de trabajo, cada tipo tiene que tener
+  // su permiso CERRADO. Sin excepción, tampoco para TENANT_ADMIN (Preview V41).
+  const requiredPermits = await requiredPermitTypesForWorkOrder(prismaRaw, current);
+  if (requiredPermits.length > 0) {
+    const { listMissingRequiredPermits } = await import("../permits/permits-service");
+    const missing = await listMissingRequiredPermits(current.tenantId, current.id, requiredPermits);
+    if (missing.length > 0) {
+      const lines = missing.map(m => `• ${PERMIT_TYPE_NAME[m.type] ?? m.type}${m.openPermitCode ? ` — ${m.openPermitCode} (${PERMIT_STATUS_NAME[m.openStatus ?? ""] ?? m.openStatus})` : " — sin permiso"}`);
+      throw new RouteError(
+        409,
+        "REQUIRED_PERMITS_NOT_CLOSED",
+        `No se puede cerrar la OT: el plan exige permisos de trabajo que todavía no están cerrados.\n${lines.join("\n")}\nCerrá el permiso desde esta misma OT y volvé a intentarlo.`,
+      );
+    }
+  }
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
   // Anclaje a mediodía UTC para el recálculo de vencimientos (mismo fix que
@@ -1649,6 +1738,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     log.error("[closeWorkOrder] failed to backfill linked Sample:", err);
   }
 
+  void archivePdf(session, { kind: "OT", id: current.id });
   return { ...closedResult, failedMovements };
 }
 
@@ -1760,6 +1850,7 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
       log.error("[cancelWorkOrder] plan restore failed:", err);
     }
   })();
+  void archivePdf(session, { kind: "OT", id: current.id });
   return cancelled;
 }
 

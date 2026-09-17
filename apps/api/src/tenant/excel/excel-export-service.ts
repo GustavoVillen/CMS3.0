@@ -46,6 +46,7 @@ const DYNAMIC_COLUMN_PRIORITIES: Record<ExcelModule, string[]> = {
     "triggerResultMode",
     "samplingKind",
     "samplingFluidType",
+    "requiredPermitTypes",
     "taskMasterId",
     "executionStatus",
     "lastExecutionDate",
@@ -712,6 +713,8 @@ function toExcelValue(val: unknown): string | number | null {
   }
   if (typeof val === "boolean") return val ? "true" : "false";
   if (typeof val === "string") return escapeFormula(val);
+  // Listas (ej. requiredPermitTypes): una celda legible, no un objeto.
+  if (Array.isArray(val)) return val.length ? escapeFormula(val.map(String).join(", ")) : null;
   return val as string | number;
 }
 

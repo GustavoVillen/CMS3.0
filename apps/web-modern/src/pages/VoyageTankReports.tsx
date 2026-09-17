@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { CheckCircle, FileText, Fuel, Loader2, Plus, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -319,18 +320,18 @@ const VoyageTankReportDrawer: React.FC<DrawerProps> = ({ report, onClose, onSave
           <section className="space-y-3">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {isNew && (
-                <div className="space-y-1.5">
-                  <label className={labelCls}>Embarcación *</label>
+                <GuideField id="vtr-new-vessel" missing={!newVesselCode}>
+                  <label className={labelCls}>Embarcación<RequiredMark />{!newVesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <select value={newVesselCode} onChange={e => setNewVesselCode(e.target.value)} className={inputCls}>
                     <option value="">— Seleccionar —</option>
                     {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                   </select>
-                </div>
+                </GuideField>
               )}
-              <div className="space-y-1.5">
-                <label className={labelCls}>Viaje *</label>
+              <GuideField id="vtr-voyage-code" missing={!voyageCode.trim()}>
+                <label className={labelCls}>Viaje<RequiredMark />{!voyageCode.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <input value={voyageCode} onChange={e => setVoyageCode(e.target.value)} disabled={isClosed} placeholder="M01" className={inputCls} />
-              </div>
+              </GuideField>
               <div className="space-y-1.5">
                 <label className={labelCls}>Fecha / hora</label>
                 <input type="datetime-local" value={reportDateTime} onChange={e => setReportDateTime(e.target.value)} disabled={isClosed} className={inputCls} />

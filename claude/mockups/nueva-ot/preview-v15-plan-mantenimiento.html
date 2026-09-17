@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan de Mantenimiento — Preview V15</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#E5E7EB; --surface:#fff; --fg:#1A1D24; --accent:#0284C7; --teal:#0F766E;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer}
+  i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .stage{padding:18px;display:flex;justify-content:center}
+  @media(max-width:600px){.stage{padding:0}}
+
+  /* ventana */
+  .modal{width:100%;max-width:1060px;height:calc(100vh - 84px);background:var(--surface);border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;border-top:4px solid #14B8A6}
+  @media(max-width:600px){.modal{border-radius:0;height:calc(100vh - 92px)}}
+  .mh{display:flex;align-items:flex-start;gap:10px;padding:12px 18px 10px;border-bottom:1px solid var(--fg10)}
+  .iconbtn{border:0;background:none;color:var(--faint);padding:6px;border-radius:10px;display:flex}
+  .iconbtn:hover{background:var(--fg5);color:var(--fg)}
+  .close{width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .mh .mid{flex:1;min-width:0}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);display:flex;gap:5px;align-items:center}
+  .mh h1{margin:2px 0 0;font-size:19px;font-weight:900;line-height:1.2}
+  .mh .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)}
+  .chip.ok{background:#ECFDF5;border-color:#6EE7B7;color:#047857} .chip.warn{background:#FFFBEB;border-color:#FCD34D;color:#92400E} .chip.bad{background:#FEF2F2;border-color:#FCA5A5;color:#B91C1C}
+  .chip.link{background:rgba(2,132,199,.07);border-color:rgba(2,132,199,.3);color:var(--accent)}
+  .mh .right{display:flex;gap:4px;align-items:center}
+  .copy{border:1px solid var(--fg10);background:var(--surface);border-radius:8px;padding:4px 8px;font-size:11px;color:var(--muted);display:flex;gap:4px;align-items:center}
+  @media(max-width:600px){.copy span{display:none}}
+
+  /* franja de estado */
+  .status{display:grid;grid-template-columns:1.3fr 1fr auto;gap:12px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--fg10)}
+  @media(max-width:800px){.status{grid-template-columns:1fr}}
+  .due{display:flex;gap:10px;align-items:center}
+  .due .big{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+  .due .t1{font-size:15px;font-weight:800} .due .t2{font-size:11.5px;color:var(--muted)}
+  .bar{height:7px;border-radius:99px;background:var(--fg10);overflow:hidden;margin-top:5px} .bar span{display:block;height:100%;border-radius:99px}
+  .facts{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)} .facts b{display:block;font-size:13px;color:var(--fg)}
+  .nextbtn{border:0;border-radius:12px;padding:10px 16px;font-weight:800;font-size:13px;display:inline-flex;gap:6px;align-items:center;color:#fff;background:var(--accent);white-space:nowrap}
+  .nextbtn.green{background:#059669} .nextbtn.ghost{background:rgba(2,132,199,.08);color:var(--accent);border:1px solid rgba(2,132,199,.3)}
+
+  /* cuerpo */
+  .mb{flex:1;min-height:0;display:grid;grid-template-columns:210px 1fr}
+  @media(max-width:800px){.mb{grid-template-columns:1fr}}
+  .nav{border-right:1px solid var(--fg10);padding:12px 10px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;background:rgba(26,29,36,.02)}
+  @media(max-width:800px){.nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--fg10);padding:8px 10px}}
+  .nav button{border:0;background:none;border-radius:10px;padding:8px 10px;text-align:left;font-size:12.5px;font-weight:600;color:var(--muted);display:flex;gap:8px;align-items:center;white-space:nowrap}
+  .nav button:hover{background:var(--fg5);color:var(--fg)} .nav button.on{background:rgba(20,184,166,.12);color:var(--teal)}
+  .nav .cnt{margin-left:auto;font-size:10px;font-weight:800;border-radius:99px;padding:0 6px;background:#FEF3C7;color:#92400E}
+  .nav .okc{margin-left:auto;color:#059669}
+  .nav .navnote{font-size:10.5px;color:var(--faint);padding:10px 10px 0;line-height:1.35}
+  @media(max-width:800px){.nav .navnote{display:none}}
+  .scroll{overflow-y:auto;padding:14px 18px 40px;scroll-behavior:smooth}
+  .ro{background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;border-radius:10px;padding:8px 12px;font-size:12px;margin-bottom:12px;display:flex;gap:6px;align-items:center}
+
+  .sec{border:1px solid var(--fg10);border-radius:14px;margin-bottom:12px;background:var(--surface)}
+  .sech{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none}
+  .sech .num{width:22px;height:22px;border-radius:99px;background:rgba(20,184,166,.14);color:var(--teal);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .sech .need{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:1px 8px;background:#FEF3C7;color:#92400E}
+  .sech .done{margin-left:auto;font-size:10.5px;font-weight:800;color:#059669;display:flex;gap:3px;align-items:center}
+  .sech .chev{color:var(--faint);transition:transform .15s} .sec.closed .chev{transform:rotate(-90deg)}
+  .secb{padding:2px 14px 14px;display:grid;grid-template-columns:repeat(12,1fr);gap:10px 12px}
+  .sec.closed .secb{display:none}
+  .f{grid-column:span 6;display:flex;flex-direction:column;gap:4px;min-width:0}
+  .f.w12{grid-column:span 12} .f.w4{grid-column:span 4} .f.w3{grid-column:span 3} .f.w8{grid-column:span 8}
+  @media(max-width:700px){.f,.f.w4,.f.w3,.f.w8{grid-column:span 12}}
+  .f label{font-size:11px;font-weight:700;color:var(--muted);display:flex;gap:6px;align-items:center}
+  .f .help{font-size:10.5px;color:var(--faint)}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg)}
+  .inp:focus{outline:none;border-color:var(--accent);background:#fff}
+  textarea.inp{resize:vertical;min-height:70px;line-height:1.45}
+  .inp.mono{font-family:ui-monospace,monospace;font-weight:700}
+  .missing{position:relative;padding-left:10px;border-left:4px solid #F59E0B;border-radius:4px;background:linear-gradient(90deg,rgba(245,158,11,.08),transparent 60%)}
+  .needtag{font-size:10px;font-weight:800;border-radius:6px;padding:0 6px;background:#FEF3C7;color:#92400E}
+  .seg{display:flex;gap:6px} .seg button{flex:1;border:1.5px solid var(--fg10);background:var(--surface);border-radius:10px;padding:7px;font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center;justify-content:center}
+  .seg button.on{border-color:var(--teal);background:rgba(20,184,166,.1);color:var(--teal)}
+  .pills{display:flex;flex-wrap:wrap;gap:6px} .pills button{border:1.5px solid var(--fg10);background:var(--surface);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;color:var(--muted)}
+  .pills button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .ai{border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9;border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center;margin-left:auto}
+  .sentence{grid-column:span 12;background:rgba(2,132,199,.06);border:1px solid rgba(2,132,199,.2);border-radius:10px;padding:8px 12px;font-size:12.5px;color:#075985;display:flex;gap:8px;align-items:center}
+  .mocnote{grid-column:span 12;background:#FFF7ED;border:1px solid #FDBA74;border-radius:10px;padding:8px 12px;font-size:12px;color:#9A3412;display:none;gap:8px;align-items:flex-start}
+  .mocnote.show{display:flex}
+  .risk{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;max-width:260px}
+  .risk span{height:22px;border-radius:5px}
+  .rows{display:flex;flex-direction:column;gap:6px}
+  .row{display:grid;grid-template-columns:1fr 90px 30px;gap:6px;align-items:center}
+  .row .x{border:0;background:none;color:var(--faint)}
+  .add{border:1px dashed var(--fg25);background:none;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:5px;align-items:center;width:fit-content}
+  .file{display:flex;align-items:center;gap:8px;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12.5px}
+  .file .up{margin-left:auto;border:1px solid rgba(5,150,105,.35);background:rgba(5,150,105,.07);color:#047857;border-radius:8px;padding:4px 9px;font-size:11.5px;font-weight:700;display:flex;gap:4px;align-items:center}
+
+  .mf{display:flex;align-items:center;gap:8px;padding:10px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap}
+  .btn{border:1px solid var(--fg10);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;gap:5px;align-items:center}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:800}
+  .btn.link{border:0;background:none;color:var(--muted)}
+  .dirty{font-size:11.5px;color:#B45309;font-weight:700;display:none;gap:4px;align-items:center} .dirty.show{display:inline-flex}
+  .mf .sp{flex:1}
+  @media(max-width:600px){.mf .hide-sm{display:none}}
+
+  /* referencia */
+  .ref{padding:16px 18px;overflow-y:auto}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .refbox{background:#F3F4F6;border:1px solid var(--fg10);border-radius:12px;padding:10px 12px;font-size:12px}
+  .refbox small{display:block;font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Plan de Mantenimiento · Preview V15</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Situación:</span>
+  <button data-s="ok" class="on">Al día</button><button data-s="window">En ventana</button><button data-s="overdue">Vencido con OT abierta</button>
+  <span class="sep"></span><span class="lab">Ver como:</span>
+  <button data-r="edit" class="on">Puede editar</button><button data-r="ro">Sólo lectura</button>
+</div>
+<div class="stage"><div class="modal" id="root"></div></div>
+
+<script>
+const S={view:"new",sit:"ok",role:"edit",toast:null,closed:{},filled:{}};
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const SIT={
+  ok:{tone:"ok",icon:"calendar-check",bg:"#ECFDF5",col:"#047857",t1:"Vence en 350 días",t2:"31/08/2027 · se avisa 180 días antes",pct:22,bar:"#10B981",chip:["ok","Al día"],btn:{cls:"ghost",icon:"zap",l:"Abrir OT"},wo:null},
+  window:{tone:"warn",icon:"calendar-clock",bg:"#FFFBEB",col:"#B45309",t1:"Vence en 42 días",t2:"26/10/2026 · ya se puede ejecutar",pct:88,bar:"#F59E0B",chip:["warn","En ventana"],btn:{cls:"",icon:"zap",l:"Abrir OT"},wo:null},
+  overdue:{tone:"bad",icon:"calendar-x",bg:"#FEF2F2",col:"#B91C1C",t1:"Vencido hace 12 días",t2:"02/09/2026 · la OT ya está abierta",pct:100,bar:"#EF4444",chip:["bad","Vencido"],btn:{cls:"green",icon:"external-link",l:"Ir a la OT-DEM-26-0051"},wo:"OT-DEM-26-0051"},
+};
+// Datos recomendados: si faltan se marcan (mismo criterio que la OT guiada).
+const REQ={what:["criteria"],who:["responsible"],safety:["loto","risk"]};
+function missingIn(sec){ return (REQ[sec]||[]).filter(k=>!S.filled[k]); }
+const totalMissing=()=>Object.keys(REQ).reduce((a,k)=>a+missingIn(k).length,0);
+
+function header(){
+  const s=SIT[S.sit];
+  return `<div class="mh">
+    <button class="iconbtn" title="Volver">${I("arrow-left",20)}</button>
+    <div class="mid">
+      <div class="kicker">${I("clipboard-list",13)}Plan de mantenimiento</div>
+      <h1>Inspección de renovación de clase</h1>
+      <div class="sub">Casco y estructura · Grupo 0 – Inspecciones y pruebas</div>
+      <div class="chips">
+        <span class="chip mono">MP-0-001</span>
+        <span class="chip">${I("ship",12)}BUQUE DEMO I</span>
+        <span class="chip ${s.chip[0]}">${s.chip[1]}</span>
+        <span class="chip">${I("search-check",12)}Inspección</span>
+        <span class="chip link">${I("file-text",12)}Renueva CERT-DEM-004</span>
+      </div>
+    </div>
+    <div class="right">
+      <button class="copy">${I("link",13)}<span>Copiar link</span></button>
+      <button class="iconbtn" title="Agrandar">${I("maximize-2",16)}</button>
+      <button class="close" title="Cerrar">${I("x",18)}</button>
+    </div>
+  </div>`;
+}
+function statusStrip(){
+  const s=SIT[S.sit];
+  return `<div class="status">
+    <div class="due"><div class="big" style="background:${s.bg};color:${s.col}">${I(s.icon,24)}</div>
+      <div style="flex:1;min-width:0"><div class="t1" style="color:${s.col}">${s.t1}</div><div class="t2">${s.t2}</div>
+      <div class="bar"><span style="width:${s.pct}%;background:${s.bar}"></span></div></div></div>
+    <div class="facts"><span>Última ejecución<b>04/08/2021</b></span><span>Frecuencia<b>cada 72 meses</b></span><span>Horas estimadas<b>40 h</b></span></div>
+    <div>${S.role==="ro"&&!s.wo?"":`<button class="nextbtn ${s.btn.cls}" onclick="toast('${s.wo?'Abre la OT (demo)':'Abre el formulario de la OT con los datos del plan (demo)'}')">${I(s.btn.icon,16)}${s.btn.l}</button>`}</div>
+  </div>`;
+}
+const NAV=[["what","list-checks","Qué se hace"],["when","calendar-range","Cuándo"],["who","users","Quién y con qué"],["safety","shield-alert","Seguridad"],["docs","paperclip","Documentos y muestreo"]];
+function nav(){
+  return `<nav class="nav">${NAV.map(([k,ic,l],i)=>{const m=missingIn(k).length;
+    return `<button data-go="${k}" class="${i===0?'on':''}">${I(ic,15)}${l}${m?`<span class="cnt">${m}</span>`:(REQ[k]?`<span class="okc">${I("check",13)}</span>`:"")}</button>`;}).join("")}
+    <div class="navnote">Los números naranjas son datos recomendados que faltan. Tocá una sección para ir.</div></nav>`;
+}
+const need=(k,label)=>S.filled[k]?"":`<span class="needtag">Falta</span>`;
+function sec(k,num,title,hint,body){
+  const m=missingIn(k).length; const closed=S.closed[k];
+  return `<section class="sec ${closed?'closed':''}" id="sec-${k}">
+    <div class="sech" data-toggle="${k}"><span class="num">${num}</span><div><h2>${title}</h2><div class="hint">${hint}</div></div>
+      ${REQ[k]?(m?`<span class="need">Faltan ${m}</span>`:`<span class="done">${I("check-circle-2",13)}Completo</span>`):`<span style="margin-left:auto"></span>`}
+      <span class="chev">${I("chevron-down",18)}</span></div>
+    <div class="secb">${body}</div></section>`;
+}
+function body(){
+  const ro=S.role==="ro"; const dis=ro?"disabled":"";
+  const aiBtn=(k)=>ro?"":`<button class="ai" onclick="fill('${k}')">${I("sparkles",11)}Sugerir con IA</button>`;
+  const what=sec("what",1,"Qué se hace","Tipo de tarea, título y pasos",`
+    <div class="f w4"><label>Tipo de tarea</label><div class="seg"><button ${dis}>${I("wrench",13)}Mantenimiento</button><button class="on" ${dis}>${I("search-check",13)}Inspección</button></div></div>
+    <div class="f w8"><label>Origen del criterio <span class="help">· de qué regla nace (ISM 10.1)</span></label><select class="inp" ${dis}><option>Requisito de clase</option><option>Fabricante</option><option>Bandera</option></select></div>
+    <div class="f w12"><label>Título</label><input class="inp" value="Inspección de renovación de clase" ${dis}></div>
+    <div class="f w12"><label>Tareas a realizar</label><textarea class="inp" rows="4" ${dis}>[ ] Inspección de espacios internos
+[ ] Medición de espesores
+[ ] Inspección del casco en seco
+[ ] Inspección de los motores</textarea></div>
+    <div class="f w12 ${S.filled.criteria?'':'missing'}"><label>Criterio de aceptación ${need("criteria")} ${aiBtn("criteria")}</label>
+      <textarea class="inp" rows="2" id="criteria" placeholder="Cómo se sabe que quedó bien" ${dis}>${S.filled.criteria?"Espesores dentro de la tolerancia de clase; sin corrosión activa ni deformaciones; motores sin pérdidas.":""}</textarea></div>`);
+  const when=sec("when",2,"Cuándo","Frecuencia, vencimiento y aviso anticipado",`
+    <div class="f w4"><label>Se programa por</label><select class="inp" id="trig" ${dis}><option>Meses (calendario)</option><option>Horas de marcha</option><option>Por evento</option><option>Por condición</option></select></div>
+    <div class="f w4"><label>Cada cuántos meses</label><input class="inp" id="freq" type="number" value="72" ${dis}></div>
+    <div class="f w4"><label>Al ejecutar</label><select class="inp" ${dis}><option>Requiere OT</option><option>Sólo reportar resultado</option><option>Alerta (OT express)</option></select></div>
+    <div class="mocnote" id="moc">${I("git-branch",16)}<div><b>Cambiaste la frecuencia.</b> Al guardar te vamos a preguntar si querés abrir un MOC (ISM 10.3): cambiar el cronograma de un plan aprobado queda registrado para auditoría.</div></div>
+    <div class="f w4"><label>Última ejecución</label><input class="inp" type="date" value="2021-08-04" ${dis}></div>
+    <div class="f w4"><label>Próximo vencimiento</label><input class="inp" type="date" value="2027-08-31" ${dis}><span class="help">Se calcula solo con la frecuencia. Cambialo sólo si hace falta.</span></div>
+    <div class="f w4"><label>Horas estimadas de trabajo</label><input class="inp" type="number" value="40" ${dis}></div>
+    <div class="f w4"><label>Aviso anticipado</label><select class="inp" id="wmode" ${dis}><option value="MANUAL">Días fijos</option><option value="AUTO">Automático</option></select></div>
+    <div class="f w4" id="leadf"><label>Días antes</label><input class="inp" type="number" id="lead" value="180" ${dis}></div>
+    <div class="sentence" id="sent">${I("info",15)}<span>Se ejecuta <b>cada 72 meses</b>. Aparece como “En ventana” <b>180 días antes</b> de vencer.</span></div>`);
+  const who=sec("who",3,"Quién y con qué","Área, taller, responsable y repuestos",`
+    <div class="f w12"><label>Área</label><div class="pills">${["Cubierta","Máquinas","Barcaza","Proveedor","Otros"].map(d=>`<button class="${d==='Proveedor'?'on':''}" ${dis}>${d}</button>`).join("")}</div></div>
+    <div class="f w12"><label>Talleres / proveedores <span class="help">· al abrir la OT se crea una SS por cada uno</span></label>
+      <div class="rows"><div class="row" style="grid-template-columns:1fr 1fr 30px"><select class="inp" ${dis}><option>Sociedad Clasificadora Demo</option></select><input class="inp" value="Inspección y certificado" ${dis}><button class="x">${I("x",15)}</button></div></div>
+      ${ro?"":`<button class="add">${I("plus",13)}Agregar proveedor</button>`}</div>
+    <div class="f w8 ${S.filled.responsible?'':'missing'}"><label>Responsable ${need("responsible")}</label><input class="inp" id="responsible" placeholder="Ej: Jefe de Máquinas" value="${S.filled.responsible?'Jefe de Máquinas':''}" ${dis} oninput="typed('responsible',this.value)"></div>
+    <div class="f w4"><label>Estado del plan</label><select class="inp" ${dis}><option>Activo</option><option>Suspendido</option></select></div>
+    <div class="f w12"><label>Repuestos y materiales previstos <span class="help">· se copian a la OT; no descuentan stock</span></label>
+      <div class="rows"><div class="row"><input class="inp" value="Electrodos E7018 (kg)" ${dis}><input class="inp" value="5" ${dis}><button class="x">${I("x",15)}</button></div></div>
+      ${ro?"":`<button class="add">${I("plus",13)}Agregar repuesto o material</button>`}</div>`);
+  const safety=sec("safety",4,"Seguridad","Bloqueo, riesgo y qué pasa si no se hace",`
+    <div class="f w12 ${S.filled.loto?'':'missing'}"><label>Bloqueo y etiquetado (LOTO) ${need("loto")} ${aiBtn("loto")}</label>
+      <textarea class="inp" rows="2" id="loto" placeholder="Qué hay que aislar antes de trabajar" ${dis}>${S.filled.loto?"Aislar tableros de iluminación del doble fondo; bloquear bombas de lastre; ventilar tanques antes de ingresar.":""}</textarea></div>
+    <div class="f w12 ${S.filled.risk?'':'missing'}"><label>Nivel de riesgo ${need("risk")} ${aiBtn("risk")}</label>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <div class="risk">${Array.from({length:10},(_,i)=>`<span style="background:${["#BBF7D0","#BBF7D0","#FDE68A","#FDE68A","#FECACA","#BBF7D0","#FDE68A","#FDE68A","#FECACA","#FCA5A5"][i]};${S.filled.risk&&i===6?'outline:3px solid #1A1D24':''}"></span>`).join("")}</div>
+        <span style="font-size:12.5px;${S.filled.risk?'font-weight:800;color:#B45309':'color:var(--faint)'}">${S.filled.risk?"Medio · probabilidad baja, consecuencia alta":"Tocá la matriz o pedile a la IA"}</span></div></div>
+    <div class="f w12"><label>Si no se hace, ¿qué pasa? ${aiBtn("cons")}</label>
+      <div style="display:grid;grid-template-columns:220px 1fr;gap:8px" class="consg"><select class="inp" ${dis}><option>Operacional</option><option>Seguridad</option><option>Ambiental</option><option>No operacional</option></select><input class="inp" value="Se pierde la clase: el buque no puede operar." ${dis}></div></div>`);
+  const docs=sec("docs",5,"Documentos y muestreo","Planilla para ejecutar y muestras",`
+    <div class="f w12"><label>Lista de chequeo <span class="help">· la planilla que se completa al ejecutar</span></label>
+      <div class="file">${I("file-spreadsheet",16)}<span>checklist-renovacion-clase.xlsx</span>${ro?"":`<button class="up">${I("upload",13)}Cambiar</button>`}</div></div>
+    <div class="f w12"><label>Plan de muestreo <span class="help">· opcional</span></label><select class="inp" ${dis}><option>No es plan de muestreo</option><option>Fluido</option><option>Vibración</option><option>Termografía</option></select></div>`);
+  return `<div class="scroll" id="scroll">${ro?`<div class="ro">${I("lock",14)}Sólo lectura: editar planes es del Admin, el Superintendente y el Capitán / Jefe de Máquinas.</div>`:""}${what}${when}${who}${safety}${docs}</div>`;
+}
+function footer(){
+  const ro=S.role==="ro"; const m=totalMissing();
+  return `<div class="mf">
+    <button class="btn">${I("history",14)}Historial</button><button class="btn">${I("file-text",14)}PDF</button>
+    <span class="sp"></span>
+    <span class="dirty" id="dirty">${I("circle-dot",12)}Cambios sin guardar</span>
+    ${ro?`<button class="btn primary">Cerrar</button>`:`<button class="btn link hide-sm">Cancelar</button>
+    <button class="btn primary" onclick="save()">${I("save",14)}Guardar${m?` <span style="font-size:10px;opacity:.85;font-weight:600">(faltan ${m})</span>`:""}</button>`}
+  </div>`;
+}
+function ref(){
+  return `<div class="ref">
+    <span class="note">El título de la ventana es el equipo; el nombre del plan queda en un campo más abajo</span><span class="note">“VESSEL” en inglés y con el código del buque</span>
+    <div class="refrow"><div class="refbox"><small>Código</small>MP-0-001</div><div class="refbox"><small>Vessel</small>BUQUE DEMO I <span style="font-size:9px">DEM</span></div></div>
+    <div class="refrow"><div class="refbox"><small>Última ejecución</small>04/08/2021</div><div class="refbox"><small>Próximo vencimiento</small>31/08/2027</div></div>
+    <span class="note">Cuánto falta para vencer no se ve: hay que leer la fecha y hacer la cuenta</span>
+    <div class="refbox" style="margin-bottom:10px">Activo · Grupo SFI · Tipo de tarea · Origen del criterio · Título</div>
+    <div class="refbox" style="margin-bottom:10px"><b style="color:#0284C7;font-size:10px">TAREAS A REALIZAR</b><br>[ ] …<br>Tipo de trigger · Frecuencia · Modo de resultado · Horas · Ventana · Días</div>
+    <span class="note">La frecuencia está “escondida” dentro de Tareas a realizar</span><span class="note">“Tipo de trigger”, “Modo de ventana anticipada”: términos técnicos</span>
+    <div class="refbox" style="margin-bottom:6px">Plan de muestreo</div><div class="refbox" style="margin-bottom:6px">Área / responsable</div><div class="refbox" style="margin-bottom:6px">Repuestos</div><div class="refbox" style="margin-bottom:6px">Responsable · Estado</div><div class="refbox" style="margin-bottom:6px">✨ Criterios · ✨ LOTO · Matriz de riesgo · ✨ Consecuencia</div><div class="refbox" style="margin-bottom:10px">Lista de chequeo</div>
+    <span class="note">Una sola columna larga, sin índice: hay que bajar mucho para llegar a Seguridad</span><span class="note">No marca qué falta (criterios, LOTO, riesgo)</span><span class="note">La IA se activa tocando el título del campo: no se nota que es un botón</span><span class="note">El aviso de MOC recién aparece al guardar</span>
+  </div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.view));
+  document.querySelectorAll(".pv-bar [data-s]").forEach(b=>b.classList.toggle("on",b.dataset.s===S.sit));
+  document.querySelectorAll(".pv-bar [data-r]").forEach(b=>b.classList.toggle("on",b.dataset.r===S.role));
+  const root=document.getElementById("root");
+  const prev=document.getElementById("scroll"); const top=prev?prev.scrollTop:0;
+  root.innerHTML = S.view==="ref" ? header()+ref() : header()+statusStrip()+`<div class="mb">${nav()}${body()}</div>`+footer();
+  const sc=document.getElementById("scroll"); if(sc){ sc.style.scrollBehavior="auto"; sc.scrollTop=top; sc.style.scrollBehavior=""; wire(); }
+  if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast" id="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function wire(){
+  document.querySelectorAll("[data-toggle]").forEach(h=>h.onclick=e=>{ if(e.target.closest(".ai")) return; const k=h.dataset.toggle; S.closed[k]=!S.closed[k]; document.getElementById("sec-"+k).classList.toggle("closed",S.closed[k]); });
+  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ const k=b.dataset.go; S.closed[k]=false; const el=document.getElementById("sec-"+k); el.classList.remove("closed");
+    document.getElementById("scroll").scrollTo({top:el.offsetTop-10,behavior:"smooth"}); document.querySelectorAll("[data-go]").forEach(x=>x.classList.toggle("on",x===b)); });
+  const sc=document.getElementById("scroll");
+  sc.onscroll=()=>{ let cur=NAV[0][0]; for(const [k] of NAV){ const el=document.getElementById("sec-"+k); if(el.offsetTop-40<=sc.scrollTop) cur=k; } document.querySelectorAll("[data-go]").forEach(x=>x.classList.toggle("on",x.dataset.go===cur)); };
+  const freq=document.getElementById("freq"), lead=document.getElementById("lead"), wm=document.getElementById("wmode"), trig=document.getElementById("trig");
+  const upd=()=>{ document.getElementById("moc").classList.toggle("show",freq.value!=="72");
+    document.getElementById("leadf").style.display=wm.value==="AUTO"?"none":"";
+    const unit=trig.selectedIndex===1?"horas":"meses";
+    document.getElementById("sent").innerHTML=`${I("info",15)}<span>Se ejecuta <b>cada ${freq.value||"?"} ${unit}</b>. Aparece como “En ventana” <b>${wm.value==="AUTO"?"con el aviso que calcula el sistema (10–15% de la frecuencia)":(lead.value||"?")+" días antes"}</b> de vencer.</span>`; lucide.createIcons(); dirty(); };
+  if(freq){ freq.oninput=upd; lead.oninput=upd; wm.onchange=upd; trig.onchange=upd; }
+  document.querySelectorAll(".scroll input:not(#responsible), .scroll textarea, .scroll select").forEach(el=>{ if(!el.oninput&&!el.onchange){ el.addEventListener("input",dirty); } });
+}
+function dirty(){ const d=document.getElementById("dirty"); if(d) d.classList.add("show"); }
+function fill(k){ const map={criteria:["criteria"],loto:["loto"],risk:["risk"],cons:[]}; (map[k]||[]).forEach(x=>S.filled[x]=true); S.toast=k==="cons"?"La IA completó la consecuencia (demo)":"La IA sugirió el texto: revisalo antes de guardar (demo)"; render(); dirty(); setTimeout(()=>{S.toast=null;document.getElementById("toast")?.remove();},1700); }
+function typed(k,v){ const was=!!S.filled[k]; S.filled[k]=!!v.trim(); dirty(); if(was!==S.filled[k]){ const el=document.activeElement, pos=el.selectionStart; render(); dirty(); const n=document.getElementById(k); n.focus(); n.setSelectionRange(pos,pos); } }
+function save(){ const m=totalMissing(); S.toast=m?`Guardado. Quedan ${m} datos recomendados sin completar (demo)`:"Guardado (demo)"; render(); setTimeout(()=>{S.toast=null;document.getElementById("toast")?.remove();},1800); }
+function toast(msg){ S.toast=msg; render(); setTimeout(()=>{S.toast=null;document.getElementById("toast")?.remove();},1700); }
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar [data-s]").forEach(b=>b.onclick=()=>{S.sit=b.dataset.s;render();});
+document.querySelectorAll(".pv-bar [data-r]").forEach(b=>b.onclick=()=>{S.role=b.dataset.r;render();});
+render();
+</script>
+</body>
+</html>

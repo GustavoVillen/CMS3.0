@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nuevo Permiso de Trabajo — Preview V19</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#D9DDE3; --surface:#fff; --fg:#1A1D24; --accent:#0284C7;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer}
+  i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px}
+  .stage{padding:20px 16px;display:flex;justify-content:center} @media(max-width:600px){.stage{padding:0}}
+  .modal{width:100%;max-width:880px;background:#fff;border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;border-top:4px solid #EA580C}
+  @media(max-width:600px){.modal{border-radius:0}}
+  .mh{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--fg10)}
+  .mh .ic{width:38px;height:38px;border-radius:11px;background:rgba(234,88,12,.12);color:#C2410C;display:flex;align-items:center;justify-content:center}
+  .mh small{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#C2410C}
+  .mh h1{margin:0;font-size:17px;font-weight:900}
+  .close{margin-left:auto;width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .steps{display:flex;gap:6px;padding:10px 18px;border-bottom:1px solid var(--fg10);background:rgba(26,29,36,.02);overflow-x:auto}
+  .stp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--faint);white-space:nowrap}
+  .stp .n{width:22px;height:22px;border-radius:99px;border:1.5px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp.on{color:var(--fg)} .stp.on .n{background:#EA580C;border-color:#EA580C;color:#fff}
+  .stp.done{color:#047857} .stp.done .n{background:#10B981;border-color:#10B981;color:#fff}
+  .stp .bar{width:22px;height:2px;background:var(--fg10)}
+  .mb{padding:16px 18px;display:flex;flex-direction:column;gap:14px;min-height:420px}
+  .q{font-size:15px;font-weight:800} .qh{font-size:12px;color:var(--muted);margin-top:2px}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:560px){.opts{grid-template-columns:1fr}}
+  .opt{border:2px solid var(--fg10);border-radius:14px;padding:14px;text-align:left;background:#fff;display:flex;gap:12px}
+  .opt:hover{border-color:var(--fg25)} .opt.rec{border-color:rgba(2,132,199,.45);background:rgba(2,132,199,.04)}
+  .opt .oi{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(2,132,199,.1);color:var(--accent)}
+  .opt .t{font-size:14px;font-weight:800} .opt .d{font-size:12px;color:var(--muted);margin-top:2px}
+  .badge{font-size:10px;font-weight:800;border-radius:99px;padding:1px 7px;background:var(--accent);color:#fff;margin-left:6px}
+  .wolist{display:flex;flex-direction:column;border:1px solid var(--fg10);border-radius:12px;overflow:hidden}
+  .wo{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--fg5);text-align:left;background:#fff;border-left:0;border-right:0;border-top:0}
+  .wo:hover{background:rgba(2,132,199,.04)}
+  .wo .code{font-family:ui-monospace,monospace;font-weight:800;font-size:12px}
+  .pill{font-size:10px;font-weight:800;border-radius:99px;padding:1px 7px;background:var(--fg5);color:var(--muted);border:1px solid var(--fg10)}
+  .search{position:relative} .search input{width:100%;border:1px solid var(--fg10);border-radius:10px;padding:9px 10px 9px 32px;font-size:13px;background:var(--fg5)}
+  .search svg{position:absolute;left:10px;top:10px;width:15px;height:15px;color:var(--faint)}
+  .types{display:grid;grid-template-columns:repeat(3,1fr);gap:10px} @media(max-width:620px){.types{grid-template-columns:1fr 1fr}}
+  .ty{border:2px solid var(--fg10);border-radius:14px;padding:12px;text-align:left;background:#fff;display:flex;flex-direction:column;gap:4px;position:relative}
+  .ty .ti{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+  .ty .t{font-size:13.5px;font-weight:800} .ty .d{font-size:11px;color:var(--muted)}
+  .ty.on{border-color:#EA580C;background:rgba(234,88,12,.06)}
+  .ty .sug{position:absolute;top:8px;right:8px;font-size:9.5px;font-weight:800;border-radius:99px;padding:1px 7px;background:rgba(124,58,237,.12);color:#6D28D9;display:flex;gap:3px;align-items:center}
+  .ctx{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 10px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:5px;align-items:center}
+  .chip.wo{color:var(--accent);background:rgba(2,132,199,.07);border-color:rgba(2,132,199,.3);font-family:ui-monospace,monospace}
+  .chip.type{color:#C2410C;background:rgba(234,88,12,.08);border-color:rgba(234,88,12,.3)}
+  .chip button{border:0;background:none;color:inherit;font-weight:800;padding:0 0 0 4px;font-size:11px;text-decoration:underline}
+  .sec{border:1px solid var(--fg10);border-radius:14px}
+  .sech{display:flex;gap:8px;align-items:center;padding:10px 14px}
+  .num{width:22px;height:22px;border-radius:99px;background:#1A1D24;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .spill{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;background:#D97706;color:#fff} .spill.ok{background:rgba(14,159,110,.15);color:#047857}
+  .secb{padding:2px 14px 14px;display:flex;flex-direction:column;gap:12px}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;align-items:center}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg)}
+  textarea.inp{resize:vertical;line-height:1.45}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media(max-width:560px){.row2{grid-template-columns:1fr}}
+  .need{border-left:4px solid #F59E0B;background:linear-gradient(90deg,rgba(245,158,11,.09),transparent 70%);border-radius:4px;padding:8px 10px}
+  .needtag{font-size:9.5px;font-weight:800;border-radius:99px;padding:1px 7px;background:#D97706;color:#fff;text-transform:uppercase}
+  .ai{margin-left:auto;border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9;border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center}
+  .quick{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap} .quick button{border:1px solid var(--fg10);background:#fff;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:700;color:var(--muted)}
+  .override{display:flex;gap:10px;align-items:flex-start;border:1.5px solid rgba(234,88,12,.3);background:rgba(234,88,12,.05);border-radius:12px;padding:10px 12px;cursor:pointer}
+  .override input{width:18px;height:18px;margin-top:1px;accent-color:#EA580C}
+  .override .t{font-size:13px;font-weight:800;color:#9A3412} .override .d{font-size:11.5px;color:var(--muted)}
+  .aiNote{font-size:11px;color:var(--faint);display:flex;gap:6px}
+  .next{border:1px solid rgba(2,132,199,.22);background:rgba(2,132,199,.06);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#075985}
+  .flow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center}
+  .flow span{font-size:11px;font-weight:800;border-radius:99px;padding:2px 9px;background:#fff;border:1px solid rgba(2,132,199,.25)}
+  .flow span.here{background:#EA580C;color:#fff;border-color:#EA580C}
+  .mf{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap}
+  .mf .sp{flex:1}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.primary{background:#EA580C;border-color:#EA580C;color:#fff} .btn.link{border:0;background:none;color:var(--muted);font-weight:600}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#F3F4F6;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .refbox small{display:block;font-size:9.5px;color:var(--faint);text-transform:uppercase}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+  .alert{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:250;padding:16px}
+  .alert>div{background:#fff;border-radius:16px;padding:18px;max-width:360px;font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Nuevo Permiso de Trabajo · Preview V19</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+</div>
+<div class="stage"><div class="modal" id="root"></div></div>
+<script>
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"new",step:1,origin:"wo",wo:null,type:null,loc:"",desc:"",haz:"",ctl:"",ppe:"",ovr:false,toast:null,alert:null};
+const WOS=[
+ {c:"OT-DEM-26-0061",a:"Tanque de lastre 3 babor",t:"Reparación de soldadura en refuerzo interno",st:"En progreso",loc:"Tanque de lastre 3 Br",sug:"HOT_WORK"},
+ {c:"OT-DEM-26-0058",a:"Mástil de proa",t:"Cambio de luces de navegación",st:"Planificada",loc:"Mástil de proa",sug:"WORKING_ALOFT"},
+ {c:"OT-DEM-26-0055",a:"Tablero principal",t:"Reapriete de barras colectoras",st:"Planificada",loc:"Sala de tableros",sug:"ELECTRICAL_ISOLATION"},
+];
+const TYPES=[["HOT_WORK","flame","Trabajo en caliente","Soldadura, corte, amolado","#FEE2E2","#B91C1C"],["ENCLOSED_SPACE_ENTRY","wind","Espacio confinado","Tanques, cofferdams, doble fondo","#E0F2FE","#0369A1"],["WORKING_ALOFT","arrow-up","Trabajo en altura","Mástiles, fuera de borda","#FEF3C7","#B45309"],["ELECTRICAL_ISOLATION","zap","Aislamiento eléctrico","Tableros y equipos energizados","#FEF9C3","#A16207"],["COLD_WORK","snowflake","Trabajo en frío","Mecánico sin llama","#E0E7FF","#4338CA"],["UNDERWATER_WORK","waves","Trabajo submarino","Buzos, casco sumergido","#CCFBF1","#0F766E"]];
+const tName=k=>TYPES.find(x=>x[0]===k)?.[2];
+function stepper(){
+  const labels=S.origin==="wo"?["Origen","Orden de trabajo","Tipo de permiso","Completar"]:["Origen","Tipo de permiso","Completar"];
+  const cur=S.origin==="wo"?S.step:(S.step===1?1:S.step-1);
+  return `<div class="steps">${labels.map((l,i)=>`${i?'<span class="stp"><span class="bar"></span></span>':''}<span class="stp ${i+1===cur?'on':i+1<cur?'done':''}"><span class="n">${i+1<cur?I("check",12):i+1}</span>${l}</span>`).join("")}</div>`;
+}
+function head(){ return `<div class="mh"><span class="ic">${I("shield-alert",20)}</span><div><small>Permiso de trabajo</small><h1>Nuevo permiso</h1></div><button class="close">${I("x",17)}</button></div>`; }
+function s1(){ return `<div class="mb"><div><div class="q">¿El permiso es para una orden de trabajo?</div><div class="qh">Lo normal es que el permiso cuelgue de la OT del trabajo: así queda trazable.</div></div>
+  <div class="opts">
+    <button class="opt rec" onclick="S.origin='wo';S.step=2;render()"><span class="oi">${I("wrench",20)}</span><span><div class="t">Sí, de una OT abierta<span class="badge">Lo habitual</span></div><div class="d">Elegís la OT y el permiso toma el buque, el lugar y la descripción.</div></span></button>
+    <button class="opt" onclick="S.origin='free';S.wo=null;S.step=3;render()"><span class="oi" style="background:var(--fg5);color:var(--muted)">${I("shield-alert",20)}</span><span><div class="t">No, trabajo ocasional</div><div class="d">Un trabajo puntual sin OT. Completás todo a mano.</div></span></button>
+  </div></div>`; }
+function s2(){ return `<div class="mb"><div><div class="q">¿Para qué orden de trabajo?</div><div class="qh">OT abiertas de BUQUE DEMO I (planificadas, en progreso o en espera).</div></div>
+  <div class="row2" style="grid-template-columns:220px 1fr"><select class="inp"><option>BUQUE DEMO I</option><option>BUQUE DEMO II</option></select><div class="search">${I("search")}<input placeholder="Buscar OT, equipo o trabajo…"></div></div>
+  <div class="wolist">${WOS.map((w,i)=>`<button class="wo" onclick="pickWo(${i})"><div style="flex:1;min-width:0"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="code">${w.c}</span><span class="pill">${w.st}</span></div>
+    <div style="font-size:13px;font-weight:700;margin-top:2px">${w.a}</div><div style="font-size:12px;color:var(--muted)">${w.t}</div></div>
+    <span class="chip type" title="Sugerido por el texto de la OT">${I(TYPES.find(x=>x[0]===w.sug)[1],12)}${tName(w.sug)}</span>${I("chevron-right",18)}</button>`).join("")}</div></div>`; }
+function pickWo(i){ const w=WOS[i]; S.wo=w; S.type=w.sug; S.loc=w.loc; S.desc=w.t; S.step=3; render(); }
+function s3(){ const sug=S.wo?.sug; return `<div class="mb">${ctx()}<div><div class="q">¿Qué tipo de permiso?</div><div class="qh">${sug?"Marcamos el que sugiere el texto de la OT. Revisalo.":"Elegí el tipo de trabajo."}</div></div>
+  <div class="types">${TYPES.map(([k,ic,t,d,bg,col])=>`<button class="ty ${S.type===k?'on':''}" onclick="S.type='${k}';S.step=4;render()">${k===sug?`<span class="sug">${I("sparkles",10)}Sugerido</span>`:""}<span class="ti" style="background:${bg};color:${col}">${I(ic,18)}</span><span class="t">${t}</span><span class="d">${d}</span></button>`).join("")}</div></div>`; }
+function ctx(){ return `<div class="ctx"><span class="chip">${I("ship",12)}BUQUE DEMO I</span>${S.wo?`<span class="chip wo">${I("wrench",12)}${S.wo.c}<button onclick="S.step=2;render()">cambiar</button></span>`:`<span class="chip">Sin OT · ocasional</span>`}${S.type&&S.step===4?`<span class="chip type">${I(TYPES.find(x=>x[0]===S.type)[1],12)}${tName(S.type)}<button onclick="S.step=3;render()">cambiar</button></span>`:""}</div>`; }
+function missingCount(){ return [!S.loc.trim(),!S.desc.trim(),!S.haz.trim(),!S.ctl.trim(),!S.ppe.trim()].filter(Boolean).length; }
+function s4(){
+  const m1=[!S.loc.trim(),!S.desc.trim()].filter(Boolean).length, m2=[!S.haz.trim(),!S.ctl.trim(),!S.ppe.trim()].filter(Boolean).length;
+  const f=(k,label,rows,ph,ai)=>`<div class="${!S[k].trim()?'need':''}"><div class="lbl">${label} ${!S[k].trim()?'<span class="needtag">Falta</span>':''}${ai?`<button class="ai" onclick="aiFill('${k}')">${I("sparkles",11)}Sugerir con IA</button>`:""}</div>
+    ${rows===1?`<input class="inp" id="f-${k}" value="${S[k]}" placeholder="${ph}" oninput="S['${k}']=this.value;soft('${k}')">`:`<textarea class="inp" id="f-${k}" rows="${rows}" placeholder="${ph}" oninput="S['${k}']=this.value;soft('${k}')">${S[k]}</textarea>`}</div>`;
+  return `<div class="mb" id="mb">${ctx()}
+  <section class="sec"><div class="sech"><span class="num">1</span><div><h2>Qué, dónde y cuándo</h2><div class="hint">Ubicación, trabajo y horario planeado</div></div>${m1?`<span class="spill">Faltan ${m1}</span>`:`<span class="spill ok">Completo</span>`}</div>
+    <div class="secb">${f("loc","Ubicación",1,"Ej: tanque de lastre 3 babor",false)}${f("desc","Qué trabajo se hace",2,"Describí el trabajo",false)}
+      <div class="row2"><div><div class="lbl">Empieza</div><input class="inp" type="datetime-local" value="2026-09-15T08:00"><div class="quick"><button>Hoy 08:00</button><button>Mañana 08:00</button></div></div>
+      <div><div class="lbl">Termina</div><input class="inp" type="datetime-local" value="2026-09-15T17:00"><div class="quick"><button>+4 h</button><button>+8 h</button><button>Fin del día</button></div></div></div></div></section>
+  <section class="sec"><div class="sech"><span class="num">2</span><div><h2>Riesgos y protección</h2><div class="hint">Peligros, cómo se controlan y equipo de protección</div></div>${m2?`<span class="spill">Faltan ${m2}</span>`:`<span class="spill ok">Completo</span>`}</div>
+    <div class="secb">${f("haz","Peligros identificados",3,"Qué puede salir mal",true)}${f("ctl","Medidas de control",3,"Qué se hace para evitarlo",true)}${f("ppe","Equipo de protección (EPP)",2,"Qué tiene que usar cada uno",true)}
+      <div class="aiNote">${I("info",13)}Las sugerencias de la IA son orientativas: revisalas con la regulación que aplica.${S.type==="ENCLOSED_SPACE_ENTRY"?" Para espacio confinado, las mediciones de gas se cargan después de guardar.":""}</div>
+      <label class="override"><input type="checkbox" ${S.ovr?'checked':''} onchange="S.ovr=this.checked"><span><div class="t">Hay que anular o puentear una alarma de seguridad</div><div class="d">Detección de incendio, gas, parada de emergencia… Al guardar te vamos a proponer registrar un MOC temporal.</div></span></label>
+    </div></section>
+  <div class="next"><b>Qué sigue:</b> ${S.type==="ENCLOSED_SPACE_ENTRY"?"después de guardar se cargan los participantes y las mediciones de gas.":"después de guardar se cargan los participantes."}
+    <div class="flow"><span class="here">Borrador</span>${I("chevron-right",12)}<span>Solicitar aprobación</span>${I("chevron-right",12)}<span>Aprobado</span>${I("chevron-right",12)}<span>Activo</span>${I("chevron-right",12)}<span>Cerrado</span></div></div>
+  </div>`;
+}
+function soft(k){ /* actualiza marcas sin perder foco */ const el=document.getElementById("f-"+k); const p=el.selectionStart; render(); const n=document.getElementById("f-"+k); n.focus(); try{n.setSelectionRange(p,p);}catch{} }
+function aiFill(k){ const txt={haz:"Incendio por proyección de chispas; atmósfera inflamable residual; quemaduras; humos de soldadura.",ctl:"Desgasificar y ventilar el tanque; retirar combustibles a 10 m; vigía de fuego con extintor durante y 30 min después.",ppe:"Careta de soldar, guantes de cuero, ropa ignífuga, protección respiratoria."}[k]; S[k]=txt; S.toast="La IA sugirió el texto: revisalo (demo)"; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll('.toast').forEach(x=>x.remove());},1600); }
+function foot(){
+  if(S.step<4) return `<div class="mf">${S.step>1?`<button class="btn link" onclick="S.step=${S.origin==='free'&&S.step===3?1:'S.step-1'};render()">${I("arrow-left",14)}Atrás</button>`:""}<span class="sp"></span><button class="btn link">Cancelar</button></div>`;
+  const m=missingCount();
+  return `<div class="mf"><button class="btn link" onclick="S.step=3;render()">${I("arrow-left",14)}Atrás</button><span class="sp"></span>
+    <button class="btn" onclick="save(false)">${I("save",14)}Guardar borrador</button>
+    <button class="btn primary" onclick="save(true)">${I("send",14)}Guardar y solicitar aprobación${m?` <span style="font-size:10px;opacity:.85;font-weight:600">(faltan ${m})</span>`:""}</button></div>`;
+}
+function save(req){
+  if(!S.loc.trim()||!S.desc.trim()){ S.alert="Completá la ubicación y qué trabajo se hace antes de guardar."; render(); return; }
+  if(req&&missingCount()){ S.alert="Para solicitar la aprobación completá peligros, controles y EPP. Podés guardarlo como borrador y seguir después."; render(); return; }
+  S.toast=req?"Guardado y enviado a aprobar (demo)":"Guardado como borrador (demo)"; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll('.toast').forEach(x=>x.remove());},1700);
+}
+function ref(){
+  return `<div class="mh"><div><small style="color:var(--faint)">PERMISOS DE TRABAJO</small><h1>Nuevo permiso de trabajo</h1></div><button class="close">${I("x",17)}</button></div>
+  <div class="mb">
+    <div class="refbox">Ventana 1: “¿De dónde nace el permiso?” — De una OT abierta / Ocasional</div>
+    <div class="refbox">Ventana 2: lista de OT con código del buque (DEM — BUQUE DEMO I)</div>
+    <div class="refbox"><b>Ventana 3 (formulario):</b><br><small>OT asociada</small>OT-DEM-26-0061 · Vincular / Cambiar<div class="row2"><div><small>Vessel</small>DEM — BUQUE DEMO I</div><div><small>Tipo</small>[ Trabajo en caliente ▾ ]</div></div><small>Ubicación · Descripción · Inicio · Fin</small><small style="color:#0284C7">✨ PELIGROS IDENTIFICADOS · ✨ MEDIDAS DE CONTROL · ✨ EPP REQUERIDO</small><small>☐ Override / bypass de alarma</small><div style="font-size:10px;color:#1D4ED8;margin-top:4px">Las sugerencias… ISGOTT 6 Cap. 11 (O₂ 19.5–23%, LEL &lt;1%…)</div></div>
+    <div><span class="note">Tres ventanas separadas sin indicar en qué paso estás</span><span class="note">El tipo de permiso es un desplegable escondido; la sugerencia no se ve</span><span class="note">No marca qué falta</span><span class="note">La IA se activa tocando el título: no parece un botón</span><span class="note">Sólo “Guardar”: solicitar aprobación es otro paso después de reabrir</span><span class="note">No explica qué sigue (participantes, gas, aprobación)</span><span class="note">Textos fijos en español y términos en inglés (Vessel, override)</span><span class="note">Errores en recuadro rojo</span></div>
+  </div><div class="mf"><span class="sp"></span><button class="btn link">Cerrar</button><button class="btn primary" style="background:#0284C7;border-color:#0284C7">Guardar</button></div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  const r=document.getElementById("root");
+  r.innerHTML=S.v==="ref"?ref():head()+stepper()+(S.step===1?s1():S.step===2?s2():S.step===3?s3():s4())+foot();
+  document.querySelectorAll(".toast,.alert").forEach(x=>x.remove());
+  if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  if(S.alert) document.body.insertAdjacentHTML("beforeend",`<div class="alert"><div>${S.alert}<div style="text-align:right;margin-top:12px"><button class="btn primary" onclick="S.alert=null;render()">OK</button></div></div></div>`);
+  lucide.createIcons();
+}
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.v=b.dataset.v;render();});
+render();
+</script>
+</body>
+</html>

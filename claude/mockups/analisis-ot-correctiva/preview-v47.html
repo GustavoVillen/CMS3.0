@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V47 — OT debajo del resultado</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:#f1f5f9; color:#0f172a; padding:24px 16px 60px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; }
+  h1 { font-size:20px; margin:10px 0 4px; } .lead { color:#475569; font-size:13px; margin:0 0 16px; max-width:780px; line-height:1.5; }
+  .card { background:#fff; border-radius:16px; border:1px solid #e5e7eb; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; min-width:760px; }
+  th { text-align:left; font-size:11px; font-weight:700; color:#94a3b8; letter-spacing:.04em; padding:14px 16px; border-bottom:1px solid #e5e7eb; }
+  td { padding:12px 16px; border-bottom:1px solid #eef2f7; font-size:13px; vertical-align:middle; }
+  tr.bad td { background:#fef2f2; } tr.bad td:first-child { box-shadow:inset 3px 0 0 #dc2626; }
+  .code { font-family:ui-monospace,monospace; color:#0369a1; font-weight:700; font-size:12px; } .v { display:block; font-size:10.5px; color:#94a3b8; }
+  .eq { font-weight:700; } .st { background:#d1fae5; color:#065f46; font-weight:700; font-size:11px; border-radius:6px; padding:3px 8px; }
+  .res { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:800; border-radius:99px; padding:3px 10px; border:1px solid; }
+  .crit { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; } .ok { background:#ecfdf5; color:#047857; border-color:#a7f3d0; } .cau { background:#fffbeb; color:#b45309; border-color:#fcd34d; }
+  .wo { display:flex; align-items:center; gap:4px; margin-top:5px; font-size:11px; font-weight:700; color:#2563eb; }
+  .wo span { font-family:ui-monospace,monospace; text-decoration:underline; text-underline-offset:2px; }
+  .wo em { font-style:normal; font-weight:600; color:#64748b; font-size:10.5px; }
+  .pend { margin-top:5px; font-size:10.5px; font-weight:700; color:#c2410c; }
+  ul { font-size:13px; line-height:1.6; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px 30px; margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V47 · DATOS REALES (LATERE, informe 1/2026)</span>
+  <h1>Muestreos y Análisis: número de OT debajo del resultado</h1>
+  <p class="lead">Cuando el defecto de un resultado quedó cerrado con una OT correctiva, debajo del veredicto aparece el número de esa OT y su estado. Si se toca, abre la OT.</p>
+  <div class="card">
+    <table>
+      <tr><th>Muestra</th><th>Equipo</th><th>Qué se analiza</th><th>Toma</th><th>Estado</th><th>Resultado</th></tr>
+      <tr><td><span class="code">FA-LTE-0062</span><span class="v">LATERE</span></td><td class="eq">Línea de eje #4</td><td>〰 Vibración</td><td>15/09/2026</td><td><span class="st">Con informe</span></td><td><span class="res cau">⚠ PRECAUCIÓN</span></td></tr>
+      <tr class="bad"><td><span class="code">FA-LTE-0061</span><span class="v">LATERE</span></td><td class="eq">Caja reductora #4</td><td>〰 Vibración</td><td>15/09/2026</td><td><span class="st">Con informe</span></td>
+        <td><span class="res crit">ⓘ CRÍTICO</span><div class="wo">🔧 <span>OT-LTE-26-0047</span> <em>· Planificada</em></div></td></tr>
+      <tr class="bad"><td><span class="code">FA-LTE-0060</span><span class="v">LATERE</span></td><td class="eq">Motor Principal #4</td><td>〰 Vibración</td><td>15/09/2026</td><td><span class="st">Con informe</span></td>
+        <td><span class="res crit">ⓘ CRÍTICO</span></td></tr>
+      <tr><td><span class="code">FA-LTE-0059</span><span class="v">LATERE</span></td><td class="eq">Línea de eje #3</td><td>〰 Vibración</td><td>15/09/2026</td><td><span class="st">Con informe</span></td><td><span class="res ok">✓ NORMAL</span></td></tr>
+    </table>
+  </div>
+  <ul>
+    <li><b>FA-LTE-0061:</b> su defecto DEF-LTE-0025 se cerró con la OT-LTE-26-0047. Aparece el número y el estado de la OT (Planificada, En curso, Cerrada o Cancelada).</li>
+    <li><b>FA-LTE-0060:</b> su defecto todavía no tiene OT, así que no se muestra nada. La fila roja ya avisa que hay que actuar.</li>
+    <li>Tocar el número de OT abre la OT, sin abrir la ventana de la muestra.</li>
+  </ul>
+</div>
+</body>
+</html>

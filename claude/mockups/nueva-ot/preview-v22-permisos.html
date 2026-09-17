@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permisos de Trabajo — Preview V22</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --fg:#1A1D24; --accent:#0284C7; --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer} i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:400;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .main{padding:20px 24px;display:flex;flex-direction:column;gap:14px;max-width:1400px;margin:0 auto} @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px} .ph .right{margin-left:auto;display:flex;gap:8px}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.orange{background:#EA580C;border-color:#EA580C;color:#fff} .btn.blue{background:var(--accent);border-color:var(--accent);color:#fff} .btn.green{background:#059669;border-color:#059669;color:#fff}
+  .btn.red{color:#B91C1C;border-color:rgba(220,38,38,.35)} .btn.ghost{border:0;background:none;color:var(--muted);font-weight:600}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media(max-width:900px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:#fff;border:1.5px solid var(--fg10);border-left-width:4px;border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .sc.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.18)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center} .sc .h{font-size:10.5px;color:var(--faint)}
+  .sc.green{border-left-color:#059669} .sc.green .n{color:#047857} .sc.blue{border-left-color:#2563EB} .sc.blue .n{color:#1D4ED8}
+  .sc.violet{border-left-color:#7C3AED} .sc.violet .n{color:#6D28D9} .sc.red{border-left-color:#DC2626} .sc.red .n{color:#B91C1C}
+  .fbar{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:240px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)} @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .tbl{background:#fff;border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:1050px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12.5px;vertical-align:middle}
+  tr.hot td{background:#FEF2F2} tr.hot td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr.live td:first-child{box-shadow:inset 4px 0 0 #059669}
+  tr:hover td{background:rgba(2,132,199,.04);cursor:pointer}
+  .code{font-family:ui-monospace,monospace;font-weight:800;font-size:12px} .sub{font-size:10.5px;color:var(--faint)}
+  .type{display:inline-flex;gap:6px;align-items:center;font-weight:700;font-size:12px} .type .ti{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+  .t-HOT{background:#FEE2E2;color:#B91C1C} .t-ENC{background:#E0F2FE;color:#0369A1} .t-ALOFT{background:#FEF3C7;color:#B45309} .t-ELEC{background:#FEF9C3;color:#A16207} .t-COLD{background:#E0E7FF;color:#4338CA}
+  .stg{font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .s-DRAFT{color:var(--muted);border-color:var(--fg10);background:var(--fg5)} .s-REQUESTED{color:#A16207;border-color:rgba(202,138,4,.35);background:rgba(202,138,4,.08)}
+  .s-APPROVED{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .s-ACTIVE{color:#fff;border-color:#059669;background:#059669}
+  .s-CLOSED{color:#047857;border-color:rgba(14,159,110,.3);background:rgba(14,159,110,.06)} .s-REJECTED,.s-CANCELLED{color:#B91C1C;border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06)}
+  .wo{font-family:ui-monospace,monospace;font-size:11px;color:var(--accent);font-weight:700}
+  .when{font-size:11.5px} .when.late{color:#B91C1C;font-weight:800} .when.live{color:#047857;font-weight:800}
+  .mini{display:inline-flex;gap:4px;align-items:center;font-size:11px;color:var(--muted);margin-right:8px} .mini.bad{color:#B91C1C;font-weight:700} .mini.ok{color:#047857;font-weight:700}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .act.green{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.08);color:#047857} .act.red{border-color:rgba(220,38,38,.4);background:#FEF2F2;color:#B91C1C} .act.orange{border-color:rgba(234,88,12,.35);background:rgba(234,88,12,.07);color:#C2410C}
+  .cards{display:none;flex-direction:column;gap:8px} @media(max-width:700px){.tbl{display:none}.cards{display:flex}}
+  .card{background:#fff;border:1px solid var(--fg10);border-left:4px solid var(--fg10);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+  .card.hot{border-left-color:#DC2626;background:#FEF2F2} .card.live{border-left-color:#059669}
+
+  .overlay{background:rgba(15,23,42,.55);min-height:calc(100vh - 46px);padding:18px;display:flex;justify-content:center} @media(max-width:600px){.overlay{padding:0}}
+  .modal{width:100%;max-width:1120px;background:#fff;border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);overflow:hidden;border-top:4px solid #EA580C;align-self:flex-start}
+  .mh{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid var(--fg10);align-items:flex-start}
+  .mh .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#C2410C}
+  .mh h1{margin:1px 0 0;font-size:19px;font-weight:900} .mh .d{font-size:12.5px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)} .chip.link{color:var(--accent);border-color:rgba(2,132,199,.3);background:rgba(2,132,199,.06);font-family:ui-monospace,monospace}
+  .close{margin-left:auto;width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .steps{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--fg10);background:rgba(26,29,36,.02)}
+  .stp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--faint)}
+  .stp .n{width:24px;height:24px;border-radius:99px;border:2px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp .dt{display:block;font-size:10px;font-weight:600;color:var(--faint)}
+  .stp.done{color:#047857} .stp.done .n{background:#10B981;border-color:#10B981;color:#fff} .stp.cur{color:var(--fg)} .stp.cur .n{background:#EA580C;border-color:#EA580C;color:#fff}
+  .stp .bar{width:18px;height:2px;background:var(--fg10)}
+  .next{margin:14px 18px 0;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .next .top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .next .ni{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .next .nt{font-size:15px;font-weight:900} .next .nd{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .next .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .checks{display:flex;flex-wrap:wrap;gap:6px}
+  .ck{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 10px;display:inline-flex;gap:5px;align-items:center;background:#fff;border:1px solid var(--fg10)}
+  .ck.ok{color:#047857;border-color:rgba(14,159,110,.35)} .ck.no{color:#B45309;border-color:#FCD34D;background:#FFFBEB}
+  .n-draft{background:#FFF7ED;border:1.5px solid #FDBA74} .n-draft .ni{background:#EA580C}
+  .n-req{background:#FEFCE8;border:1.5px solid #FDE047} .n-req .ni{background:#CA8A04}
+  .n-appr{background:#EFF6FF;border:1.5px solid #93C5FD} .n-appr .ni{background:#2563EB}
+  .n-live{background:#ECFDF5;border:1.5px solid #6EE7B7} .n-live .ni{background:#059669}
+  .n-late{background:#FEF2F2;border:1.5px solid #FCA5A5} .n-late .ni{background:#DC2626}
+  .vig{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:520px} @media(max-width:520px){.vig{grid-template-columns:1fr}}
+  .body{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:14px 18px 18px} @media(max-width:880px){.body{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .sec{border:1px solid var(--fg10);border-radius:14px}
+  .sech{display:flex;gap:8px;align-items:center;padding:10px 14px}
+  .num{width:22px;height:22px;border-radius:99px;background:#1A1D24;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .spill{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;background:#D97706;color:#fff} .spill.ok{background:rgba(14,159,110,.15);color:#047857} .spill.lock{background:var(--fg5);color:var(--muted)}
+  .secb{padding:2px 14px 14px;display:flex;flex-direction:column;gap:11px}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;align-items:center}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg)} textarea.inp{resize:vertical;line-height:1.45}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:520px){.row2{grid-template-columns:1fr}}
+  .ai{margin-left:auto;border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9;border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center}
+  .box{border:1px solid var(--fg10);border-radius:14px;overflow:hidden}
+  .box h3{margin:0;font-size:13.5px;font-weight:800;display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--fg10)}
+  .box h3 .r{margin-left:auto}
+  .box .bb{padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+  .person{display:flex;gap:8px;align-items:center;border:1px solid var(--fg10);border-radius:10px;padding:6px 9px}
+  .avatar{width:26px;height:26px;border-radius:99px;background:#E0E7FF;color:#3730A3;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .role{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:1px 8px;background:var(--fg5);color:var(--muted)}
+  .missing{font-size:11.5px;color:#B45309;font-weight:700;display:flex;gap:5px;align-items:center}
+  .gas{display:grid;grid-template-columns:repeat(4,1fr);gap:6px} .gas div{border:1px solid var(--fg10);border-radius:10px;padding:6px 8px;text-align:center} .gas small{display:block;font-size:10px;color:var(--faint);font-weight:700} .gas b{font-size:14px} .gas .lim{display:block;font-size:9.5px;color:var(--faint)}
+  .verdict{font-size:11px;font-weight:800;border-radius:99px;padding:2px 9px} .v-ok{background:#D1FAE5;color:#065F46} .v-bad{background:#FEE2E2;color:#B91C1C}
+  .file{display:flex;gap:8px;align-items:center;border:1px solid var(--fg10);border-radius:10px;padding:7px 9px;font-size:12px}
+  .mf{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap} .mf .sp{flex:1}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .dlg>div{background:#fff;border-radius:18px;max-width:480px;width:100%;overflow:hidden}
+  .dlg .dh{padding:14px 18px;border-bottom:1px solid var(--fg10);font-size:16px;font-weight:900;display:flex;gap:8px;align-items:center}
+  .dlg .db{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#fff;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Permisos de Trabajo · Preview V22</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-w="list" class="on">Listado</button><button data-w="detail">Permiso abierto</button>
+  <span class="sep"></span><button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Caso:</span>
+  <button data-c="DRAFT" class="on">Borrador</button><button data-c="REQUESTED">Por aprobar</button><button data-c="APPROVED">Aprobado · espacio confinado</button><button data-c="ACTIVE">Activo vencido</button>
+</div>
+<div id="root"></div>
+<script>
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={w:"list",v:"new",c:"DRAFT",card:"",stage:"",q:"",dlg:null,toast:null};
+const TY={HOT:["flame","Trabajo en caliente","t-HOT"],ENC:["wind","Espacio confinado","t-ENC"],ALOFT:["arrow-up","Trabajo en altura","t-ALOFT"],ELEC:["zap","Aislamiento eléctrico","t-ELEC"],COLD:["snowflake","Trabajo en frío","t-COLD"]};
+const ST={DRAFT:"Borrador",REQUESTED:"Por aprobar",APPROVED:"Aprobado",ACTIVE:"Activo",CLOSED:"Cerrado",REJECTED:"Rechazado",CANCELLED:"Cancelado"};
+const D=[
+ {c:"PTW-DEM-HW-014",v:"BUQUE DEMO I",t:"HOT",d:"Reparación de soldadura en refuerzo interno",l:"Tanque de lastre 3 Br",wo:"OT-DEM-26-0061",st:"ACTIVE",when:"Vencido hace 1 h 20 min",late:true,p:3,fw:true},
+ {c:"PTW-DEM-ES-006",v:"BUQUE DEMO I",t:"ENC",d:"Inspección de corrosión en doble fondo",l:"Doble fondo 2 Er",wo:"OT-DEM-26-0059",st:"APPROVED",when:"Empieza hoy 14:00",p:2,gas:false},
+ {c:"PTW-DEM-WA-003",v:"BUQUE DEMO II",t:"ALOFT",d:"Cambio de luces de navegación",l:"Mástil de proa",wo:"OT-DEM-26-0058",st:"REQUESTED",when:"Mañana 08:00–12:00",p:2},
+ {c:"PTW-DEM-EI-009",v:"BUQUE DEMO I",t:"ELEC",d:"Reapriete de barras colectoras",l:"Sala de tableros",wo:null,st:"DRAFT",when:"16/09 08:00–17:00",p:0},
+ {c:"PTW-DEM-HW-013",v:"BUQUE DEMO I",t:"HOT",d:"Corte de soporte de cañería",l:"Sala de máquinas",wo:"OT-DEM-26-0050",st:"ACTIVE",when:"Vence en 3 h",live:true,p:3,fw:true},
+ {c:"PTW-DEM-CW-002",v:"BUQUE DEMO II",t:"COLD",d:"Cambio de empaquetadura de bomba",l:"Sala de bombas",wo:"OT-DEM-26-0044",st:"CLOSED",when:"Cerrado 10/09",p:2},
+];
+const live=x=>["DRAFT","REQUESTED","APPROVED","ACTIVE"].includes(x.st);
+function cardM(x,k){ return k==="active"?x.st==="ACTIVE":k==="req"?x.st==="REQUESTED":k==="ready"?x.st==="APPROVED":k==="late"?!!x.late:true; }
+function list(){ const q=S.q.toLowerCase(); return D.filter(x=>{ if(S.card&&!cardM(x,S.card))return false; if(!S.stage&&!live(x)&&!q)return false; if(S.stage&&S.stage!=="ALL"&&x.st!==S.stage)return false; if(q&&!(x.c+x.d+x.l+(x.wo||"")).toLowerCase().includes(q))return false; return true;}); }
+function action(x){
+  if(x.st==="DRAFT") return `<button class="act orange" onclick="event.stopPropagation();toast('Solicita la aprobación (demo)')">${I("send",12)}Solicitar aprobación</button>`;
+  if(x.st==="REQUESTED") return `<button class="act green" onclick="event.stopPropagation();openD('REQUESTED')">${I("check",12)}Aprobar</button>`;
+  if(x.st==="APPROVED") return `<button class="act" onclick="event.stopPropagation();openD('APPROVED')">${I("play",12)}Activar</button>`;
+  if(x.st==="ACTIVE") return `<button class="act ${x.late?'red':'green'}" onclick="event.stopPropagation();openD('ACTIVE')">${I("square-check",12)}Cerrar permiso</button>`;
+  return "";
+}
+function openD(c){ S.w="detail"; S.c=c; S.dlg=null; render(); }
+function listPage(){
+  const L=list(); const cnt=k=>D.filter(x=>cardM(x,k)).length;
+  const sc=(k,cls,ic,l,h)=>`<button class="sc ${cls} ${S.card===k?'on':''}" onclick="S.card=S.card==='${k}'?'':'${k}';render()"><span class="n">${cnt(k)}</span><span class="l">${I(ic,13)}${l}</span><span class="h">${h}</span></button>`;
+  return `<div class="main">
+  <div class="ph"><h1>${I("shield-alert",20)}Permisos de Trabajo</h1><span class="count">${L.length} a la vista</span><div class="right"><button class="btn">${I("file-spreadsheet",14)}Excel</button><button class="btn orange">${I("plus",14)}Nuevo permiso</button></div></div>
+  <div class="sum">${sc("active","green","hard-hat","Trabajando ahora","Permisos activos")}${sc("req","blue","pen-line","Esperan aprobación","Para aprobar o rechazar")}${sc("ready","violet","play","Listos para empezar","Aprobados sin activar")}${sc("late","red","clock-alert","Vencidos sin cerrar","Activos con la vigencia vencida")}</div>
+  <div class="fbar"><div class="stage">
+    <button class="${!S.stage?'on':''}" onclick="S.stage='';render()">En curso <span class="c">${D.filter(live).length}</span></button>
+    ${Object.entries(ST).map(([k,l])=>`<button class="${S.stage===k?'on':''}" onclick="S.stage='${k}';render()">${l} <span class="c">${D.filter(x=>x.st===k).length}</span></button>`).join("")}
+    <button class="${S.stage==='ALL'?'on':''}" onclick="S.stage='ALL';render()">Todos <span class="c">${D.length}</span></button></div>
+    <div class="frow"><select class="sel"><option>Tipo: todos</option>${Object.values(TY).map(t=>`<option>${t[1]}</option>`).join("")}</select><select class="sel"><option>Buque: todos</option><option>BUQUE DEMO I</option><option>BUQUE DEMO II</option></select>
+      <div class="search">${I("search")}<input id="q" placeholder="Buscar permiso, trabajo, lugar u OT…" value="${S.q}" oninput="S.q=this.value;keep()"></div></div></div>
+  <div class="tbl"><table><tr><th>Permiso</th><th>Tipo</th><th>Trabajo · dónde</th><th>OT</th><th>Horario / vigencia</th><th>Equipo de trabajo</th><th>Etapa</th><th></th></tr>
+  ${L.map(x=>`<tr class="${x.late?'hot':x.live?'live':''}" onclick="openD('${x.st==="CLOSED"?"ACTIVE":x.st}')">
+    <td><span class="code">${x.c}</span><div class="sub">${x.v}</div></td>
+    <td><span class="type"><span class="ti ${TY[x.t][2]}">${I(TY[x.t][0],14)}</span>${TY[x.t][1]}</span></td>
+    <td><b style="font-weight:700">${x.d}</b><div style="font-size:12px;color:var(--muted)">${x.l}</div></td>
+    <td>${x.wo?`<span class="wo">${x.wo}</span>`:`<span class="sub">Ocasional</span>`}</td>
+    <td><span class="when ${x.late?'late':x.live?'live':''}">${x.late?I("clock-alert",12)+" ":""}${x.when}</span></td>
+    <td><span class="mini">${I("users",12)}${x.p?`${x.p} personas`:"Sin participantes"}</span>${x.t==="ENC"&&x.st==="APPROVED"?`<span class="mini ${x.gas?'ok':'bad'}">${I("wind",12)}${x.gas?"Gas apto":"Falta medir gas"}</span>`:""}</td>
+    <td><span class="stg s-${x.st}">${ST[x.st]}</span></td><td>${action(x)}</td></tr>`).join("")}</table></div>
+  <div class="cards">${L.map(x=>`<div class="card ${x.late?'hot':x.live?'live':''}"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="code">${x.c}</span><span class="stg s-${x.st}">${ST[x.st]}</span></div><span class="type"><span class="ti ${TY[x.t][2]}">${I(TY[x.t][0],13)}</span>${TY[x.t][1]}</span><b>${x.d}</b><div style="font-size:12px;color:var(--muted)">${x.l}</div><span class="when ${x.late?'late':''}">${x.when}</span>${action(x)}</div>`).join("")}</div>
+  </div>`;
+}
+function detail(){
+  const c=S.c; const enc=c==="APPROVED"; const late=c==="ACTIVE";
+  const ty=enc?"ENC":"HOT";
+  const order=["DRAFT","REQUESTED","APPROVED","ACTIVE","CLOSED"]; const idx=order.indexOf(c);
+  const dates={REQUESTED:"14/09 10:12",APPROVED:"14/09 11:40",ACTIVE:"15/09 08:05"};
+  const labels=[["DRAFT","Borrador"],["REQUESTED","Por aprobar"],["APPROVED","Aprobado"],["ACTIVE","Activo"],["CLOSED","Cerrado"]];
+  const editable=c==="DRAFT"||c==="REQUESTED";
+  const dis=editable?"":"disabled";
+  const next={
+    DRAFT:["n-draft","send","Completá y pedí la aprobación","Cuando esté todo, lo aprueba el Capitán o quien tenga el permiso de autorizar.",
+      `<div class="checks"><span class="ck ok">${I("check",12)}Trabajo y horario</span><span class="ck ok">${I("check",12)}Peligros</span><span class="ck no">${I("circle",12)}Medidas de control</span><span class="ck ok">${I("check",12)}EPP</span></div>`,
+      `<button class="btn orange">${I("send",14)}Solicitar aprobación <span style="font-size:10px;opacity:.85">(falta 1)</span></button>`],
+    REQUESTED:["n-req","pen-line","Espera tu aprobación","Revisá los riesgos y el equipo de trabajo. Podés ajustar la vigencia antes de aprobar.",
+      `<div class="vig"><div><div class="lbl">Válido desde</div><input class="inp" type="datetime-local" value="2026-09-16T08:00"></div><div><div class="lbl">Válido hasta</div><input class="inp" type="datetime-local" value="2026-09-16T12:00"></div></div>`,
+      `<button class="btn green">${I("check",14)}Aprobar</button><button class="btn red" onclick="S.dlg='reject';render()">${I("x",14)}Rechazar</button>`],
+    APPROVED:["n-appr","play","Aprobado: listo para empezar","Antes de activar, confirmá que está todo en el lugar.",
+      `<div class="checks"><span class="ck ok">${I("check",12)}2 participantes</span><span class="ck ok">${I("check",12)}Vigente hoy 14:00–18:00</span><span class="ck no">${I("wind",12)}Falta una medición de gas apta (últimos 30 min)</span></div>`,
+      `<button class="btn" onclick="toast('Abre cargar medición de gas (demo)')">${I("gauge",14)}Cargar medición de gas</button><button class="btn blue" disabled title="Falta la medición de gas apta">${I("play",14)}Activar</button>`],
+    ACTIVE:["n-late","clock-alert","Trabajo activo · la vigencia venció hace 1 h 20 min","Si el trabajo terminó, cerralo. Si sigue, cerralo y pedí un permiso nuevo.",
+      `<div class="checks"><span class="ck ok">${I("users",12)}3 participantes</span><span class="ck ok">${I("flame",12)}Vigía de fuego asignado</span></div>`,
+      `<button class="btn green" onclick="S.dlg='close';render()">${I("square-check",14)}Cerrar permiso</button>`],
+  }[c];
+  return `<div class="overlay"><div class="modal">
+  <div class="mh"><span class="ic ${TY[ty][2]}">${I(TY[ty][0],24)}</span><div style="flex:1;min-width:0">
+    <div class="kicker">Permiso de trabajo · ${TY[ty][1]}</div><h1>${enc?"Inspección de corrosión en doble fondo":"Reparación de soldadura en refuerzo interno"}</h1>
+    <div class="d">${enc?"Doble fondo 2 Er":"Tanque de lastre 3 Br"}</div>
+    <div class="chips"><span class="chip mono">${enc?"PTW-DEM-ES-006":"PTW-DEM-HW-014"}</span><span class="chip">${I("ship",12)}BUQUE DEMO I</span><span class="chip link">${I("wrench",12)}${enc?"OT-DEM-26-0059":"OT-DEM-26-0061"}</span><span class="stg s-${c}">${ST[c]}</span></div></div>
+    <button class="close">${I("x",18)}</button></div>
+  <div class="steps">${labels.map(([k,l],i)=>`${i?'<span class="stp"><span class="bar"></span></span>':''}<span class="stp ${i<idx?'done':i===idx?'cur':''}"><span class="n">${i<idx?I("check",12):i+1}</span><span>${l}${dates[k]&&i<=idx?`<span class="dt">${dates[k]}</span>`:""}</span></span>`).join("")}</div>
+  <div class="next ${next[0]}"><div class="top"><span class="ni">${I(next[1],20)}</span><div style="min-width:0"><div class="nt">${next[2]}</div><div class="nd">${next[3]}</div></div><div class="acts">${next[5]}</div></div>${next[4]}</div>
+  <div class="body"><div class="col">
+    <section class="sec"><div class="sech"><span class="num">1</span><div><h2>Qué, dónde y cuándo</h2><div class="hint">${editable?"Se puede editar hasta que se apruebe":"Bloqueado: ya fue aprobado"}</div></div><span class="spill ${editable?'ok':'lock'}">${editable?"Completo":"Bloqueado"}</span></div><div class="secb">
+      <div class="row2"><div><div class="lbl">Ubicación</div><input class="inp" value="${enc?"Doble fondo 2 Er":"Tanque de lastre 3 Br"}" ${dis}></div><div><div class="lbl">Tipo</div><input class="inp" value="${TY[ty][1]}" disabled></div></div>
+      <div><div class="lbl">Qué trabajo se hace</div><textarea class="inp" rows="2" ${dis}>${enc?"Inspección de corrosión en doble fondo":"Reparación de soldadura en refuerzo interno"}</textarea></div>
+      <div class="row2"><div><div class="lbl">Empieza</div><input class="inp" type="datetime-local" value="2026-09-15T08:00" ${dis}></div><div><div class="lbl">Termina</div><input class="inp" type="datetime-local" value="2026-09-15T12:00" ${dis}></div></div>
+    </div></section>
+    <section class="sec"><div class="sech"><span class="num">2</span><div><h2>Riesgos y protección</h2><div class="hint">Peligros, controles y EPP</div></div>${c==="DRAFT"?`<span class="spill">Falta 1</span>`:`<span class="spill ok">Completo</span>`}</div><div class="secb">
+      <div><div class="lbl">Peligros identificados ${editable?`<button class="ai">${I("sparkles",11)}Sugerir con IA</button>`:""}</div><textarea class="inp" rows="2" ${dis}>Incendio por proyección de chispas; atmósfera inflamable residual; humos de soldadura.</textarea></div>
+      <div style="${c==='DRAFT'?'border-left:4px solid #F59E0B;background:linear-gradient(90deg,rgba(245,158,11,.09),transparent 70%);border-radius:4px;padding:8px 10px':''}"><div class="lbl">Medidas de control ${c==='DRAFT'?'<span style="font-size:9.5px;font-weight:800;border-radius:99px;padding:1px 7px;background:#D97706;color:#fff">FALTA</span>':''} ${editable?`<button class="ai">${I("sparkles",11)}Sugerir con IA</button>`:""}</div><textarea class="inp" rows="2" ${dis}>${c==='DRAFT'?'':'Desgasificar y ventilar; retirar combustibles a 10 m; vigía de fuego durante y 30 min después.'}</textarea></div>
+      <div><div class="lbl">Equipo de protección (EPP) ${editable?`<button class="ai">${I("sparkles",11)}Sugerir con IA</button>`:""}</div><textarea class="inp" rows="2" ${dis}>Careta de soldar, guantes de cuero, ropa ignífuga.</textarea></div>
+    </div></section>
+  </div><div class="col">
+    <div class="box"><h3>${I("users",15)}Equipo de trabajo <span class="r"><button class="btn" style="padding:4px 9px;font-size:11.5px">${I("plus",12)}Agregar</button></span></h3><div class="bb">
+      ${c==="DRAFT"?`<div style="font-size:12px;color:var(--muted)">Todavía no hay participantes cargados.</div>`
+      :`<div class="person"><span class="avatar">JP</span><div><b>Juan Pérez</b><div class="sub">Oficial de máquinas</div></div><span class="role">Supervisor</span></div>
+        <div class="person"><span class="avatar">CG</span><div><b>Carlos Gómez</b><div class="sub">Soldador · contratista</div></div><span class="role">Ejecutante</span></div>
+        ${enc?"":`<div class="person"><span class="avatar">LM</span><div><b>Luis Martínez</b><div class="sub">Marinero</div></div><span class="role" style="background:#FEE2E2;color:#B91C1C">Vigía de fuego</span></div>`}`}
+    </div></div>
+    ${enc?`<div class="box"><h3>${I("wind",15)}Mediciones de gas <span class="r"><button class="btn" style="padding:4px 9px;font-size:11.5px">${I("plus",12)}Medir</button></span></h3><div class="bb">
+      <div style="font-size:11.5px;color:var(--muted)">Para activar hace falta una medición <b>apta</b> tomada en los últimos 30 minutos (IMO A.1050).</div>
+      <div style="display:flex;gap:6px;align-items:center"><b>Última: 14/09 16:10</b> · P. Díaz <span class="verdict v-bad" style="margin-left:auto">No apta</span></div>
+      <div class="gas"><div><small>O₂</small><b>19,1 %</b><span class="lim">19,5–23</span></div><div><small>LEL</small><b style="color:#047857">0,2 %</b><span class="lim">&lt; 1</span></div><div><small>H₂S</small><b style="color:#B91C1C">14 ppm</b><span class="lim">&lt; 10</span></div><div><small>CO</small><b style="color:#047857">12 ppm</b><span class="lim">&lt; 50</span></div></div>
+    </div></div>`:""}
+    <div class="box"><h3>${I("paperclip",15)}Permiso firmado <span class="r"><button class="btn" style="padding:4px 9px;font-size:11.5px">${I("upload",12)}Subir scan</button></span></h3><div class="bb">
+      ${c==="ACTIVE"?`<div class="file">${I("file-check",15)}<span>PTW-DEM-HW-014-firmado.pdf</span><span class="sub" style="margin-left:auto">15/09 · J. Pérez</span></div>`:`<div style="font-size:12px;color:var(--muted)">Imprimí el permiso, firmalo a bordo y subí la foto o el scan: es la evidencia para la auditoría.</div>`}
+      <div style="display:flex;gap:6px"><button class="btn" style="padding:5px 9px;font-size:11.5px">${I("file-text",12)}PDF para imprimir</button><button class="btn" style="padding:5px 9px;font-size:11.5px">${I("file-down",12)}Word</button></div>
+    </div></div>
+  </div></div>
+  <div class="mf"><button class="btn red">${I("ban",14)}Cancelar permiso</button><span class="sp"></span>${editable?`<button class="btn ghost">Cerrar ventana</button><button class="btn blue">${I("save",14)}Guardar</button>`:`<button class="btn blue">Cerrar ventana</button>`}</div>
+  </div></div>${S.dlg?dlg():""}`;
+}
+function dlg(){
+  const d={reject:["x","Rechazar el permiso","¿Por qué se rechaza?","Ej: falta el vigía de fuego y el aislamiento del tanque","Rechazar","btn red"],close:["square-check","Cerrar el permiso","Notas de cierre (opcional)","Ej: trabajo terminado, zona limpia y ventilada, vigía 30 min después","Cerrar permiso","btn green"]}[S.dlg];
+  return `<div class="dlg"><div><div class="dh">${I(d[0],20)}${d[1]}</div><div class="db"><div class="lbl">${d[2]}</div><textarea class="inp" rows="3" placeholder="${d[3]}"></textarea>${S.dlg==='close'?`<label style="display:flex;gap:8px;font-size:12.5px;align-items:center"><input type="checkbox" checked> El lugar quedó seguro y sin riesgos</label>`:""}</div>
+  <div class="mf"><span class="sp"></span><button class="btn ghost" onclick="S.dlg=null;render()">Volver</button><button class="${d[5]}" onclick="S.dlg=null;toast('${d[4]} (demo)')">${d[4]}</button></div></div></div>`;
+}
+function ref(){
+  if(S.w==="list") return `<div class="main"><div class="ph"><h1>${I("shield-alert",20)}Permisos de Trabajo</h1><span class="count">6</span><div class="right"><button class="btn">Excel</button><button class="btn blue">+ Nuevo permiso</button></div></div>
+    <div style="display:flex;gap:6px"><select class="sel"><option>— Estado: todos —</option></select><select class="sel"><option>— Tipo: todos —</option></select></div>
+    <div class="refbox">${D.slice(0,4).map(x=>`<div style="padding:8px 0;border-bottom:1px solid var(--fg5)"><span class="sub">${x.c}</span> <span class="stg s-${x.st}">${ST[x.st]}</span> <span class="sub">BUQUE DEMO I DEM · ${TY[x.t][1]}</span><div><b>${x.d}</b></div><div class="sub">${x.l}</div><div class="sub" style="text-align:right">Planeado 15/09 08:00 · ${x.p} participantes</div></div>`).join("")}</div>
+    <div><span class="note">Sin resumen: no se ve qué está activo, por aprobar o vencido</span><span class="note">No marca los activos con la vigencia vencida</span><span class="note">No hay buscador ni botón con el próximo paso</span><span class="note">No avisa si falta vigía de fuego o medición de gas</span><span class="note">Muestra los cerrados mezclados con los activos</span></div></div>`;
+  return `<div class="overlay"><div class="modal" style="border-top-color:#94A3B8"><div class="mh"><div style="flex:1"><div class="sub">PERMISOS DE TRABAJO</div><h1 style="font-size:15px">PTW-DEM-ES-006 — Espacio confinado <span class="stg s-APPROVED">Aprobado</span></h1></div><button class="close">${I("x",18)}</button></div><div style="padding:14px 18px">
+    <div class="refbox">[ DETALLES ] [ PARTICIPANTES (2) ] [ GAS TESTS (1) ] [ ADJUNTOS (0) ]</div>
+    <div class="refbox">OT asociada · Vessel · Tipo · Ubicación · Descripción · Inicio · Fin · Vigente desde/hasta · ✨ PELIGROS · ✨ CONTROLES · ✨ EPP · Override…</div>
+    <div class="refbox">Pestaña Gas tests: tabla O₂ / LEL / H₂S / CO · Verdict <b>FAIL</b></div>
+    <div class="refbox">Pie: PDF · Word · [Activar] · [Cancelar] · Cerrar</div>
+    <div><span class="note">No dice qué falta para avanzar</span><span class="note">“Activar” falla sin explicar que falta una medición de gas apta</span><span class="note">Rechazar / cerrar / cancelar piden el motivo en un cuadrito del navegador</span><span class="note">Participantes y gas escondidos en pestañas</span><span class="note">“Verdict PASS/FAIL” en inglés</span><span class="note">No se ven las fechas de cada paso</span><span class="note">No marca la vigencia vencida</span></div></div></div></div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-w]").forEach(b=>b.classList.toggle("on",b.dataset.w===S.w));
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.classList.toggle("on",b.dataset.c===S.c));
+  const y=window.scrollY; document.getElementById("root").innerHTML=S.v==="ref"?ref():S.w==="list"?listPage():detail(); window.scrollTo(0,y);
+  document.querySelectorAll(".toast").forEach(x=>x.remove()); if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function keep(){ const el=document.getElementById("q"),p=el.selectionStart; render(); const n=document.getElementById("q"); n.focus(); n.setSelectionRange(p,p); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll(".toast").forEach(x=>x.remove());},1700); }
+document.querySelectorAll(".pv-bar [data-w]").forEach(b=>b.onclick=()=>{S.w=b.dataset.w;S.dlg=null;render();});
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.v=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.onclick=()=>{S.c=b.dataset.c;S.w="detail";S.dlg=null;render();});
+render();
+</script>
+</body>
+</html>

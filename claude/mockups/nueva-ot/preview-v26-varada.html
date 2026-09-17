@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Especificación de Varada — Preview V26</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --fg:#1A1D24; --accent:#0284C7; --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer} i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:400;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .main{padding:20px 24px;display:flex;flex-direction:column;gap:14px;max-width:1400px;margin:0 auto} @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px} .ph .right{margin-left:auto;display:flex;gap:8px}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.orange{background:#EA580C;border-color:#EA580C;color:#fff} .btn.blue{background:var(--accent);border-color:var(--accent);color:#fff} .btn.green{background:#059669;border-color:#059669;color:#fff}
+  .btn.red{color:#B91C1C;border-color:rgba(220,38,38,.35)} .btn.ghost{border:0;background:none;color:var(--muted);font-weight:600}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media(max-width:900px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:#fff;border:1.5px solid var(--fg10);border-left-width:4px;border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .sc.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.18)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center} .sc .h{font-size:10.5px;color:var(--faint)}
+  .sc.green{border-left-color:#059669} .sc.green .n{color:#047857} .sc.blue{border-left-color:#2563EB} .sc.blue .n{color:#1D4ED8}
+  .sc.violet{border-left-color:#7C3AED} .sc.violet .n{color:#6D28D9} .sc.red{border-left-color:#DC2626} .sc.red .n{color:#B91C1C}
+  .fbar{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:240px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)} @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .tbl{background:#fff;border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:1050px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12.5px;vertical-align:middle}
+  tr.hot td{background:#FEF2F2} tr.hot td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr.live td:first-child{box-shadow:inset 4px 0 0 #059669}
+  tr:hover td{background:rgba(2,132,199,.04);cursor:pointer}
+  .code{font-family:ui-monospace,monospace;font-weight:800;font-size:12px} .sub{font-size:10.5px;color:var(--faint)}
+  .type{display:inline-flex;gap:6px;align-items:center;font-weight:700;font-size:12px} .type .ti{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+  .t-HOT{background:#FEE2E2;color:#B91C1C} .t-ENC{background:#E0F2FE;color:#0369A1} .t-ALOFT{background:#FEF3C7;color:#B45309} .t-ELEC{background:#FEF9C3;color:#A16207} .t-COLD{background:#E0E7FF;color:#4338CA}
+  .stg{font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .s-DRAFT{color:var(--muted);border-color:var(--fg10);background:var(--fg5)} .s-REQUESTED{color:#A16207;border-color:rgba(202,138,4,.35);background:rgba(202,138,4,.08)}
+  .s-APPROVED{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .s-ACTIVE{color:#fff;border-color:#059669;background:#059669}
+  .s-CLOSED{color:#047857;border-color:rgba(14,159,110,.3);background:rgba(14,159,110,.06)} .s-REJECTED,.s-CANCELLED{color:#B91C1C;border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06)}
+  .wo{font-family:ui-monospace,monospace;font-size:11px;color:var(--accent);font-weight:700}
+  .when{font-size:11.5px} .when.late{color:#B91C1C;font-weight:800} .when.live{color:#047857;font-weight:800}
+  .mini{display:inline-flex;gap:4px;align-items:center;font-size:11px;color:var(--muted);margin-right:8px} .mini.bad{color:#B91C1C;font-weight:700} .mini.ok{color:#047857;font-weight:700}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .act.green{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.08);color:#047857} .act.red{border-color:rgba(220,38,38,.4);background:#FEF2F2;color:#B91C1C} .act.orange{border-color:rgba(234,88,12,.35);background:rgba(234,88,12,.07);color:#C2410C}
+  .cards{display:none;flex-direction:column;gap:8px} @media(max-width:700px){.tbl{display:none}.cards{display:flex}}
+  .card{background:#fff;border:1px solid var(--fg10);border-left:4px solid var(--fg10);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+  .card.hot{border-left-color:#DC2626;background:#FEF2F2} .card.live{border-left-color:#059669}
+
+  .overlay{background:rgba(15,23,42,.55);min-height:calc(100vh - 46px);padding:18px;display:flex;justify-content:center} @media(max-width:600px){.overlay{padding:0}}
+  .modal{width:100%;max-width:1120px;background:#fff;border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);overflow:hidden;border-top:4px solid #EA580C;align-self:flex-start}
+  .mh{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid var(--fg10);align-items:flex-start}
+  .mh .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#C2410C}
+  .mh h1{margin:1px 0 0;font-size:19px;font-weight:900} .mh .d{font-size:12.5px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)} .chip.link{color:var(--accent);border-color:rgba(2,132,199,.3);background:rgba(2,132,199,.06);font-family:ui-monospace,monospace}
+  .close{margin-left:auto;width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .steps{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--fg10);background:rgba(26,29,36,.02)}
+  .stp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--faint)}
+  .stp .n{width:24px;height:24px;border-radius:99px;border:2px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp .dt{display:block;font-size:10px;font-weight:600;color:var(--faint)}
+  .stp.done{color:#047857} .stp.done .n{background:#10B981;border-color:#10B981;color:#fff} .stp.cur{color:var(--fg)} .stp.cur .n{background:#EA580C;border-color:#EA580C;color:#fff}
+  .stp .bar{width:18px;height:2px;background:var(--fg10)}
+  .next{margin:14px 18px 0;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .next .top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .next .ni{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .next .nt{font-size:15px;font-weight:900} .next .nd{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .next .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .checks{display:flex;flex-wrap:wrap;gap:6px}
+  .ck{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 10px;display:inline-flex;gap:5px;align-items:center;background:#fff;border:1px solid var(--fg10)}
+  .ck.ok{color:#047857;border-color:rgba(14,159,110,.35)} .ck.no{color:#B45309;border-color:#FCD34D;background:#FFFBEB}
+  .n-draft{background:#FFF7ED;border:1.5px solid #FDBA74} .n-draft .ni{background:#EA580C}
+  .n-req{background:#FEFCE8;border:1.5px solid #FDE047} .n-req .ni{background:#CA8A04}
+  .n-appr{background:#EFF6FF;border:1.5px solid #93C5FD} .n-appr .ni{background:#2563EB}
+  .n-live{background:#ECFDF5;border:1.5px solid #6EE7B7} .n-live .ni{background:#059669}
+  .n-late{background:#FEF2F2;border:1.5px solid #FCA5A5} .n-late .ni{background:#DC2626}
+  .vig{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:520px} @media(max-width:520px){.vig{grid-template-columns:1fr}}
+  .body{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:14px 18px 18px} @media(max-width:880px){.body{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .sec{border:1px solid var(--fg10);border-radius:14px}
+  .sech{display:flex;gap:8px;align-items:center;padding:10px 14px}
+  .num{width:22px;height:22px;border-radius:99px;background:#1A1D24;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .spill{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;background:#D97706;color:#fff} .spill.ok{background:rgba(14,159,110,.15);color:#047857} .spill.lock{background:var(--fg5);color:var(--muted)}
+  .secb{padding:2px 14px 14px;display:flex;flex-direction:column;gap:11px}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;align-items:center}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg)} textarea.inp{resize:vertical;line-height:1.45}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:520px){.row2{grid-template-columns:1fr}}
+  .ai{margin-left:auto;border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9;border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center}
+  .box{border:1px solid var(--fg10);border-radius:14px;overflow:hidden}
+  .box h3{margin:0;font-size:13.5px;font-weight:800;display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--fg10)}
+  .box h3 .r{margin-left:auto}
+  .box .bb{padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+  .person{display:flex;gap:8px;align-items:center;border:1px solid var(--fg10);border-radius:10px;padding:6px 9px}
+  .avatar{width:26px;height:26px;border-radius:99px;background:#E0E7FF;color:#3730A3;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .role{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:1px 8px;background:var(--fg5);color:var(--muted)}
+  .missing{font-size:11.5px;color:#B45309;font-weight:700;display:flex;gap:5px;align-items:center}
+  .gas{display:grid;grid-template-columns:repeat(4,1fr);gap:6px} .gas div{border:1px solid var(--fg10);border-radius:10px;padding:6px 8px;text-align:center} .gas small{display:block;font-size:10px;color:var(--faint);font-weight:700} .gas b{font-size:14px} .gas .lim{display:block;font-size:9.5px;color:var(--faint)}
+  .verdict{font-size:11px;font-weight:800;border-radius:99px;padding:2px 9px} .v-ok{background:#D1FAE5;color:#065F46} .v-bad{background:#FEE2E2;color:#B91C1C}
+  .file{display:flex;gap:8px;align-items:center;border:1px solid var(--fg10);border-radius:10px;padding:7px 9px;font-size:12px}
+  .mf{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap} .mf .sp{flex:1}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .dlg>div{background:#fff;border-radius:18px;max-width:480px;width:100%;overflow:hidden}
+  .dlg .dh{padding:14px 18px;border-bottom:1px solid var(--fg10);font-size:16px;font-weight:900;display:flex;gap:8px;align-items:center}
+  .dlg .db{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#fff;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+  .howto{background:#fff;border:1px solid var(--fg10);border-radius:16px;padding:12px 16px}
+  .howto h2{margin:0 0 8px;font-size:14px;display:flex;gap:6px;align-items:center}
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px} @media(max-width:900px){.flow{grid-template-columns:1fr 1fr}}
+  .fstep{border:1px solid var(--fg10);border-radius:12px;padding:8px 10px;font-size:12px;line-height:1.35;position:relative}
+  .fstep b{display:flex;gap:6px;align-items:center;font-size:12.5px;margin-bottom:2px} .fstep .who{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .who.ship{color:#0369A1} .who.shore{color:#7C3AED} .who.yard{color:#047857}
+  .item{border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;background:#fff}
+  .item.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.15)} .item.acc{border-left:4px solid #059669} .item.rej{border-left:4px solid #DC2626;opacity:.75} .item.pro{border-left:4px solid #D97706}
+  .item .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .src{font-size:10.5px;font-weight:800;border-radius:99px;padding:1px 8px;background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .src.link{color:var(--accent);background:rgba(2,132,199,.07);cursor:pointer}
+  .decide{display:flex;gap:6px;margin-left:auto}
+  .dbtn{border:1.5px solid var(--fg10);background:#fff;border-radius:9px;padding:4px 9px;font-size:11.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center}
+  .dbtn.acc.on,.dbtn.acc:hover{background:#059669;border-color:#059669;color:#fff} .dbtn.rej.on,.dbtn.rej:hover{background:#DC2626;border-color:#DC2626;color:#fff}
+  .help{font-size:11px;color:var(--faint);margin-top:3px;display:flex;gap:4px}
+  .prog{height:8px;border-radius:99px;background:var(--fg10);overflow:hidden;display:flex} .prog i{display:block;height:100%}
+  .bubble{border-radius:12px;padding:7px 10px;font-size:12px;max-width:88%} .bubble.ship{background:#E0F2FE;align-self:flex-start} .bubble.shore{background:#EDE9FE;align-self:flex-end}
+  .bubble small{display:block;font-size:10px;font-weight:700;color:var(--muted)}
+  .emptybox{border:2px dashed var(--fg10);border-radius:14px;padding:16px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .fix{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:12px 16px;font-size:12.5px;line-height:1.5}
+  .fix li{margin-bottom:6px} .fix .sev{font-size:10px;font-weight:800;border-radius:99px;padding:1px 7px;margin-right:6px} .sev.hi{background:#FEE2E2;color:#B91C1C} .sev.md{background:#FEF3C7;color:#92400E} .sev.lo{background:var(--fg5);color:var(--muted)}
+  .rolepick{display:inline-flex;border:1px solid #4B5563;border-radius:8px;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Especificación de Varada · Preview V26</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-w="list" class="on">Listado</button><button data-w="detail">Documento abierto</button><button data-w="fixes">Fallas encontradas</button>
+  <span class="sep"></span><span class="lab">Etapa:</span>
+  <button data-c="DRAFT0">Borrador vacío</button><button data-c="DRAFT" class="on">Borrador con trabajos</button><button data-c="SUBMITTED">Enviada</button><button data-c="UNDER_REVIEW">En revisión</button><button data-c="REJECTED">Devuelta</button><button data-c="APPROVED">Aprobada</button>
+  <span class="sep"></span><span class="lab">Soy:</span><button data-r="ship" class="on">Buque</button><button data-r="shore">Tierra</button>
+</div>
+<div id="root"></div>
+<script>
+const I=(n,s=14)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={w:"list",c:"DRAFT",r:"ship",sel:2,toast:null,card:""};
+function toast(t){S.toast=t;render();setTimeout(()=>{S.toast=null;render();},2000);}
+const ST={DRAFT:["Borrador","s-DRAFT"],SUBMITTED:["Enviada a tierra","s-REQUESTED"],UNDER_REVIEW:["En revisión","s-APPROVED"],REJECTED:["Devuelta al buque","s-REJECTED"],APPROVED:["Aprobada","s-CLOSED"],CANCELLED:["Cancelada","s-CANCELLED"]};
+const CAT={HULL_STRUCTURE:["Casco y estructura","ship"],MACHINERY:["Máquinas","cog"],ELECTRICAL:["Eléctrico","zap"],PIPING_VALVES:["Cañerías y válvulas","git-merge"],TANKS:["Tanques","cylinder"],SAFETY_EQUIPMENT:["Equipos de seguridad","life-buoy"],CLASS_STATUTORY:["Clase / bandera","badge-check"],PAINTING:["Pintura","paintbrush"],OTHER:["Otros","more-horizontal"]};
+
+/* ── Listado ── */
+const LIST=[
+ {c:"VAR-DEM1-26-0002",v:"BUQUE DEMO I",t:"Varada quinquenal 2026",y:"Astillero Demo",p:"Puerto Demo",d:"10/11/2026",days:56,st:"UNDER_REVIEW",acc:9,tot:14,dec:11},
+ {c:"VAR-DEM2-26-0001",v:"BUQUE DEMO II",t:"Varada intermedia",y:"—",p:"—",d:"—",days:null,st:"DRAFT",acc:0,tot:3,dec:0},
+ {c:"VAR-DEM3-26-0001",v:"BARCAZA DEMO",t:"Cambio de planchaje de fondo",y:"Astillero Norte",p:"Puerto Norte",d:"02/10/2026",days:17,st:"SUBMITTED",acc:0,tot:6,dec:0},
+ {c:"VAR-DEM1-25-0001",v:"BUQUE DEMO I",t:"Varada 2025",y:"Astillero Demo",p:"Puerto Demo",d:"05/03/2025",days:-560,st:"APPROVED",acc:18,tot:21,dec:21},
+];
+function listPage(){
+  const cnt=k=>LIST.filter(x=>x.st===k).length;
+  const sc=(k,cls,ic,l,h)=>`<button class="sc ${cls} ${S.card===k?'on':''}" onclick="S.card=S.card==='${k}'?'':'${k}';render()"><span class="n">${cnt(k)}</span><span class="l">${I(ic,13)}${l}</span><span class="h">${h}</span></button>`;
+  const act=x=>x.st==="DRAFT"?`<button class="act orange">${I("pencil",12)}Seguir armando</button>`:x.st==="SUBMITTED"?`<button class="act">${I("inbox",12)}Tomar para revisar</button>`:x.st==="UNDER_REVIEW"?`<button class="act">${I("list-checks",12)}Decidir trabajos</button>`:x.st==="APPROVED"?`<button class="act green">${I("file-down",12)}PDF al astillero</button>`:"";
+  const L=LIST.filter(x=>!S.card||x.st===S.card);
+  return `<div class="main">
+  <div class="ph"><h1>${I("anchor",20)}Especificación de Varada</h1><span class="count">${L.length} documentos</span><div class="right"><button class="btn">${I("file-spreadsheet",14)}Excel</button><button class="btn blue" onclick="S.w='detail';S.c='DRAFT0';render()">${I("plus",14)}Nueva especificación</button></div></div>
+  <div class="howto"><h2>${I("help-circle",16)}¿Qué es y cómo se usa?</h2>
+   <p style="margin:0 0 10px;font-size:12.5px;color:var(--muted)">Es la <b>lista de trabajos que se van a hacer en la próxima varada</b>, con el acuerdo de tierra. Termina en un PDF que se le manda al astillero para que cotice y planifique.</p>
+   <div class="flow">
+    <div class="fstep"><span class="who ship">Buque</span><b>${I("pencil",13)}1 · Armar</b>Datos de la varada y trabajos: se traen los pendientes (diferimientos, defectos, OT) o se escriben a mano.</div>
+    <div class="fstep"><span class="who ship">Buque</span><b>${I("send",13)}2 · Enviar a tierra</b>Cuando está completa. Mientras tierra no la toma, se puede retirar.</div>
+    <div class="fstep"><span class="who shore">Tierra</span><b>${I("list-checks",13)}3 · Revisar</b>Acepta o descarta cada trabajo y conversa con el buque en cada uno.</div>
+    <div class="fstep"><span class="who shore">Tierra</span><b>${I("check-circle",13)}4 · Aprobar o devolver</b>Si hay que corregir, vuelve al buque con el motivo.</div>
+    <div class="fstep"><span class="who yard">Astillero</span><b>${I("file-down",13)}5 · PDF</b>Sale con los trabajos aceptados, agrupados por rubro.</div>
+   </div></div>
+  <div class="sum">${sc("DRAFT","blue","pencil","En armado","Borradores del buque")}${sc("SUBMITTED","violet","inbox","Esperan que tierra las tome","Enviadas")}${sc("UNDER_REVIEW","green","list-checks","En revisión","Tierra decidiendo trabajos")}${sc("REJECTED","red","corner-up-left","Devueltas al buque","Hay que corregir")}</div>
+  <div class="tbl"><table><tr><th>Documento</th><th>Astillero · puerto</th><th>Empieza</th><th>Trabajos</th><th>Etapa</th><th></th></tr>
+  ${L.map(x=>`<tr onclick="S.w='detail';S.c='${x.st}';render()"><td><b>${x.t}</b><div class="sub">${x.c} · ${x.v}</div></td><td>${x.y}<div class="sub">${x.p}</div></td>
+   <td>${x.d}${x.days!=null?`<div class="sub" style="${x.days<30&&x.days>=0?'color:#B45309;font-weight:800':''}">${x.days>=0?`faltan ${x.days} días`:'realizada'}</div>`:''}</td>
+   <td style="min-width:150px"><div style="font-size:12px"><b>${x.acc}</b> aceptados de ${x.tot}</div><div class="prog" style="margin-top:3px"><i style="width:${x.acc/x.tot*100}%;background:#059669"></i><i style="width:${(x.dec-x.acc)/x.tot*100}%;background:#DC2626"></i></div>${x.st==="UNDER_REVIEW"?`<div class="sub">${x.tot-x.dec} sin decidir</div>`:''}</td>
+   <td><span class="stg ${ST[x.st][1]}">${ST[x.st][0]}</span></td><td>${act(x)}</td></tr>`).join("")}</table></div>
+  <div class="cards">${L.map(x=>`<div class="card"><b>${x.t}</b><div class="sub">${x.v} · ${x.d}</div><span class="stg ${ST[x.st][1]}" style="align-self:flex-start">${ST[x.st][0]}</span>${act(x)}</div>`).join("")}</div>
+  </div>`;
+}
+
+/* ── Documento ── */
+const ITEMS=[
+ {n:1,cat:"HULL_STRUCTURE",t:"Renovación de planchaje de fondo, tanque 3 Br",d:"Espesor medido 7,8 mm (mín. 8,5). 4 m²",pr:"CRITICAL",cls:true,src:"DEFECT",code:"DEF-DEM1-26-0041",asset:"Casco",st:"ACCEPTED",com:2},
+ {n:2,cat:"MACHINERY",t:"Overhaul de hélice de proa",d:"Diferido en agosto: no se pudo hacer a flote",pr:"HIGH",cls:false,src:"DEFERRAL",code:"DIF-DEM1-26-0007",asset:"Hélice de proa",st:"PROPOSED",com:3},
+ {n:3,cat:"PAINTING",t:"Pintura de obra viva completa",d:"Arenado SA 2½ + 2 manos antiincrustante",pr:"MEDIUM",cls:false,src:"MANUAL",code:null,asset:null,st:"PROPOSED",com:0},
+ {n:4,cat:"CLASS_STATUTORY",t:"Inspección de ejes y bocina (clase)",d:"",pr:"",cls:true,src:"WORK_ORDER",code:"OT-DEM1-26-0120",asset:"Eje de cola",st:"REJECTED",com:1},
+];
+function stepsBar(st){
+  const order=["DRAFT","SUBMITTED","UNDER_REVIEW","APPROVED"]; const lbl=["Armar","Enviada","En revisión","Aprobada"];
+  const idx=st==="REJECTED"?0:order.indexOf(st);
+  return `<div class="steps">${order.map((s,i)=>`${i?'<span class="bar"></span>':''}<span class="stp ${i<idx?'done':i===idx?'cur':''}"><span class="n">${i<idx?'✓':i+1}</span><span>${lbl[i]}<span class="dt">${i<idx?['02/09','05/09','08/09'][i]:''}</span></span></span>`).join("")}${st==="REJECTED"?`<span class="stg s-REJECTED" style="margin-left:auto">Devuelta al buque</span>`:''}</div>`;
+}
+function nextCard(){
+  const c=S.c, shore=S.r==="shore", empty=c==="DRAFT0";
+  const box=(cls,ic,t,d,extra,acts)=>`<div class="next ${cls}"><div class="top"><div class="ni">${I(ic,20)}</div><div><div class="nt">${t}</div><div class="nd">${d}</div></div><div class="acts">${acts}</div></div>${extra||''}</div>`;
+  if(c==="DRAFT0"||c==="DRAFT"){
+    const ck=(ok,l)=>`<span class="ck ${ok?'ok':'no'}">${I(ok?'check':'circle-dashed',12)}${l}</span>`;
+    return box("n-draft","pencil",empty?"Empezá por los datos y los trabajos":"Completala y enviala a tierra","Tierra no la ve hasta que la envíes. Al enviar se guarda todo.",
+      `<div class="checks">${ck(true,"Título")}${ck(!empty,"Astillero y fechas")}${ck(!empty,"Al menos un trabajo")}${ck(!empty,"Todos los trabajos con título")}${!empty?ck(false,"2 sin prioridad (recomendado)"):''}</div>`,
+      `<button class="btn orange" ${empty?'disabled':''} onclick="toast('Guarda y envía a tierra (demo)')">${I("send",14)}Guardar y enviar a tierra${empty?' <span style=\"font-size:10px\">(faltan 3)</span>':''}</button>`);
+  }
+  if(c==="SUBMITTED") return shore
+    ? box("n-req","inbox","El buque la envió: tomala para revisar","Al tomarla, el buque ya no puede cambiar los trabajos; sólo conversar en cada uno.","",`<button class="btn blue" onclick="S.c='UNDER_REVIEW';render()">${I("list-checks",14)}Tomar para revisar</button>`)
+    : box("n-req","hourglass","Esperando que tierra la tome","Si te olvidaste algo, podés retirarla y volver a borrador mientras nadie la tomó.","",`<button class="btn" onclick="S.c='DRAFT';render()">${I("corner-up-left",14)}Retirar y corregir</button>`);
+  if(c==="UNDER_REVIEW"){
+    const dec=ITEMS.filter(i=>i.st!=="PROPOSED").length, acc=ITEMS.filter(i=>i.st==="ACCEPTED").length, all=ITEMS.length;
+    const bar=`<div><div class="prog"><i style="width:${acc/all*100}%;background:#059669"></i><i style="width:${(dec-acc)/all*100}%;background:#DC2626"></i></div><div class="sub" style="margin-top:3px">${acc} aceptados · ${dec-acc} descartados · <b style="color:#B45309">${all-dec} sin decidir</b></div></div>`;
+    return shore
+      ? box("n-appr","list-checks","Decidí cada trabajo",`Aceptá o descartá cada uno. Aprobar se habilita cuando no quede ninguno sin decidir.`,bar,`<button class="btn red" onclick="S.dlg=1;toast('Pide el motivo y la devuelve (demo)')">${I("corner-up-left",14)}Devolver al buque</button><button class="btn green" disabled title="Faltan decidir 2 trabajos">${I("check",14)}Aprobar <span style="font-size:10px">(faltan 2)</span></button>`)
+      : box("n-appr","hourglass","Tierra la está revisando","Podés responder en la conversación de cada trabajo. Los cambios los hace tierra o se piden en los comentarios.",bar,"");
+  }
+  if(c==="REJECTED") return box("n-late","corner-up-left","Tierra la devolvió: hay que corregir","Motivo: «Falta el detalle de espesores del planchaje y la cotización previa del ítem 2.»","",`<button class="btn orange" onclick="S.c='DRAFT';render()">${I("pencil",14)}Volver a borrador y corregir</button>`);
+  return box("n-live","check-circle","Aprobada por Superintendente Demo · 08/09/2026","El documento queda cerrado. Sale el PDF con los 1 trabajos aceptados para mandarle al astillero.","",`<button class="btn green">${I("file-down",14)}Descargar PDF para el astillero</button>`);
+}
+function detailPage(){
+  const c=S.c, empty=c==="DRAFT0", shore=S.r==="shore";
+  const st=c==="DRAFT0"?"DRAFT":c;
+  const editDocs = st==="DRAFT"||st==="REJECTED";   // el buque edita en borrador/devuelta
+  const shoreEdits = shore && st==="UNDER_REVIEW";  // tierra ajusta durante la revisión
+  const canEdit = editDocs || shoreEdits;
+  const decide = shore && st==="UNDER_REVIEW";
+  const inp=(l,v,help,req)=>`<div class="gf ${req&&!v?'miss':''}"><div class="lbl">${l}${req&&!v?' <span class="need" style="margin-left:6px;border-radius:99px;background:#D97706;color:#fff;font-size:9px;font-weight:800;padding:2px 6px">FALTA</span>':''}</div><input class="inp" value="${v}" ${canEdit?'':'disabled'}>${help?`<div class="help">${I("info",11)}${help}</div>`:''}</div>`;
+  const items = empty?[]:ITEMS;
+  const sel = items.find(i=>i.n===S.sel);
+  return `<div class="overlay"><div class="modal" style="max-width:1240px;border-top-color:#0369A1">
+  <div class="mh"><div class="ic" style="background:#E0F2FE;color:#0369A1">${I("anchor",24)}</div><div style="flex:1;min-width:0"><div class="kicker" style="color:#0369A1">Especificación de varada</div><h1>${empty?'Nueva especificación':'Varada quinquenal 2026'}</h1><div class="d">${empty?'Buque DEMO I':'Astillero Demo · Puerto Demo · 10/11 → 30/11/2026 (faltan 56 días)'}</div>
+   <div class="chips">${empty?'':'<span class="chip mono">VAR-DEM1-26-0002</span>'}<span class="chip">${I("ship",11)}BUQUE DEMO I</span><span class="stg ${ST[st][1]}">${ST[st][0]}</span>${empty?'':`<span class="chip">${ITEMS.filter(i=>i.st==='ACCEPTED').length}/${ITEMS.length} aceptados</span>`}</div></div><button class="close">${I("x",18)}</button></div>
+  ${stepsBar(st)}
+  ${nextCard()}
+  <div class="body" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)"><div class="col">
+   <div class="sec"><div class="sech"><span class="num">1</span><div><h2>Datos de la varada</h2><div class="hint">Dónde y cuándo. Van en el encabezado del PDF.</div></div><span class="spill ${empty?'':'ok'}">${empty?'Faltan 3':'Completo'}</span></div><div class="secb">
+    ${inp("Título","Varada quinquenal 2026","Ej.: «Varada quinquenal 2026» o «Varada de emergencia por avería de hélice».",true)}
+    <div class="row2">${inp("Astillero",empty?'':'Astillero Demo',"Si todavía no está definido, dejalo vacío y completalo antes de enviar.")}${inp("Puerto",empty?'':'Puerto Demo')}</div>
+    <div class="row2">${inp("Entra a dique (estimado)",empty?'':'10/11/2026')}${inp("Sale de dique (estimado)",empty?'':'30/11/2026',"No puede ser anterior a la entrada.")}</div>
+    <div><div class="lbl">Alcance general</div><textarea class="inp" rows="2" ${canEdit?'':'disabled'}>${empty?'':'Varada reglamentaria de clase: casco, hélices, ejes y pintura de obra viva.'}</textarea><div class="help">${I("info",11)}Un párrafo que resuma para qué entra el buque. Lo lee el astillero primero.</div></div>
+   </div></div>
+   <div class="sec"><div class="sech"><span class="num">2</span><div><h2>Trabajos</h2><div class="hint">Cada trabajo es una línea del pedido al astillero.</div></div>
+    ${canEdit&&!empty?`<div style="margin-left:auto;display:flex;gap:6px"><button class="btn">${I("download",13)}Traer pendientes</button><button class="btn">${I("plus",13)}Agregar a mano</button></div>`:''}</div><div class="secb">
+    ${empty?`<div class="emptybox">${I("clipboard-list",26)}<b>Todavía no hay trabajos</b><span class="sub" style="max-width:460px">Lo más fácil es traer lo que ya está pendiente en el sistema: <b>2 diferimientos marcados «a próxima varada»</b>, defectos abiertos y OT postergadas. Después agregá a mano lo que falte (pintura, inspecciones de clase…).</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn orange">${I("download",14)}Traer pendientes (2 sugeridos)</button><button class="btn">${I("plus",14)}Agregar a mano</button></div></div>`
+    : items.map(i=>`<div class="item ${i.st==='ACCEPTED'?'acc':i.st==='REJECTED'?'rej':'pro'} ${S.sel===i.n?'sel':''}" onclick="S.sel=${i.n};render()">
+      <div class="top"><b style="font-size:12px;color:var(--faint)">#${i.n}</b><span class="chip">${I(CAT[i.cat][1],11)}${CAT[i.cat][0]}</span>
+       ${i.src!=='MANUAL'?`<span class="src link" onclick="event.stopPropagation();toast('Abre ${i.code} (demo)')">${I("link",10)}${i.code}</span>`:'<span class="src">Escrito a mano</span>'}
+       ${i.cls?'<span class="src" style="background:#EDE9FE;color:#5B21B6">Clase / bandera</span>':''}${i.asset?`<span class="sub">${i.asset}</span>`:''}
+       ${decide?`<div class="decide"><button class="dbtn acc ${i.st==='ACCEPTED'?'on':''}" onclick="event.stopPropagation();toast('Trabajo aceptado (demo)')">${I("check",12)}Aceptar</button><button class="dbtn rej ${i.st==='REJECTED'?'on':''}" onclick="event.stopPropagation();toast('Trabajo descartado (demo)')">${I("x",12)}Descartar</button></div>`
+        :`<span class="stg ${i.st==='ACCEPTED'?'s-CLOSED':i.st==='REJECTED'?'s-REJECTED':'s-REQUESTED'}" style="margin-left:auto">${i.st==='ACCEPTED'?'Aceptado':i.st==='REJECTED'?'Descartado':'Propuesto'}</span>`}</div>
+      <input class="inp" value="${i.t}" ${canEdit?'':'disabled'} onclick="event.stopPropagation()">
+      <div class="row2"><textarea class="inp" rows="1" placeholder="Detalle para el astillero: medidas, cantidades, marca…" ${canEdit?'':'disabled'} onclick="event.stopPropagation()">${i.d}</textarea>
+       <div style="display:flex;gap:6px;align-items:center"><select class="inp" style="${!i.pr&&canEdit?'border-color:#F59E0B':''}" ${canEdit?'':'disabled'} onclick="event.stopPropagation()"><option>${i.pr?{CRITICAL:'Crítica',HIGH:'Alta',MEDIUM:'Media',LOW:'Baja'}[i.pr]:'Prioridad…'}</option></select>
+        <span class="mini" style="white-space:nowrap">${I("message-square",12)}${i.com}</span>${canEdit?`<button class="btn ghost" title="Quitar" onclick="event.stopPropagation();toast('${i.com||i.st!=='PROPOSED'?'Pregunta antes: tiene conversación o decisión (demo)':'Quitado (demo)'}')">${I("trash-2",13)}</button>`:''}</div></div>
+     </div>`).join("")}
+   </div></div>
+  </div><div class="col">
+   ${empty?`<div class="box"><h3>${I("lightbulb",15)}Qué conviene incluir</h3><div class="bb"><div>• Trabajos que <b>sólo se pueden hacer en seco</b> (casco, hélices, ejes, válvulas de fondo).</div><div>• Lo que <b>pidió la clase o la bandera</b> (marcalo como «Clase / bandera»).</div><div>• Pendientes que se <b>difirieron «a próxima varada»</b>.</div><div>• Detalle suficiente para que el astillero <b>pueda cotizar</b>: medidas, cantidades, marca y modelo.</div></div></div>`
+   :`<div class="box"><h3>${I("messages-square",15)}Conversación · #${sel?sel.n:''}</h3><div class="bb">
+     <div class="sub"><b style="color:var(--fg)">${sel?sel.t:''}</b></div>
+     <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="bubble ship"><small>Jefe de Máquinas · Buque · 03/09</small>La hélice tiene juego axial fuera de tolerancia desde agosto.</div>
+      <div class="bubble shore"><small>Superintendente · Tierra · 05/09</small>¿Tenemos la medición? El astillero la va a pedir para cotizar.</div>
+      <div class="bubble ship"><small>Jefe de Máquinas · Buque · 05/09</small>Sí, 1,8 mm. Adjunto en el diferimiento.</div>
+     </div>
+     <div style="display:flex;gap:6px"><textarea class="inp" rows="2" placeholder="Escribí una pregunta o respuesta sobre este trabajo…"></textarea><button class="btn blue">${I("send",13)}</button></div>
+     <div class="help">${I("info",11)}Los comentarios muestran el nombre y si viene del buque o de tierra. No salen en el PDF.</div>
+    </div></div>
+    <div class="box"><h3>${I("bar-chart-3",15)}Resumen por rubro</h3><div class="bb">
+     ${[["HULL_STRUCTURE",1,1],["MACHINERY",1,0],["PAINTING",1,0],["CLASS_STATUTORY",1,0]].map(([k,t,a])=>`<div style="display:flex;gap:6px;align-items:center">${I(CAT[k][1],12)}<span style="flex:1">${CAT[k][0]}</span><b>${a}</b><span class="sub">/ ${t}</span></div>`).join("")}
+    </div></div>
+    <div class="box"><h3>${I("history",15)}Recorrido</h3><div class="bb">
+     <div>${I("pencil",12)} Creada por Jefe de Máquinas · 01/09</div><div>${I("send",12)} Enviada por Jefe de Máquinas · 02/09</div>${st==="UNDER_REVIEW"||st==="APPROVED"?`<div>${I("inbox",12)} Tomada por Superintendente · 05/09</div>`:''}${st==="APPROVED"?`<div>${I("check",12)} Aprobada por Superintendente · 08/09</div>`:''}
+    </div></div>`}
+  </div></div>
+  <div class="mf">${st==="DRAFT"&&!empty?`<button class="btn red">${I("trash-2",14)}Eliminar borrador</button>`:''}${!empty?`<button class="btn">${I("file-down",14)}PDF ${st!=="APPROVED"?'(borrador)':''}</button>`:''}<span class="sp"></span><span class="sub">${canEdit?'Cambios sin guardar':''}</span><button class="btn ghost">Cerrar</button>${canEdit?`<button class="btn blue">${I("save",14)}Guardar</button>`:''}</div>
+  </div></div>`;
+}
+
+function fixesPage(){
+  return `<div class="main"><div class="fix"><b style="font-size:14px">Revisión del funcionamiento actual</b> — lo que encontré leyendo el código y los datos (hoy hay 1 especificación en borrador con 8 trabajos).
+  <ol style="padding-left:18px;margin:10px 0 0">
+   <li><span class="sev hi">PIERDE DATOS</span><b>"Enviar a tierra" no guarda antes.</b> Si agregaste o cambiaste trabajos y tocás Enviar sin Guardar, los cambios se borran de la pantalla (y si todos los trabajos eran nuevos, da el error "no tiene ítems"). <i>Arreglo:</i> el botón guarda y después envía.</li>
+   <li><span class="sev hi">PIERDE DATOS</span><b>"Importar del backlog" pisa lo no guardado.</b> Al traer pendientes, la lista se reemplaza por lo que está en la base: se pierden las líneas nuevas o editadas sin guardar. <i>Arreglo:</i> guarda antes de abrir la importación.</li>
+   <li><span class="sev hi">PIERDE DATOS</span><b>Cerrar la ventana no avisa</b> si hay cambios sin guardar. <i>Arreglo:</i> pregunta antes, como el resto de la app.</li>
+   <li><span class="sev md">REGLA</span><b>Se puede aprobar con trabajos sin decidir.</b> Alcanza con 1 aceptado; los demás quedan "propuestos" y no salen en el PDF sin que nadie los haya descartado. <i>Propuesta:</i> aprobar sólo cuando todos estén aceptados o descartados.</li>
+   <li><span class="sev md">REGLA</span><b>El buque puede cambiar trabajos mientras tierra los revisa</b>, y un trabajo ya aceptado sigue "aceptado" aunque le cambien el texto. <i>Propuesta:</i> una vez que tierra la toma, sólo tierra edita; el buque conversa en cada trabajo (o la retira antes de que la tomen).</li>
+   <li><span class="sev md">PERMISO</span><b>"Tomar para revisar" lo puede hacer cualquier tripulante</b> por fuera de la pantalla (la pantalla lo esconde, el servidor no lo exige). <i>Arreglo:</i> exigir el permiso "Aprobar especificación de varada", igual que aprobar.</li>
+   <li><span class="sev md">PERMISO</span><b>Tierra puede aceptar/descartar trabajos de un borrador</b> que el buque todavía no envió. <i>Arreglo:</i> decidir sólo durante la revisión.</li>
+   <li><span class="sev md">DATOS</span><b>Quitar un trabajo borra su conversación sin preguntar.</b> <i>Arreglo:</i> confirmar cuando tiene comentarios o ya fue decidido.</li>
+   <li><span class="sev lo">VISUAL</span>Los comentarios muestran el <b>mail</b> del autor en lugar del nombre; el listado muestra el <b>código</b> del buque. <i>Arreglo:</i> nombre de la persona y del buque.</li>
+   <li><span class="sev lo">VISUAL</span>La grilla de trabajos es muy apretada (título y detalle en dos renglones chicos) y no explica qué va en cada dato. <i>Arreglo:</i> tarjetas por trabajo con ayudas.</li>
+  </ol></div></div>`;
+}
+
+function render(){
+  document.querySelectorAll(".pv-bar button").forEach(b=>{const k=Object.keys(b.dataset)[0];b.classList.toggle("on",S[k]===b.dataset[k]);});
+  let h=S.w==="list"?listPage():S.w==="detail"?detailPage():fixesPage();
+  if(S.toast)h+=`<div class="toast">${S.toast}</div>`;
+  document.getElementById("root").innerHTML=h; lucide.createIcons();
+}
+document.querySelectorAll(".pv-bar button").forEach(b=>b.onclick=()=>{const k=Object.keys(b.dataset)[0];S[k]=b.dataset[k];if(k==="c"&&S.w==="list")S.w="detail";render();});
+render();
+</script>
+</body>
+</html>

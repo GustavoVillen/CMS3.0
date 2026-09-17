@@ -51,6 +51,11 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   // Aprobar la especificacion de varada (TMSA 4.2.4): la arma el buque, la
   // aprueba tierra. Por defecto solo el superintendente de flota.
   { key: "drydock.approve",          group: "maintenance", labelKey: "perm.drydockApprove" },
+  // Informe de salud del equipo (IA). Generar consume IA y deja evidencia:
+  // tierra (DPA y Superintendente). Verlo, además, el Capitán / Jefe de Máquinas
+  // (pedido de Gustavo, sep 2026).
+  { key: "assetHealth.generate",     group: "maintenance", labelKey: "perm.assetHealthGenerate" },
+  { key: "assetHealth.view",         group: "maintenance", labelKey: "perm.assetHealthView" },
   // Solicitudes y compras
   { key: "sr.approve",               group: "procurement", labelKey: "perm.srApprove" },
   { key: "sr.authorize",             group: "procurement", labelKey: "perm.srAuthorize" },
@@ -113,7 +118,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // DPA desde sep 2026), aprueba MOC y permisos.
   FLEET_SUPERINTENDENT: [
     "wo.approve", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
-    "fluid.manage", "drydock.approve",
+    "fluid.manage", "drydock.approve", "assetHealth.generate", "assetHealth.view",
     "sr.approve", "spareRequest.approve", "stock.manage",
     "permit.authorize", "permit.manage", "moc.approve", "externalAudit.manage",
     "inspection.execute", "checklist.manageTemplates",
@@ -124,6 +129,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // ni SS — desde sep 2026 aprobar es de tierra (Superintendente o DPA).
   MAINTENANCE_MANAGER: [
     "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write", "defect.write", "fluid.manage",
+    "assetHealth.view",
     "spareRequest.approve", "spareRequest.manage", "spare.manage", "stock.manage", "provider.manage",
     "permit.manage", "externalAudit.manage", "inspection.execute", "checklist.manageTemplates",
     "crew.manage", "crewCert.manage", "drill.manage", "certificate.manage",

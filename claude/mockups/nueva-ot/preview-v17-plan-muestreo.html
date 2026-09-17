@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan de muestreo — Preview V17b</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#D9DDE3; --surface:#fff; --fg:#1A1D24; --accent:#0284C7; --teal:#0F766E;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer}
+  i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .stage{padding:18px;display:flex;justify-content:center} @media(max-width:600px){.stage{padding:0}}
+  .modal{width:100%;max-width:1060px;background:var(--surface);border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);overflow:hidden;border-top:4px solid #14B8A6}
+  .mh{display:flex;gap:10px;padding:12px 18px 10px;border-bottom:1px solid var(--fg10);align-items:flex-start}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);display:flex;gap:5px;align-items:center}
+  .mh h1{margin:2px 0 0;font-size:19px;font-weight:900} .mh .sub{font-size:12.5px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)}
+  .chip.lab{background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.3);color:#6D28D9}
+  .chip.labwarn{background:#FFFBEB;border-color:#FCD34D;color:#92400E}
+  .close{margin-left:auto;width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .mb{display:grid;grid-template-columns:210px 1fr;min-height:560px}
+  @media(max-width:800px){.mb{grid-template-columns:1fr}}
+  .nav{border-right:1px solid var(--fg10);padding:12px 10px;display:flex;flex-direction:column;gap:3px;background:rgba(26,29,36,.02)}
+  @media(max-width:800px){.nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--fg10)}}
+  .nav button{border:0;background:none;border-radius:10px;padding:8px 10px;text-align:left;font-size:12.5px;font-weight:600;color:var(--muted);display:flex;gap:8px;align-items:center;white-space:nowrap}
+  .nav button.on{background:rgba(20,184,166,.12);color:var(--teal)}
+  .nav .cnt{margin-left:auto;font-size:10px;font-weight:800;border-radius:99px;padding:0 6px;background:#FEF3C7;color:#92400E}
+  .nav .new{margin-left:auto;font-size:9px;font-weight:800;border-radius:99px;padding:0 6px;background:rgba(124,58,237,.12);color:#6D28D9}
+  .scroll{padding:14px 18px 30px;display:flex;flex-direction:column;gap:12px}
+  .sec{border:1px solid var(--fg10);border-radius:14px}
+  .sech{display:flex;gap:8px;align-items:center;padding:10px 14px}
+  .num{width:22px;height:22px;border-radius:99px;background:#1A1D24;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .pill{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;background:#D97706;color:#fff}
+  .pill.ok{background:rgba(14,159,110,.15);color:#047857}
+  .secb{padding:2px 14px 14px;display:flex;flex-direction:column;gap:12px}
+  .sec.closed .secb{display:none}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;align-items:center}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1.6fr;gap:12px} @media(max-width:700px){.grid2{grid-template-columns:1fr}}
+  .seg{display:flex;gap:6px} .seg button{flex:1;border:1.5px solid var(--fg10);background:#fff;border-radius:10px;padding:7px;font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center;justify-content:center}
+  .seg button.on{border-color:var(--teal);background:rgba(20,184,166,.1);color:var(--teal)}
+
+  /* bloque de muestreo */
+  .samp{border:2px solid rgba(124,58,237,.28);border-radius:16px;background:linear-gradient(180deg,rgba(124,58,237,.05),rgba(124,58,237,0) 70%);padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+  .samp.off{border-style:dashed;border-color:var(--fg25);background:none}
+  .samph{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .samph .ic{width:36px;height:36px;border-radius:10px;background:rgba(124,58,237,.12);color:#6D28D9;display:flex;align-items:center;justify-content:center}
+  .samph .t{font-size:14px;font-weight:800} .samph .d{font-size:11.5px;color:var(--muted)}
+  .yn{margin-left:auto;display:flex;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:2px}
+  .yn button{border:0;background:none;border-radius:8px;padding:6px 14px;font-size:12.5px;font-weight:800;color:var(--muted)}
+  .yn button.on{background:#6D28D9;color:#fff} .yn button.no.on{background:#fff;color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+  .kinds{display:grid;grid-template-columns:repeat(5,1fr);gap:8px} @media(max-width:760px){.kinds{grid-template-columns:repeat(2,1fr)}}
+  .kind{border:1.5px solid var(--fg10);background:#fff;border-radius:12px;padding:9px;text-align:left;display:flex;flex-direction:column;gap:3px}
+  .kind .kt{font-size:12.5px;font-weight:800;display:flex;gap:6px;align-items:center} .kind .kd{font-size:10.5px;color:var(--faint)}
+  .kind.on{border-color:#7C3AED;background:rgba(124,58,237,.08)} .kind.on .kt{color:#6D28D9}
+  .groups{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media(max-width:760px){.groups{grid-template-columns:1fr 1fr}}
+  .grp small{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:4px}
+  .fchips{display:flex;flex-wrap:wrap;gap:5px}
+  .fchips button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--muted)}
+  .fchips button.on{background:#7C3AED;border-color:#7C3AED;color:#fff}
+  .needbox{border-left:4px solid #F59E0B;background:rgba(245,158,11,.08);border-radius:4px;padding:8px 10px}
+  .needtag{font-size:9.5px;font-weight:800;border-radius:99px;padding:1px 7px;background:#D97706;color:#fff;text-transform:uppercase}
+  .labrow{display:flex;gap:10px;align-items:center;border:1px solid var(--fg10);background:#fff;border-radius:12px;padding:9px 11px;flex-wrap:wrap}
+  .labrow.ok{border-color:rgba(14,159,110,.35)} .labrow.warn{border-color:#FCD34D;background:#FFFBEB}
+  .labrow .t{font-size:13px;font-weight:800} .labrow .d{font-size:11.5px;color:var(--muted)}
+  .labrow .go{margin-left:auto}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--fg);display:inline-flex;gap:5px;align-items:center}
+  .btn.violet{background:#6D28D9;border-color:#6D28D9;color:#fff}
+  .labform{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;width:100%} @media(max-width:620px){.labform{grid-template-columns:1fr}}
+  .flow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px} @media(max-width:760px){.flow{grid-template-columns:1fr}}
+  .step{border:1px solid var(--fg10);border-radius:12px;padding:9px 11px;background:#fff;display:flex;gap:8px}
+  .step .n{width:22px;height:22px;border-radius:99px;background:rgba(124,58,237,.12);color:#6D28D9;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .step .t{font-size:12.5px;font-weight:800} .step .d{font-size:11px;color:var(--muted);margin-top:1px}
+  .step.dim{opacity:.55}
+  .collapsed{font-size:12px;color:var(--faint);padding:0 14px 10px}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#F3F4F6;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Plan de muestreo · Preview V17</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Caso:</span>
+  <button data-c="oil" class="on">Aceite con laboratorio</button><button data-c="vib">Vibración sin laboratorio</button><button data-c="none">No es muestreo</button>
+</div>
+<div class="stage"><div class="modal" id="root"></div></div>
+<script>
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"new",on:true,kind:"FLUID",fluid:"ENGINE_OIL",lab:true,labForm:false,toast:null};
+const CASES={oil:{on:true,kind:"FLUID",fluid:"ENGINE_OIL",lab:true},vib:{on:true,kind:"VIBRATION",fluid:"",lab:false},none:{on:false,kind:"",fluid:"",lab:false}};
+const KINDS=[["FLUID","droplets","Fluido","Aceite, combustible o agua"],["VIBRATION","activity","Vibración","ISO 10816"],["THERMAL","thermometer","Termografía","Puntos calientes"],["ULTRASOUND","audio-lines","Ultrasonido","Fugas y rodamientos"],["OTHER","flask-conical","Otro","Otro análisis"]];
+const FLUIDS=[["Aceites",[["ENGINE_OIL","Motor"],["HYDRAULIC_OIL","Hidráulico"],["GEARBOX_OIL","Reductora"],["TRANSMISSION_OIL","Transmisión"]]],["Combustible",[["FUEL_DIESEL","Diesel"],["FUEL_GASOIL","Gasoil"]]],["Agua",[["COOLING_WATER","Refrigeración"],["BOILER_WATER","Caldera"],["POTABLE_WATER","Potable"]]],["Otros",[["REFRIGERANT","Refrigerante"],["OTHER","Otro"]]]];
+const kindName=()=>KINDS.find(k=>k[0]===S.kind)?.[2]??"";
+const fluidName=()=>FLUIDS.flatMap(g=>g[1]).find(f=>f[0]===S.fluid)?.[1]??"";
+const sampLabel=()=>kindName();
+const missing=()=>S.on?((!S.lab?1:0)+(!S.kind?1:0)):0;
+
+function page(){
+  const m=missing();
+  return `<div class="mh"><div style="flex:1;min-width:0">
+      <div class="kicker">${I("clipboard-list",13)}Plan de mantenimiento</div>
+      <h1>${S.on?(S.kind==="VIBRATION"?"Análisis de vibraciones":"Toma de muestra de aceite"):"Cambio de filtros de aceite"}</h1>
+      <div class="sub">Motor principal babor · Grupo 6 – Maquinaria</div>
+      <div class="chips"><span class="chip mono">MP-6-022</span><span class="chip">${I("ship",12)}BUQUE DEMO I</span><span class="chip">Mantenimiento</span>
+      ${S.on?`<span class="chip lab">${I("flask-conical",12)}Muestreo · ${sampLabel()||"—"}</span>${S.lab?`<span class="chip lab">${I("handshake",12)}Laboratorio Demo S.A.</span>`:`<span class="chip labwarn">${I("triangle-alert",12)}Falta el laboratorio</span>`}`:""}</div>
+    </div><button class="close">${I("x",18)}</button></div>
+  <div class="mb">
+    <nav class="nav">
+      <button class="on">${I("list-checks",15)}Qué se hace${m?`<span class="cnt">${m}</span>`:""}</button>
+      <button>${I("calendar-range",15)}Cuándo</button>
+      <button>${I("users",15)}Quién y con qué</button>
+      <button>${I("shield-alert",15)}Seguridad</button>
+      <button>${I("paperclip",15)}Documentos</button>
+    </nav>
+    <div class="scroll" id="scroll">
+      <section class="sec"><div class="sech"><span class="num">1</span><div><h2>Qué se hace</h2><div class="hint">Tipo de tarea, muestreo, título y pasos</div></div>
+        ${m?`<span class="pill">Faltan ${m}</span>`:`<span class="pill ok">Completo</span>`}</div>
+        <div class="secb">
+          <div class="grid2">
+            <div><div class="lbl">Tipo de tarea</div><div class="seg"><button class="on">${I("wrench",13)}Mantenimiento</button><button>${I("search-check",13)}Inspección</button></div></div>
+            <div><div class="lbl">Origen del criterio</div><select class="inp"><option>Fabricante</option></select></div>
+          </div>
+          ${sampling()}
+          <div><div class="lbl">Título</div><input class="inp" value="${S.on?(S.kind==="VIBRATION"?"Análisis de vibraciones":"Toma de muestra de aceite"):"Cambio de filtros de aceite"}"></div>
+          <div><div class="lbl">Tareas a realizar</div><textarea class="inp" rows="2">${S.on?"[ ] Tomar la muestra con el motor en marcha y a temperatura\n[ ] Rotular el frasco con el número de muestra":"[ ] Cambiar filtros"}</textarea></div>
+        </div></section>
+      <section class="sec closed"><div class="sech"><span class="num">2</span><div><h2>Cuándo</h2><div class="hint">Frecuencia, vencimiento y aviso anticipado</div></div></div></section>
+      <section class="sec closed"><div class="sech"><span class="num">3</span><div><h2>Quién y con qué</h2><div class="hint">Área, taller, responsable y repuestos</div></div></div>
+        <div class="collapsed">${S.on&&S.lab?"Área: Proveedor · Laboratorio Demo S.A. — el mismo dato que se ve en el bloque de muestreo":"Área y responsable"}</div></section>
+      <section class="sec closed"><div class="sech"><span class="num">4</span><div><h2>Seguridad</h2><div class="hint">Bloqueo, riesgo y qué pasa si no se hace</div></div></div></section>
+      <section class="sec closed"><div class="sech"><span class="num">5</span><div><h2>Documentos</h2><div class="hint">Planilla para ejecutar</div></div></div>
+        <div class="collapsed">El plan de muestreo ya no está acá: subió a “Qué se hace”.</div></section>
+    </div>
+  </div>`;
+}
+function sampling(){
+  if(!S.on) return `<div class="samp off"><div class="samph"><span class="ic" style="background:var(--fg5);color:var(--faint)">${I("flask-conical",19)}</span>
+    <div><div class="t">¿Esta tarea toma una muestra para laboratorio?</div><div class="d">Aceite, combustible, agua, vibraciones, termografía…</div></div>
+    <div class="yn"><button class="no ${!S.on?'on':''}" onclick="setOn(false)">No</button><button class="${S.on?'on':''}" onclick="setOn(true)">Sí</button></div></div></div>`;
+  return `<div class="samp">
+    <div class="samph"><span class="ic">${I("flask-conical",19)}</span>
+      <div><div class="t">Muestra para laboratorio</div><div class="d">Plan de muestreo: se genera sola la muestra y se manda al laboratorio</div></div>
+      <div class="yn"><button class="no" onclick="setOn(false)">No</button><button class="on">Sí</button></div></div>
+    <div><div class="lbl">Qué se analiza</div><div class="kinds">${KINDS.map(([k,ic,t,d])=>`<button class="kind ${S.kind===k?'on':''}" onclick="S.kind='${k}';render()"><span class="kt">${I(ic,14)}${t}</span><span class="kd">${d}</span></button>`).join("")}</div></div>
+    <div><div class="lbl">Laboratorio ${!S.lab?'<span class="needtag">Falta</span>':''}</div>
+      ${S.lab
+        ?`<div class="labrow ok">${I("badge-check",20)}<div><div class="t">Laboratorio Demo S.A.</div><div class="d">Análisis de ${S.kind==="VIBRATION"?"vibraciones":"aceite"} · al abrir la OT se le manda la SS</div></div><button class="btn go" onclick="toast('Lleva a Quién y con qué (demo)')">${I("pencil",13)}Cambiar</button></div>`
+        :`<div class="labrow warn">${I("triangle-alert",20)}<div><div class="t" style="color:#92400E">Sin laboratorio: al abrir la OT no se le pide el análisis a nadie</div><div class="d">Se carga como proveedor del plan (área Proveedor).</div></div>
+          ${S.labForm?"":`<button class="btn violet go" onclick="S.labForm=true;render()">${I("plus",13)}Elegir laboratorio</button>`}
+          ${S.labForm?`<div class="labform"><select class="inp"><option>Laboratorio Demo S.A.</option><option>Otro proveedor…</option></select><input class="inp" value="Análisis de ${S.kind==="VIBRATION"?"vibraciones":"aceite"}"><button class="btn violet" onclick="S.lab=true;S.labForm=false;toast('Área pasa a Proveedor y se agrega el laboratorio (demo)')">${I("check",13)}Agregar</button></div>`:""}
+        </div>`}
+    </div>
+    <div><div class="lbl">Qué pasa con la muestra</div><div class="flow">
+      <div class="step"><span class="n">1</span><div><div class="t">Al autorizar la OT</div><div class="d">Se crea la muestra en borrador en Análisis de laboratorio, con este equipo.</div></div></div>
+      <div class="step ${S.lab?'':'dim'}"><span class="n">2</span><div><div class="t">Se toma y se envía</div><div class="d">${S.lab?"Se numera el frasco y va con la SS al laboratorio.":"Sin laboratorio no hay SS: hay que pedir el análisis a mano."}</div></div></div>
+      <div class="step"><span class="n">3</span><div><div class="t">Vuelve el informe</div><div class="d">Se carga el resultado y queda en el historial del equipo.</div></div></div>
+    </div></div>
+  </div>`;
+}
+function ref(){
+  return `<div class="mh"><div style="flex:1"><h1>Toma de muestra de aceite</h1><div class="sub">Plan de mantenimiento</div></div><button class="close">${I("x",18)}</button></div>
+  <div style="padding:16px 18px">
+    <div class="refbox">1 · Qué se hace — tipo, origen, título, tareas, criterio</div>
+    <div class="refbox">2 · Cuándo</div><div class="refbox">3 · Quién y con qué — Área: Proveedor · CONDOR / Laboratorio</div><div class="refbox">4 · Seguridad</div>
+    <div class="refbox" style="background:#fff"><b>5 · Documentos y muestreo</b><br>Lista de chequeo…<br><br><small style="color:var(--faint)">PLAN DE MUESTREO (opcional)</small><br>[ — No es plan de muestreo — ▾ ]  [ Elegí tipo de fluido… ▾ ]<br><span style="font-size:10px;color:#0284C7">Al autorizar la OT generada por este plan, se creará automáticamente una muestra (DRAFT) del tipo elegido.</span></div>
+    <div><span class="note">Está al final de todo, en la última sección, marcado “opcional”</span><span class="note">Dos desplegables largos, sin agrupar</span><span class="note">No avisa si falta el laboratorio (sin él no se genera la SS)</span><span class="note">No explica el recorrido de la muestra</span><span class="note">No se ve en el encabezado que es un plan de muestreo</span><span class="note">“DRAFT” en inglés</span></div>
+  </div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  const sc=document.getElementById("scroll"); const top=sc?sc.scrollTop:0; const y=window.scrollY;
+  document.getElementById("root").innerHTML=S.v==="ref"?ref():page();
+  const n=document.getElementById("scroll"); if(n) n.scrollTop=top; window.scrollTo(0,y);
+  document.querySelectorAll(".toast").forEach(x=>x.remove());
+  if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function setOn(v){ S.on=v; if(v&&!S.kind) S.kind="FLUID"; render(); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll(".toast").forEach(x=>x.remove());},1700); }
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.v=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.onclick=()=>{Object.assign(S,CASES[b.dataset.c],{labForm:false,v:"new"});document.querySelectorAll(".pv-bar [data-c]").forEach(x=>x.classList.toggle("on",x===b));render();});
+render();
+</script>
+</body>
+</html>

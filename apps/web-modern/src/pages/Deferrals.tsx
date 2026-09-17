@@ -7,6 +7,7 @@ import { api, ApiError } from "../lib/api";
 import { MocModal, type MocPrefill } from "./Moc";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { AlertDialog } from "../components/AlertDialog";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -217,10 +218,10 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
           <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("label.approvedBy")} *</label>
+          <GuideField id="def-approver-name" missing={!approverName.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("label.approvedBy")}<RequiredMark />{!approverName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input type="text" value={approverName} onChange={e => setApproverName(e.target.value)} placeholder="Nombre y apellido del aprobador" className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
-          </div>
+          </GuideField>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.targetDate")}</label>
             <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
@@ -290,14 +291,14 @@ const RejectModal: React.FC<RejectModalProps> = ({ deferralId, onClose, onSucces
           <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("label.rejectedBy")} *</label>
+          <GuideField id="def-rejector-name" missing={!rejectorName.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("label.rejectedBy")}<RequiredMark />{!rejectorName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input type="text" value={rejectorName} onChange={e => setRejectorName(e.target.value)} placeholder="Nombre y apellido del rechazador" className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.rejectionReason")} *</label>
+          </GuideField>
+          <GuideField id="def-rejection-reason" missing={!rejectionReason.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.rejectionReason")}<RequiredMark />{!rejectionReason.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <AutoTextArea rows={4} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
-          </div>
+          </GuideField>
           {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-fg/10">

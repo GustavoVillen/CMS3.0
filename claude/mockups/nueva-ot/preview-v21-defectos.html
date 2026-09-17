@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Defectos — Preview V21</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --fg:#1A1D24; --accent:#0284C7; --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer} i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:400;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .main{padding:20px 24px;display:flex;flex-direction:column;gap:14px;max-width:1400px;margin:0 auto} @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px} .ph .right{margin-left:auto;display:flex;gap:8px}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.primary{background:#DC2626;border-color:#DC2626;color:#fff} .btn.blue{background:var(--accent);border-color:var(--accent);color:#fff} .btn.green{background:#059669;border-color:#059669;color:#fff}
+  .btn.ghost{border:0;background:none;color:var(--muted);font-weight:600}
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media(max-width:900px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:#fff;border:1.5px solid var(--fg10);border-left-width:4px;border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .sc.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(2,132,199,.18)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:5px;align-items:center} .sc .h{font-size:10.5px;color:var(--faint)}
+  .sc.red{border-left-color:#DC2626} .sc.red .n{color:#B91C1C} .sc.orange{border-left-color:#EA580C} .sc.orange .n{color:#C2410C}
+  .sc.blue{border-left-color:#2563EB} .sc.blue .n{color:#1D4ED8} .sc.amber{border-left-color:#D97706} .sc.amber .n{color:#B45309}
+  .fbar{background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:240px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)} @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .strip{background:#FFFBEB;border:1px solid #FCD34D;border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .strip .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid var(--fg10);border-radius:10px;padding:7px 10px;font-size:12.5px}
+  .tbl{background:#fff;border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:1000px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12.5px;vertical-align:middle}
+  tr.hot td{background:#FEF2F2} tr.hot td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr:hover td{background:rgba(2,132,199,.04);cursor:pointer}
+  .code{font-family:ui-monospace,monospace;font-weight:800;font-size:12px} .sub{font-size:10.5px;color:var(--faint)}
+  .pill{font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 8px;white-space:nowrap;display:inline-flex;gap:3px;align-items:center}
+  .sev-CRITICAL{background:#B91C1C;color:#fff} .sev-HIGH{background:#FFEDD5;color:#C2410C} .sev-MEDIUM{background:#FEF9C3;color:#854D0E} .sev-LOW{background:#DCFCE7;color:#166534}
+  .op-NORMAL{background:#DCFCE7;color:#166534} .op-DEGRADED{background:#FEF3C7;color:#92400E} .op-RESTRICTED{background:#FFEDD5;color:#C2410C} .op-NO_GO{background:#DC2626;color:#fff}
+  .stg{font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .s-open{color:#B91C1C;border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06)} .s-work{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)}
+  .s-def{color:#A16207;border-color:rgba(202,138,4,.3);background:rgba(202,138,4,.08)} .s-closed{color:#047857;border-color:rgba(14,159,110,.3);background:rgba(14,159,110,.06)}
+  .origin{font-size:10.5px;font-weight:700;color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .wo{font-family:ui-monospace,monospace;font-size:11px;color:var(--accent);font-weight:700}
+  .age{font-size:11.5px;color:var(--muted)} .age.late{color:#B91C1C;font-weight:800}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .act.green{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.08);color:#047857} .act.amber{border-color:#FCD34D;background:#FFFBEB;color:#92400E}
+  .cards{display:none;flex-direction:column;gap:8px} @media(max-width:700px){.tbl{display:none}.cards{display:flex}}
+  .card{background:#fff;border:1px solid var(--fg10);border-left:4px solid var(--fg10);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+  .card.hot{border-left-color:#DC2626;background:#FEF2F2}
+
+  /* detalle */
+  .overlay{background:rgba(15,23,42,.55);min-height:calc(100vh - 46px);padding:18px;display:flex;justify-content:center} @media(max-width:600px){.overlay{padding:0}}
+  .modal{width:100%;max-width:1100px;background:#fff;border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);overflow:hidden;border-top:4px solid #DC2626;align-self:flex-start}
+  .mh{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid var(--fg10);align-items:flex-start}
+  .mh .ic{width:42px;height:42px;border-radius:12px;background:rgba(220,38,38,.1);color:#B91C1C;display:flex;align-items:center;justify-content:center}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#B91C1C}
+  .mh h1{margin:1px 0 0;font-size:19px;font-weight:900} .mh .d{font-size:12.5px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)} .chip.link{color:var(--accent);border-color:rgba(2,132,199,.3);background:rgba(2,132,199,.06)}
+  .close{margin-left:auto;width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .steps{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 18px;border-bottom:1px solid var(--fg10);background:rgba(26,29,36,.02)}
+  .stp{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--faint)}
+  .stp .n{width:24px;height:24px;border-radius:99px;border:2px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:11px}
+  .stp.done{color:#047857} .stp.done .n{background:#10B981;border-color:#10B981;color:#fff} .stp.cur{color:var(--fg)} .stp.cur .n{background:#DC2626;border-color:#DC2626;color:#fff}
+  .stp .bar{width:20px;height:2px;background:var(--fg10)}
+  .next{margin:14px 18px 0;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .next .ni{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .next .nt{font-size:15px;font-weight:900} .next .nd{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .next .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .n-open{background:#FEF2F2;border:1.5px solid #FCA5A5} .n-open .ni{background:#DC2626}
+  .n-work{background:#EFF6FF;border:1.5px solid #93C5FD} .n-work .ni{background:#2563EB}
+  .n-verify{background:#FFFBEB;border:1.5px solid #FCD34D} .n-verify .ni{background:#D97706}
+  .n-done{background:#ECFDF5;border:1.5px solid #6EE7B7} .n-done .ni{background:#10B981}
+  .body{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;padding:14px 18px 18px} @media(max-width:880px){.body{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .sec{border:1px solid var(--fg10);border-radius:14px}
+  .sech{display:flex;gap:8px;align-items:center;padding:10px 14px}
+  .num{width:22px;height:22px;border-radius:99px;background:#1A1D24;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .sech h2{margin:0;font-size:14px;font-weight:800} .sech .hint{font-size:11.5px;color:var(--faint)}
+  .spill{margin-left:auto;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;background:#D97706;color:#fff} .spill.ok{background:rgba(14,159,110,.15);color:#047857}
+  .secb{padding:2px 14px 14px;display:flex;flex-direction:column;gap:11px}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;display:flex;gap:6px;align-items:center}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg)} textarea.inp{resize:vertical;line-height:1.45}
+  .opts{display:flex;gap:6px;flex-wrap:wrap} .opts button{border:1.5px solid var(--fg10);background:#fff;border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted)}
+  .opts button.on.sev-CRITICAL,.opts button.on.op-NO_GO{background:#B91C1C;border-color:#B91C1C;color:#fff}
+  .opts button.on.sev-HIGH,.opts button.on.op-RESTRICTED{background:#FFEDD5;border-color:#EA580C;color:#C2410C}
+  .opts button.on.sev-MEDIUM,.opts button.on.op-DEGRADED{background:#FEF3C7;border-color:#D97706;color:#92400E}
+  .opts button.on.sev-LOW,.opts button.on.op-NORMAL{background:#DCFCE7;border-color:#16A34A;color:#166534}
+  .opts .oh{display:block;font-size:10px;font-weight:600;opacity:.8}
+  .need{border-left:4px solid #F59E0B;background:linear-gradient(90deg,rgba(245,158,11,.09),transparent 70%);border-radius:4px;padding:8px 10px}
+  .needtag{font-size:9.5px;font-weight:800;border-radius:99px;padding:1px 7px;background:#D97706;color:#fff;text-transform:uppercase}
+  .ai{margin-left:auto;border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.07);color:#6D28D9;border-radius:99px;padding:2px 9px;font-size:10.5px;font-weight:800;display:inline-flex;gap:4px;align-items:center}
+  .photos{display:grid;grid-template-columns:repeat(4,1fr);gap:6px} .photos div{aspect-ratio:1;border-radius:10px;background:linear-gradient(135deg,#94A3B8,#475569)} .photos button{aspect-ratio:1;border-radius:10px;border:1.5px dashed var(--fg25);background:none;color:var(--muted);font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .box{border:1px solid var(--fg10);border-radius:14px;overflow:hidden}
+  .box h3{margin:0;font-size:13.5px;font-weight:800;display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--fg10)}
+  .box .bb{padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px} .kv small{display:block;font-size:10.5px;color:var(--faint);font-weight:600} .kv b{font-size:12.5px}
+  .timeline{display:flex;flex-direction:column;gap:8px}
+  .tl{display:flex;gap:8px;font-size:12px} .tl .dot{width:10px;height:10px;border-radius:99px;margin-top:4px;flex-shrink:0}
+  .mf{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap} .mf .sp{flex:1}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .dlg>div{background:#fff;border-radius:18px;max-width:560px;width:100%;overflow:hidden}
+  .dlg .dh{padding:14px 18px;border-bottom:1px solid var(--fg10);font-size:16px;font-weight:900;display:flex;gap:8px;align-items:center}
+  .dlg .db{padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+  .choice{display:grid;grid-template-columns:1fr 1fr;gap:8px} @media(max-width:480px){.choice{grid-template-columns:1fr}}
+  .choice button{border:2px solid var(--fg10);border-radius:12px;background:#fff;padding:10px;text-align:left}
+  .choice button.on{border-color:#059669;background:#ECFDF5} .choice .t{font-size:13px;font-weight:800} .choice .d{font-size:11px;color:var(--muted)}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#fff;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Defectos · Preview V21</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-w="list" class="on">Listado</button><button data-w="detail">Defecto abierto</button>
+  <span class="sep"></span><button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Caso del defecto:</span>
+  <button data-c="open" class="on">Recién reportado</button><button data-c="work">Con OT en curso</button><button data-c="verify">Cerrado · a confirmar</button>
+</div>
+<div id="root"></div>
+<script>
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={w:"list",v:"new",c:"open",card:"",stage:"",sev:"",q:"",dlg:false,repair:"PERM",check:"",toast:null};
+const SEV={CRITICAL:"Crítica",HIGH:"Alta",MEDIUM:"Media",LOW:"Baja"};
+const OP={NORMAL:["Opera normal","sin limitaciones"],DEGRADED:["Degradado","anda con fallas"],RESTRICTED:["Restringido","con limitaciones"],NO_GO:["Fuera de servicio","no se puede usar"]};
+const ORIG={wo:["wrench","OT"],inspection:["search-check","Inspección"],fluid:["droplets","Análisis de laboratorio"],audit:["clipboard-check","Auditoría"],manual:["pencil","A mano"]};
+const STG={OPEN:["Abierto","s-open"],UNDER_REVIEW:["En revisión","s-open"],IN_PROGRESS:["En reparación","s-work"],DEFERRED:["Diferido","s-def"],RESOLVED:["Resuelto","s-closed"],CLOSED:["Cerrado","s-closed"]};
+const D=[
+ {c:"DEF-DEM-26-021",v:"BUQUE DEMO I",a:"Bomba de lastre N°2",d:"Pérdida de agua por el sello mecánico",o:"manual",sev:"HIGH",op:"DEGRADED",st:"OPEN",age:2,wo:null},
+ {c:"DEF-DEM-26-019",v:"BUQUE DEMO I",a:"Motor principal babor",d:"Hierro alto en el análisis de aceite (86 ppm)",o:"fluid",sev:"CRITICAL",op:"RESTRICTED",st:"IN_PROGRESS",age:6,wo:"OT-DEM-26-0065"},
+ {c:"DEF-DEM-26-017",v:"BUQUE DEMO II",a:"Guinche de proa",d:"Freno no retiene con carga",o:"inspection",sev:"CRITICAL",op:"NO_GO",st:"OPEN",age:9,wo:null},
+ {c:"DEF-DEM-26-014",v:"BUQUE DEMO I",a:"Generador auxiliar 2",d:"Vibración anormal en el cojinete lado acople",o:"wo",sev:"MEDIUM",op:"DEGRADED",st:"DEFERRED",age:34,wo:"OT-DEM-26-0041"},
+ {c:"DEF-DEM-26-011",v:"BUQUE DEMO II",a:"Luces de navegación",d:"Luz de tope intermitente",o:"audit",sev:"LOW",op:"NORMAL",st:"UNDER_REVIEW",age:15,wo:null},
+ {c:"DEF-DEM-26-008",v:"BUQUE DEMO I",a:"Compresor de aire N°1",d:"Válvula de seguridad descalibrada",o:"manual",sev:"MEDIUM",op:"NORMAL",st:"CLOSED",age:48,wo:"OT-DEM-26-0020",due:true},
+];
+const openSt=x=>!["RESOLVED","CLOSED"].includes(x.st);
+const late=x=>openSt(x)&&((x.sev==="CRITICAL"&&x.age>7)||(x.sev==="HIGH"&&x.age>15)||x.age>30);
+function cardM(x,k){ return k==="crit"?openSt(x)&&x.sev==="CRITICAL":k==="stop"?openSt(x)&&(x.op==="NO_GO"||x.op==="RESTRICTED"):k==="nowo"?openSt(x)&&!x.wo:k==="verify"?!!x.due:true; }
+function list(ign){ const q=S.q.toLowerCase(); return D.filter(x=>{ if(S.card&&!cardM(x,S.card))return false;
+  if(!ign){ if(S.stage==="open"||S.stage===""){ if(!openSt(x)&&!q&&S.card!=="verify")return false;} else if(S.stage==="closed"){ if(openSt(x))return false; } }
+  if(S.sev&&x.sev!==S.sev)return false; if(q&&!(x.c+x.a+x.d+(x.wo||"")).toLowerCase().includes(q))return false; return true;}); }
+function action(x){
+  if(x.due) return `<button class="act amber" onclick="event.stopPropagation();toast('Abre la confirmación (demo)')">${I("shield-question",12)}Confirmar si sigue bien</button>`;
+  if(!openSt(x)) return "";
+  if(!x.wo) return `<button class="act" onclick="event.stopPropagation();toast('Abre crear OT correctiva (demo)')">${I("wrench",12)}Crear OT correctiva</button>`;
+  return `<button class="act green" onclick="event.stopPropagation();toast('Abre cerrar defecto (demo)')">${I("check-circle-2",12)}Cerrar defecto</button>`;
+}
+function listPage(){
+  const L=list(); const cnt=k=>D.filter(x=>cardM(x,k)).length;
+  const sc=(k,cls,ic,l,h)=>`<button class="sc ${cls} ${S.card===k?'on':''}" onclick="S.card=S.card==='${k}'?'':'${k}';render()"><span class="n">${cnt(k)}</span><span class="l">${I(ic,13)}${l}</span><span class="h">${h}</span></button>`;
+  return `<div class="main">
+  <div class="ph"><h1>${I("triangle-alert",20)}Defectos</h1><span class="count">${L.length} a la vista</span><div class="right"><button class="btn">${I("file-spreadsheet",14)}Excel</button><button class="btn primary">${I("plus",14)}Reportar defecto</button></div></div>
+  <div class="sum">${sc("crit","red","octagon-alert","Críticos abiertos","Atender primero")}${sc("stop","orange","ban","Equipos parados o limitados","Fuera de servicio o restringidos")}${sc("nowo","blue","wrench","Sin OT asignada","Nadie los está reparando")}${sc("verify","amber","shield-question","Para confirmar","Cerrados hace 30 días: ¿volvió a fallar?")}</div>
+  <div class="strip"><div style="display:flex;gap:6px;align-items:center;font-size:12.5px;font-weight:800;color:#92400E">${I("shield-question",15)}Para confirmar (1) <span style="font-weight:500;color:var(--muted)">· ISM 10.2.3: ¿el arreglo sigue funcionando?</span></div>
+    <div class="row"><span class="code">DEF-DEM-26-008</span><span>Compresor de aire N°1 · Válvula de seguridad descalibrada</span><span style="margin-left:auto;display:flex;gap:6px"><button class="act green">Sigue bien</button><button class="act" style="color:#B91C1C;border-color:rgba(220,38,38,.35);background:#FEF2F2">Volvió a fallar</button></span></div></div>
+  <div class="fbar"><div class="stage">
+    ${[["open","Abiertos"],["closed","Resueltos y cerrados"],["all","Todos"]].map(([k,l])=>`<button class="${(S.stage||'open')===k?'on':''}" onclick="S.stage='${k}';render()">${l} <span class="c">${D.filter(x=>k==="all"?true:k==="open"?openSt(x):!openSt(x)).length}</span></button>`).join("")}</div>
+    <div class="frow"><select class="sel" onchange="S.sev=this.value;render()"><option value="">Severidad: todas</option>${Object.entries(SEV).map(([k,l])=>`<option value="${k}" ${S.sev===k?'selected':''}>${l}</option>`).join("")}</select>
+      <select class="sel"><option>Estado del equipo: todos</option>${Object.values(OP).map(o=>`<option>${o[0]}</option>`).join("")}</select>
+      <select class="sel"><option>Origen: todos</option>${Object.values(ORIG).map(o=>`<option>${o[1]}</option>`).join("")}</select>
+      <select class="sel"><option>Equipo: todos</option></select>
+      <div class="search">${I("search")}<input id="q" placeholder="Buscar defecto, equipo, descripción u OT…" value="${S.q}" oninput="S.q=this.value;keep()"></div></div></div>
+  <div class="tbl"><table><tr><th>Defecto</th><th>Equipo · qué pasó</th><th>Origen</th><th>Severidad</th><th>Estado del equipo</th><th>Etapa</th><th>Abierto</th><th>OT</th><th></th></tr>
+  ${L.map(x=>`<tr class="${late(x)||x.op==='NO_GO'&&openSt(x)?'hot':''}" onclick="S.w='detail';S.c=${x.due?"'verify'":x.wo?"'work'":"'open'"};render()">
+    <td><span class="code">${x.c}</span><div class="sub">${x.v}</div></td>
+    <td><b style="font-weight:700">${x.a}</b><div style="font-size:12px;color:var(--muted)">${x.d}</div></td>
+    <td><span class="origin">${I(ORIG[x.o][0],12)}${ORIG[x.o][1]}</span></td>
+    <td><span class="pill sev-${x.sev}">${SEV[x.sev]}</span></td><td><span class="pill op-${x.op}">${OP[x.op][0]}</span></td>
+    <td><span class="stg ${STG[x.st][1]}">${STG[x.st][0]}</span></td>
+    <td><span class="age ${late(x)?'late':''}">${openSt(x)?`${late(x)?I("clock-alert",12)+" ":""}hace ${x.age} d`:`cerrado`}</span></td>
+    <td>${x.wo?`<span class="wo">${x.wo}</span>`:`<span class="sub">—</span>`}</td><td>${action(x)}</td></tr>`).join("")}</table></div>
+  <div class="cards">${L.map(x=>`<div class="card ${late(x)?'hot':''}"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="code">${x.c}</span><span class="pill sev-${x.sev}">${SEV[x.sev]}</span><span class="pill op-${x.op}">${OP[x.op][0]}</span></div><b>${x.a}</b><div style="font-size:12px;color:var(--muted)">${x.d}</div><div style="display:flex;gap:8px;align-items:center"><span class="stg ${STG[x.st][1]}">${STG[x.st][0]}</span><span class="age ${late(x)?'late':''}">hace ${x.age} d</span></div>${action(x)}</div>`).join("")}</div>
+  </div>`;
+}
+function detail(){
+  const c=S.c; const idx=c==="open"?0:c==="work"?1:3;
+  const labels=["Reportado","En reparación","Cerrado","Confirmado"];
+  const next={
+    open:["n-open","wrench","¿Cómo se va a reparar?","Asigná una OT correctiva, o si ya lo arreglaron a bordo, cerralo.",`<button class="btn blue" onclick="toast('Abre crear OT correctiva con los datos del defecto (demo)')">${I("wrench",14)}Crear OT correctiva</button><button class="btn" onclick="S.dlg=true;render()">${I("check",14)}Ya se reparó · cerrar</button>`],
+    work:["n-work","hammer","Se está reparando con la OT-DEM-26-0065","Cuando la OT termine, cerrá el defecto y decí cómo se comprobó.",`<button class="btn" onclick="toast('Abre la OT (demo)')">${I("external-link",14)}Ir a la OT</button><button class="btn green" onclick="S.dlg=true;render()">${I("check-circle-2",14)}Cerrar defecto</button>`],
+    verify:["n-verify","shield-question","Cerrado hace 32 días: ¿el arreglo sigue funcionando?","ISM 10.2.3 pide confirmar que la medida fue eficaz.",`<button class="btn green">${I("check",14)}Sigue bien</button><button class="btn" style="color:#B91C1C;border-color:rgba(220,38,38,.35)">${I("rotate-ccw",14)}Volvió a fallar</button>`],
+  }[c];
+  const closed=c==="verify";
+  const dis=closed?"disabled":"";
+  const sevSel=c==="open"?"HIGH":"CRITICAL", opSel=c==="open"?"DEGRADED":"RESTRICTED";
+  return `<div class="overlay"><div class="modal">
+  <div class="mh"><span class="ic">${I("triangle-alert",22)}</span><div style="flex:1;min-width:0">
+    <div class="kicker">Defecto · ${c==="open"?"reportado a mano":"desde análisis de laboratorio"}</div>
+    <h1>${c==="open"?"Bomba de lastre N°2":c==="work"?"Motor principal babor":"Compresor de aire N°1"}</h1>
+    <div class="d">${c==="open"?"Pérdida de agua por el sello mecánico":c==="work"?"Hierro alto en el análisis de aceite (86 ppm)":"Válvula de seguridad descalibrada"}</div>
+    <div class="chips"><span class="chip mono">${c==="open"?"DEF-DEM-26-021":c==="work"?"DEF-DEM-26-019":"DEF-DEM-26-008"}</span><span class="chip">${I("ship",12)}BUQUE DEMO I</span>
+      <span class="pill sev-${closed?'MEDIUM':sevSel}">${SEV[closed?'MEDIUM':sevSel]}</span><span class="pill op-${closed?'NORMAL':opSel}">${OP[closed?'NORMAL':opSel][0]}</span>
+      ${c==="work"?`<span class="chip link">${I("flask-conical",12)}FA-DEM-0105 · lo generó</span>`:""}<span class="chip">reportado hace ${c==="open"?2:c==="work"?6:80} d por J. Pérez</span></div></div>
+    <button class="close">${I("x",18)}</button></div>
+  <div class="steps">${labels.map((l,i)=>`${i?'<span class="stp"><span class="bar"></span></span>':''}<span class="stp ${i<idx?'done':i===idx?'cur':''}"><span class="n">${i<idx?I("check",12):i+1}</span>${l}</span>`).join("")}</div>
+  <div class="next ${next[0]}"><span class="ni">${I(next[1],20)}</span><div style="min-width:0"><div class="nt">${next[2]}</div><div class="nd">${next[3]}</div></div><div class="acts">${next[4]}</div></div>
+  <div class="body"><div class="col">
+    <section class="sec"><div class="sech"><span class="num">1</span><div><h2>Qué pasó</h2><div class="hint">Descripción, gravedad, fotos y qué se hizo en el momento</div></div><span class="spill ok">Completo</span></div><div class="secb">
+      <div><div class="lbl">Qué se encontró <button class="ai" style="margin-left:6px">${I("mic",11)}Dictar</button></div><textarea class="inp" rows="2" ${dis}>Pérdida de agua por el sello mecánico, aprox. 1 litro por hora.</textarea></div>
+      <div><div class="lbl">Severidad</div><div class="opts">${Object.entries(SEV).reverse().map(([k,l])=>`<button class="sev-${k} ${k===sevSel?'on':''}" ${dis}>${l}</button>`).join("")}</div></div>
+      <div><div class="lbl">¿Cómo quedó el equipo?</div><div class="opts">${Object.entries(OP).map(([k,[l,h]])=>`<button class="op-${k} ${k===opSel?'on':''}" ${dis}>${l}<span class="oh">${h}</span></button>`).join("")}</div></div>
+      <div><div class="lbl">Fotos (2) <button class="ai">${I("sparkles",11)}Describir con IA</button></div><div class="photos"><div></div><div></div>${closed?"":`<button>${I("camera",18)}Agregar</button>`}</div></div>
+      <div><div class="lbl">Qué se hizo en el momento <button class="ai">${I("sparkles",11)}Sugerir con IA</button></div><textarea class="inp" rows="2" ${dis}>Se cerró la válvula de aspiración y se pasó a la bomba N°1.</textarea></div>
+    </div></section>
+    <section class="sec"><div class="sech"><span class="num">2</span><div><h2>Por qué pasó</h2><div class="hint">Causa raíz (RCA) y cómo evitar que se repita</div></div>${c==="open"?`<span class="spill">Pendiente</span>`:`<span class="spill ok">Aprobado</span>`}</div><div class="secb">
+      ${c==="open"?`<div class="need"><div class="lbl">Causa raíz <span class="needtag">Recomendado · severidad alta</span><button class="ai">${I("bot",11)}Analizar con IA</button></div><div style="font-size:12px;color:var(--muted)">La IA propone el método, las causas y las acciones preventivas. Revisalo y aprobalo.</div></div>`
+      :`<div class="kv"><div><small>Método</small><b>5 porqués</b></div><div><small>Aprobado</small><b>08/09/2026</b></div></div>
+        <div><div class="lbl">Causa inmediata</div><div class="inp" style="background:#fff">Desgaste de camisas por ingreso de polvo.</div></div>
+        <div><div class="lbl">Causa raíz</div><div class="inp" style="background:#fff">Filtro de aire sin reemplazo en el intervalo del plan.</div></div>
+        <div><div class="lbl">Acciones preventivas</div><div class="inp" style="background:#fff">Agregar inspección visual del filtro en la ronda semanal.</div></div>`}
+    </div></section>
+  </div><div class="col">
+    <div class="box"><h3>${I("link",15)}Relacionado</h3><div class="bb">
+      <div class="kv"><div><small>Origen</small><b>${c==="open"?"Reportado a mano":"Muestra FA-DEM-0105"}</b></div><div><small>OT de reparación</small><b style="color:#0284C7">${c==="open"?"— sin asignar":c==="work"?"OT-DEM-26-0065 · en curso":"OT-DEM-26-0020 · cerrada"}</b></div></div>
+      ${!closed?`<button class="btn" style="justify-content:center">${I("git-branch",14)}Abrir MOC (operar con el equipo limitado)</button>`:""}</div></div>
+    ${closed?`<div class="box"><h3>${I("check-circle-2",15)}Cierre</h3><div class="bb"><div class="kv"><div><small>Reparación</small><b>Permanente</b></div><div><small>Cerrado</small><b>14/08/2026</b></div></div><div><small style="color:var(--faint);font-size:10.5px;font-weight:600">Cómo se comprobó</small><div><b>Se probó el equipo y funciona</b></div></div></div></div>`:""}
+    <div class="box"><h3>${I("history",15)}Historia</h3><div class="bb timeline">
+      <div class="tl"><span class="dot" style="background:#DC2626"></span><div><b>Reportado</b> · ${c==="open"?"13/09/2026":"09/09/2026"} · J. Pérez</div></div>
+      ${c!=="open"?`<div class="tl"><span class="dot" style="background:#2563EB"></span><div><b>OT correctiva creada</b> · 10/09/2026</div></div><div class="tl"><span class="dot" style="background:#7C3AED"></span><div><b>RCA aprobado</b> · 11/09/2026</div></div>`:""}
+      ${closed?`<div class="tl"><span class="dot" style="background:#10B981"></span><div><b>Cerrado</b> · 14/08/2026 · se probó el equipo</div></div><div class="tl"><span class="dot" style="background:#D97706"></span><div><b>Confirmación pendiente</b> · desde 13/09/2026</div></div>`:""}
+    </div></div>
+  </div></div>
+  <div class="mf"><button class="btn">${I("file-down",14)}PDF</button><button class="btn" style="color:#B91C1C">${I("trash-2",14)}</button><span class="sp"></span>${closed?`<button class="btn blue">Cerrar ventana</button>`:`<span style="font-size:11.5px;color:#B45309;font-weight:700;display:inline-flex;gap:4px;align-items:center">${I("circle-dot",12)}Cambios sin guardar</span><button class="btn ghost">Cancelar</button><button class="btn blue">${I("save",14)}Guardar</button>`}</div>
+  </div></div>
+  ${S.dlg?closeDlg():""}`;
+}
+function closeDlg(){
+  return `<div class="dlg"><div><div class="dh">${I("check-circle-2",20)}Cerrar el defecto</div><div class="db">
+    <div><div class="lbl">¿La reparación fue definitiva?</div><div class="choice">
+      <button class="${S.repair==='PERM'?'on':''}" onclick="S.repair='PERM';render()"><div class="t">✓ Sí, permanente</div><div class="d">Queda resuelto. Se cierra el defecto.</div></button>
+      <button class="${S.repair==='TEMP'?'on':''}" style="${S.repair==='TEMP'?'border-color:#D97706;background:#FFFBEB':''}" onclick="S.repair='TEMP';render()"><div class="t">⚠ No, es temporaria</div><div class="d">Se abre una OT para la reparación definitiva.</div></button></div></div>
+    ${S.repair==='PERM'?`<div class="${S.check?'':'need'}"><div class="lbl">¿Cómo se comprobó que quedó bien? ${S.check?'':'<span class="needtag">Obligatorio</span>'}</div><div class="choice">
+      ${["Se probó el equipo y funciona","Se observó en la guardia","Lo verificó el Jefe de Máquinas","Otra"].map(o=>`<button class="${S.check===o?'on':''}" onclick="S.check='${o}';render()"><div class="t" style="font-size:12.5px">${o}</div></button>`).join("")}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">En 30 días te vamos a pedir que confirmes que no volvió a fallar (ISM 10.2.3).</div></div>`
+    :`<div style="font-size:12.5px;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:8px 10px">Se abre el formulario de la OT con los datos del defecto. Al guardarla, el defecto queda cerrado y el trabajo definitivo sigue en esa OT.</div>`}
+  </div><div class="mf"><span class="sp"></span><button class="btn ghost" onclick="S.dlg=false;render()">Cancelar</button><button class="btn green" onclick="S.dlg=false;toast('${S.repair==='PERM'?'Defecto cerrado (demo)':'Abre la OT permanente (demo)'}')">${S.repair==='PERM'?'Cerrar defecto':'Crear OT permanente'}</button></div></div></div>`;
+}
+function ref(){
+  if(S.w==="list") return `<div class="main"><div class="ph"><h1>${I("triangle-alert",20)}Defectos</h1><span class="count">6</span><div class="right"><button class="btn">Excel</button><button class="btn" style="color:#0284C7">+ Nuevo Defecto</button></div></div>
+    <div class="refbox" style="background:#FFFBEB">⚠ Para revisar (1) — Sigue bien / Volvió a fallar</div>
+    <div class="refbox" style="overflow-x:auto"><table style="min-width:800px"><tr><th>Código</th><th>Clasificación</th><th>Buque</th><th>Severidad</th><th>Estado operativo</th><th>Estado</th><th>Reportado</th></tr>${D.slice(0,4).map(x=>`<tr><td class="code">${x.c}</td><td>Origen: ${ORIG[x.o][1]} · ${x.a}<div class="sub">${x.d}</div></td><td>BUQUE DEMO I DEM</td><td>${x.sev}</td><td>${x.op}</td><td>${x.st}</td><td>13/09/2026</td></tr>`).join("")}</table></div>
+    <div><span class="note">No hay filtros ni buscador (estado/severidad sólo por link)</span><span class="note">Sin resumen: no se ven los críticos ni los equipos parados</span><span class="note">Estados en inglés (OPEN, NO_GO, IN_PROGRESS)</span><span class="note">No dice hace cuánto está abierto ni si tiene OT</span><span class="note">Muestra por defecto también los cerrados</span><span class="note">En celular la tabla no entra</span></div></div>`;
+  return `<div class="overlay"><div class="modal" style="border-top-color:#94A3B8"><div class="mh"><div style="flex:1"><h1 style="font-size:15px">Defectos</h1><div class="d">DEF-DEM-26-021 · BUQUE DEMO I DEM · Bomba de lastre N°2</div></div><button class="close">${I("x",18)}</button></div><div style="padding:14px 18px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${["REPORTADO 13/09/2026","ESTADO OPEN","SEVERIDAD HIGH","ESTADO OPERATIVO DEGRADED"].map(x=>`<div class="refbox">${x}</div>`).join("")}</div>
+    <div class="refbox">Descripción breve · Clasificación (texto libre) · [Severidad ▾ HIGH] [Estado operativo ▾ DEGRADED] [Estado ▾ OPEN]</div>
+    <div class="refbox">✨ ACCIÓN INMEDIATA · Fotos · Análisis RCA (método, resumen, causa inmediata, contribuyente, raíz, preventivas)</div>
+    <div class="refbox">¿La acción fue una corrección temporaria o permanente? [⚠ Temporaria] [✓ Permanente] → ¿cómo se comprobó?</div>
+    <div class="refbox">Pie: PDF · Crear OT Correctiva · Abrir MOC · Eliminar · Cancelar · Guardar / Guardar y cerrar</div>
+    <div><span class="note">No dice qué hay que hacer ahora con el defecto</span><span class="note">El estado se cambia a mano desde un desplegable (OPEN, UNDER_REVIEW…)</span><span class="note">Cerrar está escondido al final, dentro de “temporaria o permanente”</span><span class="note">Valores en inglés (HIGH, DEGRADED, NO_GO)</span><span class="note">Una sola columna larga</span><span class="note">No se ve la historia (cuándo se reportó, OT, RCA, cierre)</span><span class="note">Confirmar la eficacia sólo se puede desde la franja del listado</span></div></div></div></div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-w]").forEach(b=>b.classList.toggle("on",b.dataset.w===S.w));
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.classList.toggle("on",b.dataset.c===S.c));
+  const y=window.scrollY; document.getElementById("root").innerHTML=S.v==="ref"?ref():S.w==="list"?listPage():detail(); window.scrollTo(0,y);
+  document.querySelectorAll(".toast").forEach(x=>x.remove()); if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function keep(){ const el=document.getElementById("q"),p=el.selectionStart; render(); const n=document.getElementById("q"); n.focus(); n.setSelectionRange(p,p); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll(".toast").forEach(x=>x.remove());},1700); }
+document.querySelectorAll(".pv-bar [data-w]").forEach(b=>b.onclick=()=>{S.w=b.dataset.w;S.dlg=false;render();});
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.v=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.onclick=()=>{S.c=b.dataset.c;S.w="detail";S.dlg=false;render();});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<title>Inicio a bordo: qué va primero</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+  --cardshadow:0 14px 30px -18px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+    --cardshadow:0 14px 30px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  --cardshadow:0 14px 30px -18px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:30px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.scroll{flex:1;overflow-y:auto}
+.hdr{background:var(--navy);color:var(--navyfg);padding:16px 20px 56px}
+.hdr .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hdr .ship{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.hdr .out{width:40px;height:40px;border-radius:99px;background:rgba(255,255,255,.1);display:grid;place-items:center;border:0;cursor:pointer;color:inherit}
+.hdr h1{margin:16px 0 0;font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.hdr p{margin:4px 0 0;font-size:14px;opacity:.7}
+.body{padding:0 16px 30px;margin-top:-44px;display:flex;flex-direction:column;gap:14px}
+.glabel{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:6px 2px -6px}
+
+/* ── Nivel 1: lo que se usa todos los días ─────────────────────────────── */
+.big{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:20px;padding:16px 14px;cursor:pointer;box-shadow:var(--cardshadow)}
+.big .ic{width:54px;height:54px;flex:none;border-radius:16px;display:grid;place-items:center}
+.big .tx{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.big b{font-size:17.5px;font-weight:800;line-height:1.15}
+.big .st{font-size:14px;font-weight:700}
+.big .st .n{font-weight:800}
+.big .chev{color:var(--faint);flex:none}
+.ic-bad{background:var(--badsoft);color:var(--bad)}
+.ic-ac{background:var(--acsoft);color:var(--ac)}
+.t-bad{color:var(--badfg)} .t-warn{color:var(--warnfg)} .t-muted{color:var(--muted)}
+/* Variante lado a lado */
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pair .big{flex-direction:column;align-items:flex-start;gap:10px;padding:14px;min-height:164px}
+.pair .big .tx{flex:1;justify-content:flex-end}
+.pair .big b{font-size:16px}
+.pair .big .st{font-size:13.5px;line-height:1.3}
+.pair .big .chev{display:none}
+
+/* ── Nivel 2: registrar avance ─────────────────────────────────────────── */
+.mid{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 13px;cursor:pointer}
+.mid .ic{width:42px;height:42px;flex:none;border-radius:12px;background:var(--acsoft);color:var(--ac);display:grid;place-items:center}
+.mid b{display:block;font-size:15.5px;font-weight:800;line-height:1.2}
+.mid small{display:block;font-size:12.5px;color:var(--muted);margin-top:1px}
+.mid .chev{color:var(--faint);flex:none;margin-left:auto}
+
+/* ── Nivel 3: el resto ─────────────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{min-height:96px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:8px;text-align:left;cursor:pointer}
+.tile .ic{width:36px;height:36px;border-radius:10px;background:var(--surface2);color:var(--muted);display:grid;place-items:center}
+.tile b{display:block;font-size:14.5px;font-weight:700;line-height:1.2}
+.tile small{display:block;font-size:12px;color:var(--faint);margin-top:2px}
+.tile.warn small{color:var(--warnfg);font-weight:700}
+.pc{margin:6px auto 0;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--muted);background:none;border:0;cursor:pointer;padding:10px}
+
+.guide{width:340px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.optb{min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;cursor:pointer;padding:6px}
+.optb.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Inicio a bordo <small>· Preview V36</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+// B = lado a lado: es la que eligió Gustavo (2026-09-16). La A queda para comparar.
+const S = {v:"app", layout:"B", theme:"system"};
+
+// Datos de ejemplo (los mismos números de la pantalla real de Gustavo).
+const D = {vencidos:60, porVencer:13, horometros:5, otAbiertas:3, checksAbiertos:1};
+
+const planes = (chev=true) => `
+  <button class="big" data-a="ir">
+    <span class="ic ic-bad">${I("calendar-clock",26)}</span>
+    <span class="tx">
+      <b>Planes para abrir</b>
+      ${chev
+        ? `<span class="st"><span class="n t-bad">${D.vencidos} vencidos</span><span class="t-muted"> · </span><span class="n t-warn">${D.porVencer} por vencer</span></span>`
+        /* Tarjeta angosta: un renglón por número, que no se corte el texto. */
+        : `<span class="st n t-bad">${D.vencidos} vencidos</span><span class="st n t-warn">${D.porVencer} por vencer</span>`}
+    </span>
+    ${chev?`<span class="chev">${I("chevron-right",20)}</span>`:""}
+  </button>`;
+
+const horometros = (chev=true) => `
+  <button class="big" data-a="ir">
+    <span class="ic ic-ac">${I("gauge",26)}</span>
+    <span class="tx">
+      <b>Horómetros</b>
+      <span class="st"><span class="n t-warn">${D.horometros} atrasados</span></span>
+    </span>
+    ${chev?`<span class="chev">${I("chevron-right",20)}</span>`:""}
+  </button>`;
+
+const avance = () => `
+  <button class="mid" data-a="ir">
+    <span class="ic">${I("message-square-plus",21)}</span>
+    <span style="min-width:0"><b>Registrar avance</b><small>${D.otAbiertas} OT abiertas</small></span>
+    <span class="chev">${I("chevron-right",19)}</span>
+  </button>`;
+
+const resto = () => {
+  const tiles = [
+    {ic:"plus", t:"Nueva OT / SS", s:"Abrir y mandar a aprobar"},
+    {ic:"shield-check", t:"Permiso de trabajo", s:"Pedir aprobación"},
+    {ic:"clipboard-check", t:"Check list", s:`${D.checksAbiertos} sin terminar`, warn:true},
+    {ic:"package-minus", t:"Consumo de repuestos", s:"Descontar del stock"},
+  ];
+  return `<p class="glabel">Lo demás</p>
+  <div class="grid">${tiles.map(x=>`
+    <button class="tile ${x.warn?"warn":""}" data-a="ir">
+      <span class="ic">${I(x.ic,19)}</span>
+      <span><b>${x.t}</b><small>${x.s}</small></span>
+    </button>`).join("")}</div>`;
+};
+
+function home(){
+  const nivel1 = S.layout==="A"
+    ? planes() + horometros()
+    : `<div class="pair">${planes(false)}${horometros(false)}</div>`;
+  return `
+  <div class="scroll">
+    <div class="hdr">
+      <div class="top">
+        <span class="ship">${I("ship",15)} DON CHICUETO</span>
+        <button class="out">${I("log-out",16)}</button>
+      </div>
+      <h1>Buen día, Juan</h1>
+      <p>Jefe de Máquinas · martes, 16/9</p>
+    </div>
+    <div class="body">
+      ${nivel1}
+      ${avance()}
+      ${resto()}
+      <button class="pc">${I("monitor",15)}Lo demás se completa en la PC</button>
+    </div>
+  </div>`;
+}
+
+function app(){
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      ${home()}
+    </div>
+    <aside class="guide">
+      <div><h2>Lo de todos los días, primero</h2>
+      <p style="margin-top:8px">Hoy las seis funciones se ven casi iguales y la que más resalta (en celeste) es <b>Nueva OT / SS</b>. La propuesta acomoda la pantalla por uso real: arriba y grandes <b>Planes para abrir</b> y <b>Horómetros</b>, después <b>Registrar avance</b>, y abajo el resto, más chico y en gris.</p></div>
+      <div><p class="gl">Dos formas de mostrar las dos principales</p>
+        <div class="opts">
+          <button class="optb ${S.layout==="A"?"on":""}" data-a="lay" data-p="A">A · Una debajo de la otra</button>
+          <button class="optb ${S.layout==="B"?"on":""}" data-a="lay" data-p="B">B · Lado a lado</button>
+        </div>
+        <p class="hint" style="margin-top:8px"><b>Elegida: B (lado a lado).</b> En las tarjetas angostas cada número va en su propio renglón. La A queda acá sólo para comparar.</p>
+      </div>
+      <div><p class="gl">Para mirar</p><ol class="steps">
+        <li>Los números siguen en color: rojo lo vencido, ámbar lo que está por vencer o atrasado.</li>
+        <li><b>Nueva OT / SS</b> baja al grupo de abajo y deja de ser el botón celeste.</li>
+        <li>Nada cambia de lugar según el día: el orden es siempre el mismo.</li>
+      </ol></div>
+      <p class="hint">Abrilo desde el celular: ocupa toda la pantalla.</p>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Inicio a bordo: qué va primero · Preview V36</h2>
+  <p>Pedido de Gustavo: que <b>Planes para abrir</b> y <b>Horómetros</b> se reconozcan como los botones principales, <b>Registrar avance</b> como el segundo, y el resto después.</p>
+
+  <section><h3>Cómo queda la pantalla</h3>
+  <ol>
+    <li><b>Principales:</b> Planes para abrir y Horómetros. Tarjetas grandes, con ícono grande y el estado en números de color (60 vencidos · 13 por vencer / 5 atrasados).</li>
+    <li><b>Segundo:</b> Registrar avance. Tarjeta de ancho completo, pero más baja y sin sombra.</li>
+    <li><b>Lo demás</b>, bajo ese título y en dos columnas chicas: Nueva OT / SS, Permiso de trabajo, Check list y Consumo de repuestos.</li>
+  </ol></section>
+
+  <section><h3>Qué cambia respecto de hoy</h3>
+  <ul>
+    <li><b>Horómetros sube</b>: hoy es una tarjeta chica más, mezclada entre las seis.</li>
+    <li><b>Nueva OT / SS deja de ser el botón celeste</b> y pasa al grupo de abajo. Es la consecuencia directa del orden pedido: si todo resalta, no resalta nada. <i>Si preferís que siga destacada, se deja celeste dentro de “Lo demás”.</i></li>
+    <li>Aparece el título <b>“Lo demás”</b> separando los dos grupos (texto nuevo, va en los tres idiomas).</li>
+    <li>El bloque <b>“Lo que mandaste”</b> (lo enviado a aprobar) y el pie <b>“Lo demás se completa en la PC”</b> quedan igual, al final.</li>
+  </ul></section>
+
+  <section><h3>Qué NO cambia</h3>
+  <ul>
+    <li>Las funciones son las mismas y hacen lo mismo. No se agrega ni se saca ninguna.</li>
+    <li><b>Permisos:</b> cada botón se sigue mostrando sólo si el rol lo tiene. Si a alguien no le toca Horómetros, arriba queda sólo Planes y la pantalla no se rompe.</li>
+    <li>Los contadores salen de donde salen hoy; no se calcula nada nuevo.</li>
+  </ul></section>
+
+  <section><h3>Para decidir</h3>
+  <div class="opt">
+    <div class="rcard"><b>Diseño: B, lado a lado</b>Elegido por Gustavo el 2026-09-16. Las dos principales comparten la fila de arriba; cada número va en su renglón.</div>
+    <div class="rcard"><b>Nueva OT / SS</b>¿Va apagada con el resto, o queda celeste dentro de “Lo demás”?</div>
+  </div></section>
+
+  <p class="hint">Preview. No se tocó nada de la aplicación.</p>
+  </article>`;
+}
+
+function render(){
+  const prev = document.querySelector(".scroll");
+  const y = prev ? prev.scrollTop : 0;
+  const clave = `${S.v}|${S.layout}`;
+  const misma = !!prev && clave === render.clave;
+  render.clave = clave;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML = `${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref" ? ref() : app();
+  if (window.lucide) lucide.createIcons();
+  const sc = document.querySelector(".scroll");
+  if (sc && misma && y) sc.scrollTop = y;
+}
+document.addEventListener("click", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const a = el.dataset.a, p = el.dataset.p;
+  if (a==="tab") S.v = p;
+  else if (a==="theme") { S.theme = {system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if (a==="lay") S.layout = p;
+  else if (a==="ir") return; // la maqueta no navega
+  render();
+});
+render();
+</script>

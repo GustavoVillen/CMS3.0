@@ -25,6 +25,7 @@ import {
   upsertDrydockSpecItems,
 } from "./drydock-spec-items-service";
 import { buildDrydockSpecPdf } from "./drydock-spec-pdf-service";
+import { archivePdf } from "../settings/pdf-archive-service";
 
 const BASE = "/app/pms/drydock-specs";
 
@@ -135,6 +136,7 @@ export async function handleDrydockRoutes(
         "Content-Length": buffer.length,
       });
       response.end(buffer);
+      void archivePdf(session, { kind: "VAR", id: spec.id, buffer });
       return true;
     }
     if (method === "PUT" && sub === "items") {

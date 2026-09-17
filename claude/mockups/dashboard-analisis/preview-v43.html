@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V43 — Acceso al listado de análisis</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:#f1f5f9; color:#0f172a; padding:24px 16px 60px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; }
+  h1 { font-size:20px; margin:10px 0 4px; } .lead { color:#64748b; font-size:13px; margin:0 0 20px; }
+  .step { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin:24px 0 8px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .btn { display:flex; align-items:center; gap:12px; padding:16px 20px; border-radius:12px; background:rgba(5,150,105,.08); border:1px solid rgba(5,150,105,.3); font-weight:700; font-size:14px; }
+  .btn .i { font-size:22px; color:#059669; }
+  .grow { flex:1; }
+  .link { width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#94a3b8; margin:-8px -8px -8px 0; position:relative; }
+  .link svg { width:28px; height:28px; }
+  .hover { color:#2563eb; background:rgba(15,23,42,.08); }
+  .tip { position:absolute; top:44px; right:0; white-space:nowrap; background:#0f172a; color:#fff; font-size:11px; font-weight:600; padding:4px 8px; border-radius:6px; }
+  .ss { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; max-width:420px; }
+  .ss b { font-size:12px; } .ss small { display:block; font-size:10px; color:#94a3b8; }
+  .circle { outline:3px solid #ef4444; outline-offset:2px; border-radius:50%; }
+  ul { font-size:13px; line-height:1.6; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:12px 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V43 · DATOS DE EJEMPLO</span>
+  <h1>Dashboard: acceso directo a “Muestreos y Análisis”</h1>
+  <p class="lead">Se usa el mismo ícono de cuadrícula que tiene la tarjeta de Solicitudes de Servicio.</p>
+
+  <div class="step">Referencia actual</div>
+  <div class="ss"><span><b>Solicitudes de Servicio</b><small>Estado de tramitación</small></span>
+    <span class="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span></div>
+
+  <div class="step">Propuesto — botones de carga del Dashboard</div>
+  <div class="grid">
+    <div class="btn"><span class="i">✎</span><span class="grow">Registrar avance</span></div>
+    <div class="btn"><span class="i">⚗</span><span class="grow">Cargar análisis de laboratorio</span>
+      <span class="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>
+    </div>
+    <div class="btn"><span class="i">⚗</span><span class="grow">Cargar análisis de laboratorio</span>
+      <span class="link hover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg><span class="tip">Ver Muestreos y Análisis</span></span>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:8px">El tercer botón muestra el mismo botón con el mouse encima del ícono.</p>
+
+  <div class="step">Cómo funciona</div>
+  <ul>
+    <li>Tocar el <b>texto o el frasco</b> hace lo mismo que hoy: abre la ventana para cargar los PDF del laboratorio.</li>
+    <li>Tocar la <b>cuadrícula</b> lleva directo al listado de <b>Muestreos y Análisis</b>.</li>
+    <li>El botón aparece para los mismos usuarios que ya lo ven hoy.</li>
+  </ul>
+</div>
+</body>
+</html>

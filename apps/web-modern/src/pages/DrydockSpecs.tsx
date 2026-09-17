@@ -24,7 +24,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { GuideField, GuideNeedTag, GuidePill, GuideSection } from "../components/GuideKit";
+import { GuideField, GuideNeedTag, GuidePill, GuideSection, RequiredMark } from "../components/GuideKit";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useDeepLink } from "../lib/deep-link";
 import { useEscapeGuard } from "../lib/escape-guard";
@@ -739,7 +739,7 @@ const DrydockSpecDrawer: React.FC<{
                     pill={canEdit ? <GuidePill missing={sectionHeaderMissing} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} /> : undefined}>
                     {isNew && (
                       <GuideField id="dds-vessel" missing={headerMissing.vessel}>
-                        <label className={fl}>{t("col.vessel")}{headerMissing.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                        <label className={fl}>{t("col.vessel")}<RequiredMark />{headerMissing.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                         <select value={newVesselCode} onChange={e => setNewVesselCode(e.target.value)} className={inputCls}>
                           <option value="">{t("common.select")}</option>
                           {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
@@ -747,7 +747,7 @@ const DrydockSpecDrawer: React.FC<{
                       </GuideField>
                     )}
                     <GuideField id="dds-title" missing={headerMissing.title}>
-                      <label className={fl}>{t("dds.title")}{headerMissing.title && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={fl}>{t("dds.title")}<RequiredMark />{headerMissing.title && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       <input value={title} onChange={e => setTitle(e.target.value)} disabled={!canEdit} className={inputCls} placeholder={t("dds.v26.titlePh")} />
                       <p className="flex gap-1 text-[11px] text-text-industrial/50"><Info className="w-3 h-3 shrink-0 mt-px" />{t("dds.v26.titleHelp")}</p>
                     </GuideField>
@@ -993,7 +993,7 @@ const DrydockSpecDrawer: React.FC<{
             </div>
             <div className="px-5 py-4 space-y-2">
               <GuideField id="dds-reject" missing={!rejectReason.trim()}>
-                <label className={fl}>{t("dds.v26.rejectQ")}{!rejectReason.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <label className={fl}>{t("dds.v26.rejectQ")}<RequiredMark />{!rejectReason.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AutoTextArea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={4} className={inputCls} placeholder={t("dds.v26.rejectPh")} autoFocus />
               </GuideField>
             </div>

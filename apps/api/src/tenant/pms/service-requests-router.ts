@@ -17,6 +17,7 @@ import { buildServiceRequestPdf, buildServiceRequestDoc, buildServiceRequestDocx
 import { serveDoc } from "./doc-export";
 import { resolveTenantForm } from "./tenant-forms-service";
 import { serveDocx } from "./docx-export";
+import { archivePdf } from "../settings/pdf-archive-service";
 import {
   addHojaRutaEntry,
   approveServiceRequest,
@@ -80,6 +81,7 @@ export async function handleServiceRequestsRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "SS", id: (sr as any).id ?? id, buffer });
     return true;
   }
 

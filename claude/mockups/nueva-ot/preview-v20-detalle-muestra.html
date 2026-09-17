@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detalle de muestra — Preview V20</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#D9DDE3; --fg:#1A1D24; --accent:#0284C7; --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer} i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .stage{padding:18px;display:flex;justify-content:center} @media(max-width:600px){.stage{padding:0}}
+  .modal{width:100%;max-width:1080px;background:#fff;border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);overflow:hidden;border-top:4px solid #7C3AED}
+  .mh{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid var(--fg10);align-items:flex-start}
+  .mh .ic{width:42px;height:42px;border-radius:12px;background:rgba(124,58,237,.12);color:#6D28D9;display:flex;align-items:center;justify-content:center}
+  .kicker{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#6D28D9}
+  .mh h1{margin:1px 0 0;font-size:19px;font-weight:900}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)} .chip.wo{color:var(--accent);border-color:rgba(2,132,199,.3);background:rgba(2,132,199,.06);font-family:ui-monospace,monospace}
+  .st{font-size:11px;font-weight:800;border-radius:99px;padding:2px 9px}
+  .st-DRAFT{background:#FEF3C7;color:#92400E} .st-SENT{background:#DBEAFE;color:#1E40AF} .st-REPORTED{background:#D1FAE5;color:#065F46}
+  .close{margin-left:auto;width:34px;height:34px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center}
+  .track{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--fg10);background:rgba(26,29,36,.02)}
+  @media(max-width:860px){.track{grid-template-columns:1fr 1fr}}
+  .tk{display:flex;gap:8px;align-items:center}
+  .tk .d{width:26px;height:26px;border-radius:99px;display:flex;align-items:center;justify-content:center;border:2px solid var(--fg25);color:var(--faint);font-size:11px;font-weight:800;flex-shrink:0}
+  .tk.done .d{background:#10B981;border-color:#10B981;color:#fff} .tk.cur .d{background:#7C3AED;border-color:#7C3AED;color:#fff}
+  .tk .t{font-size:12px;font-weight:800} .tk .s{font-size:10.5px;color:var(--muted)} .tk.todo .t{color:var(--faint)}
+  .nextbtn{border:0;border-radius:12px;padding:9px 14px;font-weight:800;font-size:12.5px;display:inline-flex;gap:6px;align-items:center;background:#6D28D9;color:#fff;white-space:nowrap}
+  .body{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:16px 18px} @media(max-width:860px){.body{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .verdict{border-radius:16px;padding:14px;display:flex;gap:12px;align-items:flex-start}
+  .verdict .vi{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .verdict .vt{font-size:17px;font-weight:900} .verdict .vs{font-size:13px;margin-top:3px;line-height:1.45}
+  .v-NORMAL{background:#ECFDF5;border:1.5px solid #6EE7B7} .v-NORMAL .vi{background:#10B981} .v-NORMAL .vt{color:#047857}
+  .v-CAUTION{background:#FFFBEB;border:1.5px solid #FCD34D} .v-CAUTION .vi{background:#D97706} .v-CAUTION .vt{color:#B45309}
+  .v-CRITICAL{background:#FEF2F2;border:1.5px solid #FCA5A5} .v-CRITICAL .vi{background:#DC2626} .v-CRITICAL .vt{color:#B91C1C}
+  .vlinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:10px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--fg);display:inline-flex;gap:5px;align-items:center}
+  .btn.red{border-color:rgba(220,38,38,.35);color:#B91C1C;background:#fff}
+  .card{border:1px solid var(--fg10);border-radius:14px;overflow:hidden}
+  .card h3{margin:0;font-size:13.5px;font-weight:800;display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--fg10)}
+  .card h3 .r{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted)}
+  .grp{padding:6px 12px 2px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+  table{width:100%;border-collapse:collapse}
+  td{padding:6px 12px;font-size:12.5px;border-top:1px solid var(--fg5)}
+  td.n{text-align:right;font-family:ui-monospace,monospace;font-weight:700} td.u{color:var(--faint);width:60px} td.sym{font-family:ui-monospace,monospace;color:var(--faint);width:40px;font-size:11px}
+  tr.hi td{background:#FFFBEB} tr.cr td{background:#FEF2F2}
+  .flag{font-size:10px;font-weight:800;border-radius:99px;padding:1px 6px;margin-left:6px}
+  .f-c{background:#FEF3C7;color:#92400E} .f-r{background:#FEE2E2;color:#B91C1C}
+  .more{width:100%;border:0;border-top:1px solid var(--fg10);background:var(--fg5);padding:8px;font-size:12px;font-weight:700;color:var(--muted)}
+  .facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--fg10)}
+  .facts div{background:#fff;padding:8px 12px} .facts small{display:block;font-size:10.5px;color:var(--faint);font-weight:600} .facts b{font-size:13px}
+  .facts .edit{color:var(--accent);font-size:11px;font-weight:700;margin-left:4px}
+  .chart{padding:10px 12px}
+  .ai{padding:10px 12px;font-size:12.5px;line-height:1.5;background:rgba(124,58,237,.04)}
+  .mf{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--fg10)} .mf .sp{flex:1}
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#F3F4F6;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Detalle de muestra · Preview V20</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Caso:</span>
+  <button data-c="NORMAL" class="on">Con informe normal</button><button data-c="CRITICAL">Con informe crítico</button><button data-c="SENT">Esperando informe</button>
+</div>
+<div class="stage"><div class="modal" id="root"></div></div>
+<script>
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"new",c:"NORMAL",all:false,toast:null};
+const P=[
+ ["Desgaste del motor",[["fe","Hierro",24,"ppm",null],["cu","Cobre",1,"ppm",null],["al","Aluminio",2,"ppm",null],["cr","Cromo",1,"ppm",null],["pb","Plomo",0,"ppm",null],["sn","Estaño",0,"ppm",null],["ni","Níquel",0,"ppm",null],["mn","Manganeso",1,"ppm",null],["ag","Plata",0,"ppm",null],["v","Vanadio",0,"ppm",null],["cd","Cadmio",0,"ppm",null]]],
+ ["Contaminación",[["si","Silicio (polvo)",6,"ppm",null],["na","Sodio (agua)",4,"ppm",null],["k","Potasio (refrigerante)",0,"ppm",null],["h2o","Agua",0.05,"%",null]]],
+ ["Aditivos",[["ca","Calcio",6388,"ppm",null],["p","Fósforo",1627,"ppm",null],["zn","Zinc",1790,"ppm",null],["mg","Magnesio",71,"ppm",null],["b","Boro",223,"ppm",null],["ba","Bario",0,"ppm",null]]],
+ ["Propiedades del aceite",[["visc40","Viscosidad a 40 °C",118,"cSt",null],["tbn","TBN",9.8,"mgKOH/g",null]]],
+];
+function data(){
+  const crit=S.c==="CRITICAL"; const rows=JSON.parse(JSON.stringify(P));
+  if(crit){ rows[0][1][0][2]=86; rows[0][1][0][4]="r"; rows[1][1][0][2]=31; rows[1][1][0][4]="c"; rows[3][1][1][2]=4.1; rows[3][1][1][4]="c"; }
+  return rows;
+}
+function header(){
+  const st=S.c==="SENT"?"SENT":"REPORTED";
+  return `<div class="mh"><span class="ic">${I("droplets",22)}</span><div style="flex:1;min-width:0">
+    <div class="kicker">Muestra · Fluido · Aceite motor</div><h1>Motor Principal #1</h1>
+    <div class="chips"><span class="chip mono">FA-DEM-0032</span><span class="chip">${I("ship",12)}BUQUE DEMO I</span>
+      <span class="st st-${st}">${st==="SENT"?"En el laboratorio":"Con informe"}</span>
+      <span class="chip wo" style="cursor:pointer" onclick="toast('Abre la OT (demo)')">${I("wrench",12)}OT-DEM-26-0041 · generó la muestra</span></div></div>
+    <button class="close">${I("x",18)}</button></div>`;
+}
+function track(){
+  const sent=S.c==="SENT";
+  const tk=(cls,n,t,s)=>`<div class="tk ${cls}"><span class="d">${cls==="done"?I("check",13):n}</span><div><div class="t">${t}</div><div class="s">${s}</div></div></div>`;
+  return `<div class="track">
+    ${tk("done",1,"Creada","12/06/2026 · al autorizar la OT")}
+    ${tk("done",2,"Tomada","20/06/2026 · 16.292 h")}
+    ${tk(sent?"cur":"done",3,"En el laboratorio","Enviada 21/06/2026 · Laboratorio Demo")}
+    ${tk(sent?"todo":"done",4,"Informe",sent?"Enviada hace 12 días":"Recibido 02/07/2026")}
+    ${sent?`<button class="nextbtn" onclick="toast('Abre cargar informe con IA (demo)')">${I("scan-line",15)}Cargar informe</button>`:"<span></span>"}
+  </div>`;
+}
+function verdict(){
+  if(S.c==="SENT") return `<div class="verdict" style="background:#EFF6FF;border:1.5px dashed #93C5FD"><span class="vi" style="background:#3B82F6">${I("hourglass",20)}</span><div><div class="vt" style="color:#1D4ED8">Esperando el informe del laboratorio</div><div class="vs">Cuando llegue, cargalo con la IA: lee el PDF o la foto y completa los valores.</div></div></div>`;
+  const crit=S.c==="CRITICAL";
+  return `<div class="verdict v-${crit?'CRITICAL':'NORMAL'}"><span class="vi">${I(crit?"octagon-alert":"check-circle-2",20)}</span><div style="min-width:0">
+    <div class="vt">${crit?"Crítico":"Normal"}</div>
+    <div class="vs">${crit?"Hierro muy por encima del límite y silicio alto: posible desgaste de camisas por ingreso de polvo. Revisar filtro de aire y tomar una nueva muestra en 250 h.":"Según el análisis de tendencia, los resultados son normales y no requieren intervención. Enviar una nueva muestra en el intervalo recomendado."}</div>
+    <div class="vlinks">${crit?`<button class="btn red" onclick="toast('Abre el defecto (demo)')">${I("octagon-alert",13)}Defecto DEF-DEM-26-014</button>`:""}<button class="btn">${I("file-text",13)}Ver informe original</button><button class="btn">${I("pencil",13)}Corregir resultado</button></div>
+  </div></div>`;
+}
+function params(){
+  if(S.c==="SENT") return "";
+  const rows=data(); const flagged=rows.flatMap(g=>g[1]).filter(r=>r[4]);
+  const rowHtml=r=>`<tr class="${r[4]==='r'?'cr':r[4]==='c'?'hi':''}"><td class="sym">${r[0].toUpperCase().replace("VISC40","")}</td><td>${r[1]}${r[4]==='r'?'<span class="flag f-r">Crítico</span>':r[4]==='c'?'<span class="flag f-c">Precaución</span>':''}</td><td class="n">${r[2].toLocaleString()}</td><td class="u">${r[3]}</td></tr>`;
+  const total=rows.reduce((a,g)=>a+g[1].length,0);
+  return `<div class="card"><h3>${I("list",15)}Valores del laboratorio<span class="r">${flagged.length?`${flagged.length} fuera de rango`:"todos dentro de rango"}</span></h3>
+    ${S.all||flagged.length===0?rows.map(([g,rs])=>`<div class="grp">${g}</div><table>${rs.map(rowHtml).join("")}</table>`).join("")
+      :`<div class="grp">Fuera de rango</div><table>${flagged.map(rowHtml).join("")}</table>`}
+    ${flagged.length&&!S.all?`<button class="more" onclick="S.all=true;render()">Ver los ${total} valores, agrupados</button>`:""}
+    ${!flagged.length&&!S.all?"":""}
+  </div>`;
+}
+function right(){
+  return `<div class="card"><h3>${I("clipboard-list",15)}Datos de la toma</h3>
+    <div class="facts"><div><small>Fecha de toma</small><b>20/06/2026</b></div><div><small>Horas del equipo</small><b>16.292 h</b><button class="edit" style="border:0;background:none">${I("pencil",11)}</button></div>
+    <div><small>Producto</small><b>—</b></div><div><small>N° de frasco</small><b>—</b></div><div><small>Laboratorio</small><b>Laboratorio Demo</b></div><div><small>Ref. del laboratorio</small><b>—</b></div></div></div>
+  ${S.c==="SENT"?"":`<div class="card"><h3>${I("trending-up",15)}Tendencia del equipo<span class="r">Hierro · últimas 6</span></h3><div class="chart">
+    <svg viewBox="0 0 300 110" width="100%" height="120"><line x1="0" y1="${S.c==='CRITICAL'?40:30}" x2="300" y2="${S.c==='CRITICAL'?40:30}" stroke="#FCA5A5" stroke-dasharray="4 3"/><text x="4" y="${S.c==='CRITICAL'?36:26}" font-size="8" fill="#B91C1C">límite</text>
+    <polyline fill="none" stroke="#7C3AED" stroke-width="2.5" points="10,90 65,86 120,84 175,82 230,78 ${S.c==='CRITICAL'?'285,18':'285,76'}"/>${[10,65,120,175,230,285].map((x,i)=>`<circle cx="${x}" cy="${[90,86,84,82,78,S.c==='CRITICAL'?18:76][i]}" r="3.5" fill="#7C3AED"/>`).join("")}</svg></div></div>
+  <div class="card"><h3>${I("sparkles",15)}Qué dice la IA<span class="r">generado 02/07/2026 · <a style="color:#0284C7">regenerar</a></span></h3><div class="ai">${S.c==='CRITICAL'?"<b>Desgaste acelerado.</b> El hierro pasó de 24 a 86 ppm en una sola muestra, con silicio en aumento: indica ingreso de polvo. <b>Recomendación:</b> revisar filtro de aire y sellos de admisión, y repetir la muestra en 250 h.":"<b>Sin novedades.</b> Metales de desgaste estables en las últimas 6 muestras; aditivos en niveles normales. <b>Recomendación:</b> mantener el intervalo de muestreo."}</div></div>`}`;
+}
+function page(){
+  return header()+track()+`<div class="body"><div class="col">${verdict()}${params()}</div><div class="col">${right()}</div></div>
+  <div class="mf"><button class="btn">${I("file-down",13)}PDF</button><button class="btn red" title="Eliminar">${I("trash-2",13)}</button><span class="sp"></span><button class="btn" style="background:#6D28D9;color:#fff;border-color:#6D28D9">Cerrar</button></div>`;
+}
+function ref(){
+  return `<div class="mh"><div style="flex:1"><h1 style="font-size:15px">FA-DEM-0032 · Aceite motor · Motor Principal #1</h1></div><button class="close">${I("x",18)}</button></div><div style="padding:16px 18px">
+  <div class="refbox" style="background:#F0F9FF">✨ Generada automáticamente al autorizar una OT. <b style="float:right;color:#0284C7">Ver OT origen →</b></div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${["VESSEL LTE","EQUIPO Motor Principal #1","FECHA TOMA 20/06/2026","HORAS 16292","PRODUCTO —","LABORATORIO —","REF. LAB —","ESTADO REPORTED"].map(x=>`<div class="refbox">${x}</div>`).join("")}</div>
+  <div class="refbox"><b>Resultado del laboratorio</b> <span style="float:right" class="st st-REPORTED">NORMAL</span><br>Según el análisis de tendencia…</div>
+  <div class="refbox">PARÁMETRO · VALOR · UNIDAD<br>b 223 ppm · k 0 ppm · p 1627 ppm · v 0 · ag 0 · al 2 · ba 0 · ca 6388 · cd 0 · cr 1 · cu 1 · fe 24 · mg 71 · mn 1 … (lista larga)</div>
+  <div><span class="note">Parámetros con símbolos sueltos (b, k, p, v…) sin nombre ni agrupación</span><span class="note">No marca qué valores están fuera de rango</span><span class="note">El veredicto es un chip chico; lo importante no se ve primero</span><span class="note">“VESSEL” y código del buque; “REPORTED” en inglés</span><span class="note">No se ve el recorrido de la muestra (creada, tomada, enviada, informe)</span><span class="note">La tendencia y el análisis de la IA quedan al final, después de toda la tabla</span></div></div>`;
+}
+function render(){
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.classList.toggle("on",b.dataset.c===S.c));
+  const y=window.scrollY; document.getElementById("root").innerHTML=S.v==="ref"?ref():page(); window.scrollTo(0,y);
+  document.querySelectorAll(".toast").forEach(x=>x.remove()); if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll(".toast").forEach(x=>x.remove());},1600); }
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>{S.v=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar [data-c]").forEach(b=>b.onclick=()=>{S.c=b.dataset.c;S.all=false;render();});
+render();
+</script>
+</body>
+</html>

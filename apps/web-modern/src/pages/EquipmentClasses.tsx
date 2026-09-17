@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -159,10 +160,10 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* Fields */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={labelCls}>Código *</label>
+            <GuideField id="ec-code" missing={!code.trim()}>
+              <label className={labelCls}>Código<RequiredMark />{!code.trim() && <GuideNeedTag label="Falta" />}</label>
               <input value={code} onChange={e => setCode(e.target.value)} disabled={isEdit} placeholder="PUMP" className={inputCls} />
-            </div>
+            </GuideField>
             <div className="space-y-1.5">
               <label className={labelCls}>Estado</label>
               <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
@@ -171,10 +172,10 @@ const ClassDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
               </select>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <label className={labelCls}>Nombre *</label>
+          <GuideField id="ec-name" missing={!name.trim()}>
+            <label className={labelCls}>Nombre<RequiredMark />{!name.trim() && <GuideNeedTag label="Falta" />}</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Bomba centrífuga" className={inputCls} />
-          </div>
+          </GuideField>
           <div className="space-y-1.5">
             <label className={labelCls}>Descripción</label>
             <AutoTextArea value={description} onChange={e => setDescription(e.target.value)} rows={2} className={inputCls} />

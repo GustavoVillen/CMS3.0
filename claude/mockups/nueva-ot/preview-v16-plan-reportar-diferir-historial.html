@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reportar, Diferir e Historial — Preview V16</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#D9DDE3; --surface:#fff; --fg:#1A1D24; --accent:#0284C7; --teal:#0F766E;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.62); --faint:rgba(26,29,36,.42); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button,input,select,textarea{font-family:inherit} button{cursor:pointer}
+  i[data-lucide],svg.lucide{flex-shrink:0}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .stage{padding:22px 16px;display:flex;justify-content:center}
+  @media(max-width:600px){.stage{padding:0}}
+
+  .modal{width:100%;max-width:680px;background:var(--surface);border-radius:18px;box-shadow:0 25px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;max-height:calc(100vh - 110px)}
+  .modal.wide{max-width:980px}
+  @media(max-width:600px){.modal{border-radius:0;max-height:none}}
+  .mh{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--fg10)}
+  .mh .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+  .mh h1{margin:0;font-size:17px;font-weight:900}
+  .mh .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .chip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;border:1px solid var(--fg10);background:var(--fg5);color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+  .chip.mono{font-family:ui-monospace,monospace;color:var(--fg)}
+  .chip.bad{background:#FEF2F2;border-color:#FCA5A5;color:#B91C1C}
+  .close{margin-left:auto;width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .mb{padding:14px 18px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+  .mf{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--fg10);flex-wrap:wrap}
+  .mf .sp{flex:1}
+  .btn{border:1px solid var(--fg10);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:700;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.link{border:0;background:none;color:var(--muted);font-weight:600}
+  .btn.green{background:#059669;border-color:#059669;color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:6px;align-items:center;margin-bottom:5px}
+  .help{font-size:11px;color:var(--faint);font-weight:500}
+  .inp{width:100%;border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:9px 11px;font-size:13.5px;color:var(--fg)}
+  .inp:focus{outline:none;border-color:var(--accent);background:#fff}
+  textarea.inp{resize:vertical;min-height:64px;line-height:1.45}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media(max-width:560px){.row{grid-template-columns:1fr}}
+  .row3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px} @media(max-width:640px){.row3{grid-template-columns:1fr}}
+  .need{border-left:4px solid #F59E0B;background:linear-gradient(90deg,rgba(245,158,11,.09),transparent 70%);border-radius:4px;padding:8px 10px}
+  .needtag{font-size:9.5px;font-weight:800;border-radius:99px;padding:1px 7px;background:#D97706;color:#fff;text-transform:uppercase}
+  .quick{display:flex;gap:5px;margin-top:5px} .quick button{border:1px solid var(--fg10);background:var(--surface);border-radius:99px;padding:2px 9px;font-size:11px;font-weight:700;color:var(--muted)}
+  .quick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* reportar */
+  .results{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:480px){.results{grid-template-columns:1fr}}
+  .res{border:2px solid var(--fg10);border-radius:14px;padding:12px;text-align:left;background:var(--surface);display:flex;gap:10px;align-items:flex-start}
+  .res .t{font-size:14px;font-weight:800} .res .d{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .res .dot{width:30px;height:30px;border-radius:99px;display:flex;align-items:center;justify-content:center;background:var(--fg5);color:var(--faint)}
+  .res.ok.on{border-color:#10B981;background:#ECFDF5} .res.ok.on .dot{background:#10B981;color:#fff}
+  .res.def.on{border-color:#F59E0B;background:#FFFBEB} .res.def.on .dot{background:#F59E0B;color:#fff}
+  .defbox{border:1px solid #FCD34D;background:#FFFBEB;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .copilot{border:1px solid rgba(124,58,237,.3);background:rgba(124,58,237,.06);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#4C1D95}
+  .copilot b{display:flex;gap:5px;align-items:center;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;color:#6D28D9}
+  .check{display:flex;gap:10px;align-items:flex-start;border:1.5px solid #FCA5A5;background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer}
+  .check input{width:18px;height:18px;margin-top:1px;accent-color:#DC2626}
+  .check .t{font-size:13px;font-weight:800;color:#B91C1C} .check .d{font-size:11.5px;color:var(--muted)}
+  .drop{border:1.5px dashed var(--fg25);border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--muted);cursor:pointer}
+  .drop.has{border-style:solid;border-color:rgba(2,132,199,.35);background:rgba(2,132,199,.05);color:var(--accent)}
+  .after{border:1px solid rgba(2,132,199,.22);background:rgba(2,132,199,.06);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#075985;display:flex;gap:8px;align-items:flex-start}
+  .after ul{margin:3px 0 0;padding-left:18px} .after li{margin:1px 0}
+
+  /* diferir */
+  .dates{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+  @media(max-width:560px){.dates{grid-template-columns:1fr}}
+  .dbox{border:1px solid var(--fg10);border-radius:12px;padding:10px 12px}
+  .dbox small{display:block;font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}
+  .dbox .v{font-size:16px;font-weight:800;font-family:ui-monospace,monospace;margin-top:3px}
+  .arrow{color:var(--faint);display:flex;justify-content:center}
+  .delta{font-size:11.5px;font-weight:800;border-radius:99px;padding:1px 8px;background:#FEF3C7;color:#92400E;margin-left:6px}
+  .seg2{display:grid;grid-template-columns:1fr 1fr;gap:8px} @media(max-width:520px){.seg2{grid-template-columns:1fr}}
+  .opt{border:2px solid var(--fg10);border-radius:12px;padding:10px 12px;text-align:left;background:var(--surface)}
+  .opt .t{font-size:13px;font-weight:800;display:flex;gap:6px;align-items:center} .opt .d{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .opt.on{border-color:var(--accent);background:rgba(2,132,199,.06)}
+  .warnnote{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;border-radius:12px;padding:10px 12px;font-size:12px;display:flex;gap:8px}
+
+  /* historial */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px} @media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{border:1px solid var(--fg10);border-radius:12px;padding:9px 11px} .kpi .n{font-size:20px;font-weight:900} .kpi .l{font-size:11px;color:var(--muted);font-weight:600}
+  .kpi.warn .n{color:#B45309}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .sw{display:flex;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:2px}
+  .sw button{border:0;background:none;padding:5px 10px;font-size:12px;font-weight:700;border-radius:8px;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .sw button.on{background:#fff;color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+  .tl{display:flex;flex-direction:column;gap:0}
+  .ev{display:grid;grid-template-columns:22px 1fr;gap:10px}
+  .ev .rail{display:flex;flex-direction:column;align-items:center}
+  .ev .rail .b{width:14px;height:14px;border-radius:99px;margin-top:14px;border:3px solid #fff;box-shadow:0 0 0 1.5px var(--fg25)}
+  .ev .rail .ln{flex:1;width:2px;background:var(--fg10)}
+  .ev:last-child .rail .ln{display:none}
+  .card{border:1px solid var(--fg10);border-radius:12px;padding:10px 12px;margin:6px 0}
+  .card .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .card .date{font-size:14px;font-weight:800}
+  .card .wo{font-family:ui-monospace,monospace;font-size:11.5px;font-weight:700;color:var(--accent);background:rgba(2,132,199,.07);border:1px solid rgba(2,132,199,.25);border-radius:6px;padding:0 6px}
+  .pill{font-size:10.5px;font-weight:800;border-radius:99px;padding:1px 8px}
+  .p-ok{background:#D1FAE5;color:#047857} .p-def{background:#FEF3C7;color:#92400E} .p-st{background:var(--fg5);color:var(--muted);border:1px solid var(--fg10)}
+  .card .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px}
+  .card .obs{font-size:12.5px;margin-top:5px;color:var(--fg)}
+  .tbl{overflow-x:auto;border:1px solid var(--fg10);border-radius:12px}
+  table{width:100%;border-collapse:collapse;min-width:720px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:8px;border-bottom:1px solid var(--fg10)}
+  td{padding:4px 6px;border-bottom:1px solid var(--fg5);font-size:12px}
+  td input{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:5px 6px;font-size:12px}
+  td input:hover{border-color:var(--fg10)} td input:focus{outline:none;border-color:var(--accent);background:var(--fg5)}
+  .empty{text-align:center;padding:30px;color:var(--faint);font-size:13px}
+
+  .note{background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 6px 0}
+  .refbox{background:#F3F4F6;border:1px solid var(--fg10);border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+  .refbox small{display:block;font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+  .alert{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:250;padding:16px}
+  .alert div{background:#fff;border-radius:16px;padding:18px;max-width:360px;font-size:13.5px}
+  .alert button{margin-top:12px;float:right}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Plan · Preview V16</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-w="report" class="on">Reportar resultado</button><button data-w="defer">Diferir plan</button><button data-w="history">Historial</button>
+  <span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Plan por:</span>
+  <button data-t="cal" class="on">Calendario</button><button data-t="hours">Horas</button>
+  <span class="sep"></span><span class="lab">Ver como:</span>
+  <button data-r="admin" class="on">Admin</button><button data-r="crew">Tripulación</button>
+</div>
+<div class="stage" id="stage"></div>
+
+<script>
+const S={w:"report",v:"new",t:"cal",r:"admin",result:"ok",when:"today",file:false,defect:true,defText:"",auth:"wait",newDate:"2026-10-15",hv:"cards",toast:null,alert:null};
+const I=(n,s=15)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const hours=()=>S.t==="hours";
+const planHeader=(icon,bg,col,title)=>`<div class="mh"><div class="ic" style="background:${bg};color:${col}">${I(icon,22)}</div>
+  <div style="min-width:0;flex:1"><h1>${title}</h1><div class="sub">${hours()?"Cambio de aceite y filtros":"Inspección de renovación de clase"} · ${hours()?"Motor principal babor":"Casco y estructura"}</div>
+  <div class="chips"><span class="chip mono">${hours()?"MP-6-014":"MP-0-001"}</span><span class="chip">${I("ship",12)}BUQUE DEMO I</span>${S.w!=="history"?`<span class="chip bad">${hours()?"Vencido por 40 h":"Vencido hace 12 días"}</span>`:""}</div></div>
+  <button class="close">${I("x",17)}</button></div>`;
+
+/* ───────────── REPORTAR ───────────── */
+function report(){
+  const def=S.result==="def";
+  const execDate=S.when==="today"?"14/09/2026":S.when==="yday"?"13/09/2026":"10/09/2026";
+  const next=hours()?"10.240 h":(S.when==="today"?"14/09/2032":S.when==="yday"?"13/09/2032":"10/09/2032");
+  const missingDef=def&&!S.defText.trim();
+  return `<div class="modal">${planHeader("clipboard-check","#ECFDF5","#047857","Reportar resultado")}
+  <div class="mb" id="mb">
+    <div><div class="lbl">¿Cómo salió?</div>
+      <div class="results">
+        <button class="res ok ${!def?'on':''}" onclick="set('result','ok')"><span class="dot">${I("check",17)}</span><span><div class="t">Satisfactorio</div><div class="d">Se hizo todo y quedó bien</div></span></button>
+        <button class="res def ${def?'on':''}" onclick="set('result','def')"><span class="dot">${I("triangle-alert",17)}</span><span><div class="t">Con deficiencias</div><div class="d">Se encontró algo que hay que atender</div></span></button>
+      </div></div>
+    <div class="${hours()?'row3':'row'}">
+      <div><div class="lbl">Ejecutado por</div>${S.r==="admin"
+        ?`<select class="inp"><option>Juan Pérez · Jefe de Máquinas</option><option>Carlos Gómez · Tripulante</option></select><div class="help" style="margin-top:4px">Como admin podés cargarlo a nombre de otro</div>`
+        :`<input class="inp" value="Carlos Gómez"><div class="help" style="margin-top:4px">Se registra a tu nombre</div>`}</div>
+      <div><div class="lbl">Fecha</div><input class="inp" type="date" value="${S.when==="today"?"2026-09-14":S.when==="yday"?"2026-09-13":"2026-09-10"}">
+        <div class="quick"><button class="${S.when==='today'?'on':''}" onclick="set('when','today')">Hoy</button><button class="${S.when==='yday'?'on':''}" onclick="set('when','yday')">Ayer</button><button class="${S.when==='other'?'on':''}" onclick="set('when','other')">Otra</button></div></div>
+      ${hours()?`<div><div class="lbl">Horas del equipo</div><input class="inp" type="number" placeholder="Ej: 9.740"><div class="help" style="margin-top:4px">Última lectura: 9.735 h</div></div>`:""}
+    </div>
+    <div><div class="lbl">Observaciones <span class="help">· opcional</span></div><textarea class="inp" rows="2" placeholder="Qué se hizo, qué se cambió, algo a tener en cuenta la próxima vez"></textarea></div>
+    ${def?`<div class="defbox">
+      <div class="${missingDef?'need':''}"><div class="lbl">Qué deficiencias se encontraron ${missingDef?'<span class="needtag">Obligatorio</span>':''}</div>
+        <textarea class="inp" id="deftext" rows="3" placeholder="Describí lo que se encontró" oninput="S.defText=this.value;defUpd()">${S.defText}</textarea></div>
+      <div id="copi">${S.defText.trim().length>8?`<div class="copilot"><b>${I("sparkles",12)}Sugerencia del copiloto</b>Registrar un defecto sobre el equipo y revisar en la próxima guardia si la pérdida aumenta. Si afecta la navegación, avisar al Superintendente.</div>`:""}</div>
+      <label class="check"><input type="checkbox" ${S.defect?'checked':''} onchange="S.defect=this.checked;render()"><span><div class="t">Abrir un defecto con esto al guardar</div><div class="d">Queda registrado en Defectos (ISM 10.2) y te llevamos ahí para completarlo.</div></span></label>
+    </div>`:""}
+    <div><div class="lbl">Planilla o documento firmado <span class="help">· opcional</span></div>
+      <div class="drop ${S.file?'has':''}" onclick="S.file=!S.file;render()">${S.file?`${I("file-check",18)}<b>checklist-firmado.pdf</b><span style="margin-left:auto">${I("x",15)}</span>`:`${I("upload",18)}Tocá para adjuntar (PDF, Word, Excel o foto)`}</div></div>
+    <div class="after">${I("info",16)}<div><b>Al guardar:</b><ul>
+      <li>El plan queda ejecutado el <b>${execDate}</b>${hours()?"":` y vuelve a vencer el <b>${next}</b>`}${hours()?` y vuelve a vencer a las <b>${next}</b>`:""}.</li>
+      ${def&&S.defect?`<li>Se abre un <b>defecto</b> con lo que describiste.</li>`:""}
+      <li>Se descarga el PDF del reporte.</li></ul></div></div>
+  </div>
+  <div class="mf"><button class="btn link">Cancelar</button><span class="sp"></span>
+    <button class="btn" onclick="save(false)">${I("save",14)}Guardar</button>
+    <button class="btn primary" onclick="save(true)">${I("file-down",14)}Guardar y descargar PDF</button></div>
+  </div>`;
+}
+function defUpd(){ const has=S.defText.trim().length>8; const c=document.getElementById("copi"); if(c && !!c.innerHTML!==has){ const pos=document.getElementById("deftext").selectionStart; render(); const n=document.getElementById("deftext"); n.focus(); n.setSelectionRange(pos,pos);} }
+function save(pdf){
+  if(S.w==="report" && S.result==="def" && !S.defText.trim()){ S.alert="Describí las deficiencias que se encontraron antes de guardar."; render(); return; }
+  if(S.w==="defer" && S.auth==="now" && !document.getElementById("authname")?.value.trim()){ S.alert="Escribí quién autorizó el diferimiento, o elegí “Queda esperando autorización”."; render(); return; }
+  toast(S.w==="defer"?"Diferimiento guardado (demo)":pdf?"Guardado · se descarga el PDF (demo)":"Guardado (demo)");
+}
+
+/* ───────────── DIFERIR ───────────── */
+function defer(){
+  const cur=hours()?"9.800 h":"02/09/2026";
+  const d0=new Date("2026-09-02"), d1=new Date(S.newDate); const delta=Math.round((d1-d0)/864e5);
+  return `<div class="modal">${planHeader("calendar-clock","#FFFBEB","#B45309","Diferir plan")}
+  <div class="mb">
+    <div class="warnnote">${I("info",16)}<div><b>Hoy esta ventana no se puede abrir:</b> existe en el sistema pero ningún botón lleva a ella. La propuesta agrega <b>“Diferir”</b> junto a “Abrir OT” en la franja de vencimiento del plan (sólo planes activos). Decidí si lo querés: diferir una OT ya abierta sigue yendo por Diferimientos (APL).</div></div>
+    <div class="dates">
+      <div class="dbox"><small>Vence hoy</small><div class="v" style="color:#B91C1C">${cur}</div></div>
+      <div class="arrow">${I("arrow-right",22)}</div>
+      <div class="dbox" style="border-color:rgba(2,132,199,.35)"><small>Nuevo vencimiento ${!hours()&&delta>0?`<span class="delta">+${delta} días</span>`:hours()?'<span class="delta">+200 h</span>':""}</small>
+        ${hours()?`<input class="inp" type="number" value="10000" style="margin-top:4px">`:`<input class="inp" type="date" value="${S.newDate}" style="margin-top:4px" onchange="S.newDate=this.value;render()">`}</div>
+    </div>
+    <div class="need"><div class="lbl">Por qué se difiere <span class="needtag">Obligatorio</span></div>
+      <textarea class="inp" rows="3" placeholder="Ej: el buque está en navegación y la inspección requiere dique seco"></textarea></div>
+    <div><div class="lbl">Qué se hace mientras tanto <span class="help">· medidas compensatorias</span></div>
+      <textarea class="inp" rows="2" placeholder="Ej: inspección visual semanal del casco desde el interior de los tanques"></textarea></div>
+    <div><button class="btn" style="border-color:rgba(124,58,237,.35);color:#6D28D9;background:rgba(124,58,237,.06)" onclick="toast('El copiloto revisa la justificación (demo)')">${I("sparkles",14)}Revisar con el copiloto</button></div>
+    <div><div class="lbl">Autorización</div>
+      <div class="seg2">
+        <button class="opt ${S.auth==='wait'?'on':''}" onclick="set('auth','wait')"><div class="t">${I("hourglass",14)}Queda esperando autorización</div><div class="d">Lo autoriza después quien corresponda</div></button>
+        <button class="opt ${S.auth==='now'?'on':''}" onclick="set('auth','now')"><div class="t">${I("badge-check",14)}Ya está autorizado</div><div class="d">Anotá quién lo autorizó</div></button>
+      </div>
+      ${S.auth==='now'?`<input class="inp" id="authname" placeholder="Nombre de quien autorizó" style="margin-top:8px">`:""}
+    </div>
+  </div>
+  <div class="mf"><button class="btn link">Cancelar</button><span class="sp"></span>
+    <button class="btn primary" onclick="save()">${I("calendar-check",14)}Guardar diferimiento</button></div>
+  </div>`;
+}
+
+/* ───────────── HISTORIAL ───────────── */
+const EX=[
+  {d:"04/08/2021",wo:"OT-DEM-21-0130",by:"Juan Pérez",h:"8.950",res:"ok",st:"Cerrada",obs:"Sin novedades. Espesores dentro de tolerancia."},
+  {d:"12/07/2015",wo:"OT-DEM-15-0044",by:"Luis Martínez",h:"4.120",res:"def",st:"Cerrada",obs:"Corrosión en tanque de lastre 3 babor: se abrió defecto DEF-DEM-15-008."},
+  {d:"20/06/2009",wo:"OT-DEM-09-0012",by:"—",h:"—",res:"ok",st:"Cerrada",obs:"Carga histórica desde planilla."},
+];
+function history(){
+  const admin=S.r==="admin";
+  return `<div class="modal wide">${planHeader("history","#EFF6FF","#1D4ED8","Historial de ejecuciones")}
+  <div class="mb">
+    <div class="kpis">
+      <div class="kpi"><div class="n">3</div><div class="l">Ejecuciones</div></div>
+      <div class="kpi"><div class="n">04/08/2021</div><div class="l">Última</div></div>
+      <div class="kpi warn"><div class="n">1</div><div class="l">Con deficiencias</div></div>
+      <div class="kpi"><div class="n">6 años</div><div class="l">Entre ejecuciones (promedio)</div></div>
+    </div>
+    <div class="toolbar">
+      <div class="sw"><button class="${S.hv==='cards'?'on':''}" onclick="set('hv','cards')">${I("list",13)}Línea de tiempo</button><button class="${S.hv==='table'?'on':''}" onclick="set('hv','table')">${I("table-2",13)}Planilla${admin?" editable":""}</button></div>
+      <span class="help">${admin?(S.hv==='table'?"Tocá una celda para corregir fecha, ejecutor, horas u observaciones. Se guarda al salir de la celda.":"Para corregir un dato, pasá a Planilla editable."):"Sólo lectura."}</span>
+    </div>
+    ${S.hv==='cards'?`<div class="tl">${EX.map(e=>`<div class="ev"><div class="rail"><span class="b" style="background:${e.res==='ok'?'#10B981':'#F59E0B'}"></span><span class="ln"></span></div>
+      <div class="card"><div class="top"><span class="date">${e.d}</span><span class="pill ${e.res==='ok'?'p-ok':'p-def'}">${e.res==='ok'?'Satisfactorio':'Con deficiencias'}</span><span class="pill p-st">${e.st}</span><span class="wo" style="margin-left:auto;cursor:pointer" onclick="toast('Abre la ${e.wo} (demo)')">${e.wo}</span></div>
+        <div class="meta"><span>${I("user",12)} ${e.by}</span>${hours()?`<span>${I("gauge",12)} ${e.h} h</span>`:""}</div>
+        <div class="obs">${e.obs}</div></div></div>`).join("")}</div>`
+    :`<div class="tbl"><table><tr><th>OT</th><th>Fecha</th><th>Ejecutado por</th><th>Horas</th><th>Resultado / observaciones</th><th>Estado</th></tr>
+      ${EX.map(e=>`<tr><td><span class="wo" style="font-family:ui-monospace,monospace;font-size:11.5px;color:#0284C7;font-weight:700">${e.wo}</span></td>
+        <td>${admin?`<input type="date" value="${e.d.split('/').reverse().join('-')}">`:e.d}</td><td>${admin?`<input value="${e.by}">`:e.by}</td><td>${admin?`<input value="${e.h}">`:e.h}</td>
+        <td>${admin?`<input value="${e.obs}">`:e.obs}</td><td><span class="pill p-st">${e.st}</span></td></tr>`).join("")}</table></div>`}
+  </div>
+  <div class="mf"><span class="sp"></span><button class="btn primary">Cerrar</button></div>
+  </div>`;
+}
+
+/* ───────────── REFERENCIAS ───────────── */
+function ref(){
+  if(S.w==="report") return `<div class="modal"><div class="mh"><div style="flex:1"><h1>Reportar ejecución</h1><div class="sub">MP-0-001 · BUQUE DEMO I <b>DEM</b></div></div><button class="close">${I("x",17)}</button></div><div class="mb">
+    <div class="refbox"><small>Resultado</small>[ Satisfactorio ] [ Con deficiencias ]</div>
+    <div class="refbox"><small>Ejecutado por</small>Juan Pérez</div><div class="refbox"><small>Fecha de ejecución</small>14/09/2026</div>
+    <div class="refbox"><small>Observaciones</small>&nbsp;</div><div class="refbox"><small>Documento checklist</small>Seleccionar archivo…</div>
+    <div class="refbox" style="background:#FFFBEB"><small>¿Abrir registro DEF?</small>[ Abrir registro DEF ] (guarda y crea el defecto)</div>
+    <div class="refbox" style="background:#FEF2F2;color:#B91C1C">Error en recuadro rojo al pie</div>
+    <div><span class="note">No dice qué pasa al guardar (próximo vencimiento, defecto, PDF)</span><span class="note">Sólo hay “Guardar y PDF”: siempre descarga</span><span class="note">Abrir el defecto es otro botón que también guarda: se presta a confusión</span><span class="note">Errores en recuadro rojo, no en ventanita</span><span class="note">Código del buque junto al nombre</span></div>
+    </div><div class="mf"><span class="sp"></span><button class="btn link">Cancelar</button><button class="btn primary">Guardar y PDF</button></div></div>`;
+  if(S.w==="defer") return `<div class="modal"><div class="mh"><div style="flex:1"><h1>Diferir Plan</h1><div class="sub">MP-0-001 · BUQUE DEMO I <b>DEM</b></div></div><button class="close">${I("x",17)}</button></div><div class="mb">
+    <div class="row"><div class="refbox"><small>Tarea</small>Inspección de renovación de clase</div><div class="refbox"><small>Vencimiento actual</small>02/09/2026</div></div>
+    <div class="refbox"><small>Nueva fecha de vencimiento</small>dd/mm/aaaa</div><div class="refbox"><small>Justificación *</small>&nbsp;</div><div class="refbox"><small>Medidas compensatorias</small>&nbsp;</div>
+    <div class="refbox"><small>Autorizado por (opcional — si no, queda esperando autorización)</small>&nbsp;</div>
+    <div><span class="note">Ningún botón abre esta ventana hoy</span><span class="note">No se ve cuánto se corre el vencimiento</span><span class="note">“Esperar autorización” y “Guardar” son dos botones: no queda claro cuál usar</span></div>
+    </div><div class="mf"><button class="btn link">Cancelar</button><span class="sp"></span><button class="btn">Esperar Autorización</button><button class="btn primary">Guardar</button></div></div>`;
+  return `<div class="modal wide"><div class="mh"><div style="flex:1"><h1>Historial de ejecuciones</h1><div class="sub">MP-0-001 · Inspección de renovación de clase</div></div><button class="close">${I("x",17)}</button></div><div class="mb">
+    <div class="help">Edición inline: hacé clic en una celda para corregir fecha, ejecutor, horas o resultado.</div>
+    <div class="tbl"><table><tr><th>OT</th><th>Fecha</th><th>Ejecutado por</th><th>Horas</th><th>Resultado / Observaciones</th><th>Estado</th></tr>
+    ${EX.map(e=>`<tr><td>${e.wo}</td><td>${e.d}</td><td>${e.by}</td><td>${e.h}</td><td>${e.obs}</td><td><span class="pill p-st">CLOSED</span></td></tr>`).join("")}</table></div>
+    <div><span class="note">Estado en inglés (CLOSED)</span><span class="note">No distingue satisfactorias de con deficiencias</span><span class="note">No hay resumen (cuántas, cada cuánto)</span><span class="note">El código de la OT no lleva a la OT</span><span class="note">Horas siempre visibles aunque el plan sea por calendario</span></div>
+    </div><div class="mf"><span class="sp"></span><button class="btn link">Cerrar</button></div></div>`;
+}
+
+function render(){
+  document.querySelectorAll(".pv-bar [data-w]").forEach(b=>b.classList.toggle("on",b.dataset.w===S.w));
+  document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.v));
+  document.querySelectorAll(".pv-bar [data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t===S.t));
+  document.querySelectorAll(".pv-bar [data-r]").forEach(b=>b.classList.toggle("on",b.dataset.r===S.r));
+  const mb=document.querySelector(".mb"); const top=mb?mb.scrollTop:0;
+  document.getElementById("stage").innerHTML = S.v==="ref" ? ref() : (S.w==="report"?report():S.w==="defer"?defer():history());
+  const nb=document.querySelector(".mb"); if(nb) nb.scrollTop=top;
+  document.querySelectorAll(".toast,.alert").forEach(x=>x.remove());
+  if(S.toast) document.body.insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  if(S.alert) document.body.insertAdjacentHTML("beforeend",`<div class="alert"><div>${S.alert}<br><button class="btn primary" onclick="S.alert=null;render()">OK</button></div></div>`);
+  lucide.createIcons();
+}
+function set(k,v){ S[k]=v; render(); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;document.querySelectorAll(".toast").forEach(x=>x.remove());},1700); }
+document.querySelectorAll(".pv-bar [data-w]").forEach(b=>b.onclick=()=>set("w",b.dataset.w));
+document.querySelectorAll(".pv-bar [data-v]").forEach(b=>b.onclick=()=>set("v",b.dataset.v));
+document.querySelectorAll(".pv-bar [data-t]").forEach(b=>b.onclick=()=>set("t",b.dataset.t));
+document.querySelectorAll(".pv-bar [data-r]").forEach(b=>b.onclick=()=>set("r",b.dataset.r));
+render();
+</script>
+</body>
+</html>

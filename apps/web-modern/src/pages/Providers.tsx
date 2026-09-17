@@ -10,7 +10,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, RequiredMark } from "../components/GuideKit";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -192,7 +192,7 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, links, linksLoading, on
                 pill={canManage ? <GuidePill missing={name.trim() ? 0 : 1} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} /> : undefined}>
                 {/* Obligatorio (preview V24). */}
                 <GuideField id="prov-f-name" missing={canManage && !name.trim()}>
-                  <label className={fl}>{t("col.name")} *{canManage && !name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                  <label className={fl}>{t("col.name")}<RequiredMark />{canManage && !name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input value={name} onChange={e => setName(e.target.value)} disabled={!canManage} placeholder={t("prov.namePh")} className={inputCls} />
                 </GuideField>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

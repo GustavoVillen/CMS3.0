@@ -19,6 +19,7 @@ export interface WoPlanRow {
   assetId: string;
   assetName: string | null;
   isPrimary: boolean;
+  requiredPermitTypes?: string[];
 }
 
 interface PlanOption { id: string; taskCode: string; title: string; assetName?: string | null; status?: string }

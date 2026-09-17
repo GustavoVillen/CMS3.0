@@ -21,6 +21,7 @@ import {
   submitInspectionResults,
 } from "./inspection-executions-service";
 import { buildInspectionExecutionPdf } from "./inspection-execution-pdf-service";
+import { archivePdf } from "../settings/pdf-archive-service";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -126,6 +127,7 @@ export async function handleInspectionsRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: `${exec.executionCode}-${exec.vesselCode}.pdf`, buffer });
     return true;
   }
 

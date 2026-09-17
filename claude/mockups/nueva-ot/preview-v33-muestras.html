@@ -1,0 +1,300 @@
+<title>Toma de muestras en tres pasos</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --lab:#7C3AED; --labsoft:#EDE9FE;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.18);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.18); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.16); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.18); --badfg:#FCA5A5;
+    --lab:#A78BFA; --labsoft:rgba(167,139,250,.18);
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.18);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.18); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.16); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.18); --badfg:#FCA5A5;
+  --lab:#A78BFA; --labsoft:rgba(167,139,250,.18);
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:36px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:16px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted)}
+.scr{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.step{border:1.5px solid var(--line);background:var(--surface);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.step.done{border-color:color-mix(in srgb,var(--ok) 45%,transparent);background:color-mix(in srgb,var(--ok) 5%,var(--surface))}
+.step.now{border-color:var(--ac);box-shadow:0 0 0 3px var(--acsoft)}
+.step.locked{opacity:.55}
+.sh{display:flex;gap:10px;align-items:center}
+.sn{width:30px;height:30px;border-radius:99px;flex:none;display:grid;place-items:center;font-size:13px;font-weight:800;background:var(--surface2);color:var(--muted)}
+.step.done .sn{background:var(--ok);color:#fff}
+.step.now .sn{background:var(--ac);color:var(--acfg)}
+.sh b{font-size:16px;font-weight:800;line-height:1.2}
+.sh small{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
+.frasco{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;background:var(--surface2)}
+.frasco .who{min-width:0;flex:1}
+.frasco b{display:block;font-size:14px;font-weight:700;line-height:1.25}
+.frasco small{font-size:12px;color:var(--muted)}
+.frasco input{width:118px;min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);padding:0 10px;font:inherit;font-size:16px;font-family:"JetBrains Mono",monospace;text-align:center}
+.frasco input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--acsoft)}
+.frasco .num{font-family:"JetBrains Mono",monospace;font-size:15px;font-weight:700;color:var(--okfg);background:var(--oksoft);padding:6px 10px;border-radius:10px}
+.btn{min-height:52px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);font-size:15.5px;font-weight:800;display:flex;gap:8px;align-items:center;justify-content:center;cursor:pointer;width:100%;color:var(--fg)}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:var(--acfg)}
+.btn.lab{background:var(--lab);border-color:var(--lab);color:#fff}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.note{display:flex;gap:9px;align-items:flex-start;border-radius:14px;padding:11px;font-size:13px;background:var(--acsoft);color:var(--fg)}
+.note.w{background:var(--warnsoft)} .note.l{background:var(--labsoft)}
+.note svg{flex:none;margin-top:1px}
+.done-line{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--okfg);font-weight:700}
+.link{background:none;border:0;color:var(--ac);font-size:13.5px;font-weight:700;cursor:pointer;display:flex;gap:6px;align-items:center;justify-content:center;min-height:44px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--surface);border-radius:14px;overflow:hidden}
+th{background:var(--surface2);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:7px 8px;text-align:left}
+td{padding:8px;border-top:1px solid var(--line);vertical-align:top}
+td em{font-style:italic;color:var(--muted)}
+.dlg{position:absolute;inset:0;background:rgba(8,13,29,.55);display:flex;align-items:flex-end;z-index:5}
+.sheet{background:var(--surface);width:100%;border-radius:22px 22px 0 0;padding:12px 16px 20px;display:flex;flex-direction:column;gap:12px}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--line);margin:0 auto}
+.sheet h2{margin:0;font-size:18px;font-weight:800}
+.sheet input{width:100%;min-height:50px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);padding:0 12px;font:inherit;font-size:16px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chip{min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;cursor:pointer;font-size:15px}
+.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.toast{position:absolute;left:16px;right:16px;bottom:24px;background:var(--fg);color:var(--bg);padding:12px 14px;border-radius:14px;font-size:14px;font-weight:600;text-align:center;z-index:6}
+.guide{width:350px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14.5px;line-height:1.5}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Toma de muestras <small>· Preview V33</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const HOY="16/09/2026";
+
+const S={
+  v:"app", theme:"system",
+  frascos:[
+    {eq:"Motor Principal Babor", fluido:"Aceite de motor", num:""},
+    {eq:"Motor Principal Estribor", fluido:"Aceite de motor", num:""},
+    {eq:"Caja reductora Babor", fluido:"Aceite de caja", num:""},
+  ],
+  tomada:null, enviada:null, recibida:null,
+  dlg:null, quien:"Jorge Bael", conforme:null, verHoja:false, toast:null,
+};
+const numeradas=()=>S.frascos.filter(f=>f.num.trim()).length;
+function toast(t){S.toast=t;render();setTimeout(()=>{S.toast=null;render();},2000);}
+
+function paso1(){
+  const listo=!!S.tomada, faltan=S.frascos.length-numeradas();
+  return `<section class="step ${listo?"done":"now"}">
+    <div class="sh"><span class="sn">${listo?I("check",17):"1"}</span>
+      <span><b>Se toma la muestra</b><small>${listo?`Tomada el ${S.tomada} · ${S.frascos.length} frascos numerados`:"Anotá el número de cada frasco"}</small></span></div>
+    ${S.frascos.map((f,i)=>`<div class="frasco">
+      <span class="who"><b>${f.eq}</b><small>${f.fluido}</small></span>
+      ${listo?`<span class="num">${f.num}</span>`
+             :`<input inputmode="text" placeholder="N° frasco" value="${f.num}" data-in="${i}" aria-label="Número de muestra de ${f.eq}">`}
+    </div>`).join("")}
+    ${listo?"":`<button class="btn pri" data-a="tomar" ${numeradas()===0?"disabled":""}>${I("beaker",18)}Registrar ${numeradas()===S.frascos.length?"los números":`${numeradas()} de ${S.frascos.length} números`}</button>`}
+    ${!listo&&faltan>0&&numeradas()>0?`<p class="note w">${I("triangle-alert",17)}<span>Quedan ${faltan} sin número. Se puede guardar igual y completarlos después.</span></p>`:""}
+  </section>`;
+}
+
+function paso2(){
+  const bloq=!S.tomada, listo=!!S.enviada;
+  return `<section class="step ${listo?"done":bloq?"locked":"now"}">
+    <div class="sh"><span class="sn">${listo?I("check",17):"2"}</span>
+      <span><b>Se envía al laboratorio</b><small>${listo?`Enviada el ${S.enviada} · CONDOR S.A.C.I`:bloq?"Primero registrá la toma":"CONDOR S.A.C.I"}</small></span></div>
+    ${listo?"":`<button class="btn lab" data-a="enviar" ${bloq?"disabled":""}>${I("send",18)}Enviar hoy (${HOY.slice(0,5)})</button>`}
+    ${!listo&&!bloq?`<p class="note l">${I("info",17)}<span>Queda asentado en la hoja de ruta y el pedido pasa a <b>En ejecución</b>. El correo al laboratorio se manda desde la PC.</span></p>`:""}
+  </section>`;
+}
+
+function paso3(){
+  const bloq=!S.enviada, listo=!!S.recibida;
+  return `<section class="step ${listo?"done":bloq?"locked":"now"}">
+    <div class="sh"><span class="sn">${listo?I("check",17):"3"}</span>
+      <span><b>Se recibe el resultado</b><small>${listo?`Recibido el ${S.recibida} · ${S.quien}`:bloq?"Primero enviala al laboratorio":"Cuando llega el informe del laboratorio"}</small></span></div>
+    ${listo?`<p class="note l">${I("flask-conical",17)}<span>Los valores del informe (viscosidad, hierro, agua…) se cargan desde la PC, en Muestreos y Análisis.</span></p>`
+           :`<button class="btn ok" data-a="recibir" ${bloq?"disabled":""}>${I("package-check",18)}Marcar resultado recibido</button>`}
+  </section>`;
+}
+
+function hoja(){
+  const filas=[
+    ["18/06/2026","<em>Solicitud creada</em>","Pedro Pont"],
+    ["18/06/2026","<em>Aprobada</em>","Pedro Pont"],
+    ["18/06/2026","<em>Autorizada</em>","Jorge Bael"],
+    ...(S.tomada?[[S.tomada,`Muestras tomadas y numeradas: ${S.frascos.filter(f=>f.num).map(f=>f.num).join(", ")}`,"Jorge Bael"]]:[]),
+    ...(S.enviada?[[S.enviada,"<em>Enviada al taller CONDOR S.A.C.I</em>","Jorge Bael"]]:[]),
+    ...(S.recibida?[[S.recibida,"<em>Servicio recibido</em>",S.quien]]:[]),
+  ];
+  return `<button class="link" data-a="hoja">${I(S.verHoja?"chevron-up":"chevron-down",16)}${S.verHoja?"Ocultar":"Ver"} la hoja de ruta del pedido</button>
+  ${S.verHoja?`<table><thead><tr><th>Fecha</th><th>Novedad</th><th>Asienta</th></tr></thead>
+  <tbody>${filas.map(f=>`<tr><td class="mono">${f[0]}</td><td>${f[1]}</td><td>${f[2]}</td></tr>`).join("")}</tbody></table>`:""}`;
+}
+
+function dialog(){
+  if(S.dlg!=="recibir") return "";
+  return `<div class="dlg" data-a="cerrar"><div class="sheet" onclick="event.stopPropagation()">
+    <div class="grab"></div>
+    <h2>Resultado recibido</h2>
+    <label style="font-size:13px;font-weight:700">¿Quién lo recibe?
+      <input value="${S.quien}" data-in="quien" style="margin-top:6px"></label>
+    <div><p style="font-size:13px;font-weight:700;margin:0 0 6px">¿Conforme con el servicio?</p>
+      <div class="two">
+        <button class="chip ${S.conforme===true?"on":""}" data-a="conf" data-p="si">Sí</button>
+        <button class="chip ${S.conforme===false?"on":""}" data-a="conf" data-p="no">No</button>
+      </div></div>
+    <p class="note l">${I("flask-conical",17)}<span>Esto cierra el pedido al laboratorio. Los valores del informe se cargan después, desde la PC.</span></p>
+    <button class="btn ok" data-a="confirmar" ${S.conforme===null?"disabled":""}>${I("check",18)}Confirmar</button>
+  </div></div>`;
+}
+
+function app(){
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      <div class="head"><button class="iconb">${I("arrow-left",20)}</button>
+        <div style="min-width:0"><h1>SS-2-M02-2026 · Toma de muestras</h1><p>MAO 02 · CONDOR S.A.C.I</p></div></div>
+      <div class="scr">${paso1()}${paso2()}${paso3()}${hoja()}</div>
+      ${dialog()}${S.toast?`<div class="toast">${S.toast}</div>`:""}
+    </div>
+    <aside class="guide">
+      <div><h2>La muestra, en tres botones</h2>
+      <p style="margin-top:8px">Hoy hay que escribir a mano cada novedad en la hoja de ruta. Con esto son tres pasos que el sistema entiende: se toma (con el número de cada frasco), se envía y se recibe.</p></div>
+      <div><p class="gl">Para probar</p><ol class="steps">
+        <li>Escribí un número en cada frasco y tocá <b>Registrar los números</b>.</li>
+        <li>Probá dejar uno vacío: avisa, pero deja guardar.</li>
+        <li>Enviá al laboratorio y después marcá el resultado recibido.</li>
+        <li>Abrí <b>la hoja de ruta</b>: cada paso queda asentado solo.</li>
+      </ol></div>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Toma de muestras en tres pasos · Preview V33</h2>
+  <p>Cuando la solicitud es un pedido al laboratorio, el registro de avance deja de ser un renglón en blanco y pasa a ser tres botones. Cada uno escribe en el mismo lugar donde el sistema ya guarda esa información, así que lo que se carga desde el celular sirve después en la PC.</p>
+
+  <section><h3>Qué hace cada botón</h3><ul>
+    <li><b>Se toma la muestra</b> — un renglón por frasco, con el equipo y el fluido, y el número que se le pone. Es el mismo número que la PC pide antes de mandar el pedido al laboratorio, y el que después permite reconocer cada informe que vuelve. Si falta alguno, avisa pero deja guardar.</li>
+    <li><b>Se envía al laboratorio</b> — con la fecha de hoy. Asienta la novedad en la hoja de ruta y pasa el pedido a <b>En ejecución</b>, igual que el botón de la PC. El correo al laboratorio sigue saliendo desde la PC.</li>
+    <li><b>Se recibe el resultado</b> — pregunta quién recibe y si hay conformidad (los dos datos que el formulario ya exige) y cierra el pedido. Los valores del informe se cargan después en Muestreos y Análisis, desde la PC.</li>
+  </ul></section>
+
+  <section><h3>Cómo se entra</h3><p>Desde <b>Registrar avance</b>: al elegir una solicitud de laboratorio se abre esta pantalla en vez de la hoja de ruta en blanco. La hoja de ruta sigue estando, abajo, para ver el historial y anotar algo a mano si hace falta.</p></section>
+
+  <section><h3>Lo que no cambia</h3><ul>
+    <li>Ningún cambio en la base de datos: se usan los campos y los endpoints que ya existen (número de frasco, envío al taller, servicio recibido).</li>
+    <li>Las solicitudes que no son de laboratorio siguen viéndose como hoy.</li>
+    <li>Los permisos y el orden de los pasos son los mismos que en la PC: no se puede enviar algo que no está autorizado.</li>
+  </ul></section>
+
+  <section><h3>Para decidir</h3>
+  <div class="opt">
+    <div class="rcard"><b>1. ¿Un botón para "no tengo los números todavía"?</b>La PC permite declarar que los números no están y enviar igual, y eso queda asentado. En el celular lo resolví con el aviso amarillo: se guarda lo que haya. ¿Alcanza?</div>
+    <div class="rcard"><b>2. ¿Registrar el horómetro al tomar la muestra?</b>El sistema guarda las horas del equipo en cada muestra. Puedo pedirlas en el paso 1 (un campo más por frasco) o dejarlo como está.</div>
+    <div class="rcard"><b>3. ¿Foto del frasco o del remito?</b>Se puede adjuntar una foto al enviar. Suma un toque; decime si la querés.</div>
+  </div></section>
+
+  <p style="font-size:13.5px;color:var(--muted)">⚠ Aviso: esta pantalla toca el mismo archivo que está editando la otra sesión (el registro de avances). Conviene que no trabajen las dos al mismo tiempo sobre eso.</p>
+  </article>`;
+}
+
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML=`${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML=S.v==="ref"?ref():app();
+  if(window.lucide) lucide.createIcons();
+}
+document.addEventListener("input",e=>{
+  const el=e.target; if(!el.dataset || el.dataset.in===undefined) return;
+  if(el.dataset.in==="quien") S.quien=el.value;
+  else S.frascos[Number(el.dataset.in)].num=el.value;
+});
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-a]"); if(!el) return;
+  const a=el.dataset.a,p=el.dataset.p;
+  if(a==="tab") S.v=p;
+  else if(a==="theme"){S.theme={system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme);}
+  else if(a==="tomar"){ S.tomada=HOY; toast("Números registrados"); return; }
+  else if(a==="enviar"){ S.enviada=HOY; toast("Enviada a CONDOR S.A.C.I"); return; }
+  else if(a==="recibir"){ S.dlg="recibir"; }
+  else if(a==="conf"){ S.conforme=p==="si"; }
+  else if(a==="confirmar"){ S.recibida=HOY; S.dlg=null; toast("Pedido cerrado"); return; }
+  else if(a==="cerrar"){ if(e.target===el) S.dlg=null; else return; }
+  else if(a==="hoja"){ S.verHoja=!S.verHoja; }
+  else return;
+  render();
+});
+render();
+</script>

@@ -3,6 +3,7 @@ import type { AppEnv } from "../../config/env";
 import { sendJson } from "../../http/json-response";
 import { readJsonBody } from "../../http/read-json-body";
 import { RouteError } from "../../http/route-error";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
 import { enforceRateLimit } from "../../http/rate-limiter";
@@ -38,6 +39,7 @@ import {
   getSpareRequest,
   listSpareRequests,
   rejectSpareRequest,
+  resendSpareRequest,
   submitSpareRequest,
   updateSpareRequest,
 } from "../spare-requests/spare-requests-service";
@@ -242,6 +244,40 @@ export async function handleSparesRoutes(
     return true;
   }
 
+  // Planilla "Estándar para viaje" (Solicitud de suministro).
+  if (method === "GET" && (url.pathname === "/app/pms/reports/spare-standard" || url.pathname === "/app/pms/reports/spare-standard/pdf")) {
+    const deptParam = url.searchParams.get("department");
+    const filters = {
+      vesselCode: url.searchParams.get("vesselCode") ?? "",
+      department: (["CUBIERTA", "MAQUINAS", "COCINA", "BARCAZA"].includes(deptParam ?? "") ? deptParam : null) as "CUBIERTA" | "MAQUINAS" | "COCINA" | "BARCAZA" | null,
+      mode: url.searchParams.get("mode") === "HALF" ? "HALF" as const : "FULL" as const,
+      voyageNumber: url.searchParams.get("voyageNumber"),
+    };
+    if (url.pathname.endsWith("/pdf")) {
+      enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+      const { buildSpareStandardPdf } = await import("./spare-standard-pdf-service");
+      const { recordMonthlyReportGenerated } = await import("./monthly-reports-history-service");
+      const buffer = await buildSpareStandardPdf(session, filters);
+      const filename = `estandar-${filters.vesselCode}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      await recordMonthlyReportGenerated(session, {
+        type: "STANDARD",
+        vesselCode: filters.vesselCode,
+        fileName: filename,
+        department: filters.department ?? "MAQUINAS",
+      });
+      response.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": buffer.length,
+      });
+      response.end(buffer);
+      return true;
+    }
+    const { getSpareStandardReport } = await import("./spare-reports-service");
+    sendJson(response, 200, await getSpareStandardReport(session, filters));
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/app/pms/reports/history") {
     const { listMonthlyReportHistory } = await import("./monthly-reports-history-service");
     const vesselCode = url.searchParams.get("vesselCode");
@@ -249,7 +285,7 @@ export async function handleSparesRoutes(
     const limit      = Number(url.searchParams.get("limit") ?? "100");
     const items = await listMonthlyReportHistory(session, {
       vesselCode,
-      type: typeParam === "INVENTORY" || typeParam === "CONSUMPTION" ? typeParam : null,
+      type: typeParam === "INVENTORY" || typeParam === "CONSUMPTION" || typeParam === "STANDARD" ? typeParam : null,
       limit: Number.isFinite(limit) ? limit : 100,
     });
     sendJson(response, 200, { items, total: items.length });
@@ -323,6 +359,7 @@ export async function handleSparesRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer });
     return true;
   }
 
@@ -375,6 +412,7 @@ export async function handleSparesRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "REQ", id: sr!.id, buffer });
     return true;
   }
 
@@ -406,6 +444,11 @@ export async function handleSparesRoutes(
     if (method === "POST") { sendJson(response, 200, await submitSpareRequest(session, id)); return true; }
   }
 
+  if (/^\/app\/pms\/spare-requests\/[^/]+\/resend$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "POST") { sendJson(response, 200, await resendSpareRequest(session, id)); return true; }
+  }
+
   if (/^\/app\/pms\/spare-requests\/[^/]+\/approve$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     if (method === "POST") { sendJson(response, 200, await approveSpareRequest(session, id)); return true; }
@@ -422,7 +465,11 @@ export async function handleSparesRoutes(
 
   if (/^\/app\/pms\/spare-requests\/[^/]+\/cancel$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    if (method === "POST") { sendJson(response, 200, await cancelSpareRequest(session, id)); return true; }
+    if (method === "POST") {
+      const body = await readJsonBody(request) as { reason?: string };
+      sendJson(response, 200, await cancelSpareRequest(session, id, body?.reason ?? ""));
+      return true;
+    }
   }
 
   if (/^\/app\/pms\/spare-requests\/[^/]+\/items$/.test(url.pathname)) {

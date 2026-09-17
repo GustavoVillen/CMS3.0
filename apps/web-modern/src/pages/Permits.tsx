@@ -6,7 +6,7 @@ import {
   ArrowLeft, ChevronRight, Info, Save, Send, Ship, Wrench, Users, PenLine, Hourglass, Play, HardHat, RotateCcw, Search,
 } from "lucide-react";
 import { WizardStepper } from "../components/NewWorkOrderWizard";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, RequiredMark } from "../components/GuideKit";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth, useCan } from "../lib/auth";
@@ -740,6 +740,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   // ── Alta del permiso por bloques (preview V19) ──────────────────────────────
   const [showTypeCards, setShowTypeCards] = useState(false);
   const missingNew = {
+    vessel: !workOrder && !vesselCode,
     location: !location.trim(),
     description: !description.trim(),
     start: !plannedStart,
@@ -748,7 +749,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
     controls: !controls.trim(),
     ppe: !ppe.trim(),
   };
-  const miss1 = Number(missingNew.location) + Number(missingNew.description) + Number(missingNew.start) + Number(missingNew.end);
+  const miss1 = Number(missingNew.vessel) + Number(missingNew.location) + Number(missingNew.description) + Number(missingNew.start) + Number(missingNew.end);
   const miss2 = Number(missingNew.hazards) + Number(missingNew.controls) + Number(missingNew.ppe);
   /** Horario rápido: hoy o mañana a las 08:00; fin = inicio + N horas o a las 17:00. */
   const setStartAt = (daysAhead: number) => {
@@ -811,24 +812,24 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       <GuideSection n={1} title={t("pm.wiz.sec1")} subtitle={t("pm.wiz.sec1Sub")} open onToggle={() => { /* siempre abierto */ }}
         pill={<GuidePill missing={miss1} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />}>
         {!workOrder && (
-          <div>
-            <label className={fl}>{t("pm.vessel")}</label>
+          <GuideField id="pm-f-vessel" missing={missingNew.vessel}>
+            <label className={fl}>{t("pm.vessel")}<RequiredMark />{missingNew.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
               {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
             </select>
-          </div>
+          </GuideField>
         )}
         <GuideField id="pm-f-location" missing={missingNew.location}>
-          <label className={fl}>{t("common.location")}{missingNew.location && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          <label className={fl}>{t("common.location")}<RequiredMark />{missingNew.location && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
           <input value={location} onChange={e => setLocation(e.target.value)} className={inputCls} placeholder={t("pm.locationPh")} />
         </GuideField>
         <GuideField id="pm-f-description" missing={missingNew.description}>
-          <label className={fl}>{t("pm.wiz.workWhat")}{missingNew.description && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          <label className={fl}>{t("pm.wiz.workWhat")}<RequiredMark />{missingNew.description && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
           <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls} />
         </GuideField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <GuideField id="pm-f-start" missing={missingNew.start}>
-            <label className={fl}>{t("pm.wiz.starts")}{missingNew.start && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <label className={fl}>{t("pm.wiz.starts")}<RequiredMark />{missingNew.start && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} className={inputCls} />
             <div className="flex flex-wrap gap-1.5">
               <button type="button" className={quickBtn} onClick={() => setStartAt(0)}>{t("pm.wiz.today8")}</button>
@@ -836,7 +837,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
             </div>
           </GuideField>
           <GuideField id="pm-f-end" missing={missingNew.end}>
-            <label className={fl}>{t("pm.wiz.ends")}{missingNew.end && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <label className={fl}>{t("pm.wiz.ends")}<RequiredMark />{missingNew.end && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} className={inputCls} />
             <div className="flex flex-wrap gap-1.5">
               <button type="button" className={quickBtn} onClick={() => setEndAt(4)}>+4 h</button>
@@ -1129,22 +1130,22 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   {/* Obligatorios: se resaltan mientras falten y el permiso sea editable (preview V24). */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <GuideField id="pm-e-location" missing={isEditable && !location.trim()}>
-                      <label className={fl}>{t("common.location")}{isEditable && !location.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={fl}>{t("common.location")}<RequiredMark />{isEditable && !location.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       <input value={location} onChange={e => setLocation(e.target.value)} disabled={!isEditable} className={inputCls} placeholder={t("pm.locationPh")} />
                     </GuideField>
                     <div><label className={fl}>{t("pm.type")}</label><input value={t(TYPE_TKEY[permit.type])} disabled className={inputCls} /></div>
                   </div>
                   <GuideField id="pm-e-description" missing={isEditable && !description.trim()}>
-                    <label className={fl}>{t("pm.wiz.workWhat")}{isEditable && !description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                    <label className={fl}>{t("pm.wiz.workWhat")}<RequiredMark />{isEditable && !description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                     <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={!isEditable} className={inputCls} />
                   </GuideField>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <GuideField id="pm-e-start" missing={isEditable && !plannedStart}>
-                      <label className={fl}>{t("pm.wiz.starts")}{isEditable && !plannedStart && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={fl}>{t("pm.wiz.starts")}<RequiredMark />{isEditable && !plannedStart && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
                     </GuideField>
                     <GuideField id="pm-e-end" missing={isEditable && !plannedEnd}>
-                      <label className={fl}>{t("pm.wiz.ends")}{isEditable && !plannedEnd && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={fl}>{t("pm.wiz.ends")}<RequiredMark />{isEditable && !plannedEnd && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
                     </GuideField>
                   </div>
@@ -1240,9 +1241,12 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                 <h2 className="text-base font-black text-fg">{dlgMeta.title}</h2>
                 <ModalCloseButton onClose={() => setActionDlg(null)} className="ml-auto" />
               </div>
+              {/* Motivo obligatorio salvo al cerrar (closeNotes es opcional). */}
               <div className="px-5 py-4 space-y-2">
-                <label className={fl}>{dlgMeta.label}</label>
-                <AutoTextArea rows={3} value={dlgText} onChange={e => setDlgText(e.target.value)} placeholder={dlgMeta.ph} className={inputCls} autoFocus />
+                <GuideField id="pm-dlg-reason" missing={actionDlg !== "close" && !dlgText.trim()}>
+                  <label className={fl}>{dlgMeta.label}{actionDlg !== "close" && <RequiredMark />}{actionDlg !== "close" && !dlgText.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                  <AutoTextArea rows={3} value={dlgText} onChange={e => setDlgText(e.target.value)} placeholder={dlgMeta.ph} className={inputCls} autoFocus />
+                </GuideField>
               </div>
               <div className="flex items-center gap-2 px-5 py-3 border-t border-fg/10">
                 <span className="flex-1" />

@@ -11,7 +11,7 @@
 // se elija el equipo a mano.
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  FlaskConical, Loader2, CheckCircle2, AlertTriangle, XCircle, FileText, Upload, Link2, Wrench,
+  FlaskConical, Loader2, CheckCircle2, AlertTriangle, XCircle, FileText, Upload, Link2, Wrench, Activity,
 } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -29,9 +29,22 @@ type BatchWarning =
   | "VERDICT_MISSING" | "VERDICT_MISMATCH" | "FLUID_TYPE_ASSUMED" | "NO_PARAMETERS"
   | "SAMPLE_NUMBER_OTHER_VESSEL";
 
+type VibrationSeverity = "NONE" | "NORMAL" | "ALERT" | "ALARM";
+type VibrationPriority = "NONE" | "SCHEDULED" | "NORMAL" | "URGENT";
+
 interface ScanRow {
   fileName: string;
   file: { url: string; name: string; mime: string };
+  /** VIBRATION: el informe trae varios equipos y el mismo archivo vuelve como varias filas. */
+  kind: "FLUID" | "VIBRATION";
+  /** Nº de informe del analista de vibraciones. */
+  labReference: string | null;
+  vibration: {
+    severity: VibrationSeverity;
+    priority: VibrationPriority;
+    finding: string | null;
+    recommendation: string | null;
+  } | null;
   sampleNumber: string | null;
   vesselCode: string | null;
   vesselReferenceText: string | null;
@@ -40,7 +53,7 @@ interface ScanRow {
   assetReferenceText: string | null;
   assetConfidence: "high" | "medium" | "low" | null;
   assetReason: string | null;
-  fluidType: FluidType;
+  fluidType: FluidType | null;
   fluidProduct: string | null;
   sampledAt: string | null;
   receivedAt: string | null;
@@ -136,6 +149,9 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
   const [assetsByVessel, setAssetsByVessel] = useState<Record<string, AssetItem[]>>({});
   const [saving, setSaving] = useState(false);
   const [results, setResults] = useState<CommitResult[]>([]);
+  // Filas mandadas a guardar, en el mismo orden que `results`: en un informe de
+  // vibraciones todas comparten el nombre de archivo y el resumen se nombra por equipo.
+  const [committed, setCommitted] = useState<ScanRow[]>([]);
 
   // Paso opcional del final: abrir UNA OT (con su SS al laboratorio) por las
   // rutinas de muestreo que ejecutan estos análisis. No se dispara solo — la SS
@@ -172,11 +188,13 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
       const f = files[i]!;
       setProgress({ done: i, total: files.length, current: f.name });
       try {
-        const row = await api.uploadRaw<ScanRow>("/app/fluid-analyses/batch-scan", f, {
+        // Un reporte de aceite vuelve como una fila; un informe de vibraciones,
+        // como una fila por equipo.
+        const scanned = await api.uploadRaw<ScanRow[]>("/app/fluid-analyses/batch-scan", f, {
           "X-Filename": encodeURIComponent(f.name),
           ...(vesselHint ? { "X-Vessel-Code": vesselHint } : {}),
         });
-        okRows.push(row);
+        okRows.push(...scanned);
       } catch (e) {
         koRows.push({ fileName: f.name, message: e instanceof ApiError ? e.message : t("fa.batch.readFailed") });
       }
@@ -211,6 +229,17 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
     [rows],
   );
   const duplicates = useMemo(() => rows.filter(r => r.duplicateOf), [rows]);
+  // Informes de vibraciones del lote, con cuántos equipos trajo cada uno.
+  const vibrationFiles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) if (r.kind === "VIBRATION") counts.set(r.fileName, (counts.get(r.fileName) ?? 0) + 1);
+    return Array.from(counts, ([file, n]) => ({ file, n }));
+  }, [rows]);
+  const paramLabel = (key: string) => {
+    const tk = `fa.param.${key.toLowerCase()}` as TranslationKey;
+    const label = t(tk);
+    return label === `[${tk}]` ? key : label;
+  };
   const blocked = useMemo(
     () => rows.filter(r => !r.duplicateOf && !(r.vesselCode && r.assetId && r.sampledAt && r.verdict)),
     [rows],
@@ -225,6 +254,8 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
         rows: savable.map(r => ({
           fileName: r.fileName,
           file: r.file,
+          kind: r.kind,
+          labReference: r.labReference,
           sampleNumber: r.sampleNumber,
           vesselCode: r.vesselCode,
           assetId: r.assetId,
@@ -241,6 +272,7 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
         })),
       });
       setResults(res.items ?? []);
+      setCommitted(savable);
       setStep("done");
       if ((res.items ?? []).some(i => i.status === "created" || i.status === "attached")) onSaved?.();
     } catch (e) {
@@ -353,6 +385,13 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
               {failed.length > 0 && <Chip tone="red" label={fill(t("fa.batch.countFailed"), { n: failed.length })} />}
             </div>
 
+            {vibrationFiles.map(v => (
+              <div key={v.file} className="flex items-start gap-2 rounded-xl border border-violet-500/30 bg-violet-500/5 px-3 py-2 text-[11px] text-fg leading-relaxed">
+                <Activity className="w-4 h-4 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+                <span>{fill(t("fa.batch.vib.banner"), { file: v.file, n: v.n })}</span>
+              </div>
+            ))}
+
             <div className="overflow-x-auto rounded-xl border border-fg/10">
               <table className="w-full text-[11px]">
                 <thead className="bg-fg/5 text-text-industrial/50">
@@ -432,18 +471,55 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           )}
                         </Td>
                         <Td>
-                          <select
-                            value={r.fluidType}
-                            disabled={isDup}
-                            onChange={e => patchRow(i, { fluidType: e.target.value as FluidType })}
-                            className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] text-fg max-w-[130px] disabled:opacity-60"
-                          >
-                            {FLUID_TYPES.map(ft => <option key={ft} value={ft}>{FLUID_LABELS[ft]}</option>)}
-                          </select>
+                          {r.kind === "VIBRATION" ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 font-semibold text-fg whitespace-nowrap">
+                                <Activity className="w-3.5 h-3.5" />{t("mp.samp.kind.VIBRATION")}
+                              </span>
+                              {Object.entries(r.parameters).map(([k, p]) => (
+                                <span key={k} className="block text-[10px] text-text-industrial/60 whitespace-nowrap">
+                                  {paramLabel(k)} {String(p.value).replace(".", ",")}{p.unit ? ` ${p.unit}` : ""}
+                                </span>
+                              ))}
+                            </>
+                          ) : (
+                            <select
+                              value={r.fluidType ?? "ENGINE_OIL"}
+                              disabled={isDup}
+                              onChange={e => patchRow(i, { fluidType: e.target.value as FluidType })}
+                              className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[11px] text-fg max-w-[130px] disabled:opacity-60"
+                            >
+                              {FLUID_TYPES.map(ft => <option key={ft} value={ft}>{FLUID_LABELS[ft]}</option>)}
+                            </select>
+                          )}
                         </Td>
-                        <Td>{r.sampleNumber ?? "—"}</Td>
+                        <Td>
+                          {r.kind === "VIBRATION"
+                            ? (r.labReference ? fill(t("fa.batch.vib.reportNo"), { no: r.labReference }) : "—")
+                            : (r.sampleNumber ?? "—")}
+                        </Td>
                         <Td>{r.sampledAt ?? (isDup ? "—" : missTag)}</Td>
-                        <Td>{r.verdict ? <VerdictBadge verdict={r.verdict} /> : (isDup ? "—" : missTag)}</Td>
+                        <Td>
+                          {r.verdict ? <VerdictBadge verdict={r.verdict} /> : (isDup ? "—" : missTag)}
+                          {/* La palabra del analista junto al veredicto traducido. */}
+                          {r.vibration && (
+                            <>
+                              <span className="block mt-1 text-[10px] text-text-industrial/45 whitespace-nowrap">
+                                {fill(t("fa.batch.vib.analyst"), {
+                                  sev: [
+                                    t(`fa.batch.vib.sev.${r.vibration.severity}` as TranslationKey),
+                                    r.vibration.priority !== "NONE" ? t(`fa.batch.vib.prio.${r.vibration.priority}` as TranslationKey) : null,
+                                  ].filter(Boolean).join(" · "),
+                                })}
+                              </span>
+                              {r.vibration.recommendation && (
+                                <span className="block mt-0.5 text-[10px] text-text-industrial/60 max-w-[240px] leading-snug">
+                                  {r.vibration.recommendation}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </Td>
                         <Td>
                           {isDup ? (
                             <span className="text-text-industrial/50">
@@ -481,6 +557,10 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                             </span>
                           ) : (
                             <span className="text-success-sea font-semibold">{t("fa.batch.actionCreate")}</span>
+                          )}
+                          {/* Al guardar, estos veredictos abren un defecto solos: se avisa antes. */}
+                          {!isDup && !blockedRow && (r.verdict === "CRITICAL" || r.verdict === "ACTION_REQUIRED") && (
+                            <span className="block mt-0.5 text-[10px] font-bold text-red-700 dark:text-red-400">{t("fa.batch.opensDefect")}</span>
                           )}
                         </Td>
                       </tr>
@@ -529,7 +609,11 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                     : r.status === "skipped"
                       ? <AlertTriangle className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
                       : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                  <span className="text-[11px] text-text-industrial/70 truncate flex-1" title={r.fileName}>{r.fileName}</span>
+                  <span className="text-[11px] text-text-industrial/70 truncate flex-1" title={r.fileName}>
+                    {committed[i]?.kind === "VIBRATION"
+                      ? `${committed[i]!.assetName ?? r.fileName} · ${t("mp.samp.kind.VIBRATION")}`
+                      : r.fileName}
+                  </span>
                   <span className="text-[10px] font-semibold shrink-0 text-right">
                     {r.status === "created"  && fill(t("fa.batch.resCreated"), { code: r.sampleCode ?? "" })}
                     {r.status === "attached" && fill(t("fa.batch.resAttached"), { code: r.sampleCode ?? "" })}

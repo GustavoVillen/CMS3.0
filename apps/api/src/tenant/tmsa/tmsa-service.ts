@@ -306,7 +306,7 @@ async function computeOne(
       }) as Promise<Array<{ id: string; minStock: number }>>,
       [] as Array<{ id: string; minStock: number }>,
     ),
-    safe(() => p.spareRequest.count({ where: { tenantId, deletedAt: null, status: { in: ["DRAFT", "SUBMITTED"] } } }), 0),
+    safe(() => p.spareRequest.count({ where: { tenantId, deletedAt: null, status: "DRAFT" } }), 0),
     safe(() => p.maintenancePlan.count({ where: { ...base, status: "ACTIVE", samplingKind: { not: null } } }), 0),
     // Análisis de fluidos fuera de rango (verdict crítico) del buque, últimos 90d.
     safe(() => p.fluidAnalysisResult.count({

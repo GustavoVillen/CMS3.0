@@ -6,6 +6,8 @@ import { useT } from "../lib/i18n";
 import { NAV, LOCKED_NAV_PATHS } from "../lib/nav-items";
 import { fetchHiddenNavPaths, saveHiddenNavPaths } from "../lib/nav-config";
 import { WeeklyReportSettings } from "../components/WeeklyReportSettings";
+import { PdfArchiveSettings } from "../components/PdfArchiveSettings";
+import { SpareRequestSettings } from "../components/SpareRequestSettings";
 import { useAuth } from "../lib/auth";
 
 export const ConfigurationPage: React.FC = () => {
@@ -143,6 +145,8 @@ export const ConfigurationPage: React.FC = () => {
       {/* El backend vuelve a chequear el rol: esto solo evita mostrar controles
           que el usuario no puede usar. */}
       {isAdmin && <WeeklyReportSettings />}
+      {isAdmin && <SpareRequestSettings />}
+      {isAdmin && <PdfArchiveSettings />}
     </div>
   );
 };

@@ -336,7 +336,9 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
   const [criteria, setCriteria] = useState("");
   const [loto, setLoto] = useState("");
   const [risk, setRisk] = useState<string | null>(null);
-  const [tried, setTried] = useState(false);
+  // Estándar V50 (pedido de Gustavo): lo que falta se marca desde que se abre,
+  // no recién al tocar el botón.
+  const [tried, setTried] = useState(true);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);

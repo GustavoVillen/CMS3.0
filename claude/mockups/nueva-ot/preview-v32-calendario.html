@@ -1,0 +1,362 @@
+<title>Calendario de mantenimiento</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.18);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.18); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.16); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.18); --badfg:#FCA5A5;
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.18);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.18); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.16); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.18); --badfg:#FCA5A5;
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:36px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted)}
+.vtabs{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:0 12px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.vtabs button{min-height:40px;border:0;border-radius:11px;background:var(--surface2);font-weight:800;font-size:13.5px;cursor:pointer;color:var(--muted)}
+.vtabs button.on{background:var(--ac);color:var(--acfg)}
+.navrow{flex:none;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 10px 10px}
+.navrow b{flex:1;text-align:center;font-size:15px;font-weight:800;text-transform:capitalize}
+.navb{width:40px;height:40px;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.hoyb{height:36px;padding:0 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13px;font-weight:800;cursor:pointer}
+.scr{flex:1;overflow-y:auto;padding:0 0 16px}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);padding:8px 8px 4px;background:var(--surface)}
+.dow span{text-align:center;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+.weeks{background:var(--surface);padding:0 8px 8px;display:flex;flex-direction:column;gap:2px}
+.week{border-top:1px solid var(--line);padding-top:3px}
+.nums{display:grid;grid-template-columns:repeat(7,1fr)}
+.num{height:26px;display:grid;place-items:center;font-size:12.5px;font-weight:700;color:var(--fg);cursor:pointer}
+.num.out{color:var(--faint);font-weight:500}
+.num.today span{background:var(--ac);color:var(--acfg);border-radius:99px;width:24px;height:24px;display:grid;place-items:center}
+.num.sel span{outline:2px solid var(--fg);outline-offset:1px;border-radius:99px;width:24px;height:24px;display:grid;place-items:center}
+.lanes{position:relative;min-height:6px;margin-bottom:4px}
+.lane{position:relative;height:16px;margin-bottom:2px}
+.evt{position:absolute;top:0;height:16px;border-radius:5px;font-size:10px;font-weight:800;line-height:16px;padding:0 4px;overflow:hidden;white-space:nowrap;cursor:pointer;color:var(--fg)}
+.evt.open{background:var(--acsoft);color:var(--ac);border-left:3px solid var(--ac)}
+.evt.wait{background:var(--surface2);color:var(--muted);border-left:3px solid var(--faint)}
+.evt.over{background:var(--badsoft);color:var(--badfg);border-left:3px solid var(--bad)}
+.evt.run{background:var(--oksoft);color:var(--okfg);border-left:3px solid var(--ok)}
+.evt .due{float:right;margin-left:4px;opacity:.75}
+.more{position:absolute;font-size:9.5px;font-weight:800;color:var(--muted);line-height:14px}
+.daylist{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.daylist h3{margin:0;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;cursor:pointer}
+.card.over{border-color:color-mix(in srgb,var(--bad) 45%,transparent);background:color-mix(in srgb,var(--bad) 5%,var(--surface))}
+.card.run{border-color:color-mix(in srgb,var(--ok) 45%,transparent);background:color-mix(in srgb,var(--ok) 5%,var(--surface))}
+.dot{width:10px;height:10px;border-radius:99px;flex:none;margin-top:5px}
+.card .eq{font-size:12px;color:var(--muted);font-weight:600}
+.card .tk{font-size:14.5px;font-weight:800;line-height:1.25}
+.card .win{font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:5px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:99px;margin-top:5px}
+.p-open{background:var(--acsoft);color:var(--ac)} .p-wait{background:var(--surface2);color:var(--muted)}
+.p-over{background:var(--badsoft);color:var(--badfg)} .p-run{background:var(--oksoft);color:var(--okfg)}
+.empty{color:var(--muted);font-size:13.5px;padding:6px 2px}
+.wk{display:flex;flex-direction:column}
+.wkday{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.wkday.today{background:var(--acsoft)}
+.wkd{width:46px;flex:none;text-align:center}
+.wkd span{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+.wkd b{font-size:19px;font-weight:800}
+.wkday.today .wkd b{color:var(--ac)}
+.wkitems{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.wkitem{border-radius:10px;padding:7px 9px;font-size:12.5px;font-weight:700;line-height:1.3;cursor:pointer}
+.wkitem small{display:block;font-weight:600;opacity:.8;font-size:11.5px}
+.wkitem.open{background:var(--acsoft);color:var(--ac)} .wkitem.wait{background:var(--surface2);color:var(--muted)}
+.wkitem.over{background:var(--badsoft);color:var(--badfg)} .wkitem.run{background:var(--oksoft);color:var(--okfg)}
+.legend{margin:14px 16px 0;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.legend div{display:flex;gap:8px;align-items:center}
+.sw{width:14px;height:14px;border-radius:5px;flex:none}
+.guide{width:350px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Calendario de mantenimiento <small>· Preview V32</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const D=(y,m,dd)=>new Date(y,m-1,dd);
+const HOY=D(2026,9,16);
+const MESL=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const DOW=["Lu","Ma","Mi","Ju","Vi","Sá","Do"];
+const DOWL=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const key=x=>`${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+const fmt=x=>`${String(x.getDate()).padStart(2,"0")}/${String(x.getMonth()+1).padStart(2,"0")}`;
+const addD=(x,n)=>{const r=new Date(x); r.setDate(r.getDate()+n); return r;};
+const days=(a,b)=>Math.round((b-a)/86400000);
+/** Lunes de la semana de x. */
+const lunes=x=>{const r=new Date(x); const w=(r.getDay()+6)%7; r.setDate(r.getDate()-w); r.setHours(0,0,0,0); return r;};
+
+// Cada tarea: ventana (open) → vencimiento (due). Es lo que ya sabe el sistema.
+const T=[
+ {eq:"Bomba de Incendio de Emergencia", tk:"Recorrido de bomba y cambio de sellos", open:D(2026,6,10), due:D(2026,6,20), code:"M02-BBA-INC-EM-30"},
+ {eq:"Filtros de Achique Sentina", tk:"Limpiar filtro general y rejillas", open:D(2026,6,5), due:D(2026,6,11), code:"M02-FILT-ACH-01"},
+ {eq:"Bomba Hidráulica Estribor", tk:"Recorrido general, juntas y mangueras", open:D(2026,9,1), due:D(2026,9,30), code:"M02-BBA-HID-ER-30", wo:"WO-M02-26-0461"},
+ {eq:"Motor Principal Babor", tk:"Cambio de aceite y filtros", open:D(2026,9,12), due:D(2026,9,22), code:"M02-MP-BR-04", est:true},
+ {eq:"Generador N°2", tk:"Limpieza del intercambiador", open:D(2026,9,14), due:D(2026,9,26), code:"M02-GEN-2-03"},
+ {eq:"Balsas salvavidas", tk:"Servicio anual en taller", open:D(2026,9,18), due:D(2026,10,28), code:"M02-BALSA-01"},
+ {eq:"Molinete de proa", tk:"Engrase general y control de freno", open:D(2026,9,25), due:D(2026,10,5), code:"M02-MOL-01"},
+ {eq:"Motor Principal Estribor", tk:"Toma de muestra de aceite", open:D(2026,10,2), due:D(2026,10,12), code:"M02-MP-ER-18"},
+ {eq:"Caja reductora Babor", tk:"Cambio de aceite de caja", open:D(2026,10,20), due:D(2026,11,4), code:"M02-CR-BR-06", est:true},
+ {eq:"Extintores portátiles", tk:"Control y recarga (12 unidades)", open:D(2026,11,1), due:D(2026,11,20), code:"M02-EXT-01"},
+];
+const estado=t=> t.wo ? "run" : HOY>t.due ? "over" : HOY>=t.open ? "open" : "wait";
+const ESTADO_TXT={open:"Ya se puede hacer", wait:"Todavía no", over:"Vencida", run:"En ejecución"};
+
+const S={v:"app", vista:"mes", cursor:D(2026,9,1), sel:HOY, theme:"system"};
+
+/** Barras de una semana: cada tarea ocupa los días en que su ventana toca esa semana. */
+function lanesDeSemana(ini){
+  const fin=addD(ini,6);
+  const items=T.filter(t=>t.open<=fin && t.due>=ini)
+    .sort((a,b)=> a.open-b.open || b.due-a.due);
+  const lanes=[];
+  for(const t of items){
+    const c0=Math.max(0, days(ini,t.open));
+    const c1=Math.min(6, days(ini,t.due));
+    let i=0; while(lanes[i] && lanes[i].some(x=>!(x.c1<c0 || x.c0>c1))) i++;
+    (lanes[i] ??= []).push({t,c0,c1});
+  }
+  return lanes;
+}
+
+function mes(){
+  const y=S.cursor.getFullYear(), m=S.cursor.getMonth();
+  const primero=new Date(y,m,1);
+  let ini=lunes(primero);
+  const semanas=[];
+  for(let i=0;i<6;i++){ const s=addD(ini,i*7); if(i>0 && s.getMonth()!==m && s>new Date(y,m+1,0)) break; semanas.push(s); }
+  const html=semanas.map(sIni=>{
+    const lanes=lanesDeSemana(sIni);
+    const visibles=lanes.slice(0,3), ocultas=lanes.slice(3);
+    const extra={};
+    ocultas.flat().forEach(({t,c0,c1})=>{ for(let c=c0;c<=c1;c++) extra[c]=(extra[c]||0)+1; });
+    return `<div class="week">
+      <div class="nums">${Array.from({length:7},(_,c)=>{
+        const dia=addD(sIni,c), out=dia.getMonth()!==m, hoy=key(dia)===key(HOY), sel=key(dia)===key(S.sel);
+        return `<div class="num ${out?"out":""} ${hoy?"today":""} ${sel&&!hoy?"sel":""}" data-a="dia" data-p="${dia.toISOString()}"><span>${dia.getDate()}</span></div>`;
+      }).join("")}</div>
+      <div class="lanes">
+        ${visibles.map(lane=>`<div class="lane">${lane.map(({t,c0,c1})=>{
+          const w=(c1-c0+1)/7*100, l=c0/7*100;
+          const cortaDer = t.due>addD(sIni,6);
+          return `<div class="evt ${estado(t)}" style="left:${l}%;width:calc(${w}% - 3px)" data-a="ver" data-p="${t.code}" title="${t.tk}">${t.eq}${!cortaDer?`<span class="due">${t.due.getDate()}</span>`:""}</div>`;
+        }).join("")}</div>`).join("")}
+        ${Object.entries(extra).map(([c,n])=>`<div class="more" style="left:${c/7*100}%">+${n}</div>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+  const delDia=T.filter(t=> S.sel>=t.open && S.sel<=t.due);
+  return `<div class="dow">${DOW.map(d=>`<span>${d}</span>`).join("")}</div>
+  <div class="weeks">${html}</div>
+  ${listaDelDia(delDia)}
+  ${leyenda()}`;
+}
+
+function listaDelDia(items){
+  const titulo = key(S.sel)===key(HOY) ? "Hoy" : `${DOWL[(S.sel.getDay()+6)%7]} ${fmt(S.sel)}`;
+  return `<div class="daylist"><h3>${titulo} · ${items.length} ${items.length===1?"tarea":"tareas"}</h3>
+  ${items.length===0?`<p class="empty">No hay tareas con la ventana abierta ese día.</p>`:items.map(t=>{
+    const st=estado(t);
+    const color=st==="over"?"var(--bad)":st==="run"?"var(--ok)":st==="open"?"var(--ac)":"var(--faint)";
+    const venceHoy=key(t.due)===key(S.sel);
+    return `<button class="card ${st==="over"?"over":st==="run"?"run":""}" data-a="ver" data-p="${t.code}">
+      <span class="dot" style="background:${color}"></span>
+      <span style="min-width:0;flex:1">
+        <span class="eq">${t.eq}</span>
+        <span class="tk" style="display:block">${t.tk}</span>
+        <span class="win">${I("calendar-range",13)} Ventana ${fmt(t.open)} → ${fmt(t.due)} ${t.est?'· estimada':''}</span>
+        <span class="pill p-${st}">${st==="run"?`${I("wrench",13)}En ejecución · ${t.wo}`:st==="over"?`${I("alert-triangle",13)}Venció el ${fmt(t.due)}`:venceHoy?`${I("alert-triangle",13)}Vence hoy`:st==="open"?`${I("circle-check",13)}Ya se puede hacer`:`${I("clock",13)}Se puede desde el ${fmt(t.open)}`}</span>
+      </span>
+    </button>`;
+  }).join("")}</div>`;
+}
+
+function semana(){
+  const ini=lunes(S.cursor);
+  return `<div class="wk">${Array.from({length:7},(_,i)=>{
+    const dia=addD(ini,i), hoy=key(dia)===key(HOY);
+    const items=T.filter(t=> dia>=t.open && dia<=t.due);
+    return `<div class="wkday ${hoy?"today":""}">
+      <div class="wkd"><span>${DOWL[i]}</span><b>${dia.getDate()}</b></div>
+      <div class="wkitems">
+        ${items.length===0?`<span class="empty" style="padding:2px">—</span>`:items.map(t=>{
+          const st=estado(t), venceHoy=key(t.due)===key(dia), abreHoy=key(t.open)===key(dia);
+          return `<div class="wkitem ${st}" data-a="ver" data-p="${t.code}">${t.tk}
+            <small>${t.eq}${venceHoy?" · vence hoy":abreHoy?" · se abre la ventana":""}</small></div>`;
+        }).join("")}
+      </div>
+    </div>`;
+  }).join("")}</div>${leyenda()}`;
+}
+
+function leyenda(){
+  return `<div class="legend">
+    <div><span class="sw" style="background:var(--bad)"></span>Vencida</div>
+    <div><span class="sw" style="background:var(--ac)"></span>Ya se puede hacer (ventana abierta)</div>
+    <div><span class="sw" style="background:var(--surface2);border:1px solid var(--line)"></span>Todavía no se puede</div>
+    <div><span class="sw" style="background:var(--ok)"></span>En ejecución (ya tiene OT)</div>
+    <div style="color:var(--muted);font-size:12.5px">La barra va desde que se puede empezar hasta el día que vence.</div>
+  </div>`;
+}
+
+function app(){
+  const titulo = S.vista==="mes"
+    ? `${MESL[S.cursor.getMonth()]} ${S.cursor.getFullYear()}`
+    : (()=>{ const i=lunes(S.cursor), f=addD(i,6); return `${fmt(i)} — ${fmt(f)}`; })();
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      <div class="head"><button class="iconb">${I("arrow-left",20)}</button><div><h1>Planes para abrir</h1><p>MAO 02</p></div></div>
+      <div class="vtabs">
+        <button class="${S.vista==="mes"?"on":""}" data-a="vista" data-p="mes">Mes</button>
+        <button class="${S.vista==="semana"?"on":""}" data-a="vista" data-p="semana">Semana</button>
+        <button data-a="nada">Lista</button>
+      </div>
+      <div class="navrow">
+        <button class="navb" data-a="mover" data-p="-1">${I("chevron-left",20)}</button>
+        <b>${titulo}</b>
+        <button class="hoyb" data-a="hoy">Hoy</button>
+        <button class="navb" data-a="mover" data-p="1">${I("chevron-right",20)}</button>
+      </div>
+      <div class="scr">${S.vista==="mes"?mes():semana()}</div>
+    </div>
+    <aside class="guide">
+      <div><h2>El calendario: mes y semana</h2>
+      <p style="margin-top:8px">Cada tarea es una barra que empieza el día en que se puede empezar y termina el día que vence. El número al final de la barra es el día del vencimiento.</p></div>
+      <div><p class="gl">Para probar</p><ol class="steps">
+        <li>Tocá un día del mes: abajo aparecen las tareas de ese día.</li>
+        <li>Pasá a <b>Semana</b>: se ve día por día, con "vence hoy" y "se abre la ventana".</li>
+        <li>Movete con las flechas; <b>Hoy</b> vuelve a septiembre.</li>
+        <li>Probá el modo oscuro con el botón de arriba.</li>
+      </ol></div>
+      <p style="font-size:13px">La vista <b>Lista</b> (el botón gris) es la agenda de la Preview V31: misma información, en renglones.</p>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Calendario de mantenimiento · Preview V32</h2>
+  <p>La misma información de la agenda (V31), pero dibujada como un calendario: <b>Mes</b>, <b>Semana</b> y <b>Lista</b>. Cada tarea es una barra que va desde que se abre la ventana hasta el vencimiento, igual que un evento de varios días en Google Calendar.</p>
+
+  <section><h3>Vista Mes</h3><ul>
+    <li>Cuadrícula del mes, con hoy marcado en celeste.</li>
+    <li>Hasta 3 barras por semana; si hay más, aparece “+2” en el día.</li>
+    <li>Al tocar un día, abajo se listan sus tareas con las dos fechas y el estado.</li>
+    <li>En pantalla de celular entra el nombre del equipo, no la tarea entera: la tarea completa se ve al tocar.</li>
+  </ul></section>
+
+  <section><h3>Vista Semana</h3><ul>
+    <li>Los siete días uno debajo del otro (no columnas: en un celular las columnas quedan ilegibles).</li>
+    <li>Cada tarea aparece en todos los días de su ventana, y avisa “vence hoy” o “se abre la ventana”.</li>
+  </ul></section>
+
+  <section><h3>Lo que hay que saber</h3><ul>
+    <li>Las tareas <b>por horas de motor</b> no tienen fecha propia: su barra usa la fecha estimada por el uso del equipo y se marca como <b>estimada</b>.</li>
+    <li>Las tareas <b>vencidas</b> quedan en el mes en que vencieron. Para no perderlas de vista, la lista (V31) las agrupa arriba de todo; en el calendario hay que retroceder de mes.</li>
+    <li>Nada cambia en la base ni en las reglas: el calendario sólo mira.</li>
+  </ul></section>
+
+  <section><h3>Mi recomendación</h3>
+  <div class="opt">
+    <div class="rcard"><b>Las dos, con la lista como la vista por defecto</b>La lista responde “qué hago ahora” en dos segundos, que es lo que se usa a bordo todos los días. El calendario responde “cómo viene el mes”, que sirve para planificar la semana o una recalada. El botón queda con tres opciones: Mes · Semana · Lista.</div>
+    <div class="rcard"><b>Si hay que elegir una sola</b>La lista: en un celular de 6 pulgadas, la cuadrícula del mes obliga a tocar cada día para leer algo. El calendario luce mejor en la PC (donde ya existe el diagrama de Gantt).</div>
+  </div></section>
+  </article>`;
+}
+
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML=`${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref"?ref():app();
+  if(window.lucide) lucide.createIcons();
+}
+document.addEventListener("click", e=>{
+  const el=e.target.closest("[data-a]"); if(!el) return;
+  const a=el.dataset.a, p=el.dataset.p;
+  if(a==="tab") S.v=p;
+  else if(a==="theme"){ S.theme={system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if(a==="vista") S.vista=p;
+  else if(a==="dia") S.sel=new Date(p);
+  else if(a==="hoy"){ S.cursor=new Date(HOY); S.sel=new Date(HOY); }
+  else if(a==="mover"){ const n=Number(p);
+    if(S.vista==="mes") S.cursor=new Date(S.cursor.getFullYear(), S.cursor.getMonth()+n, 1);
+    else S.cursor=addD(S.cursor, 7*n); }
+  else return;
+  render();
+});
+render();
+</script>

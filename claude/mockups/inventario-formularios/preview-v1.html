@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview V1 — Formularios de Inventario</title>
+<style>
+  :root { --navy:#0C2461; --line:#555; --soft:#e5e7eb; --yellow:#fdfbd3; --green:#dbe8cc; --sky:#b8dbe8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#d9dde3; font-family: Arial, Helvetica, sans-serif; color:#111; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
+  .banner { background:#fff3cd; border:1px solid #e0b100; border-radius:8px; padding:12px 16px; font-size:13px; margin-bottom:18px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:36px 0 8px; }
+  .note { background:#fff; border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.5; margin-bottom:12px; }
+  .note b { color:var(--navy); }
+  .note ul { margin:6px 0 0 18px; padding:0; }
+  .demo { display:inline-block; background:#fde68a; color:#7c5800; font-size:10px; font-weight:bold; padding:1px 6px; border-radius:4px; }
+  /* Hoja A4 */
+  .page { background:#fff; width:794px; min-height:1060px; margin:0 auto 18px; padding:34px 36px 60px; position:relative; box-shadow:0 2px 10px rgba(0,0,0,.25); font-size:11px; }
+  table { border-collapse:collapse; width:100%; }
+  td, th { border:1px solid var(--line); padding:2px 5px; vertical-align:middle; }
+  .hdr td { height:24px; }
+  .logo { width:130px; text-align:center; }
+  .logo .m { font: bold 30px Georgia, serif; color:#2f6db5; letter-spacing:-2px; }
+  .logo .g { font-size:9px; color:#2f6db5; letter-spacing:1px; }
+  .code { text-align:center; color:var(--navy); font:bold 13px Georgia, serif; }
+  .title { text-align:center; font:bold 12px Georgia, serif; }
+  .meta { width:70px; font-size:9.5px; color:var(--navy); }
+  .metav { width:65px; text-align:center; font-size:9.5px; }
+  .ctrl { text-align:center; font-weight:bold; color:var(--navy); font-size:10px; }
+  .nav { background:var(--navy); color:#fff; font-weight:bold; text-align:center; }
+  .lab { font-weight:bold; text-align:center; }
+  .gray { background:#f2f2f2; }
+  .cb { display:inline-block; width:9px; height:9px; border:1px solid #111; vertical-align:middle; position:relative; }
+  .cb.on::after { content:""; position:absolute; inset:1px; background:#111; }
+  .rows td { height:15px; font-weight:bold; font-size:10.5px; }
+  .foot { position:absolute; left:36px; right:36px; bottom:22px; border:1px solid var(--line); display:flex; justify-content:space-between; padding:2px 8px; font-size:9.5px; }
+  .mark { background:#fff7c2; outline:2px dashed #e0a800; outline-offset:-2px; }
+  .page-no { position:absolute; top:6px; right:10px; font-size:9px; color:#999; }
+  /* Estándar */
+  .re th { background:var(--sky); font-family: "Times New Roman", serif; font-size:9.5px; }
+  .re td { font-size:9.5px; }
+  .re .sec { background:var(--sky); font:bold 14px "Times New Roman", serif; text-align:center; }
+  .re .std { background:var(--yellow); text-align:center; }
+  .re .rem { background:var(--green); text-align:center; }
+  .re .sol { text-align:center; font-weight:bold; }
+  .re .eq b { display:block; }
+  .re .pn { border-top:1px dashed #888; }
+  .screen { background:#0f172a; color:#e2e8f0; border-radius:10px; padding:14px; font-size:12px; }
+  .screen .tabs span { display:inline-block; padding:5px 10px; border-radius:6px; margin-right:6px; background:#1e293b; color:#94a3b8; }
+  .screen .tabs span.on { background:#0ea5e9; color:#fff; }
+  .screen .bar { display:flex; gap:10px; align-items:flex-end; background:#1e293b; border-radius:8px; padding:10px; margin-top:10px; flex-wrap:wrap; }
+  .screen label { display:block; font-size:9px; text-transform:uppercase; color:#64748b; margin-bottom:3px; }
+  .screen .in { background:#0f172a; border:1px solid #334155; border-radius:6px; padding:5px 8px; min-width:120px; }
+  .screen .btn { margin-left:auto; background:#0ea5e933; border:1px solid #0ea5e9; color:#38bdf8; border-radius:6px; padding:6px 12px; font-weight:bold; }
+  .seg span { display:inline-block; padding:5px 10px; border:1px solid #334155; }
+  .seg span.on { background:#0ea5e9; color:#fff; border-color:#0ea5e9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="banner"><b>Preview V1</b> — vista previa, no toca la app. Los datos son <span class="demo">DEMO</span> (repuestos de DON CHICUETO y herramientas del papel de MAO 02). Lo resaltado en amarillo punteado es lo que cambia respecto del PDF de hoy.</div>
+
+<h1>Formularios de Inventario adaptados al papel</h1>
+
+<div class="note">
+  <b>Qué se propone</b>
+  <ul>
+    <li><b>REGI-MAN-04.1 Inventario de repuestos y herramientas:</b> el PDF que ya existe se rearma igual al papel: 4 columnas (Repuesto · Detalles · Para qué · Cantidad), sección <b>Herramientas</b>, <b>Comentarios adicionales</b>, <b>Generado por</b> y el pie Elaborado / Revisado / Aprobado. Revisión 3, desde 29.12.2025.</li>
+    <li><b>R/E Estándar de filtros, lubricantes y artículos (nuevo):</b> para cada ítem muestra Estándar para viaje, Remanencia a bordo (stock del sistema) y calcula la Solicitud = Estándar − Remanencia. Se elige <b>Estándar</b> o <b>Medio estándar</b>, igual que la planilla Excel.</li>
+    <li>Las herramientas se cargan en Repuestos con categoría <b>Herramienta</b>; los artículos de consumo (guantes, trapo, pilas…) con categoría <b>Artículo</b>.</li>
+  </ul>
+</div>
+
+<div class="note">
+  <b>Errores que encontré en el reporte actual (se corrigen en el mismo cambio)</b>
+  <ul>
+    <li><b>Departamento mal calculado:</b> el sistema manda los equipos con código SFI 600/700 (motores, generadores, purificadora) a <b>COCINA</b>, y alojamiento (500) a MÁQUINAS. Hoy, si filtrás "MÁQUINAS", los filtros del Volvo Penta de DON CHICUETO no salen. Correcto: 100–400 Cubierta · 500 Cocina · 600–800 Máquinas.</li>
+    <li><b>Barcazas no reconocidas:</b> busca el tipo "BARCAZA" exacto, pero en la base dice "Barcaza Tanque - Rake/Box", así que nunca marca la casilla BARCAZA.</li>
+    <li><b>Revisión y fecha del documento:</b> hoy sale "Desde 01.05.2025"; el papel vigente es Revisión 3 desde 29.12.2025.</li>
+  </ul>
+</div>
+
+<!-- ═════════════════ REGI-MAN-04.1 ═════════════════ -->
+<h2>1 · REGI-MAN-04.1 — Inventario de repuestos y herramientas</h2>
+
+<div class="page">
+  <span class="page-no">hoja 1</span>
+  <table class="hdr">
+    <tr>
+      <td class="logo" rowspan="4"><div class="m">M</div><div class="g">MERCURIO GROUP</div></td>
+      <td class="code" rowspan="2">REGI-MAN-04.1</td>
+      <td class="meta">Revisión N°</td><td class="metav mark">3</td>
+    </tr>
+    <tr><td class="meta">Desde:</td><td class="metav mark">29.12.2025</td></tr>
+    <tr><td class="title" rowspan="2">Inventario de repuestos y herramientas</td><td class="meta">Página:</td><td class="metav">1</td></tr>
+    <tr><td class="ctrl" colspan="2" style="height:34px">Documento Controlado</td></tr>
+  </table>
+
+  <table style="margin-top:14px">
+    <tr><td class="nav" style="width:21%">REMOLCADOR</td><td style="width:29%"><b>DON CHICUETO</b></td><td class="lab gray" style="width:21%">FECHA</td><td class="lab">17-09-2026</td></tr>
+  </table>
+  <table>
+    <tr style="height:32px">
+      <td class="lab gray">ZONA</td><td class="mark">PTO. GUYRATI</td>
+      <td class="lab gray">RIO</td><td></td>
+      <td class="lab gray">KM</td><td></td>
+      <td class="lab gray">MARGEN</td><td></td>
+    </tr>
+  </table>
+  <table>
+    <tr><td class="nav" colspan="8">ESTADO DEL BUQUE</td></tr>
+    <tr>
+      <td class="lab">NAVEGACION</td><td style="text-align:center"><span class="cb"></span></td>
+      <td class="lab">AMARRADO</td><td style="text-align:center"><span class="cb on"></span></td>
+      <td class="lab">PUERTO</td><td style="text-align:center"><span class="cb"></span></td>
+      <td class="lab">VARADERO</td><td style="text-align:center"><span class="cb"></span></td>
+    </tr>
+  </table>
+  <table>
+    <tr style="height:36px"><td class="lab" style="vertical-align:top">RIO</td><td></td><td class="lab" style="vertical-align:top">KM</td><td></td><td class="lab" style="vertical-align:top">CIUDAD</td><td style="vertical-align:top">VILLETA</td></tr>
+  </table>
+  <table>
+    <tr><td class="nav" colspan="8">DEPARTAMENTO</td></tr>
+    <tr>
+      <td class="lab">CUBIERTA</td><td style="text-align:center"><span class="cb"></span></td>
+      <td class="lab">MAQUINAS</td><td style="text-align:center"><span class="cb on"></span></td>
+      <td class="lab">COCINA</td><td style="text-align:center"><span class="cb"></span></td>
+      <td class="lab">BARCAZA</td><td style="text-align:center"><span class="cb"></span></td>
+    </tr>
+    <tr><td class="nav" colspan="8">REPUESTOS</td></tr>
+  </table>
+  <table class="rows mark">
+    <tr class="gray"><td class="lab" style="width:28%">REPUESTO</td><td class="lab" style="width:22%">DETALLES</td><td class="lab" style="width:36%">PARA QUE</td><td class="lab">CANTIDAD</td></tr>
+    <tr><td>IMPELLER BOMBA DE AGUA DE MAR</td><td>P/N 3862295</td><td>MOTOR PRINCIPAL VOLVO PENTA D16 MH</td><td>02 UND</td></tr>
+    <tr><td>FILTRO DE AIRE</td><td>P/N 13053</td><td>ELECTROCOMPRESOR CETEC NK</td><td>02 UND</td></tr>
+    <tr><td>MAJOR SERVICE KIT</td><td>P/N 549302-01</td><td>PURIFICADORA ALFA LAVAL MAB 102B-14</td><td>01 KIT</td></tr>
+    <tr><td>MOTOR DE ARRANQUE</td><td></td><td>MOTOR PRINCIPAL VOLVO PENTA D16 MH</td><td>01 UND</td></tr>
+    <tr><td>LIQUIDO REFRIGERANTE PREMEZCLADO</td><td></td><td>GENERADOR CUMMINS SERIE ES/C</td><td>20 L</td></tr>
+    <tr><td></td><td></td><td></td><td></td></tr>
+    <tr><td></td><td></td><td></td><td></td></tr>
+    <tr><td></td><td></td><td></td><td></td></tr>
+    <tr><td></td><td></td><td></td><td></td></tr>
+    <tr><td></td><td></td><td></td><td></td></tr>
+  </table>
+  <table class="mark">
+    <tr><td class="nav" colspan="2">HERRAMIENTAS</td></tr>
+    <tr class="gray"><td class="lab">NOMBRE Y DESCRIPCION</td><td class="lab" style="width:15%">CANTIDAD</td></tr>
+  </table>
+  <table class="rows mark">
+    <tr><td>JUEGO DE LLAVE TUBO TOPTUL DEL 8 A 32 MM Y LLAVE COMBINADA</td><td style="width:15%">01 JUEGO</td></tr>
+    <tr><td>TALADRO MAKITA HP333D A BATERIA 12 VOLT CON 02 BATERIAS Y CARGADOR</td><td>01 CAJA</td></tr>
+    <tr><td>PINZA PIROMETRICA (MULTIMETRO DIGITAL TRUPER)</td><td>01 UND</td></tr>
+    <tr><td>RADIO VHF STANDARD HORIZON HX 400</td><td>01 UND</td></tr>
+    <tr><td></td><td></td></tr>
+    <tr><td></td><td></td></tr>
+  </table>
+  <table class="mark" style="margin-top:0">
+    <tr><td class="nav">COMENTARIOS ADICIONALES</td></tr>
+    <tr><td style="height:34px"></td></tr>
+    <tr><td class="nav">EL PRESENTE FUE GENERADO POR</td></tr>
+    <tr><td style="height:18px"><b>EDGAR ALVARENGA — JEFE DE MÁQUINAS</b></td></tr>
+  </table>
+
+  <div class="foot mark"><span>Elaborado: Mercurio Group</span><span>Revisado: Persona Designada en Tierra</span><span>Aprobado: Gerente General</span></div>
+</div>
+
+<div class="note">
+  <b>Cómo se llena cada dato</b>
+  <ul>
+    <li><b>Repuesto:</b> nombre del repuesto. <b>Detalles:</b> número de parte del fabricante (el sistema no guarda si es "nuevo" o "recorrido"; esa columna queda para anotar a mano si hace falta). <b>Para qué:</b> el equipo al que está vinculado; si no tiene equipo, su grupo SFI. <b>Cantidad:</b> stock real a bordo con su unidad.</li>
+    <li>Sólo se listan los ítems <b>con stock mayor a cero</b> (es un inventario de lo que hay a bordo). Se agregan renglones vacíos para completar a mano.</li>
+    <li><b>Estado del buque</b> y <b>Ciudad/Zona</b> salen del último Parte Diario; Río, KM y Margen quedan en blanco para anotar (el sistema no los tiene).</li>
+    <li><b>Generado por:</b> el nombre del usuario que descarga el PDF.</li>
+    <li>Se sacan las columnas Ubicación, Últ. movimiento y el renglón "Total ítems" que hoy agrega el sistema y no están en el papel.</li>
+  </ul>
+</div>
+
+<!-- ═════════════════ ESTÁNDAR ═════════════════ -->
+<h2>2 · R/E Estándar de filtros, lubricantes y artículos (nuevo)</h2>
+
+<div class="page re">
+  <span class="page-no">hoja 1</span>
+  <table>
+    <tr>
+      <td style="width:110px; text-align:center; border-right:none"><div style="font:bold 26px Georgia; color:#2f6db5">M</div><div style="font-size:8px;color:#2f6db5">MERCURIO GROUP</div></td>
+      <td style="text-align:center; font:bold 17px 'Times New Roman'; border-left:none">R/E DON CHICUETO - MERCURIO GROUP</td>
+      <td style="width:150px; text-align:center; background:var(--green); font:bold 10px 'Times New Roman'">VIAJE N° 14<br><span style="font-size:9px">SC-25-DCH-2026</span></td>
+    </tr>
+  </table>
+  <table>
+    <tr>
+      <th style="width:38%">ARTICULOS</th><th style="width:16%">N° DE PARTE</th><th style="width:10%">MEDIDA</th>
+      <th style="width:9%">ESTÁNDAR<br>PARA VIAJE</th><th style="width:9%">REMANENCIA<br><br>A BORDO</th><th>SOLICITUD<br><br>PARA COMPLETAR ESTANDAR</th>
+    </tr>
+    <tr><td class="sec" colspan="6">ESTANDAR DE FILTROS Y LUBRICANTES PARA MAQUINAS</td></tr>
+    <tr><td class="eq"><b>Motor principal</b>Marca/Modelo: Volvo Penta D16 MH<br><b style="padding-left:40px">Aceite de motor</b></td><td>Shell Rimula R4 L 15W40</td><td>Tambor x 200 lts</td><td class="std">2</td><td class="rem">1</td><td class="sol">1</td></tr>
+    <tr><td class="eq"><b>Motor principal</b>Marca/Modelo: Volvo Penta D16 MH<br><b style="padding-left:40px">Filtro de Combustible</b></td><td>21380488</td><td>UN</td><td class="std">12</td><td class="rem">10</td><td class="sol">2</td></tr>
+    <tr><td class="eq"><b>Motor principal</b>Marca/Modelo: Volvo Penta D16 MH<br><b style="padding-left:40px">Prefiltro separador de agua</b></td><td>RACOR 2020PM-OR</td><td>UN</td><td class="std">2</td><td class="rem">2</td><td class="sol">0</td></tr>
+    <tr><td class="eq"><b>Generador</b>Marca/Modelo: Cummins serie ES/C<br><b style="padding-left:40px">Líquido refrigerante</b></td><td>KLAAS G 48 (50/50)</td><td>L</td><td class="std">20</td><td class="rem">5</td><td class="sol">15</td></tr>
+    <tr><td class="eq"><b>Compresor</b>Marca/Modelo: CETEC NK<br><b style="padding-left:40px">Filtro de Aire</b></td><td>13053</td><td>UN</td><td class="std">2</td><td class="rem">2</td><td class="sol">0</td></tr>
+    <tr><td class="eq"><b>Compresor</b>Marca/Modelo: CETEC NK<br><b style="padding-left:40px">Filtro Separador de Aceite</b></td><td>240154</td><td>UN</td><td class="std">2</td><td class="rem">0</td><td class="sol">2</td></tr>
+    <tr><td class="sec" colspan="6">ESTANDAR DE ARTICULOS PARA MAQUINAS</td></tr>
+    <tr><td colspan="2">CINTA - TIPO AISLADORA 3M</td><td>UN</td><td class="std">2</td><td class="rem">0</td><td class="sol">2</td></tr>
+    <tr><td colspan="2">GUANTE - TIPO DE CUERO VAQUETA (AMARILLO)</td><td>UN</td><td class="std">12</td><td class="rem">0</td><td class="sol">12</td></tr>
+    <tr><td colspan="2">PILA DURACELL - TIPO "AA" PAQ DE 4 UNID</td><td>UN</td><td class="std">6</td><td class="rem">1</td><td class="sol">5</td></tr>
+    <tr><td colspan="2">TRAPO - TIPO INDUSTRIAL</td><td>KILOS</td><td class="std">20</td><td class="rem">0</td><td class="sol">20</td></tr>
+    <tr><td colspan="2">KIT CLARIFICANTE (POTABILIZADOR) X 100 UNIDADES</td><td>KITS</td><td class="std">3</td><td class="rem">4</td><td class="sol">0</td></tr>
+  </table>
+  <table style="margin-top:18px">
+    <tr>
+      <td style="border-right:none; vertical-align:top; font-size:11px"><b>COMENTARIOS:</b><br>.............................................................................................<br>.............................................................................................<br>.............................................................................................</td>
+      <td style="width:130px; border-left:none"></td>
+      <td style="width:150px; text-align:center; padding:0">
+        <div style="height:40px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:10px">FIRMA DEL JEFE DE MAQUINAS</div>
+        <div style="height:30px; display:flex; align-items:center; justify-content:center; font-size:10px">ACLARACIÓN DE FIRMA</div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div class="note">
+  <b>Cómo se llena cada dato</b>
+  <ul>
+    <li><b>Estándar para viaje:</b> el "Stock objetivo" que ya tiene cada repuesto en el sistema. Con <b>Medio estándar</b> se usa la mitad (redondeada hacia arriba).</li>
+    <li><b>Remanencia a bordo:</b> el stock que tiene el sistema en ese momento. Si el conteo real no coincide, primero se ajusta el stock y después se imprime.</li>
+    <li><b>Solicitud:</b> Estándar − Remanencia; si sobra, queda en 0.</li>
+    <li><b>Primera sección</b> (filtros y lubricantes): categorías Filtro, Lubricante y Refrigerante, agrupados por equipo (Marca/Modelo sale del equipo vinculado). <b>Segunda sección</b> (artículos): categoría Artículo.</li>
+    <li>Sólo entran los ítems que tienen Estándar cargado. Sirve para Máquinas o Cubierta según el departamento elegido (el título cambia a "…PARA CUBIERTA").</li>
+    <li><b>Viaje N°</b> se escribe en la pantalla antes de descargar; si se deja vacío, sale el renglón para completarlo a mano.</li>
+    <li>El PDF no crea un pedido de repuestos automáticamente: es el formulario para mandar a la compañía, igual que hoy.</li>
+  </ul>
+</div>
+
+<h2>3 · Dónde se pide (pantalla Reportes)</h2>
+<div class="screen">
+  <div class="tabs"><span>Inventario (REGI-MAN-04.1)</span><span>Consumo mensual</span><span class="on">Estándar para viaje</span><span>Historial</span></div>
+  <div class="bar">
+    <div><label>Departamento</label><div class="in">MÁQUINAS ▾</div></div>
+    <div><label>Tipo de pedido</label><div class="seg"><span class="on">Estándar</span><span>Medio estándar</span></div></div>
+    <div><label>Viaje N°</label><div class="in">14</div></div>
+    <div class="btn">⬇ Descargar PDF</div>
+  </div>
+  <div style="margin-top:10px; color:#94a3b8">Debajo, la misma tabla del PDF para revisar antes de descargar (Artículo · Estándar · A bordo · Solicitud), con la solicitud resaltada cuando es mayor a 0.</div>
+</div>
+
+<div class="note" style="margin-top:14px">
+  <b>Datos a cargar después</b> (no los carga este cambio): MAO 02 hoy no tiene repuestos en el sistema, y ningún buque tiene herramientas ni artículos de consumo cargados. Hasta que se carguen, esas secciones salen con renglones vacíos.
+</div>
+
+</div>
+</body>
+</html>

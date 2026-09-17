@@ -1,6 +1,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { log } from "../../common/logger";
 import { assertCanReopen, assertReopenReason } from "../../common/record-lock";
@@ -472,6 +473,7 @@ export async function approveDeferral(
     }
   }
 
+  void archivePdf(session, { kind: "APL", id: approved.id });
   return { ...approved, drydockSpecId: drydock?.specId ?? null, drydockSpecCode: drydock?.specCode ?? null };
 }
 
@@ -510,6 +512,7 @@ export async function rejectDeferral(
     entityId: rejected.id,
     metadata: { deferralCode: rejected.deferralCode, vesselCode: rejected.vesselCode, sourceType: rejected.sourceType },
   });
+  void archivePdf(session, { kind: "APL", id: rejected.id });
   return rejected;
 }
 
@@ -642,7 +645,7 @@ export async function closeDeferral(session: TenantAccessSession, id: string, pa
   const current = await getDeferral(session, id);
   ensureStatus(current.status, "ACTIVE", "Close");
 
-  return deferral.update({
+  const closed = await deferral.update({
     where: { id: current.id },
     data: {
       status: "CLOSED",
@@ -651,6 +654,8 @@ export async function closeDeferral(session: TenantAccessSession, id: string, pa
       updatedByUserId: session.user.id,
     },
   });
+  void archivePdf(session, { kind: "APL", id: current.id });
+  return closed;
 }
 
 export async function reopenDeferral(

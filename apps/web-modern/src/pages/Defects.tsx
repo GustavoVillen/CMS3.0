@@ -3,9 +3,9 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertOctagon, AlertTriangle, Ban, Bot, Camera, Check, CheckCircle2, CircleDot, ClipboardCheck, Clock, Download, Droplets, ExternalLink,
   GitBranch, Hammer, History, Link2, Loader2, Maximize2, Minimize2, MoreHorizontal, Pencil, Plus, RotateCcw, Save, Search, SearchCheck,
-  ShieldQuestion, Ship, Sparkles, Trash2, Wrench, X,
+  ShieldQuestion, Ship, Sparkles, Trash2, Wrench, X, ListChecks,
 } from "lucide-react";
-import { GuideSection, GuideField, GuideNeedTag } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -59,6 +59,10 @@ interface Defect {
   assetId: string;
   workOrderId: string | null;
   workOrderCode: string | null;
+  /** Sólo en el detalle: estado de la OT vinculada y muestra de origen (V49). */
+  workOrderStatus?: string | null;
+  originSampleId?: string | null;
+  originSampleCode?: string | null;
   // Origen auditoría/inspección externa (cuando classification=EXTERNAL_AUDIT_FINDING).
   sourceType?: string | null;
   sourceId?: string | null;
@@ -175,6 +179,7 @@ interface AssetLiveSearchProps {
 }
 
 const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disabled, value, onChange }) => {
+  const t = useT();
   const [query, setQuery]   = useState("");
   const [open, setOpen]     = useState(false);
   const ref                 = React.useRef<HTMLDivElement>(null);
@@ -206,7 +211,7 @@ const AssetLiveSearch: React.FC<AssetLiveSearchProps> = ({ assets, loading, disa
 
   return (
     <div ref={ref} className="relative">
-      <label className={labelCls}>Equipo *</label>
+      <label className={labelCls}>{t("wo.modal.equipment")}<RequiredMark /></label>
       <input
         value={open ? query : displayValue}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
@@ -573,7 +578,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
           <div className="grid grid-cols-2 gap-3">
             {/* Obligatorios: se resaltan mientras falten (preview V24). */}
             <GuideField id="def-new-vessel" missing={!vesselCode}>
-              <label className={labelCls}>{t("form.vessel")}{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <label className={labelCls}>{t("form.vessel").replace(/\s*\*\s*$/, "")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls + " appearance-none"} required>
                 <option value="">{t("asset.selectVessel")}</option>
                 {vessels.map(v => (
@@ -606,13 +611,13 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
               </select>
             </div>
             <GuideField id="def-new-class" missing={!classification.trim()}>
-              <label className={labelCls}>{t("form.classification")}{!classification.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <label className={labelCls}>{t("form.classification").replace(/\s*\*\s*$/, "")}<RequiredMark />{!classification.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input value={classification} onChange={e => setClassification(e.target.value)} className={inputCls} placeholder={t("def.classificationPh")} />
             </GuideField>
           </div>
           <GuideField id="def-new-desc" missing={!description.trim()}>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelCls + " mb-0"}>{t("form.description")}{!description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <label className={labelCls + " mb-0"}>{t("form.description").replace(/\s*\*\s*$/, "")}<RequiredMark />{!description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -1165,6 +1170,32 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   const repairWoCode = originKey !== "wo" ? defect.workOrderCode : null;
   const canCreateWo = !isClosed && !defect.workOrderId;
 
+  // No se abre una OT sobre un defecto a medio cargar: lo básico siempre y, si
+  // la severidad es Alta o Crítica, también el análisis de causa raíz.
+  const filled = (v: string) => v.replace(/[\s*_#>`~-]/g, "").length > 0;
+  const woMissing = [
+    !filled(description) && t("def.guide.found"),
+    !classification.trim() && t("def.classification"),
+    !filled(immediateAction) && t("def.guide.immediate"),
+    ...((severity === "HIGH" || severity === "CRITICAL") ? [
+      !rcaMethodology && t("def.rcaMethodology"),
+      !filled(rcaImmediateCause) && t("def.rcaImmediateCause"),
+      !filled(rcaRootCause) && t("def.rcaRootCause"),
+    ] : []),
+  ].filter((x): x is string => !!x);
+
+  /** Única puerta para abrir la OT correctiva: exige el formulario completo y lo guarda antes. */
+  const startCreateWo = useCallback(async (extra?: Record<string, unknown>) => {
+    if (woMissing.length > 0) {
+      setActionError(`${t("def.woGate.intro")}\n${woMissing.map(m => `• ${m}`).join("\n")}`);
+      return false;
+    }
+    if (!await patchDefect(extra)) return false;
+    setShowCreateWo(true);
+    return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [woMissing.join("|"), patchDefect, t]);
+
   /** Guardar sin cerrar (el cierre va por su ventana). */
   const saveOnly = useCallback(async () => {
     if (await patchDefect()) onSaved();
@@ -1185,11 +1216,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       setCloseDlg(false);
       await closeDefectAndWo();
     } else if (repairType === "TEMPORARIA") {
-      if (!await patchDefect({ repairType: "TEMPORARIA" })) return;
       setCloseDlg(false);
-      setShowCreateWo(true);
+      await startCreateWo({ repairType: "TEMPORARIA" });
     }
-  }, [repairType, closeCheckText, patchDefect, closeDefectAndWo, t]);
+  }, [repairType, closeCheckText, patchDefect, closeDefectAndWo, startCreateWo, t]);
 
   /** ISM 10.2.3 — confirmar desde el defecto si el arreglo sigue funcionando. */
   const verifyEffectiveness = useCallback(async (outcome: "EFFECTIVE" | "INEFFECTIVE") => {
@@ -1210,8 +1240,9 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   useEffect(() => {
     if (initialActionDone.current || !initialAction) return;
     initialActionDone.current = true;
-    if (initialAction === "createWo" && canCreateWo) setShowCreateWo(true);
+    if (initialAction === "createWo" && canCreateWo) void startCreateWo();
     if (initialAction === "close" && !isClosed) setCloseDlg(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAction, canCreateWo, isClosed]);
 
 
@@ -1234,7 +1265,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
               No, mantener abierto
             </button>
             <button
-              onClick={() => { setPostSaveStep(null); setShowCreateWo(true); }}
+              onClick={() => { setPostSaveStep(null); void startCreateWo(); }}
               className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all"
             >
               Sí, crear {woTerms.abbr} permanente
@@ -1279,6 +1310,10 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     : (status === "IN_PROGRESS" || !!repairWoCode) ? 1 : 0;
   const reportedDays = Math.max(0, Math.floor((Date.now() - new Date(defect.reportedAt).getTime()) / 86_400_000));
   const rcaRecommended = !isClosed && (severity === "HIGH" || severity === "CRITICAL") && !rcaRootCause.trim();
+  // Estándar V50: lo que exige la OT correctiva (startCreateWo) se marca siempre.
+  const rcaRequired = severity === "HIGH" || severity === "CRITICAL";
+  const rcaReqReason = t("def.req.bySeverity").replace("{sev}", t(SEVERITY_LABEL_KEYS[severity as typeof DEFECT_SEVERITIES[number]] ?? "priority.medium"));
+  const needImmediate = !immediateAction.replace(/[\s*_#>`~-]/g, "");
   const btn = "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50";
   const aiPill = (onClick: () => void, loading: boolean, label: string, Icon: typeof Sparkles = Sparkles) => isClosed ? null : (
     <button type="button" onClick={onClick} disabled={loading}
@@ -1288,18 +1323,83 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   );
   const fl = "flex items-center gap-1.5 text-xs font-semibold text-text-industrial/70 mb-1.5";
 
-  // Recuadro "qué hacer ahora" según la etapa.
+  // Flujograma "¿Qué hacer con este defecto?" (preview V49): origen → completar
+  // → OT correctiva → ejecutar y cerrar → confirmar eficacia. Reemplaza la barra
+  // de etapas; la línea "Ahora" conserva las acciones de siempre.
+  const repairWoStatus = originKey !== "wo" ? (defect.workOrderStatus ?? null) : null;
+  const isFluid = originKey === "fluid";
+  const woStatusLabel = repairWoStatus ? t(`fa.woSt.${repairWoStatus}` as TranslationKey) : null;
+  const flowCurrent = (() => {
+    if (!isClosed && woMissing.length > 0 && !repairWoCode) return 1;
+    if (!repairWoCode && !isClosed) return 2;
+    if (repairWoCode && repairWoStatus !== "CLOSED" && repairWoStatus !== "CANCELLED") return 3;
+    if (defect.effectivenessVerifiedAt) return 5;
+    return 4;
+  })();
+  const originStep: { title: string; sub: string; onClick?: () => void } =
+    isFluid ? { title: t("def.flow.originFluid"), sub: defect.originSampleCode ?? t(`def.origin.fluid` as TranslationKey),
+      onClick: defect.originSampleId ? () => navigate(`/fluid-analyses?openId=${encodeURIComponent(defect.originSampleId!)}`) : undefined }
+    : originKey === "wo" ? { title: t("def.flow.originWo"), sub: defect.workOrderCode ?? "—",
+      onClick: defect.workOrderCode ? () => navigate(`/work-orders?autoCode=${defect.workOrderCode}`) : undefined }
+    : originKey === "audit" ? { title: t("def.origin.audit"), sub: defect.auditCode ?? "—",
+      onClick: defect.auditId ? () => navigate(`/external-audits?auditId=${defect.auditId}`) : undefined }
+    : originKey === "inspection" ? { title: t("def.flow.originInspection"), sub: fmtDate(defect.reportedAt) ?? "" }
+    : { title: t("def.flow.originManual"), sub: fmtDate(defect.reportedAt) ?? "" };
+  const flowSteps: Array<{ title: string; sub: string; onClick?: () => void }> = [
+    originStep,
+    { title: t("def.flow.complete"), sub: woMissing.length === 0 || isClosed ? t("def.flow.completeOk") : t("def.flow.missingN").replace("{n}", String(woMissing.length)) },
+    repairWoCode
+      ? { title: t("fa.flow.s3").replace("{wo}", woTerms.abbr), sub: repairWoCode, onClick: () => navigate(`/work-orders?autoCode=${repairWoCode}`) }
+      : { title: t("fa.flow.s3").replace("{wo}", woTerms.abbr), sub: isClosed ? t("def.flow.fixedOnBoard") : t("def.flow.orOnBoard") },
+    { title: t("fa.flow.s4"), sub: woStatusLabel ?? (isClosed ? t("def.flow.completeOk") : t("fa.flow.s4Sub").replace("{wo}", woTerms.abbr)) },
+    { title: isFluid ? t("fa.flow.s5") : t("def.flow.confirm"),
+      sub: defect.effectivenessVerifiedAt ? t(effectivenessLabelKey(defect.effectivenessOutcome))
+        : defect.effectivenessDueAt ? t("def.flow.reviewOn").replace("{date}", fmtDate(defect.effectivenessDueAt) ?? "") : t("def.flow.afterClose") },
+  ];
   const nextCard = (() => {
-    const card = (tone: string, iconBox: string, Icon: typeof Sparkles, title: string, desc: string, actions: React.ReactNode) => (
-      <div className={`flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] px-3.5 py-3 ${tone}`}>
-        <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${iconBox}`}><Icon className="w-5 h-5" /></span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-black text-fg">{title}</p>
-          <p className="text-[12.5px] text-text-industrial/70">{desc}</p>
+    const card = (tone: string, _iconBox: string, _Icon: typeof Sparkles, title: string, desc: string, actions: React.ReactNode) => {
+      const toneCls = tone.includes("emerald") ? "border-emerald-400/50 bg-emerald-500/[0.07] [&_b]:text-emerald-800 dark:[&_b]:text-emerald-300"
+        : tone.includes("blue") ? "border-blue-400/50 bg-blue-500/[0.07] [&_b]:text-blue-800 dark:[&_b]:text-blue-300"
+        : tone.includes("amber") || tone.includes("yellow") ? "border-amber-400/60 bg-amber-500/[0.08] [&_b]:text-amber-800 dark:[&_b]:text-amber-300"
+        : "border-orange-400/60 bg-orange-500/[0.08] [&_b]:text-orange-800 dark:[&_b]:text-orange-300";
+      return (
+        <div className="rounded-2xl border border-red-500/25 bg-surface p-3.5">
+          <p className="flex items-center gap-1.5 text-[13.5px] font-extrabold text-fg mb-3"><ListChecks className="w-4 h-4 text-red-600" /> {t("def.flow.title")}</p>
+          <ol className="grid grid-cols-5 gap-1">
+            {flowSteps.map((s, i) => {
+              const done = i < flowCurrent || (i === 4 && !!defect.effectivenessVerifiedAt);
+              const cur = i === flowCurrent && !done;
+              return (
+                <li key={i} className="relative min-w-0">
+                  {i < flowSteps.length - 1 && (
+                    <span className={`absolute top-[13px] left-1/2 w-full h-0.5 ${i < flowCurrent ? "bg-emerald-500" : "bg-fg/15"}`} />
+                  )}
+                  <button type="button" onClick={s.onClick} disabled={!s.onClick}
+                    className={`relative w-full flex flex-col items-center text-center rounded-lg pb-1 ${s.onClick ? "cursor-pointer hover:bg-fg/5 [&_.step-title]:hover:underline" : "cursor-default"}`}>
+                    <span className={`relative z-[1] w-7 h-7 rounded-full border-2 flex items-center justify-center text-[11px] font-extrabold ${
+                      done ? "bg-emerald-500 border-emerald-500 text-white"
+                        : cur ? "bg-orange-600 border-orange-600 text-white ring-4 ring-orange-500/20"
+                        : "bg-surface border-fg/20 text-text-industrial/40"
+                    }`}>{done ? <Check className="w-3.5 h-3.5" /> : i + 1}</span>
+                    <span className={`step-title mt-1.5 text-[11px] font-extrabold leading-tight ${cur ? "text-orange-700 dark:text-orange-300" : done ? "text-fg" : "text-text-industrial/50"}`}>{s.title}</span>
+                    <span className="mt-0.5 text-[10px] leading-tight text-text-industrial/55 break-words">{s.sub}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <div className={`mt-3 flex flex-wrap items-center gap-2.5 rounded-xl border px-3 py-2 text-[12.5px] text-fg/85 ${toneCls}`}>
+            <span className="min-w-0 flex-1">
+              <b>{t("fa.flow.now")}</b> {title}{desc ? ` — ${desc}` : ""}
+              {flowCurrent === 1 && (
+                <span className="block text-[11.5px] font-semibold text-orange-800 dark:text-orange-300">{t("def.flow.missingList")} {woMissing.join(" · ")}</span>
+              )}
+            </span>
+            {actions && <div className="flex flex-wrap gap-2 ml-auto">{actions}</div>}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 ml-auto">{actions}</div>
-      </div>
-    );
+      );
+    };
     if (isClosed && defect.effectivenessVerifiedAt) {
       return card("border-emerald-500/40 bg-emerald-500/[0.08]", defect.effectivenessOutcome === "INEFFECTIVE" ? "bg-red-600" : "bg-emerald-500", CheckCircle2,
         `${t("def.guide.verified")}: ${t(effectivenessLabelKey(defect.effectivenessOutcome))}`,
@@ -1317,6 +1417,13 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
             </button>
           </>
         ));
+    }
+    if (isClosed && repairWoCode && repairWoStatus !== "CLOSED" && repairWoStatus !== "CANCELLED") {
+      return card("border-blue-400/60 bg-blue-500/[0.07]", "bg-blue-600", Hammer,
+        t("def.flow.nowWoOpen").replace("{code}", repairWoCode).replace("{status}", woStatusLabel ?? "—"), "",
+        <button type="button" onClick={() => navigate(`/work-orders?autoCode=${repairWoCode}`)} className={`${btn} bg-blue-600 text-white hover:brightness-110`}>
+          <ExternalLink className="w-3.5 h-3.5" /> {t("def.guide.goWo")}
+        </button>);
     }
     if (isClosed) {
       return card("border-emerald-500/40 bg-emerald-500/[0.08]", "bg-emerald-500", CheckCircle2, t("def.guide.closedTitle"),
@@ -1347,7 +1454,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       canCreateWo ? t("def.guide.openDesc") : t("def.guide.openDescNoWo"),
       <>
         {canCreateWo && (
-          <button type="button" onClick={() => setShowCreateWo(true)} className={`${btn} bg-accent text-accent-fg hover:brightness-110`}>
+          <button type="button" onClick={() => { void startCreateWo(); }} className={`${btn} bg-accent text-accent-fg hover:brightness-110`}>
             <Wrench className="w-3.5 h-3.5" /> {t("def.guide.createWo").replace("{abbr}", woTerms.abbr)}
           </button>
         )}
@@ -1408,27 +1515,12 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
             </div>
           </div>
 
-          {/* Recorrido */}
-          <div className="flex flex-wrap items-center gap-2 px-4 sm:px-6 py-2.5 border-b border-fg/10 bg-fg/[0.02] shrink-0">
-            {labels.map((l, i) => {
-              const done = i < stepIdx;
-              const cur = i === stepIdx;
-              return (
-                <React.Fragment key={l}>
-                  {i > 0 && <span className="w-5 h-px bg-fg/15" />}
-                  <span className={`flex items-center gap-1.5 text-xs font-bold ${done ? "text-emerald-700 dark:text-emerald-400" : cur ? "text-fg" : "text-text-industrial/40"}`}>
-                    <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[11px] ${done ? "bg-emerald-500 border-emerald-500 text-white" : cur ? "bg-red-600 border-red-600 text-white" : "border-fg/25"}`}>
-                      {done ? <Check className="w-3.5 h-3.5" /> : i + 1}
-                    </span>
-                    {l}
-                  </span>
-                </React.Fragment>
-              );
-            })}
-            {status === "DEFERRED" && !isClosed && (
+          {/* La barra de etapas se reemplazó por el flujograma de abajo (V49). */}
+          {status === "DEFERRED" && !isClosed && (
+            <div className="flex px-4 sm:px-6 py-1.5 border-b border-fg/10 bg-fg/[0.02] shrink-0">
               <span className="ml-auto rounded-full bg-yellow-500/15 px-2 py-0.5 text-[11px] font-extrabold text-yellow-800 dark:text-yellow-300">{t("def.st.DEFERRED")}</span>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="px-4 sm:px-6 pt-4">{nextCard}</div>
@@ -1438,7 +1530,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                 <GuideSection n={1} title={t("def.sec.what")} subtitle={t("def.sec.whatSub")} open onToggle={() => { /* siempre abierto */ }}>
                   <GuideField id="def-e-desc" missing={!isClosed && !description.trim()}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className={`${fl} mb-0`}>{t("def.guide.found")}{!isClosed && !description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={`${fl} mb-0`}>{t("def.guide.found")}<RequiredMark />{!isClosed && !description.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       {!isClosed && <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} />}
                     </div>
                     <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} disabled={isClosed} className={fldCls + " resize-y"} placeholder={t("def.briefDescPh")} />
@@ -1467,7 +1559,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                     </div>
                   </div>
                   <GuideField id="def-e-class" missing={!isClosed && !classification.trim()}>
-                    <label className={fl}>{t("def.classification")}{!isClosed && !classification.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                    <label className={fl}>{t("def.classification")}<RequiredMark />{!isClosed && !classification.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                     <input value={classification} onChange={e => setClassification(e.target.value)} disabled={isClosed} className={fldCls} />
                   </GuideField>
 
@@ -1508,23 +1600,22 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                     )}
                   </div>
 
-                  <div>
+                  <GuideField id="def-e-immediate" missing={!isClosed && needImmediate}>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <label className={`${fl} mb-0`}>{t("def.guide.immediate")}</label>
+                      <label className={`${fl} mb-0`}>{t("def.guide.immediate")}<RequiredMark reason={isClosed ? null : t("def.req.forWo").replace("{wo}", woTerms.abbr)} />{!isClosed && needImmediate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       {aiPill(() => { void handleImmediateActionClick(); }, loadingImmediate, t("mp.guide.suggestAi"))}
                     </div>
                     <AutoTextArea rows={2} value={immediateAction} onChange={e => setImmediateAction(e.target.value)} disabled={isClosed || loadingImmediate} className={fldCls + " resize-y"} placeholder={t("def.immediateActionPh")} />
-                  </div>
+                  </GuideField>
                 </GuideSection>
 
                 <GuideSection n={2} title={t("def.sec.why")} subtitle={t("def.sec.whySub")} open onToggle={() => { /* siempre abierto */ }}
                   pill={rcaApprovedAt
                     ? <span className="rounded-full bg-success-sea/15 px-2 py-0.5 text-[10px] font-bold text-success-sea whitespace-nowrap">{t("def.rcaApproved")} · {fmtDate(rcaApprovedAt)}</span>
                     : rcaRecommended ? <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-bold text-white whitespace-nowrap">{t("def.guide.recommended")}</span> : undefined}>
-                  <GuideField id="def-rca" missing={rcaRecommended}>
+                  <GuideField id="def-rca" missing={!isClosed && rcaRequired && !rcaMethodology}>
                     <div className="flex items-center gap-1.5">
-                      <label className={`${fl} mb-0`}>{t("def.rcaMethodology")}</label>
-                      {rcaRecommended && <GuideNeedTag label={t("def.guide.recommendedHigh")} />}
+                      <label className={`${fl} mb-0`}>{t("def.rcaMethodology")}{rcaRequired && <RequiredMark reason={isClosed ? null : rcaReqReason} />}{!isClosed && rcaRequired && !rcaMethodology && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       {aiPill(() => { void analyzeRca(); }, rcaAnalyzing, t("def.guide.analyzeAi"), Bot)}
                     </div>
                     <select value={rcaMethodology} onChange={e => setRcaMethodology(e.target.value as RcaMethodology | "")} disabled={isClosed} className={fldCls}>
@@ -1537,19 +1628,19 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                     <RichTextArea rows={2} value={rcaAnalysis} onChange={setRcaAnalysis} disabled={isClosed} className={fldCls} placeholder={t("def.rcaSummaryPh")} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className={fl}>{t("def.rcaImmediateCause")}</label>
+                    <GuideField id="def-rca-immediate" missing={!isClosed && rcaRequired && !rcaImmediateCause.trim()}>
+                      <label className={fl}>{t("def.rcaImmediateCause")}{rcaRequired && <RequiredMark />}{!isClosed && rcaRequired && !rcaImmediateCause.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       <RichTextArea rows={2} value={rcaImmediateCause} onChange={setRcaImmediateCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaImmediatePh")} />
-                    </div>
+                    </GuideField>
                     <div>
                       <label className={fl}>{t("def.rcaContributingCause")}</label>
                       <RichTextArea rows={2} value={rcaContributingCause} onChange={setRcaContributingCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaContributingPh")} />
                     </div>
                   </div>
-                  <div>
-                    <label className={fl}>{t("def.rcaRootCause")}</label>
+                  <GuideField id="def-rca-root" missing={!isClosed && rcaRequired && !rcaRootCause.trim()}>
+                    <label className={fl}>{t("def.rcaRootCause")}{rcaRequired && <RequiredMark />}{!isClosed && rcaRequired && !rcaRootCause.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                     <RichTextArea rows={2} value={rcaRootCause} onChange={setRcaRootCause} disabled={isClosed} className={fldCls} placeholder={t("def.rcaRootPh")} />
-                  </div>
+                  </GuideField>
                   <div>
                     <label className={fl}>{t("def.rcaPreventiveActions")}</label>
                     <RichTextArea rows={2} value={rcaPreventiveActions} onChange={setRcaPreventiveActions} disabled={isClosed} className={fldCls} placeholder={t("def.rcaPreventivePh")} />
@@ -1709,7 +1800,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
               </div>
               {repairType === "PERMANENTE" && (
                 <GuideField id="def-close-check" missing={!closeCheckText}>
-                  <p className={fl}>{t("def.verify.closeQuestion")}{!closeCheckText && <GuideNeedTag label={t("mp.exec.required")} />}</p>
+                  <p className={fl}>{t("def.verify.closeQuestion")}<RequiredMark />{!closeCheckText && <GuideNeedTag label={t("mp.guide.missing")} />}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {CLOSE_CHECK_OPTIONS.map(opt => (
                       <button key={opt.key} type="button" onClick={() => setCloseCheck(prev => prev === opt.key ? null : opt.key)}
@@ -1939,6 +2030,17 @@ export const DefectsPage: React.FC = () => {
   const [vesselSel, setVesselSel] = useState(vesselFilter);
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<"createWo" | "close" | null>(null);
+  // `/defects/:code?action=createWo`: llega desde el flujograma de un resultado
+  // crítico de Muestreos y Análisis (preview V46). Se consume y se limpia la URL.
+  const urlAction = searchParams.get("action");
+  useEffect(() => {
+    if (urlAction !== "createWo") return;
+    setPendingAction("createWo");
+    const params = new URLSearchParams(searchParams);
+    params.delete("action");
+    const qs = params.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+  }, [urlAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/defects", []);
 

@@ -19,7 +19,8 @@ export type TenantFormType =
   | "WORK_ORDER" | "SERVICE_REQUEST" | "MAINTENANCE_PLAN" | "DEFERRAL"
   // Un formulario controlado por tipo de permiso de trabajo (REGI-SYE-01.4..01.9).
   | "PERMIT_ENCLOSED_SPACE" | "PERMIT_HOT_WORK" | "PERMIT_COLD_WORK"
-  | "PERMIT_ALOFT" | "PERMIT_ELECTRICAL" | "PERMIT_UNDERWATER";
+  | "PERMIT_ALOFT" | "PERMIT_ELECTRICAL" | "PERMIT_UNDERWATER"
+  | "FLUID_ANALYSIS" | "DEFECT";
 
 const PUBLIC_DIR = join(process.cwd(), "..", "web-modern", "public");
 
@@ -212,6 +213,30 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     footer: MERCURIO_FOOTER,
     config: EMPTY_CONFIG,
   },
+  // Informe de análisis de laboratorio. La muestra ya emite su código (FA-...).
+  // El título lo decide el PDF según el tipo de muestra (fluido, vibraciones…);
+  // éste es el de respaldo. Sigue el estilo de documento del tenant.
+  FLUID_ANALYSIS: {
+    style: "STANDARD",
+    formCode: "",
+    title: "INFORME DE ANÁLISIS",
+    revision: 2,
+    effectiveFrom: "01.05.2025",
+    codePattern: null,
+    footer: MERCURIO_FOOTER,
+    config: EMPTY_CONFIG,
+  },
+  // Reporte de defecto. El defecto ya emite su código (DEF-...).
+  DEFECT: {
+    style: "STANDARD",
+    formCode: "",
+    title: "REPORTE DE DEFECTO",
+    revision: 2,
+    effectiveFrom: "01.05.2025",
+    codePattern: null,
+    footer: MERCURIO_FOOTER,
+    config: EMPTY_CONFIG,
+  },
 
   // Permisos de trabajo — rev 3, vigentes desde 29.12.2025. Style STANDARD por
   // defecto: solo los tenants con estilo de documento Mercurio (o con fila
@@ -372,7 +397,7 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
     // Los permisos siguen el mismo signal, pero normalizado: MERCURIO_OT es una
     // plantilla de OT, no un FormStyle — para los permisos cualquier variante
     // Mercurio significa "documento controlado".
-    : type.startsWith("PERMIT_")
+    : (type.startsWith("PERMIT_") || type === "FLUID_ANALYSIS" || type === "DEFECT")
       ? (rawLegacy?.startsWith("MERCURIO") ? "MERCURIO" : rawLegacy)
       : undefined;
   const style = (form?.style ?? legacyStyle ?? def.style) as "STANDARD" | "MERCURIO";

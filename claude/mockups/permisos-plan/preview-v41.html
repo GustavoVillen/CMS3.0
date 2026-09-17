@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V41 — Permisos de trabajo en el plan</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --fg:#0f172a; --muted:#64748b; --line:#e2e8f0; --surface:#fff; --bg:#f1f5f9; --or:#ea580c; --or-bg:#fff7ed; --or-line:#fdba74; --amber:#b45309; --green:#059669; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg); color:var(--fg); padding:24px 16px 60px; }
+  .wrap { max-width:980px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; letter-spacing:.04em; }
+  h1 { font-size:20px; margin:10px 0 4px; }
+  .lead { color:var(--muted); font-size:13px; margin:0 0 22px; max-width:760px; }
+  .step { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:28px 0 8px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .sechead { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .secnum { width:26px; height:26px; border-radius:8px; background:#0f172a; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .sectitle { font-weight:800; font-size:14px; } .secsub { font-size:11.5px; color:var(--muted); }
+  .q { display:flex; flex-wrap:wrap; align-items:center; gap:12px; border:2px dashed #cbd5e1; border-radius:16px; padding:12px 14px; }
+  .q.on { border:2px solid rgba(234,88,12,.35); background:linear-gradient(#fff7ed, #fff); border-style:solid; display:block; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+  .ico { width:36px; height:36px; border-radius:12px; background:#f1f5f9; color:#94a3b8; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .on .ico { background:rgba(234,88,12,.14); color:var(--or); }
+  .qt { font-size:14px; font-weight:800; display:block; } .qh { font-size:11.5px; color:var(--muted); display:block; }
+  .grow { flex:1; min-width:0; }
+  .seg { display:flex; border:1px solid var(--line); background:#f1f5f9; border-radius:12px; padding:2px; margin-left:auto; }
+  .seg span { padding:6px 14px; font-size:12px; font-weight:800; border-radius:9px; color:var(--muted); }
+  .seg .sel { background:#fff; color:var(--fg); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .seg .selor { background:var(--or); color:#fff; }
+  .lbl { font-size:11px; font-weight:700; color:var(--muted); margin:14px 0 6px; display:flex; align-items:center; gap:8px; }
+  .ai { font-size:10.5px; font-weight:800; color:#6d28d9; border:1px solid rgba(139,92,246,.35); background:rgba(139,92,246,.07); border-radius:99px; padding:2px 8px; }
+  .types { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  @media (max-width:640px){ .types { grid-template-columns:repeat(2,1fr); } }
+  .t { border:1.5px solid var(--line); background:#fff; border-radius:12px; padding:8px 10px; }
+  .t b { font-size:12.5px; display:flex; align-items:center; gap:6px; } .t small { font-size:10.5px; color:#94a3b8; display:block; margin-top:2px; }
+  .t.sel { border-color:var(--or); background:rgba(234,88,12,.08); } .t.sel b { color:#c2410c; }
+  .box { width:14px; height:14px; border-radius:4px; border:1.5px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; font-size:10px; color:#fff; }
+  .t.sel .box { background:var(--or); border-color:var(--or); }
+  .info { margin-top:12px; font-size:11.5px; color:#475569; background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:8px 10px; line-height:1.5; }
+  .fake { margin-top:14px; border-top:1px dashed var(--line); padding-top:12px; color:#94a3b8; font-size:12px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
+  .perm { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:8px 10px; margin-top:8px; font-size:12.5px; }
+  .code { font-weight:800; } .pill { margin-left:auto; font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:99px; }
+  .p-draft { background:#f1f5f9; color:#475569; } .p-closed { background:#d1fae5; color:#065f46; }
+  .req { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#c2410c; background:var(--or-bg); border:1px solid var(--or-line); border-radius:10px; padding:6px 10px; }
+  .overlay { background:rgba(15,23,42,.55); border-radius:16px; padding:28px 16px; display:flex; justify-content:center; }
+  .dlg { background:#fff; border-radius:16px; max-width:420px; width:100%; padding:20px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+  .dlg h3 { margin:0 0 8px; font-size:15px; } .dlg p { font-size:13px; color:#334155; line-height:1.55; margin:0 0 8px; }
+  .dlg ul { margin:0 0 12px; padding-left:18px; font-size:13px; } .dlg li { margin:3px 0; }
+  .ok { display:block; margin-left:auto; background:#0f172a; color:#fff; border:0; border-radius:10px; padding:9px 18px; font-weight:800; font-size:13px; }
+  .rules { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 18px; font-size:13px; line-height:1.6; }
+  .rules li { margin:4px 0; }
+  .demo { font-size:10.5px; color:#94a3b8; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V41 · DATOS DE EJEMPLO</span>
+  <h1>Planes de mantenimiento: “¿Esta tarea requiere permiso de trabajo?”</h1>
+  <p class="lead">Misma pregunta Sí/No que la de la muestra de laboratorio. Va al principio de la sección <b>4 · Seguridad</b> del plan, arriba del LOTO. Si la respuesta es Sí, se tildan uno o varios tipos de permiso.</p>
+
+  <!-- ═══ 1. Plan: respuesta No ═══ -->
+  <div class="step">1 · Plan — estado inicial (No)</div>
+  <div class="card">
+    <div class="sechead"><span class="secnum">4</span><span><span class="sectitle">Seguridad</span><br><span class="secsub">Cómo se trabaja sin riesgo</span></span></div>
+    <div class="q">
+      <span class="ico">🛡</span>
+      <span class="grow"><span class="qt">¿Esta tarea requiere permiso de trabajo?</span><span class="qh">Trabajo en caliente, espacio confinado, altura, aislamiento eléctrico…</span></span>
+      <div class="seg"><span class="sel">No</span><span>Sí</span></div>
+    </div>
+    <div class="fake">LOTO / Aislamiento de energías · Nivel de riesgo · Consecuencia… (sin cambios)</div>
+  </div>
+
+  <!-- ═══ 2. Plan: respuesta Sí ═══ -->
+  <div class="step">2 · Plan — respuesta Sí</div>
+  <div class="card">
+    <div class="sechead"><span class="secnum">4</span><span><span class="sectitle">Seguridad</span><br><span class="secsub">Cómo se trabaja sin riesgo</span></span></div>
+    <div class="q on">
+      <div class="row">
+        <span class="ico">🛡</span>
+        <span class="grow"><span class="qt">Requiere permiso de trabajo</span><span class="qh">Al autorizar la OT se crean los permisos en borrador, y la OT no se cierra hasta que estén cerrados.</span></span>
+        <div class="seg"><span>No</span><span class="selor">Sí</span></div>
+      </div>
+      <div class="lbl">¿Qué permisos? <span class="ai">✦ Sugerido por el título de la tarea</span></div>
+      <div class="types">
+        <div class="t sel"><b><span class="box">✓</span> Trabajo en caliente</b><small>Soldadura, corte, amolado</small></div>
+        <div class="t sel"><b><span class="box">✓</span> Espacio confinado</b><small>Tanques, cofferdams, doble fondo</small></div>
+        <div class="t"><b><span class="box"></span> Trabajo en altura</b><small>Arnés, andamios, mástil</small></div>
+        <div class="t"><b><span class="box"></span> Aislamiento eléctrico</b><small>Tableros, motores, barras</small></div>
+        <div class="t"><b><span class="box"></span> Trabajo en frío</b><small>Sin fuentes de ignición</small></div>
+        <div class="t"><b><span class="box"></span> Trabajo subacuático</b><small>Buceo, casco, hélice</small></div>
+      </div>
+      <div class="info">Ejemplo de tarea: <i>“Reparación de soldadura en tanque de lastre 3 Br”</i>.<br>Si se deja el Sí sin tildar ningún permiso, al guardar sale un aviso con botón OK.</div>
+    </div>
+    <div class="fake">LOTO / Aislamiento de energías · Nivel de riesgo · Consecuencia… (sin cambios)</div>
+  </div>
+
+  <!-- ═══ 3. OT ═══ -->
+  <div class="step">3 · En la OT que sale de ese plan</div>
+  <div class="grid2">
+    <div class="card">
+      <div style="font-weight:800;font-size:13px;margin-bottom:8px">OT-DCH-26-0412 · Permisos de trabajo <span class="demo">(bloque que ya existe en la OT)</span></div>
+      <div class="req">⚠ Esta OT requiere: Trabajo en caliente · Espacio confinado</div>
+      <div class="perm"><span>🔥</span><span><span class="code">PTW-DCH-26-0051</span><br><span style="color:#64748b;font-size:11.5px">Trabajo en caliente · creado al autorizar</span></span><span class="pill p-closed">Cerrado</span></div>
+      <div class="perm"><span>🚪</span><span><span class="code">PTW-DCH-26-0052</span><br><span style="color:#64748b;font-size:11.5px">Espacio confinado · creado al autorizar</span></span><span class="pill p-draft">Borrador</span></div>
+    </div>
+    <div class="overlay">
+      <div class="dlg">
+        <h3>Atención</h3>
+        <p>No se puede cerrar la OT: el plan exige permisos de trabajo que todavía no están cerrados.</p>
+        <ul><li><b>Espacio confinado</b> — PTW-DCH-26-0052 (Borrador)</li></ul>
+        <p style="font-size:12px;color:#64748b">Cerrá el permiso desde esta misma OT y volvé a intentarlo.</p>
+        <button class="ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Reglas ═══ -->
+  <div class="step">Cómo funciona (a confirmar junto con el diseño)</div>
+  <div class="rules">
+    <ul>
+      <li><b>Quién lo define:</b> los mismos que hoy pueden editar el plan. Queda guardado en el plan y se copia a la Vista Planilla y a la exportación a Excel.</li>
+      <li><b>Al AUTORIZAR la OT</b> (igual que la muestra) se crea un permiso <b>Borrador</b> por cada tipo tildado. El permiso queda vinculado a la OT, con el mismo buque y equipo, y con la fecha de la OT como ventana. Si la OT ya tiene un permiso de ese tipo, no se duplica. Después se avisa en pantalla qué permisos se crearon.</li>
+      <li><b>Al CERRAR la OT:</b> cada tipo exigido tiene que tener un permiso <b>Cerrado</b>. Si falta alguno, sale la ventanita de arriba. Un permiso cancelado o rechazado no cuenta: hay que hacer uno nuevo.</li>
+      <li><b>Sin excepción:</b> ni el administrador puede cerrar la OT salteando el permiso. Si querés que el administrador pueda forzarlo dejando el motivo escrito, decímelo.</li>
+      <li>Las OT ya abiertas y los planes existentes no cambian: arrancan todos en <b>No</b>.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

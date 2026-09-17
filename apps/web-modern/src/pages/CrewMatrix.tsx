@@ -8,6 +8,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PageHeader } from "../components/PageHeader";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT } from "../lib/i18n";
@@ -163,10 +164,10 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
           <ModalCloseButton onClose={requestClose} />
         </div>
         <div className="p-6 space-y-3">
-          <div>
-            <label className={labelCls}>{t("cm.cellDate")}</label>
+          <GuideField id="cm-cell-date" missing={!completedAt}>
+            <label className={labelCls}>{t("cm.cellDate").replace(/\s*\*\s*$/, "")}<RequiredMark />{!completedAt && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input type="date" value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
-          </div>
+          </GuideField>
           <div>
             <label className={labelCls}>
               Vencimiento {item.validityYears ? <span className="text-text-industrial/40 normal-case">(auto: {item.validityYears} años)</span> : null}

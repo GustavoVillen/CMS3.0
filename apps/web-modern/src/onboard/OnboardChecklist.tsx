@@ -115,7 +115,9 @@ function ChecklistRun({ exec, onBack, onExit }: { exec: Execution; onBack: () =>
     Object.fromEntries(exec.responses.filter(r => r.status !== "PENDING").map(r => [r.itemCode, r.status as Answer])));
   const [notes, setNotes] = useState<Record<string, string>>(() =>
     Object.fromEntries(exec.responses.map(r => [r.itemCode, r.notes ?? ""])));
-  const [tried, setTried] = useState(false);
+  // Estándar V50 (pedido de Gustavo): lo que falta se marca desde que se abre,
+  // no recién al tocar el botón.
+  const [tried, setTried] = useState(true);
   const [sign, setSign] = useState(false);
   const [busy, setBusy] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);

@@ -46,6 +46,7 @@ import {
   Ship,
   ShieldAlert,
   ShieldCheck,
+  Package,
   Sparkles,
   Table2,
   Thermometer,
@@ -102,8 +103,13 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { CRITERIA_SOURCES, type CriteriaSource } from "../lib/criteria-source";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, RequiredMark } from "../components/GuideKit";
 import { textMatches } from "../lib/text-search";
+import { suggestPermitTypesFromText, type PermitType } from "../lib/permit-classifier";
+
+const PLAN_PERMIT_TYPES: PermitType[] = [
+  "HOT_WORK", "ENCLOSED_SPACE_ENTRY", "WORKING_ALOFT", "ELECTRICAL_ISOLATION", "COLD_WORK", "UNDERWATER_WORK",
+];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,6 +166,7 @@ export interface MaintenancePlan {
   consequenceRationale?: string | null;
   samplingKind?: string | null;
   samplingFluidType?: string | null;
+  requiredPermitTypes?: string[] | null;
   windowMode?: string | null;
   windowLeadDays?: number | null;
 }
@@ -853,7 +860,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
             <div className={`grid grid-cols-1 gap-3 ${isHoursBased ? "sm:grid-cols-[1.3fr_1fr_1fr]" : "sm:grid-cols-2"}`}>
               {/* Executed by — el admin puede elegir el usuario ejecutor; el resto reporta a su nombre */}
               <GuideField id="mp-exec-by" missing={!executedByName.trim()}>
-                <label className={fl}>{t("mp.exec.executedBy")}{!executedByName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <label className={fl}>{t("mp.exec.executedBy")}<RequiredMark />{!executedByName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 {isAdmin && teamUsers.length > 0 ? (
                   <PersonSelect
                     value={executedByUserId}
@@ -919,7 +926,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
               <div className="rounded-2xl border border-amber-500/40 bg-amber-500/[0.06] p-3 space-y-3">
                 <GuideField id="mp-exec-def" missing={!deficienciesNotes.trim()}>
                   <label className={fl}>
-                    {t("mp.exec.defWhat")}
+                    {t("mp.exec.defWhat")}<RequiredMark />
                     {!deficienciesNotes.trim() && <GuideNeedTag label={t("mp.exec.required")} />}
                   </label>
                   <AutoTextArea value={deficienciesNotes} onChange={e => setDeficienciesNotes(e.target.value)} rows={3}
@@ -1149,7 +1156,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
 
             <GuideField id="mp-postpone-why" missing={!justification.trim()}>
               <label className={fl}>
-                {t("mp.postpone.why")}
+                {t("mp.postpone.why")}<RequiredMark />
                 {!justification.trim() && <GuideNeedTag label={t("mp.exec.required")} />}
               </label>
               <AutoTextArea value={justification} onChange={e => setJustification(e.target.value)} rows={3} className={inputCls} placeholder={t("mp.postpone.justificationPlaceholder")} />
@@ -1295,6 +1302,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       quantity: s.quantity ?? 1, unit: s.unit ?? "ud",
     })),
   );
+  // ¿Requiere reemplazo de repuestos? (preview V42) — derivado de la lista, sin
+  // campo propio. En No la lista se conserva en pantalla (por si se vuelve a Sí)
+  // pero se guarda vacía.
+  const [requiresSpares, setRequiresSpares] = useState<boolean>((plan?.spares?.length ?? 0) > 0);
   // Catálogo de repuestos del buque con stock (para el desplegable + semáforo).
   const [spareCatalog, setSpareCatalog] = useState<WoSpareOption[]>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(plan?.acceptanceCriteria ?? "");
@@ -1337,6 +1348,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     plan?.samplingKind ?? (plan?.samplingFluidType ? "FLUID" : "")
   );
   const [samplingFluidType, setSamplingFluidType] = useState<string>(plan?.samplingFluidType ?? "");
+  // Permisos de trabajo que exige la tarea (preview V41). El Sí sin tipos no se guarda.
+  const [requiresPermit, setRequiresPermit] = useState<boolean>((plan?.requiredPermitTypes?.length ?? 0) > 0);
+  const [requiredPermitTypes, setRequiredPermitTypes] = useState<string[]>(plan?.requiredPermitTypes ?? []);
   const [checklistUploading, setChecklistUploading] = useState(false);
   const [checklistUploadError, setChecklistUploadError] = useState<string | null>(null);
   const [loadingCriteria, setLoadingCriteria] = useState(false);
@@ -1503,6 +1517,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       kind: s.kind, spareId: s.spareId ?? null, description: s.description,
       quantity: s.quantity ?? 1, unit: s.unit ?? "ud",
     })));
+    setRequiresSpares((plan.spares?.length ?? 0) > 0);
     setAcceptanceCriteria(plan.acceptanceCriteria ?? "");
     setLoto(plan.loto ?? "");
     setSfiGroupNumber(plan.sfiGroupNumber ?? null);
@@ -1527,6 +1542,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setChecklistTemplate(plan.checklistTemplate ?? "");
     setSamplingKind(plan.samplingKind ?? (plan.samplingFluidType ? "FLUID" : ""));
     setSamplingFluidType(plan.samplingFluidType ?? "");
+    setRequiresPermit((plan.requiredPermitTypes?.length ?? 0) > 0);
+    setRequiredPermitTypes(plan.requiredPermitTypes ?? []);
     setChecklistUploading(false);
     setChecklistUploadError(null);
     setActionError(null);
@@ -1701,6 +1718,16 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         setSaving(false);
         return;
       }
+      if (requiresSpares && !plannedSpares.some(s => s.kind === "SPARE" ? !!s.spareId : !!s.description.trim())) {
+        setActionError(t("mp.spares.itemsRequired"));
+        setSaving(false);
+        return;
+      }
+      if (requiresPermit && requiredPermitTypes.length === 0) {
+        setActionError(t("mp.ptw.typesRequired"));
+        setSaving(false);
+        return;
+      }
       const cleanProviderRequests = department === "PROVEEDOR"
         ? providerRequests.filter(r => r.providerId).map(r => ({ providerId: r.providerId, purpose: r.purpose.trim() || null }))
         : [];
@@ -1754,7 +1781,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
-          spares: cleanSpares,
+          requiredPermitTypes: requiresPermit ? requiredPermitTypes : [],
+          spares: requiresSpares ? cleanSpares : [],
         });
         savedId = created.id;
       } else {
@@ -1797,6 +1825,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
+          requiredPermitTypes: requiresPermit ? requiredPermitTypes : [],
           // Última ejecución editable (admin): el backend recalcula el próximo
           // vencimiento desde la frecuencia. Próximo vencimiento fijado a mano
           // (solo TENANT_ADMIN): manda sobre ese cálculo automático.
@@ -1804,7 +1833,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           ...(lastExecHoursChanged ? { lastExecutionHours: lastExecHours ? Number(lastExecHours) : null } : {}),
           ...(nextDueDateChanged ? { nextDueDate: nextDueDateOverride || null } : {}),
           ...(nextDueHoursChanged ? { nextDueHours: nextDueHoursOverride ? Number(nextDueHoursOverride) : null } : {}),
-          spares: cleanSpares,
+          spares: requiresSpares ? cleanSpares : [],
         });
         savedId = plan.id;
       }
@@ -1858,8 +1887,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
-    checklistTemplate, samplingKind, samplingFluidType,
-    lastExecDate, lastExecHours, nextDueDateOverride, nextDueHoursOverride, plannedSpares,
+    checklistTemplate, samplingKind, samplingFluidType, requiresPermit, requiredPermitTypes,
+    lastExecDate, lastExecHours, nextDueDateOverride, nextDueHoursOverride, plannedSpares, requiresSpares,
   }, `${saveResetKey}:${planSyncKey}`);
   planDirtyRef.current = planDirty;
   const requestClose = useEscapeGuard({
@@ -2214,6 +2243,68 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/[0.07] px-2 py-0.5 text-[10.5px] font-extrabold text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 disabled:opacity-60">
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} {t("mp.guide.suggestAi")}
     </button>
+  );
+
+  // ── Permisos de trabajo (preview V41) ──
+  // Va primero en "Seguridad". Al AUTORIZAR la OT se crean en borrador y la OT
+  // no se cierra hasta que estén cerrados (work-orders-service).
+  const togglePermitType = (type: PermitType) =>
+    setRequiredPermitTypes(prev => prev.includes(type) ? prev.filter(x => x !== type) : [...prev, type]);
+  const turnOnPermits = () => {
+    setRequiresPermit(true);
+    // Sugerencia por el texto de la tarea, sólo si todavía no hay nada tildado.
+    if (requiredPermitTypes.length === 0) {
+      setRequiredPermitTypes(suggestPermitTypesFromText(`${title} ${description}`).map(m => m.type));
+    }
+  };
+  const permitBlock = !requiresPermit ? (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-dashed border-fg/15 px-3.5 py-3">
+      <span className="w-9 h-9 rounded-xl bg-fg/5 text-text-industrial/40 flex items-center justify-center shrink-0"><ShieldCheck className="w-5 h-5" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-extrabold text-fg">{t("mp.ptw.question")}</span>
+        <span className="block text-[11.5px] text-text-industrial/60">{t("mp.ptw.questionHint")}</span>
+      </span>
+      <div className="flex rounded-xl border border-fg/10 bg-fg/5 p-0.5 ml-auto">
+        <span className="rounded-lg bg-surface px-3.5 py-1.5 text-xs font-extrabold text-fg shadow-sm">{t("mp.samp.no")}</span>
+        <button type="button" onClick={turnOnPermits} className="rounded-lg px-3.5 py-1.5 text-xs font-extrabold text-text-industrial/60 hover:text-fg">{t("mp.samp.yes")}</button>
+      </div>
+    </div>
+  ) : (
+    <div className="rounded-2xl border-2 border-orange-500/35 bg-gradient-to-b from-orange-500/[0.06] to-transparent px-3.5 py-3 space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="w-9 h-9 rounded-xl bg-orange-500/15 text-orange-700 dark:text-orange-300 flex items-center justify-center shrink-0"><ShieldCheck className="w-5 h-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-extrabold text-fg">{t("mp.ptw.title")}</span>
+          <span className="block text-[11.5px] text-text-industrial/60">{t("mp.ptw.titleHint")}</span>
+        </span>
+        <div className="flex rounded-xl border border-fg/10 bg-fg/5 p-0.5 ml-auto">
+          <button type="button" onClick={() => { setRequiresPermit(false); setRequiredPermitTypes([]); }} className="rounded-lg px-3.5 py-1.5 text-xs font-extrabold text-text-industrial/60 hover:text-fg">{t("mp.samp.no")}</button>
+          <span className="rounded-lg bg-orange-600 px-3.5 py-1.5 text-xs font-extrabold text-white">{t("mp.samp.yes")}</span>
+        </div>
+      </div>
+      <div>
+        <p className={`${fLabelCls} mb-1.5`}>{t("mp.ptw.which")}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {PLAN_PERMIT_TYPES.map(type => {
+            const on = requiredPermitTypes.includes(type);
+            return (
+              <button key={type} type="button" onClick={() => togglePermitType(type)}
+                className={`flex flex-col items-start gap-0.5 rounded-xl border-[1.5px] px-2.5 py-2 text-left transition-colors ${
+                  on ? "border-orange-600 bg-orange-500/10" : "border-fg/10 bg-surface hover:border-fg/25"
+                }`}>
+                <span className={`flex items-center gap-1.5 text-[12.5px] font-extrabold ${on ? "text-orange-700 dark:text-orange-300" : "text-fg"}`}>
+                  <span className={`w-3.5 h-3.5 rounded border-[1.5px] flex items-center justify-center ${on ? "bg-orange-600 border-orange-600 text-white" : "border-fg/25"}`}>
+                    {on && <Check className="w-2.5 h-2.5" />}
+                  </span>
+                  {t(`mp.ptw.type.${type}` as Parameters<typeof t>[0])}
+                </span>
+                <span className="text-[10.5px] text-text-industrial/50">{t(`mp.ptw.typeHint.${type}` as Parameters<typeof t>[0])}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 
   // ── Plan de muestreo (preview V17b) ──
@@ -2617,7 +2708,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                     {isNew ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <GuideField id="mp-f-vessel" missing={missing.vessel}>
-                          <label className={fLabelCls}>{t("mp.vesselCode")}{missing.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                          <label className={fLabelCls}>{t("mp.vesselCode")}<RequiredMark />{missing.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                           {loadingVessels
                             ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</div>
                             : <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={lockAsset} className={`${selectCls} disabled:opacity-60`}>
@@ -2646,7 +2737,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                           </div>
                         </div>
                         <GuideField id="mp-f-asset-new" missing={missing.asset}>
-                          <label className={fLabelCls}>{t("mp.asset")}{missing.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                          <label className={fLabelCls}>{t("mp.asset")}<RequiredMark />{missing.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                           {loadingAssets
                             ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
                             : <AssetSearchDropdown
@@ -2680,8 +2771,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                                 onClick={() => navigate(`/equipment?open=${encodeURIComponent(assetId)}`)}
                                 className={`${fLabelCls} hover:text-accent transition-colors cursor-pointer`}
                                 title={t("mp.modal.openAsset")}
-                              >{t("mp.asset")} ↗</button>
-                            : <label className={fLabelCls}>{t("mp.asset")}{missing.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>}
+                              >{t("mp.asset")}<RequiredMark /> ↗</button>
+                            : <label className={fLabelCls}>{t("mp.asset")}<RequiredMark />{missing.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>}
                           {loadingAssets
                             ? <div className="flex items-center gap-2 text-xs text-text-industrial/40 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.modal.loadingAssets")}</div>
                             : <AssetSearchDropdown assets={assets} value={assetId} onChange={setAssetId} />
@@ -2725,7 +2816,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                     {samplingBlock}
 
                     <GuideField id="mp-f-title" missing={missing.title}>
-                      <label className={fLabelCls}>{t("col.title")}{missing.title && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={fLabelCls}>{t("col.title")}<RequiredMark />{missing.title && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
                     </GuideField>
 
@@ -2957,13 +3048,36 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                       </div>
                     </div>
 
-                    {/* Repuestos / materiales previstos: salen del catálogo /Spares (con
-                        stock) o van a mano. Al abrir la OT se heredan. NO descuenta stock. */}
-                    <div className="space-y-1.5">
-                      <label className={fLabelCls}>{t("mp.spares.title")}</label>
-                      <p className="text-[11px] text-text-industrial/50">{t("mp.spares.hint")}</p>
-                      <PlannedItemsEditor items={plannedSpares} onChange={setPlannedSpares} spares={spareCatalog} disabled={readOnly} />
-                    </div>
+                    {/* Repuestos / materiales previstos (preview V42): salen del catálogo
+                        /Spares (con stock) o van a mano. Al abrir la OT se heredan. NO descuenta stock. */}
+                    {!requiresSpares ? (
+                      <div className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-dashed border-fg/15 px-3.5 py-3">
+                        <span className="w-9 h-9 rounded-xl bg-fg/5 text-text-industrial/40 flex items-center justify-center shrink-0"><Package className="w-5 h-5" /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-extrabold text-fg">{t("mp.spares.question")}</span>
+                          <span className="block text-[11.5px] text-text-industrial/60">{t("mp.spares.questionHint")}</span>
+                        </span>
+                        <div className="flex rounded-xl border border-fg/10 bg-fg/5 p-0.5 ml-auto">
+                          <span className="rounded-lg bg-surface px-3.5 py-1.5 text-xs font-extrabold text-fg shadow-sm">{t("mp.samp.no")}</span>
+                          <button type="button" onClick={() => setRequiresSpares(true)} className="rounded-lg px-3.5 py-1.5 text-xs font-extrabold text-text-industrial/60 hover:text-fg">{t("mp.samp.yes")}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border-2 border-cyan-600/30 bg-gradient-to-b from-cyan-500/[0.06] to-transparent px-3.5 py-3 space-y-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="w-9 h-9 rounded-xl bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 flex items-center justify-center shrink-0"><Package className="w-5 h-5" /></span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-extrabold text-fg">{t("mp.spares.requires")}</span>
+                            <span className="block text-[11.5px] text-text-industrial/60">{t("mp.spares.hint")}</span>
+                          </span>
+                          <div className="flex rounded-xl border border-fg/10 bg-fg/5 p-0.5 ml-auto">
+                            <button type="button" onClick={() => setRequiresSpares(false)} className="rounded-lg px-3.5 py-1.5 text-xs font-extrabold text-text-industrial/60 hover:text-fg">{t("mp.samp.no")}</button>
+                            <span className="rounded-lg bg-cyan-700 px-3.5 py-1.5 text-xs font-extrabold text-white">{t("mp.samp.yes")}</span>
+                          </div>
+                        </div>
+                        <PlannedItemsEditor items={plannedSpares} onChange={setPlannedSpares} spares={spareCatalog} disabled={readOnly} />
+                      </div>
+                    )}
                   </fieldset>
                 </GuideSection>
               </div>
@@ -2973,6 +3087,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 <GuideSection n={4} title={sectionMeta.safety.title} subtitle={sectionMeta.safety.sub} pill={sectionPill("safety")}
                   open={openSecs.safety} onToggle={() => setOpenSecs(s => ({ ...s, safety: !s.safety }))}>
                   <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    {permitBlock}
                     <GuideField id="mp-f-loto" missing={missing.loto}>
                       <div className="flex items-center gap-1">
                         <label className={fLabelCls}>{t("mp.f.lotoTitle")}</label>

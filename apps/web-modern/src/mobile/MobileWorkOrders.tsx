@@ -11,6 +11,7 @@ import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 
 interface WO {
   id: string;
@@ -744,7 +745,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Resultado *</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Resultado<RequiredMark /></p>
             <div className="grid grid-cols-2 gap-2">
               {(["SATISFACTORY", "WITH_DEFICIENCIES"] as const).map(r => (
                 <button
@@ -1018,9 +1019,10 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                   <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">La SS queda marcada como rechazada y vuelve a Solicitada.</p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <GuideField id="wo-appr-name" missing={!approverName.trim()}>
                 <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
-                  Nombre de quien {sheetVerb}
+                  Nombre de quien {sheetVerb}<RequiredMark />
+                  {!approverName.trim() && <GuideNeedTag label="Falta" />}
                 </label>
                 <input
                   value={approverName}
@@ -1028,10 +1030,13 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                   placeholder="Nombre y apellido"
                   className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
                 />
-              </div>
+              </GuideField>
               {approvalStep === "RECHAZA" && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Motivo del rechazo</label>
+                <GuideField id="wo-appr-reason" missing={!rejectReason.trim()}>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
+                    Motivo del rechazo<RequiredMark />
+                    {!rejectReason.trim() && <GuideNeedTag label="Falta" />}
+                  </label>
                   <AutoTextArea
                     rows={3}
                     value={rejectReason}
@@ -1039,7 +1044,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                     placeholder="Por qué no se aprueba/autoriza…"
                     className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 resize-none"
                   />
-                </div>
+                </GuideField>
               )}
               {approvalErr && <p className="text-[11px] text-red-600 dark:text-red-400">{approvalErr}</p>}
               <div className="flex gap-2">

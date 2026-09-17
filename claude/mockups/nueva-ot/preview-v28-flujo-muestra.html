@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flujo de la muestra — Preview V28</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{--fg:#1A1D24;--muted:rgba(26,29,36,.62);--faint:rgba(26,29,36,.42);--fg10:rgba(26,29,36,.10);--fg5:rgba(26,29,36,.05);--vi:#7C3AED;--vi10:rgba(124,58,237,.10)}
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#F4F5F7;color:var(--fg);font-size:14px}
+  .bar{position:sticky;top:0;z-index:10;background:#111827;color:#fff;padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .bar b{font-size:13px;margin-right:6px} .bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer} .bar button.on{background:#0284C7}
+  .bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .wrap{max-width:1100px;margin:18px auto;padding:0 16px;display:flex;flex-direction:column;gap:14px}
+  .sec{background:#fff;border:1.5px solid rgba(124,58,237,.35);border-radius:16px;padding:14px 16px}
+  .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;display:flex;gap:6px;align-items:center}
+  .note{font-size:12px;color:var(--muted);background:#fff;border:1px dashed var(--fg10);border-radius:12px;padding:10px 14px;line-height:1.5}
+  i[data-lucide]{flex-shrink:0}
+
+  /* A · Flujo horizontal con flechas */
+  .flow{display:flex;align-items:stretch;gap:0}
+  .node{flex:1;min-width:0;border:1.5px solid var(--fg10);border-radius:14px;padding:10px 12px;background:#fff;display:flex;flex-direction:column;gap:6px;position:relative}
+  .node .top{display:flex;gap:8px;align-items:center}
+  .ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--vi10);color:var(--vi)}
+  .who{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:99px;padding:1px 7px}
+  .w-sys{background:#E0F2FE;color:#0369A1} .w-ship{background:#DCFCE7;color:#15803D} .w-lab{background:#EDE9FE;color:#6D28D9} .w-shore{background:#FEF3C7;color:#92400E}
+  .node b{font-size:13px} .node p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.4}
+  .where{font-size:10.5px;font-weight:700;color:var(--vi);display:inline-flex;gap:4px;align-items:center}
+  .arrow{width:34px;display:flex;align-items:center;justify-content:center;color:var(--vi);flex-shrink:0}
+  .node.warn{border-color:#FCD34D;background:#FFFBEB} .node.warn .ico{background:#FEF3C7;color:#B45309}
+  .branch{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+  .branch .opt{border-radius:10px;padding:6px 8px;font-size:11px;line-height:1.35;border:1px solid var(--fg10)}
+  .opt.on{border-color:rgba(124,58,237,.45);background:rgba(124,58,237,.05)} .opt.off{opacity:.45}
+  .opt b{font-size:11.5px;display:flex;gap:5px;align-items:center}
+  @media(max-width:760px){.flow{flex-direction:column}.arrow{width:auto;height:26px;transform:rotate(90deg)}}
+
+  /* C · Mínimo: un renglón */
+  .mini{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px}
+  .mini .t{font-weight:700;color:var(--muted);margin-right:4px;display:inline-flex;gap:5px;align-items:center}
+  .step{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(124,58,237,.3);background:rgba(124,58,237,.05);border-radius:99px;padding:3px 10px 3px 4px;font-weight:700;white-space:nowrap;cursor:help}
+  .step .n{width:18px;height:18px;border-radius:99px;background:var(--vi);color:#fff;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+  .step.warn{border-color:#FCD34D;background:#FFFBEB;color:#92400E} .step.warn .n{background:#D97706}
+  .step small{font-weight:600;color:var(--faint)}
+  .ar{color:var(--vi);display:inline-flex}
+  /* B · Línea vertical */
+  .vt{display:flex;flex-direction:column;gap:0}
+  .vrow{display:flex;gap:12px}
+  .vline{display:flex;flex-direction:column;align-items:center;width:34px}
+  .vline .dot{width:34px;height:34px;border-radius:99px;background:var(--vi);color:#fff;display:flex;align-items:center;justify-content:center}
+  .vline .stick{flex:1;width:2px;background:rgba(124,58,237,.3);min-height:14px}
+  .vbody{padding-bottom:14px;flex:1} .vbody b{font-size:13px} .vbody p{margin:2px 0 0;font-size:11.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Plan de Mantenimiento · Flujo de la muestra · Preview V28</b><span class="tag">DEMO</span>
+  <button data-v="C" class="on">C · Mínimo (1 renglón)</button><button data-v="A">A · Flujo con flechas</button><button data-v="B">B · Línea de tiempo</button>
+  <span style="width:1px;height:20px;background:#4B5563;margin:0 4px"></span>
+  <button data-l="1" class="on">Con laboratorio</button><button data-l="0">Sin laboratorio</button>
+</div>
+<div class="wrap" id="root"></div>
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"C",l:"1"};
+function A(){
+  const lab=S.l==="1";
+  return `<div class="sec"><div class="lbl">${I("workflow",14)}Qué pasa con la muestra</div>
+  <div class="flow">
+    <div class="node"><div class="top"><span class="ico">${I("clipboard-check")}</span><span class="who w-sys">Sistema</span></div>
+      <b>1 · Al autorizar la OT</b><p>Se crea la muestra en borrador, con este equipo.</p><span class="where">${I("flask-conical",11)}Análisis de laboratorio</span></div>
+    <div class="arrow">${I("arrow-right",22)}</div>
+    <div class="node ${lab?'':'warn'}"><div class="top"><span class="ico">${I(lab?"send":"alert-triangle")}</span><span class="who w-ship">Buque</span></div>
+      <b>2 · Se toma y se envía</b>
+      <div class="branch">
+        <div class="opt ${lab?'on':'off'}"><b>${I("truck",12)}Con laboratorio</b>Se numera el frasco y va con la SS al laboratorio.</div>
+        <div class="opt ${lab?'off':'on'}" style="${lab?'':'border-color:#FCD34D;background:#FEF3C7'}"><b>${I("hand",12)}Sin laboratorio</b>No hay SS: hay que pedir el análisis a mano.</div>
+      </div></div>
+    <div class="arrow">${I("arrow-right",22)}</div>
+    <div class="node"><div class="top"><span class="ico">${I("file-check")}</span><span class="who w-lab">Laboratorio</span><span class="who w-shore">Tierra</span></div>
+      <b>3 · Vuelve el informe</b><p>Se carga el resultado y queda en el historial del equipo.</p><span class="where">${I("history",11)}Historial del equipo</span></div>
+  </div></div>`;
+}
+function C(){
+  const lab=S.l==="1";
+  const st=(n,t,tip,warn,extra)=>`<span class="step ${warn?'warn':''}" title="${tip}"><span class="n">${n}</span>${t}${extra?` <small>· ${extra}</small>`:''}</span>`;
+  return `<div class="sec" style="padding:8px 12px"><div class="mini"><span class="t">${I("workflow",13)}Qué pasa con la muestra</span>
+   ${st(1,"Al autorizar la OT","Se crea la muestra en borrador en Análisis de laboratorio, con este equipo.")}<span class="ar">${I("arrow-right",14)}</span>
+   ${st(2,"Se toma y se envía",lab?"Se numera el frasco y va con la SS al laboratorio.":"Sin laboratorio no hay SS: hay que pedir el análisis a mano.",!lab,lab?"con la SS":"pedir a mano")}<span class="ar">${I("arrow-right",14)}</span>
+   ${st(3,"Vuelve el informe","Se carga el resultado y queda en el historial del equipo.")}
+  </div></div>`;
+}
+function B(){
+  const lab=S.l==="1";
+  const row=(ic,t,d,last)=>`<div class="vrow"><div class="vline"><span class="dot">${I(ic,16)}</span>${last?'':'<span class="stick"></span>'}</div><div class="vbody"><b>${t}</b><p>${d}</p></div></div>`;
+  return `<div class="sec"><div class="lbl">${I("workflow",14)}Qué pasa con la muestra</div><div class="vt">
+   ${row("clipboard-check","1 · Al autorizar la OT","El sistema crea la muestra en borrador en Análisis de laboratorio, con este equipo.")}
+   ${row(lab?"send":"alert-triangle","2 · Se toma y se envía",lab?"El buque numera el frasco y lo manda con la SS al laboratorio.":"Sin laboratorio no hay SS: hay que pedir el análisis a mano.")}
+   ${row("file-check","3 · Vuelve el informe","Se carga el resultado y queda en el historial del equipo.",true)}
+  </div></div>`;
+}
+function render(){
+  document.querySelectorAll(".bar button").forEach(b=>{const k=Object.keys(b.dataset)[0];b.classList.toggle("on",S[k]===b.dataset[k]);});
+  document.getElementById("root").innerHTML=(S.v==="C"?C():S.v==="A"?A():B())+`<div class="note"><b>C · Mínimo:</b> un solo renglón de ~30 px: tres pasos unidos por flechas. El detalle de cada paso aparece al pasar el mouse (o tocar) encima. El paso 2 dice «con la SS» o, en naranja, «pedir a mano» si el plan no tiene laboratorio. En celular baja a dos renglones.<br><b>A · Flujo con flechas:</b> los 3 pasos unidos por flechas, con quién lo hace (Sistema / Buque / Laboratorio-Tierra), dónde queda el dato y el paso 2 partido en «con laboratorio / sin laboratorio» (se resalta el que aplica según el plan). En celular se apila con flechas hacia abajo.<br><b>B · Línea de tiempo:</b> más compacta, vertical, un paso debajo del otro.<br>Mismo contenido y textos que hoy (en los 3 idiomas); sólo cambia el formato.</div>`;
+  lucide.createIcons();
+}
+document.querySelectorAll(".bar button").forEach(b=>b.onclick=()=>{const k=Object.keys(b.dataset)[0];S[k]=b.dataset[k];render();});
+render();
+</script>
+</body>
+</html>

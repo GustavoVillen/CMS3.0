@@ -5,7 +5,7 @@ import {
   Trash2, FileText, TrendingUp,
   ArrowUpDown, ChevronUp, ChevronDown, Clipboard,
   Activity, AlertOctagon, AlertTriangle, AudioLines, Clock, Droplets, Files, Hourglass, Pencil, ScanLine, Search, TestTube, Thermometer,
-  Check, CheckCircle2, ClipboardList, List, Ship, Wrench,
+  Check, CheckCircle2, ClipboardList, List, Ship, Wrench, ListChecks, ArrowRight,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useFetch } from "../lib/hooks";
@@ -15,7 +15,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { MarkdownText } from "../components/MarkdownText";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useT, type TranslationKey } from "../lib/i18n";
+import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 import { useAuth, useCan } from "../lib/auth";
 import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
@@ -34,7 +34,7 @@ import {
 import { ScanFluidSampleWizard } from "../components/fluid-analyses/ScanFluidSampleWizard";
 import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
 import { AutoTextArea } from "../components/AutoTextArea";
-import { GuideField, GuideNeedTag } from "../components/GuideKit";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,6 +286,19 @@ export const FluidAnalysesPage: React.FC = () => {
       </div>
     );
   };
+  // OT correctiva con la que se cerró el defecto del resultado (preview V47).
+  const repairWoLink = (s: FluidSample) => s.result?.defectWorkOrderCode ? (
+    <button type="button"
+      onClick={e => { e.stopPropagation(); navigate(`/work-orders?openId=${encodeURIComponent(s.result!.defectWorkOrderId!)}`); }}
+      className="mt-1 flex items-center gap-1 text-[11px] font-bold text-accent hover:underline">
+      <Wrench className="w-3 h-3 shrink-0" />
+      <span className="font-mono">{s.result.defectWorkOrderCode}</span>
+      {s.result.defectWorkOrderStatus && (
+        <span className="font-semibold text-text-industrial/55">· {t(`fa.woSt.${s.result.defectWorkOrderStatus}` as TranslationKey)}</span>
+      )}
+    </button>
+  ) : null;
+
   const waitCell = (s: FluidSample) => {
     if (s.status !== "DRAFT" && s.status !== "SENT") return null;
     const late = faIsLate(s);
@@ -475,7 +488,7 @@ export const FluidAnalysesPage: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-2.5"><div className="flex flex-col items-start gap-0.5">{statusChip(s)}{waitCell(s)}</div></td>
-                      <td className="px-4 py-2.5">{s.result ? <VerdictBadge verdict={s.result.verdict} /> : <span className="text-text-industrial/30">—</span>}</td>
+                      <td className="px-4 py-2.5">{s.result ? <><VerdictBadge verdict={s.result.verdict} />{repairWoLink(s)}</> : <span className="text-text-industrial/30">—</span>}</td>
                       <td className="px-4 py-2.5">
                         {s.sourceWorkOrderCode ? (
                           <button type="button"
@@ -514,6 +527,7 @@ export const FluidAnalysesPage: React.FC = () => {
                     {statusChip(s)}
                     {s.result && <VerdictBadge verdict={s.result.verdict} />}
                   </div>
+                  {repairWoLink(s)}
                   <div className="text-[13px] font-bold text-fg">{assetLabel(s.assetId, assets)}</div>
                   <div className="flex flex-wrap items-center gap-2.5 text-xs">
                     {kindCell(s)}
@@ -616,14 +630,14 @@ function SampleFormModal({
         <div className="grid grid-cols-2 gap-3">
           {/* Obligatorios: se resaltan mientras falten (preview V24). */}
           <GuideField id="fa-f-vessel" missing={!vesselCode}>
-            <label className={labelCls}>{t("form.vessel")}{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <label className={labelCls}>{t("form.vessel").replace(/\s*\*\s*$/, "")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <select value={vesselCode} onChange={e => { setVesselCode(e.target.value); setAssetId(""); }} className={inputCls}>
               <option value="">{t("fa.selectPh")}</option>
               {vessels.map(v => <option key={v.code} value={v.code}>{v.name || v.code}</option>)}
             </select>
           </GuideField>
           <GuideField id="fa-f-asset" missing={!assetId}>
-            <label className={labelCls}>{t("form.equipment")}{!assetId && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <label className={labelCls}>{t("form.equipment").replace(/\s*\*\s*$/, "")}<RequiredMark />{!assetId && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls} disabled={!vesselCode}>
               <option value="">{t("fa.selectPh")}</option>
               {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name ?? a.assetCode}</option>)}
@@ -632,7 +646,7 @@ function SampleFormModal({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>{t("fa.fluidType")}</label>
+            <label className={labelCls}>{t("fa.fluidType").replace(/\s*\*\s*$/, "")}<RequiredMark /></label>
             <select value={fluidType} onChange={e => setFluidType(e.target.value as FluidType)} className={inputCls}>
               {FLUID_TYPES.map(f => <option key={f} value={f}>{FLUID_LABELS[f]}</option>)}
             </select>
@@ -644,7 +658,7 @@ function SampleFormModal({
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className={labelCls}>{t("fa.sampleDate")}</label>
+            <label className={labelCls}>{t("fa.sampleDate").replace(/\s*\*\s*$/, "")}<RequiredMark /></label>
             <input type="date" value={sampledAt} onChange={e => setSampledAt(e.target.value)} className={inputCls} />
           </div>
           <div>
@@ -903,6 +917,9 @@ function SampleDetailModal({
                     <p className="mt-0.5 text-[13px] text-fg/75">{t("fa.detail.waitReportHint")}</p>
                   </div>
                 </div>
+              )}
+              {sample.result && (verdict === "CRITICAL" || verdict === "ACTION_REQUIRED") && (
+                <CriticalResultFlow result={sample.result} canCreateWo={user?.role !== "AUDITOR_READONLY"} />
               )}
               {sample.result && <ParametersTable parameters={sample.result.parameters} thresholds={thresholds} />}
             </div>
@@ -1169,6 +1186,95 @@ const PARAM_GROUP: Record<string, "wear" | "contam" | "additive" | "props"> = {
   visc40: "props", visc100: "props", v40: "props", v100: "props", viscosity: "props", tbn: "props", tan: "props", oxidation: "props", nitration: "props",
 };
 const PARAM_GROUP_ORDER = ["wear", "contam", "additive", "props", "other"] as const;
+
+/**
+ * "¿Qué hacer con este resultado?" (preview V46). Resultado crítico → defecto →
+ * OT correctiva (se crea DESDE el defecto) → ejecutar y cerrar → nueva medición.
+ * Marca el paso actual y ofrece una sola acción.
+ */
+function CriticalResultFlow({ result, canCreateWo }: { result: FluidResult; canCreateWo: boolean }) {
+  const t = useT();
+  const navigate = useNavigate();
+  const woTerms = useWoTerms();
+  const defectCode = result.defectCode ?? null;
+  const defectClosed = result.defectStatus === "CLOSED" || result.defectStatus === "RESOLVED";
+  const woId = result.defectWorkOrderId ?? null;
+  const woCode = result.defectWorkOrderCode ?? woTerms.abbr;
+  // Al crear la OT desde Defectos, el defecto se cierra en el acto: el trabajo
+  // sigue en la OT. Por eso el avance lo marca el estado de la OT, no el del defecto.
+  const woStatus = result.defectWorkOrderStatus ?? null;
+  const woClosed = woStatus === "CLOSED";
+  const current = !defectCode ? 1
+    : woId ? (woClosed ? 4 : 3)
+    : defectClosed ? 4 // reparado a bordo sin OT
+    : 2;
+  // Los pasos con registro propio llevan a él: el defecto y la OT correctiva.
+  const steps: Array<{ title: string; sub: string; onClick?: () => void }> = [
+    { title: t("fa.flow.s1"), sub: t("fa.flow.s1Sub") },
+    { title: t("fa.flow.s2"), sub: defectCode ?? t("fa.flow.noDefect"),
+      onClick: defectCode ? () => navigate(`/defects/${encodeURIComponent(defectCode)}`) : undefined },
+    { title: t("fa.flow.s3").replace("{wo}", woTerms.abbr), sub: woId ? woCode : t("fa.flow.s3Sub"),
+      onClick: woId ? () => navigate(`/work-orders?openId=${encodeURIComponent(woId)}`)
+        : defectCode && canCreateWo ? () => navigate(`/defects/${encodeURIComponent(defectCode)}?action=createWo`) : undefined },
+    { title: t("fa.flow.s4"), sub: t("fa.flow.s4Sub").replace("{wo}", woTerms.abbr) },
+    { title: t("fa.flow.s5"), sub: t("fa.flow.s5Sub") },
+  ];
+  const goDefect = (action?: string) => defectCode
+    ? navigate(`/defects/${encodeURIComponent(defectCode)}${action ? `?action=${action}` : ""}`)
+    : navigate("/defects");
+  const now: { tone: string; text: string; button?: { label: string; onClick: () => void } } =
+    current === 1 ? { tone: "orange", text: t("fa.flow.nowNoDefect"), button: { label: t("fa.flow.goDefects"), onClick: () => goDefect() } }
+    : current === 2 ? { tone: "orange", text: t("fa.flow.nowCreateWo").replace(/\{wo\}/g, woTerms.abbr),
+        button: canCreateWo ? { label: t("fa.flow.goCreateWo").replace("{wo}", woTerms.abbr), onClick: () => goDefect("createWo") } : undefined }
+    : current === 3 ? { tone: "blue",
+        text: t(woStatus === "PLANNED" ? "fa.flow.nowWoPlanned" : woStatus === "CANCELLED" ? "fa.flow.nowWoCancelled" : "fa.flow.nowWoRunning")
+          .replace("{code}", woCode),
+        button: { label: t("fa.flow.viewWo").replace("{wo}", woTerms.abbr), onClick: () => navigate(`/work-orders?openId=${encodeURIComponent(woId!)}`) } }
+    : { tone: "green", text: t("fa.flow.nowRemeasure") };
+  const toneCls: Record<string, string> = {
+    orange: "border-orange-400/60 bg-orange-500/[0.08] [&_b]:text-orange-800 dark:[&_b]:text-orange-300",
+    blue: "border-blue-400/50 bg-blue-500/[0.07] [&_b]:text-blue-800 dark:[&_b]:text-blue-300",
+    green: "border-emerald-400/50 bg-emerald-500/[0.07] [&_b]:text-emerald-800 dark:[&_b]:text-emerald-300",
+  };
+  const btnCls: Record<string, string> = { orange: "bg-orange-600", blue: "bg-blue-600", green: "bg-emerald-600" };
+  return (
+    <div className="rounded-2xl border border-red-500/25 bg-surface p-3.5">
+      <p className="flex items-center gap-1.5 text-[13.5px] font-extrabold text-fg mb-3"><ListChecks className="w-4 h-4 text-red-600" /> {t("fa.flow.title")}</p>
+      <ol className="grid grid-cols-5 gap-1">
+        {steps.map((s, i) => {
+          const done = i < current;
+          const cur = i === current;
+          return (
+            <li key={i} className="relative min-w-0">
+              <button type="button" onClick={s.onClick} disabled={!s.onClick}
+                className={`w-full flex flex-col items-center text-center rounded-lg pb-1 ${s.onClick ? "cursor-pointer hover:bg-fg/5 [&_.step-title]:hover:underline" : "cursor-default"}`}>
+              {i < steps.length - 1 && (
+                <span className={`absolute top-[13px] left-1/2 w-full h-0.5 ${done ? "bg-emerald-500" : "bg-fg/15"}`} />
+              )}
+              <span className={`relative z-[1] w-7 h-7 rounded-full border-2 flex items-center justify-center text-[11px] font-extrabold ${
+                done ? "bg-emerald-500 border-emerald-500 text-white"
+                  : cur ? "bg-orange-600 border-orange-600 text-white ring-4 ring-orange-500/20"
+                  : "bg-surface border-fg/20 text-text-industrial/40"
+              }`}>{done ? <Check className="w-3.5 h-3.5" /> : i + 1}</span>
+              <span className={`step-title mt-1.5 text-[11px] font-extrabold leading-tight ${cur ? "text-orange-700 dark:text-orange-300" : done ? "text-fg" : "text-text-industrial/50"}`}>{s.title}</span>
+              <span className="mt-0.5 text-[10px] leading-tight text-text-industrial/55 break-words">{s.sub}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <div className={`mt-3 flex flex-wrap items-center gap-2.5 rounded-xl border px-3 py-2 text-[12.5px] text-fg/85 ${toneCls[now.tone]}`}>
+        <span className="min-w-0 flex-1"><b>{t("fa.flow.now")}</b> {now.text}</span>
+        {now.button && (
+          <button type="button" onClick={now.button.onClick}
+            className={`ml-auto inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white hover:brightness-110 ${btnCls[now.tone]}`}>
+            {now.button.label} <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /** Nombre legible del parámetro; si no está en la lista, la clave tal cual. */
 function useParamLabel() {
@@ -1599,7 +1705,7 @@ function ResultFormModal({
               <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
             </div>
             <GuideField id="fa-f-verdict" missing={!verdict}>
-              <label className={labelCls}>{t("fa.verdict")}{!verdict && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <label className={labelCls}>{t("fa.verdict").replace(/\s*\*\s*$/, "")}<RequiredMark />{!verdict && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={verdict} onChange={e => setVerdict(e.target.value as Verdict)} className={inputCls}>
                 <option value="">{t("fa.selectPh")}</option>
                 {VERDICTS.map(v => <option key={v} value={v}>{VERDICT_STYLES[v].label}</option>)}

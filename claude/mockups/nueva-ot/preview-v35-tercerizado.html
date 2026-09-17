@@ -1,0 +1,414 @@
+<title>Tercerizado: taller y SS</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --violet:#7C3AED; --violetsoft:rgba(124,58,237,.10);
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --violet:#A78BFA; --violetsoft:rgba(167,139,250,.14);
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --violet:#A78BFA; --violetsoft:rgba(167,139,250,.14);
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:36px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted)}
+.scr{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.foot{flex:none;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px}
+.mainb{width:100%;min-height:54px;border:0;border-radius:16px;background:var(--ac);color:var(--acfg);font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.mainb.miss{background:color-mix(in srgb,var(--warn) 15%,transparent);border:1.5px solid var(--warn);color:var(--warnfg)}
+.foot small{text-align:center;font-size:12.5px;color:var(--muted)}
+.tk-code{font-size:12px;font-weight:600;color:var(--muted)}
+.tk-title{margin:2px 0 0;font-size:21px;font-weight:800;line-height:1.15;letter-spacing:-.01em}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:99px;white-space:nowrap;align-self:flex-start}
+.p-over{background:var(--badsoft);color:var(--badfg)}
+.sect{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:6px 2px -4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:2px 14px}
+.okrow{display:flex;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.okrow:first-child{border-top:0}
+.okrow b{display:block;font-size:14px;font-weight:800}
+.okrow span{font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.okrow i.ic{color:var(--ok);flex:none;margin-top:1px}
+.field{display:flex;flex-direction:column;gap:8px;padding:10px 0}
+.field > label{font-size:14.5px;font-weight:800}
+.field .fhint{font-size:12.5px;color:var(--muted);margin:-4px 0 0}
+.field.missing > label{color:var(--warnfg)}
+/* Una sola fila: tantas columnas como opciones, todas del mismo ancho y
+   repartidas en el ancho del celular. Si una etiqueta no entra, parte en dos
+   renglones dentro del botón (no se desborda ni se corta). */
+.chips{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:7px}
+.chip{min-height:44px;padding:5px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;line-height:1.15;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-align:center;color:var(--fg);overflow-wrap:anywhere}
+.chip.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.case{--n:2}
+@media (max-width:380px){ .chip{font-size:12.5px;padding:5px 4px} .chips{gap:6px} }
+.field.missing .chip{border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
+.inp{width:100%;min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);padding:0 12px 0 34px;font-size:15px}
+.inpwrap{position:relative;display:flex;align-items:center}
+.inpwrap > i{position:absolute;left:11px;color:var(--faint)}
+.pickrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);cursor:pointer}
+.pickrow b{display:block;font-size:15px;font-weight:800;line-height:1.2}
+.pickrow small{font-size:12.5px;color:var(--muted)}
+.picked{background:color-mix(in srgb,var(--ac) 10%,var(--surface));border-color:var(--ac)}
+.picked i.ic{color:var(--ac);flex:none}
+.chg{min-height:36px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;flex:none}
+.note{display:flex;gap:9px;background:var(--acsoft);border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);border-radius:14px;padding:11px 13px;font-size:13px;line-height:1.4}
+.note i{color:var(--ac);flex:none;margin-top:1px}
+.newtag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--violetsoft);color:var(--violet);border:1px solid color-mix(in srgb,var(--violet) 40%,transparent);padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:2px}
+.done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:20px 0}
+.done .circ{width:80px;height:80px;border-radius:99px;background:var(--oksoft);color:var(--ok);display:grid;place-items:center}
+.done h2{margin:8px 0 0;font-size:23px;font-weight:800;line-height:1.15}
+.done .codes{font-size:14px;font-weight:600;color:var(--muted)}
+.done ul{list-style:none;margin:10px 0 0;padding:0;width:100%;display:flex;flex-direction:column;gap:8px;text-align:left}
+.done li{display:flex;gap:10px;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.done li i{color:var(--faint);flex:none;margin-top:1px}
+.ghost{width:100%;min-height:48px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);font-size:15px;font-weight:700;cursor:pointer}
+.guide{width:360px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.case{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Tercerizado: taller y SS <small>· Preview V35</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+
+// ── Datos de ejemplo (ficticios) ─────────────────────────────────────────────
+const TALLERES = [
+  {id:"p1", name:"NAVALTEC S.R.L.", cat:"Taller naval · Motores"},
+  {id:"p2", name:"HIDRÁULICA DEL RÍO S.A.", cat:"Hidráulica y mangueras"},
+  {id:"p3", name:"CONDOR S.A.C.I", cat:"Laboratorio de análisis"},
+  {id:"p4", name:"ELECTROMAR", cat:"Electricidad naval"},
+  {id:"p5", name:"SERVICIOS PORT. ITATÍ", cat:"Buceo e inspección de casco"},
+];
+const CASOS = {
+  // Plan de la tripulación: hoy no hay forma de pedir el taller desde el celular.
+  crew: {
+    code:"M02-BBA-HID-ER-30", title:"Recorrido general, cambio de juntas y mangueras",
+    eq:"Bomba Hidráulica Estribor", vence:"Venció hace 12 días",
+    plan:{criterio:"Sin pérdidas ni ruidos anómalos; presión de trabajo 180 bar ± 5.", loto:"Bloqueo de la central hidráulica y descarga de presión.", riesgo:"Riesgo Alto"},
+    talleresDelPlan:[],
+  },
+  // Plan que YA trae el taller configurado: la SS se abre sola (hoy y después).
+  shop: {
+    code:"M02-BALSA-01", title:"Servicio anual de balsas salvavidas en taller certificado",
+    eq:"Balsas salvavidas (2 x 20 personas)", vence:"Vence en 14 días",
+    plan:{criterio:"Certificado de servicio vigente emitido por taller autorizado.", loto:"No requiere bloqueo de energía.", riesgo:"Riesgo Medio"},
+    talleresDelPlan:["NAVALTEC S.R.L."],
+  },
+};
+
+const S = {v:"app", caso:"crew", asignado:"TRIPULACION", solicitado:"", sistema:"", ubic:"Km 1.240 – Corrientes",
+           taller:null, q:"", tipos:[], intento:false, pantalla:"form", theme:"system"};
+
+function resetCaso(){
+  S.asignado = CASOS[S.caso].talleresDelPlan.length ? "TERCERIZADO" : "TRIPULACION";
+  S.taller = null; S.q = ""; S.tipos = []; S.intento = false; S.pantalla = "form";
+  S.solicitado = ""; S.sistema = "";
+}
+
+// El bloque del taller aparece SÓLO cuando el plan no trae taller propio.
+const pideTaller = () => S.asignado==="TERCERIZADO" && CASOS[S.caso].talleresDelPlan.length===0;
+
+function faltan(){
+  let n = 0;
+  if (!S.solicitado) n++;
+  if (!S.asignado) n++;
+  if (!S.sistema) n++;
+  if (!S.ubic.trim()) n++;
+  if (pideTaller() && !S.taller) n++;
+  if (pideTaller() && S.tipos.length===0) n++;
+  return n;
+}
+
+function chips(nombre, opciones, valor){
+  return `<div class="chips" style="--n:${opciones.length}">${opciones.map(o=>
+    `<button type="button" class="chip ${valor===o.v?"on":""}" data-a="${nombre}" data-p="${o.v}">${o.l}</button>`).join("")}</div>`;
+}
+
+function bloqueTaller(){
+  const lista = TALLERES.filter(p => !S.q.trim() || (p.name+" "+p.cat).toLowerCase().includes(S.q.trim().toLowerCase()));
+  const elegido = TALLERES.find(p=>p.id===S.taller);
+  return `
+  <div class="field ${S.intento&&!S.taller?"missing":""}">
+    <label>Proveedor <span class="newtag">nuevo</span></label>
+    ${elegido ? `
+      <div class="pickrow picked">
+        ${I("building-2",20)}
+        <span style="min-width:0;flex:1"><b>${elegido.name}</b><small>${elegido.cat}</small></span>
+        <button type="button" class="chg" data-a="quitar">Cambiar</button>
+      </div>` : `
+      <div class="inpwrap">${I("search",16)}<input class="inp" placeholder="Buscar proveedor…" value="${S.q}" data-a="buscar"></div>
+      ${lista.map(p=>`<button type="button" class="pickrow" data-a="taller" data-p="${p.id}">
+        <span style="min-width:0"><b>${p.name}</b><small>${p.cat}</small></span></button>`).join("")
+        || `<p class="hint" style="text-align:center;padding:10px 0">Sin resultados</p>`}
+    `}
+  </div>
+  <div class="field ${S.intento&&S.tipos.length===0?"missing":""}">
+    <label>Tipo de solicitud <span class="newtag">nuevo</span></label>
+    <p class="fhint">Podés marcar más de uno.</p>
+    <div class="chips" style="--n:3">${[["NORMAL","Normal"],["AFECTA SEGURIDAD","Afecta seguridad"],["AFECTA SERVICIO","Afecta servicio"]].map(([v,l])=>
+      `<button type="button" class="chip ${S.tipos.includes(v)?"on":""}" data-a="tipo" data-p="${v}">${l}</button>`).join("")}</div>
+  </div>
+  <div class="note">${I("info",17)}<span>Se abre la <b>Solicitud de Servicio</b> al taller junto con la OT y las dos se envían a aprobar. Presupuestos, adjuntos y el seguimiento del taller se cargan desde la PC.</span></div>`;
+}
+
+function form(){
+  const C = CASOS[S.caso];
+  const n = faltan();
+  return `
+  <div class="scr">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="tk-code mono">${C.code}</span>
+      <h2 class="tk-title">${C.title}</h2>
+      <span class="pill p-over" style="margin-top:4px">${C.vence}</span>
+    </div>
+
+    <p class="sect">Ya viene del plan</p>
+    <div class="card">
+      <div class="okrow">${I("circle-check",18)}<span style="min-width:0"><b>Criterio de aceptación</b><span>${C.plan.criterio}</span></span></div>
+      <div class="okrow">${I("circle-check",18)}<span style="min-width:0"><b>Bloqueo de energía (LOTO)</b><span>${C.plan.loto}</span></span></div>
+      <div class="okrow">${I("circle-check",18)}<span style="min-width:0"><b>${C.plan.riesgo}</b><span>Lo define el plan.</span></span></div>
+      ${C.talleresDelPlan.length?`<div class="okrow">${I("circle-check",18)}<span style="min-width:0"><b>Lo hace ${C.talleresDelPlan.join(", ")}</b><span>La solicitud al taller se abre sola.</span></span></div>`:""}
+    </div>
+
+    <p class="sect">Completá para enviar</p>
+    <div>
+      <div class="field ${S.intento&&!S.solicitado?"missing":""}">
+        <label>Solicitado por</label>
+        ${chips("solicitado",[{v:"CUBIERTA",l:"Cubierta"},{v:"MAQUINAS",l:"Máquinas"},{v:"TECNICA",l:"Técnica"},{v:"OPS_SSMA",l:"Ops / SSMA"}],S.solicitado)}
+      </div>
+      <div class="field">
+        <label>Asignado a</label>
+        <p class="fhint">Viene del plan; cambialo si hace falta.</p>
+        ${chips("asignado",[{v:"TRIPULACION",l:"Tripulación"},{v:"TERCERIZADO",l:"Tercerizado"},{v:"TECNICA",l:"Técnica"},{v:"OPS_SSMA",l:"Ops / SSMA"}],S.asignado)}
+      </div>
+      ${pideTaller()?bloqueTaller():""}
+      <div class="field ${S.intento&&!S.sistema?"missing":""}">
+        <label>Sistema</label>
+        ${chips("sistema",[{v:"MAQUINAS",l:"Máquinas"},{v:"RE_CUBIERTA",l:"R/E Cubierta"},{v:"BARCAZAS",l:"Barcazas"}],S.sistema)}
+      </div>
+      <div class="field">
+        <label>Ubicación</label>
+        <div class="inpwrap" style="padding:0">${I("map-pin",16)}<input class="inp" value="${S.ubic}" data-a="ubic"></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <button type="button" class="mainb ${n?"miss":""}" data-a="${n?"intento":"enviar"}">
+      ${n ? `${I("alert-triangle",18)}${n===1?"Falta 1 dato":`Faltan ${n} datos`}` : `${I("send",18)}Enviar a aprobar`}
+    </button>
+    <small>Firma como Juan Pérez · Jefe de Máquinas</small>
+  </div>`;
+}
+
+function done(){
+  const C = CASOS[S.caso];
+  const taller = TALLERES.find(p=>p.id===S.taller);
+  const conSS = pideTaller() || C.talleresDelPlan.length>0;
+  const nombreTaller = taller ? taller.name : C.talleresDelPlan[0];
+  return `
+  <div class="scr">
+    <div class="done">
+      <span class="circ">${I("send",40)}</span>
+      <h2>${conSS?"OT y SS enviadas a aprobar":"OT enviada a aprobar"}</h2>
+      <span class="codes mono">OT-M02-26-0478${conSS?" · SS-75-M02-2026":""}</span>
+      <ul>
+        <li>${I("list-checks",17)}<span>1 tarea de ${C.eq}.</span></li>
+        ${conSS?`<li>${I("building-2",17)}<span>También se envió la solicitud a <b>${nombreTaller}</b>.</span></li>`:""}
+        <li>${I("user-check",17)}<span>Le llega al que aprueba.</span></li>
+        <li>${I("monitor",17)}<span>El resto (repuestos, fechas, adjuntos) se carga desde la PC.</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot">
+    <button type="button" class="mainb" data-a="volver">${I("home",18)}Volver al inicio</button>
+    <button type="button" class="ghost" data-a="otra">Abrir otra tarea</button>
+  </div>`;
+}
+
+function app(){
+  const C = CASOS[S.caso];
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      <div class="head">
+        <button class="iconb">${I("arrow-left",20)}</button>
+        <div><h1>Abrir OT</h1><p>${C.eq}</p></div>
+      </div>
+      ${S.pantalla==="form"?form():done()}
+    </div>
+    <aside class="guide">
+      <div><h2>Tercerizado: ahora se elige el taller</h2>
+      <p style="margin-top:8px">Al abrir la OT desde una tarea del plan, marcar <b>Tercerizado</b> no pedía a quién. La OT salía sin taller y sin Solicitud de Servicio: había que completarla después desde la PC.</p></div>
+      <div><p class="gl">Probá los dos casos</p>
+        <div class="case">
+          <button type="button" class="chip ${S.caso==="crew"?"on":""}" data-a="caso" data-p="crew">Tarea de la tripulación</button>
+          <button type="button" class="chip ${S.caso==="shop"?"on":""}" data-a="caso" data-p="shop">Tarea que ya trae taller</button>
+        </div>
+      </div>
+      <div><p class="gl">Para probar</p><ol class="steps">
+        <li>En <b>Asignado a</b>, tocá <b>Tercerizado</b>: aparecen el buscador de proveedores y el tipo de solicitud.</li>
+        <li>Elegí un taller y marcá un tipo. El botón de abajo deja de avisar que faltan datos.</li>
+        <li>Tocá <b>Enviar a aprobar</b>: salen la OT y la SS, con sus dos números.</li>
+        <li>Cambiá al caso <b>“ya trae taller”</b>: ahí el plan ya sabe a quién, no se pregunta nada y la SS se abre sola (es lo que pasa hoy).</li>
+      </ol></div>
+      <p class="hint">Abrilo desde el celular: ocupa toda la pantalla.</p>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Tercerizado: taller y SS · Preview V35</h2>
+  <p>En el celular, al abrir la OT desde una tarea del plan (<b>Planes / Agenda → Abrir OT</b>), el recuadro <b>Asignado a</b> deja marcar “Tercerizado”, pero no pregunta <b>a qué taller</b>. Resultado: la orden sale sin proveedor y sin Solicitud de Servicio, y el trabajo de pedirle el servicio al taller queda pendiente en la PC.</p>
+
+  <section><h3>Qué agrega</h3>
+  <ul>
+    <li>Al tocar <b>Tercerizado</b> aparecen dos recuadros nuevos: <b>Proveedor</b> (buscador con los talleres activos de la empresa) y <b>Tipo de solicitud</b> (Normal / Afecta seguridad / Afecta servicio).</li>
+    <li>Los dos son <b>obligatorios</b>: sin ellos el botón sigue diciendo “Faltan datos”, igual que el resto del formulario.</li>
+    <li>Al enviar: se abre la OT, se le cuelga la <b>Solicitud de Servicio</b> al taller elegido y las dos se mandan a aprobar. La pantalla final muestra los dos números.</li>
+    <li>Es el mismo par de recuadros que ya usa <b>“OT nueva”</b> en el celular, con el mismo texto y el mismo comportamiento.</li>
+  </ul></section>
+
+  <section><h3>Qué NO cambia</h3>
+  <ul>
+    <li><b>Tareas que ya traen taller en el plan</b> (área Proveedor): siguen igual — no se pregunta nada y la SS se abre sola con el taller del plan. No se puede cambiar de taller desde el celular; eso sigue siendo de la PC.</li>
+    <li><b>Un taller por OT</b> desde el celular. Varios talleres en la misma orden se cargan desde la PC.</li>
+    <li>La tramitación no se toca: la SS nace en borrador, se envía a aprobar junto con la OT y llegar al taller sigue siendo una acción manual. Nadie compromete gasto sin firma.</li>
+    <li>El aviso de campos faltantes sigue siendo el mismo botón amarillo de arriba; no se agregan carteles nuevos.</li>
+  </ul></section>
+
+  <section><h3>Por dentro</h3>
+  <ul>
+    <li>La OT queda con el <b>proveedor elegido</b>, igual que cuando se abre desde “OT nueva”, así el PDF y los listados lo muestran.</li>
+    <li>La SS se crea por el camino de siempre (una solicitud por taller), con su número correlativo SS-…-BUQUE-AÑO.</li>
+    <li>Si la SS fallara por cualquier motivo, la OT igual queda abierta y la pantalla final lo avisa: no se pierde el trabajo cargado.</li>
+  </ul></section>
+
+  <section><h3>Para decidir</h3>
+  <div class="opt">
+    <div class="rcard"><b>Tipo de solicitud: ¿obligatorio?</b>En “OT nueva” lo es. Acá se propone igual, por coherencia. Si preferís que sea opcional (y que quede “Normal” por defecto), se cambia.</div>
+    <div class="rcard"><b>Tareas con taller del plan</b>Propuesta: no preguntar nada. Si querés poder mandarla a OTRO taller desde el celular, es un cambio aparte.</div>
+  </div></section>
+
+  <p class="hint">Preview. No se tocó nada de la aplicación.</p>
+  </article>`;
+}
+
+function render(){
+  // La maqueta redibuja todo en cada toque; sin esto la pantalla del celular
+  // volvería arriba cada vez que se marca una opción.
+  const prev = document.querySelector(".scr");
+  const y = prev ? prev.scrollTop : 0;
+  const clave = `${S.v}|${S.caso}|${S.pantalla}`;
+  const mismaPantalla = !!prev && clave === render.clave;
+  render.clave = clave;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML = `${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref" ? ref() : app();
+  if (window.lucide) lucide.createIcons();
+  const scr = document.querySelector(".scr");
+  if (scr && mismaPantalla && y) scr.scrollTop = y;
+}
+document.addEventListener("input", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  if (el.dataset.a==="buscar") { S.q = el.value; const p=el.selectionStart; render();
+    const n=document.querySelector('[data-a="buscar"]'); if(n){n.focus(); n.setSelectionRange(p,p);} }
+  else if (el.dataset.a==="ubic") { S.ubic = el.value; }
+});
+document.addEventListener("click", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const a = el.dataset.a, p = el.dataset.p;
+  if (a==="tab") S.v = p;
+  else if (a==="theme") { S.theme = {system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if (a==="caso") { S.caso = p; resetCaso(); }
+  else if (a==="solicitado") S.solicitado = S.solicitado===p ? "" : p;
+  else if (a==="sistema") S.sistema = S.sistema===p ? "" : p;
+  else if (a==="asignado") { S.asignado = S.asignado===p ? "" : p; if (S.asignado!=="TERCERIZADO") { S.taller=null; S.tipos=[]; S.q=""; } }
+  else if (a==="taller") S.taller = p;
+  else if (a==="quitar") { S.taller = null; S.q = ""; }
+  else if (a==="tipo") S.tipos = S.tipos.includes(p) ? S.tipos.filter(x=>x!==p) : [...S.tipos, p];
+  else if (a==="intento") S.intento = true;
+  else if (a==="enviar") S.pantalla = "done";
+  else if (a==="volver" || a==="otra") resetCaso();
+  else if (a==="buscar" || a==="ubic") return;
+  render();
+});
+render();
+</script>

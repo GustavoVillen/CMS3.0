@@ -16,7 +16,7 @@ import { findClassInspectionAsset } from "../lib/class-inspection-asset";
 import { useCopilotAssist, type CopilotAssistField } from "../lib/copilot-context";
 import { useFetch } from "../lib/hooks";
 import { PersonSelect } from "./PersonSelect";
-import { GuideField, GuideNeedTag } from "./GuideKit";
+import { GuideField, GuideNeedTag, RequiredMark } from "./GuideKit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -961,8 +961,22 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     vessel: !prefill && !vesselCode.trim(),
     asset: (!prefill || !!prefill.assetSelectable) && !assetId,
     provider: !prefill && requireProvider && !hasAnyProvider,
+    // Pedido de Gustavo (V50): la OT no se crea sin título ni tarea.
+    title: !title.trim(),
+    task: !description.trim(),
   };
-  const missReqCount = Number(missReq.vessel) + Number(missReq.asset) + Number(missReq.provider);
+  const missReqCount = Number(missReq.vessel) + Number(missReq.asset) + Number(missReq.provider)
+    + Number(missReq.title) + Number(missReq.task);
+  // Guía: se marcan con "Falta" pero no impiden crear la OT (se completan después).
+  const missGuide = {
+    dueDate: !dueDate, estimatedHours: !estimatedHours, assignee: !assignedTo.trim(),
+    // Formulario REGI y seguridad: con asterisco los mismos que pide la
+    // preparación de la OT (ubicación, solicitado por, asignado a, sistema).
+    voyage: !voyageNumber.trim(), location: !location.trim(), condition: !operatingCondition,
+    requestedBy: !requestedByArea, assignedTo: !assignedToArea, system: !systemArea,
+    criteria: !acceptanceCriteria.trim(), loto: !loto.trim(), risk: !riskLevel,
+    consequence: !consequenceCategory, riskResult: !riskAnalysisResult.trim(), rationale: !consequenceRationale.trim(),
+  };
 
   const onSave = useCallback(async () => {
     setErr(null);
@@ -972,6 +986,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       if (requireProvider && !hasAnyProvider) { setErr(t("wo.modal.providerRequired")); return; }
     } else if (prefill.assetSelectable && !assetId) {
       setErr(t("wo.modal.equipmentRequired")); return;
+    }
+    if (!title.trim() || !description.trim()) {
+      setErr(`${t("wo.modal.completeBeforeCreate")}\n${[!title.trim() && t("wo.modal.titleField"), !description.trim() && t("wo.modal.task")].filter(Boolean).map(x => `• ${x}`).join("\n")}`);
+      return;
     }
     setSaving(true);
     try {
@@ -1281,7 +1299,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const vesselAssetFields = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <GuideField id="wo-new-vessel" missing={missReq.vessel}>
-        <label className={labelCls}>{t("wo.modal.vessel")} *{missReq.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+        <label className={labelCls}>{t("wo.modal.vessel")}<RequiredMark />{missReq.vessel && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
         <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
           <option value="">{t("wo.modal.selectVessel")}</option>
           {vessels.map(v => (
@@ -1290,7 +1308,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
         </select>
       </GuideField>
       <GuideField id="wo-new-asset" missing={missReq.asset}>
-        <label className={labelCls}>{t("wo.modal.equipment")} *{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+        <label className={labelCls}>{t("wo.modal.equipment")}<RequiredMark />{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
         {loadingAssets
           ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /><span className="text-xs text-text-industrial/50">{t("common.loading")}</span></div>
           : assets.length > 0
@@ -1375,7 +1393,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       )}
       {showsStandaloneProviders && !providersPreselected && (
         <div className={`rounded-xl border p-3 space-y-2 ${missReq.provider ? "border-amber-500/60 border-l-4 bg-amber-50 dark:bg-amber-500/10" : "border-accent/25 bg-accent/5"}`}>
-          <label className={labelCls}>{t("wo.modal.provider")}{requireProvider ? " *" : ""}{missReq.provider && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+          <label className={labelCls}>{t("wo.modal.provider")}{requireProvider && <RequiredMark />}{missReq.provider && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
           {standaloneProviderRequests.map((row, i) => (
             <div key={i} className="flex items-start gap-2">
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
@@ -1536,7 +1554,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 {prefill.assetSelectable && (
                   <GuideField id="wo-new-asset-prefill" missing={missReq.asset}>
                     <div className="flex items-center justify-between gap-2">
-                      <label className={labelCls}>{t("wo.modal.equipment")} *{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                      <label className={labelCls}>{t("wo.modal.equipment")}<RequiredMark />{missReq.asset && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                       {assets.length > 0 && (
                         <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={suggestingAsset}
                           title={t("wo.ai.suggestAssetTooltip")} onClick={() => { void handleSuggestAsset(); }} />
@@ -1575,9 +1593,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               </>
             )}
 
-            <div className="space-y-1.5">
+            <GuideField id="wo-new-title" missing={missReq.title}>
               <div className="flex items-center justify-between gap-2">
-                <label className={labelCls}>{t("wo.modal.titleField")}</label>
+                <label className={labelCls}>{t("wo.modal.titleField")}<RequiredMark />{missReq.title && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingTitle}
                   title={t("wo.ai.titleTooltip")} onClick={handleTitleClick} />
               </div>
@@ -1592,20 +1610,20 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 className={`${inputCls} resize-y`}
                 placeholder={t("wo.modal.titlePlaceholder")}
               />
-            </div>
+            </GuideField>
 
-            <div className="space-y-1.5">
+            <GuideField id="wo-new-task" missing={missReq.task}>
               {/* "Sugerir" = la IA propone las tareas a partir del equipo y el
                   título (mismo gesto que Criterios / LOTO / Riesgo). */}
               <div className="flex items-center justify-between gap-2">
-                <label className={labelCls}>{t("wo.modal.task")}</label>
+                <label className={labelCls}>{t("wo.modal.task")}<RequiredMark />{missReq.task && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingTask} dim={!title.trim()}
                   title={!title.trim() ? t("wo.ai.completeTitleFirst") : t("wo.ai.taskTooltip")} onClick={handleTaskClick} />
               </div>
               <AutoTextArea rows={autoRows(description, 3)} value={description} onChange={e => setDescription(e.target.value)}
                 disabled={loadingTask}
                 className={`${inputCls} resize-y`} />
-            </div>
+            </GuideField>
 
             {/* Detección de plan: corre sola una vez por equipo (silenciosa si
                 no encuentra nada), pero acá se puede repetir a mano en
@@ -1647,22 +1665,22 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
                 </div>
               )}
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.dueDate")}</label>
+              <GuideField id="wo-new-due" missing={missGuide.dueDate}>
+                <label className={labelCls}>{t("wo.modal.dueDate")}{missGuide.dueDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.estimatedHours")}</label>
+              </GuideField>
+              <GuideField id="wo-new-hours" missing={missGuide.estimatedHours}>
+                <label className={labelCls}>{t("wo.modal.estimatedHours")}{missGuide.estimatedHours && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <input type="number" min="0" step="0.5" value={estimatedHours}
                   onChange={e => setEstimatedHours(e.target.value)}
                   className={inputCls} placeholder="—" />
-              </div>
+              </GuideField>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.assignee")}</label>
+              <GuideField id="wo-new-assignee" missing={missGuide.assignee}>
+                <label className={labelCls}>{t("wo.modal.assignee")}{missGuide.assignee && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AssigneeSelect value={assignedTo} onChange={setAssignedTo} className={inputCls} />
-              </div>
+              </GuideField>
               {/* Admin: abrir en nombre de otro usuario (SOLICITA). */}
               {isAdmin && (
                 <div className="space-y-1.5">
@@ -1686,18 +1704,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           {isMercurio && (
             <FormSection n={++sectionNo} title={t("wo.modal.sec.regi")} subtitle={t("wo.modal.sec.regiSub")}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.voyageNumber")}</label>
+                <GuideField id="wo-new-voyage" missing={missGuide.voyage}>
+                  <label className={labelCls}>{t("wo.modal.voyageNumber")}{missGuide.voyage && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input value={voyageNumber} onChange={e => setVoyageNumber(e.target.value)}
                     placeholder="Ej. V-2026-014" className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.location")}</label>
+                </GuideField>
+                <GuideField id="wo-new-location" missing={missGuide.location}>
+                  <label className={labelCls}>{t("wo.modal.location")}<RequiredMark />{missGuide.location && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
-                </div>
+                </GuideField>
                 {/* CONDICION: evidencia de si el trabajo se hizo navegando. */}
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.operatingCondition")}</label>
+                <GuideField id="wo-new-condition" missing={missGuide.condition}>
+                  <label className={labelCls}>{t("wo.modal.operatingCondition")}{missGuide.condition && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <select value={operatingCondition} onChange={e => setOperatingCondition(e.target.value)}
                     className={inputCls}>
                     <option value="">—</option>
@@ -1705,15 +1723,15 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                       <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
                     ))}
                   </select>
-                </div>
+                </GuideField>
               </div>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.requestedBy")}</label>
+              <GuideField id="wo-new-requested" missing={missGuide.requestedBy}>
+                <label className={labelCls}>{t("wo.modal.requestedBy")}<RequiredMark />{missGuide.requestedBy && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <SegButtons options={WO_REQUESTED_BY} value={requestedByArea} onChange={setRequestedByArea} />
-              </div>
-              <div className="space-y-2">
+              </GuideField>
+              <GuideField id="wo-new-assigned" missing={missGuide.assignedTo}>
                 <div className="flex items-center justify-between gap-2">
-                  <label className={labelCls}>{t("wo.modal.assignedTo")}</label>
+                  <label className={labelCls}>{t("wo.modal.assignedTo")}<RequiredMark />{missGuide.assignedTo && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   {serviceRequestMode && <span className="text-[10px] text-text-industrial/50">{t("wo.modal.ssAlwaysOutsourced")}</span>}
                 </div>
                 {/* En modo prefill viene precargado según el plan
@@ -1722,7 +1740,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 <SegButtons options={WO_ASSIGNED_TO} value={assignedToArea}
                   onChange={v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); }} />
                 {!providersInFirstSection && providersBlock}
-              </div>
+              </GuideField>
               {!prefill && (
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("wo.modal.type")}</label>
@@ -1730,10 +1748,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.system")}</label>
+                <GuideField id="wo-new-system" missing={missGuide.system}>
+                  <label className={labelCls}>{t("wo.modal.system")}<RequiredMark />{missGuide.system && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <SegButtons options={WO_SYSTEM_AREAS} value={systemArea} onChange={setSystemArea} />
-                </div>
+                </GuideField>
                 {!prefill && (
                   <div className="space-y-1.5">
                     <label className={labelCls}>{t("wo.modal.criticality")}</label>
@@ -1767,30 +1785,30 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           {/* 4 · Seguridad y criterio de cierre */}
           <FormSection n={++sectionNo} title={t("wo.modal.sec.safety")} subtitle={t("wo.modal.sec.safetySub")}
             badge={<span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">{t("wo.modal.recommended")}</span>}>
-            <div className="space-y-1.5">
+            <GuideField id="wo-new-criteria" missing={missGuide.criteria}>
               <div className="flex items-center justify-between gap-2">
-                <label className={labelCls}>{t("wo.modal.acceptanceCriteria")}</label>
+                <label className={labelCls}>{t("wo.modal.acceptanceCriteria")}{missGuide.criteria && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingCriteria} dim={!aiTaskDesc}
                   title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.criteriaTooltip")} onClick={handleCriteriaClick} />
               </div>
               <AutoTextArea rows={autoRows(acceptanceCriteria, 2)} value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)}
                 disabled={loadingCriteria}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.acceptancePlaceholder")} />
-            </div>
-            <div className="space-y-1.5">
+            </GuideField>
+            <GuideField id="wo-new-loto" missing={missGuide.loto}>
               <div className="flex items-center justify-between gap-2">
-                <label className={labelCls}>{t("wo.modal.loto")}</label>
+                <label className={labelCls}>{t("wo.modal.loto")}{missGuide.loto && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingLoto} dim={!aiTaskDesc}
                   title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.lotoTooltip")} onClick={handleLotoClick} />
               </div>
               <AutoTextArea rows={autoRows(loto, 2)} value={loto} onChange={e => setLoto(e.target.value)}
                 disabled={loadingLoto}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.lotoPlaceholder")} />
-            </div>
+            </GuideField>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <GuideField id="wo-new-risk" missing={missGuide.risk}>
                 <div className="flex items-center justify-between gap-2">
-                  <label className={labelCls}>{t("wo.modal.riskLevel")}</label>
+                  <label className={labelCls}>{t("wo.modal.riskLevel")}{missGuide.risk && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingRisk} dim={!aiTaskDesc}
                     title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.ai.riskTooltip")} onClick={handleRiskClick} />
                 </div>
@@ -1805,10 +1823,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   ))}
                 </div>
                 <p className="text-[10px] text-text-industrial/50">{t("wo.modal.riskLevelHint").replace(/^—\s*/, "")}</p>
-              </div>
-              <div className="space-y-1.5">
+              </GuideField>
+              <GuideField id="wo-new-consequence" missing={missGuide.consequence}>
                 <div className="flex items-center justify-between gap-2">
-                  <label className={labelCls}>{t("wo.modal.consequenceCategory")}</label>
+                  <label className={labelCls}>{t("wo.modal.consequenceCategory")}{missGuide.consequence && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <AiSuggestButton label={t("wo.modal.aiSuggest")} loading={loadingConsequence} dim={!aiTaskDesc}
                     title={!aiTaskDesc ? t("wo.ai.completeTaskFirst") : t("wo.modal.consequenceTooltip")} onClick={handleConsequenceClick} />
                 </div>
@@ -1820,21 +1838,21 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                   <option value="OPERATIONAL">{t("wo.modal.consequence.operational")}</option>
                   <option value="NON_OPERATIONAL">{t("wo.modal.consequence.nonOperational")}</option>
                 </select>
-              </div>
+              </GuideField>
             </div>
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}</label>
+            <GuideField id="wo-new-risk-result" missing={missGuide.riskResult}>
+              <label className={labelCls}>{t("wo.modal.riskAnalysisResult")}{missGuide.riskResult && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <AutoTextArea rows={autoRows(riskAnalysisResult, 2)} value={riskAnalysisResult} onChange={e => setRiskAnalysisResult(e.target.value)}
                 disabled={loadingRisk}
                 className={`${inputCls} resize-y`} placeholder={t("wo.modal.riskPlaceholder")} />
-            </div>
+            </GuideField>
             {consequenceCategory && (
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.consequenceRationale")}</label>
+              <GuideField id="wo-new-rationale" missing={missGuide.rationale}>
+                <label className={labelCls}>{t("wo.modal.consequenceRationale")}{missGuide.rationale && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <AutoTextArea rows={autoRows(consequenceRationale, 2)} value={consequenceRationale} onChange={e => setConsequenceRationale(e.target.value)}
                   disabled={loadingConsequence}
                   className={`${inputCls} resize-y`} placeholder={t("wo.modal.consequenceRationalePlaceholder")} />
-              </div>
+              </GuideField>
             )}
           </FormSection>
 

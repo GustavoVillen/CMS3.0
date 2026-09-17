@@ -76,7 +76,9 @@ export const OnboardDefect: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   const assets = useFetch<{ items: AssetOption[] }>("/app/pms/assets?limit=500");
 
   const [step, setStep] = useState<"tell" | "review" | "how" | "fixed" | "wo">("tell");
-  const [tried, setTried] = useState(false);
+  // Estándar V50 (pedido de Gustavo): lo que falta se marca desde que se abre,
+  // no recién al tocar el botón.
+  const [tried, setTried] = useState(true);
   // Paso 1
   const [text, setText] = useState("");
   const [photos, setPhotos] = useState<PickedPhoto[]>([]);
@@ -126,7 +128,7 @@ export const OnboardDefect: React.FC<{ onExit: () => void }> = ({ onExit }) => {
       if (f.operationalState && OP_STATES.includes(f.operationalState as never)) setOpState(f.operationalState);
       setImmediate(asText(f.immediateAction));
       setStep("review");
-      setTried(false);
+      setTried(true);
     } catch (e) {
       setAlert(errorText(e, t("ob.aiFailed")));
     } finally {
@@ -364,7 +366,7 @@ export const OnboardDefect: React.FC<{ onExit: () => void }> = ({ onExit }) => {
       <Screen head={<Head title={t("ob.def.howTitle")} sub={`${defect?.defectCode ?? ""} · ${t("ob.def.registered")}`} step={3} onBack={() => setDone("open")} />}>
         <p className="text-[12.5px] text-text-industrial/60">{t("ob.def.howHint")}</p>
         {option(<Wrench className="w-6 h-6" />, "bg-accent/10 text-accent", t("ob.def.optWo"), t("ob.def.optWoSub"), () => setStep("wo"))}
-        {option(<CheckCheck className="w-6 h-6" />, "bg-success/15 text-success", t("ob.def.optFixed"), t("ob.def.optFixedSub"), () => { setTried(false); setStep("fixed"); })}
+        {option(<CheckCheck className="w-6 h-6" />, "bg-success/15 text-success", t("ob.def.optFixed"), t("ob.def.optFixedSub"), () => { setTried(true); setStep("fixed"); })}
         {option(<Clock className="w-6 h-6" />, "bg-fg/5 text-text-industrial/60", t("ob.def.optOpen"), t("ob.def.optOpenSub"), () => setDone("open"))}
       </Screen>
     );

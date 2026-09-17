@@ -78,7 +78,9 @@ function NewWorkOrderFlow({ onExit, onAgain, prefill, onCreated }: {
   const assets = useFetch<{ items: AssetOption[] }>("/app/pms/assets?limit=500");
 
   const [step, setStep] = useState(1);
-  const [tried, setTried] = useState(false);
+  // Estándar V50 (pedido de Gustavo): lo que falta se marca desde que se abre,
+  // no recién al tocar el botón.
+  const [tried, setTried] = useState(true);
   // Paso 1
   const [assetQuery, setAssetQuery] = useState("");
   const [asset, setAsset] = useState<AssetOption | null>(prefill?.asset ?? null);
@@ -138,7 +140,7 @@ function NewWorkOrderFlow({ onExit, onAgain, prefill, onCreated }: {
   };
 
   const next = () => {
-    if (step < 3) { setStep(step + 1); setTried(false); return; }
+    if (step < 3) { setStep(step + 1); setTried(true); return; }
     void send();
   };
 
@@ -244,7 +246,7 @@ function NewWorkOrderFlow({ onExit, onAgain, prefill, onCreated }: {
         title={step === 1 ? t("ob.tile.newWo").replace("{wo}", woTerms.abbr) : stepNames[step - 1]!}
         sub={t("ob.stepOf").replace("{n}", String(step)).replace("{name}", stepNames[step - 1]!)}
         step={step}
-        onBack={() => { if (step > 1) { setStep(step - 1); setTried(false); } else onExit(); }}
+        onBack={() => { if (step > 1) { setStep(step - 1); setTried(true); } else onExit(); }}
       />}
       foot={<>
         <MainButton missing={missingNow} busy={busy}

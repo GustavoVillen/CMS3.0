@@ -1,7 +1,10 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
+import { resolveTenantTime, fmtDate } from "../../common/tenant-time";
+import { buildResultDefectDescription } from "./analysis-text";
 import { generateFluidAiAnalysis } from "./fluid-analyses-ai-insights";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { ensurePermission } from "../auth/role-permissions";
@@ -27,7 +30,9 @@ export type Verdict = typeof VERDICTS[number];
 export interface CreateFluidSampleInput {
   vesselCode: string;
   assetId: string;
-  fluidType: FluidType;
+  /** Tipo de muestreo. Default FLUID; con otro kind `fluidType` se ignora y queda null. */
+  kind?: SampleKindInput;
+  fluidType: FluidType | null;
   fluidProduct?: string | null;
   sampledAt: string | Date;
   runningHours?: number | null;
@@ -271,6 +276,32 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
     for (const s of filtered) s.sourceWorkOrderCode = null;
   }
 
+  // OT correctiva con la que se cerró el defecto del resultado (preview V47):
+  // el listado la muestra debajo del veredicto. En lote: defectos y después OTs.
+  const defectIds = [...new Set(filtered.map((s: any) => s.result?.defectId).filter(Boolean))] as string[];
+  if (defectIds.length > 0) {
+    const defects = await (prisma as any).defect.findMany({
+      where: { id: { in: defectIds }, tenantId, deletedAt: null, workOrderId: { not: null } },
+      select: { id: true, workOrderId: true },
+    }) as Array<{ id: string; workOrderId: string }>;
+    const repairWos = defects.length > 0
+      ? await (prisma as any).workOrder.findMany({
+          where: { id: { in: defects.map(d => d.workOrderId) }, tenantId, deletedAt: null },
+          select: { id: true, workOrderCode: true, status: true },
+        }) as Array<{ id: string; workOrderCode: string; status: string }>
+      : [];
+    const woById = new Map(repairWos.map(w => [w.id, w]));
+    const woByDefect = new Map(defects.map(d => [d.id, woById.get(d.workOrderId)]));
+    for (const s of filtered) {
+      const wo = s.result?.defectId ? woByDefect.get(s.result.defectId) : undefined;
+      if (s.result && wo) {
+        s.result.defectWorkOrderId = wo.id;
+        s.result.defectWorkOrderCode = wo.workOrderCode;
+        s.result.defectWorkOrderStatus = wo.status;
+      }
+    }
+  }
+
   return { items: filtered, total: filtered.length };
 }
 
@@ -329,6 +360,15 @@ export async function getFluidSample(session: TenantAccessSession, id: string) {
     sample.result.defectCode = defect?.defectCode ?? null;
     sample.result.defectStatus = defect?.status ?? null;
     sample.result.defectWorkOrderId = defect?.workOrderId ?? null;
+    // Para el flujograma de "qué hacer" (preview V46): en qué está la OT correctiva.
+    if (defect?.workOrderId) {
+      const wo = await (prisma as any).workOrder.findFirst({
+        where: { id: defect.workOrderId, tenantId, deletedAt: null },
+        select: { workOrderCode: true, status: true },
+      });
+      sample.result.defectWorkOrderCode = wo?.workOrderCode ?? null;
+      sample.result.defectWorkOrderStatus = wo?.status ?? null;
+    }
   }
 
   return sample;
@@ -346,7 +386,10 @@ export async function createFluidSample(session: TenantAccessSession, input: Cre
   if (!vesselCode) throw new RouteError(400, "FIELD_REQUIRED", "vesselCode es requerido.");
   const assetId = String(input.assetId || "").trim();
   if (!assetId) throw new RouteError(400, "FIELD_REQUIRED", "assetId es requerido.");
-  if (!FLUID_TYPES.includes(input.fluidType)) throw new RouteError(400, "INVALID_FLUID_TYPE", "Tipo de fluido inválido.");
+  const kind: SampleKindInput = SAMPLE_KINDS.includes(input.kind as SampleKindInput) ? input.kind! : "FLUID";
+  if (kind === "FLUID" && !FLUID_TYPES.includes(input.fluidType as FluidType)) {
+    throw new RouteError(400, "INVALID_FLUID_TYPE", "Tipo de fluido inválido.");
+  }
 
   const sampledAt = parseDate(input.sampledAt);
   if (!sampledAt) throw new RouteError(400, "INVALID_DATE", "sampledAt inválido.");
@@ -359,7 +402,8 @@ export async function createFluidSample(session: TenantAccessSession, input: Cre
       vesselCode,
       assetId,
       sampleCode,
-      fluidType: input.fluidType,
+      kind,
+      fluidType: kind === "FLUID" ? input.fluidType : null,
       fluidProduct: normText(input.fluidProduct),
       sampledAt,
       runningHours: input.runningHours ?? null,
@@ -381,7 +425,7 @@ export async function createFluidSample(session: TenantAccessSession, input: Cre
     action: "FluidSample.created",
     entityType: "FluidSample",
     entityId: created.id,
-    metadata: { sampleCode, vesselCode, fluidType: created.fluidType },
+    metadata: { sampleCode, vesselCode, kind, fluidType: created.fluidType },
   });
 
   return created;
@@ -615,6 +659,7 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
     entityId: sampleId,
     metadata: { sampleCode: sample.sampleCode, vesselCode: sample.vesselCode, verdict },
   });
+  void archivePdf(session, { kind: "FA", id: sampleId });
 
   // El análisis IA (informe de especialista senior) NO se dispara automáticamente:
   // es un informe extenso y costoso, se genera on-demand con el botón
@@ -715,13 +760,6 @@ async function createDefectFromResult(
   result: any,
   parameters: Record<string, unknown>,
 ): Promise<string | null> {
-  // Pick the worst parameters to surface in the description
-  const worstParams = Object.entries(parameters)
-    .filter(([, v]) => Number.isFinite(Number(v)))
-    .map(([k, v]) => `${k}=${v}`)
-    .slice(0, 6)
-    .join(", ");
-
   // Generate next defect code
   const last = await prisma.defect.findFirst({
     where: { tenantId: sample.tenantId, vesselCode: sample.vesselCode },
@@ -736,11 +774,19 @@ async function createDefectFromResult(
   const defectCode = `DEF-${sample.vesselCode}-${String(n).padStart(4, "0")}`;
 
   const severity = result.verdict === "ACTION_REQUIRED" ? "CRITICAL" : "HIGH";
-  const description = [
-    `Análisis de fluido ${sample.sampleCode} (${sample.fluidType}) — Veredicto: ${result.verdict}.`,
-    result.summary ? `Resumen del lab: ${result.summary}` : "",
-    worstParams ? `Parámetros: ${worstParams}` : "",
-  ].filter(Boolean).join(" ");
+  // Texto ordenado con todo el resultado: la OT correctiva que se abre desde
+  // el defecto lo hereda como descripción (preview V46).
+  const { tz, locale } = await resolveTenantTime(session.tenantSlug);
+  const description = buildResultDefectDescription({
+    kind: String(sample.kind ?? "FLUID"),
+    sampleCode: sample.sampleCode,
+    labReference: sample.labReference ?? null,
+    labName: sample.labName ?? null,
+    sampledAtText: sample.sampledAt ? fmtDate(sample.sampledAt, tz, locale) : null,
+    verdict: result.verdict,
+    summary: result.summary ?? null,
+    parameters,
+  });
 
   const defect = await prisma.defect.create({
     data: {

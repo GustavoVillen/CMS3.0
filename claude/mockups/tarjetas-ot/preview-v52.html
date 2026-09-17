@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview V52 · Órdenes de Trabajo sin tarjetas de resumen y con filtro por grupo</title>
+<style>
+  body{margin:0;padding:22px 26px 40px;background:#f3f5f8;font-family:Inter,"Segoe UI",system-ui,sans-serif;color:#141c26}
+  .demo{display:inline-block;background:#fff3cd;color:#7a5a00;border:1px solid #f0d58c;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;margin-bottom:8px}
+  h1{font-size:20px;margin:0 0 4px}
+  .lead{color:#5b6776;font-size:13.5px;margin:0 0 16px;max-width:980px;line-height:1.5}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{border:1px solid #d6dde5;background:#fff;border-radius:8px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer}
+  .tabs button.on{background:#1668b3;color:#fff;border-color:#1668b3}
+  .shot{background:#fff;border:1px solid #d6dde5;border-radius:10px;padding:6px;max-width:1600px}
+  .shot img{width:100%;display:block;border-radius:6px}
+  .notes{margin-top:20px;background:#fff;border:1px solid #e3e7ec;border-radius:10px;padding:16px 20px;font-size:13.5px;line-height:1.55;max-width:1100px}
+  .notes h3{margin:14px 0 6px;font-size:14px} .notes h3:first-child{margin-top:0}
+  .notes ul{margin:0;padding-left:18px} .notes li{margin-bottom:4px}
+  .ok{display:inline-block;background:#1668b3;color:#fff;border-radius:6px;padding:2px 8px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<span class="demo">CAPTURA REAL DE LA APP LOCAL · LATERE · los botones de grupo y el cartel están dibujados encima</span>
+<h1>Preview V52 · Órdenes de Trabajo</h1>
+<p class="lead">Dos cambios en la misma pantalla: <b>se sacan las 5 tarjetas de resumen</b> de arriba
+(Vencidas · Esperando mi firma · Sin enviar a aprobar · En ejecución · Diferidas) y <b>se agrega el filtro por grupo</b>
+con botones G0 a G9. Al pasar el mouse sobre un botón aparece el nombre del grupo.</p>
+
+<div class="tabs">
+  <button class="on" data-src="v52-propuesta.png">Propuesta V52</button>
+  <button data-src="v52-hoy.png">Hoy</button>
+</div>
+<div class="shot"><img id="img" src="v52-propuesta.png" alt="Órdenes de Trabajo"></div>
+
+<div class="notes">
+  <h3>1 · Sin tarjetas de resumen</h3>
+  <ul>
+    <li>El tablero sube unos 110 px: se ve más de cada columna sin bajar.</li>
+    <li>Tres tarjetas ya tienen su filtro abajo: <b>Sin enviar a aprobar</b> = "En preparación", <b>Diferidas</b> = "Diferidas", <b>Vencidas</b> = "Sólo vencidas".</li>
+    <li>Dos se pierden como botón: <b>Esperando mi firma</b> (lo más parecido: "Por aprobar" y "Por autorizar") y <b>En ejecución</b>, que no tiene otro filtro. En el tablero siguen viéndose por la etiqueta verde "En proceso".</li>
+    <li>Los enlaces que llegan desde el Dashboard ya filtrados siguen funcionando igual.</li>
+  </ul>
+
+  <h3>2 · Filtro por grupo: G0 a G9</h3>
+  <ul>
+    <li>Un renglón debajo de las etapas. Un clic filtra por ese grupo; otro clic en el mismo botón lo saca. Se combina con los demás filtros.</li>
+    <li>Al pasar el mouse: <b>"G6 · Sistemas de Propulsión y Generación"</b>, con los nombres de grupo del armador que ya usa la app, en los 3 idiomas.</li>
+    <li>Los grupos sin órdenes en ese momento quedan apagados (en LATERE hoy hay de G4, G5, G6 y G7).</li>
+    <li><b>De dónde sale el grupo de cada OT:</b> del plan de mantenimiento que la originó; si no viene de un plan (una correctiva, por ejemplo), del código SFI del equipo. Revisado en la base: las 76 OT abiertas de Mercurio tienen grupo por uno de los dos caminos (53 por el plan, 23 por el equipo).</li>
+  </ul>
+
+  <h3>Qué se toca</h3>
+  <ul>
+    <li>La pantalla de Órdenes de Trabajo y el listado de OT del servidor, que pasa a mandar el grupo de cada orden. No cambia la base de datos.</li>
+    <li>Queda igual para todos los roles: nadie ve órdenes que antes no veía.</li>
+  </ul>
+
+  <p style="margin:14px 0 0">Si querés que lo implemente así, escribí <span class="ok">APROBAR-CAMBIO</span>.
+  El Preview V51 (tarjetas más bajas) sigue esperando tu respuesta aparte.</p>
+</div>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+    document.getElementById('img').src = b.dataset.src;
+  });
+</script>
+</body>
+</html>

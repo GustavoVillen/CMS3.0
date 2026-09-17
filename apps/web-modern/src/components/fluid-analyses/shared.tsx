@@ -56,6 +56,8 @@ export interface FluidResult {
   defectCode?: string | null;
   defectStatus?: string | null;
   defectWorkOrderId?: string | null;
+  defectWorkOrderCode?: string | null;
+  defectWorkOrderStatus?: string | null;
 }
 
 // Tipos de muestreo. FLUID es el caso histórico. Al ampliar el módulo a CBM,

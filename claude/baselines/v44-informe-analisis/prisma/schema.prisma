@@ -1,0 +1,4424 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Platform / Auth enums ────────────────────────────────────────────────────
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum LocaleCode {
+  es
+  en
+  pt
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum PlatformRole {
+  SUPERADMIN
+  SUPPORT
+}
+
+enum TenantRole {
+  TENANT_ADMIN
+  FLEET_SUPERINTENDENT
+  MAINTENANCE_MANAGER
+  TECHNICIAN_OPERATOR
+  INSPECTOR_COMPLIANCE
+  PROCUREMENT_STORE
+  AUDITOR_READONLY
+  // Jefe SSMA (Seguridad, Salud y Medio Ambiente). Perfil de seguridad: autoriza
+  // permisos de trabajo, lleva near miss, simulacros, auditorias externas y
+  // checklists. No autoriza OT ni toca planes/repuestos por defecto — pero todo
+  // eso es configurable desde Equipo → Permisos por rol.
+  HSE_MANAGER
+}
+
+enum AuditActorType {
+  PLATFORM_USER
+  TENANT_USER
+  SYSTEM
+}
+
+// ─── Operational enums (Blocks 05-07) ────────────────────────────────────────
+
+enum VesselStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AssetCriticality {
+  A
+  B
+  C
+}
+
+// RCM consequence category — "si esta tarea no se hace, ¿qué pasa?"
+// Reliability-Centered Maintenance categoriza el motivo del plan por la
+// consecuencia que mitiga, no por la frecuencia. Sirve para distribuir
+// el esfuerzo de mantenimiento por riesgo real (no todo necesita preventivo).
+enum ConsequenceCategory {
+  SAFETY           // Riesgo a personas (lesión / fatalidad)
+  ENVIRONMENTAL    // Daño ambiental (vertido, emisión)
+  OPERATIONAL      // Pérdida de operación (paro, retraso)
+  NON_OPERATIONAL  // Solo costo de reparación (sin impacto)
+}
+
+// RCM — cómo se detecta/previene un modo de falla. Vocabulario alineado con
+// SampleKind (mantenimiento por condición) + INSPECTION (prueba funcional) y
+// NONE para fallas ocultas (típico de dispositivos de protección/seguridades).
+enum FailureDetectionMethod {
+  NONE          // no detectable en operación (falla oculta)
+  INSPECTION    // inspección visual / prueba funcional
+  FLUID         // análisis de fluidos
+  VIBRATION
+  THERMAL
+  ULTRASOUND
+  CONDITION     // sensor / parámetro en línea
+}
+
+enum AssetStatus {
+  OPERATIONAL
+  DEGRADED
+  OUT_OF_SERVICE
+}
+
+/// De dónde salió una lectura de horómetro (AssetHoursReading). MANUAL = planilla
+/// "Horas de Equipos"; VOYAGE_TANK_REPORT = M2 al enviarse; DAILY_REPORT = renglón de
+/// horas del Reporte Diario (módulo dormante, sigue vivo en la vista móvil).
+enum HoursReadingSource {
+  MANUAL
+  VOYAGE_TANK_REPORT
+  DAILY_REPORT
+}
+
+enum MaintenancePlanTrigger {
+  HOURS
+  MONTHS
+  CONDITION
+  EVENT
+  CALENDAR       // alias semántico de MONTHS
+  RUNNING_HOURS  // alias semántico de HOURS
+  DAY
+  WEEK
+}
+
+enum MaintenancePlanStatus {
+  ACTIVE
+  DUE_SOON
+  OVERDUE
+  INACTIVE
+}
+
+enum WorkOrderType {
+  PREVENTIVE
+  CORRECTIVE
+  INSPECTION
+}
+
+enum WorkOrderStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  DEFERRED
+  CLOSED
+  CANCELLED
+}
+
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum WorkOrderDepartment {
+  CUBIERTA
+  MAQUINAS
+  BARCAZA
+  PROVEEDOR
+  OTROS
+}
+
+// Condición operativa del buque cuando se ejecutó el trabajo. TMSA (Elemento 4)
+// pide evidencia de que las auditorías de ingeniería incluyen la observación de
+// las prácticas DURANTE LA NAVEGACIÓN: sin este dato el papel no distingue una
+// inspección hecha en marcha de una hecha con el buque amarrado.
+enum WorkOrderOperatingCondition {
+  NAVEGACION
+  PUERTO
+  FONDEADO
+  DIQUE
+}
+
+// ── Formulario controlado de OT (Mercurio REGI-MAN-02.3) ─────────────────────
+// Recuadros de opciones del papel. Son ejes independientes entre sí y de
+// `department`: el formulario separa QUIÉN pide, A QUIÉN se asigna y sobre QUÉ
+// sistema, mientras que `department` es el área responsable del registro.
+
+enum WorkOrderRequestedByArea {
+  CUBIERTA
+  MAQUINAS
+  TECNICA
+  OPS_SSMA
+}
+
+enum WorkOrderAssignedToArea {
+  TRIPULACION
+  TERCERIZADO
+  TECNICA
+  OPS_SSMA
+}
+
+enum WorkOrderSystemArea {
+  MAQUINAS
+  RE_CUBIERTA
+  BARCAZAS
+}
+
+// TIPO DE MANTENIMIENTO del formulario. Es un refinamiento de `WorkOrderType`,
+// no un reemplazo: el enum grueso (PREVENTIVE/CORRECTIVE/INSPECTION) sigue
+// siendo el eje que consumen MTTR, el flujo OT→Defecto y los reportes, y
+// ensancharlo rompería esos consumidores en silencio. El service deriva `type`
+// a partir de este campo; el mapeo 5→3 no tiene inversa, así que no es
+// información redundante.
+enum WorkOrderMaintenanceKind {
+  PREVENTIVO
+  CORRECTIVO_PROGRAMADO
+  CORRECTIVO_NO_PROGRAMADO
+  PREDICTIVO
+  EMERGENCIA
+}
+
+// El formulario pide REPUESTOS y MATERIALES en recuadros separados.
+enum WorkOrderItemKind {
+  SPARE
+  MATERIAL
+}
+
+enum WorkOrderPdfTemplate {
+  STANDARD
+  // Formulario viejo de Mercurio. Se conserva para poder volver atrás:
+  // revertir es UPDATE "TenantSetting" SET "workOrderPdfTemplate"='MERCURIO'.
+  MERCURIO
+  // REGI-MAN-02.3 "Orden de trabajo" (rev 0, 29.12.2025) — el formulario vigente.
+  MERCURIO_OT
+}
+
+// ── Tenant-configurable controlled-document forms ─────────────────────────────
+// Cada tenant define sus propios formularios (numero, revision, logo, secciones,
+// footer, opciones de listas) en `TenantForm`. El estilo visual del "chrome"
+// (header/footer del documento controlado) es `FormStyle`.
+
+enum TenantFormType {
+  WORK_ORDER
+  SERVICE_REQUEST
+  MAINTENANCE_PLAN
+  DEFERRAL
+  // Permisos de trabajo: un formulario controlado por tipo de permiso, porque
+  // cada uno tiene su propio codigo, titulo y revision (Mercurio REGI-SYE-01.4..01.9).
+  PERMIT_ENCLOSED_SPACE
+  PERMIT_HOT_WORK
+  PERMIT_COLD_WORK
+  PERMIT_ALOFT
+  PERMIT_ELECTRICAL
+  PERMIT_UNDERWATER
+  // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
+}
+
+enum FormStyle {
+  STANDARD
+  MERCURIO
+}
+
+// ── Fluid Analyses ────────────────────────────────────────────────────────────
+
+enum FluidType {
+  ENGINE_OIL
+  HYDRAULIC_OIL
+  GEARBOX_OIL
+  TRANSMISSION_OIL
+  FUEL_DIESEL
+  FUEL_GASOIL
+  COOLING_WATER
+  BOILER_WATER
+  POTABLE_WATER
+  REFRIGERANT
+  OTHER
+}
+
+enum FluidSampleStatus {
+  DRAFT
+  SENT
+  REPORTED
+  ARCHIVED
+}
+
+// Tipo de muestreo / análisis de condición. FLUID es el original (lubricante,
+// combustible, agua). El resto fueron agregados al ampliar el módulo a
+// monitoreo de condición (CBM) más amplio. El nombre de la tabla `FluidSample`
+// se conserva por compatibilidad histórica; semánticamente es "Sample".
+enum SampleKind {
+  FLUID
+  VIBRATION
+  THERMAL
+  ULTRASOUND
+  OTHER
+}
+
+enum FluidVerdict {
+  NORMAL
+  CAUTION
+  CRITICAL
+  ACTION_REQUIRED
+}
+
+enum FluidThresholdDirection {
+  HIGH_BAD
+  LOW_BAD
+  RANGE
+}
+
+enum DefectStatus {
+  OPEN
+  UNDER_REVIEW
+  IN_PROGRESS
+  DEFERRED
+  RESOLVED
+  CLOSED
+}
+
+enum DefectSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DefectOperationalState {
+  NORMAL
+  DEGRADED
+  RESTRICTED
+  NO_GO
+}
+
+enum DeferralSourceType {
+  DEFECT
+  WORK_ORDER
+  MAINTENANCE_PLAN
+}
+
+enum DeferralStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+  EXPIRED
+  CLOSED
+}
+
+enum RcaMethodology {
+  FIVE_WHYS
+  FISHBONE
+  FTA
+  BARRIER_ANALYSIS
+}
+
+enum CapaSourceType {
+  DEFECT
+  WORK_ORDER
+  INSPECTION
+}
+
+enum CapaStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_VERIFICATION
+  EFFECTIVENESS_REVIEW
+  VERIFIED_EFFECTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum EffectivenessOutcome {
+  EFFECTIVE
+  PARTIALLY_EFFECTIVE
+  INEFFECTIVE
+}
+
+enum CapaPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum InspectionType {
+  SAFETY
+  TECHNICAL
+  REGULATORY
+  CLASS
+}
+
+enum InspectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionResult {
+  PASS
+  FAIL
+  CONDITIONAL
+}
+
+enum InspectionLogEntryType {
+  FINDING
+  ACTION
+  NOTE
+}
+
+enum InspectionLogSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CertificateStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  SUSPENDED
+  CLOSED
+}
+
+// ── Crew / Tripulación ────────────────────────────────────────────────────────
+
+enum CrewRank {
+  CAPTAIN
+  CHIEF_OFFICER
+  SECOND_OFFICER
+  THIRD_OFFICER
+  CHIEF_ENGINEER
+  SECOND_ENGINEER
+  THIRD_ENGINEER
+  FOURTH_ENGINEER
+  ELECTRICIAN
+  BOSUN
+  AB_SEAMAN
+  OS_SEAMAN
+  OILER
+  WIPER
+  COOK
+  STEWARD
+  CADET
+  RADIO_OPERATOR
+  PILOT
+  PILOTIN
+  OTHER
+}
+
+enum CrewStatus {
+  ONBOARD
+  SIGNED_OFF
+}
+
+enum CrewCertificationType {
+  STCW_II_1
+  STCW_II_2
+  STCW_III_1
+  STCW_III_2
+  STCW_IV_2
+  STCW_V_1
+  STCW_VI_1
+  STCW_VI_2
+  STCW_VI_3
+  STCW_VI_4
+  GMDSS_GOC
+  GMDSS_ROC
+  BST
+  MEDICAL_ENOG
+  MEDICAL_FIRST_AID
+  ADVANCED_FIRE_FIGHTING
+  SHIP_SECURITY_OFFICER
+  CROWD_MANAGEMENT
+  PASSPORT
+  SEAMANS_BOOK
+  OTHER
+}
+
+enum CrewCertificationStatus {
+  VALID
+  EXPIRING_SOON
+  EXPIRED
+}
+
+enum DrillStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+// ── Permit to Work (PTW) ──────────────────────────────────────────────────────
+
+enum PermitType {
+  HOT_WORK
+  ENCLOSED_SPACE_ENTRY
+  WORKING_ALOFT
+  ELECTRICAL_ISOLATION
+  // "FRIO" del formulario REGI-MAN-02.3 (trabajo en frío: sin fuentes de ignición).
+  COLD_WORK
+  // Trabajo subacuático / buceo — formulario REGI-SYE-01.9 de Mercurio.
+  UNDERWATER_WORK
+}
+
+enum PermitStatus {
+  DRAFT
+  REQUESTED
+  APPROVED
+  REJECTED
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum PermitParticipantRole {
+  PERFORMER
+  FIRE_WATCH
+  STAND_BY
+  ATTENDANT
+  SUPERVISOR
+}
+
+enum PermitGasVerdict {
+  PASS
+  FAIL
+}
+
+enum DailyReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  CLOSED
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SpareStatus {
+  ACTIVE
+  OBSOLETE
+}
+
+enum MovementType {
+  RECEIPT
+  ISSUE
+  ADJUSTMENT
+  TRANSFER
+  TRANSFER_IN
+  TRANSFER_OUT
+  RETURN_IN
+  ADJUSTMENT_PLUS
+  ADJUSTMENT_MINUS
+}
+
+enum MovementRefType {
+  WORK_ORDER
+  DEFECT
+  ADJUSTMENT
+  SPARE_REQUEST
+  WORK_LOG
+  // Recepción contra remito: el movimiento cuelga de un GoodsReceipt
+  // (referenceId = GoodsReceipt.id), que guarda proveedor, nº y el archivo.
+  GOODS_RECEIPT
+}
+
+enum EvaluationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum EvaluationRating {
+  A
+  B
+  C
+  D
+}
+
+enum NcStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum NcSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DomainEventKind {
+  STATE_CHANGED
+  RECORD_CREATED
+  RECORD_UPDATED
+  RECORD_DELETED
+}
+
+enum AttachmentTarget {
+  DEFECT
+  WORK_ORDER
+  MAINTENANCE_PLAN
+  INSPECTION
+  CERTIFICATE
+  DAILY_REPORT
+  CAPA
+  SPARE_ORDER
+  INSPECTION_EXECUTION
+  WORK_LOG
+  // Scan del permiso de trabajo firmado en papel (evidencia TMSA/SIRE).
+  WORK_PERMIT
+}
+
+enum AttachmentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// ─── PMS enums (Block 11) ─────────────────────────────────────────────────────
+
+enum TaskType {
+  MAINTENANCE
+  INSPECTION
+}
+
+// EXPRESS se elimino junto con el modulo "Mantenimiento Express". Antes de
+// aplicar este schema a una base con datos hay que correr
+// `scripts/migrate-express-plans.ts`, que pasa los planes que lo usaban a
+// DUE_ONLY; si queda alguna fila con EXPRESS, el push falla.
+// CHECKLIST se conserva: ya no se puede elegir (ver MaintenancePlans.tsx) pero
+// el valor sigue vivo por si alguna base productiva tiene planes historicos.
+enum TriggerResultMode {
+  DUE_ONLY
+  AUTO_WO
+  APPROVAL_WO
+  CHECKLIST
+}
+
+enum ExecutionWindowMode {
+  AUTO
+  MANUAL
+}
+
+enum ExecutionStatus {
+  FUTURE
+  UPCOMING
+  IN_WINDOW
+  DUE
+  OVERDUE
+  COMPLETED
+}
+
+enum ChecklistItemType {
+  BOOLEAN_OK_NOK
+  PASS_FAIL_NA
+  NUMERIC_READING
+  SHORT_TEXT
+  TECHNICAL_NOTES
+  PHOTO_REQUIRED
+}
+
+enum InspectionExecutionResult {
+  SATISFACTORY
+  SATISFACTORY_WITH_OBSERVATIONS
+  UNSATISFACTORY_FOLLOW_UP_REQUIRED
+  CRITICAL_DEFICIENCY_IMMEDIATE_ACTION
+}
+
+enum DeficiencySeverity {
+  OBSERVATION
+  DEFICIENCY
+  CRITICAL
+}
+
+enum CriteriaSource {
+  MAKER_MANUAL
+  COMPANY_STANDARD
+  CLASS_REQUIREMENT
+  STATUTORY
+  ENGINEERING_CRITERION
+}
+
+enum WorkLogResult {
+  COMPLETED
+  COMPLETED_WITH_OBSERVATIONS
+  NOT_COMPLETED
+  FOLLOW_UP_REQUIRED
+}
+
+enum PortCallType {
+  LOADING
+  DISCHARGING
+  BUNKERING
+  ANCHORAGE
+  WAITING
+  REPAIR
+  OTHER
+}
+
+enum MaintenanceOpportunity {
+  YES
+  LIMITED
+  NO
+  UNKNOWN
+}
+
+enum SparesReceiptPossible {
+  YES
+  NO
+  UNKNOWN
+}
+
+// ─── Bitácora ─────────────────────────────────────────────────────────────────
+
+enum BitacoraCategory {
+  NOVEDAD_TECNICA
+  OBSERVACION_OPERATIVA
+  EVENTO_IMPORTANTE
+  INSTRUCCION_RECIBIDA
+  SEGUIMIENTO
+  ANOTACION_GENERAL
+}
+
+model BitacoraEntry {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  entryCode          String
+  entryDate          DateTime
+  category           BitacoraCategory @default(ANOTACION_GENERAL)
+  title              String
+  body               String           @db.Text
+  relatedAssetId     String?
+  isMonitoring       Boolean          @default(false)
+  monitoringClosedAt DateTime?
+  createdAt          DateTime         @default(now())
+  createdByUserId    String
+  updatedAt          DateTime         @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  @@unique([tenantId, vesselCode, entryCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, vesselCode, entryDate])
+}
+
+// ─── Fase 3: Spare Requests & Reservations ───────────────────────────────────
+
+enum SpareRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+}
+
+enum SpareRequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SpareRequestItemStatus {
+  PENDING
+  RESERVED
+  PARTIALLY_RESERVED
+  FULFILLED
+  CANCELLED
+}
+
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+}
+
+// ─── New PMS extension enums ──────────────────────────────────────────────────
+
+enum SuperintendentAssignmentType {
+  PRIMARY
+  SECONDARY
+}
+
+enum DailyReportType {
+  NOON
+  DEPARTURE
+  ARRIVAL
+  WEEKLY
+  OTHER
+}
+
+enum VesselOperationalStatus {
+  AT_SEA
+  IN_PORT
+  ANCHORED
+  MANOEUVRING
+  DRY_DOCK
+  LAID_UP
+}
+
+enum DeferralType {
+  OPERATIONAL_CONSTRAINT
+  NO_PORT_OPPORTUNITY
+  SPARES_MISSING
+  CONTRACTOR_REQUIRED
+  SAFETY_CONSTRAINT
+  WEATHER_CONSTRAINT
+  EQUIPMENT_CANNOT_BE_STOPPED
+  PERMIT_NOT_AVAILABLE
+  CREW_LIMITATION
+  LOW_RISK_RESCHEDULE
+  OTHER
+}
+
+// ─── Platform / Auth models ───────────────────────────────────────────────────
+
+model Tenant {
+  id            String             @id @default(cuid())
+  slug          String             @unique
+  status        TenantStatus       @default(ACTIVE)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  domains            TenantDomain[]
+  settings           TenantSetting?
+  memberships        TenantMembership[]
+  invitations        UserInvitation[]
+  refreshTokens      RefreshToken[]
+  auditEvents        AuditEvent[]
+  aiDocuments        AiDocument[]
+  rankDefinitions    RankDefinition[] @relation("RankDefinitions")
+  trainingItems      TrainingItem[] @relation("TrainingItems")
+  forms              TenantForm[]
+  formDocuments      FormDocument[]
+  scheduledReportRuns ScheduledReportRun[]
+}
+
+model TenantDomain {
+  id         String   @id @default(cuid())
+  tenantId    String
+  host       String   @unique
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model TenantSetting {
+  tenantId        String       @id
+  displayName     String
+  logoUrl         String?
+  logoUrlLight    String?
+  primaryColor    String?
+  supportEmail    String
+  defaultLocale   LocaleCode   @default(es)
+  enabledLocales  LocaleCode[] @default([es])
+  timezone        String
+  currency        String
+  // Navegación: paths del menú lateral que el admin decidió OCULTAR para todo el
+  // tenant. Se guarda el complemento (los ocultos) para que default [] = todo
+  // visible y los módulos nuevos aparezcan por defecto sin re-configurar.
+  hiddenNavPaths  String[] @default([])
+  // Automation policies
+  autoUpdateCountersFromDailyReport     Boolean  @default(false)
+  autoCreateFindingDrafts               Boolean  @default(false)
+  autoCreateWoDrafts                    Boolean  @default(false)
+  requireApprovalForCriticalCorrectives Boolean  @default(true)
+  requireApprovalForComplianceTasks     Boolean  @default(true)
+  autoConsumeNonCriticalSpares          Boolean  @default(false)
+  // PDF templates per entity (extensible: defectPdfTemplate, deferralPdfTemplate, etc.)
+  // Legacy: per-entity template selection. Se mantiene como fallback; la fuente de
+  // verdad de los formularios es el modelo `TenantForm`.
+  workOrderPdfTemplate WorkOrderPdfTemplate @default(STANDARD)
+  // Footer del documento controlado (default a nivel tenant; cada TenantForm puede
+  // sobreescribirlo en su `config.footer`). Editables porque pueden cambiar.
+  controlledDocPreparedBy   String?
+  controlledDocReviewedBy   String?
+  controlledDocApprovedBy   String?
+  // Document revisions (printed in PDF headers — incrementable per tenant when forms change)
+  spareInventoryRevision    Int @default(2)
+  spareConsumptionRevision  Int @default(1)
+  // Satellite link cost (USD per MB) — used to estimate communication cost per user/vessel
+  satelliteUsdPerMbIn       Float @default(0)
+  satelliteUsdPerMbOut      Float @default(0)
+  // Autorizaciones por rol configuradas por el admin. Forma: { [role]: string[] }
+  // con las claves del catalogo de `tenant/auth/role-permissions.ts`. Se guarda
+  // SOLO lo que el admin cambio; null / rol ausente => se usan los defaults del
+  // codigo (mismo criterio que hiddenNavPaths: lo nuevo aparece sin reconfigurar).
+  rolePermissions           Json?
+  // Parte semanal de flota por correo (lunes apertura / viernes cierre). Apagado
+  // por defecto: una empresa nueva no empieza a mandar correos sola. Sin
+  // destinatarios cargados tampoco se manda nada aunque este prendido.
+  weeklyReportEnabled       Boolean  @default(false)
+  weeklyReportRecipients    String[] @default([])
+  // Casilla del departamento de Compras. "Enviar a Compras" de una Solicitud de
+  // repuestos manda ahí el formulario PDF (spare-requests-service). Sin casilla
+  // la solicitud no se envía y queda en Borrador.
+  spareRequestMailbox       String?
+  // Archivo automático de PDFs en Google Drive vía un Apps Script publicado por la
+  // empresa (tenant/settings/pdf-archive-service.ts). Apagado por defecto.
+  // pdfArchiveFolders: { OT, SS, DEF, FA, APL, VAR, REQ, MOC, PLAN, OTHER } → nombre
+  // de carpeta; clave ausente => nombre por defecto.
+  pdfArchiveEnabled         Boolean   @default(false)
+  pdfArchiveScriptUrl       String?
+  pdfArchiveSecret          String?
+  pdfArchiveFolders         Json?
+  pdfArchiveLastError       String?
+  pdfArchiveLastErrorAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+enum ScheduledReportKind {
+  WEEKLY_OPENING   // lunes: estado de flota + tareas de la semana
+  WEEKLY_CLOSING   // viernes: lo ejecutado + lo que queda abierto
+}
+
+enum ScheduledReportStatus {
+  SENT
+  FAILED
+  SKIPPED_NO_RECIPIENTS
+  SKIPPED_NOT_CONFIGURED
+}
+
+// Un envio del parte semanal. El indice unico (tenant, tipo, semana) es lo que
+// garantiza UN solo correo por semana: el job pregunta si ya existe la fila
+// antes de mandar, y la propia constraint lo frena si dos procesos compiten.
+// Sobrevive a reinicios del servidor, que es donde fallaria un simple contador
+// en memoria. Ademas es la primera traza de "salio o no salio" que tiene el
+// sistema: hasta ahora ningun correo dejaba registro en la base.
+model ScheduledReportRun {
+  id         String                @id @default(cuid())
+  tenantId   String
+  reportKind ScheduledReportKind
+  // Semana ISO del envio, "2026-W35". Junto al tipo identifica el envio.
+  periodKey  String
+  status     ScheduledReportStatus
+  recipients String[]              @default([])
+  // Motivo cuando status = FAILED (mensaje del servidor SMTP, truncado).
+  error      String?
+  // Copia CONGELADA del parte de esa semana. Es lo que se consulta despues en
+  // "semanas anteriores": regenerarlo daria los numeros de hoy, no los de
+  // aquella semana, y entonces no serviria para comparar como veniamos.
+  // Es de flota completa, asi que solo lo abre quien ve toda la flota.
+  html       String?
+  sentAt     DateTime              @default(now())
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, reportKind, periodKey])
+  @@index([tenantId, sentAt])
+}
+
+// Definicion de un formulario controlado por tenant. Unica fuente de verdad de
+// TODAS las diferencias del formulario: numero, revision, vigencia, logo propio,
+// secciones incluidas, opciones de listas, footer y patron de codigo.
+model TenantForm {
+  id            String         @id @default(cuid())
+  tenantId      String
+  type          TenantFormType
+  style         FormStyle      @default(STANDARD)
+  formCode      String?        // "REGI-LOG-01.3"
+  title         String?        // "Solicitud de servicios"
+  revision      Int            @default(1)
+  effectiveFrom String?        // "01.05.2025" (texto, como en la muestra)
+  logoUrl       String?        // logo propio del formulario (fallback: logo del tenant)
+  // Codigo del documento: patron + autonumeracion (scoped al tenant)
+  codePattern   String?        // "SS-{seq:0000}-{vesselShort}-{year}"; null => usa codigo de la fuente
+  codeSeq       Int            @default(0) // ultimo correlativo asignado (por tenant/form)
+  // Resto de diferencias (override de defaults en codigo):
+  //   { sections[], footer{preparedBy,reviewedBy,approvedBy},
+  //     departments[], distribution[], communicationMethods[], purchaseRequest[],
+  //     labels{ "<sectionKey>": "TITULO" } }
+  config        Json?
+  enabled       Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type]) // un formulario por tipo y por tenant
+  @@index([tenantId])
+}
+
+// Codigo emitido para una instancia concreta de formulario (estable por fuente).
+// Garantiza que reimprimir reusa el mismo numero y no consume secuencia.
+model FormDocument {
+  id         String         @id @default(cuid())
+  tenantId   String
+  type       TenantFormType
+  sourceType String         // "WORK_ORDER"
+  sourceId   String         // WorkOrder.id
+  code       String         // "SS-0001-DONCHI-2026" ya renderizado
+  seq        Int
+  createdAt  DateTime       @default(now())
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type, sourceId]) // codigo estable por fuente (reimpresiones reusan)
+  @@index([tenantId])
+}
+
+model PlatformUser {
+  id            String            @id @default(cuid())
+  email         String            @unique
+  passwordHash  String
+  role          PlatformRole
+  status        UserStatus        @default(ACTIVE)
+  firstName     String?
+  lastName      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  sessions      PlatformSession[]
+  auditEvents   AuditEvent[]      @relation("AuditPlatformUser")
+}
+
+// Registro de cada pregunta que un usuario le hace al copiloto. Solo se guarda
+// la pregunta (no la respuesta de la IA). Lo lee únicamente el SUPERADMIN de
+// plataforma para detectar qué necesitan los usuarios y mejorar el sistema.
+model CopilotQuestion {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenantSlug    String
+  userId        String
+  userEmail     String
+  userRole      String
+  capability    String
+  vesselCode    String?
+  screen        String?
+  question      String   @db.Text
+  hasAttachment Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  // El listado del superadmin filtra por tenantSlug (no tenantId) y ordena por
+  // fecha; el indice acompaña ese patron. createdAt suelto cubre el listado sin
+  // filtro de tenant.
+  @@index([createdAt])
+  @@index([tenantSlug, createdAt])
+}
+
+model PlatformSession {
+  id               String       @id @default(cuid())
+  platformUserId   String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime     @default(now())
+
+  platformUser     PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([platformUserId])
+  @@index([expiresAt])
+}
+
+model User {
+  id               String             @id @default(cuid())
+  // El email NO es único: varios usuarios pueden compartir el mismo (ej. buzón
+  // funcional de un buque/departamento). Es dato de contacto/firma, no la
+  // credencial de login. La identidad de login es legacyUserId (username), que
+  // sí es único. Ver login: apps/api/src/tenant/auth/tenant-auth-service.ts.
+  email            String
+  legacyUserId     String?            @unique
+  passwordHash     String
+  status           UserStatus         @default(INVITED)
+  preferredLocale  LocaleCode?
+  firstName        String?
+  lastName         String?
+  // Nombre a mostrar en los formularios controlados (firma) y firma como data URI (base64 PNG/JPG).
+  formName         String?
+  signatureUrl     String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  memberships                  TenantMembership[]
+  invitations                  UserInvitation[]   @relation("InvitationAcceptedBy")
+  refreshTokens                RefreshToken[]
+  auditEvents                  AuditEvent[]       @relation("AuditTenantUser")
+  superintendentAssignments    VesselSuperintendentAssignment[]
+
+  // Ya no es único, pero se busca por email en login e invitaciones.
+  @@index([email])
+}
+
+model TenantMembership {
+  id                   String           @id @default(cuid())
+  tenantId              String
+  userId                String
+  role                  TenantRole
+  status                MembershipStatus @default(INVITED)
+  assignedVesselCodes   String[]         @default([])
+  // ── Calificación del representante de la compañía ──────────────────────────
+  // TMSA pide que las auditorías de ingeniería las haga un representante
+  // "debidamente calificado y con experiencia". Va en la membership y no en
+  // User porque es un dato de la empresa: la misma persona puede estar en
+  // varios tenants con cargos distintos. Todo opcional y aditivo.
+  jobTitle              String?          // cargo / título profesional
+  licenseNumber         String?          // matrícula o licencia habilitante
+  experienceYears       Int?             // años de experiencia
+  qualificationDocUrl   String?          // respaldo documental (título, matrícula)
+  qualificationNotes    String?          // aclaraciones (especialidad, alcance)
+  joinedAt              DateTime?
+  invitedAt             DateTime         @default(now())
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Un user puede pertenecer a varios tenants, pero sólo una vez a cada uno.
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([role])
+}
+
+model UserInvitation {
+  id                 String      @id @default(cuid())
+  tenantId           String
+  email              String
+  role               TenantRole
+  locale             LocaleCode?
+  tokenHash          String      @unique
+  expiresAt          DateTime
+  acceptedAt         DateTime?
+  acceptedByUserId   String?
+  createdAt          DateTime    @default(now())
+
+  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  acceptedByUser     User?       @relation("InvitationAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model RefreshToken {
+  id               String    @id @default(cuid())
+  userId           String
+  tenantId         String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([expiresAt])
+}
+
+model VesselSuperintendentAssignment {
+  id                    String                      @id @default(cuid())
+  tenantId              String
+  vesselCode            String
+  userId                String
+  assignmentType        SuperintendentAssignmentType @default(PRIMARY)
+  isActive              Boolean                     @default(true)
+  assignedAt            DateTime                    @default(now())
+  assignedByUserId      String
+  deactivatedAt         DateTime?
+  deactivatedByUserId   String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, vesselCode, userId])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([userId])
+}
+
+model AuditEvent {
+  id                   String          @id @default(cuid())
+  tenantId             String?
+  actorType            AuditActorType
+  actorUserId          String?
+  actorPlatformUserId  String?
+  action               String
+  entityType           String
+  entityId             String?
+  metadata             Json?
+  createdAt            DateTime        @default(now())
+
+  tenant               Tenant?         @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actorUser            User?           @relation("AuditTenantUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorPlatformUser    PlatformUser?   @relation("AuditPlatformUser", fields: [actorPlatformUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Usage Event (append-only) ────────────────────────────────────────────────
+// Unified log: AI token consumption + HTTP bytes traffic (satellite link cost).
+// Distinguished by `kind`. SUPERADMIN-visible. Retention: 6 months (purged by cron).
+model UsageEvent {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  tenantSlug            String                          // denormalized for fast filter + readable export
+  userId                String
+  userEmail             String                          // denormalized: survives user delete
+  vesselCode            String?                         // when the request carries vessel context
+  kind                  String                          // "ai_call" | "http_request"
+  // ── AI-only fields ──
+  feature               String?                         // "copiloto" | "fluid_analyses"
+  model                 String?                         // "claude-haiku-4-5-20251001"
+  inputTokens           Int       @default(0)
+  outputTokens          Int       @default(0)
+  cacheReadTokens       Int       @default(0)
+  cacheCreationTokens   Int       @default(0)
+  // ── HTTP-only fields ──
+  route                 String?                         // "/app/copiloto/stream"
+  method                String?                         // "GET" | "POST" | etc
+  statusCode            Int?
+  // ── Common ──
+  bytesIn               Int       @default(0)           // request body bytes
+  bytesOut              Int       @default(0)           // response body bytes
+  latencyMs             Int?
+  errored               Boolean   @default(false)
+  ipAddress             String?                         // client IP (X-Forwarded-For first hop, validated)
+  latitude              Float?                          // browser geolocation — vessel position when TECHNICIAN_OPERATOR
+  longitude             Float?
+  userRole              String?                         // TenantRole at time of request (denormalized)
+  createdAt             DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+  @@index([kind, createdAt])
+  @@index([vesselCode, createdAt])
+  @@index([createdAt])
+}
+
+// ─── IP Geo (cache) ───────────────────────────────────────────────────────────
+// Traduce la IP de un acceso a un lugar legible (ciudad/país/proveedor) para la
+// consola SUPERADMIN. Es solo caché: cada IP se resuelve una vez contra el
+// servicio externo y se reusa por 30 días. Las IPs privadas nunca salen a
+// internet — se marcan isPrivate y se rotulan "Red local".
+model IpGeo {
+  ip          String   @id
+  countryCode String?                        // "PY" → bandera
+  country     String?                        // "Paraguay"
+  region      String?                        // "Central"
+  city        String?                        // "Asunción"
+  isp         String?                        // "Tigo", "Marlink" → delata enlace satelital
+  latitude    Float?
+  longitude   Float?
+  isPrivate   Boolean  @default(false)       // loopback / LAN: no se consulta afuera
+  failed      Boolean  @default(false)       // el servicio no pudo resolverla
+  resolvedAt  DateTime @default(now())
+
+  @@index([resolvedAt])
+}
+
+// ─── Domain Event (append-only) ───────────────────────────────────────────────
+
+model DomainEvent {
+  id          String          @id @default(cuid())
+  tenantId    String
+  vesselCode  String?
+  entityType  String
+  entityId    String
+  eventKind   DomainEventKind
+  actorUserId String?
+  payload     Json
+  createdAt   DateTime        @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Block 05: Core Functional Modules ───────────────────────────────────────
+
+model Vessel {
+  id               String        @id @default(cuid())
+  tenantId         String
+  code             String
+  name             String
+  owner            String?
+  vesselType       String?
+  // Si la embarcacion lleva dotacion permanente a bordo. Cambia el analisis de
+  // riesgo y el RCM: en una barcaza sin gente a bordo una falla no lastima a
+  // nadie en el momento. null = no declarado (se deduce del vesselType, que es
+  // texto libre); por eso es opcional y no un default.
+  isCrewed         Boolean?
+  imo              String?
+  registration     String?
+  powerHp          Float?
+  dwtTons          Float?
+  lengthM          Float?
+  beamM            Float?
+  depthM           Float?
+  trnTn            Float?
+  trbTn            Float?
+  buildYear        Int?
+  buildCountry     String?
+  incorporationDate DateTime?
+  incorporationType String?
+  status                VesselStatus  @default(ACTIVE)
+  crewPasswordHash      String?
+  crewPasswordUpdatedAt DateTime?
+  createdAt             DateTime      @default(now())
+  createdByUserId  String
+  updatedAt        DateTime      @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  assets           Asset[]
+  maintenancePlans MaintenancePlan[]
+  workOrders       WorkOrder[]
+  serviceRequests  ServiceRequest[]
+  defects          Defect[]
+  deferrals        Deferral[]
+  capaRecords      CapaRecord[]
+  inspections      Inspection[]
+  inspectionLogs   InspectionLog[]
+  certificates     Certificate[]
+  dailyReports     DailyReport[]
+  spares           Spare[]
+  stockMovements   StockMovement[]
+  goodsReceipts    GoodsReceipt[]
+  providerEvals    ProviderEvaluation[]
+  providerNcs      ProviderNonconformity[]
+  attachments      Attachment[]
+  crew             Crew[]
+  drills           Drill[]
+  permits          PermitToWork[]
+  externalAudits   ExternalAudit[]
+  nearMissReports  NearMissReport[]
+  checklistExecutions ChecklistExecution[]
+  failureModes     FailureMode[]
+  voyageTankReports VoyageTankReport[]
+  drydockSpecs     DrydockSpec[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+model Asset {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetCode        String
+  sfiCode          String?
+  name             String
+  criticality      AssetCriticality @default(B)
+  status           AssetStatus      @default(OPERATIONAL)
+  manufacturer     String?
+  model            String?
+  serialNumber     String?
+  installationDate DateTime?
+  lastOverhaulDate DateTime?
+  replacementDate  DateTime?
+  trackDailyReport Boolean          @default(false)
+  // Justificación textual de la criticidad asignada (manual o sugerida por IA)
+  criticalityRationale String?
+  // ISM Code 10.3: equipos cuya falla súbita puede causar situaciones peligrosas
+  // (sistemas de gobierno, contraincendio, propulsión emergencia, etc.).
+  // Independiente de criticality (A/B/C), que es operacional.
+  isSafetyCritical     Boolean       @default(false)
+  // Decisión explícita de "este equipo NO lleva plan de mantenimiento" (correctivo
+  // puro / run-to-failure). Sin esto, un equipo sin plan es indistinguible de un
+  // olvido: el indicador de cobertura (TMSA 4.1.1 / ISM 10.1) lo cuenta como brecha
+  // aunque la decisión esté tomada. Default false = lleva plan, que es lo que
+  // corresponde a los equipos ya cargados.
+  planNotRequired      Boolean       @default(false)
+  // Por qué no lleva plan. Es lo que se le muestra al auditor al lado del equipo
+  // sin plan; sin motivo escrito la excepción no se sostiene.
+  planNotRequiredReason String?
+  // ISM 10.3 — "prueba periódica de los dispositivos y equipos de reserva o de
+  // los sistemas técnicos que no estén en uso continuo". El equipo que trabaja
+  // continuo evidencia su propia disponibilidad; el de reserva sólo se sabe si
+  // arranca probándolo. Sólo tiene sentido junto a isSafetyCritical: en el resto
+  // de los equipos no cambia nada y el backend lo fuerza a false.
+  isStandby             Boolean       @default(false)
+  // Cuál de los planes del propio equipo ES esa prueba periódica. Puntero suelto
+  // a MaintenancePlan.id (mismo criterio que providerId en MaintenancePlan): sin
+  // FK, se valida al guardar y se re-verifica al leer contra los planes ACTIVE del
+  // equipo, así un plan borrado o dado de baja vuelve a contar como "sin prueba",
+  // que es la lectura correcta. La evidencia de la prueba son las OT y partes
+  // cerrados de ese plan: no se crea un tipo de registro nuevo.
+  standbyTestPlanId     String?
+  // PMS extensions
+  equipmentClassId String?
+  parentAssetId    String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+  updatedAt        DateTime         @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  equipmentClass   EquipmentClass?  @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
+  parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  children         Asset[]          @relation("AssetHierarchy")
+  inspectionExecs  InspectionExecution[]
+  hoursReadings    AssetHoursReading[]
+
+  @@unique([tenantId, vesselCode, assetCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+/// Informe de salud de un equipo, redactado por IA sobre todo lo que el sistema
+/// tiene de él (plan, OT, laboratorio, defectos, postergaciones, horas, MOC…).
+///
+/// INMUTABLE: "Generar nuevo" agrega una fila, nunca pisa la anterior. El
+/// historial es la evidencia de cómo se venía leyendo el equipo en el tiempo, y
+/// un informe que cambia después de leído no sirve para auditoría. Por eso no hay
+/// updatedAt ni deletedAt.
+///
+/// `metrics` y `sources` los calcula el SISTEMA (conteos exactos); `report` es el
+/// texto de la IA. Se guardan separados para que en pantalla y en el PDF los
+/// números nunca dependan de lo que escribió el modelo.
+///
+/// `assetId` es puntero suelto a Asset.id (mismo criterio que Defect/WorkOrder).
+model AssetHealthReport {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  assetId         String
+  /// GOOD | ATTENTION | RISK — lectura de la IA, no un dato de cumplimiento.
+  healthState     String
+  periodFrom      DateTime
+  periodTo        DateTime
+  /// Números clave calculados por el sistema (vencidas, defectos abiertos, …).
+  metrics         Json
+  /// Texto de la IA por secciones: summary, maintenance, lab, defects, recommendations.
+  report          Json
+  /// Qué y cuánto se leyó (planes, OT, análisis, defectos…).
+  sources         Json
+  locale          String
+  model           String
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdByName   String?
+
+  @@index([tenantId, assetId, createdAt])
+  @@index([tenantId, vesselCode])
+}
+
+/// Lectura de horómetro de un equipo. ÚNICA fuente de verdad de las "horas actuales":
+/// todo lo que muestre o calcule horas (ficha del equipo, planes por horas, mapa del plan,
+/// ítems por vencer, confiabilidad) lee de acá vía `tenant/asset-hours/asset-hours-service`.
+///
+/// Se alimenta de tres vías, todas por el mismo escritor (`recordHoursReadings`):
+/// la planilla "Horas de Equipos" (MANUAL), el M2 al enviarse (VOYAGE_TANK_REPORT) y el
+/// renglón de horas del Reporte Diario (DAILY_REPORT).
+///
+/// `readingDate` es el día AL QUE CORRESPONDEN las horas, no cuándo se tipearon: ordenar
+/// por `createdAt` hacía que corregir un reporte viejo pisara las horas actuales.
+/// `DailyEquipmentHours` y `VoyageEngineHours` siguen guardando lo suyo (consumos, horas
+/// inicial/final del tramo); esta tabla no los reemplaza.
+model AssetHoursReading {
+  id              String             @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  assetId         String
+  readingDate     DateTime           @db.Date
+  runningHours    Float
+  /// RPM del equipo al momento de la lectura. Opcional y sólo informativo: no
+  /// interviene en el vencimiento de planes (eso lo define runningHours). Se
+  /// carga a mano desde la planilla "Horas de Equipos"; las vías automáticas
+  /// (M2, reporte diario) lo dejan en null.
+  rpm             Float?
+  source          HoursReadingSource
+  /// Id del M2 / Reporte Diario que originó la lectura. Null en las manuales.
+  sourceRecordId  String?
+  /// Justificación cuando la lectura no sigue la progresión normal (horómetro
+  /// reemplazado, corrección de carga).
+  note            String?
+  createdAt       DateTime           @default(now())
+  createdByUserId String
+  updatedAt       DateTime           @updatedAt
+  updatedByUserId String?
+
+  asset           Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  /// Hace idempotente la carga: recargar el mismo día por la misma vía actualiza,
+  /// no duplica. Distintos orígenes pueden coexistir en la misma fecha.
+  @@unique([tenantId, assetId, readingDate, source])
+  @@index([tenantId, assetId, readingDate])
+  @@index([tenantId, vesselCode, readingDate])
+}
+
+model MaintenancePlan {
+  id                   String                 @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  assetId              String
+  taskCode             String
+  title                String
+  description          String?
+  triggerType          MaintenancePlanTrigger
+  frequencyHours       Float?
+  frequencyMonths      Int?
+  estimatedHours       Float?
+  responsible          String?
+  // Área / responsable de la tarea (Cubierta, Máquinas, Barcaza, Proveedor, Otros).
+  // Se hereda a la OT al abrirla. Cuando department = PROVEEDOR, providerId apunta
+  // al Provider responsable (sin FK forzada; el nombre se resuelve al leer).
+  department           WorkOrderDepartment?
+  providerId           String?
+  // Varios proveedores por plan (área = PROVEEDOR), cada uno con la aclaración de
+  // para qué se lo contrata: [{ providerId, purpose }]. Al abrir la OT se crea una
+  // SS por cada entrada. Mismo criterio suelto que providerId (sin FK; el nombre se
+  // resuelve al leer). providerId se mantiene sincronizado: = el único id cuando hay
+  // exactamente uno, null cuando hay varios — para la línea "Proveedor" del PDF.
+  providerRequests     Json?
+  // Repuestos/materiales previstos para la tarea: [{ kind: SPARE|MATERIAL,
+  // spareId, description, quantity, unit }]. Al abrir la OT se heredan como
+  // WorkOrderItem (spareId enlaza al catálogo /Spares para mostrar stock). Es
+  // planificación: NO descuenta stock (eso pasa al cerrar la OT). Mismo criterio
+  // suelto/JSON que providerRequests; description guarda el nombre como snapshot.
+  spares               Json?
+  acceptanceCriteria   String?
+  loto                 String?
+  sfiGroupNumber       Int?
+  sfiSubgroupCode      String?
+  riskLevel            String?
+  // Ejes de la matriz de riesgo (probabilidad × consecuencia). De ellos se
+  // deriva riskLevel (Bajo/Medio/Alto). Opcionales: planes viejos no los tienen.
+  riskProbability      String?                // LIKELY | PROBABLE | UNLIKELY | RARE
+  riskConsequence      String?                // FATALITY | MAJOR | MINOR | NEGLIGIBLE
+  riskAnalysisResult   String?
+  taskType             TaskType               @default(MAINTENANCE)
+  // ISM 10.1 — de qué regla nace la tarea (requisito de clase, estatutario,
+  // manual del fabricante, estándar de la Compañía, criterio de ingeniería).
+  // Sin esto el plan dice QUÉ hacer y CADA CUÁNTO, pero no de dónde sale la
+  // exigencia, que es exactamente la trazabilidad que pide el Capítulo 10.
+  // Reusa el enum de los ítems de inspección: misma pregunta, mismo vocabulario.
+  // Opcional: los planes históricos no lo declaran y no se les puede inventar.
+  criteriaSource       CriteriaSource?
+  // RCM: clasificación de qué consecuencia mitiga este plan. Usado para
+  // reportes de distribución por consecuencia y para ordenar prioridades.
+  consequenceCategory  ConsequenceCategory?
+  // Justificación textual de la categoría de consecuencia (manual o IA)
+  consequenceRationale String?
+  status               MaintenancePlanStatus  @default(ACTIVE)
+  lastExecutionDate    DateTime?
+  nextDueDate          DateTime?
+  lastExecutionHours   Float?
+  nextDueHours         Float?
+  // PMS extensions
+  taskMasterId         String?
+  // Sampling: si `samplingKind` está set, al cerrar la OT generada por este
+  // plan se crea automáticamente un FluidSample DRAFT con kind correspondiente,
+  // horas y datos del activo. Para kind=FLUID, además se usa `samplingFluidType`
+  // como sub-tipo (engine oil, hydraulic, etc.). Para otros kinds (VIBRATION,
+  // THERMAL, etc.) el sub-tipo no aplica.
+  samplingKind         SampleKind?
+  samplingFluidType    FluidType?
+  // Permisos de trabajo que exige la tarea. Al AUTORIZAR la OT se crea un
+  // PermitToWork DRAFT por tipo, y la OT no se cierra hasta que cada tipo tenga
+  // su permiso CLOSED. [] = no requiere (default de todos los planes existentes).
+  requiredPermitTypes  PermitType[]           @default([])
+  triggerResultMode    TriggerResultMode      @default(DUE_ONLY)
+  checklistTemplate    String?
+  windowMode           ExecutionWindowMode    @default(AUTO)
+  windowLeadDays       Int?
+  windowLeadHours      Float?
+  windowLeadPercent    Float?
+  windowOpenDate       DateTime?
+  windowOpenHours      Float?
+  executionStatus      ExecutionStatus        @default(FUTURE)
+  createdAt            DateTime               @default(now())
+  createdByUserId      String
+  updatedAt            DateTime               @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  vessel               Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  taskMaster           TaskMaster?            @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
+  workLogs             WorkLog[]
+  certificates         Certificate[]
+  workOrderLinks       WorkOrderMaintenancePlan[]
+
+  @@unique([tenantId, vesselCode, taskCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt, nextDueDate])
+}
+
+model WorkOrder {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  assetId             String
+  maintenancePlanId   String?
+  workOrderCode       String
+  type                WorkOrderType
+  status              WorkOrderStatus   @default(PLANNED)
+  priority            WorkOrderPriority @default(MEDIUM)
+  criticality         AssetCriticality  @default(B)
+  openDate            DateTime
+  startDate           DateTime?
+  dueDate             DateTime?
+  completedDate       DateTime?
+  holdReason          String?
+  cancelReason        String?
+  closeNotes          String?
+  independentVerifier String?
+  testResult          String?
+  // PMS extensions
+  title               String?
+  description         String?
+  assignedToUserId    String?
+  estimatedHours      Float?
+  actualHours         Float?
+  taskMasterId        String?
+  // Plan fields
+  acceptanceCriteria  String?
+  loto                String?
+  riskLevel           String?
+  riskAnalysisResult  String?
+  checklistDocUrl     String?
+  // RCM: consecuencia que se mitiga si la OT no se ejecuta
+  consequenceCategory  ConsequenceCategory?
+  consequenceRationale String?
+  // Área / responsable de la tarea (Cubierta, Máquinas, Barcaza, Proveedor, Otros).
+  // Cuando department = PROVEEDOR, providerId apunta al Provider responsable
+  // (sin FK forzada, mismo patrón que assignedToUserId; el nombre se resuelve al leer).
+  department              WorkOrderDepartment?
+  providerId              String?
+  // La empresa tercerizada puede no estar en el catálogo de Providers: ahí se
+  // escribe el nombre a mano. Es alternativo a providerId, no complementario.
+  // NO se llama `providerName`: ese nombre ya lo usa el campo DERIVADO que
+  // getTenantWorkOrder agrega al leer (el nombre resuelto del catálogo), y una
+  // columna homónima lo pisaría. Al leer, providerName = catálogo ?? providerOther.
+  providerOther           String?
+  location                String?
+  communicationMethod     String[]
+  distribution            String[]
+  // ── Formulario controlado REGI-MAN-02.3 "Orden de trabajo" ──────────────────
+  // Campos aditivos, todos nullable: las OT anteriores al formulario siguen
+  // siendo válidas y el PDF cae a los datos que ya tenía.
+  voyageNumber            String?                    // NRO DE VIAJE (texto libre)
+  // CONDICIÓN: navegación / puerto / fondeado / dique. Evidencia TMSA de las
+  // prácticas observadas en marcha (ver WorkOrderOperatingCondition).
+  operatingCondition      WorkOrderOperatingCondition?
+  requestedByArea         WorkOrderRequestedByArea?  // SOLICITADO POR
+  assignedToArea          WorkOrderAssignedToArea?   // ASIGNADO A (área; ≠ assignedToUserId)
+  systemArea              WorkOrderSystemArea?       // SISTEMA
+  maintenanceKind         WorkOrderMaintenanceKind?  // TIPO DE MANTENIMIENTO (deriva `type`)
+  taskCompleted           Boolean?                   // TAREA CONCLUIDA? SI/NO
+  pendingDetail           String?                    // DETALLE DE PENDIENTES (MATERIALES/TAREAS)
+  // Result fields
+  woResult                String?
+  executedByName          String?
+  observations            String?
+  supportingDocUrl        String?
+  runningHoursAtExecution Float?
+  createdAt           DateTime          @default(now())
+  createdByUserId     String
+  updatedAt           DateTime          @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+  // Audit trail de re-aperturas. Una OT CLOSED/CANCELLED solo puede modificarse
+  // tras un reopen explícito por TENANT_ADMIN con justificación obligatoria.
+  reopenCount         Int               @default(0)
+  lastReopenAt        DateTime?
+  lastReopenReason    String?
+  lastReopenByUserId  String?
+  // Tramitación (cadena de aprobación del tablero): En preparación → Envía a
+  // aprobar → Aprueba → Autoriza. El nombre se captura en cada paso.
+  // La etapa NO se guarda: se deduce de estas fechas (ver woStage en
+  // WorkOrders.tsx). Sin enviadoAprobacionAt la OT está EN PREPARACIÓN — el
+  // que la abrió todavía la está completando y nadie tiene que firmarla.
+  enviadoAprobacionByName   String?
+  enviadoAprobacionByUserId String?
+  enviadoAprobacionAt       DateTime?
+  aprobadoByName      String?
+  aprobadoByUserId    String?
+  aprobadoAt          DateTime?
+  autorizadoByName    String?
+  autorizadoByUserId  String?
+  autorizadoAt        DateTime?
+  // Rechazo de tramitación: [NO APROBADA] / [NO AUTORIZADA] devuelven la OT a
+  // En preparación (en rojo) limpiando enviado/aprobado/autorizado y
+  // registrando quién/por qué — es donde hay que corregirla y reenviarla.
+  rechazadoByName     String?
+  rechazadoAt         DateTime?
+  rechazoReason       String?
+
+  vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  workLogs            WorkLog[]
+  progressNotes       WorkOrderProgressNote[]
+  // Solicitudes de Servicio (pedidos de servicio externo) abiertas desde esta OT.
+  serviceRequests     ServiceRequest[]
+  // REPUESTOS / MATERIALES del formulario (planificados, se cargan al abrir la OT).
+  // Distinto de los repuestos CONSUMIDOS al cerrar, que son StockMovement ISSUE.
+  items               WorkOrderItem[]
+  // Planes de mantenimiento que ejecuta esta OT (ver WorkOrderMaintenancePlan).
+  planLinks           WorkOrderMaintenancePlan[]
+  // PROGRAMACION DE TRABAJO del formulario (ver WorkOrderScheduleEntry).
+  scheduleEntries     WorkOrderScheduleEntry[]
+
+  @@unique([tenantId, vesselCode, workOrderCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([tenantId, openDate])
+  // Historial de OTs por equipo (modal/PDF del asset): listTenantWorkOrders({ assetId }).
+  @@index([tenantId, assetId])
+  // Historial de ejecuciones por plan (modal Historial): listPlanExecutions({ maintenancePlanId }).
+  @@index([tenantId, maintenancePlanId])
+}
+
+// PLANES DE MANTENIMIENTO que ejecuta una OT. Una parada de astillero cubre
+// varios ítems del PDM en una sola orden (ej. "ITEM DEL PDM: 1.7 / 1.8 / 1.9 …"),
+// incluso de equipos distintos (válvulas PV, manifold, LCI…). Sin esta tabla,
+// cerrar esa OT daba por ejecutado UN solo ítem y los demás seguían venciendo.
+//
+// `WorkOrder.maintenancePlanId` se conserva como PLAN PRINCIPAL — es el que da
+// equipo, título y datos heredados a la OT, y lo que ya leen PDF/daily reports/
+// certificados. Esta tabla es la lista COMPLETA e incluye también al principal,
+// así todo lo que necesita "los planes de esta OT" consulta un solo lugar.
+model WorkOrderMaintenancePlan {
+  id                String   @id @default(cuid())
+  tenantId          String
+  workOrderId       String
+  maintenancePlanId String
+  // Orden de aparición (el principal es 0). Define el orden del ITEM DEL PDM.
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  createdByUserId   String
+
+  workOrder         WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  maintenancePlan   MaintenancePlan @relation(fields: [maintenancePlanId], references: [id], onDelete: Cascade)
+
+  @@unique([workOrderId, maintenancePlanId])
+  @@index([tenantId, maintenancePlanId])
+  @@index([workOrderId])
+}
+
+// PROGRAMACION DE TRABAJO de una OT (recuadro del formulario REGI-MAN-02.3):
+// una fila por jornada, con quién la hizo, dónde, para qué empresa y en qué
+// horario. Se carga durante la ejecución.
+//
+// NO se usa WorkLog para esto: el WorkLog es el registro de mantenimiento que
+// alimenta el historial del equipo, el del plan y el consumo de repuestos.
+// Meter ahí las jornadas de una OT ensuciaría ese historial con filas que no
+// son ejecuciones de un plan. Esto es sólo el recuadro del papel.
+//
+// `place` y `company` se guardan por fila (el formulario los pide por fila) y
+// al agregar una se proponen los de la OT, que es el caso normal.
+model WorkOrderScheduleEntry {
+  id              String    @id @default(cuid())
+  tenantId        String
+  workOrderId     String
+  workDate        DateTime?
+  technician      String?
+  place           String?
+  company         String?
+  // Horario de la jornada, "HH:MM". Texto y no DateTime: es una hora del día
+  // suelta, sin fecha ni zona horaria, y así sale igual en el papel.
+  timeFrom        String?
+  timeTo          String?
+  sortOrder       Int       @default(0)
+  createdAt       DateTime  @default(now())
+  createdByUserId String
+  updatedAt       DateTime  @updatedAt
+  updatedByUserId String
+
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([tenantId, workOrderId])
+}
+
+// REPUESTOS / MATERIALES planificados de una OT (recuadros del formulario
+// REGI-MAN-02.3). Se cargan al abrir la OT, antes de ejecutar.
+//
+// Ojo, hay tres nociones distintas de "repuesto" alrededor de una OT y no hay
+// que confundirlas:
+//   · WorkOrderItem      → lo que se PLANIFICA que hace falta (esto).
+//   · StockMovement ISSUE→ lo que se CONSUMIÓ realmente, al cerrar la OT.
+//   · SpareRequest       → el pedido a compras, módulo aparte (otra app lo maneja).
+// `spareId` es opcional: el formulario se llena a mano y el ítem puede no estar
+// en el catálogo. Que esté deja el enganche listo para integrarlo más adelante.
+model WorkOrderItem {
+  id              String            @id @default(cuid())
+  workOrderId     String
+  kind            WorkOrderItemKind
+  spareId         String?
+  description     String
+  quantity        Float             @default(1)
+  unit            String            @default("ud")
+  sortOrder       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  createdByUserId String
+  updatedAt       DateTime          @updatedAt
+  updatedByUserId String
+
+  workOrder       WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+}
+
+// ─── Solicitud de Servicio (SS) ───────────────────────────────────────────────
+// Pedido de un servicio EXTERNO (un taller que concurre a bordo). No es sinónimo
+// de OT: una SS sólo se abre desde una OT abierta y siempre queda ligada a ella
+// (1 OT → N SS). Formulario controlado: REGI-LOG-01.3 "Solicitud de servicios".
+//
+// Contratar un tercero compromete gasto, por eso el flujo tiene un gate duro:
+// IN_PROGRESS sólo se alcanza desde AUTORIZADA, y autorizar está restringido a
+// tierra (TENANT_ADMIN = "DPA / Director de Operaciones", FLEET_SUPERINTENDENT =
+// "Superintendente técnico"). Ver service-requests-service.ts.
+
+enum ServiceRequestStatus {
+  DRAFT        // Borrador, editable
+  SOLICITADA   // Enviada para aprobación
+  APROBADA     // Aprobada a bordo (Capitán / Jefe de Máquinas)
+  AUTORIZADA   // Autorizada por tierra (Superintendente / DPA) — habilita el trabajo
+  IN_PROGRESS  // El taller está ejecutando
+  COMPLETED    // Servicio recibido conforme
+  REJECTED     // No aprobada / no autorizada
+  CANCELLED
+}
+
+model ServiceRequest {
+  id                  String               @id @default(cuid())
+  tenantId            String
+  // Denormalizado de la OT: habilita el scope por buque y el código correlativo.
+  vesselCode          String
+  // NOT NULL: no existe SS sin OT. Se valida además que la OT esté abierta.
+  workOrderId         String
+  serviceRequestCode  String               // "SS-<VESSEL>-<YY>-<NNNN>"
+  status              ServiceRequestStatus @default(DRAFT)
+  priority            WorkOrderPriority    @default(MEDIUM)
+  openDate            DateTime
+  title               String?
+  description         String?              // DESCRIPCION DEL SERVICIO
+  causes              String?              // DETALLE DE LAS CAUSAS
+  // TALLER QUE CONCURRE A REALIZAR EL SERVICIO. providerId sin FK forzada (mismo
+  // patrón que WorkOrder.providerId); tallerNotes para talleres fuera del catálogo.
+  providerId          String?
+  tallerNotes         String?
+  // SOLICITUD DE COMPRAS: NORMAL | AFECTA SEGURIDAD | AFECTA SERVICIO.
+  // Múltiple — en el formulario real conviven marcadas "AFECTA SEGURIDAD" y
+  // "AFECTA SERVICIO" (ver SS-74-M01-2026). No es un link a otra entidad: la
+  // Solicitud de Compra la maneja otra app.
+  purchaseRequestKinds String[]
+  department          WorkOrderDepartment?
+  communicationMethod String[]
+  distribution        String[]
+  observations        String?
+  closeNotes          String?
+  cancelReason        String?
+  // ENTREGA / RECEPCION: "si por parte de quien solicitó el servicio hay
+  // conformidad con el trabajo realizado". Se completa al recibir el servicio.
+  receptionItem       String?
+  receivedByName      String?
+  receptionConform    Boolean?
+  // Fechas de los dos pasos que no dejaban rastro propio (updatedAt cambia con
+  // cualquier edición, así que no sirve). Alimentan los hitos de la HOJA DE RUTA.
+  startedAt           DateTime?  // se mandó el trabajo al taller (IN_PROGRESS)
+  receivedAt          DateTime?  // se recibió el servicio (COMPLETED)
+  // Pie del formulario: "Deben firmar y registrarse el Jefe de Máquinas y Capitán".
+  // Texto libre (el formulario admite nombre + cargo, ej. "CAP. WILLIAM RIQUELME").
+  capitanName         String?
+  jefeMaquinasName    String?
+  // Tramitación (Solicita → Aprueba → Autoriza) — espejo de WorkOrder.
+  // El nombre es texto libre (el papel admite "Jefe de Máquinas" a secas) y el
+  // *ByUserId es quien lo hizo en la app: de ahí sale la firma del PDF.
+  // TENANT_ADMIN puede editar nombres y fechas para cargar SS históricas o
+  // corregir un dato mal cargado (ver updateServiceRequestTramitacion).
+  solicitaByName      String?    // si está, gana sobre el nombre del creador
+  // Quién solicita, como usuario. Faltaba: el PDF caía a la firma del CREADOR
+  // del registro y estampaba la firma de otra persona debajo del nombre del
+  // solicitante (bug real en SS-112-M01-2026, ago 2026). Null en las SS
+  // anteriores y en las de papel: sin usuario no hay firma que estampar, y la
+  // línea sale en blanco para firmar a mano.
+  solicitaByUserId    String?
+  aprobadoByName      String?
+  aprobadoByUserId    String?
+  aprobadoAt          DateTime?
+  autorizadoByName    String?
+  autorizadoByUserId  String?
+  autorizadoAt        DateTime?
+  rechazadoByName     String?
+  rechazadoAt         DateTime?
+  rechazoReason       String?
+  createdAt           DateTime             @default(now())
+  createdByUserId     String
+  updatedAt           DateTime             @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  vessel              Vessel               @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  // Restrict (default): la OT usa soft-delete, un hard delete con SS debe fallar.
+  workOrder           WorkOrder            @relation(fields: [workOrderId], references: [id])
+  hojaRuta            ServiceRequestLog[]
+
+  @@unique([tenantId, vesselCode, serviceRequestCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  // Panel "Solicitudes de Servicio" del modal de la OT.
+  @@index([workOrderId])
+}
+
+/// HOJA DE RUTA DEL PEDIDO (REGI-LOG-01.3): FECHA | NOVEDAD | ASIENTA.
+///
+/// Guarda SÓLO las novedades que alguien asienta a mano (el taller reprogramó,
+/// falta un repuesto, no pudo entrar a sala de máquinas...). Los hitos del
+/// sistema — creada / aprobada / autorizada / enviada al taller / recibida — NO
+/// se guardan acá: se derivan al renderizar de las fechas que ya tiene
+/// ServiceRequest (openDate, aprobadoAt, autorizadoAt, startedAt, receivedAt) y
+/// se mezclan por fecha con estas filas. Duplicarlos abriría la puerta a que la
+/// hoja de ruta contradiga a la tramitación del mismo formulario.
+model ServiceRequestLog {
+  id               String   @id @default(cuid())
+  tenantId         String
+  serviceRequestId String
+  entryDate        DateTime // FECHA de la novedad (no es la de carga: se puede asentar en diferido)
+  novedad          String   @db.Text
+  // Texto libre, igual que la tramitación: el papel admite "Jefe de Máquinas" a
+  // secas. El userId queda para trazar quién lo cargó en la app.
+  asientaByName    String
+  asientaByUserId  String?
+  createdAt        DateTime @default(now())
+  createdByUserId  String
+  updatedAt        DateTime @updatedAt
+
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([serviceRequestId])
+}
+
+enum WorkOrderProgressKind {
+  TEXT
+  PHOTO
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+// Notas de avance que el técnico carga durante la ejecución de una OT.
+// Cada nota puede ser texto, foto, video o audio. La AI (en una iteración
+// posterior) las procesa: transcribe audio, hace OCR de fotos, y reescribe
+// el texto consolidado en formato técnico hacia WorkOrder.observations.
+model WorkOrderProgressNote {
+  id              String                @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  workOrderId     String
+  kind            WorkOrderProgressKind
+  // Texto crudo: lo que el usuario tipeó (TEXT) o caption (PHOTO/VIDEO/AUDIO)
+  text            String?               @db.Text
+  // Archivo asociado (solo PHOTO/VIDEO/AUDIO)
+  fileUrl         String?
+  mimeType        String?
+  sizeBytes       Int?
+  // Resultado del pipeline AI: texto efectivo a sumar al "texto1"
+  // (transcripción de audio, OCR de foto, o text crudo si es TEXT).
+  processedText   String?               @db.Text
+  processed       Boolean               @default(false)
+  // Error si el pipeline AI falla, para no quedar trabados
+  processError    String?               @db.Text
+  createdAt       DateTime              @default(now())
+  createdByUserId String
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  workOrder       WorkOrder             @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([tenantId, vesselCode])
+}
+
+model Defect {
+  id                     String                 @id @default(cuid())
+  tenantId               String
+  vesselCode             String
+  assetId                String
+  workOrderId            String?
+  // Vínculo genérico al origen (mismo patrón que Deferral/CapaRecord). Hoy se usa para
+  // EXTERNAL_AUDIT_FINDING (sourceId = ExternalAuditFinding.id); extensible a otros orígenes.
+  sourceType             String?
+  sourceId               String?
+  // RCM: qué modo de falla se materializó en este defecto (acoplamiento flojo, sin FK
+  // forzada, igual que assetId). Alimenta MTBF por modo de falla. Opcional/backward-compat.
+  failureModeId          String?
+  defectCode             String
+  status                 DefectStatus           @default(OPEN)
+  severity               DefectSeverity         @default(MEDIUM)
+  operationalState       DefectOperationalState @default(NORMAL)
+  classification         String
+  reportedAt             DateTime
+  description            String
+  immediateAction        String?
+  correctiveAction       String?
+  rcaAnalysis            String?
+  rcaMethodology         RcaMethodology?
+  rcaImmediateCause      String?
+  rcaContributingCause   String?
+  rcaRootCause           String?
+  rcaPreventiveActions   String?
+  rcaCompletedAt         DateTime?
+  rcaApprovedAt          DateTime?
+  rcaApprovedByUserId    String?
+  capaDescription        String?
+  repairType             String?
+  // ISM 10.2.3 — verificación de eficacia de la medida correctiva SIN encender CAPA.
+  // Al cerrar el defecto se fija la fecha de revisión (cierre + 30 d); pasada esa
+  // fecha el defecto pide confirmación de que el problema no volvió. Los defectos
+  // cerrados antes de esta función tienen effectivenessDueAt null y quedan fuera
+  // del circuito (no hay backfill ni fecha mágica de corte).
+  effectivenessDueAt            DateTime?
+  effectivenessVerifiedAt       DateTime?
+  effectivenessOutcome          EffectivenessOutcome?
+  effectivenessNote             String?
+  effectivenessVerifiedByUserId String?
+  createdAt              DateTime               @default(now())
+  createdByUserId        String
+  updatedAt              DateTime               @updatedAt
+  updatedByUserId        String
+  deletedAt              DateTime?
+  deletedByUserId        String?
+  // Audit trail de re-aperturas (cuando un defecto CLOSED/RESOLVED se re-abre)
+  reopenCount            Int                    @default(0)
+  lastReopenAt           DateTime?
+  lastReopenReason       String?
+  lastReopenByUserId     String?
+
+  vessel                 Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, defectCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([tenantId, reportedAt])
+  @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, failureModeId])
+  @@index([tenantId, effectivenessDueAt])
+}
+
+// RCM — modo de falla de un activo: una forma concreta en que puede fallar, con
+// su causa, su efecto, la consecuencia que produce y — clave — el plan que lo
+// mitiga. Cierra el lazo RCM: FailureMode --mitiga--> MaintenancePlan, y
+// Defect.failureModeId --materializa--> FailureMode (para MTBF por modo).
+// Acoplamiento flojo por id (assetId / mitigatingPlanId) igual que Plan y Defect;
+// sin FK forzadas, scope tenant+vessel, soft-delete y audit estándar del proyecto.
+model FailureMode {
+  id                   String                  @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  assetId              String
+  code                 String                  // "FM-001" por activo
+  title                String                  // "Obstrucción del impulsor"
+  failureCause         String?                 // por qué falla (desgaste, cavitación…)
+  failureEffect        String?                 // qué pasa en el equipo cuando falla
+  // Reutiliza el enum RCM del plan — misma semántica de consecuencia mitigada
+  consequenceCategory  ConsequenceCategory?
+  consequenceRationale String?
+  detectionMethod      FailureDetectionMethod  @default(NONE)
+  // El link que faltaba: qué plan mitiga este modo de falla (sin FK forzada)
+  mitigatingPlanId     String?
+  // Probabilidad estimada — reutiliza el vocabulario de MaintenancePlan.riskProbability
+  probability          String?                 // LIKELY | PROBABLE | UNLIKELY | RARE
+  status               String                  @default("ACTIVE")
+  createdAt            DateTime                @default(now())
+  createdByUserId      String
+  updatedAt            DateTime                @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  vessel               Vessel                  @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, code])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, vesselCode, assetId])
+  @@index([tenantId, mitigatingPlanId])
+}
+
+model Deferral {
+  id                   String             @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  assetId              String
+  sourceType           DeferralSourceType
+  sourceId             String
+  deferralCode         String
+  status               DeferralStatus     @default(REQUESTED)
+  deferralType         DeferralType?
+  requestedAt          DateTime
+  requestedByUserId    String
+  targetDate           DateTime?
+  targetPort           String?
+  // Destino declarado: el trabajo se hace en la próxima varada. No es derivable
+  // de targetDate (una fecha no es un destino) ni del DrydockSpecItem, que sólo
+  // existe DESPUÉS de importarlo: el punto es registrar la intención antes.
+  toNextDrydock        Boolean            @default(false)
+  justification        String?
+  compensatoryMeasures String?
+  riskLevel            String?   // LOW | MEDIUM | HIGH | CRITICAL
+  riskProbability      String?   // LIKELY | PROBABLE | UNLIKELY | RARE
+  riskConsequence      String?   // FATALITY | MAJOR | MINOR | NEGLIGIBLE
+  riskAnalysisResult   String?
+  reviewNotes          String?
+  decisionAt           DateTime?
+  decidedByUserId      String?
+  approverName         String?
+  rejectorName         String?
+  activeSince          DateTime?
+  expiredAt            DateTime?
+  closedAt             DateTime?
+  closeNotes           String?
+  rejectionReason      String?
+  createdAt            DateTime           @default(now())
+  createdByUserId      String
+  updatedAt            DateTime           @updatedAt
+  updatedByUserId      String
+  deletedAt            DateTime?
+  deletedByUserId      String?
+
+  // Audit trail de re-aperturas (cuando un deferral CLOSED se re-abre)
+  reopenCount          Int                @default(0)
+  lastReopenAt         DateTime?
+  lastReopenReason     String?
+  lastReopenByUserId   String?
+
+  vessel               Vessel             @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, deferralCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([tenantId, requestedAt])
+}
+
+model CapaRecord {
+  id               String         @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetId          String
+  sourceType       CapaSourceType
+  sourceId         String
+  capaCode         String
+  status           CapaStatus     @default(OPEN)
+  priority         CapaPriority   @default(MEDIUM)
+  title            String
+  description      String?
+  owner            String?
+  dueDate          DateTime?
+  completedAt      DateTime?
+  // Acciones realizadas por el responsable de a bordo al sugerir cierre.
+  // Se rellena al pasar a PENDING_VERIFICATION; Gerencia Técnica la lee
+  // antes de aprobar el cierre y escribe verificationNote por su lado.
+  actionsTaken              String?
+  verificationNote          String?
+  effectivenessCriteria     String?
+  effectivenessReviewDate   DateTime?
+  effectivenessOutcome      EffectivenessOutcome?
+  cancelReason              String?
+  createdAt        DateTime       @default(now())
+  createdByUserId  String
+  updatedAt        DateTime       @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  // Audit trail de re-aperturas (cuando un CAPA CLOSED se re-abre)
+  reopenCount         Int          @default(0)
+  lastReopenAt        DateTime?
+  lastReopenReason    String?
+  lastReopenByUserId  String?
+
+  vessel           Vessel         @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, capaCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+// ─── Block 06: Compliance & Operations ───────────────────────────────────────
+
+model Inspection {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  assetId          String?
+  inspectionCode   String
+  type             InspectionType
+  status           InspectionStatus @default(SCHEDULED)
+  result           InspectionResult?
+  providerId       String?
+  scheduledAt      DateTime?
+  completedAt      DateTime?
+  inspectorName    String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+  updatedAt        DateTime         @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  // Audit trail de re-aperturas (cuando una inspección COMPLETED se re-abre)
+  reopenCount         Int             @default(0)
+  lastReopenAt        DateTime?
+  lastReopenReason    String?
+  lastReopenByUserId  String?
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider         Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  logs             InspectionLog[]
+
+  @@unique([tenantId, vesselCode, inspectionCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model InspectionLog {
+  id               String                 @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  inspectionId     String
+  logCode          String
+  entryType        InspectionLogEntryType
+  severity         InspectionLogSeverity  @default(LOW)
+  observedAt       DateTime
+  summary          String
+  recommendation   String?
+  createdAt        DateTime               @default(now())
+  createdByUserId  String
+
+  vessel           Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  inspection       Inspection             @relation(fields: [inspectionId], references: [id])
+
+  @@index([tenantId])
+  @@index([inspectionId])
+  @@index([tenantId, observedAt])
+}
+
+model Certificate {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  assetId             String?
+  certificateCode     String
+  name                String
+  issuingAuthority    String
+  originalSourceLink  String?
+  originalSourceName  String?
+  originalSourceMimeOrExt String?
+  status              CertificateStatus @default(ACTIVE)
+  issueDate           DateTime
+  expiryDate          DateTime
+  lastInspectionDate  DateTime?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  createdByUserId     String
+  updatedAt           DateTime          @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  // Plan de mantenimiento que renueva este certificado. Algunos certificados los
+  // emite un proveedor al terminar un servicio tercerizado (ej. el SERVICE anual
+  // del AIS): al reportar esa ejecución se ofrece renovar el certificado.
+  // Opcional: la enorme mayoría de los certificados no nace de un plan.
+  maintenancePlanId   String?
+
+  vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  maintenancePlan     MaintenancePlan?  @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
+  renewals            CertificateRenewal[]
+
+  @@unique([tenantId, vesselCode, certificateCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([expiryDate])
+  @@index([maintenancePlanId])
+}
+
+/// Historial de vigencias de un certificado. Una fila por renovación, con la
+/// foto de la vigencia que se cierra (fechas y archivo anteriores) y la que
+/// empieza. Antes la renovación se hacía editando la fila del certificado, así
+/// que se perdían las fechas viejas y se pisaba el PDF anterior — inservible
+/// para una auditoría (TMSA / inspección de bandera).
+model CertificateRenewal {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  vesselCode           String
+  certificateId        String
+
+  // Vigencia que se cierra (foto previa a la renovación).
+  previousIssueDate    DateTime
+  previousExpiryDate   DateTime
+  previousSourceLink   String?
+  previousSourceName   String?
+
+  // Vigencia que empieza.
+  issueDate            DateTime
+  expiryDate           DateTime
+  lastInspectionDate   DateTime?
+
+  // Qué mantenimiento la originó (si vino de reportar una ejecución).
+  maintenancePlanId    String?
+  workLogId            String?
+
+  notes                String?  @db.Text
+  createdAt            DateTime @default(now())
+  createdByUserId      String
+  createdByName        String
+
+  certificate          Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([certificateId])
+  @@index([maintenancePlanId])
+}
+
+model DailyReport {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  reportDate          DateTime          @db.Date
+  status              DailyReportStatus @default(DRAFT)
+  summary             String?
+  positionLat         Float?
+  positionLon         Float?
+  engineHoursMain     Float?
+  generatorHours      Float?
+  fuelConsumedLiters  Float?
+  oilConsumedLiters   Float?
+  notes               String?
+  // Report context
+  reportType              DailyReportType?
+  operationalStatus       VesselOperationalStatus?
+  currentPort             String?
+  timezone                String?
+  submittedByUserId       String?
+  verifiedByUserId        String?
+  verifiedAt              DateTime?
+  integratedAt            DateTime?
+  // PMS / logistic extensions
+  nextPort                String?
+  etaNextPort             DateTime?
+  etdNextPort             DateTime?
+  portCallType            PortCallType?
+  estimatedStayHours      Float?
+  maintenanceOpportunity  MaintenanceOpportunity  @default(UNKNOWN)
+  sparesReceiptPossible   SparesReceiptPossible   @default(UNKNOWN)
+  operationalRemarks      String?
+  reportCode          String?
+  createdAt           DateTime          @default(now())
+  createdByUserId     String
+  updatedAt           DateTime          @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  vessel              Vessel                @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  equipmentHours      DailyEquipmentHours[]
+  maintenanceEntries  DailyMaintenanceEntry[]
+  spareUsages         DailySpareUsage[]
+  defectEntries       DailyDefectEntry[]
+
+  // Dos partes creados a la vez no pueden compartir código (la app reintenta en P2002).
+  @@unique([tenantId, reportCode])
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, vesselCode, reportDate])
+}
+
+// ─── Monthly Report ──────────────────────────────────────────────────────────
+
+model MonthlyReport {
+  id                  String              @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  reportYear          Int
+  reportMonth         Int                 // 1..12
+  status              MonthlyReportStatus @default(DRAFT)
+  // Info tab fields
+  operationalStatus   VesselOperationalStatus?
+  currentPort         String?
+  positionLat         Float?
+  positionLon         Float?
+  summary             String?
+  nextPort            String?
+  etaNextPort         DateTime?
+  notes               String?
+  // Inventory snapshot — frozen at submission time
+  inventorySnapshot   Json?
+  inventorySnapshotAt DateTime?
+  // Audit
+  submittedAt         DateTime?
+  submittedByUserId   String?
+  integratedAt        DateTime?
+  createdAt           DateTime            @default(now())
+  createdByUserId     String
+  updatedAt           DateTime            @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  @@unique([tenantId, vesselCode, reportYear, reportMonth])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+enum MonthlyReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  CLOSED
+}
+
+// ─── Daily Report sub-entities ───────────────────────────────────────────────
+
+model DailyEquipmentHours {
+  id                      String      @id @default(cuid())
+  tenantId                String
+  vesselCode              String
+  dailyReportId           String
+  assetId                 String?
+  equipmentLabel          String
+  runningHoursTotal       Float?
+  fuelConsumptionLiters   Float?
+  oilConsumptionLiters    Float?
+  inService               Boolean?
+  standby                 Boolean?
+  remarks                 String?
+  createdAt               DateTime    @default(now())
+
+  dailyReport         DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+  @@index([assetId, tenantId, createdAt])
+}
+
+model DailyMaintenanceEntry {
+  id                  String        @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  dailyReportId       String
+  assetId             String?
+  equipmentLabel      String   @default("")
+  taskTitle           String
+  taskType            TaskType
+  shortDescription    String?
+  performedBy         String?
+  maintenancePlanId   String?
+  workOrderId         String?
+  resultStatus        WorkLogResult
+  followUpRequired    Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+
+  dailyReport         DailyReport   @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model DailySpareUsage {
+  id                       String      @id @default(cuid())
+  tenantId                 String
+  vesselCode               String
+  dailyReportId            String
+  spareId                  String?
+  spareName                String
+  quantity                 Float
+  unit                     String
+  linkedEquipmentId        String?
+  linkedMaintenanceEntryId String?
+  notes                    String?
+  createdAt                DateTime    @default(now())
+
+  dailyReport              DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model DailyDefectEntry {
+  id                     String         @id @default(cuid())
+  tenantId               String
+  vesselCode             String
+  dailyReportId          String
+  affectedEquipmentId    String?
+  affectedEquipmentLabel String?
+  description            String
+  severitySuggested      DefectSeverity?
+  immediateActionTaken   String?
+  followUpRequired       Boolean        @default(false)
+  defectId               String?
+  createdAt              DateTime       @default(now())
+
+  dailyReport            DailyReport    @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@index([tenantId, vesselCode])
+}
+
+// ─── Voyage Tank Report (Formulario M2 — Medición de Tanques por viaje) ──────
+
+enum VoyageTankReportStatus {
+  DRAFT
+  SUBMITTED
+  CLOSED
+}
+
+model VoyageTankReport {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  voyageCode        String                 // "M01"
+  reportCode        String?                // "M2-<VESSEL>-<YY>-<NNNN>"
+  tramo             String?                // free-text route "KM 773 ... AL KM 1578 ..."
+  reportDateTime    DateTime?              // Fecha/hora del encabezado
+  status            VoyageTankReportStatus @default(DRAFT)
+  // SUBIDA (viaje)
+  kmStart           Float?
+  kmEnd             Float?
+  dateStart         DateTime?
+  dateEnd           DateTime?
+  daysNav           Int?                   // "Días" (se auto-sugiere de las fechas)
+  // Bunker
+  bunkerReceivedLts Float?                 // Recepción
+  bargeDeliveredLts Float?                 // Entrega (Bczas)
+  signatory         String?                // "Jefe de Máquinas"
+  notes             String?
+  createdAt         DateTime               @default(now())
+  createdByUserId   String
+  updatedAt         DateTime               @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel                 @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  tankReadings      VoyageTankReading[]
+  engineHours       VoyageEngineHours[]
+
+  @@unique([tenantId, vesselCode, voyageCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model VoyageTankReading {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  vesselCode            String
+  voyageReportId        String
+  tankLabel             String   // "TANQUE N°1 Estribor"
+  tankOrder             Int      // orden estable
+  // INICIAL
+  liquidHeightMmInitial Float?
+  waterHeightMmInitial  Float?
+  volumeTotalLtsInitial Float?
+  volumeWaterLtsInitial Float?
+  // FINAL
+  liquidHeightMmFinal   Float?
+  waterHeightMmFinal    Float?
+  volumeTotalLtsFinal   Float?
+  volumeWaterLtsFinal   Float?
+  createdAt             DateTime @default(now())
+
+  voyageReport          VoyageTankReport @relation(fields: [voyageReportId], references: [id], onDelete: Cascade)
+
+  @@index([voyageReportId])
+  @@index([tenantId, vesselCode])
+}
+
+model VoyageEngineHours {
+  id             String   @id @default(cuid())
+  tenantId       String
+  vesselCode     String
+  voyageReportId String
+  assetId        String?  // enlaza al Asset cuando se siembra de equipos trackeados
+  engineLabel    String   // "M/P N°1 ER"
+  engineOrder    Int
+  hoursInitial   Float?
+  hoursFinal     Float?
+  createdAt      DateTime @default(now())
+
+  voyageReport   VoyageTankReport @relation(fields: [voyageReportId], references: [id], onDelete: Cascade)
+
+  @@index([voyageReportId])
+  @@index([tenantId, vesselCode])
+}
+
+// ─── Drydock Specification (Especificación de Varada — TMSA 4.2.4 / 4.4.2) ───
+//
+// Documento formal de trabajos a ejecutar en varada. El buque arma la lista
+// (a mano o importando del backlog: diferimientos, defectos, OT pendientes),
+// la envía a tierra, la superintendencia comenta ítem por ítem, acepta o
+// descarta líneas y aprueba. Una vez APPROVED el documento queda congelado:
+// sólo se pueden agregar comentarios y bajar el PDF para el astillero.
+
+enum DrydockSpecStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DrydockItemCategory {
+  HULL_STRUCTURE
+  MACHINERY
+  ELECTRICAL
+  PIPING_VALVES
+  TANKS
+  SAFETY_EQUIPMENT
+  CLASS_STATUTORY
+  PAINTING
+  OTHER
+}
+
+// De dónde salió el ítem. MANUAL = lo escribió alguien; el resto apunta al
+// registro de origen por sourceId (acoplamiento flojo, sin FK, igual que Deferral).
+enum DrydockItemSourceType {
+  MANUAL
+  DEFERRAL
+  DEFECT
+  WORK_ORDER
+}
+
+// Decisión de tierra sobre la línea: entra a la varada o no.
+enum DrydockItemStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+}
+
+model DrydockSpec {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  specCode           String            // "VAR-<VESSEL>-<YY>-<NNNN>"
+  title              String
+  status             DrydockSpecStatus @default(DRAFT)
+  // Datos de la varada
+  shipyardName       String?
+  shipyardProviderId String?           // Provider del astillero, si está dado de alta
+  port               String?
+  plannedStartDate   DateTime?
+  plannedEndDate     DateTime?
+  scopeSummary       String?           // alcance general del documento
+  // Trazabilidad del circuito buque → tierra
+  submittedAt        DateTime?
+  submittedByUserId  String?
+  submittedByName    String?
+  reviewStartedAt    DateTime?
+  approvedAt         DateTime?
+  approvedByUserId   String?
+  approvedByName     String?
+  rejectedAt         DateTime?
+  rejectedReason     String?
+  createdAt          DateTime          @default(now())
+  createdByUserId    String
+  updatedAt          DateTime          @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  vessel             Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  items              DrydockSpecItem[]
+
+  @@unique([tenantId, vesselCode, specCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model DrydockSpecItem {
+  id               String                   @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  specId           String
+  itemNo           Int                      // orden estable dentro del documento
+  category         DrydockItemCategory      @default(OTHER)
+  title            String
+  description      String?
+  assetId          String?                  // sin FK, igual que Deferral/Defect
+  sourceType       DrydockItemSourceType    @default(MANUAL)
+  sourceId         String?                  // deferralId | defectId | workOrderId
+  priority         String?                  // LOW | MEDIUM | HIGH | CRITICAL
+  classRelated     Boolean                  @default(false) // requisito de clase/bandera
+  proposedByVessel Boolean                  @default(true)  // true = lo propuso el buque
+  itemStatus       DrydockItemStatus        @default(PROPOSED)
+  decisionNotes    String?
+  createdAt        DateTime                 @default(now())
+  createdByUserId  String
+  updatedAt        DateTime                 @updatedAt
+  updatedByUserId  String
+
+  spec             DrydockSpec              @relation(fields: [specId], references: [id], onDelete: Cascade)
+  comments         DrydockSpecItemComment[]
+
+  @@index([specId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, sourceType, sourceId])
+}
+
+// Hilo de discusión buque ↔ tierra sobre una línea. El "lado" (buque o tierra)
+// se deriva de authorRole en la UI: no se guarda un campo redundante.
+model DrydockSpecItemComment {
+  id           String          @id @default(cuid())
+  tenantId     String
+  itemId       String
+  body         String
+  authorUserId String
+  authorName   String
+  authorRole   String
+  createdAt    DateTime        @default(now())
+
+  item         DrydockSpecItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([tenantId])
+}
+
+// ─── Block 07: Procurement & Stock ───────────────────────────────────────────
+
+model StockLocation {
+  id              String    @id @default(cuid())
+  tenantId        String
+  vesselCode      String?
+  code            String
+  name            String
+  description     String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  createdByUserId String
+  updatedAt       DateTime  @updatedAt
+  updatedByUserId String
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  defaultForSpares Spare[]
+  stockMovements   StockMovement[]
+  reservations     StockReservation[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model Provider {
+  id               String         @id @default(cuid())
+  tenantId         String
+  providerCode     String
+  name             String
+  category         String?
+  status           ProviderStatus @default(ACTIVE)
+  contactName      String?
+  contactEmail     String?
+  contactPhone     String?
+  location         String?
+  // Comentarios libres sobre el proveedor (condiciones, contactos alternativos,
+  // antecedentes). Opcional: los proveedores existentes quedan en null.
+  notes            String?
+  createdAt        DateTime       @default(now())
+  createdByUserId  String
+  updatedAt        DateTime       @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  evaluations      ProviderEvaluation[]
+  nonconformities  ProviderNonconformity[]
+  inspections      Inspection[]
+  goodsReceipts    GoodsReceipt[]
+
+  @@unique([tenantId, providerCode])
+  @@index([tenantId])
+}
+
+model Spare {
+  id                     String           @id @default(cuid())
+  tenantId               String
+  vesselCode             String
+  sku                    String
+  name                   String
+  category               String?
+  criticality            AssetCriticality @default(B)
+  manufacturer           String?
+  model                  String?
+  unit                   String
+  currentStock           Float            @default(0)  // deprecated — use stock-calc-service
+  minStock               Float            @default(0)
+  reorderPoint           Float            @default(0)
+  targetStock            Float?
+  status                 SpareStatus      @default(ACTIVE)
+  location               String?
+  // Extended fields (Fase 2)
+  internalPartNumber     String?
+  manufacturerPartNumber String?
+  longDescription        String?
+  defaultLocationId      String?
+  preferredSupplierId    String?
+  linkedAssetId          String?
+  sfiCode                String?
+  leadTimeDays           Int?
+  // MOC trigger: repuesto equivalente / no-OEM (uso en equipo crítico dispara MOC)
+  isEquivalent           Boolean          @default(false)
+  createdAt              DateTime         @default(now())
+  createdByUserId        String
+  updatedAt              DateTime         @updatedAt
+  updatedByUserId        String
+  deletedAt              DateTime?
+  deletedByUserId        String?
+
+  vessel           Vessel              @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  defaultLocation  StockLocation?      @relation(fields: [defaultLocationId], references: [id], onDelete: SetNull)
+  stockMovements     StockMovement[]
+  requestItems       SpareRequestItem[]
+  reservations       StockReservation[]
+
+  @@unique([tenantId, vesselCode, sku])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model StockMovement {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  spareId          String
+  locationId       String?
+  movementCode     String
+  movementType     MovementType
+  quantity         Float
+  unit             String
+  occurredAt       DateTime
+  referenceType    MovementRefType?
+  referenceId      String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  spare            Spare            @relation(fields: [spareId], references: [id])
+  location         StockLocation?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([spareId])
+  // Detalle de OT: reconstruye los repuestos consumidos por una OT puntual
+  // (getTenantWorkOrder). Sin este índice la búsqueda escaneaba todos los
+  // movimientos del tenant filtrando referenceType/referenceId en memoria.
+  @@index([tenantId, referenceType, referenceId])
+}
+
+// Recepción de repuestos contra remito. Es la cabecera: proveedor, número de
+// remito, fecha y el archivo escaneado/fotografiado. Las líneas NO se duplican
+// acá — cada una es un StockMovement RECEIPT con referenceType GOODS_RECEIPT y
+// referenceId = este id, así el stock se sigue calculando de una sola fuente.
+model GoodsReceipt {
+  id               String    @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  receiptCode      String
+  /** Número de remito del proveedor, tal como figura en el papel. */
+  documentNumber   String?
+  providerId       String?
+  /** Nombre libre cuando el proveedor no está dado de alta en Proveedores. */
+  providerName     String?
+  receivedAt       DateTime
+  /** Archivo del remito (PDF o foto). Se sirve por /app/files/goods-receipts/... */
+  fileUrl          String?
+  fileName         String?
+  fileMime         String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  createdByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel    @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider         Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, receiptCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+}
+
+model SpareRequest {
+  id                      String                @id @default(cuid())
+  tenantId                String
+  requestCode             String
+  status                  SpareRequestStatus    @default(DRAFT)
+  priority                SpareRequestPriority  @default(MEDIUM)
+  requestedByUserId       String
+  requestedAt             DateTime
+  approvedByUserId        String?
+  approvedAt              DateTime?
+  rejectionReason         String?
+  notes                   String?
+  requestedForVesselCode  String?
+  requestedForAssetId     String?
+  requestedForLocationId  String?
+  createdAt               DateTime              @default(now())
+  createdByUserId         String
+  updatedAt               DateTime              @updatedAt
+  updatedByUserId         String
+  deletedAt               DateTime?
+  deletedByUserId         String?
+
+  items                   SpareRequestItem[]
+
+  @@unique([tenantId, requestCode])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+model SpareRequestItem {
+  id                String                 @id @default(cuid())
+  spareRequestId    String
+  spareId           String?
+  description       String
+  quantity          Float
+  unit              String
+  quantityReserved  Float                  @default(0)
+  quantityFulfilled Float                  @default(0)
+  status            SpareRequestItemStatus @default(PENDING)
+  notes             String?
+  receivedAt        DateTime?
+  receiptNotes      String?
+  createdAt         DateTime               @default(now())
+  createdByUserId   String
+  updatedAt         DateTime               @updatedAt
+  updatedByUserId   String
+
+  spareRequest      SpareRequest           @relation(fields: [spareRequestId], references: [id], onDelete: Cascade)
+  spare             Spare?                 @relation(fields: [spareId], references: [id], onDelete: SetNull)
+  reservations      StockReservation[]
+
+  @@index([spareRequestId])
+  @@index([spareId])
+}
+
+model StockReservation {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  spareId         String
+  requestItemId   String
+  locationId      String?
+  quantity        Float
+  status          StockReservationStatus @default(ACTIVE)
+  reservedAt      DateTime               @default(now())
+  expiresAt       DateTime?
+  releasedAt      DateTime?
+  consumedAt      DateTime?
+  createdByUserId String
+  updatedAt       DateTime               @updatedAt
+  updatedByUserId String
+
+  spare           Spare                  @relation(fields: [spareId], references: [id])
+  requestItem     SpareRequestItem       @relation(fields: [requestItemId], references: [id])
+  location        StockLocation?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([spareId])
+  @@index([requestItemId])
+  @@index([tenantId, status])
+}
+
+model ProviderEvaluation {
+  id               String           @id @default(cuid())
+  tenantId         String
+  vesselCode       String
+  providerId       String
+  evaluationCode   String
+  status           EvaluationStatus @default(DRAFT)
+  score            Float
+  rating           EvaluationRating
+  evaluatedAt      DateTime
+  evaluatorName    String
+  summary          String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  createdByUserId  String
+  updatedAt        DateTime         @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  vessel           Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider         Provider         @relation(fields: [providerId], references: [id])
+
+  @@unique([tenantId, vesselCode, evaluationCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([providerId])
+}
+
+model ProviderNonconformity {
+  id                String     @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  providerId        String
+  nonconformityCode String
+  status            NcStatus   @default(OPEN)
+  severity          NcSeverity @default(MEDIUM)
+  reportedAt        DateTime
+  description       String
+  correctiveAction  String?
+  closedAt          DateTime?
+  createdAt         DateTime   @default(now())
+  createdByUserId   String
+  updatedAt         DateTime   @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel     @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  provider          Provider   @relation(fields: [providerId], references: [id])
+
+  @@unique([tenantId, vesselCode, nonconformityCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([providerId])
+}
+
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+model Attachment {
+  id                String           @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  targetType        AttachmentTarget
+  targetId          String
+  filename          String
+  mimeType          String
+  sizeBytes         Int
+  status            AttachmentStatus @default(ACTIVE)
+  uploadedAt        DateTime
+  uploadedByUserId  String
+  description       String?
+  createdAt         DateTime         @default(now())
+  createdByUserId   String
+  updatedAt         DateTime         @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([targetType, targetId])
+  @@index([tenantId, uploadedAt])
+}
+
+// ─── Block 09: AI Documents & Prompt Governance ───────────────────────────────
+
+enum PromptCapability {
+  knowledge_assistant
+  defect_assistant
+  deferral_analysis
+  barrier_interviewer
+  maintenance_insights
+  daily_executive_summary
+  document_summarizer
+  evidence_link_assistant
+}
+
+enum PromptStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model PromptTemplate {
+  id          String           @id @default(cuid())
+  capability  PromptCapability
+  locale      String
+  version     Int
+  status      PromptStatus     @default(DRAFT)
+  title       String
+  content     String           @db.Text
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  publishedAt DateTime?
+  createdById String?
+
+  @@unique([capability, locale, version])
+  @@index([capability, locale, status])
+}
+
+enum AiDocumentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AiDocumentVersionStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model AiDocument {
+  id              String           @id @default(cuid())
+  tenantId        String
+  name            String
+  description     String?
+  status          AiDocumentStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  createdByUserId String
+  updatedAt       DateTime         @updatedAt
+  updatedByUserId String
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  versions        AiDocumentVersion[]
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+}
+
+model AiDocumentVersion {
+  id                String                  @id @default(cuid())
+  documentId        String
+  tenantId          String
+  version           Int
+  status            AiDocumentVersionStatus @default(DRAFT)
+  content           String                  @db.Text
+  mimeType          String                  @default("text/plain")
+  sizeBytes         Int                     @default(0)
+  activatedAt       DateTime?
+  activatedByUserId String?
+  archivedAt        DateTime?
+  archivedByUserId  String?
+  createdAt         DateTime                @default(now())
+  createdByUserId   String
+
+  document          AiDocument              @relation(fields: [documentId], references: [id])
+
+  @@unique([documentId, version])
+  @@index([tenantId, status])
+}
+
+// ─── Block 10: AI Insights ────────────────────────────────────────────────────
+
+enum InsightType {
+  backlog_risk
+  repeated_failure
+  repeated_deferral
+  pm_frequency_review
+  stock_below_minimum
+  stock_below_reorder_point
+  certificate_expiring
+  certificate_expired
+  inspection_failure_pattern
+  overdue_capa
+  overdue_work_order
+  documentation_gap
+  operational_anomaly
+  recurring_asset_downtime
+  trend_based_maintenance_improvement
+  cross_vessel_spare_availability
+  fleet_repeated_failure_pattern
+  fleet_known_fix_suggestion
+  fleet_shared_operational_experience
+}
+
+enum InsightStatus {
+  OPEN
+  DISMISSED
+  RESOLVED
+}
+
+enum InsightPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum InsightTargetType {
+  VESSEL
+  ASSET
+  WORK_ORDER
+  DEFECT
+  CAPA
+  SPARE
+  CERTIFICATE
+  INSPECTION
+  FLEET
+}
+
+model AiInsight {
+  id             String            @id @default(cuid())
+  tenantId       String
+  insightCode    String
+  insightType    InsightType
+  status         InsightStatus     @default(OPEN)
+  priority       InsightPriority   @default(MEDIUM)
+  targetType     InsightTargetType
+  targetId       String?
+  vesselCode     String?
+  title          String
+  summary        String
+  recommendation String
+  detectedAt     DateTime          @default(now())
+  resolvedAt     DateTime?
+  dismissedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  createdByUserId String
+  updatedAt      DateTime          @updatedAt
+  updatedByUserId String
+
+  @@unique([tenantId, insightType, targetType, targetId])
+  @@index([tenantId, status])
+  @@index([tenantId, vesselCode, status])
+}
+
+// ─── In-app notifications (campana del header + banner CRITICAL) ─────────────
+// Una fila por destinatario. Anti-duplicado por (tenant, user, sourceType, sourceId)
+// para que sync periódico no spamee la bandeja con la misma alerta.
+model Notification {
+  id              String    @id @default(cuid())
+  tenantId        String
+  recipientUserId String
+  vesselCode      String?
+  type            String    // DEFECT_CRITICAL | WORK_ORDER_OVERDUE | CERTIFICATE_EXPIRED
+  severity        String    // CRITICAL | HIGH | INFO
+  title           String
+  body            String?
+  linkUrl         String?
+  sourceType      String?   // DEFECT | WORK_ORDER | CERTIFICATE
+  sourceId        String?
+  createdAt       DateTime  @default(now())
+  readAt          DateTime?
+  dismissedAt     DateTime?
+
+  @@unique([tenantId, recipientUserId, sourceType, sourceId])
+  @@index([tenantId, recipientUserId, dismissedAt, readAt])
+  @@index([tenantId, severity, dismissedAt])
+}
+
+// ─── Block 11: PMS — Catálogos globales ──────────────────────────────────────
+
+model SfiNode {
+  id          String   @id @default(cuid())
+  code        String   // "610", "710", etc.
+  description String
+  groupNumber Int      // 0-9
+  groupName   String
+  isGlobal    Boolean  @default(true)
+  tenantId    String?  // null = global; set = extensión de tenant
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([groupNumber])
+}
+
+model EquipmentClass {
+  id                 String            @id @default(cuid())
+  tenantId           String?           // null = global
+  code               String
+  name               String
+  description        String?
+  defaultSfiCode     String?
+  defaultCriticality AssetCriticality?
+  isGlobal           Boolean           @default(true)
+  status             String            @default("ACTIVE")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  assets              Asset[]
+  taskTemplates       ClassTaskTemplate[]
+  spareLinks          SpareLink[]
+  inspectionTemplates InspectionTemplate[]
+
+  @@index([tenantId])
+}
+
+model TaskMaster {
+  id                  String                 @id @default(cuid())
+  tenantId            String?                // null = global
+  code                String
+  title               String
+  taskType            TaskType
+  triggerType         MaintenancePlanTrigger
+  triggerResultMode   TriggerResultMode      @default(DUE_ONLY)
+  frequencyDays       Int?
+  frequencyHours      Float?
+  estimatedHours      Float?
+  procedure           String?                @db.Text
+  procedureReference  String?
+  acceptanceCriteria  String?
+  evidenceRequired    Boolean                @default(false)
+  isGlobal            Boolean                @default(true)
+  status              String                 @default("ACTIVE")
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  classTemplates      ClassTaskTemplate[]
+  maintenancePlans    MaintenancePlan[]
+  spareLinks          SpareLink[]
+
+  @@index([tenantId])
+  @@index([taskType])
+}
+
+model ClassTaskTemplate {
+  id               String         @id @default(cuid())
+  equipmentClassId String
+  taskMasterId     String
+  isDefault        Boolean        @default(true)
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+
+  equipmentClass   EquipmentClass @relation(fields: [equipmentClassId], references: [id], onDelete: Cascade)
+  taskMaster       TaskMaster     @relation(fields: [taskMasterId], references: [id], onDelete: Cascade)
+
+  @@unique([equipmentClassId, taskMasterId])
+  @@index([equipmentClassId])
+  @@index([taskMasterId])
+}
+
+// ─── Block 11: PMS — Inspecciones ────────────────────────────────────────────
+
+model InspectionTemplate {
+  id                String                 @id @default(cuid())
+  tenantId          String?                // null = global
+  code              String
+  title             String
+  description       String?
+  equipmentClassId  String?
+  sfiCode           String?
+  triggerType       MaintenancePlanTrigger
+  triggerResultMode TriggerResultMode      @default(DUE_ONLY)
+  frequencyDays     Int?
+  windowMode        ExecutionWindowMode    @default(AUTO)
+  windowLeadDays    Int?
+  evidenceRequired  Boolean                @default(false)
+  isGlobal          Boolean                @default(true)
+  status            String                 @default("ACTIVE")
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  equipmentClass    EquipmentClass?        @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
+  checklistItems    InspectionChecklistItem[]
+  executions        InspectionExecution[]
+
+  @@index([tenantId])
+}
+
+model InspectionChecklistItem {
+  id                     String              @id @default(cuid())
+  templateId             String
+  sortOrder              Int                 @default(0)
+  description            String
+  itemType               ChecklistItemType
+  acceptanceCriteria     String?
+  nominalValue           Float?
+  minValue               Float?
+  maxValue               Float?
+  unit                   String?
+  requiresInstrument     Boolean             @default(false)
+  requiredInstrumentType String?
+  evidenceRequired       Boolean             @default(false)
+  deficiencySeverity     DeficiencySeverity?
+  criteriaSource         CriteriaSource?
+  isOptional             Boolean             @default(false)
+
+  template               InspectionTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  itemResults            InspectionItemResult[]
+
+  @@index([templateId])
+}
+
+model InspectionExecution {
+  id                  String                     @id @default(cuid())
+  tenantId            String
+  vesselCode          String
+  assetId             String?
+  templateId          String
+  executionCode       String
+  status              InspectionStatus           @default(SCHEDULED)
+  result              InspectionExecutionResult?
+  scheduledAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  inspectorUserId     String?
+  inspectorName       String?
+  generalObservations String?
+  nextScheduledDate   DateTime?
+  createdAt           DateTime                   @default(now())
+  createdByUserId     String
+  updatedAt           DateTime                   @updatedAt
+  updatedByUserId     String
+  deletedAt           DateTime?
+  deletedByUserId     String?
+
+  template            InspectionTemplate         @relation(fields: [templateId], references: [id])
+  asset               Asset?                     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  itemResults         InspectionItemResult[]
+
+  @@unique([tenantId, vesselCode, executionCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model InspectionItemResult {
+  id                 String                  @id @default(cuid())
+  executionId        String
+  checklistItemId    String
+  resultValue        String?
+  numericValue       Float?
+  isConforming       Boolean?
+  deficiencySeverity DeficiencySeverity?
+  instrumentId       String?
+  notes              String?
+  createdAt          DateTime                @default(now())
+
+  execution          InspectionExecution     @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  checklistItem      InspectionChecklistItem @relation(fields: [checklistItemId], references: [id])
+  instrument         Instrument?             @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+
+  @@unique([executionId, checklistItemId])
+  @@index([executionId])
+}
+
+// ─── Block 11: PMS — Instrumentos ────────────────────────────────────────────
+
+model Instrument {
+  id                  String     @id @default(cuid())
+  tenantId            String
+  vesselCode          String?
+  code                String
+  name                String
+  instrumentType      String
+  serialNumber        String?
+  calibrationRequired Boolean    @default(false)
+  calibrationDate     DateTime?
+  calibrationDueDate  DateTime?
+  status              String     @default("ACTIVE")
+  notes               String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  deletedAt           DateTime?
+
+  itemResults         InspectionItemResult[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// ─── Block 11: PMS — Work Logs ───────────────────────────────────────────────
+
+model WorkLog {
+  id                      String        @id @default(cuid())
+  tenantId                String
+  vesselCode              String
+  workOrderId             String?
+  maintenancePlanId       String?
+  assetId                 String
+  logCode                 String
+  taskType                TaskType
+  result                  WorkLogResult
+  startedAt               DateTime
+  completedAt             DateTime?
+  executedByUserId        String?
+  executedByName          String
+  hoursWorked             Float?
+  runningHoursAtExecution Float?
+  notes                   String?       @db.Text
+  followUpRequired        Boolean       @default(false)
+  createdAt               DateTime      @default(now())
+  createdByUserId         String
+
+  workOrder               WorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  maintenancePlan         MaintenancePlan? @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, vesselCode, logCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([workOrderId])
+  @@index([maintenancePlanId])
+}
+
+// ─── Block 11: PMS — Repuestos sugeridos ─────────────────────────────────────
+
+model SpareLink {
+  id               String          @id @default(cuid())
+  tenantId         String?
+  equipmentClassId String?
+  taskMasterId     String?
+  spareSku         String?
+  spareName        String
+  isConsumable     Boolean         @default(false)
+  estimatedQty     Float           @default(1)
+  unit             String?
+  notes            String?
+  createdAt        DateTime        @default(now())
+
+  equipmentClass   EquipmentClass? @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
+  taskMaster       TaskMaster?     @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
+
+  @@index([equipmentClassId])
+  @@index([taskMasterId])
+}
+
+// ─── Block 12: Análisis de Fluidos (lubricantes, combustibles, agua) ─────────
+
+model FluidSample {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  assetId            String
+  sampleCode         String
+  // kind: tipo de muestreo. FLUID = comportamiento original. Cuando es otro
+  // kind (VIBRATION, THERMAL, etc.), `fluidType` queda en null y los datos
+  // específicos van en `parameters` del resultado.
+  kind               SampleKind          @default(FLUID)
+  fluidType          FluidType?
+  fluidProduct       String?
+  sampledAt          DateTime
+  runningHours       Float?
+  sampledByUserId    String?
+  containerCode      String?
+  sentAt             DateTime?
+  labName            String?
+  labReference       String?
+  status             FluidSampleStatus   @default(DRAFT)
+  notes              String?
+  // Trazabilidad cuando el sample fue generado automáticamente al cerrar una OT
+  sourceWorkOrderId  String?
+  sourcePlanId       String?
+  createdAt        DateTime            @default(now())
+  createdByUserId  String
+  updatedAt        DateTime            @updatedAt
+  updatedByUserId  String
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  result           FluidAnalysisResult?
+
+  @@unique([tenantId, vesselCode, sampleCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, assetId])
+  @@index([tenantId, fluidType])
+  @@index([tenantId, status])
+}
+
+model FluidAnalysisResult {
+  id               String       @id @default(cuid())
+  tenantId         String
+  sampleId         String       @unique
+  receivedAt       DateTime
+  verdict          FluidVerdict @default(NORMAL)
+  summary          String?
+  parameters       Json
+  reportUrl        String?
+  reportMime       String?
+  reportSourceText String?
+  defectId         String?
+  // AI analysis: tendencias clave, interpretación, recomendaciones (markdown)
+  aiAnalysis            String?
+  aiAnalysisGeneratedAt DateTime?
+  enteredByUserId  String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  sample           FluidSample  @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([verdict])
+}
+
+model FluidParameterThreshold {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  fluidType     FluidType
+  parameter     String
+  label         String
+  unit          String?
+  cautionMin    Float?
+  cautionMax    Float?
+  criticalMin   Float?
+  criticalMax   Float?
+  direction     FluidThresholdDirection @default(HIGH_BAD)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@unique([tenantId, fluidType, parameter])
+  @@index([tenantId, fluidType])
+}
+
+// ── Block: Crew / Certificaciones / Drills (Vetting Sprint 1 — TMSA 4 Elem. 3) ─
+
+// Catálogo dinámico de rangos por tenant (reemplaza enum CrewRank fijo)
+model RankDefinition {
+  id           String   @id @default(cuid())
+  tenantId     String
+  code         String   // ej: "CMD", "IME", "OF_NAU", "ELET"
+  name         String   // nombre en idioma del tenant
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation("RankDefinitions", fields: [tenantId], references: [id])
+  requirements RankTrainingRequirement[]
+  crew         Crew[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// Catálogo dinámico de items de entrenamiento por tenant
+// (reemplaza CrewCertification type + CrewCapability area enums fijos)
+model TrainingItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  code         String   // ej: "CIR", "NR_10", "ECDIS_FURUNO"
+  name         String   // descripción del item
+  regulation   String?  // ej: "STCW II/1", "NR-10", "IMCA 117"
+  category     String?  // ej: "STCW", "NR", "ECDIS", "INTERNO"
+  validityYears Int?    // años de validez; null si sin vencimiento
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation("TrainingItems", fields: [tenantId], references: [id])
+  requirements RankTrainingRequirement[]
+  records      CrewTrainingRecord[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// Matriz: qué training items se requieren para cada rank
+model RankTrainingRequirement {
+  id               String   @id @default(cuid())
+  rankDefinitionId String
+  trainingItemId   String
+  level            String   // "OBRIGATORIO", "VALIDO", "DESEJAVEL"
+  validityYears    Int?     // override de TrainingItem.validityYears si aplica
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  rankDefinition   RankDefinition @relation(fields: [rankDefinitionId], references: [id], onDelete: Cascade)
+  trainingItem     TrainingItem   @relation(fields: [trainingItemId], references: [id], onDelete: Cascade)
+
+  @@unique([rankDefinitionId, trainingItemId])
+  @@index([rankDefinitionId])
+  @@index([trainingItemId])
+}
+
+// Registro de completitud: qué items ha completado cada tripulante
+model CrewTrainingRecord {
+  id             String   @id @default(cuid())
+  tenantId       String
+  crewId         String
+  trainingItemId String
+  completedAt    DateTime // cuándo completó el item
+  expiryDate     DateTime? // cuándo vence (si aplica)
+  docUrl         String?  // referencia a documento probatorio
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  crew           Crew     @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  trainingItem   TrainingItem @relation(fields: [trainingItemId], references: [id])
+
+  @@unique([crewId, trainingItemId])
+  @@index([tenantId])
+  @@index([crewId])
+  @@index([trainingItemId])
+  @@index([expiryDate])
+}
+
+model Crew {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  crewCode           String
+  firstName          String
+  lastName           String
+  rankId             String?         // FK a RankDefinition; nullable para no romper registros existentes
+  nationality        String?
+  dateOfBirth        DateTime?
+  passportNumber     String?
+  signOnDate         DateTime
+  signOffDate        DateTime?
+  status             CrewStatus      @default(ONBOARD)
+  notes              String?
+  createdAt          DateTime        @default(now())
+  createdByUserId    String
+  updatedAt          DateTime        @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  // Audit trail de re-aperturas (cuando un crew SIGNED_OFF se re-abre)
+  reopenCount        Int             @default(0)
+  lastReopenAt       DateTime?
+  lastReopenReason   String?
+  lastReopenByUserId String?
+
+  vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  rankDefinition     RankDefinition? @relation(fields: [rankId], references: [id])
+  certifications     CrewCertification[]
+  trainingRecords    CrewTrainingRecord[]
+
+  @@unique([tenantId, vesselCode, crewCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+
+model CrewCertification {
+  id                 String                  @id @default(cuid())
+  tenantId           String
+  crewId             String
+  type               CrewCertificationType
+  certificateNumber  String?
+  issuingAuthority   String?
+  issuedDate         DateTime?
+  expiryDate         DateTime?
+  docUrl             String?
+  status             CrewCertificationStatus @default(VALID)
+  notes              String?
+  createdAt          DateTime                @default(now())
+  createdByUserId    String
+  updatedAt          DateTime                @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  crew               Crew                    @relation(fields: [crewId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([crewId])
+  @@index([tenantId, status])
+  @@index([expiryDate])
+}
+
+// Catálogo configurable de drills/simulacros por tenant. Reemplaza el enum
+// fijo DrillType + DrillConfig. Cada tenant puede cargar su matriz SOLAS/ISPS/
+// MARPOL/MLC/STCW con regulación, frecuencia, label de intervalo y scope opcional
+// por buque (applicableVesselCodes vacío = aplica a toda la flota).
+model DrillRequirement {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  title                 String
+  solasRegulation       String?
+  frequencyDays         Int
+  intervalLabel         String?
+  // Array de strings descriptivos de quién ejecuta (ej: ["Master", "Officers", "Crew"])
+  performedBy           Json      @default("[]")
+  // Array de vesselCode; vacío = aplica a toda la flota del tenant
+  applicableVesselCodes Json      @default("[]")
+  notes                 String?
+  enabled               Boolean   @default(true)
+  sortOrder             Int       @default(0)
+  createdAt             DateTime  @default(now())
+  createdByUserId       String
+  updatedAt             DateTime  @updatedAt
+  updatedByUserId       String
+  deletedAt             DateTime?
+  deletedByUserId       String?
+
+  drills                Drill[]
+
+  @@unique([tenantId, title])
+  @@index([tenantId])
+  @@index([tenantId, enabled])
+}
+
+model Drill {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  drillCode          String
+  requirementId      String
+  status             DrillStatus     @default(SCHEDULED)
+  scheduledDate      DateTime
+  // Hora de inicio del simulacro ("HH:mm", 24h). Usada para cruzar con las
+  // horas de descanso (STCW): un tripulante presente en el simulacro no puede
+  // figurar descansando en ese bloque horario.
+  scheduledTime      String?
+  completedDate      DateTime?
+  // Hora real de realización ("HH:mm", 24h). Junto con completedDate registra
+  // cuándo se ejecutó efectivamente el simulacro.
+  completedTime      String?
+  scenario           String?
+  observations       String?
+  lessonsLearned     String?
+  // JSON array de crewId; simplifica vs tabla DrillParticipant separada
+  participantCrewIds Json            @default("[]")
+  pdfUrl             String?
+  createdAt          DateTime        @default(now())
+  createdByUserId    String
+  updatedAt          DateTime        @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  // Audit trail de re-aperturas (cuando un drill COMPLETED/CANCELLED se re-abre)
+  reopenCount        Int             @default(0)
+  lastReopenAt       DateTime?
+  lastReopenReason   String?
+  lastReopenByUserId String?
+
+  vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  requirement        DrillRequirement @relation(fields: [requirementId], references: [id])
+
+  @@unique([tenantId, vesselCode, drillCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([scheduledDate])
+  @@index([requirementId])
+}
+
+// ── Block: Permit to Work (Vetting Sprint 1 — SOLAS II-2/10, XI-1/7, SIRE 2.0) ─
+
+model PermitToWork {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  permitCode         String
+  type               PermitType
+  status             PermitStatus    @default(DRAFT)
+  // Refs opcionales: un PTW puede originarse de una OT/asset, o ser libre.
+  assetId            String?
+  workOrderId        String?
+  location           String
+  description        String
+  // Ventana de validez del permiso (típicamente <= 24 h en hot work).
+  plannedStart       DateTime
+  plannedEnd         DateTime
+  validFrom          DateTime?
+  validTo            DateTime?
+  // Workflow timestamps + autores.
+  requestedAt        DateTime?
+  requestedByUserId  String?
+  approvedAt         DateTime?
+  approvedByUserId   String?
+  activatedAt        DateTime?
+  activatedByUserId  String?
+  closedAt           DateTime?
+  closedByUserId     String?
+  closeNotes         String?
+  rejectionReason    String?
+  cancelReason       String?
+  // Contenido principal (texto libre, derivable de la operación).
+  hazardsIdentified  String?
+  controlMeasures    String?
+  ppeRequired        String?
+  // Campos específicos por tipo (isolationPoints / harnessType / hotWorkClass / etc.).
+  details            Json            @default("{}")
+  // MOC trigger: bypass/override de alarma crítica dispara TEMPORARY MOC
+  alarmOverride      Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  createdByUserId    String
+  updatedAt          DateTime        @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  // Audit trail de re-aperturas (cuando un permiso terminal se re-abre)
+  reopenCount        Int             @default(0)
+  lastReopenAt       DateTime?
+  lastReopenReason   String?
+  lastReopenByUserId String?
+
+  vessel             Vessel          @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  gasTests           PermitGasTest[]
+  participants       PermitParticipant[]
+
+  @@unique([tenantId, vesselCode, permitCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([validTo])
+}
+
+model PermitGasTest {
+  id              String           @id @default(cuid())
+  tenantId        String
+  permitId        String
+  testedAt        DateTime
+  testedByName    String
+  location        String?
+  // Lecturas: nullable porque algunos sensores miden subset.
+  o2Pct           Float?
+  lelPct          Float?
+  h2sPpm          Float?
+  coPpm           Float?
+  verdict         PermitGasVerdict
+  notes           String?
+  createdAt       DateTime         @default(now())
+  createdByUserId String
+
+  permit          PermitToWork     @relation(fields: [permitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([permitId])
+  @@index([tenantId, testedAt])
+}
+
+model PermitParticipant {
+  id              String                @id @default(cuid())
+  tenantId        String
+  permitId        String
+  // crewId es opcional — admite participantes externos (contratistas) por nombre libre.
+  crewId          String?
+  name            String
+  role            PermitParticipantRole
+  createdAt       DateTime              @default(now())
+  createdByUserId String
+
+  permit          PermitToWork          @relation(fields: [permitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([permitId])
+  @@index([crewId])
+}
+
+// ─── Block: External Audits (PSC / Flag / Class / Vetting) — SIRE 2.0 Ch. 4 ────
+// Registro histórico de inspecciones externas, separado de las inspecciones
+// internas. SIRE pregunta explícitamente por PSC findings pasados.
+
+enum ExternalAuditType {
+  PSC                 // Port State Control
+  FLAG                // Flag State
+  CLASS               // Sociedad de Clasificación
+  VETTING_OIL_MAJOR   // SIRE inspection previo / vetting de oil major
+  CDI                 // Chemical Distribution Institute
+  RIGHTSHIP           // RightShip
+  OTHER
+}
+
+enum ExternalAuditFindingType {
+  DEFICIENCY
+  OBSERVATION
+  RECOMMENDATION
+  POSITIVE_OBSERVATION
+}
+
+enum ExternalAuditFindingStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  REJECTED_BY_AUDITOR
+}
+
+model ExternalAudit {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  vesselCode         String
+  auditCode          String              // EXT-VESSEL-YY-####
+  auditType          ExternalAuditType
+  auditDate          DateTime
+  port               String?
+  country            String?
+  agencyOrAuthority  String?             // "USCG", "MCA", "Shell", "BP", "ABS", etc.
+  inspectorName      String?
+  durationHours      Decimal?            @db.Decimal(5, 2)
+  overallResult      String?             // "Pass", "Conditional", "Fail", "Acceptable"
+  summary            String?             // resumen general
+  scoreOrRating      String?             // "85%", "B-", etc.
+  reportUrl          String?             // URL al PDF original del informe
+  createdAt          DateTime            @default(now())
+  createdByUserId    String
+  updatedAt          DateTime            @updatedAt
+  updatedByUserId    String
+  deletedAt          DateTime?
+  deletedByUserId    String?
+
+  vessel             Vessel              @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  findings           ExternalAuditFinding[]
+
+  @@unique([tenantId, vesselCode, auditCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, auditType])
+  @@index([auditDate])
+}
+
+model ExternalAuditFinding {
+  id                String                     @id @default(cuid())
+  tenantId          String
+  auditId           String
+  vesselCode        String
+  // findingCode: código del inspector (ej. PSC code "30150", SIRE Q "7.1.2").
+  findingCode       String?
+  findingType       ExternalAuditFindingType
+  category          String?                    // "Safety", "Pollution prevention", "Crew", "Cargo"
+  description       String                     // qué se encontró
+  status            ExternalAuditFindingStatus @default(OPEN)
+  // Severidad solo aplica a DEFICIENCY. "MINOR" / "MAJOR" / "CRITICAL".
+  severity          String?
+  detentionRelated  Boolean                    @default(false)
+  rectificationDeadline DateTime?
+  clearingDate      DateTime?
+  evidenceNotes     String?                    // qué evidencia se aportó al cerrar
+  evidenceDocUrl    String?
+  // OT correctiva abierta a partir del finding (opcional). Campo plano como Defect.workOrderId.
+  workOrderId       String?
+  createdAt         DateTime                   @default(now())
+  createdByUserId   String
+  updatedAt         DateTime                   @updatedAt
+  updatedByUserId   String
+
+  audit             ExternalAudit              @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([auditId])
+  @@index([tenantId, vesselCode, status])
+}
+
+// ─── Block: Near Miss / Hazard Observation — SIRE 2.0 Ch. 4 Safety ─────────────
+// Separado de Defect: el defecto es un problema material (algo está roto o
+// degradado); el near miss es un evento o condición que pudo haber causado
+// daño pero no lo causó. Cultura de reporte es clave en SIRE.
+
+enum NearMissCategory {
+  NEAR_MISS            // Evento que pudo causar daño pero no lo causó
+  HAZARD_OBSERVATION   // Condición de riesgo observada (sin evento)
+  UNSAFE_ACT           // Acción humana insegura observada
+  UNSAFE_CONDITION     // Estado físico inseguro
+}
+
+enum NearMissSeverity {
+  LOW                  // Potencial de daño bajo
+  MEDIUM               // Potencial de lesión leve
+  HIGH                 // Potencial de lesión grave / daño mayor
+  CRITICAL             // Potencial de fatalidad / pérdida total
+}
+
+enum NearMissStatus {
+  REPORTED
+  UNDER_REVIEW
+  ACTIONED             // Acción correctiva aplicada
+  CLOSED
+}
+
+model NearMissReport {
+  id                String           @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  nearMissCode      String           // NM-VESSEL-YY-####
+  category          NearMissCategory
+  severity          NearMissSeverity @default(MEDIUM)
+  status            NearMissStatus   @default(REPORTED)
+  occurredAt        DateTime
+  location          String?          // "Sala de máquinas", "Cubierta", "Puente"
+  description       String
+  immediateAction   String?
+  rootCause         String?
+  preventiveActions String?
+  lessonsLearned    String?
+  assetId           String?
+  reportedByName    String?          // crew code o nombre libre
+  reportedByCrewId  String?
+  reviewedAt        DateTime?
+  reviewedByUserId  String?
+  closedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  createdByUserId   String
+  updatedAt         DateTime         @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  vessel            Vessel           @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+
+  @@unique([tenantId, vesselCode, nearMissCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+  @@index([occurredAt])
+}
+
+// ─── Block: Hours of Rest — STCW Manila / MLC 2006 ─────────────────────────────
+// Una fila por (crew, día). El registro de horas se modela como un array de
+// 24 booleans en JSON: true = descanso, false = trabajo, indexado por hora
+// del día (0..23 en hora local del buque). El cálculo de violaciones
+// (mínimo 10h/24h, 77h/7d, no más de 2 períodos en 24h con uno ≥6h) se hace
+// en el servicio al consultar.
+
+model CrewRestHours {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  crewId          String
+  recordDate      DateTime @db.Date
+  // hoursData: Json[24]; true = descanso. Si no hay datos, se asume work=true.
+  hoursData       Json     @default("[false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]")
+  notes           String?
+  // Snapshot calculado al guardar — útil para listados y reportes sin recomputar.
+  totalRestHours  Decimal? @db.Decimal(4, 2)
+  hasViolation    Boolean  @default(false)
+  violationsJson  Json?    // { kind: "...", details: "..." }[]
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String
+
+  @@unique([tenantId, vesselCode, crewId, recordDate])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode, recordDate])
+  @@index([crewId, recordDate])
+  @@index([tenantId, hasViolation])
+}
+
+// ─── Block: Pre-Arrival / Pre-Departure / Pre-Bunkering Checklists ─────────────
+// SIRE 2.0 Ch. 4 + ISGOTT + ISM. Listas de verificación firmadas que el
+// inspector pide ver. Templates con items + ejecución por evento.
+
+enum ChecklistTemplateType {
+  PRE_ARRIVAL
+  PRE_DEPARTURE
+  PRE_BUNKERING
+  PRE_CARGO_TRANSFER
+  ENCLOSED_SPACE_ENTRY
+  HOT_WORK
+  PILOT_BOARDING
+  ANCHOR
+  MOORING
+  OTHER
+}
+
+enum ChecklistExecutionStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ChecklistItemResponseStatus {
+  PENDING
+  CONFORMING
+  NOT_CONFORMING
+  NOT_APPLICABLE
+}
+
+model ChecklistTemplate {
+  id              String                @id @default(cuid())
+  tenantId        String?               // null = template global (compartido)
+  type            ChecklistTemplateType
+  name            String
+  description     String?
+  // items: array de { code, text, isMandatory, category? } guardado JSON
+  // para evitar una tabla más con tan pocos campos.
+  itemsJson       Json                  @default("[]")
+  isActive        Boolean               @default(true)
+  // MOC trigger: edición de plantilla aprobada dispara PROCEDURE_CHANGE
+  approvedAt      DateTime?
+  approvedByUserId String?
+  createdAt       DateTime              @default(now())
+  createdByUserId String
+  updatedAt       DateTime              @updatedAt
+  updatedByUserId String
+
+  executions      ChecklistExecution[]
+
+  @@index([tenantId])
+  @@index([type])
+}
+
+model ChecklistExecution {
+  id                String                       @id @default(cuid())
+  tenantId          String
+  vesselCode        String
+  templateId        String
+  executionCode     String                       // CHK-VESSEL-YY-####
+  type              ChecklistTemplateType
+  status            ChecklistExecutionStatus     @default(IN_PROGRESS)
+  // Contexto del evento
+  eventDateTime     DateTime
+  port              String?
+  voyageRef         String?
+  performedByName   String?                      // nombre del que llenó
+  performedByCrewId String?
+  signedByName      String?                      // capitán o responsable
+  signedByCrewId    String?
+  signedAt          DateTime?
+  notes             String?
+  // Snapshot calculado al cerrar
+  totalItems        Int                          @default(0)
+  conformingItems   Int                          @default(0)
+  notConformingItems Int                         @default(0)
+  createdAt         DateTime                     @default(now())
+  createdByUserId   String
+  updatedAt         DateTime                     @updatedAt
+  updatedByUserId   String
+  deletedAt         DateTime?
+  deletedByUserId   String?
+
+  template          ChecklistTemplate            @relation(fields: [templateId], references: [id])
+  vessel            Vessel                       @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
+  responses         ChecklistItemResponse[]
+
+  @@unique([tenantId, vesselCode, executionCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, type, status])
+  @@index([eventDateTime])
+}
+
+model ChecklistItemResponse {
+  id              String                       @id @default(cuid())
+  tenantId        String
+  executionId     String
+  // itemCode = mismo code del itemsJson del template; permite mantener
+  // la asociación aunque el template se edite a futuro.
+  itemCode        String
+  itemText        String                       // copia del texto al momento del llenado
+  status          ChecklistItemResponseStatus  @default(PENDING)
+  notes           String?
+  reportedByName  String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  updatedByUserId String
+
+  execution       ChecklistExecution           @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, itemCode])
+  @@index([tenantId])
+  @@index([executionId])
+}
+
+// ─── Block: Crew Capability Matrix ────────────────────────────────────────────
+// Quién está calificado para qué tarea crítica. Útil para asignar OTs / PTW /
+// drills y para responder preguntas SIRE como "¿quién puede operar X?".
+
+enum CapabilityLevel {
+  TRAINED              // Hizo el curso pero no está certificado
+  CERTIFIED            // Tiene la certificación vigente
+  EXPERT               // Instructor / referente
+}
+
+enum CapabilityArea {
+  ECDIS                // Operación ECDIS
+  BWMS                 // Ballast Water Management System
+  IG_SYSTEM            // Inert Gas system
+  CARGO_HANDLING       // Operación de carga
+  MOORING_MASTER       // Mooring master / amarre supervisado
+  ENCLOSED_SPACE_ENTRY // Entry team / rescatista
+  HOT_WORK             // Hot work permit holder
+  RADAR_ARPA           // Radar / ARPA
+  GMDSS                // GMDSS operator
+  BRIDGE_RESOURCE_MGMT // BRM
+  ENGINE_ROOM_RESOURCE // ERM
+  FIRE_FIGHTING        // Advanced fire fighting (más allá de BST)
+  SURVIVAL_CRAFT       // Bote / balsa
+  MEDICAL_FIRST_AID    // Primeros auxilios
+  HIGH_VOLTAGE         // Trabajo con alta tensión
+  CRANE_OPERATION      // Operación de grúa / pluma
+  OTHER
+}
+
+model CrewCapability {
+  id              String           @id @default(cuid())
+  tenantId        String
+  crewId          String
+  area            CapabilityArea
+  level           CapabilityLevel  @default(CERTIFIED)
+  // Vinculación opcional con certificación existente como evidencia.
+  certificationId String?
+  notes           String?
+  validUntil      DateTime?
+  createdAt       DateTime         @default(now())
+  createdByUserId String
+  updatedAt       DateTime         @updatedAt
+  updatedByUserId String
+
+  @@unique([crewId, area])
+  @@index([tenantId])
+  @@index([crewId])
+  @@index([tenantId, area])
+}
+
+// ─── Block: Management of Change (MOC) — SIRE 2.0 Ch. 4 + ISM ──────────────────
+// Workflow formal de cambios significativos al buque / sistemas / procedimientos.
+
+enum MocCategory {
+  EQUIPMENT_CHANGE     // Cambio físico de equipo (instalación, modificación)
+  PROCEDURE_CHANGE     // Cambio en procedimiento operativo
+  ORGANIZATIONAL       // Cambio organizacional / responsabilidades
+  TEMPORARY            // Cambio temporal (bypass, workaround)
+  SOFTWARE_FIRMWARE    // Cambio de software/firmware
+  OTHER
+}
+
+enum MocRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MocStatus {
+  REQUESTED            // Solicitado, pendiente de análisis
+  UNDER_ANALYSIS       // En análisis de impacto/riesgo
+  APPROVED             // Aprobado, pendiente de implementación
+  IN_PROGRESS          // Implementación en curso
+  IMPLEMENTED          // Implementado, pendiente de revisión post
+  REVIEWED             // Revisado post-implementación, cerrado satisfactorio
+  REJECTED
+  CANCELLED
+}
+
+model MocRecord {
+  id                    String        @id @default(cuid())
+  tenantId              String
+  vesselCode            String
+  mocCode               String        // MOC-VESSEL-YY-####
+  category              MocCategory
+  status                MocStatus     @default(REQUESTED)
+  title                 String
+  reasonForChange       String
+  proposedChange        String
+  riskLevel             MocRiskLevel  @default(MEDIUM)
+  // Análisis de impacto: array JSON con áreas afectadas (Safety, Environment, etc.).
+  impactAreasJson       Json          @default("[]")
+  riskAssessmentNotes   String?
+  mitigationActions     String?
+  // Aprobación
+  approvedAt            DateTime?
+  approvedByUserId      String?
+  approvedByName        String?
+  rejectedReason        String?
+  // Implementación
+  plannedDate           DateTime?
+  implementedAt         DateTime?
+  implementedByName     String?
+  implementationNotes   String?
+  // Revisión post
+  reviewedAt            DateTime?
+  reviewedByUserId      String?
+  reviewNotes           String?
+  reviewOutcome         String?        // "SATISFACTORY" / "WITH_OBSERVATIONS" / "REOPEN"
+  // Vínculos opcionales
+  relatedAssetId        String?
+  relatedWorkOrderId    String?
+
+  // ─── Formulario controlado REGI-GES-06.1 (campos aditivos, nullable) ────────
+  // Sección 1 · Identificación ampliada
+  requesterName             String?
+  requesterRegistration     String?   // matrícula del solicitante
+  changeManagerName         String?   // Gestor del Cambio
+  changeManagerRegistration String?
+  requestingArea            String?
+  areaSupervisor            String?
+  managementName            String?   // Gerencia
+  managerName               String?   // Gerente
+  // Sección 1 · Dimensión del cambio
+  changeTypesJson       Json          @default("[]") // ["INFRASTRUCTURE","TECHNOLOGICAL","PROCEDURES","ORGANIZATIONAL"]
+  duration              String?       // "PERMANENT" | "TEMPORARY"
+  temporaryUntil        DateTime?
+  locationType          String?       // "OFFICE" | "WAREHOUSE" | "WORKSHOP"
+  locationUnit          String?       // unidad/embarcación (RE ...)
+  physicalArea          String?
+  // Sección 1 · Descripción detallada (motivo=reasonForChange, propuesto=proposedChange ya existen)
+  currentSituation      String?       // Situación actual
+  expectedResult        String?       // Resultado esperado
+  // Sección 2 · Evaluación previa (24 preguntas) + screening
+  evaluationAnswersJson Json          @default("[]") // [{n,group,answer:"YES"|"NO"|"UNKNOWN",canImpact:bool}]
+  evaluatorAreasJson    Json          @default("[]") // ["SSMA","RRHH","OPERATIONS",...]
+  requiresFullManagement Boolean      @default(false) // derivado: algún impacto marcado
+  // Sección 3 · Clasificación, viabilidad y opinión técnica (SSMA + Apoyo)
+  technicalReviewsJson  Json          @default("[]") // [{team,evaluatorName,methodology,impactForSsma,viable,justification,riskClassification}]
+  // Sección 4 · Plan de acción para la implementación
+  actionPlanJson        Json          @default("[]") // [{impact,action,responsible,dueDate,status,observations}]
+  // Sección 5 · Aprobación para la implantación
+  finalRiskLevel        MocRiskLevel?
+  recommendationsBeforeChange String?
+  additionalInfo        String?       // Informaciones adicionales
+  // Sección 6 · Análisis de eficacia (7 preguntas)
+  effectivenessAnswersJson Json       @default("[]") // [{n,answer:"YES"|"NO",detail}]
+
+  createdAt             DateTime      @default(now())
+  createdByUserId       String
+  updatedAt             DateTime      @updatedAt
+  updatedByUserId       String
+  deletedAt             DateTime?
+  deletedByUserId       String?
+
+  @@unique([tenantId, vesselCode, mocCode])
+  @@index([tenantId])
+  @@index([tenantId, vesselCode])
+  @@index([tenantId, status])
+}
+

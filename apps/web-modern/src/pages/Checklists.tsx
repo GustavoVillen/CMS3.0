@@ -16,6 +16,7 @@ import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { useSearchParams } from "react-router-dom";
 
 const TYPE_TKEY: Record<string, TranslationKey> = {
@@ -283,18 +284,20 @@ const ExecutionModal: React.FC<{
           ) : isCreating ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={labelCls}>Vessel *</label>
+                <GuideField id="cl-vessel" missing={!vesselCode}>
+                  <label className={labelCls}>Vessel<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
                     {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
                   </select>
-                </div>
-                <div><label className={labelCls}>Template *</label>
+                </GuideField>
+                <GuideField id="cl-template" missing={!templateId}>
+                  <label className={labelCls}>Template<RequiredMark />{!templateId && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                   <select value={templateId} onChange={e => setTemplateId(e.target.value)} className={inputCls}>
                     <option value="">— Seleccionar —</option>
                     {(templatesData?.items ?? []).map(tpl => <option key={tpl.id} value={tpl.id}>{t(TYPE_TKEY[tpl.type])} — {tpl.name}</option>)}
                   </select>
-                </div>
-                <div><label className={labelCls}>Fecha/hora *</label>
+                </GuideField>
+                <div><label className={labelCls}>Fecha/hora</label>
                   <input type="datetime-local" value={eventDateTime} onChange={e => setEventDT(e.target.value)} className={inputCls} />
                 </div>
                 <div><label className={labelCls}>Puerto</label>

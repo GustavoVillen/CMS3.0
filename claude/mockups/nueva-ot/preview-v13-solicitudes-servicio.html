@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solicitudes de Servicio — Preview V13</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{ --bg:#F4F5F7; --surface:#fff; --fg:#1A1D24; --accent:#0284C7; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25); --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40); }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer} select,input{font-family:inherit}
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:8px 16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:6px} .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600} .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px} .pv-bar .lab{font-size:11px;color:#9CA3AF}
+  .app{display:flex;min-height:calc(100vh - 46px)}
+  .side{width:210px;background:#0F172A;color:#CBD5E1;padding:16px 10px;flex-shrink:0}
+  .side .logo{color:#fff;font-weight:800;font-size:15px;margin:0 8px 18px}
+  .side a{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;font-size:13px;color:#CBD5E1;text-decoration:none}
+  .side a.on{background:rgba(56,189,248,.15);color:#fff}
+  @media(max-width:800px){.side{display:none}}
+  .main{flex:1;min-width:0;padding:20px 24px}
+  @media(max-width:600px){.main{padding:14px 12px}}
+  .ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .ph h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+  .ph .count{font-size:12px;color:var(--muted);background:var(--fg5);border-radius:99px;padding:2px 8px}
+  .ph .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn-primary{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn-soft{background:var(--surface);border:1px solid var(--fg10);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .menu{position:relative} .menu-pop{position:absolute;top:40px;right:0;background:#fff;border:1px solid var(--fg10);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.12);padding:6px;min-width:230px;z-index:20}
+  .menu-pop button{display:flex;gap:8px;align-items:center;width:100%;border:0;background:none;padding:8px 10px;border-radius:8px;font-size:12px;text-align:left}
+  .menu-pop button:hover{background:var(--fg5)}
+  .viewsw{display:flex;background:var(--fg5);border:1px solid var(--fg10);border-radius:10px;padding:2px}
+  .viewsw button{border:0;background:none;padding:6px 10px;font-size:12px;font-weight:700;border-radius:8px;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .viewsw button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+  /* resumen */
+  .sum{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:1000px){.sum{grid-template-columns:repeat(3,1fr)}} @media(max-width:560px){.sum{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:var(--surface);border:1.5px solid var(--fg10);border-radius:14px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px;transition:.15s}
+  .sc:hover{border-color:var(--fg25)} .sc.on{box-shadow:0 0 0 3px rgba(2,132,199,.18);border-color:var(--accent)}
+  .sc .n{font-size:24px;font-weight:800;line-height:1.1} .sc .l{font-size:12px;font-weight:600;color:var(--muted);display:flex;gap:5px;align-items:center}
+  .sc .h{font-size:10px;color:var(--faint)}
+  .sc.red .n{color:#B91C1C} .sc.red{border-left:4px solid #DC2626}
+  .sc.blue .n{color:#1D4ED8} .sc.blue{border-left:4px solid #2563EB}
+  .sc.amber .n{color:#B45309} .sc.amber{border-left:4px solid #D97706}
+  .sc.green .n{color:#047857} .sc.green{border-left:4px solid #0E9F6E}
+  .sc.yellow .n{color:#A16207} .sc.yellow{border-left:4px solid #CA8A04}
+  /* filtros */
+  .fbar{background:var(--surface);border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px}
+  .frow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stage{display:flex;gap:4px;flex-wrap:wrap}
+  .stage button{border:1.5px solid var(--fg10);background:var(--surface);border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+  .stage button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .stage .c{font-size:10px;background:var(--fg10);border-radius:99px;padding:0 6px} .stage button.on .c{background:rgba(255,255,255,.25)}
+  .sel{border:1px solid var(--fg10);background:var(--fg5);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--fg)}
+  .sel.on{border-color:var(--accent);background:rgba(2,132,199,.06);color:var(--accent);font-weight:700}
+  .tog{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;border:1px solid var(--fg10);border-radius:10px;padding:6px 10px;background:var(--surface)}
+  .tog.on{border-color:#DC2626;color:#B91C1C;background:#FEF2F2}
+  .search{position:relative;margin-left:auto} .search input{border:1px solid var(--fg10);border-radius:10px;padding:7px 10px 7px 30px;font-size:12px;width:230px;background:var(--fg5)}
+  .search svg{position:absolute;left:9px;top:8px;width:14px;height:14px;color:var(--faint)}
+  @media(max-width:600px){.search{margin-left:0;width:100%}.search input{width:100%}}
+  .active{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted)}
+  .achip{display:inline-flex;gap:5px;align-items:center;background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);color:var(--accent);border-radius:99px;padding:2px 4px 2px 9px;font-weight:700}
+  .achip button{border:0;background:rgba(2,132,199,.15);color:var(--accent);border-radius:99px;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  .clear{border:0;background:none;color:var(--muted);font-size:11px;text-decoration:underline}
+  /* tablero */
+  .board{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:12px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory}
+  .col{background:rgba(26,29,36,.03);border-radius:14px;padding:8px;scroll-snap-align:start;min-width:240px}
+  .colh{display:flex;align-items:center;gap:6px;padding:4px 4px 8px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+  .colh .c{margin-left:auto;background:var(--fg10);border-radius:99px;padding:0 7px;font-size:11px;color:var(--muted)}
+  .colh .dot{width:8px;height:8px;border-radius:99px}
+  .grp{font-size:11px;font-weight:700;color:var(--muted);padding:6px 4px 4px;display:flex;gap:5px;align-items:center}
+  .card{background:var(--surface);border:1px solid var(--fg10);border-radius:12px;padding:9px 10px;margin-bottom:7px;display:flex;flex-direction:column;gap:5px;cursor:pointer;border-left:4px solid var(--fg10)}
+  .card:hover{box-shadow:0 4px 14px rgba(0,0,0,.07)}
+  .card.p-CRITICAL{border-left-color:#B91C1C} .card.p-HIGH{border-left-color:#EA580C} .card.p-MEDIUM{border-left-color:#CA8A04} .card.p-LOW{border-left-color:#0E9F6E}
+  .card.over{background:#FEF2F2}
+  .ctop{display:flex;align-items:center;gap:6px}
+  .code{font-family:ui-monospace,monospace;font-size:12px;font-weight:800;color:var(--fg)}
+  .prio{font-size:9px;font-weight:800;border-radius:99px;padding:1px 7px;text-transform:uppercase;margin-left:auto;white-space:nowrap}
+  .prio.CRITICAL{background:#B91C1C;color:#fff} .prio.HIGH{background:#FFEDD5;color:#C2410C} .prio.MEDIUM{background:#FEF9C3;color:#A16207} .prio.LOW{background:#DCFCE7;color:#047857}
+  .ttl{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .asset{font-size:11px;color:var(--muted);display:flex;gap:4px;align-items:center}
+  .cfoot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .due{font-size:11px;font-weight:700;display:inline-flex;gap:3px;align-items:center}
+  .due.over{color:#B91C1C} .due.soon{color:#B45309} .due.ok{color:var(--muted);font-weight:500}
+  .av{width:22px;height:22px;border-radius:99px;background:#E0E7FF;color:#3730A3;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-left:auto}
+  .av.none{background:var(--fg5);color:var(--faint)}
+  .ss{font-size:10px;font-family:ui-monospace,monospace;font-weight:700;color:#0891B2;background:rgba(8,145,178,.08);border:1px solid rgba(8,145,178,.25);border-radius:6px;padding:0 5px}
+  .type{font-size:9px;font-weight:800;border-radius:99px;padding:1px 6px;border:1px solid}
+  .t-P{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .t-C{color:#C2410C;border-color:rgba(234,88,12,.3);background:rgba(234,88,12,.06)} .t-I{color:#0F766E;border-color:rgba(13,148,136,.3);background:rgba(13,148,136,.06)}
+  .act{border:1px solid rgba(2,132,199,.35);background:rgba(2,132,199,.06);color:var(--accent);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;display:inline-flex;gap:4px;align-items:center;width:100%;justify-content:center}
+  .act.green{border-color:rgba(14,159,110,.4);background:rgba(14,159,110,.08);color:#047857}
+  .rej{font-size:10px;font-weight:800;color:#B91C1C;background:#FEE2E2;border-radius:6px;padding:1px 6px}
+  .empty{text-align:center;color:var(--faint);font-size:12px;padding:18px 0}
+  /* lista */
+  .tbl-wrap{background:var(--surface);border:1px solid var(--fg10);border-radius:14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:900px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--fg10);white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid var(--fg5);font-size:12px;vertical-align:middle}
+  tr.over td{background:#FEF2F2} tr.over td:first-child{box-shadow:inset 4px 0 0 #DC2626}
+  tr:hover td{background:rgba(2,132,199,.04)}
+  .stg{font-size:10px;font-weight:700;border-radius:8px;padding:2px 7px;border:1px solid;white-space:nowrap}
+  .s-prep{color:var(--muted);border-color:var(--fg10);background:var(--fg5)} .s-sol{color:#1D4ED8;border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.06)} .s-apr{color:#6D28D9;border-color:rgba(124,58,237,.3);background:rgba(124,58,237,.06)} .s-aut{color:#047857;border-color:rgba(14,159,110,.3);background:rgba(14,159,110,.06)} .s-dif{color:#A16207;border-color:rgba(202,138,4,.3);background:rgba(202,138,4,.08)} .s-clo{color:var(--faint);border-color:var(--fg10);background:var(--fg5)}
+  /* referencia */
+  .note{background:#DC2626;color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;display:inline-block;margin:0 4px 4px 0}
+  .refbox{background:var(--surface);border:1px solid var(--fg10);border-radius:12px;padding:12px;margin-bottom:10px}
+  .mini-chip{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;border:1px solid var(--fg10);background:var(--fg5);border-radius:99px;padding:3px 7px;margin:2px;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300}
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>Solicitudes de Servicio · Preview V13</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="new" class="on">Propuesta</button><button data-v="ref">Hoy (referencia)</button>
+  <span class="sep"></span><span class="lab">Ver como:</span>
+  <button data-role="admin" class="on">Superintendente / DPA (firma)</button><button data-role="crew">Tripulación</button>
+</div>
+<div class="app">
+  <nav class="side"><div class="logo">CMS3.0</div>
+    <a><i data-lucide="layout-dashboard" style="width:15px;height:15px"></i>Tablero</a>
+    <a><i data-lucide="wrench" style="width:15px;height:15px"></i>Órdenes de Trabajo</a>
+    <a class="on"><i data-lucide="handshake" style="width:15px;height:15px"></i>Solicitudes de Servicio</a>
+    <a><i data-lucide="clipboard-list" style="width:15px;height:15px"></i>Plan de Mantenimiento</a>
+    <a><i data-lucide="gauge" style="width:15px;height:15px"></i>Horas de Equipos</a>
+  </nav>
+  <main class="main" id="root"></main>
+</div>
+<script>
+const SRS=[
+ {code:"SS-14-DEM-2026",serv:"Rectificado del eje de cola",asset:"Eje de cola",ot:"OT-DEM-26-0046",shop:"Taller Naval Demo S.A.",prio:"HIGH",stage:"DRAFT",age:1},
+ {code:"SS-15-DEM-2026",serv:"Toma de muestra de aceite",asset:"Reductor babor",ot:"OT-DEM-26-0030",shop:"",prio:"LOW",stage:"DRAFT",age:4},
+ {code:"SS-12-DEM-2026",serv:"Reparación del servo timón",asset:"Servo timón",ot:"OT-DEM-26-0040",shop:"Servicios Hidráulicos Demo",prio:"HIGH",stage:"SOLICITADA",age:2},
+ {code:"SS-11-DEM-2026",serv:"Bobinado de motor de bomba",asset:"Bomba contraincendio",ot:"OT-DEM-26-0038",shop:"Electro Marine Demo",prio:"CRITICAL",stage:"SOLICITADA",age:6},
+ {code:"SS-10-DEM-2026",serv:"Balanceo de hélice",asset:"Hélice #1",ot:"OT-DEM-26-0045",shop:"Taller Naval Demo S.A.",prio:"MEDIUM",stage:"APROBADA",age:5},
+ {code:"SS-09-DEM-2026",serv:"Rectificado de asientos de válvula",asset:"Motor principal babor",ot:"OT-DEM-26-0035",shop:"Taller Naval Demo S.A.",prio:"HIGH",stage:"AUTORIZADA",age:8},
+ {code:"SS-08-DEM-2026",serv:"Análisis de vibraciones",asset:"Generador auxiliar N°1",ot:"OT-DEM-26-0029",shop:"Laboratorio Demo S.A.",prio:"MEDIUM",stage:"IN_PROGRESS",age:21},
+ {code:"SS-07-DEM-2026",serv:"Muestras de aceite — laboratorio",asset:"Reductor babor",ot:"OT-DEM-26-0030",shop:"Laboratorio Demo S.A.",prio:"LOW",stage:"IN_PROGRESS",age:6},
+ {code:"SS-06-DEM-2026",serv:"Calibración de válvulas de seguridad",asset:"Caldera",ot:"OT-DEM-26-0024",shop:"Servicios Hidráulicos Demo",prio:"HIGH",stage:"REJECTED",age:9,reason:"Falta cotización del taller"},
+ {code:"SS-03-DEM-2026",serv:"Reparación de compresor",asset:"Compresor de aire N°1",ot:"OT-DEM-26-0012",shop:"Electro Marine Demo",prio:"MEDIUM",stage:"COMPLETED",age:40},
+];
+const COLS=[["DRAFT","En preparación","#94A3B8"],["SOLICITADA","Pendiente de aprobación","#CA8A04"],["APROBADA","Pendiente de autorización","#2563EB"],["AUTORIZADA","Autorizada · lista para el taller","#7C3AED"],["IN_PROGRESS","En el taller","#D97706"]];
+const STAGE_LBL={DRAFT:"En preparación",SOLICITADA:"Pend. aprobación",APROBADA:"Pend. autorización",AUTORIZADA:"Autorizada",IN_PROGRESS:"En el taller",COMPLETED:"Completada",REJECTED:"Rechazada",CANCELLED:"Cancelada"};
+const STAGE_CLS={DRAFT:"s-prep",SOLICITADA:"s-dif",APROBADA:"s-sol",AUTORIZADA:"s-apr",IN_PROGRESS:"s-dif",COMPLETED:"s-aut",REJECTED:"s-clo",CANCELLED:"s-clo"};
+const PRIO_LBL={CRITICAL:"Inmediato",HIGH:"24 hs",MEDIUM:"Semana",LOW:"Mes"};
+const OPEN=["DRAFT","SOLICITADA","APROBADA","AUTORIZADA","IN_PROGRESS"];
+const LONG=15;
+const S={view:"new",role:"admin",mode:"board",stage:"",card:"",shop:"",asset:"",prio:"",q:"",group:false,toast:null};
+
+function filtered(ignoreStage=false){
+  const q=S.q.toLowerCase();
+  return SRS.filter(s=>{
+    if(!ignoreStage){ if(S.stage){ if(s.stage!==S.stage) return false; } else if(!OPEN.includes(s.stage) && !q) return false; }
+    if(S.card==="sign" && !(s.stage==="SOLICITADA"||s.stage==="APROBADA")) return false;
+    if(S.card==="notsent" && s.stage!=="DRAFT") return false;
+    if(S.card==="ready" && s.stage!=="AUTORIZADA") return false;
+    if(S.card==="long" && !(s.stage==="IN_PROGRESS" && s.age>LONG)) return false;
+    if(S.card==="rejected" && s.stage!=="REJECTED") return false;
+    if(S.shop && (S.shop==="__none__" ? s.shop : s.shop!==S.shop)) return false;
+    if(S.asset && s.asset!==S.asset) return false;
+    if(S.prio && s.prio!==S.prio) return false;
+    if(q && !(s.code+s.serv+s.asset+s.ot+s.shop).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function render(){
+  document.querySelectorAll(".pv-bar button[data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===S.view));
+  document.querySelectorAll(".pv-bar button[data-role]").forEach(b=>b.classList.toggle("on",b.dataset.role===S.role));
+  document.getElementById("root").innerHTML = S.view==="ref" ? ref() : page();
+  if(S.toast) document.getElementById("root").insertAdjacentHTML("beforeend",`<div class="toast">${S.toast}</div>`);
+  lucide.createIcons();
+}
+function page(){
+  const list=filtered();
+  const card=(key,cls,icon,n,l,h)=>`<button class="sc ${cls} ${S.card===key?'on':''}" onclick="S.card=S.card==='${key}'?'':'${key}';render()"><span class="n">${n}</span><span class="l"><i data-lucide="${icon}" style="width:13px;height:13px"></i>${l}</span><span class="h">${h}</span></button>`;
+  const shops=[...new Set(SRS.map(s=>s.shop).filter(Boolean))], assets=[...new Set(SRS.map(s=>s.asset))];
+  const opts=(arr,cur,ph)=>`<option value="">${ph}</option>`+arr.map(([v,l])=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`).join("");
+  const actives=[];
+  if(S.card) actives.push(["card",{sign:"Esperando mi firma",notsent:"Sin enviar a aprobar",ready:"Listas para el taller",long:`En el taller +${LONG} días`,rejected:"Rechazadas"}[S.card]]);
+  if(S.stage) actives.push(["stage",STAGE_LBL[S.stage]]);
+  if(S.shop) actives.push(["shop",S.shop==="__none__"?"Sin taller":S.shop]);
+  if(S.asset) actives.push(["asset",S.asset]);
+  if(S.prio) actives.push(["prio","Prioridad: "+PRIO_LBL[S.prio]]);
+  const cnt=k=>filtered(true).filter(s=>k?s.stage===k:OPEN.includes(s.stage)).length;
+  return `
+  <div class="ph">
+    <h1><i data-lucide="handshake" style="width:20px;height:20px;color:#0891B2"></i>Solicitudes de Servicio</h1>
+    <span class="count">${list.length} a la vista</span>
+    <span class="count"><i data-lucide="ship" style="width:11px;height:11px;vertical-align:-1px"></i> BUQUE DEMO I</span>
+    <div class="right">
+      <div class="viewsw"><button class="${S.mode==='board'?'on':''}" onclick="S.mode='board';render()"><i data-lucide="columns-3" style="width:13px;height:13px"></i>Tablero</button><button class="${S.mode==='list'?'on':''}" onclick="S.mode='list';render()"><i data-lucide="list" style="width:13px;height:13px"></i>Lista</button></div>
+      <button class="btn-primary" onclick="toast('Abre el asistente de Nueva SS (demo)')"><i data-lucide="plus" style="width:15px;height:15px"></i>Nueva SS</button>
+    </div>
+  </div>
+  <div class="sum">
+    ${S.role==="admin"?card("sign","blue","pen-line",SRS.filter(s=>s.stage==="SOLICITADA"||s.stage==="APROBADA").length,"Esperando mi firma","Para aprobar o autorizar"):card("sign","blue","hourglass",SRS.filter(s=>s.stage==="SOLICITADA"||s.stage==="APROBADA").length,"Esperando firma","Aprobación o autorización en tierra")}
+    ${card("notsent","amber","send",SRS.filter(s=>s.stage==="DRAFT").length,"Sin enviar a aprobar","En preparación")}
+    ${card("ready","green","truck",SRS.filter(s=>s.stage==="AUTORIZADA").length,"Listas para el taller","Autorizadas sin enviar al proveedor")}
+    ${card("long","red","clock-alert",SRS.filter(s=>s.stage==="IN_PROGRESS"&&s.age>LONG).length,`En el taller +${LONG} días`,"Revisar con el proveedor")}
+    ${card("rejected","yellow","x-circle",SRS.filter(s=>s.stage==="REJECTED").length,"Rechazadas","Para corregir o cancelar")}
+  </div>
+  <div class="fbar">
+    <div class="frow"><div class="stage">
+      <button class="${S.stage===''?'on':''}" onclick="S.stage='';render()">En trámite <span class="c">${cnt('')}</span></button>
+      ${[["DRAFT","En preparación"],["SOLICITADA","Por aprobar"],["APROBADA","Por autorizar"],["AUTORIZADA","Autorizadas"],["IN_PROGRESS","En el taller"],["COMPLETED","Completadas"],["REJECTED","Rechazadas"],["CANCELLED","Canceladas"]].map(([k,l])=>`<button class="${S.stage===k?'on':''}" onclick="S.stage='${k}';render()">${l} <span class="c">${cnt(k)}</span></button>`).join("")}
+    </div></div>
+    <div class="frow">
+      <select class="sel ${S.shop?'on':''}" onchange="S.shop=this.value;render()">${opts([["__none__","Sin taller"],...shops.map(x=>[x,x])],S.shop,"Taller: todos")}</select>
+      <select class="sel ${S.asset?'on':''}" onchange="S.asset=this.value;render()">${opts(assets.map(a=>[a,a]),S.asset,"Equipo: todos")}</select>
+      <select class="sel ${S.prio?'on':''}" onchange="S.prio=this.value;render()">${opts(Object.entries(PRIO_LBL),S.prio,"Prioridad: todas")}</select>
+      ${S.mode==='board'?`<button class="tog" style="${S.group?'border-color:var(--accent);color:var(--accent);background:rgba(2,132,199,.06)':''}" onclick="S.group=!S.group;render()"><i data-lucide="layers" style="width:13px;height:13px"></i>Agrupar por equipo</button>`:''}
+      <div class="search"><i data-lucide="search"></i><input id="q" placeholder="Buscar SS, servicio, equipo, taller u OT…" value="${S.q}" oninput="S.q=this.value;renderKeep('q')"></div>
+    </div>
+    ${actives.length?`<div class="active">Filtrando por: ${actives.map(([k,l])=>`<span class="achip">${l}<button onclick="clearF('${k}')">✕</button></span>`).join("")}<button class="clear" onclick="clearAll()">Quitar filtros</button></div>`:''}
+  </div>
+  ${S.mode==="board" && !["COMPLETED","REJECTED","CANCELLED"].includes(S.stage) ? board(list) : table(list)}`;
+}
+function action(s){
+  if(s.stage==="DRAFT") return `<button class="act" onclick="event.stopPropagation();toast('Abre Enviar a aprobar (demo)')"><i data-lucide="send" style="width:12px;height:12px"></i>Enviar a aprobar</button>`;
+  if(S.role==="admin"&&s.stage==="SOLICITADA") return `<button class="act green" onclick="event.stopPropagation();toast('Abre Aprobar (demo)')"><i data-lucide="check" style="width:12px;height:12px"></i>Aprobar</button>`;
+  if(S.role==="admin"&&s.stage==="APROBADA") return `<button class="act green" onclick="event.stopPropagation();toast('Abre Autorizar (demo)')"><i data-lucide="shield-check" style="width:12px;height:12px"></i>Autorizar</button>`;
+  if(s.stage==="AUTORIZADA") return `<button class="act" onclick="event.stopPropagation();toast('Envía al proveedor (demo)')"><i data-lucide="truck" style="width:12px;height:12px"></i>Enviar al proveedor</button>`;
+  if(s.stage==="IN_PROGRESS") return `<button class="act green" onclick="event.stopPropagation();toast('Abre la recepción (demo)')"><i data-lucide="package-check" style="width:12px;height:12px"></i>Servicio recibido</button>`;
+  return "";
+}
+function ageTxt(s){
+  if(s.stage==="IN_PROGRESS"&&s.age>LONG) return `<span class="due over"><i data-lucide="clock-alert" style="width:12px;height:12px"></i>En el taller hace ${s.age} d</span>`;
+  return `<span class="due ok">Abierta hace ${s.age} d</span>`;
+}
+function cardHtml(s){
+  const long = s.stage==="IN_PROGRESS"&&s.age>LONG;
+  return `<div class="card p-${s.prio} ${long?'over':''}" onclick="toast('Abre ${s.code} (demo)')">
+    <div class="ctop"><span class="code" style="color:#0891B2">${s.code.replace('-DEM-2026','')}</span><span class="prio ${s.prio}">${PRIO_LBL[s.prio]}</span></div>
+    <div class="ttl">${s.serv}</div>
+    ${S.group?'':`<div class="asset"><i data-lucide="cog" style="width:11px;height:11px"></i>${s.asset}</div>`}
+    <div class="asset" style="${s.shop?'color:var(--fg);font-weight:600':'color:#B45309;font-weight:700'}"><i data-lucide="handshake" style="width:11px;height:11px"></i>${s.shop||'Falta elegir el taller'}</div>
+    <div class="cfoot">${ageTxt(s)}<span class="ss" style="color:var(--accent);background:rgba(2,132,199,.06);border-color:rgba(2,132,199,.25);margin-left:auto">${s.ot.replace('OT-DEM-26-','OT-')}</span></div>
+    ${action(s)}
+  </div>`;
+}
+function board(list){
+  const cols = S.stage ? COLS.filter(c=>c[0]===S.stage) : COLS;
+  return `<div class="board" style="${S.stage?'grid-template-columns:minmax(260px,420px)':''}">${cols.map(([k,l,c])=>{
+    const items=list.filter(s=>s.stage===k);
+    let body;
+    if(!items.length) body=`<div class="empty">Nada acá</div>`;
+    else if(S.group){ const g={}; items.forEach(s=>(g[s.asset]=g[s.asset]||[]).push(s)); body=Object.entries(g).map(([a,ss])=>`<div class="grp"><i data-lucide="cog" style="width:11px;height:11px"></i>${a} · ${ss.length}</div>${ss.map(cardHtml).join("")}`).join(""); }
+    else body=items.map(cardHtml).join("");
+    return `<div class="col"><div class="colh"><span class="dot" style="background:${c}"></span>${l}<span class="c">${items.length}</span></div>${body}</div>`;
+  }).join("")}</div>`;
+}
+function table(list){
+  return `<div class="tbl-wrap"><table><tr><th>N° SS</th><th>Servicio / Equipo</th><th>Taller</th><th>OT de origen</th><th>Prioridad</th><th>Etapa</th><th>Abierta</th><th></th></tr>
+  ${list.map(s=>{const long=s.stage==="IN_PROGRESS"&&s.age>LONG; return `<tr class="${long?'over':''}" style="cursor:pointer" onclick="toast('Abre ${s.code} (demo)')">
+    <td><span class="code" style="color:#0891B2">${s.code}</span><div style="font-size:10px;color:var(--muted)">BUQUE DEMO I</div></td>
+    <td><b style="font-weight:600">${s.serv}</b><div style="color:var(--muted);font-size:11px">${s.asset}</div></td>
+    <td>${s.shop||'<span style="color:#B45309;font-weight:700">Falta elegir</span>'}</td>
+    <td><span class="code" style="font-size:11px;color:var(--accent)">${s.ot}</span></td>
+    <td><span class="prio ${s.prio}" style="margin:0">${PRIO_LBL[s.prio]}</span></td>
+    <td><span class="stg ${STAGE_CLS[s.stage]}">${STAGE_LBL[s.stage]}</span>${s.reason?`<div style="font-size:10px;color:#B91C1C;margin-top:2px">${s.reason}</div>`:''}</td>
+    <td>${ageTxt(s)}</td><td style="width:140px">${action(s)}</td></tr>`;}).join("") || `<tr><td colspan="8" class="empty">No hay solicitudes con estos filtros</td></tr>`}
+  </table></div>`;
+}
+function ref(){
+  return `<div class="ph"><h1><i data-lucide="handshake" style="width:20px;height:20px;color:#0891B2"></i>Solicitudes de Servicio</h1><span class="count">8 registros</span>
+    <div class="right"><div class="viewsw"><button><i data-lucide="list" style="width:13px;height:13px"></i></button><button class="on"><i data-lucide="layout-grid" style="width:13px;height:13px"></i></button></div></div></div>
+  <p style="font-size:11px;color:var(--muted)">Una solicitud de servicio se abre desde una orden de trabajo abierta. Para crear una, entrá a la OT correspondiente.</p>
+  <div style="margin-bottom:10px"><span class="note">No hay botón "Nueva SS" (hay que ir a la OT)</span><span class="note">No hay resumen de lo urgente</span><span class="note">No se filtra por taller, equipo ni prioridad</span><span class="note">Textos fijos en español (no se traducen)</span></div>
+  <div class="refbox">${["Todas","En trámite","En ejecución","Completadas","Rechazadas","Canceladas"].map(x=>`<span class="mini-chip">${x}</span>`).join("")}</div>
+  <div class="board">${COLS.map(([k,l,c])=>`<div class="col"><div class="colh"><span class="dot" style="background:${c}"></span>${l}<span class="c">${SRS.filter(s=>s.stage===k).length}</span></div>
+    ${[...new Set(SRS.filter(s=>s.stage===k).map(s=>s.asset))].map(a=>`<div class="refbox" style="padding:7px 9px;margin-bottom:6px;font-size:12px;font-weight:700;display:flex;gap:5px;align-items:center"><i data-lucide="chevron-right" style="width:12px;height:12px"></i>${a}</div>`).join("")}</div>`).join("")}</div>
+  <div style="margin-top:8px"><span class="note">Grupos cerrados: las SS no se ven</span><span class="note">La tarjeta no dice a qué taller va</span><span class="note">Código del buque (DCH) en tarjeta y lista</span><span class="note">Aprobar / mandar al taller = arrastrar</span><span class="note">No marca las que llevan mucho en el taller</span></div>`;
+}
+function clearF(k){ if(k==="card")S.card=""; else S[k]=""; render(); }
+function clearAll(){ Object.assign(S,{stage:"",card:"",shop:"",asset:"",prio:"",q:""}); render(); }
+function toast(m){ S.toast=m; render(); setTimeout(()=>{S.toast=null;render();},1800); }
+function renderKeep(id){ const el=document.getElementById(id); const pos=el?.selectionStart; render(); const n=document.getElementById(id); if(n){n.focus(); try{n.setSelectionRange(pos,pos);}catch{}} }
+document.querySelectorAll(".pv-bar button[data-v]").forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render();});
+document.querySelectorAll(".pv-bar button[data-role]").forEach(b=>b.onclick=()=>{S.role=b.dataset.role;S.card="";render();});
+render();
+</script>
+</body>
+</html>

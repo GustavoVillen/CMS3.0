@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  AlertTriangle, CalendarCheck, ChevronRight, FileDown, FileSpreadsheet, History, Loader2, MapPin, Package, PackageX, Plus, RefreshCw, Save, Search,
+  AlertTriangle, CalendarCheck, ChevronRight, ClipboardList, FileDown, FileSpreadsheet, History, Loader2, MapPin, Package, PackageX, Plus, RefreshCw, Save, Search,
   ShieldAlert, ShoppingCart, Ship, SlidersHorizontal, Trash2, TrendingDown, Truck, X,
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
@@ -11,7 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, RequiredMark } from "../components/GuideKit";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -19,9 +19,10 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
-import { downloadAuthedFile } from "../lib/authed-media";
 import { AlertDialog } from "../components/AlertDialog";
 import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
+import { SpareFormsModal } from "../components/spares/SpareFormsModal";
+import { SpareRequestBatchModal } from "../components/spares/SpareRequestBatchModal";
 import { textMatches } from "../lib/text-search";
 
 // ---------------------------------------------------------------------------
@@ -392,7 +393,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
                 pill={canEdit ? <GuidePill missing={Number(missReq.vessel) + Number(missReq.sku) + Number(missReq.name)} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} /> : undefined}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <GuideField id="sp-f-vessel" missing={canEdit && missReq.vessel}>
-                    <label className={fl}>{t("form.vessel")}{needTag(missReq.vessel)}</label>
+                    <label className={fl}>{t("form.vessel").replace(/\s*\*\s*$/, "")}<RequiredMark />{needTag(missReq.vessel)}</label>
                     {isNew
                       ? <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} className={inputCls}>
                           <option value="">{t("sp.selectVesselPh")}</option>
@@ -401,12 +402,12 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
                       : <input value={vesselName(spare.vesselCode)} disabled className={inputCls} />}
                   </GuideField>
                   <GuideField id="sp-f-sku" missing={canEdit && missReq.sku}>
-                    <label className={fl}>{t("sp.sku")}{needTag(missReq.sku)}</label>
+                    <label className={fl}>{t("sp.sku").replace(/\s*\*\s*$/, "")}<RequiredMark />{needTag(missReq.sku)}</label>
                     <input value={sku} onChange={e => setSku(e.target.value.toUpperCase())} disabled={!canEdit} placeholder="SKU-001" className={inputCls} />
                   </GuideField>
                 </div>
                 <GuideField id="sp-f-name" missing={canEdit && missReq.name}>
-                  <label className={fl}>{t("sp.nameReq")}{needTag(missReq.name)}</label>
+                  <label className={fl}>{t("sp.nameReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{needTag(missReq.name)}</label>
                   <input value={name} onChange={e => setName(e.target.value)} disabled={!canEdit} placeholder={t("sp.namePh")} className={inputCls} />
                 </GuideField>
                 <div><label className={fl}>{t("sp.longDesc")}</label><AutoTextArea value={longDescription} onChange={e => setLongDescription(e.target.value)} disabled={!canEdit} placeholder={t("sp.longDescPh")} rows={2} className={`${inputCls} resize-none`} /></div>
@@ -451,7 +452,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div><label className={fl}>{t("sp.v23.location")}</label><input value={location} onChange={e => setLocation(e.target.value)} disabled={!canEdit} placeholder={t("sp.v23.locationPh")} className={inputCls} /></div>
                   <GuideField id="sp-f-unit" missing={canEdit && missReq.unit}>
-                    <label className={fl}>{t("sp.unitReq")}{needTag(missReq.unit)}</label>
+                    <label className={fl}>{t("sp.unitReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{needTag(missReq.unit)}</label>
                     <input value={unit} onChange={e => setUnit(e.target.value)} disabled={!canEdit} placeholder="ud, m, kg, L…" className={inputCls} />
                   </GuideField>
                 </div>
@@ -557,7 +558,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
             <div className="px-5 py-4 space-y-3">
               <p className="text-xs text-text-industrial/60">{t("sp.v23.adjNow").replace("{name}", spare.name).replace("{n}", `${spare.onHand} ${spare.unit}`)}</p>
               <GuideField id="sp-adj-qty" missing={adjQty.trim() === ""}>
-                <label className={fl}>{t("sp.v23.adjQty")}{adjQty.trim() === "" && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <label className={fl}>{t("sp.v23.adjQty")}<RequiredMark />{adjQty.trim() === "" && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <input type="number" min="0" step="0.01" value={adjQty} onChange={e => setAdjQty(e.target.value)} className={inputCls} autoFocus />
               </GuideField>
               <div><label className={fl}>{t("sp.v23.adjReason")}</label><input value={adjNotes} onChange={e => setAdjNotes(e.target.value)} placeholder={t("sp.v23.adjReasonPh")} className={inputCls} /></div>
@@ -628,8 +629,10 @@ export const SparesPage: React.FC = () => {
   // llegó al buque, después de que la ventana busca los parecidos. Es lo que
   // evita que el mismo filtro entre dos veces con nombres distintos.
   const [showReceipt, setShowReceipt] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [showForms, setShowForms] = useState(false);
+  // Pedido múltiple (Preview V3): ids tildados. Una solicitud es de un solo buque.
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [showBatch, setShowBatch] = useState(false);
   const { vessels, selectedVesselCode } = useVesselContext();
 
   const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/spares", []);
@@ -682,44 +685,27 @@ export const SparesPage: React.FC = () => {
   const handleSaved = (s: Spare) => { reload(); setSelected(s); };
   const mocTrigger = useMocTrigger();
 
-  /**
-   * PDF de la lista tal como se ve: se mandan los ids de las filas visibles (y
-   * en su orden), porque búsqueda, categoría y semáforo de stock se filtran en
-   * el navegador y el backend no los conoce.
-   */
-  const exportPdf = async () => {
-    if (filteredItems.length === 0) return;
-    setPdfBusy(true);
-    try {
-      const parts = [
-        vesselSel ? vesselName(vesselSel) : null,
-        critSel ? `${t("col.criticality")} ${critSel}` : null,
-        cardSel ? summaryCards.find(c => c.key === cardSel)?.label ?? null : null,
-        catSel || null,
-        searchText.trim() ? `"${searchText.trim()}"` : null,
-      ].filter(Boolean);
-      await downloadAuthedFile(
-        "/app/pms/reports/spare-list/pdf",
-        `repuestos-${new Date().toISOString().slice(0, 10)}.pdf`,
-        { ids: filteredItems.map(s => s.id), filterLabel: parts.length ? parts.join(" · ") : null },
-      );
-    } catch {
-      setPdfError(t("sp.pdfError"));
-    } finally {
-      setPdfBusy(false);
-    }
-  };
-
-  const rowAction = (s: Spare) => {
-    const base = "inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors";
-    if (stockLevel(s) !== "ok") {
-      return <button type="button" onClick={e => { e.stopPropagation(); navigate("/spare-requests"); }} className={`${base} border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20`}><ShoppingCart className="w-3 h-3" /> {t("sp.v23.order")}</button>;
-    }
-    return null;
+  const canRequest = can("spareRequest.manage");
+  const pickedItems = allItems.filter(s => picked.has(s.id));
+  const pickedVessel = pickedItems[0]?.vesselCode ?? null;
+  const togglePick = (s: Spare) => setPicked(prev => {
+    const next = new Set(prev);
+    if (next.has(s.id)) next.delete(s.id); else next.add(s.id);
+    return next;
+  });
+  const pickBox = (s: Spare) => {
+    const otherVessel = !!pickedVessel && s.vesselCode !== pickedVessel;
+    return (
+      <input type="checkbox" checked={picked.has(s.id)} disabled={otherVessel}
+        title={otherVessel ? t("sp.batch.otherVessel") : undefined}
+        onClick={e => e.stopPropagation()} onChange={() => togglePick(s)}
+        className="h-4 w-4 cursor-pointer accent-orange-600 disabled:cursor-not-allowed disabled:opacity-30" />
+    );
   };
   const critChip = (c: string) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${CRIT_CHIP[c] ?? CRIT_CHIP.C}`}>{c}</span>;
 
   const COLUMNS: Column<Spare>[] = [
+    ...(canRequest ? [{ key: "pick", header: "", width: "36px", render: pickBox } as Column<Spare>] : []),
     {
       key: "name", header: t("sp.v23.col.spare"), sortValue: r => r.name,
       render: r => (
@@ -740,7 +726,6 @@ export const SparesPage: React.FC = () => {
         ? <span className="inline-flex items-center gap-1 text-[11px] text-text-industrial/60 whitespace-nowrap"><CalendarCheck className="w-3 h-3" />{t("sp.v23.tasksN").replace("{n}", String(planCount.get(r.id)))}</span>
         : <span className="text-text-industrial/30">—</span>,
     },
-    { key: "action", header: "", render: rowAction },
   ];
 
   const summaryCards: { key: Exclude<SpareCard, "">; label: string; hint: string; icon: typeof Package; cls: string; num: string }[] = [
@@ -775,22 +760,40 @@ export const SparesPage: React.FC = () => {
         />
       )}
 
-      {pdfError && <AlertDialog message={pdfError} onClose={() => setPdfError(null)} />}
+      {showForms && (
+        <SpareFormsModal
+          // Con un buque global elegido, useFetch lo fuerza en las consultas: se ofrece sólo ese.
+          vessels={vessels.filter(v => !selectedVesselCode || v.code === selectedVesselCode).map(v => ({ code: v.code, name: v.name ?? v.code }))}
+          defaultVesselCode={selectedVesselCode || vesselSel}
+          onClose={() => setShowForms(false)}
+        />
+      )}
+
+      {showBatch && pickedItems.length > 0 && (
+        <SpareRequestBatchModal
+          spares={pickedItems}
+          vesselName={vesselName(pickedItems[0]!.vesselCode)}
+          onRemove={id => { const next = new Set(picked); next.delete(id); setPicked(next); if (next.size === 0) setShowBatch(false); }}
+          onClose={() => setShowBatch(false)}
+          onCreated={() => { setShowBatch(false); setPicked(new Set()); navigate("/spare-requests"); }}
+        />
+      )}
 
       <MocTriggerHost controller={mocTrigger} />
 
       <PageHeader icon={Package} title={t("page.spares")} total={filteredItems.length} onReload={reload}>
-        <button
-          onClick={() => void exportPdf()}
-          disabled={pdfBusy || filteredItems.length === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all disabled:opacity-40"
-        >
-          {pdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : <FileDown className="w-3.5 h-3.5 text-accent" />}
-          {t("sp.generatePdf")}
+        <button onClick={() => setShowForms(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+          <ClipboardList className="w-3.5 h-3.5 text-accent" /> {t("sp.forms.button")}
         </button>
         <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
           <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
         </button>
+        {canRequest && (
+          <button onClick={() => setShowBatch(true)} disabled={pickedItems.length === 0}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-bold hover:brightness-110 transition-all disabled:opacity-40">
+            <ShoppingCart className="w-3.5 h-3.5" /> {t("sp.batch.button")}{pickedItems.length > 0 ? ` (${pickedItems.length})` : ""}
+          </button>
+        )}
         {/* Alta: pasa por la Recepción (busca primero, crea después). */}
         {can("stock.manage") && (
           <button onClick={() => setShowReceipt(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:brightness-110 transition-all">
@@ -847,6 +850,19 @@ export const SparesPage: React.FC = () => {
         </div>
       </div>
 
+      {pickedItems.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs">
+          <b className="text-fg">{t("sp.batch.selected").replace("{n}", String(pickedItems.length)).replace("{vessel}", vesselName(pickedVessel!))}</b>
+          <button type="button" className="font-semibold text-orange-700 dark:text-orange-300 hover:underline"
+            onClick={() => setPicked(prev => new Set([...prev, ...filteredItems.filter(s => s.vesselCode === pickedVessel && s.available <= 0).map(s => s.id)]))}>
+            {t("sp.batch.pickZero")}
+          </button>
+          <button type="button" className="font-semibold text-orange-700 dark:text-orange-300 hover:underline" onClick={() => setPicked(new Set())}>
+            {t("sp.batch.clear")}
+          </button>
+        </div>
+      )}
+
       <TmsaFilterBanner filter={tmsaFilter} shown={filteredItems.length} total={data?.items?.length ?? 0} />
 
       {/* Escritorio: tabla · Celular: tarjetas */}
@@ -861,10 +877,9 @@ export const SparesPage: React.FC = () => {
         {filteredItems.slice(0, 200).map(s => (
           <div key={s.id} onClick={() => setSelected(s)}
             className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer ${stockLevel(s) === "low" ? "border-l-red-600" : stockLevel(s) === "reorder" ? "border-l-amber-500" : "border-l-fg/10"} bg-surface`}>
-            <div className="flex items-center gap-1.5">{critChip(s.criticality)}<b className="text-[13px] text-fg truncate">{s.name}</b></div>
+            <div className="flex items-center gap-1.5">{canRequest && pickBox(s)}{critChip(s.criticality)}<b className="text-[13px] text-fg truncate">{s.name}</b></div>
             <p className="text-[11px] text-text-industrial/55"><span className="font-mono">{s.sku}</span>{s.location ? ` · ${s.location}` : ""}</p>
             <StockBar spare={s} />
-            {rowAction(s)}
           </div>
         ))}
       </div>

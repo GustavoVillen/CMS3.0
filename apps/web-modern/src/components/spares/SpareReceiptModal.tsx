@@ -11,7 +11,7 @@
 // Tres pasos: datos del remito → revisión → resumen. Nada se escribe en la base
 // hasta el botón de confirmar.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { GuideNeedTag } from "../GuideKit";
+import { GuideNeedTag, RequiredMark } from "../GuideKit";
 import {
   PackagePlus, Upload, Loader2, CheckCircle2, AlertTriangle, Search, Plus, Trash2, FileText,
 } from "lucide-react";
@@ -530,7 +530,7 @@ const ReviewRow: React.FC<{
 
         {/* Cantidad */}
         <div className="w-24">
-          <label className={labelCls}>{t("rcp.col.qty")}</label>
+          <label className={labelCls}>{t("rcp.col.qty")}<RequiredMark /></label>
           <input
             type="number" min="0" step="0.01"
             value={row.quantity}
@@ -606,11 +606,11 @@ const ReviewRow: React.FC<{
             <SimilarCheck vesselCode={vesselCode} name={row.newName} onPick={onPick} />
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               <div>
-                <label className={labelCls}>{t("rcp.newSku")}{!row.newSku.trim() && need}</label>
+                <label className={labelCls}>{t("rcp.newSku")}<RequiredMark />{!row.newSku.trim() && need}</label>
                 <input value={row.newSku} onChange={e => onPatch({ newSku: e.target.value })} placeholder="FIL-COMB-GEN" className={`${inputCls} ${row.newSku.trim() ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`} />
               </div>
               <div className="sm:col-span-2">
-                <label className={labelCls}>{t("rcp.newName")}{!row.newName.trim() && need}</label>
+                <label className={labelCls}>{t("rcp.newName")}<RequiredMark />{!row.newName.trim() && need}</label>
                 <input value={row.newName} onChange={e => onPatch({ newName: e.target.value })} className={`${inputCls} ${row.newName.trim() ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`} />
               </div>
               <div>

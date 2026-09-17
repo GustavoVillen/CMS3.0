@@ -1,346 +1,103 @@
-# Alineación de los planes de mantenimiento con las planillas de a bordo
+# CONTEXTO — Actualización de manuales y videos (sep 2026)
 
-Tres buques del tenant `mercurio`, todos terminados: **LATERE (LTE)**,
-**DON CHICUETO (DCH)** y **MAO 02 (M02)**. Mismos criterios en los tres.
+**Pedido de Gustavo (12-sep-2026):** actualizar los manuales y los videos con los 86 commits desde el
+31-ago, crear los videos que no existan y **subir todo al VPS** al final.
+Decisiones suyas: regrabar solo los videos que cambiaron mucho; **no grabar pantallas ocultas en
+producción para Mercurio** (Tripulantes, Horas de Descanso, Simulacros, Cert. Tripulación, Matriz
+Requerimientos, Near Miss). Tanques, Reportes Mensuales y Bitácora ya se grabaron y se publican igual.
 
----
+Brief para los subagentes: scratchpad de la sesión `BRIEF-comun.md` (copia de las reglas abajo si se perdió).
+Clave local: `Mercurio2026`. Para grabar, los scripts NO hacen login: usan una copia del perfil
+de Chrome donde Gustavo inició sesión a mano (`scratchpad\chrome-login`; si ya no existe, abrir
+Chrome con `--user-data-dir` nuevo y pedirle que entre).
 
-# LATERE (LTE) — TERMINADO
+## HECHO
+- Manuales corregidos (backup en `MisDocs\ManualesCMS3.bak-20260912\`): Abrir-ot-completa-y-ss,
+  cargar-plan-mantenimiento, maintenance-gantt, cargar-activo, tripulacion-y-maestros, dashboard,
+  tmsa, horas-de-equipos, parte-semanal, manual-usuario, firmas-en-el-celular, inspecciones,
+  muestreos-y-analisis, registrar-muestreo-analisis, permisos-de-trabajo, defectos, checklists,
+  flujogramas (vía _flujogramas-data.cjs), diagrama-generar-ot, generar-ot-actualizada.
+- Manual NUEVO `planilla-a-bordo` (fuente `_src/planilla-a-bordo.src.html`), ya sumado al MANIFEST de `_build-portal.cjs`.
+- Chequeo estructural de manuales OK (tags balanceados, capturas intactas; dashboard 5→3 a propósito).
+- Videos REGRABADOS (viejos en el backup como .OLD.mp4): OT, Indicadores Tablero, Horas de Equipos,
+  Gantt (16,5 min), Muestreos (18 min), Auditoría ISM, Auditoría TMSA.
+- Videos NUEVOS listos: planes-mantenimiento, planilla-a-bordo, medicion-tanques,
+  reportes-mensuales, parte-semanal, bitacora.
 
-**Objetivo:** que el plan cargado en el VPS (PlanB) refleje el plan en papel del buque
-(PlanA = `MisDocs/LTE/Mantenimiento/PLAN DE MANT. LTE - JULIO.xlsx`, 12 hojas, ~341 tareas).
+## EN PAUSA (se frenó a pedido de Gustavo)
+- certificados, checklists — carpeta `_capturas-certificados-video\` (guion listo).
+- buques, proveedores, usuarios-y-roles.
+- ai-documents, configuracion, firmas-celular, copiloto.
+Mirar el README de cada `_capturas-<slug>-video\` para ver en qué paso quedó.
+Ninguno llegó a grabar ni a escribir en la base. Solo `_capturas-certificados-video\` tiene guion + capturar.cjs (sin login).
+**Traba abierta:** la copia del perfil `chrome-login` abre en `/login` (la sesión no viajó con la copia o venció).
+Al retomar, antes de lanzar agentes: averiguar dónde guarda la app el token (`lib/auth.tsx`: localStorage vs sessionStorage)
+y si la API se reinició (las sesiones viven en memoria). Si hace falta, pedirle a Gustavo que inicie sesión de nuevo
+y grabar enseguida, sin reiniciar la API.
 
-## Por qué hizo falta
+## ACTUALIZACIÓN 13-sep
+- Los 9 videos que estaban en pausa quedaron grabados: certificados, checklists, buques, proveedores,
+  usuarios-y-roles, ai-documents, configuracion, firmas-celular, copiloto. En total hay 33 videos.
+- Portales regenerados: `videos-portal.html` (33 videos) y `manual-completo.html` (35 manuales), y copiado a `apps/web-modern/public/manual.html` (sin commit).
+- Traba de sesión resuelta: la app rota el token de refresco, así que cada agente necesita su propio
+  perfil logueado a mano (no se pueden usar copias del mismo perfil).
+- **PUBLICADO 13-sep** (Gustavo dijo "actualizar vps"): commit 5487bc1 en v3, build web en el VPS, 22 MP4 subidos a
+  /app-cms3/media/videos (los 7 viejos en `_bak-20260913/`), thumbs + index.html nuevos. Verificado: 33 videos en /videos/.
+  TAREA CERRADA. Quedan sólo los bugs de abajo y las 4 capturas viejas de los manuales de OT.
 
-El plan del LTE se había dado de alta clonando el de otro buque. Los 4 motores principales
-estaban fichados como **Volvo Penta D16 MH** cuando el LATERE tiene **Cummins KTA-50**: las
-frecuencias cargadas eran de otro motor y faltaban tareas. Además casi ningún plan tenía
-fecha de última ejecución ni de vencimiento (sólo 12 de 207).
+## FALTA (versión anterior, ver arriba)
+1. Terminar los 9 videos en pausa.
+2. `_build-videos-portal.cjs`: sumar a TITLES/GROUPS los slugs nuevos (planes-mantenimiento,
+   planilla-a-bordo, medicion-tanques, reportes-mensuales, parte-semanal, bitacora + los 9) y correrlo
+   (genera videos-portal.html y videos.html).
+3. `node _build-portal.cjs` → copiar `manual-completo.html` a `apps/web-modern/public/manual.html`.
+4. Commit + push a v3; en el VPS `git pull` + build web; subir los MP4 nuevos/regrabados a
+   `/app-cms3/media/videos/<slug>.mp4` + `videos-portal.html` como index.html + thumbs.
+5. Capturas desactualizadas marcadas en Abrir-ot-completa-y-ss (3) y generar-ot-actualizada (1): decidir si se rehacen.
 
-## Criterios acordados con Gustavo (2026-08-17)
-
-1. **Corregir todo según el PlanA**: se pisan frecuencias, títulos y tareas de los planes
-   existentes, se separan los ítems que estaban agrupados y se crea lo que falta.
-2. **Activos faltantes: crearlos.** El PlanA tiene ~16 equipos sin activo en el sistema
-   (6 transformadores 380/220, barómetro, ecosondas babor y estribor, chiller, equipo tifón,
-   termotanque, bomba de espuma, separador de aguas oleosas, cabrestantes de POPA BR/ER,
-   molinete ancla popa, electrobomba trasvase AUX, electrobomba incendio AUX, servo motores
-   1 y 2, aparejo eléctrico de pluma).
-3. **Rutinas consolidadas**: UN solo plan para todas las tareas DIARIO, otro para todas las
-   SEMANAL y otro para todas las de 15 DÍAS, con todas las tareas unidas en el campo TAREAS.
-   (Pendiente: se arma al final, cuando estén relevadas las 12 hojas.)
-4. **Sobrantes del PlanB**: los ~60 planes que no figuran en el PlanA (casco, CO2, detección
-   de incendio, hélices, botellones, purificadora, NK40, motor auxiliar de puerto, elementos
-   de elevación, válvulas de gran achique…) **no se tocan**; van listados en el informe final.
-5. **Todos los planes**: área = MAQUINAS, responsable = "Jefe de Máquinas",
-   triggerResultMode = AUTO_WO (todos abren OT), y criterios de aceptación / LOTO /
-   riesgo / RCM generados con IA.
-6. **Ejecución por tandas, hoja por hoja**, con visto bueno entre tanda y tanda.
-
-## Cómo leer el Excel (ya resuelto, no re-deducir)
-
-- Hojas de motores: `E` = "Última verificación" es la ejecución ANTERIOR; `F` = "Hora de
-  cambio Act." es la MÁS RECIENTE; `H` = "Próximo recorrido" es el vencimiento. **Manda H**,
-  y la hora de última ejecución se toma de F o E según cuál cierre `H − frecuencia`
-  (hay errores de tipeo en E/F: huelgo axial de N02, N03 y N04).
-- La fecha real de la última ejecución sale de la columna del mes ("22/JUL/2026 08:00").
-- Resto de las hojas: "Recorrido Actual" es la última ejecución y "Próximo recorrido" el
-  vencimiento; ambas son fechas.
-- "Tomar muestras" es C/CAMBIO → hereda horas del cambio de aceite del mismo motor.
-
-## Scripts
-
-| Archivo | Qué hace |
-|---|---|
-| `scripts/_tmp-parse-lte-plana.py` | Normaliza las 12 hojas del Excel a `_tmp-lte-plana.json` |
-| `scripts/_tmp-gen-lte-mp-plans.py` | Genera los 60 planes de motores → `_tmp-lte-mp-plans.json` |
-| `scripts/_tmp_lte_common.py` | **Módulo común**: parseo de fechas y horas de la planilla, `resolver_horas`, `resolver_fechas` |
-| `scripts/_tmp-gen-lte-cajas.py` | Genera los 20 planes de cajas → `_tmp-lte-cajas-plans.json` |
-| `scripts/_tmp-gen-lte-mmaa.py` | Genera los 42 planes de generadores → `_tmp-lte-mmaa-plans.json` |
-| `scripts/_tmp-gen-lte-electrica.py` | Genera los 26 planes de planta eléctrica → `_tmp-lte-electrica-plans.json` |
-| `scripts/_tmp_lte_tareas.py` | Catálogo de tareas que se repiten en todo el plan (códigos 30-49) |
-| `scripts/_tmp-gen-lte-hoja.py` | **Generador genérico** de las hojas de equipos. `python ... <NOMBRE_HOJA>` |
-| `scripts/_tmp-audit-lte.ts` | Auditoría: planes incompletos y restos de plantilla (sin args = buque entero) |
-| `scripts/_tmp-lte-rutinas.json` | Acumulador de las tareas DIARIO/SEMANAL/15 DÍAS apartadas para el cierre |
-| `scripts/load-lte-plan-motores.ts` | Aplica los planes de motores (fue la tanda 1; el genérico lo reemplaza) |
-| `scripts/load-lte-plan.ts` | **Cargador genérico de todas las tandas.** Recibe el JSON del lote (DRY=1 previsualiza) |
-| `scripts/load-lte-plan-ia.ts` | Completa criterios/LOTO/riesgo/RCM con IA. `CLEAN=1` sólo limpia, `FORCE=1` regenera |
-| `scripts/_tmp-dump-latere-mp.ts` | Dump read-only del estado del buque |
-
-Respaldo del estado previo de los motores: `/app-cms3/scripts/_tmp-lte-mp-backup.json` (VPS).
-
-## Estado
-
-- [x] **Tanda 1 — MOTORES_PROPULSORES** (2026-08-17). 36 planes corregidos + 24 creados = 60,
-      los 4 motores con 15 tareas cada uno, todos con IA completa. Activos corregidos a
-      Cummins KTA-50.
-- [x] **Tanda 2 — CAJAS_REDUCTORAS** (2026-08-17). 16 corregidos + 4 creados; 36 planes en
-      total sobre las 4 cajas, todos con IA. Fichas corregidas de Twin Disc 5170 a
-      **Reintjes 5,75:1**. Los 16 planes sin par (engrase de sellos, ánodos del
-      intercambiador, acople torsional, adición de aceite) conservan tarea y frecuencia;
-      sólo se les completó área y responsable.
-      Las 8 tareas DIARIO de las líneas de eje quedan para el plan consolidado del cierre.
-- [x] **Tanda 3 — MOTORES_GENERADORES** (2026-08-17). Los 3 grupos: 36 corregidos +
-      18 creados = 46 planes, todos con IA. Fichas corregidas de Cummins 4BTA3-G1 a
-      **Cummins N855** (por eso sus planes listaban 4 inyectores y el papel tiene 6).
-      El **N03 de emergencia** es el activo `LTE-MA-PTO`, que figuraba como "Motor Auxiliar
-      Puerto": Gustavo confirmó que es el mismo equipo y se renombró a "Motor Generador N°3
-      de Emergencia" (y `LTE-ALT-PTO` a "Alternador N°3 de Emergencia"). Sus frecuencias son
-      propias: corre 127 h en total, así que el service es ANUAL y no cada 400 h.
-      Sin par: "CONTROL 2: Medición gases escape / inyectores / alternador" (3000 h) en los
-      tres, e "Inspección SEMANAL" en el de emergencia.
-      Se unificaron dos pares de filas del papel en una tarea cada uno, por describir el
-      mismo trabajo en el mismo momento y con los mismos datos: "cambio de aceite" +
-      "cambio de filtro de aceite", e "inyector N°1..N°6" + "cambio de inyectores y control
-      de avance de inyección".
-- [x] **Tanda 4 — PLANTA_ELECTRICA** (2026-08-17). 5 corregidos + 21 creados = 26 planes,
-      todos con IA. Se dieron de alta los **6 transformadores 380/220** (`LTE-TRAFO-01..06`,
-      SFI 800, criticidad B), que no existían como activo.
-      **Nombres unificados** (pedido de Gustavo): `LTE-MA-#1/#2` → "Motor Generador N°1 Babor"
-      y "N°2 Estribor"; `LTE-ALT-BR/ER` → "Alternador N°1 Babor" y "N°2 Estribor".
-      Sin par: rodamientos (renovación 60 m y sellados 20 000 h) y verificación de diodos/AVR
-      en los tres alternadores.
-      ⚠ Esta hoja usa **otro layout de columnas**: el vencimiento está en la columna 6, no en
-      la 7 como en las hojas de motores, y "Recorrido Actual" (col 5) es la última ejecución.
-- [x] **Tanda 5 — CIRCUITO_DE_COMBUSTIBLE** (2026-08-17). 2 corregidos + 10 creados = 12
-      planes, todos con IA. Se dio de alta `LTE-EB-TRASV-AUX` "Bomba Trasvase de Combustible
-      Auxiliar". La toma de muestra de calidad del combustible es "con cada embarque" →
-      quedó como plan por EVENTO (sin vencimiento automático), colgada de la tubería de
-      embarque. 2 rutinas semanales apartadas.
-      **Desde esta tanda el generador es genérico** (`_tmp-gen-lte-hoja.py`), configurable
-      por hoja: cubre las 7 hojas de equipos que quedan.
-- [x] **Tanda 6 — NAV-COM** (2026-08-17). 9 corregidos + 3 creados = 12 planes, todos con IA.
-      Activos nuevos: `LTE-BAROMETRO`, `LTE-ECO-BR`, `LTE-ECO-ER`. Se cargaron los modelos que
-      el papel declara (Samyung SI-30, Danforth, Furuno 1715 / M1934 BB / LS-4100, Icom IC-M412).
-      El magnetrón del radar de babor figuraba de **2 KW** y el papel dice **6 KW**: corregido.
-      Los VHF pasaron de 12 a 60 meses (el papel dice 5 años).
-      ⚠ Estructura propia: sin fila de encabezado, cada equipo ocupa 2-3 filas y sólo la
-      primera trae frecuencia y fechas → script aparte, `_tmp-gen-lte-navcom.py`.
-- [x] **Tanda 7 — BOMBAS_ELECTRICAS** (2026-08-17). 5 corregidos + 24 creados = 29 planes.
-      Activos nuevos: `LTE-EB-INC-AUX`, `LTE-EB-ESPUMA`. Las dos bombas de agua potable
-      comparten texto en la planilla y son dos equipos: el generador las reparte por orden.
-- [x] **Tanda 8 — COMPRESOR-A_A-TIFON** (2026-08-17). 2 corregidos + 18 creados = 20 planes.
-      Activo nuevo: `LTE-CHILLER`. Mapeo asumido: "COMPRESOR" del papel = `LTE-COMP-NK40`,
-      "EQUIPO TIFON" = `LTE-COMP-PITO`.
-- [x] **Tanda 9 — SISTEMA_HIDRAULICO** (2026-08-17). 2 corregidos + 6 creados = 8 planes.
-      Activos nuevos: `LTE-SERVO-1` y `LTE-SERVO-2`. El "Motor Electrico" de la hoja se
-      mapeó a `LTE-CENT-HID` (es el que acciona la central hidráulica).
-- [x] **Tanda 10 — VENTILADORES/EXTRACTORES/OTROS** (2026-08-17). 3 corregidos + 10 creados.
-      Activos nuevos: `LTE-APAREJO-PLUMA`, `LTE-TERMOTANQUE`, `LTE-EXTR-COCINA`.
-- [x] **Tanda 11 — CABRESTANTES** (2026-08-17). 2 corregidos + 9 creados. Activos nuevos:
-      `LTE-CABR-POPA-BR`, `LTE-CABR-POPA-ER`, `LTE-MOLINETE`.
-- [x] **Tanda 12 — SEPARADOR / PLANTA PTE** (2026-08-17). 1 corregido + 5 creados. Activo
-      nuevo: `LTE-SEPARADOR`. El "Control aislación de motor eléctrico" de la planta PTE es
-      la misma tarea que la hoja de ventiladores llama "Toma de Aislación": el papel la
-      repite en dos hojas y se unificó en un solo plan.
-- [x] **Cierre — RUTINAS CONSOLIDADAS** (2026-08-17). Gustavo pidió **unir las diarias con
-      las semanales**, así que quedaron **2** planes en vez de 3, colgados de
-      `LTE-6-ED-001` (Equipos de Máquinas en General):
-      - `LTE-6-ED-001-90` **RUTINA SEMANAL DE MÁQUINAS** — trigger WEEK, 1 semana, 39 tareas
-        (las 33 diarias van marcadas "(diaria)" para no perder el dato).
-      - `LTE-6-ED-001-91` **RUTINA QUINCENAL DE MÁQUINAS** — trigger DAY, 15 días, 14 tareas.
-      El sistema soporta WEEK y DAY: usan `frequencyMonths` como nº de semanas / de días
-      (ver `advanceDateOccurrence` y `recalculateNextDue`).
-
-## Aprendizajes de las primeras tandas
-
-- Cada grupo de activos viene con la **ficha del fabricante equivocada**, heredada del clon.
-  Revisarla siempre contra el encabezado de la hoja del Excel antes de cargar
-  (motores: Volvo Penta → Cummins KTA-50; cajas: Twin Disc → Reintjes).
-- Los planes heredados del clon traen `department` en null y el responsable escrito
-  "Jefe de Maquinas" **sin tilde**. El cargador genérico lo normaliza.
-- Después de cada tanda conviene correr `CLEAN=1 load-lte-plan-ia.ts <activos>`: los planes
-  que ya tenían IA de antes arrastran los corchetes del bug viejo.
-- **Las columnas cambian de hoja en hoja.** Verificar siempre el encabezado antes de
-  escribir el generador: en motores el vencimiento está en la columna 7; en planta eléctrica
-  y las demás, en la 6, con "Recorrido Actual" (col 5) como última ejecución.
-- Al correr la pasada de IA, incluir **todos** los activos tocados, no sólo los que tienen
-  planes nuevos (se escapó `LTE-ALT-PTO` en la tanda 4).
-
-## Resuelto
-
-- **Generador N03 = `LTE-MA-PTO`** (2026-08-17). Ver tanda 3.
-- **Bug de la IA** (commit `3673549`, deployado 2026-08-17): el texto sugerido salía con los
-  corchetes de la plantilla del prompt. Se reescribieron los prompts y se agregó
-  `cleanAiText()` en `apps/api/src/tenant/ai/ai-text.ts`, aplicado en planes, órdenes de
-  trabajo y diferimientos.
-
-## Estado final
-
-**361 planes sobre 92 activos.** 201 planes salen del plan en papel; 22 activos se dieron de
-alta. 334 planes tienen los cuatro campos de análisis completos.
-Restos de plantilla: 0. Rutinas consolidadas: 53 tareas (33 diarias, 6 semanales, 14 quincenales).
-
-**Quedan 27 planes sin análisis de IA**: todos sobrantes de clase o estatutarios que no
-figuran en el plan de máquinas en papel (hélices, purificadora, botellones de aire, split,
-filtros de toma de mar, CO2, bombas de sanidad/lodos/prelubricación/refrigeración de bocinas,
-motobomba EGA portátil). Pendiente de decisión de Gustavo si se les corre la IA.
-
-⚠ **Ojo con el área**: algunos planes del buque son de **CUBIERTA**, no de máquinas
-(`LTE-ELEV-02` prueba de peso, `LTE-1-002/003` inspecciones de casco con responsable
-"3er Oficial Cubierta"). El criterio "área = MÁQUINAS" se aplicó sólo a los activos de las
-hojas de máquinas; no forzar los de cubierta.
-
+## Bugs de la app encontrados (sin corregir)
+- i18n `assetHours.editDateHint` dice "solo administrador" (también corrigen Superintendente y Jefe de Máquinas).
+- Reportes Mensuales: modal en blanco tras guardar uno nuevo; "Generar borrador" IA da 500 con AI_PROVIDER=gemini.
+- Parte Semanal: "&MIDDOT;" sin decodificar en el encabezado del correo.
+- Bitácora: acciones sin traducir (RECORDED, AUTHORIZED, OPENEDFROMPLAN, SUBMITTEDFORAPPROVAL).
+- WorkOrders.tsx: dos secciones con el número 3 en el formulario controlado.
+- MaintenancePlans.tsx: strings sin i18n ("Excel", "Limpiar", "Generar una sola…", "ítem(s) marcado(s)").
+- Datos: equipos duplicados en MAO 01 (Motor Principal Babor, Caja Reductora Estribor) y planes duplicados por taskCode en DCH (DCH-MA-ER-06, DCH-MA-BR-06). Base local = copia de producción, verificar allá.
+- Local: plan M01-MA-BR-01 quedó con "Última verificación" = fecha de grabación (solo base local).
 
 ---
 
-# DON CHICUETO (DCH) — TERMINADO
+# CONTEXTO — Solicitudes de Repuestos (17-sep-2026)
 
-**Fuente:** `MisDocs/DCH/Mantenimiento/07- PMP DON CHICUETO - JULIO.xlsm`
-(20 hojas, **369 tareas**). Estado inicial: 170 planes sobre 80 activos.
+**Pedido de Gustavo:** "mejorar y completar el proceso de Solicitudes de Repuestos".
+**Meta aclarada:** la solicitud es **sólo un formulario desde el buque al departamento de Compras** de la
+Compañía. No es un pedido a depósito con reservas ni entrega de stock.
 
-## Diferencias con el LATERE
+## Ya hecho hoy (sin commit)
+- Repuestos & Stock: casillas + "Generar solicitud de repuestos (N)" → crea UNA solicitud en Borrador
+  con los ítems tildados (Preview V3). Se sacó el "Pedir" de cada fila.
+- Formularios/ PDF: REGI-MAN-04.1 y Estándar para viaje (Preview V1/V2). BASELINE: tag `baseline-inventario-formularios-v1`.
 
-- **El plan del DCH es uniforme**: todas las hojas tienen la misma fila de encabezado
-  (`TRABAJO A RELIZAR` / `ULTIMO TRABAJO` / `PROXIMO TRABAJO` / `FRECUENCIA`) y la columna
-  anterior al trabajo nombra el componente o el equipo. Un solo generador cubre las 20 hojas:
-  `scripts/_tmp-gen-dch-hoja.py`.
-- **No hay tareas diarias, semanales ni quincenales.** La frecuencia mínima es mensual
-  (99 tareas). No hacen falta planes consolidados de rutina.
-- El último y el próximo trabajo vienen como fecha o como horas en las **mismas** columnas,
-  según la frecuencia de la tarea.
-- El papel usa `0` en "último trabajo" para *nunca ejecutado*: se carga sin última ejecución.
-- Frecuencias propias: `Mensual`, `Trimestral`, `Semestral`, `Anual`, `6 Años / Dique Seco`
-  (= 72 meses), además de `N MESES` y horas.
+## Cómo está hoy el proceso (código)
+- Estados: Borrador → Enviada → Aprobada/Rechazada → Parcialmente entregada/Entregada; Cancelada.
+- "Entregar" un ítem SUMA STOCK por su cuenta (movimiento RECEIPT), aparte de la Recepción con remito:
+  usando los dos, el stock se duplica. Además entrega siempre la cantidad completa.
+- Hay reservas de stock (StockReservation) pensadas para pedido a depósito: no aplican a esta meta.
+- Rechazada = final: no se puede corregir y reenviar.
+- No manda nada a Compras: hay PDF (spare-request-pdf-service) pero no correo. La SS sí manda correo con PDF (mailer).
+- Pantalla con textos fijos en español, estados/prioridades en inglés (SUBMITTED, MEDIUM), campo
+  "Vessel destino" de texto libre, ítems sin P/N / equipo / stock a bordo / motivo.
+- Permisos: crear/enviar = `spareRequest.manage`; aprobar/rechazar = `spareRequest.approve`.
+  Ítems usan una lista fija de roles (inconsistente con el permiso).
 
-## Decisiones acordadas con Gustavo (2026-08-17)
+## DECIDIDO (Gustavo) e IMPLEMENTADO — Preview V4 aprobada
+- Sin aprobación: Borrador → "Enviar a Compras" (correo con PDF) → Enviada. Termina ahí; lo que llega va por Recepción Repuestos.
+- Casilla de Compras configurable en Configuración (TenantSetting.spareRequestMailbox, sólo admin). Fail-closed: sin casilla/SMTP o si falla, sigue en Borrador.
+- Anular (con motivo, avisa a Compras por correo), Reenviar correo. Se sacaron de la pantalla Aprobar/Rechazar/Entregar/Reservas (endpoints quedan).
+- PDF nuevo (spare-request-pdf-service). Pendientes del sidebar/TMSA cuentan sólo borradores.
+- Ítems: permiso spareRequest.manage (antes lista fija de roles).
 
-1. **Motores principales**: figuran como Volvo Penta D16 MH y el plan en papel no cuadra
-   con ese motor (turbosoplante, colector de escape, botadores hidráulicos, cojinetes de
-   bancada, recorrido completo a 40 000 h, 39 501 horas de servicio). Gustavo decidió
-   **dejar la ficha como está** y anotarlo en el informe final.
-2. **Bombas que el papel trata de a pares** (agua potable BR y ER, refrigeración de motores
-   auxiliares popa y proa): **duplicar** las tareas en cada bomba, para que cada equipo lleve
-   su propio historial.
-3. **Guinches y pluma**: crearlos como activos propios.
-
-## Scripts (genéricos, sirven para los dos buques)
-
-| Archivo | Qué hace |
-|---|---|
-| `scripts/load-vessel-plan.ts` | Cargador. El buque sale del campo `vessel` del lote; el autor, de `USUARIO_POR_BUQUE` |
-| `scripts/load-vessel-plan-ia.ts` | Pasada de IA. `--buque=DCH`, `--todos`, `CLEAN=1`, `FORCE=1` |
-| `scripts/_tmp-audit-vessel.ts` | Auditoría. `--buque=DCH` + activos opcionales |
-| `scripts/_tmp-gen-dch-hoja.py` | Generador de lote por hoja del DCH |
-
-⚠ El jefe de máquinas del DCH es **OSCAR-DUARTE** (Oscar Duarte), no un usuario "MAQUINAS…"
-como en el LATERE (MAQUINASLATERE).
-
-## Fichas equivocadas detectadas en el DCH
-
-| Equipo | En el sistema | Dice el papel |
-|---|---|---|
-| Radar de Babor | Furuno 1715 | **Samyung SMR 3700**, magnetrón 4 KW |
-| Radar de Estribor | Furuno M1934 BB | **Furuno FAR 2117BB** (principal), magnetrón 12 KW |
-| AIS | Samyung SI-30 | **Emtrak A-200** |
-| Motores principales | Volvo Penta D16 MH | no cuadra (ver decisión 1) |
-
-## Estado final
-
-**Las 20 hojas cargadas** (2026-08-17). 485 planes sobre 86 activos; **369 salen del papel**,
-116 quedaron sin par. **485 con análisis de IA completo, 0 incompletos, 0 restos de plantilla.**
-Activos dados de alta: `DCH-COMP-1`, `DCH-COMP-2`, `DCH-GUINCHE-ER`, `DCH-GUINCHE-BR`,
-`DCH-PLUMA`, `DCH-CABR-POPA`.
-140 planes figuran vencidos: la planilla se actualizó el 28 de junio y tiene 99 tareas
-mensuales, casi todas vencidas en julio. Es la foto real, no un problema de la carga.
-
-Informe: https://claude.ai/code/artifact/4d3d942f-e785-474b-b0b1-61684dcb2a6b
-
-## Auditoría de la carga (2026-08-29)
-
-Se comparó fila por fila la planilla contra la base (dump read-only del VPS). Scripts:
-`scripts/_tmp-audit-dch-dump.ts` / `_tmp-audit-dch-dump2.ts` (VPS) y `scripts/_tmp-audit-dch.py`
-(compara y arma `_tmp-dch-auditoria.json`); el informe HTML lo genera
-`scripts/_tmp-informe-auditoria-dch.py`.
-Informe: https://claude.ai/code/artifact/62e86f2c-1798-4843-8c79-be87baa07789
-
-**382 filas del papel · 488 planes vivos · 373 emparejados.** Hallazgos:
-
-1. ⚠ **8 filas del papel se perdieron por colisión de código.** Dos hojas distintas le dan el
-   mismo sufijo (30/31/32) al mismo activo y `load-vessel-plan.ts` empareja por
-   `(activo, sufijo)` → la segunda hoja **actualiza** el plan de la primera en vez de crear uno
-   nuevo. Casilleros afectados: `DCH-6-ED-001-30`, `DCH-CENT-HID-30`, `DCH-EB-INC-P-30`,
-   `DCH-EB-LASTRE-30`, `DCH-HID-GOB-30` (pierde 2), `DCH-MBBA-PORT-30`, `DCH-MBBA-PORT-31`.
-   Sin equivalente en el sistema: prueba mensual del gobierno de emergencia, engrase de timón,
-   engrase de sala de máquinas, control mensual de la bomba de la central hidráulica y el
-   recorrido general de la motobomba de incendio (72 m). Dos son casi duplicados de la fila que
-   sobrevivió (bomba de incendio principal y de lastre: "verificar funcionamiento" vs "prueba de
-   funcionamiento").
-   **Arreglo del generador pendiente**: en `_tmp-gen-dch-hoja.py` la secuencia 30+ es por HOJA;
-   tiene que ser por ACTIVO y compartida entre hojas. Vale para los demás buques.
-2. `DCH-AA-SPLIT-32` (control de aprietes, trimestral) se cargó bien y **se dio de baja el
-   28-ago** junto con `DCH-AA-SPLIT-02`. Confirmar si fue a propósito.
-3. **11 planes con la última ejecución movida a mano, sin OT detrás** (editados por Admin
-   Mercurio el 19/20-ago y 28/29-ago): AA-SPLIT-30/31, AIS-01, ALARM-SENT-30, ALARM-TK-30/31,
-   ALT-ER-30, ALT-PTO-30, BAROM-01, BAT-EGA-30/31. Los muestreos de aceite de los auxiliares
-   (MA-BR-06 / MA-ER-06) sí tienen OT cerrada el 12-ago.
-4. **Muestreo de aceite: la planilla cuenta 180 días y el sistema 6 meses** → 3 días de
-   diferencia en MP-BR-18, MP-ER-18 y MA-PTO-06. No es un error de carga; hay que elegir criterio.
-5. **115 planes fuera de la planilla**: 54 genéricos heredados del clon ("Mantenimiento CADA…",
-   "OVERHAUL"), 49 propios del equipo, 7 de clase/estatutarios y 5 dados de alta después
-   (inspecciones de clase, 20 y 29-ago). Los 54 del clon son los que conviene depurar.
-
-La planilla **no cambió** desde la carga (los 20 lotes regenerados dan byte a byte lo mismo).
-
-## ⚠ Trampa que costó tres hojas: los planes borrados reservan el taskCode
-
-El unique de `MaintenancePlan` es `(tenantId, vesselCode, taskCode)` y **no excluye
-`deletedAt`**: un plan dado de baja sigue ocupando su código. El DCH tiene **71 planes
-borrados** del clon anterior (limpieza del 19-jul), así que `createMany` fallaba entero con
-`Unique constraint failed` en alternadores y dos motores auxiliares.
-`load-vessel-plan.ts` ahora consulta **todos** los taskCodes del buque (borrados incluidos) y
-corre el sufijo hasta uno libre, avisando en el reporte. Cinco planes quedaron con código
-corrido (`DCH-MA-BR-2` en vez de `DCH-MA-BR-01`).
-
-## Otro aprendizaje: no pisar responsables con contenido propio
-
-Al normalizar área/responsable se pisaron dos responsables que no eran "Jefe de Máquinas":
-`DCH-8-001` (Electricista) y `DCH-ELEV-02` (Proveedor Externo Calificado). Se restauraron.
-`_tmp-normaliza-area.ts` ahora sólo unifica la variante sin tilde y respeta el resto; los de
-cubierta (3er Oficial) van a área CUBIERTA.
-
-
----
-
-# MAO 02 (M02) — TERMINADO
-
-**Fuente:** `MisDocs/MAO02/Mao 02 -JULIO-PLAN DE MANTENIMIENTO MAQUINAS 06- 2026.xlsx`
-(una sola hoja, 48 items, 222 tareas). Estado inicial: 97 planes vivos sobre 62 activos.
-
-**Estado final:** 326 planes sobre 79 activos; **218 salen del papel** + 2 de rutina
-consolidada, 108 sin par. 325 con analisis de IA completo.
-Informe: https://claude.ai/code/artifact/2455dca5-9638-45b8-8013-ea2edb7033bf
-
-## Particularidades
-
-- Formato igual al del LATERE (una hoja, equipo en la columna "Descripcion" que se
-  arrastra). Generador: `scripts/_tmp-gen-m02.py`.
-- **El item 41 (carta nautica) arranca con su tarea y nombra el equipo una fila mas abajo.**
-  El generador mira hacia adelante cuando empieza un item numerado sin equipo.
-- Jefe de maquinas: **PEDRO-PONT** (Pedro Pont).
-- Solo 4 tareas de rutina (2 controles diarios de los MMPP, 2 quincenales de baterias de
-  los MMAA) -> 2 planes consolidados en `M02-6-ED-001`.
-
-## ⚠ Segunda trampa del borrado logico: los ACTIVOS
-
-Ademas de los planes (ver DCH), los **activos** dados de baja rompen la carga: existen para
-el unique pero no para la query que filtra `deletedAt: null`, asi que el cargador fallaba con
-"Activos inexistentes". El MAO 02 tenia 14 activos dados de baja el 14-jul.
-`load-vessel-plan.ts` ahora **reactiva** el activo cuando el plan en papel lo lleva, en vez de
-crear un gemelo: cinco de ellos (cocina, termotanque, malacate, libro de aislaciones, calidad
-del combustible) tenian **20 ordenes de trabajo** colgando y duplicarlos habria partido el
-historial.
-
-## ⚠ Sin mapeo de reuso, la carga duplica
-
-La primera pasada daba "corrige 0 · crea 218": los 97 planes del clon habrian quedado al lado
-de los 218 del papel. El generador necesita la tabla `REUSA` (activo -> regex de la tarea ->
-codigo del plan existente). Con ella: 64 corregidos, 154 creados. **Revisar siempre este
-numero antes de aplicar: si "corrige" da 0 y el buque ya tenia planes, falta el mapeo.**
-
-## Pendiente de decision
-
-- **Plan huerfano**: `M02-BAROM-01` sigue activo con su activo (barometro) dado de baja, asi
-  que no se ve en ninguna pantalla de equipo. El papel del MAO 02 no lista barometro.
-- **El electrocompresor NK40** (10 planes) y el **motor auxiliar de puerto** (10) no figuran
-  en el papel del MAO 02.
+## FALTA
+- Cargar la casilla real de Compras en Configuración (local, demo y producción) y `pnpm db:push` en el VPS (campo nuevo).
+- Probar un envío real con SMTP (local no tiene SMTP: sólo se verificó el camino "no sale").
+- Commit + demo + producción cuando Gustavo lo pida.

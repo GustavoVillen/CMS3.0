@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V49 — Flujograma en Defectos</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:#e2e8f0; color:#0f172a; padding:24px 16px 60px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; }
+  h1 { font-size:20px; margin:10px 0 4px; } .lead { color:#475569; font-size:13px; margin:0 0 16px; max-width:820px; line-height:1.5; }
+  .step { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin:26px 0 8px; }
+  .modal { background:#fff; border-radius:16px; border-top:4px solid #dc2626; box-shadow:0 10px 30px rgba(0,0,0,.15); overflow:hidden; }
+  .mh { padding:12px 20px; border-bottom:1px solid #e5e7eb; }
+  .kick { font-size:10.5px; font-weight:800; color:#b91c1c; text-transform:uppercase; } .mh h2 { margin:0; font-size:18px; font-weight:900; }
+  .chip { display:inline-block; font-size:11px; font-weight:700; border:1px solid #e5e7eb; background:#f8fafc; border-radius:99px; padding:1px 8px; margin:4px 4px 0 0; }
+  .old { padding:8px 20px; background:#f8fafc; border-bottom:1px solid #e5e7eb; font-size:12px; color:#94a3b8; text-decoration:line-through; }
+  .body { padding:14px 20px; }
+  .flow { border:1px solid #fecaca; border-radius:14px; padding:12px 14px; }
+  .flow h4 { margin:0 0 10px; font-size:13px; font-weight:900; }
+  .chain { display:grid; grid-template-columns:repeat(5,1fr); gap:2px; }
+  .node { display:flex; flex-direction:column; align-items:center; text-align:center; position:relative; padding:0 2px 4px; border-radius:8px; }
+  .node.link { cursor:pointer; } .node.link:hover { background:#f1f5f9; } .node.link .nt { text-decoration:underline; text-decoration-color:#cbd5e1; text-underline-offset:2px; }
+  .dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; border:2px solid #cbd5e1; color:#94a3b8; background:#fff; z-index:1; }
+  .done .dot { background:#10b981; border-color:#10b981; color:#fff; }
+  .cur .dot { background:#ea580c; border-color:#ea580c; color:#fff; box-shadow:0 0 0 4px rgba(234,88,12,.2); }
+  .node::after { content:""; position:absolute; top:13px; left:calc(50% + 14px); width:calc(100% - 28px); height:2px; background:#cbd5e1; }
+  .node.done::after { background:#10b981; } .node:last-child::after { display:none; }
+  .nt { font-size:11px; font-weight:800; margin-top:5px; } .ns { font-size:10px; color:#64748b; margin-top:2px; line-height:1.3; }
+  .cur .nt { color:#c2410c; }
+  .act { margin-top:10px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; border-radius:10px; padding:8px 10px; font-size:12.5px; }
+  .o { background:#fff7ed; border:1px solid #fdba74; } .o b { color:#9a3412; }
+  .bl { background:#eff6ff; border:1px solid #bfdbfe; } .bl b { color:#1e40af; }
+  .gr { background:#fffbeb; border:1px solid #fcd34d; } .gr b { color:#92400e; }
+  .btn { font-size:12px; font-weight:800; border-radius:8px; padding:6px 11px; border:1px solid #e5e7eb; background:#fff; }
+  .primary { background:#0369a1; color:#fff; border-color:#0369a1; } .blue { background:#2563eb; color:#fff; border-color:#2563eb; } .green { background:#059669; color:#fff; border-color:#059669; }
+  .ml { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .miss { display:block; font-size:11.5px; color:#9a3412; margin-top:2px; }
+  .rest { color:#94a3b8; font-size:12px; margin-top:12px; }
+  ul { font-size:13px; line-height:1.6; background:#fff; border-radius:14px; padding:12px 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V49 · DATOS REALES (LATERE)</span>
+  <h1>Defectos: el mismo flujograma "¿Qué hacer con este defecto?"</h1>
+  <p class="lead">Reemplaza la barra de etapas de hoy (Reportado → En reparación → Cerrado → Confirmado) y el recuadro "¿Cómo se va a reparar?" por un único flujograma, con el mismo estilo que en Muestreos y Análisis. Los botones que ya existen (Crear OT correctiva, Ya se reparó · cerrar, confirmar eficacia) quedan en la línea "Ahora". Los pasos que tienen un registro propio son clickeables: el origen y la OT.</p>
+
+  <div class="step">A · DEF-LTE-0024 — abierto, falta completar</div>
+  <div class="modal">
+    <div class="mh"><div class="kick">Defecto · Fluidos</div><h2>Motor Principal #4</h2><span class="chip">DEF-LTE-0024</span><span class="chip">🚢 LATERE</span><span class="chip">Alta</span></div>
+    <div class="old">Reportado — En reparación — Cerrado — Confirmado (se quita)</div>
+    <div class="body">
+      <div class="flow">
+        <h4>🧭 ¿Qué hacer con este defecto?</h4>
+        <div class="chain">
+          <div class="node done link"><span class="dot">✓</span><span class="nt">Resultado crítico</span><span class="ns">FA-LTE-0060</span></div>
+          <div class="node cur"><span class="dot">2</span><span class="nt">Completar el defecto</span><span class="ns">Faltan 3 datos</span></div>
+          <div class="node"><span class="dot">3</span><span class="nt">OT correctiva</span><span class="ns">o reparado a bordo</span></div>
+          <div class="node"><span class="dot">4</span><span class="nt">Ejecutar y cerrar</span><span class="ns">Hasta cerrar la OT</span></div>
+          <div class="node"><span class="dot">5</span><span class="nt">Nueva medición</span><span class="ns">Confirmar eficacia</span></div>
+        </div>
+        <div class="act o"><span><b>Ahora:</b> completá el defecto para poder crear la OT correctiva.<span class="miss">Falta: Qué se hizo en el momento · Metodología · Causa raíz</span></span>
+          <span class="ml"><span class="btn primary">🔧 Crear OT correctiva</span><span class="btn">✓ Ya se reparó · cerrar</span></span></div>
+      </div>
+      <div class="rest">1 · Qué pasó · 2 · Por qué pasó… (sin cambios)</div>
+    </div>
+  </div>
+
+  <div class="step">B · DEF-LTE-0025 — cerrado dentro de la OT, OT planificada</div>
+  <div class="modal">
+    <div class="mh"><div class="kick">Defecto · Fluidos</div><h2>Caja reductora #4</h2><span class="chip">DEF-LTE-0025</span><span class="chip">🚢 LATERE</span><span class="chip">Alta</span></div>
+    <div class="body">
+      <div class="flow">
+        <h4>🧭 ¿Qué hacer con este defecto?</h4>
+        <div class="chain">
+          <div class="node done link"><span class="dot">✓</span><span class="nt">Resultado crítico</span><span class="ns">FA-LTE-0061</span></div>
+          <div class="node done"><span class="dot">✓</span><span class="nt">Completar el defecto</span><span class="ns">Completo</span></div>
+          <div class="node done link"><span class="dot">✓</span><span class="nt">OT correctiva</span><span class="ns">OT-LTE-26-0047</span></div>
+          <div class="node cur"><span class="dot">4</span><span class="nt">Ejecutar y cerrar</span><span class="ns">Planificada</span></div>
+          <div class="node"><span class="dot">5</span><span class="nt">Nueva medición</span><span class="ns">Revisar el 17/10/2026</span></div>
+        </div>
+        <div class="act bl"><span><b>Ahora:</b> el defecto quedó cerrado dentro de la OT-LTE-26-0047. Falta enviarla a aprobación, aprobarla y autorizarla; después se ejecuta y se cierra con el resultado.</span><span class="ml"><span class="btn blue">Ver OT →</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">C · OT cerrada, llegó la fecha de confirmar</div>
+  <div class="modal">
+    <div class="body">
+      <div class="flow">
+        <h4>🧭 ¿Qué hacer con este defecto?</h4>
+        <div class="chain">
+          <div class="node done link"><span class="dot">✓</span><span class="nt">Resultado crítico</span><span class="ns">FA-LTE-0061</span></div>
+          <div class="node done"><span class="dot">✓</span><span class="nt">Completar el defecto</span><span class="ns">Completo</span></div>
+          <div class="node done link"><span class="dot">✓</span><span class="nt">OT correctiva</span><span class="ns">OT-LTE-26-0047</span></div>
+          <div class="node done"><span class="dot">✓</span><span class="nt">Ejecutar y cerrar</span><span class="ns">Cerrada</span></div>
+          <div class="node cur"><span class="dot">5</span><span class="nt">Nueva medición</span><span class="ns">Revisar el 17/10/2026</span></div>
+        </div>
+        <div class="act gr"><span><b>Ahora:</b> tomá una nueva medición del equipo y confirmá si el problema volvió (ISM 10.2.3).</span><span class="ml"><span class="btn green">✓ Sigue bien</span><span class="btn">✕ Volvió a fallar</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">Reglas</div>
+  <ul>
+    <li><b>Paso 1, el origen, cambia según de dónde vino el defecto:</b> "Resultado crítico" (lleva a la muestra), "Hallazgo en OT" (lleva a la OT de origen), "Auditoría externa" (lleva a la auditoría) o "Reportado" (a mano, sin enlace).</li>
+    <li><b>Paso 2</b> usa la misma regla que ya bloquea la OT: lo básico siempre y la causa raíz si es Alta o Crítica.</li>
+    <li><b>Paso 3:</b> si se cerró como "reparado a bordo", sin OT, dice "Reparado a bordo" y el paso 4 queda hecho.</li>
+    <li><b>Paso 5:</b> en los defectos que no vienen de un análisis se llama "Confirmar eficacia" y usa los botones que ya existen.</li>
+    <li>Los datos del formulario, el análisis de causa, las fotos y la historia no cambian.</li>
+  </ul>
+</div>
+</body>
+</html>

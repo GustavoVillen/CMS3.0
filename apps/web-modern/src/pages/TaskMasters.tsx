@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ClipboardList, Loader2, Plus } from "lucide-react";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
@@ -148,10 +149,10 @@ const TaskDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={labelCls}>Código *</label>
+            <GuideField id="tm-code" missing={!code.trim()}>
+              <label className={labelCls}>Código<RequiredMark />{!code.trim() && <GuideNeedTag label="Falta" />}</label>
               <input value={code} onChange={e => setCode(e.target.value)} disabled={isEdit} placeholder="MP-001" className={inputCls} />
-            </div>
+            </GuideField>
             <div className="space-y-1.5">
               <label className={labelCls}>Estado</label>
               <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
@@ -161,10 +162,10 @@ const TaskDrawer: React.FC<DrawerProps> = ({ initial, onClose, onSaved }) => {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className={labelCls}>Título *</label>
+          <GuideField id="tm-title" missing={!title.trim()}>
+            <label className={labelCls}>Título<RequiredMark />{!title.trim() && <GuideNeedTag label="Falta" />}</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Cambio de aceite lubricante" className={inputCls} />
-          </div>
+          </GuideField>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

@@ -8,6 +8,7 @@ import { analyzePhotoForDefect, uploadDefectPhoto } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
 import { VoiceReportSheet } from "../components/VoiceReportSheet";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 
 export interface VoiceReportFields {
   assetId?: string | null;
@@ -299,15 +300,15 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
           <span className="font-bold text-sm text-fg">Nuevo Defecto</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="space-y-1.5">
-            <p className={labelCls}>Equipo *</p>
+          <GuideField id="mdef-asset" missing={!assetId}>
+            <p className={labelCls}>Equipo<RequiredMark />{!assetId && <GuideNeedTag label="Falta" />}</p>
             <select value={assetId} onChange={e => setAssetId(e.target.value)} className={inputCls + " appearance-none"}>
               <option value="">— Seleccionar —</option>
               {(assetData?.items ?? []).map(a => (
                 <option key={a.id} value={a.id}>{a.name ?? a.code}</option>
               ))}
             </select>
-          </div>
+          </GuideField>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <p className={labelCls}>Severidad</p>
@@ -337,9 +338,9 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               placeholder="ej. Mecánico, Eléctrico..."
             />
           </div>
-          <div className="space-y-1.5">
+          <GuideField id="mdef-desc" missing={!description.trim()}>
             <div className="flex items-center justify-between">
-              <p className={labelCls}>Descripción *</p>
+              <p className={labelCls}>Descripción<RequiredMark />{!description.trim() && <GuideNeedTag label="Falta" />}</p>
               <MicButton onAppend={chunk => setDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} className="w-4 h-4" />
             </div>
             <AutoTextArea
@@ -349,7 +350,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               placeholder="Describe el defecto o tocá el micrófono para dictarlo…"
               className={inputCls + " resize-none"}
             />
-          </div>
+          </GuideField>
 
           {/* Fotos: cámara trasera del celular + análisis IA + mosaico */}
           <div className="space-y-1.5">
@@ -459,9 +460,9 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               className={inputCls}
             />
           </div>
-          <div className="space-y-1.5">
+          <GuideField id="mnm-desc" missing={!nmDescription.trim()}>
             <div className="flex items-center justify-between">
-              <p className={labelCls}>Descripción *</p>
+              <p className={labelCls}>Descripción<RequiredMark />{!nmDescription.trim() && <GuideNeedTag label="Falta" />}</p>
               <MicButton onAppend={chunk => setNmDescription(prev => (prev.trim() ? prev + " " : "") + chunk)} className="w-4 h-4" />
             </div>
             <AutoTextArea
@@ -471,7 +472,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
               placeholder="Qué pasó y qué pudo haber pasado…"
               className={inputCls + " resize-none"}
             />
-          </div>
+          </GuideField>
           <div className="space-y-1.5">
             <p className={labelCls}>Acción inmediata</p>
             <AutoTextArea

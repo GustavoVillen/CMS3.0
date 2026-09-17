@@ -1,0 +1,845 @@
+<title>App a bordo CMS3.0</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --ai:#6D28D9; --aisoft:#EDE9FE;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --ai:#A78BFA; --aisoft:rgba(167,139,250,.15);
+    --navy:#0B132B; --navyfg:#E0E1DD; --frame:#000000;
+    --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --ai:#A78BFA; --aisoft:rgba(167,139,250,.15);
+  --navy:#0B132B; --navyfg:#E0E1DD; --frame:#000000;
+  --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+
+/* barra de la maqueta */
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg);border-bottom:1px solid rgba(255,255,255,.08)}
+.bar .name{font-weight:800;font-size:14px;letter-spacing:-.01em;display:flex;gap:8px;align-items:center}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.bar .sp{flex:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+
+/* escenario */
+.stage{display:flex;gap:36px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.sbar.navy{background:var(--navy);color:var(--navyfg)}
+.sbar span{display:flex;gap:5px;align-items:center}
+.head{flex:none;display:flex;align-items:center;gap:10px;padding:6px 12px 10px;background:var(--surface)}
+.head.bd{border-bottom:1px solid var(--line)}
+.head .grow{min-width:0;flex:1}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2;text-wrap:balance}
+.head p{margin:0;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.prog{display:flex;gap:5px;padding:0 16px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+.prog span{flex:1;height:5px;border-radius:9px;background:var(--line)}
+.prog span.on{background:var(--ac)}
+.scr{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain}
+.foot{flex:none;padding:12px 16px 16px;background:var(--surface);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+
+/* botones */
+.btn{min-height:54px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);font-size:16px;font-weight:800;display:flex;gap:8px;align-items:center;justify-content:center;cursor:pointer;width:100%;padding:0 16px;color:var(--fg)}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:var(--acfg)}
+.btn.need{background:var(--warnsoft);border-color:var(--warn);color:var(--warnfg)}
+.btn.sec2{min-height:48px;font-size:15px;font-weight:700}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.signer{font-size:12.5px;color:var(--muted);text-align:center;margin:0}
+
+/* inicio */
+.hero{margin:-16px -16px 0;padding:4px 20px 52px;background:var(--navy);color:var(--navyfg)}
+.hero-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.vsl{display:inline-flex;gap:7px;align-items:center;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.me{width:38px;height:38px;border-radius:99px;background:rgba(255,255,255,.13);display:grid;place-items:center;font-size:13px;font-weight:800}
+.hi{margin:16px 0 0;font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.role{margin:3px 0 0;font-size:14px;opacity:.7}
+.due{margin-top:-52px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;gap:12px;align-items:center;text-align:left;cursor:pointer;width:100%;box-shadow:0 10px 24px -14px rgba(13,27,42,.35);color:var(--fg)}
+.due-ic{width:46px;height:46px;flex:none;border-radius:13px;background:var(--badsoft);color:var(--badfg);display:grid;place-items:center}
+.due-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.due-tx b{font-size:16px}
+.due-tx span{font-size:14px;color:var(--muted)}
+.n-bad{color:var(--badfg);font-weight:800;font-style:normal}
+.n-warn{color:var(--warnfg);font-weight:800;font-style:normal}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{min-height:116px;border-radius:18px;border:1px solid var(--line);background:var(--surface);padding:14px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;color:var(--fg)}
+.tile .ti{width:42px;height:42px;border-radius:12px;background:var(--acsoft);color:var(--ac);display:grid;place-items:center}
+.tile b{display:block;font-size:15.5px;line-height:1.2}
+.tile small{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.tile small.w{color:var(--warnfg);font-weight:700}
+.tile.pri{background:var(--ac);border-color:var(--ac);color:var(--acfg)}
+.tile.pri .ti{background:rgba(255,255,255,.2);color:var(--acfg)}
+.tile.pri small{color:var(--acfg);opacity:.85}
+.gh{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:6px 2px -6px}
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:flex;gap:12px;align-items:center;padding:12px 14px;border:0;border-top:1px solid var(--line);text-align:left;background:transparent;width:100%;color:var(--fg)}
+.row:first-child{border-top:0}
+button.row{cursor:pointer}
+.row .grow{flex:1;min-width:0}
+.row b{display:block;font-size:14.5px;line-height:1.3}
+.row .sub{font-size:12.5px;color:var(--muted)}
+.code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:12px;font-weight:600;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.p-bad{background:var(--badsoft);color:var(--badfg)}
+.p-warn{background:var(--warnsoft);color:var(--warnfg)}
+.p-ok{background:var(--oksoft);color:var(--okfg)}
+.p-ac{background:var(--acsoft);color:var(--ac)}
+.p-mut{background:var(--surface2);color:var(--muted)}
+.pc{display:flex;gap:7px;align-items:center;justify-content:center;font-size:13px;color:var(--muted);margin:2px 0 4px}
+
+/* tarjetas y pestañas */
+.tabs2{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface2);padding:4px;border-radius:14px}
+.tabs2 button{min-height:44px;border:0;border-radius:11px;background:transparent;font-weight:800;font-size:14.5px;cursor:pointer;color:var(--muted)}
+.tabs2 button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;cursor:pointer;color:var(--fg)}
+.card .eq{font-size:12.5px;color:var(--muted);font-weight:600}
+.card .tk{font-size:16px;font-weight:800;line-height:1.25}
+.card .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.card.off{opacity:.62}
+.task{display:flex;flex-direction:column;gap:4px}
+.task h2{margin:2px 0 0;font-size:21px;font-weight:800;line-height:1.2;letter-spacing:-.01em;text-wrap:balance}
+.task p{margin:0;color:var(--muted);font-size:14px}
+
+/* formularios */
+.fld{display:flex;flex-direction:column;gap:8px;padding:12px;margin:0 -12px;border-radius:14px;border:1.5px solid transparent}
+.fld.miss{background:var(--warnsoft);border-color:var(--warn)}
+.lbl{font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;margin:0}
+.lbl .req{font-size:11px;font-weight:800;color:var(--warnfg);text-transform:uppercase;letter-spacing:.05em;display:none}
+.miss .lbl .req{display:inline}
+.lbl .opt2{font-size:12px;font-weight:600;color:var(--faint)}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:14.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--fg)}
+.chip.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.chip.sm{min-height:36px;font-size:13px;padding:0 11px;border-width:1px}
+.chip.aio.on{background:var(--aisoft);border-color:var(--ai);color:var(--fg)}
+.inp,.ta{width:100%;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;font-size:16px;padding:12px}
+.inp{min-height:50px}
+.ta{min-height:96px;resize:none;line-height:1.45}
+.inp:focus,.ta:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--acsoft)}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:2px 14px}
+.okrow{display:flex;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+.okrow:first-child{border-top:0}
+.okrow .ck{color:var(--ok);flex:none;margin-top:1px}
+.okrow b{display:block;font-size:14px}
+.okrow span{font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:14px;background:var(--acsoft);font-size:13.5px;color:var(--fg);margin:0}
+.note svg{color:var(--ac);flex:none;margin-top:1px}
+.note.ai{background:var(--aisoft)}
+.note.ai svg{color:var(--ai)}
+.note.w{background:var(--warnsoft)}
+.note.w svg{color:var(--warnfg)}
+.tools{display:flex;gap:8px}
+.tools .chip{flex:1;justify-content:center}
+.chip.rec{background:var(--bad);border-color:var(--bad);color:#fff}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{min-height:124px;border-radius:16px;border:1.5px solid var(--line);background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;text-align:left;cursor:pointer;color:var(--fg)}
+.opt b{font-size:15px;line-height:1.2}
+.opt small{font-size:12.5px;color:var(--muted)}
+.opt.on{border-color:var(--ac);background:var(--acsoft)}
+.opt .oi{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--surface2);color:var(--fg)}
+.opt.on .oi{background:var(--ac);color:var(--acfg)}
+.radio{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer;text-align:left;width:100%;color:var(--fg)}
+.radio.on{border-color:var(--ac);background:var(--acsoft)}
+.radio .dot{width:22px;height:22px;border-radius:99px;border:2px solid var(--faint);flex:none;display:grid;place-items:center}
+.radio.on .dot{border-color:var(--ac)}
+.radio.on .dot::after{content:"";width:11px;height:11px;border-radius:99px;background:var(--ac)}
+.radio .grow{flex:1;min-width:0}
+.radio b{display:block;font-size:15px}
+.radio small{font-size:12.5px;color:var(--muted)}
+.stack{display:flex;flex-direction:column;gap:8px}
+.risk{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.risk button{min-height:50px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;font-size:13.5px;cursor:pointer;color:var(--fg)}
+.risk button.on.r0{background:var(--ok);border-color:var(--ok);color:#fff}
+.risk button.on.r1{background:var(--warn);border-color:var(--warn);color:#1A1D24}
+.risk button.on.r2{background:#EA580C;border-color:#EA580C;color:#fff}
+.risk button.on.r3{background:var(--bad);border-color:var(--bad);color:#fff}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{width:62px;height:62px;border-radius:12px;background:linear-gradient(135deg,#94A3B8,#475569);display:grid;place-items:center;color:#fff}
+.sel{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--acsoft);border:1.5px solid var(--ac)}
+.sel .grow{flex:1;min-width:0}
+.sel b{display:block;font-size:15px}
+.times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.times label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+
+/* horómetros */
+.hcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 12px 12px 14px;display:flex;gap:10px;align-items:center}
+.hcard .grow{flex:1;min-width:0}
+.hcard b{font-size:15px;display:block;line-height:1.25}
+.hlast{font-size:13px;color:var(--muted)}
+.hlast.st{color:var(--badfg);font-weight:700}
+.delta{font-size:12.5px;font-weight:700;min-height:18px;display:block}
+.delta.ok{color:var(--okfg)}
+.delta.warn{color:var(--warnfg)}
+.hin{display:flex;align-items:center;gap:6px}
+.hin input{width:122px;min-height:54px;text-align:right;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;border:1.5px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--fg);padding:0 10px}
+.hin input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--acsoft)}
+.hin span{font-weight:700;color:var(--muted)}
+
+/* check list */
+.item{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.item.miss{border-color:var(--warn);background:var(--warnsoft)}
+.item p{margin:0;font-size:15px;font-weight:600;line-height:1.35}
+.yn{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.yn button{min-height:48px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;font-size:14px;display:flex;gap:5px;align-items:center;justify-content:center;cursor:pointer;color:var(--fg)}
+.yn button.on.si{background:var(--ok);border-color:var(--ok);color:#fff}
+.yn button.on.no{background:var(--bad);border-color:var(--bad);color:#fff}
+.yn button.on.na{background:var(--muted);border-color:var(--muted);color:var(--bg)}
+.meter{display:flex;flex-direction:column;gap:6px}
+.meter div{height:8px;border-radius:9px;background:var(--line);overflow:hidden}
+.meter div span{display:block;height:100%;background:var(--ac);border-radius:9px}
+.meter p{margin:0;font-size:13px;color:var(--muted);display:flex;justify-content:space-between}
+
+/* repuestos */
+.spare{display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;cursor:pointer;text-align:left;width:100%;color:var(--fg)}
+.spare .grow{flex:1;min-width:0}
+.spare b{display:block;font-size:15px}
+.spare .sub{font-size:12.5px;color:var(--muted)}
+.cart{background:var(--surface);border:1.5px solid var(--ac);border-radius:16px;padding:4px 14px}
+.cart .row{padding:10px 0}
+.stepper{display:flex;align-items:center;justify-content:center;gap:18px}
+.stepper button{width:66px;height:66px;border-radius:18px;border:1.5px solid var(--line);background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.stepper output{font-size:42px;font-weight:800;font-variant-numeric:tabular-nums;min-width:90px;text-align:center}
+
+/* ventanitas */
+.dlg{position:absolute;inset:0;background:rgba(8,13,29,.55);display:flex;align-items:flex-end;z-index:5}
+.sheet{background:var(--surface);width:100%;border-radius:22px 22px 0 0;padding:10px 16px 20px;display:flex;flex-direction:column;gap:12px;max-height:85%;overflow-y:auto}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 4px}
+.sheet h2{margin:0;font-size:19px;font-weight:800;text-wrap:balance}
+.two{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
+.toast{position:absolute;left:16px;right:16px;bottom:104px;background:var(--fg);color:var(--bg);padding:12px 14px;border-radius:14px;font-size:14px;font-weight:600;z-index:6;text-align:center}
+
+/* listo */
+.done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:6px}
+.done .big{width:80px;height:80px;border-radius:99px;background:var(--oksoft);color:var(--okfg);display:grid;place-items:center}
+.done h2{margin:10px 0 0;font-size:23px;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+.done ul{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
+.done li{display:flex;gap:10px;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.done li svg{flex:none;color:var(--muted);margin-top:1px}
+
+/* panel guía */
+.guide{width:350px;max-width:100%;display:flex;flex-direction:column;gap:20px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15;text-wrap:balance}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.jump{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.jump button{min-height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;text-align:left;padding:0 10px;display:flex;gap:7px;align-items:center;cursor:pointer;color:var(--fg)}
+.jump button.on{border-color:var(--ac);color:var(--ac)}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+
+/* qué incluye */
+.ref{max-width:880px;margin:0 auto;padding-block:30px 64px;padding-inline:16px;display:flex;flex-direction:column;gap:26px}
+.ref header h2{margin:0;font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
+.ref header p{margin:8px 0 0;color:var(--muted);font-size:16px;max-width:64ch}
+.ref h3{margin:0 0 10px;font-size:17px;font-weight:800}
+.ref section p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{padding:10px 14px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+thead th{border-top:0;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);background:var(--surface2)}
+td b{font-weight:700}
+.dec{display:flex;flex-direction:column;gap:10px}
+.dec div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14.5px;line-height:1.5}
+.dec b{display:block;margin-bottom:2px}
+
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px}
+  .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .hero{padding-top:14px}
+  .guide{padding:22px 16px 44px;width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="bar">
+  <span class="name">App a bordo <small>· Preview V30</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué incluye</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme" aria-label="Cambiar tema"></button>
+</div>
+<main id="main"></main>
+
+<script>
+/* ───────── datos de ejemplo (ficticios) ───────── */
+const VESSEL="REMOLCADOR DEMO I", USER="Juan Demo", CARGO="Capitán";
+const PLANS=[
+ {id:"p1",code:"DEM1-MP-BR-04",eq:"Motor principal Babor",task:"Cambio de aceite y filtros de aceite",due:"Venció hace 40 h",k:"over",dept:"MAQUINAS",crit:"Motor en marcha 15 min sin pérdidas; presión de aceite dentro del rango del fabricante.",loto:"Motor detenido, arranque bloqueado y tarjeta en el panel local.",risk:"Medio"},
+ {id:"p2",code:"DEM1-MP-BR-07",eq:"Motor principal Babor",task:"Cambio de filtros de combustible",due:"Venció hace 12 días",k:"over",dept:"MAQUINAS",crit:"Sin aire en el circuito; el motor arranca y sostiene el régimen.",loto:"Motor detenido y válvula de combustible cerrada y rotulada.",risk:"Medio"},
+ {id:"p3",code:"DEM1-GEN-2-03",eq:"Generador 2",task:"Limpieza del intercambiador de calor",due:"Venció hace 3 días",k:"over",dept:"MAQUINAS",crit:"Temperatura del agua de enfriamiento estable con carga.",loto:"Generador fuera de barra y bloqueado en el tablero principal.",risk:"Bajo"},
+ {id:"p4",code:"DEM1-MP-ER-18",eq:"Motor principal Estribor",task:"Toma de muestra de aceite para laboratorio",due:"Faltan 5 días",k:"soon",dept:"PROVEEDOR",prov:"Laboratorio Demo S.A.",crit:"Muestra rotulada y enviada al laboratorio dentro de las 48 h.",loto:"No requiere bloqueo: se toma con el motor en marcha desde la válvula de muestreo.",risk:"Bajo"},
+ {id:"p5",code:"DEM1-BOM-INC-02",eq:"Bomba de incendio principal",task:"Prueba de funcionamiento",due:"Faltan 2 días",k:"soon",dept:"CUBIERTA",crit:"Dos chorros simultáneos con presión en la manguera más alejada.",loto:"No requiere bloqueo.",risk:"Bajo"},
+ {id:"p6",code:"DEM1-GEN-1-01",eq:"Generador 1",task:"Service de 500 h",due:"Faltan 30 h",k:"soon",dept:"MAQUINAS",openWo:"OT-DEM1-26-0068"},
+];
+const OPEN_WOS=[
+ {c:"OT-DEM1-26-0068",t:"Service de 500 h",eq:"Generador 1",st:["p-ac","En curso"]},
+ {c:"OT-DEM1-26-0061",t:"Soldadura de refuerzo interno",eq:"Tanque de lastre 3 Babor",st:["p-warn","Espera repuesto"]},
+ {c:"OT-DEM1-26-0057",t:"Cambio de termostato",eq:"Generador 2",st:["p-ac","En curso"]},
+];
+const EQUIPOS=["Motor principal Babor","Motor principal Estribor","Generador 1","Generador 2","Bomba de incendio principal","Bomba de lastre","Molinete de proa","Radar de estribor"];
+const PROVIDERS=[
+ {n:"Taller Naval Demo",c:"Mecánica y soldadura"},
+ {n:"Electro Demo SRL",c:"Electricidad"},
+ {n:"Hidráulica Demo",c:"Hidráulica"},
+ {n:"Laboratorio Demo S.A.",c:"Análisis de aceite"},
+];
+const HOURS=[
+ {id:"mpbr",eq:"Motor principal Babor",last:39512,days:1},
+ {id:"mper",eq:"Motor principal Estribor",last:39488,days:1},
+ {id:"gen1",eq:"Generador 1",last:12480,days:2},
+ {id:"gen2",eq:"Generador 2",last:11902,days:9},
+ {id:"gene",eq:"Generador de emergencia",last:127,days:30},
+];
+const PTW=[
+ {v:"HOT_WORK",n:"Trabajo en caliente",d:"Soldadura, corte, amolado",ic:"flame",
+  haz:["Incendio","Humos de soldadura","Quemaduras","Proyección de partículas"],
+  ctl:["Retirar combustibles del área","Guardia de fuego con extintor","Ventilación forzada","Aislar la detección de incendio de la zona"],
+  ppe:["Careta de soldar","Guantes de cuero","Ropa ignífuga","Protección auditiva"]},
+ {v:"ENCLOSED_SPACE_ENTRY",n:"Espacio cerrado",d:"Tanques, cofferdams, doble fondo",ic:"box",
+  haz:["Falta de oxígeno","Gases tóxicos","Resbalones y caídas"],ctl:["Ventilar antes de entrar","Medir gases","Persona de guardia afuera"],ppe:["Detector de gases personal","Linterna","Casco"]},
+ {v:"WORKING_ALOFT",n:"Trabajo en altura",d:"Mástil, costado, pluma",ic:"arrow-up-from-line",
+  haz:["Caída de altura","Caída de objetos","Movimiento del buque"],ctl:["Arnés con doble cabo","Zona de abajo señalizada","No trabajar con mal tiempo"],ppe:["Arnés","Casco con barbijo","Calzado antideslizante"]},
+ {v:"ELECTRICAL_ISOLATION",n:"Aislación eléctrica",d:"Tableros, motores, baterías",ic:"zap",
+  haz:["Choque eléctrico","Arco eléctrico","Arranque inesperado"],ctl:["Cortar y bloquear en el tablero (LOTO)","Verificar ausencia de tensión","Herramientas aisladas"],ppe:["Guantes dieléctricos","Protección facial","Ropa ignífuga"]},
+ {v:"COLD_WORK",n:"Trabajo en frío",d:"Mecánico sin llama",ic:"wrench",
+  haz:["Golpes y cortes","Pérdidas de presión","Ruido"],ctl:["Despresurizar el sistema","Área señalizada"],ppe:["Guantes","Anteojos de seguridad","Protección auditiva"]},
+ {v:"UNDERWATER_WORK",n:"Trabajo submarino",d:"Buceo en casco o tomas de mar",ic:"waves",
+  haz:["Ahogamiento","Succión de tomas de mar","Hélice en movimiento"],ctl:["Máquinas bloqueadas y señalizadas","Bandera Alfa izada","Buzo con asistente"],ppe:["Equipo de buceo certificado","Chaleco salvavidas"]},
+];
+const CK_ZAR=["Prueba del gobierno y del timón de emergencia","Luces de navegación y señales","Radar, AIS y GPS funcionando","VHF probado con el control","Máquinas principales probadas avante y atrás","Alarmas de sala de máquinas probadas","Puertas estancas y portillos cerrados","Tripulación completa y en sus puestos","Parte meteorológico recibido","Libro de navegación al día"];
+const CK_BUNK=["Imbornales tapados","Bandejas de derrame en su lugar","Comunicación con la barcaza probada","Kit SOPEP listo","Sondas de tanques tomadas","Válvulas alineadas y verificadas"];
+const CK_GEN=["Área de trabajo inspeccionada","Charla de seguridad con el personal","EPP correcto para la tarea","Comunicaciones probadas","Equipos de emergencia a mano","Responsable designado"];
+const TEMPLATES=[
+ {id:"zar",n:"Antes de zarpar",s:"Pre-zarpada",items:CK_ZAR},
+ {id:"arr",n:"Antes de llegar a puerto",s:"Pre-arribo",items:CK_GEN},
+ {id:"bunk",n:"Carga de combustible",s:"Pre-bunkering",items:CK_BUNK},
+ {id:"fond",n:"Fondeo",s:"Maniobra de ancla",items:CK_GEN},
+ {id:"amar",n:"Amarre",s:"Maniobra de amarre",items:CK_GEN},
+ {id:"esp",n:"Entrada a espacio cerrado",s:"Antes de entrar",items:CK_GEN},
+];
+const SPARES=[
+ {n:"Filtro de aceite",pn:"LF9009",loc:"Pañol de máquinas · E2",stock:6,rp:4,u:"un."},
+ {n:"Filtro de combustible",pn:"FF5052",loc:"Pañol de máquinas · E2",stock:2,rp:4,u:"un."},
+ {n:"Junta de termostato",pn:"3955392",loc:"Pañol de máquinas · C1",stock:4,rp:2,u:"un."},
+ {n:"Aceite 15W40",pn:"Granel",loc:"Tanque de aceite limpio",stock:180,rp:100,u:"L"},
+ {n:"Correa del alternador",pn:"3288817",loc:"Pañol de máquinas · B3",stock:0,rp:1,u:"un."},
+ {n:"Electrodo 7018 · 3,2 mm",pn:"E7018-32",loc:"Pañol de cubierta · A1",stock:3,rp:5,u:"kg"},
+];
+const SENT=[
+ {c:"OT-DEM1-26-0071",t:"Cambio de junta · Bomba de lastre",p:["p-warn","Esperando aprobación"]},
+ {c:"SS-DEM1-26-0014",t:"Rectificar tapa de cilindro · Taller Naval Demo",p:["p-ok","Aprobada"]},
+ {c:"PTW-DEM1-26-0009",t:"Trabajo en caliente · Tanque 3 Babor",p:["p-bad","Rechazado"],why:"Falta la guardia de fuego"},
+];
+
+/* ───────── estado ───────── */
+const newOt=()=>({step:1,eq:null,eqQ:"",txt:"",rec:false,photos:0,tipo:null,urg:null,quien:null,prov:null,kinds:new Set(),sol:null,sis:null,ubi:"",riesgo:null,loto:null,lotoTxt:"",crit:""});
+const newPt=()=>({step:1,type:null,ot:null,lugar:"",desc:"",rec:false,dia:"Hoy",desde:"08:00",hasta:"12:00",haz:new Set(),ctl:new Set(),ppe:new Set()});
+const S={tab:"app",theme:"system",scr:"home",tried:false,scrollMiss:false,dlg:null,toast:null,
+  plan:null,planTab:"over",pf:{},add:new Set(),
+  ot:newOt(),pt:newPt(),av:{wo:null,txt:"",rec:false,photos:0},
+  h:{},hn:{note:""},ck:{tpl:null,ans:{}},ckn:{},rp:{step:"ot",ot:null,lines:[],pick:null,qty:1,q:""},done:null,lastKey:""};
+
+/* ───────── utilidades ───────── */
+const $=s=>document.querySelector(s);
+const I=(n,s=18)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=n=>Number(n).toLocaleString("es-AR");
+const parseNum=v=>{const t=String(v).trim().replace(/\./g,"").replace(",",".");return t===""?null:Number(t);};
+function toast(t){S.toast=t;render();clearTimeout(toast.t);toast.t=setTimeout(()=>{S.toast=null;render();},2200);}
+const head=(title,sub,opts={})=>`<div class="head ${opts.prog?"":"bd"}"><button type="button" class="iconb" data-a="back" aria-label="Volver">${I("arrow-left",20)}</button><div class="grow"><h1>${title}</h1>${sub?`<p>${sub}</p>`:""}</div></div>${opts.prog?`<div class="prog">${[1,2,3].map(i=>`<span class="${i<=opts.prog?"on":""}"></span>`).join("")}</div>`:""}`;
+const sendBtn=(miss,label,act,icon="send")=>miss>0
+  ? `<button type="button" class="btn need" data-a="${act}">${I("triangle-alert",18)}Faltan ${miss} ${miss===1?"dato":"datos"}</button>`
+  : `<button type="button" class="btn pri" data-a="${act}">${I(icon,18)}${label}</button>`;
+const signer=`<p class="signer">Firma como <b>${USER} · ${CARGO}</b></p>`;
+function chipsFld(o,k,label,opts,{multi=false,hint="",req=true}={}){
+  const v=S[o][k]; const empty=multi?v.size===0:!v;
+  return `<div class="fld ${req&&S.tried&&empty?"miss":""}"><p class="lbl">${label}${req?`<span class="req">Falta</span>`:`<span class="opt2">opcional</span>`}</p>${hint?`<p class="hint">${hint}</p>`:""}<div class="chips">${opts.map(x=>`<button type="button" class="chip ${(multi?v.has(x):v===x)?"on":""}" data-a="set" data-p="${o}|${k}|${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`;
+}
+function inputFld(o,k,label,{ph="",sugg=[],ta=false,req=true,hint="",extra=""}={}){
+  const v=S[o][k]; const empty=!String(v).trim();
+  const ctl=ta?`<textarea class="ta" id="${o}-${k}" data-in="${o}|${k}" placeholder="${esc(ph)}">${esc(v)}</textarea>`
+             :`<input class="inp" id="${o}-${k}" data-in="${o}|${k}" value="${esc(v)}" placeholder="${esc(ph)}">`;
+  return `<div class="fld ${req&&S.tried&&empty?"miss":""}"><p class="lbl">${label}${req?`<span class="req">Falta</span>`:`<span class="opt2">opcional</span>`}</p>${hint?`<p class="hint">${hint}</p>`:""}${ctl}${sugg.length?`<div class="chips">${sugg.map(x=>`<button type="button" class="chip sm" data-a="fill" data-p="${o}|${k}|${esc(x)}">${esc(x)}</button>`).join("")}</div>`:""}${extra}</div>`;
+}
+const tools=o=>`<div class="tools"><button type="button" class="chip ${S[o].rec?"rec":""}" data-a="dictate" data-p="${o}">${I(S[o].rec?"square":"mic",17)}${S[o].rec?"Escuchando…":"Dictar"}</button><button type="button" class="chip" data-a="photo" data-p="${o}">${I("camera",17)}Foto${S[o].photos?` (${S[o].photos})`:""}</button></div>${S[o].photos?`<div class="thumbs">${Array.from({length:S[o].photos},()=>`<div class="thumb">${I("image",20)}</div>`).join("")}</div>`:""}`;
+
+/* ───────── pantallas ───────── */
+function home(){
+  const over=PLANS.filter(p=>p.k==="over").length, soon=PLANS.filter(p=>p.k==="soon").length;
+  const tile=(go,ic,t,s,cls="",sc="")=>`<button type="button" class="tile ${cls}" data-a="go" data-p="${go}"><span class="ti">${I(ic,22)}</span><span><b>${t}</b><small class="${sc}">${s}</small></span></button>`;
+  return {sbar:"navy",body:`
+  <section class="hero">
+    <div class="hero-top"><span class="vsl">${I("ship",16)}${VESSEL}</span><span class="me" aria-label="${USER}">JD</span></div>
+    <p class="hi">Buen día, Juan</p><p class="role">${CARGO} · martes 15/09</p>
+  </section>
+  <button type="button" class="due" data-a="go" data-p="plans">
+    <span class="due-ic">${I("calendar-clock",23)}</span>
+    <span class="due-tx"><b>Planes para abrir</b><span><em class="n-bad">${over} vencidos</em> · <em class="n-warn">${soon} por vencer</em></span></span>
+    ${I("chevron-right",20)}
+  </button>
+  <div class="tiles">
+    ${tile("newot","plus","Nueva OT / SS","Abrir y mandar a aprobar","pri")}
+    ${tile("avance","message-square-plus","Registrar avance","3 OT en curso")}
+    ${tile("horas","gauge","Horómetros","2 atrasados","","w")}
+    ${tile("permiso","shield-check","Permiso de trabajo","Pedir aprobación")}
+    ${tile("check","clipboard-check","Check list","1 sin terminar","","w")}
+    ${tile("repuestos","package-minus","Consumo de repuestos","Descontar del stock")}
+  </div>
+  <p class="gh">Lo que mandaste</p>
+  <div class="list">${SENT.map(s=>`<div class="row"><div class="grow"><span class="code">${s.c}</span><b>${s.t}</b>${s.why?`<span class="sub">Motivo: ${s.why}</span>`:""}</div><span class="pill ${s.p[0]}">${s.p[1]}</span></div>`).join("")}</div>
+  <p class="pc">${I("monitor",15)}Lo demás se completa en la PC.</p>`};
+}
+
+function plans(){
+  const items=PLANS.filter(p=>p.k===S.planTab);
+  const over=PLANS.filter(p=>p.k==="over").length, soon=PLANS.filter(p=>p.k==="soon").length;
+  return {head:head("Planes para abrir",VESSEL),body:`
+  <div class="tabs2"><button type="button" class="${S.planTab==="over"?"on":""}" data-a="pick" data-p="planTab||over">Vencidos · ${over}</button><button type="button" class="${S.planTab==="soon"?"on":""}" data-a="pick" data-p="planTab||soon">Por vencer · ${soon}</button></div>
+  <p class="hint">Tocá una tarea para abrir la OT. Si hay otras del mismo equipo, se suman a la misma orden.</p>
+  ${items.map(p=>`<button type="button" class="card ${p.openWo?"off":""}" data-a="openPlan" data-p="${p.id}">
+    <span class="eq">${p.eq}</span><span class="tk">${p.task}</span>
+    <span class="meta"><span class="pill ${p.openWo?"p-mut":p.k==="over"?"p-bad":"p-warn"}">${p.openWo?`Ya tiene ${p.openWo}`:p.due}</span><span class="code">${p.code}</span></span>
+  </button>`).join("")}`};
+}
+
+const PF_REQ=["sol","asig","sis","ubi"];
+const pfMiss=()=>PF_REQ.filter(k=>!String(S.pf[k]??"").trim()).length;
+function planOpen(){
+  const p=S.plan; const others=PLANS.filter(x=>x.eq===p.eq&&x.id!==p.id&&!x.openWo);
+  return {head:head("Abrir OT",p.eq),body:`
+  <div class="task"><span class="code">${p.code}</span><h2>${p.task}</h2><p><span class="pill ${p.k==="over"?"p-bad":"p-warn"}">${p.due}</span></p></div>
+  ${others.length?`<div class="group"><div class="okrow" style="border:0;padding-bottom:4px"><span class="ck" style="color:var(--ac)">${I("list-checks",18)}</span><div><b>También toca en este equipo</b><span>Marcalas para hacer todo en la misma OT.</span></div></div>
+    ${others.map(o=>`<button type="button" class="radio ${S.add.has(o.id)?"on":""}" style="margin-bottom:10px" data-a="toggleAdd" data-p="${o.id}"><span class="dot"></span><span class="grow"><b>${o.task}</b><small>${o.due}</small></span></button>`).join("")}</div>`:""}
+  <p class="gh">Ya viene del plan</p>
+  <div class="group">
+    <div class="okrow"><span class="ck">${I("circle-check",18)}</span><div><b>Criterio de aceptación</b><span>${p.crit}</span></div></div>
+    <div class="okrow"><span class="ck">${I("circle-check",18)}</span><div><b>Bloqueo de energía (LOTO)</b><span>${p.loto}</span></div></div>
+    <div class="okrow"><span class="ck">${I("circle-check",18)}</span><div><b>Riesgo: ${p.risk}</b><span>Análisis de riesgo cargado en el plan.</span></div></div>
+    ${p.prov?`<div class="okrow"><span class="ck">${I("circle-check",18)}</span><div><b>Lo hace ${p.prov}</b><span>Se abre también la SS al proveedor.</span></div></div>`:""}
+  </div>
+  <p class="gh">Completá para enviar</p>
+  <div>
+    ${chipsFld("pf","sol","Solicitado por",["Cubierta","Máquinas","Técnica","Ops / SSMA"])}
+    ${chipsFld("pf","asig","Asignado a",["Tripulación","Tercerizado","Técnica","Ops / SSMA"],{hint:"Viene del plan; cambialo si hace falta."})}
+    ${chipsFld("pf","sis","Sistema",["Máquinas","R/E Cubierta","Barcazas"])}
+    ${inputFld("pf","ubi","Ubicación",{ph:"¿Dónde se hace el trabajo?",sugg:["Sala de máquinas","Cubierta principal","Puente","Proa","Popa"]})}
+  </div>`,
+  foot:`${sendBtn(pfMiss(),"Enviar a aprobar","sendPlan")}${signer}`};
+}
+
+const OT_REQ={1:["eq","txt","tipo","urg"],2:["quien"],3:["sol","sis","ubi","riesgo","loto","crit"]};
+function otMiss(){
+  const o=S.ot; let m=OT_REQ[o.step].filter(k=>!String(o[k]??"").trim()).length;
+  if(o.step===2&&o.quien==="Taller o proveedor"){ if(!o.prov)m++; if(o.kinds.size===0)m++; }
+  if(o.step===3&&o.loto==="Sí"&&!o.lotoTxt.trim())m++;
+  return m;
+}
+function newot(){
+  const o=S.ot; const names=["¿Qué pasa?","¿Quién lo hace?","Datos para aprobar"];
+  let body="";
+  if(o.step===1){
+    const eqF=S.tried&&!o.eq;
+    body=`<div class="fld ${eqF?"miss":""}"><p class="lbl">Equipo<span class="req">Falta</span></p>
+      ${o.eq?`<div class="sel">${I("cog",20)}<div class="grow"><b>${esc(o.eq)}</b><span class="hint">${VESSEL}</span></div><button type="button" class="chip sm" data-a="pick" data-p="ot|eq|">Cambiar</button></div>`
+      :`<input class="inp" id="ot-eqQ" data-in="ot|eqQ" data-filter="eqlist" value="${esc(o.eqQ)}" placeholder="Buscar equipo…"><div class="stack" id="eqlist">${EQUIPOS.map(e=>`<button type="button" class="radio" data-name="${esc(e.toLowerCase())}" data-a="pick" data-p="ot|eq|${esc(e)}"><span class="dot"></span><span class="grow"><b>${esc(e)}</b></span></button>`).join("")}</div>`}</div>
+    ${inputFld("ot","txt","¿Qué hay que hacer?",{ta:true,ph:"Contalo simple: qué falla y qué hay que hacer…",extra:tools("ot")})}
+    ${chipsFld("ot","tipo","Tipo de mantenimiento",["Correctivo programado","Correctivo no programado","Emergencia","Preventivo","Inspección"])}
+    ${chipsFld("ot","urg","¿Para cuándo?",["Inmediato","Dentro de las 24 hs","Dentro de la semana","Dentro del mes"])}`;
+  } else if(o.step===2){
+    const qF=S.tried&&!o.quien;
+    body=`<div class="fld ${qF?"miss":""}"><p class="lbl">¿Quién hace el trabajo?<span class="req">Falta</span></p>
+      <div class="choice">
+        <button type="button" class="opt ${o.quien==="Tripulación"?"on":""}" data-a="pick" data-p="ot|quien|Tripulación"><span class="oi">${I("users",22)}</span><b>La tripulación</b><small>Sólo se abre la OT</small></button>
+        <button type="button" class="opt ${o.quien==="Taller o proveedor"?"on":""}" data-a="pick" data-p="ot|quien|Taller o proveedor"><span class="oi">${I("building-2",22)}</span><b>Un taller o proveedor</b><small>Se abren la OT y la SS</small></button>
+      </div></div>
+    ${o.quien==="Taller o proveedor"?`
+      <div class="fld ${S.tried&&!o.prov?"miss":""}"><p class="lbl">Proveedor<span class="req">Falta</span></p><div class="stack">
+        ${PROVIDERS.map(p=>`<button type="button" class="radio ${o.prov===p.n?"on":""}" data-a="pick" data-p="ot|prov|${esc(p.n)}"><span class="dot"></span><span class="grow"><b>${p.n}</b><small>${p.c}</small></span></button>`).join("")}
+      </div></div>
+      ${chipsFld("ot","kinds","Tipo de solicitud",["Normal","Afecta seguridad","Afecta servicio"],{multi:true,hint:"Podés marcar más de uno."})}
+      <p class="note">${I("info",17)}<span>La SS sale con este proveedor y la descripción del paso anterior. Presupuestos y adjuntos se cargan desde la PC.</span></p>`:""}`;
+  } else {
+    const rF=S.tried&&!o.riesgo;
+    body=`${chipsFld("ot","sol","Solicitado por",["Cubierta","Máquinas","Técnica","Ops / SSMA"])}
+    ${chipsFld("ot","sis","Sistema",["Máquinas","R/E Cubierta","Barcazas"])}
+    ${inputFld("ot","ubi","Ubicación",{ph:"¿Dónde se hace el trabajo?",sugg:["Sala de máquinas","Cubierta principal","Puente","Proa","Popa"]})}
+    <div class="fld ${rF?"miss":""}"><p class="lbl">Nivel de riesgo<span class="req">Falta</span></p><div class="risk">${["Bajo","Medio","Alto","Crítico"].map((r,i)=>`<button type="button" class="r${i} ${o.riesgo===r?"on":""}" data-a="pick" data-p="ot|riesgo|${r}">${r}</button>`).join("")}</div></div>
+    <div class="fld ${S.tried&&(!o.loto||(o.loto==="Sí"&&!o.lotoTxt.trim()))?"miss":""}"><p class="lbl">¿Hay que bloquear energía? (LOTO)<span class="req">Falta</span></p>
+      <div class="chips">${["Sí","No"].map(x=>`<button type="button" class="chip ${o.loto===x?"on":""}" style="min-width:90px;justify-content:center" data-a="pick" data-p="ot|loto|${x}">${x}</button>`).join("")}</div>
+      ${o.loto==="Sí"?`<textarea class="ta" id="ot-lotoTxt" data-in="ot|lotoTxt" placeholder="Qué se corta y dónde se bloquea…">${esc(o.lotoTxt)}</textarea>`:""}</div>
+    ${inputFld("ot","crit","¿Cómo se sabe que quedó bien?",{ta:true,hint:"Criterio de aceptación.",ph:"Ej.: sin pérdidas con el equipo en marcha 15 minutos.",extra:`<button type="button" class="chip" data-a="aiCrit" style="justify-content:center">${I("sparkles",17)}Sugerir con IA</button>`})}`;
+  }
+  const last=o.step===3;
+  return {head:head(o.step===1?"Nueva OT / SS":names[o.step-1],`Paso ${o.step} de 3 · ${names[o.step-1]}`,{prog:o.step}),body,
+    foot:last?`${sendBtn(otMiss(),"Enviar a aprobar","otNext")}${signer}`:sendBtn(otMiss(),"Siguiente","otNext","arrow-right")};
+}
+
+function avance(){
+  return {head:head("Registrar avance","¿En qué trabajaste?"),body:`
+  ${OPEN_WOS.map(w=>`<button type="button" class="card" data-a="avPick" data-p="${w.c}"><span class="eq">${w.eq}</span><span class="tk">${w.t}</span><span class="meta"><span class="pill ${w.st[0]}">${w.st[1]}</span><span class="code">${w.c}</span></span></button>`).join("")}
+  <p class="note">${I("info",17)}<span>Es el mismo registro de avances de la <b>Preview V29</b>: frases rápidas, ¿cuándo?, ¿cómo sigue? y la pregunta de repuestos detectados.</span></p>`};
+}
+function avSheet(){
+  const w=OPEN_WOS.find(x=>x.c===S.av.wo); const can=S.av.txt.trim()||S.av.photos;
+  return {head:head("Registrar avance",`${w.c} · ${w.t}`),body:`
+  ${inputFld("av","txt","¿Qué se hizo?",{ta:true,req:false,ph:"Contalo como se lo dirías al jefe de máquinas…",extra:tools("av")})}
+  <div class="fld"><p class="lbl">¿Cómo sigue?<span class="opt2">opcional</span></p><div class="chips">${["Sigue en curso","Espera repuesto","Listo para cerrar"].map(x=>`<button type="button" class="chip sm" data-a="fill" data-p="av|txt|${esc((S.av.txt?S.av.txt.replace(/\s*$/,"")+" ":"")+x+".")}">${x}</button>`).join("")}</div></div>`,
+  foot:`<button type="button" class="btn pri" ${can?"":"disabled"} data-a="avSave">${I("check",19)}Guardar avance</button><p class="signer">${can?"Si no hay señal, queda en el teléfono y se envía solo.":"Escribí, dictá o sacá una foto."}</p>`};
+}
+
+function horas(){
+  const n=Object.values(S.h).filter(v=>parseNum(v)!==null).length;
+  return {head:head("Horómetros","Lectura de hoy · 15/09 · 09:41"),body:`
+  <p class="hint">Escribí lo que marca cada horómetro. Dejá vacío el que no leíste.</p>
+  ${HOURS.map(h=>{const st=h.days>=7;return `<div class="hcard"><div class="grow"><b>${h.eq}</b><span class="hlast ${st?"st":""}">Última: <span class="mono">${fmt(h.last)} h</span> · hace ${h.days} ${h.days===1?"día":"días"}${st?" · atrasado":""}</span><span class="delta" id="d-${h.id}"></span></div>
+    <label class="hin"><input id="h-${h.id}" inputmode="decimal" autocomplete="off" data-in="h|${h.id}" data-live="h" value="${esc(S.h[h.id]??"")}" placeholder="${fmt(h.last)}" aria-label="Horas de ${h.eq}"><span>h</span></label></div>`;}).join("")}`,
+  foot:`<button type="button" class="btn pri" ${n?"":"disabled"} data-a="hSave">${I("check",19)}${n?`Guardar ${n} ${n===1?"lectura":"lecturas"}`:"Guardar lecturas"}</button>`};
+}
+function hourWarn(h,v){
+  const n=parseNum(v); if(n===null||Number.isNaN(n))return null;
+  const d=n-h.last;
+  if(d<0)return {w:true,t:`${fmt(Math.abs(d))} h menos que la anterior`};
+  if(d>h.days*24)return {w:true,t:`+${fmt(d)} h: más de las que pasaron (máx. ${h.days*24} h)`};
+  return {w:false,t:`+${fmt(d)} h desde la última lectura`};
+}
+
+const PT_REQ={2:["lugar","desc"]};
+const ptMiss=()=>S.pt.step===2?PT_REQ[2].filter(k=>!S.pt[k].trim()).length:0;
+function permiso(){
+  const o=S.pt; const T=PTW.find(x=>x.v===o.type);
+  const names=["Tipo de permiso","El trabajo","Seguridad"];
+  let body="";
+  if(o.step===1){
+    body=`<p class="hint">¿Qué tipo de trabajo vas a hacer?</p><div class="choice">${PTW.map(t=>`<button type="button" class="opt ${o.type===t.v?"on":""}" data-a="ptType" data-p="${t.v}"><span class="oi">${I(t.ic,22)}</span><b>${t.n}</b><small>${t.d}</small></button>`).join("")}</div>`;
+  } else if(o.step===2){
+    body=`<div class="sel">${I(T.ic,20)}<div class="grow"><b>${T.n}</b><span class="hint">${T.d}</span></div><button type="button" class="chip sm" data-a="ptStep" data-p="1">Cambiar</button></div>
+    <div class="fld"><p class="lbl">¿Para qué OT?<span class="opt2">opcional</span></p><div class="stack">
+      ${OPEN_WOS.map(w=>`<button type="button" class="radio ${o.ot===w.c?"on":""}" data-a="set" data-p="pt|ot|${w.c}"><span class="dot"></span><span class="grow"><b>${w.t}</b><small class="mono">${w.c} · ${w.eq}</small></span></button>`).join("")}
+    </div></div>
+    ${inputFld("pt","lugar","Lugar",{ph:"¿Dónde se hace?",sugg:["Sala de máquinas","Tanque 3 Babor","Cubierta principal","Mástil"]})}
+    ${inputFld("pt","desc","¿Qué se va a hacer?",{ta:true,ph:"Describí el trabajo en pocas palabras…",extra:tools("pt")})}
+    <div class="fld"><p class="lbl">¿Cuándo?</p><div class="chips">${["Hoy","Mañana"].map(x=>`<button type="button" class="chip ${o.dia===x?"on":""}" style="min-width:96px;justify-content:center" data-a="pick" data-p="pt|dia|${x}">${x}</button>`).join("")}</div>
+      <div class="times"><label for="pt-desde">Desde<input class="inp mono" id="pt-desde" type="time" data-in="pt|desde" value="${o.desde}"></label><label for="pt-hasta">Hasta<input class="inp mono" id="pt-hasta" type="time" data-in="pt|hasta" value="${o.hasta}"></label></div></div>`;
+  } else {
+    const grp=(k,label,list)=>`<div class="fld"><p class="lbl">${label}</p><div class="chips">${list.map(x=>`<button type="button" class="chip sm aio ${o[k].has(x)?"on":""}" data-a="set" data-p="pt|${k}|${esc(x)}">${o[k].has(x)?I("check",14):""}${esc(x)}</button>`).join("")}<button type="button" class="chip sm" data-a="toastOther">${I("plus",14)}Otro</button></div></div>`;
+    body=`<p class="note ai">${I("sparkles",17)}<span>La IA sugirió esto para <b>${T.n.toLowerCase()}</b>. Tocá para quitar lo que no aplica.</span></p>
+    ${grp("haz","Peligros",T.haz)}${grp("ctl","Controles",T.ctl)}${grp("ppe","Equipo de protección (EPP)",T.ppe)}`;
+  }
+  return {head:head("Permiso de trabajo",`Paso ${o.step} de 3 · ${names[o.step-1]}`,{prog:o.step}),body,
+    foot:o.step===1?"":o.step===2?sendBtn(ptMiss(),"Siguiente","ptNext","arrow-right"):`${sendBtn(0,"Pedir aprobación","ptNext")}${signer}`};
+}
+
+function check(){
+  return {head:head("Check list",VESSEL),body:`
+  <p class="gh">Sin terminar</p>
+  <button type="button" class="card" data-a="ckStart" data-p="zar|resume"><span class="eq">Empezado ayer 18:40</span><span class="tk">Antes de zarpar</span><span class="meta"><span class="pill p-warn">4 de 10</span><span class="hint">Seguir</span></span></button>
+  <p class="gh">Empezar uno nuevo</p>
+  <div class="list">${TEMPLATES.map(t=>`<button type="button" class="row" data-a="ckStart" data-p="${t.id}|new"><span class="grow"><b>${t.n}</b><span class="sub">${t.s} · ${t.items.length} puntos</span></span>${I("chevron-right",18)}</button>`).join("")}</div>`};
+}
+function ckState(){
+  const t=TEMPLATES.find(x=>x.id===S.ck.tpl); const a=S.ck.ans;
+  const answered=t.items.filter((_,i)=>a[i]).length;
+  const noteMiss=t.items.filter((_,i)=>a[i]==="no"&&!String(S.ckn[i]??"").trim()).length;
+  return {t,a,answered,noteMiss,miss:t.items.length-answered+noteMiss};
+}
+function ckRun(){
+  const {t,a,answered,miss}=ckState();
+  return {head:head(t.n,`${t.s} · ${VESSEL}`),body:`
+  <div class="meter"><div><span style="width:${answered/t.items.length*100}%"></span></div><p><span>${answered} de ${t.items.length} respondidos</span><span>${t.items.filter((_,i)=>a[i]==="no").length} no conformes</span></p></div>
+  ${t.items.map((it,i)=>{const m=S.tried&&(!a[i]||(a[i]==="no"&&!String(S.ckn[i]??"").trim()));return `<div class="item ${m?"miss":""}"><p>${it}</p>
+    <div class="yn"><button type="button" class="si ${a[i]==="si"?"on":""}" data-a="ckAns" data-p="${i}|si">${I("check",17)}Sí</button><button type="button" class="no ${a[i]==="no"?"on":""}" data-a="ckAns" data-p="${i}|no">${I("x",17)}No</button><button type="button" class="na ${a[i]==="na"?"on":""}" data-a="ckAns" data-p="${i}|na">N/A</button></div>
+    ${a[i]==="no"?`<textarea class="ta" style="min-height:70px" id="ck-${i}" data-in="ckn|${i}" placeholder="¿Qué pasa? (obligatorio)">${esc(S.ckn[i]??"")}</textarea>`:""}</div>`;}).join("")}`,
+  foot:miss?`<button type="button" class="btn need" data-a="ckFinish">${I("triangle-alert",18)}Faltan ${miss} ${miss===1?"punto":"puntos"}</button><p class="signer">Se guarda solo: podés seguir más tarde.</p>`
+           :`<button type="button" class="btn pri" data-a="ckFinish">${I("pen-line",18)}Firmar y terminar</button>`};
+}
+
+function repuestos(){
+  const r=S.rp;
+  if(r.step==="ot") return {head:head("Consumo de repuestos","¿Para qué trabajo?"),body:`
+    ${OPEN_WOS.map(w=>`<button type="button" class="card" data-a="rpOt" data-p="${w.c}"><span class="eq">${w.eq}</span><span class="tk">${w.t}</span><span class="meta"><span class="pill ${w.st[0]}">${w.st[1]}</span><span class="code">${w.c}</span></span></button>`).join("")}
+    <button type="button" class="card" data-a="rpOt" data-p="none"><span class="eq">Sin OT</span><span class="tk">Consumo general del buque</span><span class="meta"><span class="hint">Ej.: aceite de relleno, trapos, electrodos</span></span></button>`};
+  const ot=OPEN_WOS.find(w=>w.c===r.ot);
+  const total=r.lines.length;
+  return {head:head("Consumo de repuestos",ot?`${ot.c} · ${ot.t}`:"Consumo general del buque"),body:`
+    ${total?`<div class="cart"><p class="gh" style="margin:10px 0 2px">Vas a descontar</p>${r.lines.map((l,i)=>{const s=SPARES[l.i];return `<div class="row"><span class="grow"><b>${s.n}</b><span class="sub mono">${s.pn}</span></span><span class="pill p-ac mono">${fmt(l.q)} ${s.u}</span><button type="button" class="iconb" style="width:38px;height:38px" data-a="rpDel" data-p="${i}" aria-label="Quitar ${s.n}">${I("x",16)}</button></div>`;}).join("")}</div>`:""}
+    <input class="inp" id="rp-q" data-in="rp|q" data-filter="splist" value="${esc(r.q)}" placeholder="Buscar por nombre o P/N…">
+    <div class="stack" id="splist">${SPARES.map((s,i)=>{const p=s.stock===0?["p-bad","Sin stock"]:s.stock<=s.rp?["p-warn",`Quedan ${fmt(s.stock)} ${s.u}`]:["p-ok",`Hay ${fmt(s.stock)} ${s.u}`];
+      return `<button type="button" class="spare" data-name="${esc((s.n+" "+s.pn).toLowerCase())}" data-a="rpPick" data-p="${i}"><span class="grow"><b>${s.n}</b><span class="sub"><span class="mono">P/N ${s.pn}</span> · ${s.loc}</span></span><span class="pill ${p[0]}">${p[1]}</span></button>`;}).join("")}</div>`,
+  foot:`<button type="button" class="btn pri" ${total?"":"disabled"} data-a="rpSave">${I("package-minus",19)}${total?`Descontar ${total} ${total===1?"repuesto":"repuestos"}`:"Elegí los repuestos usados"}</button>`};
+}
+
+function done(){
+  const d=S.done;
+  return {body:`<div class="done"><span class="big">${I(d.icon||"check",40)}</span><h2>${d.title}</h2>${d.code?`<span class="code" style="font-size:14px">${d.code}</span>`:""}
+    <ul>${d.lines.map(l=>`<li>${I(l[0],17)}<span>${l[1]}</span></li>`).join("")}</ul></div>`,
+  foot:`<button type="button" class="btn pri" data-a="home">${I("house",19)}Volver al inicio</button>${d.again?`<button type="button" class="btn sec2" data-a="go" data-p="${d.again[1]}">${d.again[0]}</button>`:""}`};
+}
+
+/* ───────── ventanitas ───────── */
+function dialog(){
+  if(S.dlg==="horas"){
+    const ws=HOURS.map(h=>({h,w:hourWarn(h,S.h[h.id]??"")})).filter(x=>x.w&&x.w.w);
+    return `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><div class="grab"></div><h2 id="dlg-t">Revisá antes de guardar</h2>
+      <div class="stack">${ws.map(x=>`<p class="note w">${I("triangle-alert",17)}<span><b>${x.h.eq}</b><br>${x.w.t}</span></p>`).join("")}</div>
+      <textarea class="ta" id="hn-note" data-in="hn|note" placeholder="Si está bien, contá por qué (ej.: se cambió el horómetro)">${esc(S.hn.note)}</textarea>
+      <div class="two"><button type="button" class="btn sec2" data-a="dlgClose">Corregir</button><button type="button" class="btn pri sec2" data-a="hConfirm">Guardar igual</button></div></div>`;
+  }
+  if(S.dlg==="qty"){
+    const s=SPARES[S.rp.pick]; const over=S.rp.qty>s.stock;
+    return `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><div class="grab"></div><h2 id="dlg-t">${s.n}</h2><p class="hint mono" style="margin-top:-8px">P/N ${s.pn} · ${s.loc}</p>
+      <div class="stepper"><button type="button" data-a="qty" data-p="-1" aria-label="Menos">${I("minus",26)}</button><output class="mono">${fmt(S.rp.qty)}</output><button type="button" data-a="qty" data-p="1" aria-label="Más">${I("plus",26)}</button></div>
+      <p class="hint" style="text-align:center">${s.u==="un."?"unidades":s.u==="L"?"litros":"kilos"} usados</p>
+      ${over?`<p class="note w">${I("triangle-alert",17)}<span>En el sistema hay ${fmt(s.stock)} ${s.u}. Se descuenta igual y el stock queda marcado para revisar.</span></p>`:""}
+      <div class="two"><button type="button" class="btn sec2" data-a="dlgClose">Cancelar</button><button type="button" class="btn pri sec2" data-a="rpAdd">${I("plus",18)}Agregar</button></div></div>`;
+  }
+  if(S.dlg==="ckSign"){
+    const {t,a}=ckState(); const c=k=>t.items.filter((_,i)=>a[i]===k).length;
+    return `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><div class="grab"></div><h2 id="dlg-t">Firmar «${t.n}»</h2>
+      <div class="chips"><span class="pill p-ok">${c("si")} conformes</span><span class="pill p-bad">${c("no")} no conformes</span><span class="pill p-mut">${c("na")} no aplican</span></div>
+      <p class="note">${I("pen-line",17)}<span>Firma <b>${USER} · ${CARGO}</b>, hoy 15/09 a las 09:41. Después de firmar no se puede cambiar.</span></p>
+      <div class="two"><button type="button" class="btn sec2" data-a="dlgClose">Revisar</button><button type="button" class="btn pri sec2" data-a="ckSign">Firmar</button></div></div>`;
+  }
+  return "";
+}
+
+/* ───────── panel guía y "qué incluye" ───────── */
+const JUMPS=[["home","house","Inicio"],["plans","calendar-clock","Planes"],["newot","plus","Nueva OT / SS"],["avance","message-square-plus","Avance"],["horas","gauge","Horómetros"],["permiso","shield-check","Permiso"],["check","clipboard-check","Check list"],["repuestos","package-minus","Repuestos"]];
+function guide(){
+  const base={planOpen:"plans",avSheet:"avance",ckRun:"check",done:""}[S.scr]??S.scr;
+  return `<aside class="guide">
+    <div><h2>La app del Capitán y del Jefe de Máquinas</h2><p style="margin-top:8px">Abrir, completar lo mínimo y mandar a aprobar. Lo demás se completa en la PC.</p></div>
+    <div><p class="gl">Ir a</p><div class="jump">${JUMPS.map(j=>`<button type="button" class="${base===j[0]?"on":""}" data-a="go" data-p="${j[0]}">${I(j[1],16)}${j[2]}</button>`).join("")}</div></div>
+    <div><p class="gl">Para probar</p><ol class="steps">
+      <li><b>Planes</b> → «Cambio de aceite» del motor principal Babor. Sumá la otra tarea del mismo motor, completá lo que falta y enviala.</li>
+      <li><b>Nueva OT / SS</b> → elegí «Un taller o proveedor»: se abren las dos juntas.</li>
+      <li><b>Horómetros</b> → escribí <span class="mono">39400</span> en el motor principal Babor para ver el aviso.</li>
+      <li><b>Check list</b> → marcá un «No»: pide explicar qué pasa.</li>
+    </ol></div>
+    <p class="hint">Abrí esta página desde el celular: ocupa toda la pantalla, como la app.</p>
+  </aside>`;
+}
+function refPage(){
+  return `<article class="ref">
+  <header><h2>App a bordo · Preview V30</h2><p>Una app de celular sólo para el Capitán y el Jefe de Máquinas: siete funciones, cada una resuelta en pocos toques. Todo lo que pide un escritorio —presupuestos, adjuntos, repuestos planificados, participantes— sigue en la PC.</p></header>
+  <section><h3>Qué hace cada función</h3><div class="tw"><table>
+    <thead><tr><th>Función</th><th>En el celular</th><th>Queda para la PC</th><th>Quién aprueba</th></tr></thead>
+    <tbody>
+    <tr><td><b>Planes vencidos y por vencer</b></td><td>Ver la lista, abrir la OT (sumando otras tareas del mismo equipo), completar solicitado por, asignado a, sistema y ubicación, y enviar a aprobar. Criterio, LOTO y riesgo ya vienen del plan.</td><td>Repuestos planificados, fechas, adjuntos, cierre.</td><td>Superintendente</td></tr>
+    <tr><td><b>Nueva OT / SS</b></td><td>Equipo, qué pasa (texto, dictado, foto), tipo y urgencia; quién lo hace; si es un taller: proveedor y tipo de solicitud. Riesgo, LOTO y criterio (con sugerencia de IA). Envía a aprobar la OT y, si corresponde, la SS.</td><td>Presupuestos, forma de comunicación, distribución, seguimiento del taller.</td><td>Superintendente</td></tr>
+    <tr><td><b>Registrar avance</b></td><td>Igual que la Preview V29.</td><td>—</td><td>No requiere</td></tr>
+    <tr><td><b>Horómetros</b></td><td>Lectura del día por equipo, con la última lectura a la vista. Avisa si es menor que la anterior o si suma más horas de las que pasaron, y pide una nota.</td><td>Historial y corrección de lecturas viejas.</td><td>No requiere</td></tr>
+    <tr><td><b>Permiso de trabajo</b></td><td>Tipo (los 6 del formulario), OT relacionada, lugar, qué se hace y horario; peligros, controles y EPP sugeridos por IA. Pide aprobación.</td><td>Participantes, pruebas de gas, adjuntos, activar y cerrar.</td><td>Superintendente o Jefe SSMA</td></tr>
+    <tr><td><b>Check list</b></td><td>Elegir la lista, responder Sí / No / N/A (el «No» pide explicación), seguir más tarde y firmar.</td><td>PDF, plantillas.</td><td>No requiere</td></tr>
+    <tr><td><b>Consumo de repuestos</b></td><td>Elegir la OT (o consumo general), buscar por nombre o P/N, cantidad con botones grandes, descontar.</td><td>Recepciones, ajustes, pedidos.</td><td>No requiere</td></tr>
+    </tbody></table></div></section>
+  <section><h3>Quién ve, quién crea, quién aprueba</h3><ul>
+    <li><b>Ve:</b> sólo los buques asignados al usuario, igual que hoy.</li>
+    <li><b>Crea y envía:</b> Capitán y Jefe de Máquinas, con los permisos que ya tienen. No se agrega ningún permiso nuevo.</li>
+    <li><b>Aprueba:</b> nadie desde esta app. OT y SS las aprueba el Superintendente; los permisos de trabajo, el Superintendente o el Jefe SSMA.</li>
+  </ul></section>
+  <section><h3>Qué no cambia</h3><p>La base de datos, las reglas de aprobación y las pantallas de la PC. La app usa lo que el sistema ya sabe hacer. La vista móvil actual de la tripulación sigue como está.</p></section>
+  <section><h3>Para decidir</h3><div class="dec">
+    <div><b>1. ¿Exigir todos los datos para enviar?</b>En la PC hoy se puede «Enviar igual» con datos faltantes. En el celular propongo exigirlos (el botón dice «Faltan 2 datos» y los marca en amarillo).</div>
+    <div><b>2. «Lo que mandaste» en el inicio</b>Muestra si te aprobaron o rechazaron, con el motivo. ¿Lo dejamos?</div>
+    <div><b>3. Consumo sin OT</b>Hoy el sistema lo permite (consumo general del buque). ¿Lo dejamos en el celular o todo consumo debe ir contra una OT?</div>
+    <div><b>4. Fotos en el check list</b>El sistema guarda Sí / No / N/A y una nota, no fotos. Sumarlas es un cambio de base: lo dejaría para otra etapa.</div>
+    <div><b>5. ¿Cómo entra el Capitán?</b>Propuesta: al iniciar sesión desde el celular con ese rol, abre directo esta app.</div>
+  </div></section>
+  <section><h3>Aviso para la implementación</h3><p>El consumo cargado desde la OT hoy reemplaza la lista entera de repuestos de esa orden. Si dos personas cargan consumos en la misma OT, el segundo borraría lo del primero. Al construir la app hay que sumar sin pisar.</p></section>
+  </article>`;
+}
+
+/* ───────── acciones ───────── */
+function go(scr){
+  S.scr=scr;S.tried=false;S.dlg=null;
+  if(scr==="newot")S.ot=newOt();
+  if(scr==="permiso")S.pt=newPt();
+  if(scr==="horas"){S.h={};S.hn.note="";}
+  if(scr==="avance")S.av={wo:null,txt:"",rec:false,photos:0};
+  if(scr==="repuestos")S.rp={step:"ot",ot:null,lines:[],pick:null,qty:1,q:""};
+}
+function back(){
+  const m={plans:"home",planOpen:"plans",avance:"home",avSheet:"avance",horas:"home",check:"home",ckRun:"check",done:"home"};
+  if(S.scr==="newot"){ if(S.ot.step>1){S.ot.step--;S.tried=false;} else go("home"); return; }
+  if(S.scr==="permiso"){ if(S.pt.step>1){S.pt.step--;S.tried=false;} else go("home"); return; }
+  if(S.scr==="repuestos"){ if(S.rp.step==="list"){S.rp.step="ot";} else go("home"); return; }
+  S.scr=m[S.scr]||"home";S.tried=false;S.dlg=null;
+}
+function finish(d){S.done=d;S.scr="done";S.dlg=null;S.tried=false;}
+function needMore(){S.tried=true;S.scrollMiss=true;}
+const DICT={ot:"Pierde agua por el sello mecánico; hay que cambiar el sello y revisar el eje.",av:"Se desarmó la bomba y se cambió el sello mecánico. Se probó 20 minutos sin pérdidas.",pt:"Soldar un refuerzo en la cuaderna 42 del tanque 3 Babor."};
+const DICTK={ot:"txt",av:"txt",pt:"desc"};
+
+function act(a,p){
+  const [x,y,z]=p.split("|");
+  switch(a){
+    case "tab": S.tab=x; window.scrollTo(0,0); break;
+    case "theme": S.theme={system:"light",light:"dark",dark:"system"}[S.theme]; applyTheme(); break;
+    case "go": go(x); break;
+    case "home": go("home"); break;
+    case "back": back(); break;
+    case "set": { const t=y?S[x]:S; const k=y||x; const v=y?z:""; if(t[k] instanceof Set){t[k].has(v)?t[k].delete(v):t[k].add(v);} else t[k]=t[k]===v?null:v; break; }
+    case "pick": { if(x==="planTab"){S.planTab=z;break;} S[x][y]=z||null; if(x==="ot"&&y==="eq"&&!z)S.ot.eqQ=""; break; }
+    case "fill": S[x][y]=z; break;
+    case "openPlan": { const pl=PLANS.find(q=>q.id===x); if(pl.openWo){toast(`Ya tiene la ${pl.openWo}: cargá el avance desde ahí.`);return;}
+      S.plan=pl; S.add=new Set(); S.pf={sol:null,asig:pl.dept==="PROVEEDOR"?"Tercerizado":"Tripulación",sis:null,ubi:""}; S.scr="planOpen"; S.tried=false; break; }
+    case "toggleAdd": S.add.has(x)?S.add.delete(x):S.add.add(x); break;
+    case "sendPlan": { if(pfMiss()){needMore();break;}
+      const n=1+S.add.size, pl=S.plan;
+      finish({icon:"send",title:"OT enviada a aprobar",code:"OT-DEM1-26-0072"+(pl.prov?" · SS-DEM1-26-0015":""),again:["Abrir otro plan","plans"],lines:[
+        ["list-checks",`${n} ${n===1?"tarea":"tareas"} de ${pl.eq}${n>1?" en la misma orden":""}.`],
+        ["user-check","La aprueba el Superintendente. El estado aparece en «Lo que mandaste»."],
+        ["monitor","Repuestos planificados, fechas y adjuntos: desde la PC."]]});
+      break; }
+    case "otNext": { if(otMiss()){needMore();break;}
+      if(S.ot.step<3){S.ot.step++;S.tried=false;break;}
+      const ss=S.ot.quien==="Taller o proveedor";
+      finish({icon:"send",title:ss?"OT y SS enviadas a aprobar":"OT enviada a aprobar",code:ss?"OT-DEM1-26-0073 · SS-DEM1-26-0015":"OT-DEM1-26-0073",again:["Abrir otra","newot"],lines:[
+        ["cog",`${S.ot.eq} · ${S.ot.urg}.`],
+        ...(ss?[["building-2",`La SS sale para ${S.ot.prov}.`]]:[]),
+        ["user-check","La aprueba el Superintendente. El estado aparece en «Lo que mandaste»."],
+        ["monitor",ss?"Presupuestos y adjuntos de la SS: desde la PC.":"Repuestos y adjuntos: desde la PC."]]});
+      break; }
+    case "dictate": { const o=S[x]; if(!o.rec){o.rec=true;} else {o.rec=false; const k=DICTK[x]; o[k]=(o[k]?o[k].replace(/\s*$/," "):"")+DICT[x];} break; }
+    case "photo": S[x].photos++; break;
+    case "aiCrit": S.ot.crit="Equipo en marcha 15 minutos sin pérdidas y con la presión de trabajo normal."; if(S.ot.loto==="Sí"&&!S.ot.lotoTxt.trim())S.ot.lotoTxt="Cortar la alimentación en el tablero principal y colocar candado y tarjeta."; toast("Sugerencia de IA: revisala antes de enviar."); return;
+    case "avPick": S.av.wo=x; S.scr="avSheet"; break;
+    case "avSave": finish({icon:"check",title:"Avance guardado",code:S.av.wo,again:["Registrar otro","avance"],lines:[["message-square-plus","Se ve en la OT con tu nombre y la hora."]]}); break;
+    case "hSave": { const ws=HOURS.filter(h=>{const w=hourWarn(h,S.h[h.id]??"");return w&&w.w;}); if(ws.length){S.dlg="horas";break;} }
+    /* falls through */
+    case "hConfirm": { const n=Object.values(S.h).filter(v=>parseNum(v)!==null).length;
+      finish({icon:"gauge",title:`${n} ${n===1?"lectura guardada":"lecturas guardadas"}`,lines:[["calendar-clock","Los planes por horas se recalculan con estas lecturas."],["monitor","El historial y las correcciones, desde la PC."]]}); break; }
+    case "ptType": { const T=PTW.find(t=>t.v===x); S.pt.type=x; S.pt.haz=new Set(T.haz); S.pt.ctl=new Set(T.ctl); S.pt.ppe=new Set(T.ppe); S.pt.step=2; S.tried=false; break; }
+    case "ptStep": S.pt.step=Number(x); S.tried=false; break;
+    case "ptNext": { if(ptMiss()){needMore();break;} if(S.pt.step<3){S.pt.step++;S.tried=false;break;}
+      const T=PTW.find(t=>t.v===S.pt.type);
+      finish({icon:"shield-check",title:"Permiso enviado a aprobar",code:"PTW-DEM1-26-0010",again:["Pedir otro","permiso"],lines:[
+        [T.ic,`${T.n} · ${S.pt.lugar} · ${S.pt.dia} ${S.pt.desde} a ${S.pt.hasta}.`],
+        ["user-check","Lo aprueba el Superintendente o el Jefe SSMA."],
+        ["monitor","Participantes, pruebas de gas y adjuntos: desde la PC."]]});
+      break; }
+    case "toastOther": toast("Se escribe a mano (en la maqueta no hace nada)."); return;
+    case "ckStart": { S.ck={tpl:x,ans:{}}; S.ckn={}; if(y==="resume"){for(let i=0;i<4;i++)S.ck.ans[i]="si";} S.scr="ckRun"; S.tried=false; break; }
+    case "ckAns": S.ck.ans[x]=S.ck.ans[x]===y?undefined:y; break;
+    case "ckFinish": { if(ckState().miss){needMore();break;} S.dlg="ckSign"; break; }
+    case "ckSign": { const {t,a}=ckState(); const no=t.items.filter((_,i)=>a[i]==="no").length;
+      finish({icon:"clipboard-check",title:"Check list firmado",code:`${t.n} · 15/09 09:41`,lines:[
+        ["circle-check",`${t.items.length} puntos · ${no} no ${no===1?"conforme":"conformes"}.`],
+        ["monitor","El PDF queda disponible en la PC."]]}); break; }
+    case "rpOt": S.rp.ot=x==="none"?null:x; S.rp.step="list"; break;
+    case "rpPick": S.rp.pick=Number(x); S.rp.qty=1; S.dlg="qty"; break;
+    case "qty": S.rp.qty=Math.max(1,S.rp.qty+Number(x)); break;
+    case "rpAdd": { const ex=S.rp.lines.find(l=>l.i===S.rp.pick); ex?ex.q+=S.rp.qty:S.rp.lines.push({i:S.rp.pick,q:S.rp.qty}); S.dlg=null; break; }
+    case "rpDel": S.rp.lines.splice(Number(x),1); break;
+    case "rpSave": { const n=S.rp.lines.length;
+      finish({icon:"package-minus",title:"Stock descontado",code:S.rp.ot||"Consumo general",lines:[
+        ...S.rp.lines.map(l=>["package",`${SPARES[l.i].n} · ${fmt(l.q)} ${SPARES[l.i].u}`]),
+        ["history",`${n} ${n===1?"movimiento":"movimientos"} con tu nombre y la hora.`]]}); break; }
+    case "dlgClose": S.dlg=null; break;
+  }
+  render();
+}
+
+/* ───────── render ───────── */
+function current(){
+  return ({home,plans,planOpen,newot,avance,avSheet,horas,permiso,check,ckRun,repuestos,done})[S.scr]();
+}
+function icons(){ if(window.lucide) lucide.createIcons(); }
+function applyTheme(){
+  const r=document.documentElement;
+  if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme);
+  try{localStorage.setItem("v30-theme",S.theme);}catch(e){}
+}
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.p===S.tab));
+  $("#themeb").innerHTML=`${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  const main=$("#main");
+  if(S.tab==="ref"){ main.innerHTML=refPage(); icons(); return; }
+  const key=S.scr+(S.scr==="newot"?S.ot.step:S.scr==="permiso"?S.pt.step:S.scr==="repuestos"?S.rp.step:"");
+  const prev=$("#scr"); const top=(prev&&key===S.lastKey)?prev.scrollTop:0;
+  const focusId=document.activeElement&&document.activeElement.id;
+  const v=current();
+  main.innerHTML=`<div class="stage"><div class="phone">
+      <div class="sbar ${v.sbar||""}"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      ${v.head||""}<div class="scr" id="scr">${v.body}</div><div id="foot">${v.foot?`<div class="foot">${v.foot}</div>`:""}</div>
+      ${S.dlg?`<div class="dlg" data-a="dlgBg">${dialog()}</div>`:""}${S.toast?`<div class="toast" role="status">${S.toast}</div>`:""}
+    </div>${guide()}</div>`;
+  icons();
+  const scr=$("#scr"); scr.scrollTop=top; S.lastKey=key;
+  if(S.scr==="horas") HOURS.forEach(h=>liveHour(h.id,S.h[h.id]??""));
+  ["eqlist","splist"].forEach(id=>{const inp=document.querySelector(`[data-filter="${id}"]`); if(inp&&inp.value) filterList(id,inp.value);});
+  if(focusId&&!S.dlg){const el=document.getElementById(focusId); if(el&&(el.tagName==="INPUT"||el.tagName==="TEXTAREA"))el.focus();}
+  if(S.scrollMiss){S.scrollMiss=false; const m=scr.querySelector(".miss"); if(m)m.scrollIntoView({block:"center",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});}
+}
+function refreshFoot(){ const v=current(); $("#foot").innerHTML=v.foot?`<div class="foot">${v.foot}</div>`:""; icons(); }
+function liveHour(id,v){
+  const h=HOURS.find(x=>x.id===id); const el=document.getElementById("d-"+id); if(!el)return;
+  const w=hourWarn(h,v); el.className="delta "+(w?(w.w?"warn":"ok"):""); el.textContent=w?w.t:"";
+}
+function filterList(id,q){
+  const t=q.trim().toLowerCase(); document.querySelectorAll(`#${id} [data-name]`).forEach(b=>{b.hidden=t&&!b.dataset.name.includes(t);});
+}
+
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-a]"); if(!el)return;
+  if(el.dataset.a==="dlgBg"){ if(e.target===el){S.dlg=null;render();} return; }
+  act(el.dataset.a,el.dataset.p||"");
+});
+document.addEventListener("input",e=>{
+  const el=e.target; if(!el.dataset||!el.dataset.in)return;
+  const [o,k]=el.dataset.in.split("|"); S[o][k]=el.value;
+  if(el.dataset.live==="h") liveHour(k,el.value);
+  if(el.dataset.filter) filterList(el.dataset.filter,el.value);
+  const f=el.closest(".fld,.item"); if(f&&S.tried) f.classList.toggle("miss",!el.value.trim());
+  if(!S.dlg) refreshFoot();
+});
+
+try{S.theme=localStorage.getItem("v30-theme")||"system";}catch(e){}
+applyTheme();
+render();
+window.addEventListener("load",icons);
+</script>

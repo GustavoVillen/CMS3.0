@@ -20,8 +20,10 @@ import { MaintenancePlanModal, type MaintenancePlan } from "./MaintenancePlans";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { textMatches } from "../lib/text-search";
 import { AlertDialog } from "../components/AlertDialog";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, RequiredMark } from "../components/GuideKit";
 import type { FluidSample } from "../components/fluid-analyses/shared";
+import { AssetHealthReportModal, HEALTH_STATE_STYLE, type HealthReportSummary } from "../components/assets/AssetHealthReportModal";
+import { fmtDate } from "../lib/utils";
 
 interface Asset {
   id: string;
@@ -782,6 +784,21 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const currentHoursDate = assetDetail?.currentHoursDate ?? initial?.currentHoursDate ?? null;
   const currentHoursSource = assetDetail?.currentHoursSource ?? initial?.currentHoursSource ?? null;
 
+  // Informe de salud (Preview V43): generan DPA y Superintendente; lo ven además
+  // Capitán / Jefe de Máquinas. El historial se pide sólo si el rol puede verlo.
+  const canGenerateHealth = can("assetHealth.generate");
+  const canViewHealth = canGenerateHealth || can("assetHealth.view");
+  const [healthItems, setHealthItems] = useState<HealthReportSummary[]>([]);
+  const [healthOpen, setHealthOpen] = useState(false);
+  useEffect(() => {
+    if (!initial?.id || !canViewHealth) return;
+    let alive = true;
+    api.get<{ items: HealthReportSummary[] }>(`/app/pms/assets/${initial.id}/health-reports`)
+      .then(res => { if (alive) setHealthItems(res.items ?? []); })
+      .catch(() => { /* sin historial: el botón queda en "generar" o no aparece */ });
+    return () => { alive = false; };
+  }, [initial?.id, canViewHealth]);
+
   const [vesselCode, setVesselCode] = useState(initial?.vesselCode ?? defaultVesselCode ?? "");
   const [assetCode, setAssetCode] = useState(initial?.assetCode ?? "");
   // Arranca con el grupo del asset, no vacío: el efecto de más abajo lo vuelve
@@ -1240,8 +1257,49 @@ const AssetModal: React.FC<AssetModalProps> = ({
               </div>
             )}
           </div>
+          {/* Informe de salud: botón grande a la derecha del encabezado. */}
+          {isEdit && initial && (canGenerateHealth || (canViewHealth && healthItems.length > 0)) && (() => {
+            const last = healthItems[0];
+            const generateStyle = canGenerateHealth;
+            return (
+              <button type="button" onClick={() => setHealthOpen(true)}
+                className={`flex items-center gap-2.5 rounded-2xl px-3 sm:px-4 py-2 text-left shrink-0 transition-all ${
+                  generateStyle
+                    ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 hover:brightness-110"
+                    : "border-[1.5px] border-violet-300 dark:border-violet-500/40 bg-surface text-fg hover:bg-violet-500/5"
+                }`}>
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${generateStyle ? "bg-white/20" : "bg-violet-500/15 text-violet-700 dark:text-violet-300"}`}>
+                  <Sparkles className="w-5 h-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black leading-tight">
+                    {!generateStyle ? t("asset.health.btnView") : last ? t("asset.health.btn") : t("asset.health.btnGenerate")}
+                  </span>
+                  <span className={`flex items-center gap-1 text-[11px] ${generateStyle ? "text-white/85" : "text-text-industrial/60"}`}>
+                    {last && <span className={`inline-block w-2 h-2 rounded-full ${HEALTH_STATE_STYLE[last.healthState]?.dot ?? "bg-slate-400"}`} />}
+                    {!last
+                      ? t("asset.health.btnGenerateSub")
+                      : generateStyle
+                        ? t("asset.health.btnLast").replace("{date}", fmtDate(last.createdAt)).replace("{state}", t(`asset.health.state.${last.healthState}` as TranslationKey))
+                        : t("asset.health.btnViewSub").replace("{date}", fmtDate(last.createdAt)).replace("{name}", last.createdByName ?? "—")}
+                  </span>
+                </span>
+              </button>
+            );
+          })()}
           <ModalCloseButton onClose={requestClose} />
         </div>
+        {healthOpen && initial && (
+          <AssetHealthReportModal
+            asset={{ id: initial.id, assetCode: initial.assetCode, name: initial.name ?? null }}
+            vesselName={vesselName(initial.vesselCode)}
+            canGenerate={canGenerateHealth}
+            initialItems={healthItems}
+            generateOnOpen={healthItems.length === 0}
+            onClose={() => setHealthOpen(false)}
+            onChanged={setHealthItems}
+          />
+        )}
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Qué hacer ahora */}
@@ -1276,21 +1334,21 @@ const AssetModal: React.FC<AssetModalProps> = ({
                 pill={<GuidePill missing={missSec1} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <GuideField id="as-f-vessel" missing={missReq.vessel}>
-                    <label className={fl}>{t("col.vessel")}{needTag(missReq.vessel)}</label>
+                    <label className={fl}>{t("col.vessel")}{!isEdit && <RequiredMark />}{needTag(missReq.vessel)}</label>
                     <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={isEdit && !isAdmin} className={inp}>
                       <option value="">{t("asset.selectVessel")}</option>
                       {vessels.map(vessel => <option key={vessel.code} value={vessel.code}>{vessel.name || vessel.code}</option>)}
                     </select>
                   </GuideField>
                   <GuideField id="as-f-code" missing={missReq.code}>
-                    <label className={fl}>{t("asset.code")}{needTag(missReq.code)}</label>
+                    <label className={fl}>{t("asset.code")}{!isEdit && <RequiredMark />}{needTag(missReq.code)}</label>
                     <input value={assetCode} onChange={e => { setAssetCode(e.target.value.toUpperCase()); setAssetCodeTouched(true); }}
                       disabled={(isEdit && !isAdmin) || (!isEdit && Boolean(selectedNameOption))} className={inp} />
                   </GuideField>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <GuideField id="as-f-group" missing={missReq.group}>
-                    <label className={fl}>{t("mp.sfiGroup")}{needTag(missReq.group)}</label>
+                    <label className={fl}>{t("mp.sfiGroup")}<RequiredMark />{needTag(missReq.group)}</label>
                     <select value={selectedGroup} onChange={e => onGroupChanged(e.target.value)} className={inp}>
                       <option value="">{t("mp.selectSfiGroup")}</option>
                       {SFI_GROUP_NUMBERS.map(g => <option key={g} value={String(g)}>{g} - {t(`sfi.g.${g}` as TranslationKey)}</option>)}
@@ -1304,7 +1362,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   </div>
                 </div>
                 <GuideField id="as-f-name" missing={missReq.name}>
-                  <label className={fl}>{t("col.name")}{needTag(missReq.name)}</label>
+                  <label className={fl}>{t("col.name")}<RequiredMark />{needTag(missReq.name)}</label>
                   {nameOptions.length > 0 && (
                     <select value={selectedNameOption?.name ?? ""} onChange={e => onNameChanged(e.target.value)} disabled={!selectedGroup} className={inp}>
                       <option value="">{t("asset.selectExistingName")}</option>
@@ -1399,7 +1457,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                     </label>
                     {planNotRequired && (
                       <GuideField id="as-f-exempt" missing={missReq.exemptReason}>
-                        {needTag(missReq.exemptReason)}
+                        <span className={fl}><RequiredMark />{needTag(missReq.exemptReason)}</span>
                         <AutoTextArea value={planNotRequiredReason} onChange={e => setPlanNotRequiredReason(e.target.value)} rows={2} placeholder={t("asset.planNotRequiredReasonPh")} className={`${inp} resize-y`} />
                       </GuideField>
                     )}

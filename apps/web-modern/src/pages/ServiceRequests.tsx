@@ -10,7 +10,7 @@
 
 import React, { useState } from "react";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
+import { AlertTriangle, Archive, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
@@ -31,7 +31,7 @@ import {
 } from "../components/service-requests/SsPaperForm";
 import { downloadDocx } from "../lib/download-docx";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark } from "../components/GuideKit";
 import { WizardStepper } from "../components/NewWorkOrderWizard";
 import { NewServiceRequestWizard } from "../components/NewServiceRequestWizard";
 import { isJustCreated, clearJustCreated } from "../lib/just-created";
@@ -53,6 +53,8 @@ interface ServiceRequest {
   priority: string;
   vesselCode: string;
   workOrderId: string;
+  /** Grupo SFI (0–9) heredado de la OT: del plan que la originó o del código SFI del equipo. */
+  sfiGroupNumber?: number | null;
   openDate: string;
   title: string | null;
   description: string | null;
@@ -277,12 +279,15 @@ function SsPriorityChip({ priority }: { priority: string }) {
   );
 }
 
-function SsActionButton({ action }: { action: SsCardAction }) {
+/** `compact`: más finito, para la tarjeta del tablero (Preview V51). */
+function SsActionButton({ action, compact = false }: { action: SsCardAction; compact?: boolean }) {
   if (!action) return null;
   const Icon = action.icon;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
-      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+      className={`flex w-full items-center justify-center gap-1 border px-2 font-bold transition-colors ${
+        compact ? "rounded-md py-px text-[10.5px]" : "rounded-lg py-1 text-[11px]"
+      } ${
         action.tone === "green"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
@@ -330,34 +335,39 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart, showAsset, ac
       }}
       onDragEnd={() => onDragStart(null)}
       onClick={() => !isDragging && !busy && onOpen(sr)}
-      className={`w-full border rounded-xl px-2.5 py-2 space-y-1.5 select-none flex flex-col cursor-grab
+      className={`w-full border rounded-xl px-2 pt-1 pb-1.5 space-y-[3px] select-none flex flex-col cursor-grab
         ${long ? "border-fg/10 bg-red-500/[0.05]" : "border-fg/10 bg-surface"}
         ${prioLeft}
         ${isDragging ? "opacity-30" : "hover:shadow-md"}
         ${busy ? "opacity-60 pointer-events-none" : ""}
         transition-all`}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* El código nunca se parte: es lo que se busca a simple vista. */}
-        <span className="font-mono font-bold text-fg text-xs whitespace-nowrap">{sr.serviceRequestCode}</span>
+        <span className="font-mono font-bold text-fg text-[11px] whitespace-nowrap">{sr.serviceRequestCode}</span>
         <span className="ml-auto"><SsPriorityChip priority={sr.priority} /></span>
       </div>
-      {srServicio(sr) && <p className="text-[13px] text-fg font-semibold leading-snug line-clamp-2">{srServicio(sr)}</p>}
-      {showAsset && sr.workOrder?.assetName && (
-        <span className="flex items-center gap-1 text-[11px] text-text-industrial/60 truncate"><Wrench className="w-3 h-3 shrink-0" />{sr.workOrder.assetName}</span>
-      )}
-      <span className={`flex items-center gap-1 text-[11px] truncate ${shop ? "font-semibold text-fg" : "font-bold text-amber-700 dark:text-amber-400"}`}>
-        <Handshake className="w-3 h-3 shrink-0" />{shop || t("ss.card.noShop")}
-      </span>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SsAgeLabel sr={sr} />
+      {srServicio(sr) && <p className="text-[12.5px] text-fg font-semibold leading-tight line-clamp-2">{srServicio(sr)}</p>}
+      {/* Equipo, taller y antigüedad en un renglón; si no entran, lo que sobra
+          baja al siguiente en vez de quedar cortado (Preview V51). */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px]">
+        {showAsset && sr.workOrder?.assetName && (
+          <span title={sr.workOrder.assetName} className="flex flex-[1_1_4rem] min-w-0 items-center gap-1 text-text-industrial/60">
+            <Wrench className="w-3 h-3 shrink-0" /><span className="truncate">{sr.workOrder.assetName}</span>
+          </span>
+        )}
+        <span title={shop || t("ss.card.noShop")}
+          className={`flex flex-[1_1_4.5rem] min-w-0 items-center gap-1 ${shop ? "font-semibold text-fg" : "font-bold text-amber-700 dark:text-amber-400"}`}>
+          <Handshake className="w-3 h-3 shrink-0" /><span className="truncate">{shop || t("ss.card.noShop")}</span>
+        </span>
+        <span className="shrink-0"><SsAgeLabel sr={sr} /></span>
         {sr.workOrder && (
-          <span className="ml-auto rounded-md border border-accent/25 bg-accent/5 px-1.5 py-px font-mono text-[10px] font-bold text-accent" title={t("ss.col.wo")}>
+          <span className="shrink-0 ml-auto rounded-md border border-accent/25 bg-accent/5 px-1.5 font-mono text-[9.5px] font-bold text-accent" title={t("ss.col.wo")}>
             {sr.workOrder.workOrderCode}
           </span>
         )}
       </div>
-      <SsActionButton action={action} />
+      <SsActionButton action={action} compact />
     </div>
   );
 }
@@ -495,7 +505,9 @@ function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, 
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(`ss.col.${col.colId}` as TranslationKey)}</span>
                 <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
               </div>
-              <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+              {/* scrollbar-gutter: el lugar de la barra queda reservado, así las
+                  tarjetas no se corren cuando la columna pasa a tener scroll. */}
+              <div className="flex flex-col gap-2 overflow-y-auto [scrollbar-gutter:stable]" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 {colItems.length === 0 && <p className="text-[11px] text-text-industrial/30 text-center py-6">{t("wo.fl.nothing")}</p>}
                 {!grouped && colItems.map(sr => renderCard(sr, true))}
                 {grouped && groupSrsByAsset(colItems).map(group => {
@@ -570,9 +582,13 @@ export function ServiceRequestsPage() {
   const viewParam = searchParams.get("view") ?? "";
   const cardSel: SsCardKey | "" = (SS_CARD_KEYS as string[]).includes(viewParam) ? (viewParam as SsCardKey) : "";
   const [stageSel, setStageSel] = useState<SsStageKey>(() => LEGACY_VIEW_TO_STAGE[viewParam] ?? "");
-  const [shopSel, setShopSel] = useState("");
-  const [assetSel, setAssetSel] = useState("");
-  const [prioSel, setPrioSel] = useState("");
+  // Los desplegables de taller / equipo / prioridad y los botones de etapa se
+  // sacaron a pedido del usuario (17-sep): la barra quedó con el grupo y el
+  // buscador, que ya busca por taller, equipo, código de SS y de OT.
+  // Grupo SFI (botones G0…G9, Preview V52). null = todos.
+  const [groupSel, setGroupSel] = useState<number | null>(null);
+  // "Ver cerradas": completadas, rechazadas y canceladas, en modo lista.
+  const [closedOnly, setClosedOnly] = useState(false);
   const [groupByAsset, setGroupByAsset] = useState(false);
   const [showNewSs, setShowNewSs] = useState(false);
   // SS recién creada desde "+ Nueva SS": se abre cuando llega en la lista recargada.
@@ -613,15 +629,6 @@ export function ServiceRequestsPage() {
     setSearchParams(params, { replace: true });
     if (key) setStageSel("");
   };
-  /** Elegir una etapa también reemplaza el filtro de estado y la tarjeta. */
-  const pickStage = (key: SsStageKey) => {
-    setStageSel(key);
-    if (!statusParam && !cardSel) return;
-    const params = new URLSearchParams(searchParams);
-    params.delete("status");
-    params.delete("view");
-    setSearchParams(params, { replace: true });
-  };
   const clearStatusParam = () => {
     const params = new URLSearchParams(searchParams);
     params.delete("status");
@@ -643,13 +650,10 @@ export function ServiceRequestsPage() {
   }, [canApprove, canAuthorize]);
 
   /** Todo menos la etapa: base de los contadores de los botones de etapa. */
-  const beforeStage = React.useMemo(() => {
+  const beforeGroup = React.useMemo(() => {
     let list = items;
     if (statusSet) list = list.filter(sr => statusSet.has(sr.status));
     if (cardSel) list = list.filter(sr => matchCard(sr, cardSel));
-    if (shopSel) list = list.filter(sr => (shopSel === "__none__" ? !ssShopName(sr) : ssShopName(sr) === shopSel));
-    if (assetSel) list = list.filter(sr => sr.workOrder?.assetName === assetSel);
-    if (prioSel) list = list.filter(sr => sr.priority === prioSel);
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(sr =>
@@ -662,40 +666,38 @@ export function ServiceRequestsPage() {
       );
     }
     return list;
-  }, [items, statusSet, cardSel, matchCard, shopSel, assetSel, prioSel, search]);
+  }, [items, statusSet, cardSel, matchCard, search]);
+
+  /** El filtro por grupo se aplica sobre todo lo demás (Preview V52). */
+  const beforeStage = React.useMemo(
+    () => (groupSel === null ? beforeGroup : beforeGroup.filter(sr => sr.sfiGroupNumber === groupSel)),
+    [beforeGroup, groupSel],
+  );
 
   /**
    * "En trámite" deja afuera completadas, rechazadas y canceladas, salvo que se
    * esté buscando o que otro filtro las pida (Rechazadas, el donut del Dashboard).
    */
   const stageFilter = React.useCallback((list: ServiceRequest[], key: SsStageKey): ServiceRequest[] => {
+    // "Ver cerradas": completadas, rechazadas y canceladas, todas juntas.
+    if (closedOnly) return list.filter(sr => SS_TERMINAL_STATUSES.includes(sr.status));
     if (key) return list.filter(sr => sr.status === key);
     if (search.trim() || statusSet || cardSel === "rejected") return list;
     return list.filter(sr => SS_OPEN_STATUSES.includes(sr.status));
-  }, [search, statusSet, cardSel]);
+  }, [closedOnly, search, statusSet, cardSel]);
 
   const displayItems = React.useMemo(() => stageFilter(beforeStage, stageSel), [beforeStage, stageFilter, stageSel]);
 
   // Completadas, rechazadas y canceladas no tienen columna en el tablero: ahí va la lista.
   const statusOnlyTerminal = !!statusSet && ![...statusSet].some(s => SS_OPEN_STATUSES.includes(s));
-  const showBoard = viewMode === "kanban" && !SS_TERMINAL_STATUSES.includes(stageSel) && cardSel !== "rejected" && !statusOnlyTerminal;
+  const showBoard = viewMode === "kanban" && !closedOnly && !SS_TERMINAL_STATUSES.includes(stageSel) && cardSel !== "rejected" && !statusOnlyTerminal;
 
   /** Cuántas solicitudes se están viendo, para el contador del encabezado. */
   const shownCount = showBoard ? displayItems.filter(sr => ssStage(sr) !== "HIDDEN").length : displayItems.length;
 
-  // ── Tarjetas de resumen (sobre todas las SS, sin filtros) ──
-  const summary = React.useMemo(() => {
-    const n = (key: SsCardKey) => items.filter(sr => matchCard(sr, key)).length;
-    return { sign: n("sign"), notSent: n("notSent"), ready: n("ready"), long: n("long"), rejected: n("rejected") };
-  }, [items, matchCard]);
+  // Las tarjetas de resumen de arriba se sacaron (Preview V52). El filtro `?view=`
+  // sigue vivo: llega ya aplicado desde el Dashboard y otros enlaces.
 
-  // Opciones de los desplegables: salen de lo que hay cargado.
-  const shopOptions = React.useMemo(() => [...new Set(items.map(ssShopName).filter(Boolean))].sort(), [items]);
-  const assetOptions = React.useMemo(
-    () => [...new Set(items.map(sr => sr.workOrder?.assetName).filter((n): n is string => !!n))].sort(),
-    [items],
-  );
-  const prioLabel = (p: string) => t(`wo.prioShort.${p}` as TranslationKey);
   const vesselName = (code: string) => vessels.find(v => v.code === code)?.name ?? code;
 
   // ?code=SS-3-M02-2026 — para links que sólo conocen el CÓDIGO y no el id
@@ -810,15 +812,14 @@ export function ServiceRequestsPage() {
     { key: "action", header: "", render: r => <div className="w-36"><SsActionButton action={cardAction(r)} /></div> },
   ];
 
-  const summaryCards: { key: SsCardKey; n: number; label: string; hint: string; icon: typeof Send; cls: string; num: string }[] = [
-    canApprove || canAuthorize
-      ? { key: "sign", n: summary.sign, label: t("wo.sum.mySign"), hint: t("wo.sum.mySignHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" }
-      : { key: "sign", n: summary.sign, label: t("ss.sum.waitSign"), hint: t("ss.sum.waitSignHint"), icon: Hourglass, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "notSent", n: summary.notSent, label: t("wo.sum.notSent"), hint: t("wo.sum.notSentHint"), icon: Send, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
-    { key: "ready", n: summary.ready, label: t("ss.sum.ready"), hint: t("ss.sum.readyHint"), icon: Truck, cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
-    { key: "long", n: summary.long, label: t("ss.sum.long").replace("{n}", String(SS_LONG_IN_SHOP_DAYS)), hint: t("ss.sum.longHint"), icon: AlertTriangle, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    { key: "rejected", n: summary.rejected, label: t("ss.sum.rejected"), hint: t("ss.sum.rejectedHint"), icon: Ban, cls: "border-l-yellow-600", num: "text-yellow-700 dark:text-yellow-400" },
-  ];
+  /** Nombre de cada filtro `?view=`, para el chip de filtro activo. */
+  const CARD_LABEL: Record<SsCardKey, string> = {
+    sign: canApprove || canAuthorize ? t("wo.sum.mySign") : t("ss.sum.waitSign"),
+    notSent: t("wo.sum.notSent"),
+    ready: t("ss.sum.ready"),
+    long: t("ss.sum.long").replace("{n}", String(SS_LONG_IN_SHOP_DAYS)),
+    rejected: t("ss.sum.rejected"),
+  };
   const STAGE_BUTTONS: { key: SsStageKey; label: string }[] = [
     { key: "", label: t("ss.stageF.open") },
     { key: "DRAFT", label: t("wo.filter.inPreparation") },
@@ -832,21 +833,20 @@ export function ServiceRequestsPage() {
   ];
   const activeFilters: { key: string; label: string; clear: () => void }[] = [
     ...(statusSet ? [{ key: "status", label: [...statusSet].map(s => t(`ss.stage.${s}` as TranslationKey)).join(" · "), clear: clearStatusParam }] : []),
-    ...(cardSel ? [{ key: "card", label: summaryCards.find(c => c.key === cardSel)!.label, clear: () => setViewParam("") }] : []),
+    ...(cardSel ? [{ key: "card", label: CARD_LABEL[cardSel], clear: () => setViewParam("") }] : []),
     ...(stageSel ? [{ key: "stage", label: STAGE_BUTTONS.find(b => b.key === stageSel)!.label, clear: () => setStageSel("") }] : []),
-    ...(shopSel ? [{ key: "shop", label: shopSel === "__none__" ? t("ss.fl.noShop") : shopSel, clear: () => setShopSel("") }] : []),
-    ...(assetSel ? [{ key: "asset", label: assetSel, clear: () => setAssetSel("") }] : []),
-    ...(prioSel ? [{ key: "prio", label: t("wo.fl.prio").replace("{p}", prioLabel(prioSel)), clear: () => setPrioSel("") }] : []),
+    ...(groupSel !== null ? [{ key: "group", label: `G${groupSel} · ${t(`sfi.g.${groupSel}` as TranslationKey)}`, clear: () => setGroupSel(null) }] : []),
   ];
+  // Grupos con solicitudes para lo que se está mirando (misma etapa y filtros, sin el grupo).
+  const groupsWithItems = new Set(
+    stageFilter(beforeGroup, stageSel).map(sr => sr.sfiGroupNumber).filter((g): g is number => typeof g === "number"),
+  );
   const clearAllFilters = () => {
-    setStageSel(""); setShopSel(""); setAssetSel(""); setPrioSel(""); setSearch("");
+    setStageSel(""); setSearch(""); setGroupSel(null); setClosedOnly(false);
     const params = new URLSearchParams(searchParams);
     params.delete("view"); params.delete("status");
     setSearchParams(params, { replace: true });
   };
-  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${
-    on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"
-  }`;
 
   return (
     <div className="space-y-4">
@@ -866,63 +866,57 @@ export function ServiceRequestsPage() {
         )}
       </PageHeader>
 
-      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setViewParam(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${
-                on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"
-              }`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* Filtros: sirven igual para el tablero y la lista. */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
-        <div className="flex flex-wrap gap-1.5">
-          {STAGE_BUTTONS.map(b => {
-            const on = stageSel === b.key;
-            const count = stageFilter(beforeStage, b.key).length;
+        {/* Grupo SFI: sólo el número; el nombre va en el tooltip (Preview V52).
+            La SS no tiene grupo propio: hereda el de su OT. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">{t("wo.fl.group")}</span>
+          <button type="button" aria-pressed={groupSel === null} onClick={() => setGroupSel(null)}
+            className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              groupSel === null ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {t("wo.fl.groupAll")}
+          </button>
+          {Array.from({ length: 10 }, (_, g) => {
+            const on = groupSel === g;
+            const has = groupsWithItems.has(g);
+            const name = `G${g} · ${t(`sfi.g.${g}` as TranslationKey)}`;
             return (
-              <button key={b.key || "open"} type="button" onClick={() => pickStage(b.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
-                  on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+              <button key={g} type="button" title={name} aria-label={name} aria-pressed={on}
+                disabled={!has && !on}
+                onClick={() => setGroupSel(on ? null : g)}
+                className={`min-w-[2.4rem] rounded-full border-[1.5px] px-2.5 py-1 text-xs font-bold transition-colors ${
+                  on ? "border-accent bg-accent text-accent-fg"
+                    : has ? "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                    : "border-fg/10 bg-surface text-text-industrial/60 opacity-35 cursor-default"
                 }`}>
-                {b.label}
-                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{count}</span>
+                G{g}
               </button>
             );
           })}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select value={shopSel} onChange={e => setShopSel(e.target.value)} className={`${selCls(!!shopSel)} max-w-[14rem]`}>
-            <option value="">{t("ss.fl.shopAll")}</option>
-            <option value="__none__">{t("ss.fl.noShop")}</option>
-            {shopOptions.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-          <select value={assetSel} onChange={e => setAssetSel(e.target.value)} className={`${selCls(!!assetSel)} max-w-[14rem]`}>
-            <option value="">{t("wo.fl.assetAll")}</option>
-            {assetOptions.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-          <select value={prioSel} onChange={e => setPrioSel(e.target.value)} className={selCls(!!prioSel)}>
-            <option value="">{t("wo.fl.prioAll")}</option>
-            {["CRITICAL", "HIGH", "MEDIUM", "LOW"].map(p => <option key={p} value={p}>{prioLabel(p)}</option>)}
-          </select>
+          {/* "Ver cerradas", "Agrupar por equipo" y el buscador van en este mismo
+              renglón, a la derecha: la barra entera es una sola fila. */}
+          <button type="button"
+            onClick={() => {
+              // Las cerradas no tienen columna en el tablero: se muestran en la lista.
+              setClosedOnly(v => !v);
+              setViewMode(closedOnly ? "kanban" : "list");
+            }}
+            className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+              closedOnly ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
+            }`}>
+            <Archive className="w-3.5 h-3.5" /> {t("wo.fl.showClosed")}
+          </button>
           {showBoard && (
             <button type="button" onClick={() => setGroupByAsset(v => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
                 groupByAsset ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
               }`}>
               <Layers className="w-3.5 h-3.5" /> {t("wo.fl.groupByAsset")}
             </button>
           )}
-          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+          <div className={`flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1 w-full sm:w-auto ${showBoard ? "" : "sm:ml-auto"}`}>
             <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("ss.list.search")}
               className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
@@ -934,6 +928,7 @@ export function ServiceRequestsPage() {
           </div>
         </div>
         {activeFilters.length > 0 && (
+
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-text-industrial/60">
             {t("wo.fl.filtering")}
             {activeFilters.map(f => (
@@ -1143,8 +1138,8 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
       }
     >
       {!isReject && (
-        <div>
-          <label className={labelCls}>Nombre de quien {verbo}</label>
+        <GuideField id="sr-approval-name" missing={!name.trim()}>
+          <label className={labelCls}>Nombre de quien {verbo}<RequiredMark />{!name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
           {adminPicker ? (
             <PersonSelect
               autoFocus
@@ -1167,7 +1162,7 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
             <input autoFocus className={inputCls} value={name}
               onChange={e => setName(e.target.value)} placeholder="Nombre y apellido" />
           )}
-        </div>
+        </GuideField>
       )}
 
       {showDate && (
@@ -1183,12 +1178,12 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
       )}
 
       {isReject && (
-        <div>
-          <label className={labelCls}>Motivo del rechazo</label>
+        <GuideField id="sr-approval-reason" missing={!reason.trim()}>
+          <label className={labelCls}>Motivo del rechazo<RequiredMark />{!reason.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
           <AutoTextArea autoFocus className={inputCls + " min-h-[72px] resize-y"} value={reason}
             onChange={e => setReason(e.target.value)}
             placeholder="Ej. El presupuesto del taller excede lo autorizado" />
-        </div>
+        </GuideField>
       )}
     </FormModal>
   );
@@ -1208,6 +1203,7 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
   /** Lo que ya se escribió en el recuadro ENTREGA / RECEPCION del formulario. */
   initial?: { recibe: string; item: string; conforme: boolean | null };
 }) {
+  const t = useT();
   const [recibe, setRecibe] = useState(initial?.recibe ?? "");
   const [item, setItem] = useState(initial?.item ?? "");
   const [conforme, setConforme] = useState<boolean | null>(initial?.conforme ?? null);
@@ -1247,18 +1243,18 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
         </>
       }
     >
-      <div>
-        <label className={labelCls}>¿Quién recibe el servicio?</label>
+      <GuideField id="sr-receive-name" missing={!recibe.trim()}>
+        <label className={labelCls}>¿Quién recibe el servicio?<RequiredMark />{!recibe.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
         <input className={inputCls} value={recibe} autoFocus
           onChange={e => setRecibe(e.target.value)} placeholder="Ej. J.M. CRISTHIAN VERON" />
-      </div>
+      </GuideField>
       <div>
         <label className={labelCls}>Ítem recibido (opcional)</label>
         <input className={inputCls} value={item}
           onChange={e => setItem(e.target.value)} placeholder="Ej. Servo timón Br" />
       </div>
-      <div>
-        <label className={labelCls}>¿Hay conformidad con el trabajo realizado?</label>
+      <GuideField id="sr-receive-conform" missing={conforme === null}>
+        <label className={labelCls}>¿Hay conformidad con el trabajo realizado?<RequiredMark />{conforme === null && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
         <div className="flex gap-2">
           {[
             { v: true, txt: "Sí, conforme", on: "bg-success-sea text-white border-success-sea" },
@@ -1272,7 +1268,7 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
             </button>
           ))}
         </div>
-      </div>
+      </GuideField>
       <div>
         <label className={labelCls}>Comentarios adicionales (opcional)</label>
         <AutoTextArea className={inputCls + " min-h-[56px] resize-y"} value={notas}
@@ -2364,7 +2360,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3.5">
+        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-6 py-4 space-y-3.5">
           {ssView === "guided" ? guidedBody : (
             <>
               <p className="text-xs text-text-industrial/60 text-center">{t("ss.guide.paperNote")}</p>

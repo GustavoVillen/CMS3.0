@@ -6,6 +6,8 @@ import { readBinaryBody } from "../http/read-binary-body";
 import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-service";
 import { getRolePermissions, setRolePermissions } from "./settings/role-permissions-config-service";
 import { getWeeklyReportConfig, setWeeklyReportConfig } from "./settings/weekly-report-config-service";
+import { getSpareRequestConfig, setSpareRequestConfig } from "./settings/spare-request-config-service";
+import { archivePdf, getPdfArchiveConfig, setPdfArchiveConfig, testPdfArchive } from "./settings/pdf-archive-service";
 import { hasPermission, resolvePermissionsForRole } from "./auth/role-permissions";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
@@ -804,6 +806,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, codeFrom: { delegate: "dailyReport", codeField: "reportCode", id } });
     return true;
   }
 
@@ -882,6 +885,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, codeFrom: { delegate: "voyageTankReport", codeField: "reportCode", id } });
     return true;
   }
 
@@ -1227,6 +1231,7 @@ export async function handleTenantRoutes(
       "Content-Length": pdfBuffer.length,
     });
     response.end(pdfBuffer);
+    void archivePdf(session, { kind: "FA", id: sampleId, buffer: pdfBuffer });
     return true;
   }
   if (method === "POST" && url.pathname === "/app/fluid-analyses/upload-report") {
@@ -1261,6 +1266,11 @@ export async function handleTenantRoutes(
     // file-access-service.ts).
     claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
     const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode, referenceDate, sampleNumber });
+    // Un informe de vibraciones trae varios equipos: no entra en la carga de una
+    // sola muestra. La carga masiva lo separa en una fila por equipo.
+    if (extracted.documentKind === "VIBRATION") {
+      throw new RouteError(422, "VIBRATION_REPORT_USE_BATCH", "Este informe es de análisis de vibraciones y trae varios equipos. Cargalo desde \"Subir reportes\", que arma un análisis por equipo.");
+    }
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
     return true;
   }
@@ -1930,6 +1940,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: `${drill.drillCode}.pdf`, buffer });
     return true;
   }
   if (method === "GET" && url.pathname === "/app/drills") {
@@ -2179,6 +2190,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: `${exec.executionCode}-${exec.vesselCode}.pdf`, buffer });
     return true;
   }
   if (/^\/app\/checklist-executions\/[^/]+\/responses$/.test(url.pathname)) {
@@ -2305,6 +2317,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "MOC", id, buffer });
     return true;
   }
   if (/^\/app\/mocs\/[^/]+\/transition$/.test(url.pathname)) {
@@ -2515,6 +2528,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
+    void archivePdf(session, { kind: "OTHER", fileName: `${fileName}.pdf`, buffer });
     return true;
   }
   // Mismo formulario en Word: el permiso se completa y se firma a bordo.
@@ -2736,6 +2750,42 @@ export async function handleTenantRoutes(
   // una clave al catalogo de permisos: en produccion la matriz de Mercurio esta
   // guardada en la base y REEMPLAZA a la del codigo, asi que una clave nueva
   // llegaria vacia para todos los roles menos admin.
+  // ── Archivo de PDFs en Google Drive (sólo TENANT_ADMIN, chequeado en el service) ──
+  if (method === "GET" && url.pathname === "/app/tenant/pdf-archive-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getPdfArchiveConfig(session));
+    return true;
+  }
+  if (method === "PATCH" && url.pathname === "/app/tenant/pdf-archive-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as Parameters<typeof setPdfArchiveConfig>[1];
+    sendJson(response, 200, await setPdfArchiveConfig(session, body ?? {}));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/tenant/pdf-archive-config/test") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf-archive-test:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    sendJson(response, 200, await testPdfArchive(session));
+    return true;
+  }
+
+  // Casilla de Compras para "Enviar a Compras" de las Solicitudes de repuestos.
+  if (method === "GET" && url.pathname === "/app/tenant/spare-request-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getSpareRequestConfig(session));
+    return true;
+  }
+
+  if (method === "PATCH" && url.pathname === "/app/tenant/spare-request-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Solo administradores pueden configurar la casilla de Compras.");
+    }
+    const body = await readJsonBody(request) as { mailbox?: unknown };
+    sendJson(response, 200, await setSpareRequestConfig(session, body ?? {}));
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/app/tenant/weekly-report-config") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     sendJson(response, 200, await getWeeklyReportConfig(session));

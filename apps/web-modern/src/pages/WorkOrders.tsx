@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
+import { AlertTriangle, Archive, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -18,7 +18,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard, WizardStepper } from "../components/NewWorkOrderWizard";
 import { isJustCreated, clearJustCreated, markJustCreated } from "../lib/just-created";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark } from "../components/GuideKit";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 // WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
 // la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
@@ -190,6 +190,8 @@ interface WorkOrder {
    * figuraba como si fuera del primero. Con un solo ítem trae un único nombre.
    */
   assetNames?: string[] | null;
+  /** Grupo SFI (0–9): del plan que la originó o, sin plan, del código SFI del equipo. */
+  sfiGroupNumber?: number | null;
   estimatedHours: number | null;
   actualHours: number | null;
   // Plan fields
@@ -272,13 +274,20 @@ const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", col
 
 // ── CategoryBadge ─────────────────────────────────────────────────────────────
 
-function CategoryBadge({ type }: { type: string }) {
+/** `short`: nombre corto y sin partir, para la tarjeta del tablero; el completo queda en el tooltip. */
+function CategoryBadge({ type, short = false }: { type: string; short?: boolean }) {
   const t = useT();
-  if (type === "INSPECTION")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
-  if (type === "CORRECTIVE")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+  const kind = type === "INSPECTION" ? "inspection" : type === "CORRECTIVE" ? "corrective" : "preventive";
+  const cls = kind === "inspection"
+    ? "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20"
+    : kind === "corrective"
+    ? "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20"
+    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
+  const full = t(`wo.type.${kind}` as TranslationKey);
+  if (short) {
+    return <span title={full} className={`inline-block shrink-0 whitespace-nowrap text-[9.5px] px-1.5 rounded-full border font-bold ${cls}`}>{t(`wo.typeShort.${kind}` as TranslationKey)}</span>;
+  }
+  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>{full}</span>;
 }
 
 // ── WoStatusBadge ─────────────────────────────────────────────────────────────
@@ -1723,6 +1732,27 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     [workOrder.id],
   );
   const linkedPermits = linkedPermitsData?.items ?? [];
+  // Permisos que exigen los planes de la OT (preview V41): el cierre los pide cerrados.
+  const requiredPermitTypes = useMemo(
+    () => [...new Set((workOrder.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))] as PermitType[],
+    [workOrder.plans],
+  );
+  const requiredPermitsBanner = requiredPermitTypes.length > 0 && (
+    <div className="flex items-start gap-2 rounded-lg border border-orange-500/40 bg-orange-500/[0.07] px-2.5 py-1.5 text-[11.5px] font-bold text-orange-700 dark:text-orange-300">
+      <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+      <span>
+        {t("wo.ptw.requires")}{" "}
+        {requiredPermitTypes.map(type => {
+          const closed = linkedPermits.some(pm => pm.type === type && pm.status === "CLOSED");
+          return (
+            <span key={type} className={`mr-2 whitespace-nowrap ${closed ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
+              {closed ? "✓ " : ""}{t(`mp.ptw.type.${type}` as Parameters<typeof t>[0])}
+            </span>
+          );
+        })}
+      </span>
+    </div>
+  );
   const advisoryMatches = useMemo(
     () => suggestPermitTypesFromText(`${title} ${description}`),
     [title, description],
@@ -2453,6 +2483,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       </button>
                     )}
                   </div>
+
+                  {requiredPermitsBanner}
 
                   {/* Sugerencia por el contenido del trabajo (mismas keywords). */}
                   {isApproved && isEditable && advisoryMatches.length > 0 && linkedPermits.length === 0 && (
@@ -3364,7 +3396,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             disabled={!isEditable} className={`${inputCls} resize-y`} placeholder={t("wo.guide.field.requestPh")} />
         </div>
         {needWrap("title", <>
-          {guideLabel(<>{t("wo.guide.field.task")} *</>, "title", aiBtn(() => { void handleTitleClick(); }, loadingTitle, t("wo.ai.titleTooltip")))}
+          {guideLabel(<>{t("wo.guide.field.task")}<RequiredMark /></>, "title", aiBtn(() => { void handleTitleClick(); }, loadingTitle, t("wo.ai.titleTooltip")))}
           <AutoTextArea rows={Math.min(6, Math.max(2, title.split("\n").length))} value={title}
             onChange={e => handlePaperChange({ title: e.target.value })}
             onBlur={() => { void analyzeForDeficiency(title, "title"); }}
@@ -3383,7 +3415,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         pill={sectionPill(["location", "requestedBy", "assignedTo", "system"])} open={secOpen("form")} onToggle={() => toggleSec("form")}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
           {needWrap("location", <>
-            {guideLabel(<>{t("wo.modal.location")} *</>, "location")}
+            {guideLabel(<>{t("wo.modal.location")}<RequiredMark /></>, "location")}
             <input value={location} onChange={e => handlePaperChange({ location: e.target.value })} disabled={!isEditable}
               placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
           </>)}
@@ -3404,12 +3436,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
         </div>
         {needWrap("requestedBy", <>
-          {guideLabel(<>{t("wo.modal.requestedBy")} *</>, "requestedBy")}
+          {guideLabel(<>{t("wo.modal.requestedBy")}<RequiredMark /></>, "requestedBy")}
           {segBtns(WO_REQUESTED_BY, regiForm.requestedByArea,
             v => handlePaperChange({ requestedByArea: regiForm.requestedByArea === v ? "" : v }), !isEditable)}
         </>)}
         {needWrap("assignedTo", <>
-          {guideLabel(<>{t("wo.modal.assignedTo")} *</>, "assignedTo")}
+          {guideLabel(<>{t("wo.modal.assignedTo")}<RequiredMark /></>, "assignedTo")}
           {segBtns(WO_ASSIGNED_TO, regiForm.assignedToArea,
             v => handlePaperChange({ assignedToArea: regiForm.assignedToArea === v ? "" : v }), !isEditable)}
         </>)}
@@ -3449,7 +3481,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           }, !isEditable)}
         </div>
         {needWrap("system", <>
-          {guideLabel(<>{t("wo.modal.system")} *</>, "system")}
+          {guideLabel(<>{t("wo.modal.system")}<RequiredMark /></>, "system")}
           {segBtns(WO_SYSTEM_AREAS, regiForm.systemArea,
             v => handlePaperChange({ systemArea: regiForm.systemArea === v ? "" : v }), !isEditable)}
         </>)}
@@ -3527,7 +3559,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         open={secOpen("closure")} onToggle={() => toggleSec("closure")} {...lockedProps}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           {needWrap("taskCompleted", <>
-            {guideLabel(<>{t("wo.modal.taskCompleted")} *</>, "taskCompleted")}
+            {guideLabel(<>{t("wo.modal.taskCompleted")}<RequiredMark /></>, "taskCompleted")}
             <div className="flex gap-2">
               {[["YES", t("common.yes"), "bg-success-sea/10 text-success-sea border-success-sea/40"],
                 ["NO", t("common.no"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/40"]].map(([val, label, cls]) => (
@@ -3540,7 +3572,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </div>
           </>)}
           {needWrap("result", <>
-            {guideLabel(<>{t("wo.modal.result")} *</>, "result")}
+            {guideLabel(<>{t("wo.modal.result")}<RequiredMark /></>, "result")}
             <div className="flex gap-2">
               {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/40"],
                 ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/40"]].map(([val, label, cls]) => (
@@ -4065,6 +4097,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               ) : undefined}
             />
 
+            {requiredPermitsBanner}
+
             {/* Advisory banner: keywords matchearon pero no hay PTW vinculado */}
             {advisoryMatches.length > 0 && linkedPermits.length === 0 && isEditable && (
               <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3 flex items-start gap-2.5">
@@ -4164,7 +4198,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             {/* Con el formulario controlado, RESULTADO se marca en la hoja. */}
             {!isMercurio && (
               <div className="space-y-1.5">
-                <label className={labelCls}>{t("wo.modal.result")} *</label>
+                <label className={labelCls}>{t("wo.modal.result")}<RequiredMark /></label>
                 <div className="flex gap-2">
                   {[["SATISFACTORY", t("wo.modal.result.satisfactory"), "bg-success-sea/10 text-success-sea border-success-sea/30"],
                     ["WITH_DEFICIENCIES", t("wo.modal.result.withDeficiencies"), "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"]].map(([val, label, cls]) => (
@@ -4626,49 +4660,6 @@ function SrChips({ items }: { items: SrLite[] }) {
   );
 }
 
-/**
- * Etiqueta de estado de la TARJETA del tablero.
- *
- * Hermana de `WoStageBadge`, que es la de la columna "Tramitación" del listado.
- * Se separan por dos motivos: acá los textos son cortos (en una tarjeta no
- * entra "Aprobada. Pendiente de autorización") y acá "En proceso" tiene
- * prioridad — en el listado el avance ya lo muestra la columna "Estado".
- *
- * Por qué existe: la COLUMNA del tablero ordena por el trámite (quién firmó),
- * no por el trabajo. Una orden autorizada puede no haber arrancado nunca, y la
- * columna "Autorizada y en proceso" las mezcla: se ven tres tarjetas juntas y
- * sólo una está en marcha. El dashboard, que cuenta por avance real, decía
- * "1 en progreso" y no había forma de saber cuál era.
- *
- * "En proceso" gana sobre la etapa de trámite: es el único dato que la columna
- * no puede mostrar. Las dos cosas no se pisan — el avance vive en `status` y el
- * trámite en las fechas de firma.
- */
-const WO_CARD_STAGE_BADGE: Record<Exclude<WoStage, "HIDDEN">, { key: TranslationKey; cls: string }> = {
-  EN_PREPARACION: { key: "wo.stage.enPreparacion", cls: "bg-fg/10 text-text-industrial/70 border-fg/15" },
-  SOLICITADA:     { key: "wo.stage.solicitada",    cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30" },
-  APROBADA:       { key: "wo.stage.aprobada",      cls: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30" },
-  AUTORIZADA:     { key: "wo.stage.autorizada",    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
-  DIFERIDA:       { key: "wo.stage.diferida",      cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
-};
-
-function WoCardStageBadge({ wo }: { wo: WorkOrder }) {
-  const t = useT();
-  const base = "inline-block max-w-full truncate text-[10px] px-2 py-0.5 rounded-full border font-bold";
-
-  // Relleno pleno, no tono suave: es lo que se busca de un vistazo en el tablero.
-  if (wo.status === "IN_PROGRESS") {
-    const label = t("wo.stage.inProgress");
-    return <span title={label} className={`${base} bg-emerald-600 text-white border-emerald-700`}>{label}</span>;
-  }
-
-  const stage = woStage(wo);
-  if (stage === "HIDDEN") return null;   // cerrada o anulada: no llega al tablero
-  const { key, cls } = WO_CARD_STAGE_BADGE[stage];
-  const label = t(key);
-  return <span title={label} className={`${base} ${cls}`}>{label}</span>;
-}
-
 /** Acción visible de una tarjeta/fila: el próximo paso de la OT (si el usuario puede darlo). */
 type WoCardAction = { label: string; icon: typeof Send; tone: "accent" | "green"; run: () => void } | null;
 
@@ -4708,12 +4699,15 @@ function WoPriorityChip({ priority }: { priority: string }) {
   );
 }
 
-function WoActionButton({ action }: { action: WoCardAction }) {
+/** `compact`: más finito, para la tarjeta del tablero (Preview V51). */
+function WoActionButton({ action, compact = false }: { action: WoCardAction; compact?: boolean }) {
   if (!action) return null;
   const Icon = action.icon;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
-      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+      className={`flex w-full items-center justify-center gap-1 border px-2 font-bold transition-colors ${
+        compact ? "rounded-md py-px text-[10.5px]" : "rounded-lg py-1 text-[11px]"
+      } ${
         action.tone === "green"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
@@ -4738,42 +4732,62 @@ function KanbanCardContent({ wo, deferralMap, srs, showAsset, action }: {
   // tarjeta lo recorta a dos; sin el chip parecía que era del primer equipo.
   const assetNames = woAssetNames(wo);
   const initials = (wo.assignedToUserName ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]!.toUpperCase()).join("");
+  // Preview V51 — tarjeta comprimida: sin la etiqueta de etapa (la dice la
+  // columna), salvo "En proceso", que la columna no puede mostrar; y equipo,
+  // vencimiento, SS y responsable en un único renglón.
+  const inProgressLabel = wo.status === "IN_PROGRESS" ? t("wo.stage.inProgress") : null;
   return (
     <>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* El código nunca se parte: es lo que se busca a simple vista. */}
-        <span className="font-mono font-bold text-fg text-xs whitespace-nowrap">{wo.workOrderCode}</span>
-        <CategoryBadge type={wo.type} />
+        <span className="font-mono font-bold text-fg text-[11px] whitespace-nowrap">{wo.workOrderCode}</span>
+        <CategoryBadge type={wo.type} short />
+        {inProgressLabel && (
+          <span title={inProgressLabel} className="shrink-0 whitespace-nowrap rounded-full border border-emerald-700 bg-emerald-600 px-1.5 text-[9.5px] font-bold text-white">{inProgressLabel}</span>
+        )}
+        {rejected && (
+          <span className="shrink-0 whitespace-nowrap rounded-md bg-red-500/15 px-1.5 text-[9.5px] font-extrabold text-red-700 dark:text-red-400">{t("wo.card.rejected")}</span>
+        )}
         <span className="ml-auto"><WoPriorityChip priority={wo.priority} /></span>
       </div>
-      <WoCardStageBadge wo={wo} />
-      {rejected && (
-        <span className="self-start rounded-md bg-red-500/15 px-1.5 py-px text-[10px] font-extrabold text-red-700 dark:text-red-400">{t("wo.card.rejected")}</span>
-      )}
-      {wo.title && <p className="text-[13px] text-fg font-semibold leading-snug line-clamp-2">{wo.title}</p>}
-      {assetNames.length > 1 ? (
-        <span
-          title={assetNames.join(", ")}
-          className="self-start inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent"
-        >
-          <Wrench className="w-2.5 h-2.5" />
-          {t("wo.multiAsset.count").replace("{n}", String(assetNames.length))}
-        </span>
-      ) : showAsset && assetNames[0] ? (
-        <span className="flex items-center gap-1 text-[11px] text-text-industrial/60 truncate"><Wrench className="w-3 h-3 shrink-0" />{assetNames[0]}</span>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <WoDueLabel wo={wo} />
-        {deferral && <DeferralStatusBadge status={deferral.status} />}
-        <SrChips items={srs} />
+      {wo.title && <p className="text-[12.5px] text-fg font-semibold leading-tight line-clamp-2">{wo.title}</p>}
+      {/* Un renglón; si la tarjeta viene cargada (vencida + varias SS) lo que no
+          entra baja al siguiente en vez de quedar cortado contra el borde. */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px]">
+        {assetNames.length > 1 ? (
+          <span
+            title={assetNames.join(", ")}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 text-[10px] font-bold text-accent"
+          >
+            <Wrench className="w-2.5 h-2.5" />
+            {t("wo.multiAsset.count").replace("{n}", String(assetNames.length))}
+          </span>
+        ) : showAsset && assetNames[0] ? (
+          // Base de 4.5rem: el equipo nunca desaparece; crece y se recorta con lo que sobre.
+          <span title={assetNames[0]} className="flex flex-[1_1_4.5rem] min-w-0 items-center gap-1 text-text-industrial/60"><Wrench className="w-3 h-3 shrink-0" /><span className="truncate">{assetNames[0]}</span></span>
+        ) : null}
+        <span className="shrink-0"><WoDueLabel wo={wo} /></span>
+        {deferral && <span className="shrink-0"><DeferralStatusBadge status={deferral.status} /></span>}
+        {srs.length === 1 ? (
+          <span className="shrink-0 flex items-center gap-1" title={`${srs[0]!.serviceRequestCode} · ${SS_STATUS_LABEL[srs[0]!.status] ?? srs[0]!.status}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${SS_DOT_CLS[srs[0]!.status] ?? "bg-fg/20"}`} />
+            <span className="font-mono text-[9px] text-text-industrial/60">{srs[0]!.serviceRequestCode}</span>
+          </span>
+        ) : srs.length > 1 ? (
+          // Con varias SS no entran los códigos en un renglón: un chip y la lista en el tooltip.
+          <span className="shrink-0 rounded-full bg-fg/10 px-1.5 font-mono text-[9px] font-bold text-text-industrial/70"
+            title={srs.map(sr => `${sr.serviceRequestCode} · ${SS_STATUS_LABEL[sr.status] ?? sr.status}`).join("\n")}>
+            {srs.length} SS
+          </span>
+        ) : null}
         <span
           title={wo.assignedToUserName ?? t("wo.fl.noOne")}
-          className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-extrabold ${initials ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300" : "bg-fg/5 text-text-industrial/40"}`}
+          className={`ml-auto shrink-0 flex h-[17px] w-[17px] items-center justify-center rounded-full text-[8px] font-extrabold ${initials ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300" : "bg-fg/5 text-text-industrial/40"}`}
         >
           {initials || "?"}
         </span>
       </div>
-      <WoActionButton action={action} />
+      <WoActionButton action={action} compact />
     </>
   );
 }
@@ -4810,7 +4824,7 @@ function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDra
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
       onClick={() => !isDragging && !isLoading && onOpen(wo)}
-      className={`w-full border rounded-xl px-2.5 py-2 space-y-1.5 select-none flex flex-col
+      className={`w-full border rounded-xl px-2 pt-1 pb-1.5 space-y-[3px] select-none flex flex-col
         ${borderCls}
         ${prioLeft}
         ${isDragging ? "opacity-30" : "hover:shadow-md"}
@@ -5060,6 +5074,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   // esta ventana: si no, el registro nuevo queda invisible hasta que alguien
   // entre a Análisis de Fluidos a buscarlo por su cuenta.
   const [createdSampleCodes, setCreatedSampleCodes] = useState<string[] | null>(null);
+  const [createdPermitCodes, setCreatedPermitCodes] = useState<string[] | null>(null);
 
   // Solo TENANT_ADMIN puede aprobar/autorizar en nombre de otro usuario (no en RECHAZA):
   // se elige de una lista y la firma del PDF se toma de ESE usuario.
@@ -5115,7 +5130,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
     if (isReject && !trimmedReason) { setError("Ingresá el motivo del rechazo."); return; }
     setSaving(true); setError(null);
     try {
-      const res = await api.post<{ createdFluidSamples?: { sampleCode: string }[] }>(
+      const res = await api.post<{ createdFluidSamples?: { sampleCode: string }[]; createdPermits?: { permitCode: string }[] }>(
         `/app/pms/work-orders/${workOrder.id}/approval`,
         {
           step, name: trimmed, reason: isReject ? trimmedReason : undefined,
@@ -5124,11 +5139,13 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
         },
       );
       const codes = (res.createdFluidSamples ?? []).map(s => s.sampleCode);
-      if (codes.length > 0) {
+      const permitCodes = (res.createdPermits ?? []).map(p => p.permitCode);
+      if (permitCodes.length > 0) setCreatedPermitCodes(permitCodes);
+      if (codes.length > 0 || permitCodes.length > 0) {
         // Avisa antes de cerrar: onSuccess() se dispara recién cuando el
         // usuario reconoce el aviso (ver AlertDialog más abajo).
         setSaving(false);
-        setCreatedSampleCodes(codes);
+        if (codes.length > 0) setCreatedSampleCodes(codes);
         return;
       }
       onSuccess();
@@ -5227,7 +5244,14 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
               .replace("{code}", createdSampleCodes.join(", "))
               .replace("{section}", t("page.fluidAnalyses"))
           }
-          onClose={() => { setCreatedSampleCodes(null); onSuccess(); }}
+          onClose={() => { setCreatedSampleCodes(null); if (!createdPermitCodes) onSuccess(); }}
+        />
+      )}
+      {/* Después del aviso de muestras (si hubo): se muestran de a uno. */}
+      {createdPermitCodes && !createdSampleCodes && (
+        <AlertDialog
+          message={t("wo.ptw.created").replace("{codes}", createdPermitCodes.join(", "))}
+          onClose={() => { setCreatedPermitCodes(null); onSuccess(); }}
         />
       )}
     </div>
@@ -5380,11 +5404,13 @@ export const WorkOrdersPage: React.FC = () => {
   //   - tipo, prioridad, responsable, equipo, "sólo vencidas" y el buscador.
   // Antes los filtros sólo existían en la lista y se borraban al pasar al tablero.
   const [stageSel, setStageSel] = useState<"" | "inPreparation" | "toApprove" | "toAuthorize" | "authorized" | "postponed" | "closed">("");
-  const [typeSel, setTypeSel] = useState("");
-  const [prioSel, setPrioSel] = useState("");
-  const [whoSel, setWhoSel] = useState("");
-  const [assetSel, setAssetSel] = useState("");
+  // Los desplegables de tipo / prioridad / responsable / equipo y los botones de
+  // etapa se sacaron a pedido del usuario (17-sep): la barra quedó en una sola
+  // fila (grupo + sólo vencidas + agrupar + buscador). El buscador ya encuentra
+  // por equipo, responsable, código y título.
   const [overdueOnly, setOverdueOnly] = useState(false);
+  // Grupo SFI (botones G0…G9, Preview V52). null = todos.
+  const [groupSel, setGroupSel] = useState<number | null>(null);
   const [groupByAsset, setGroupByAsset] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const canList = useCan();
@@ -5427,15 +5453,11 @@ export const WorkOrdersPage: React.FC = () => {
   const isOverdueWo = (w: WorkOrder) =>
     w.status !== "CLOSED" && w.status !== "CANCELLED" && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < new Date();
 
-  /** Todo menos la etapa: base de los contadores de los botones de etapa. */
-  const beforeStage = useMemo(() => {
+  /** Todo menos la etapa y el grupo: base de qué grupos tienen órdenes. */
+  const beforeGroup = useMemo(() => {
     let items = data?.items ?? null;
     if (!items) return items;
     if (viewFilter) items = applyViewKey(items, viewFilter);
-    if (typeSel) items = items.filter(w => w.type === typeSel);
-    if (prioSel) items = items.filter(w => w.priority === prioSel);
-    if (whoSel) items = items.filter(w => (whoSel === "__none__" ? !w.assignedToUserName : w.assignedToUserName === whoSel));
-    if (assetSel) items = items.filter(w => woAssetNames(w).includes(assetSel));
     if (overdueOnly) items = items.filter(isOverdueWo);
     const q = search.trim().toLowerCase();
     if (q) {
@@ -5447,7 +5469,13 @@ export const WorkOrdersPage: React.FC = () => {
       );
     }
     return items;
-  }, [data, viewFilter, applyViewKey, typeSel, prioSel, whoSel, assetSel, overdueOnly, search]);
+  }, [data, viewFilter, applyViewKey, overdueOnly, search]);
+
+  /** Todo menos la etapa: base de los contadores de los botones de etapa. */
+  const beforeStage = useMemo(
+    () => (beforeGroup && groupSel !== null ? beforeGroup.filter(w => w.sfiGroupNumber === groupSel) : beforeGroup),
+    [beforeGroup, groupSel],
+  );
 
   /** "Abiertas" deja afuera las cerradas, salvo que se esté buscando o se pidan cerradas. */
   const stageFilter = useCallback((items: WorkOrder[], key: string): WorkOrder[] => {
@@ -5485,33 +5513,14 @@ export const WorkOrdersPage: React.FC = () => {
     return items.filter(w => woStage(w) !== "HIDDEN").length;
   }, [tmsaDisplayItems, showBoard]);
 
-  // ── Tarjetas de resumen (sobre todas las OT del buque, sin filtros) ──
-  const summary = useMemo(() => {
-    const items = data?.items ?? [];
-    return {
-      overdue: applyViewKey(items, "overdue").length,
-      mine: applyViewKey(items, "mine").length,
-      notSent: applyViewKey(items, "inPreparation").length,
-      inProgress: applyViewKey(items, "inProgress").length,
-      deferred: applyViewKey(items, "postponed").length,
-    };
-  }, [data, applyViewKey]);
+  // Las tarjetas de resumen de arriba se sacaron (Preview V52). Los filtros
+  // `?view=` siguen vivos: llegan ya aplicados desde el Dashboard y otros enlaces.
   const setViewParam = (key: string) => {
     const params = new URLSearchParams(searchParams);
     if (key) params.set("view", key); else params.delete("view");
     setSearchParams(params, { replace: true });
   };
 
-  // Opciones de los desplegables: salen de lo que hay cargado.
-  const whoOptions = useMemo(
-    () => [...new Set((data?.items ?? []).map(w => w.assignedToUserName).filter((n): n is string => !!n))].sort(),
-    [data],
-  );
-  const assetOptions = useMemo(
-    () => [...new Set((data?.items ?? []).flatMap(w => woAssetNames(w)))].sort(),
-    [data],
-  );
-  const prioLabel = (p: string) => t(`wo.prioShort.${p}` as TranslationKey);
 
   // ── Acción visible de cada OT (mismo paso que el arrastre del tablero) ──
   const [listApproval, setListApproval] = useState<{ wo: WorkOrder; step: "ENVIA" | "APRUEBA" | "AUTORIZA" } | null>(null);
@@ -5659,15 +5668,6 @@ export const WorkOrdersPage: React.FC = () => {
     { key: "action", header: "", render: r => <div className="w-32"><WoActionButton action={cardAction(r)} /></div> },
   ], [deferralMap, navigate, t, srMap, cardAction]);
 
-  const summaryCards: { key: string; n: number; label: string; hint: string; icon: typeof Wrench; cls: string; num: string }[] = [
-    { key: "overdue", n: summary.overdue, label: t("wo.sum.overdue"), hint: t("wo.sum.overdueHint"), icon: AlertTriangle, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    canApproveList || canAuthorizeList
-      ? { key: "mine", n: summary.mine, label: t("wo.sum.mySign"), hint: t("wo.sum.mySignHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" }
-      : { key: "mine", n: summary.mine, label: t("wo.sum.mine"), hint: t("wo.sum.mineHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "inPreparation", n: summary.notSent, label: t("wo.sum.notSent"), hint: t("wo.sum.notSentHint"), icon: Send, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
-    { key: "inProgress", n: summary.inProgress, label: t("wo.sum.inProgress"), hint: t("wo.sum.inProgressHint"), icon: Hammer, cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
-    { key: "postponed", n: summary.deferred, label: t("wo.sum.deferred"), hint: t("wo.sum.deferredHint"), icon: Pause, cls: "border-l-yellow-600", num: "text-yellow-700 dark:text-yellow-400" },
-  ];
   const STAGE_BUTTONS: { key: typeof stageSel; label: string }[] = [
     { key: "", label: t("wo.stageF.open") },
     { key: "inPreparation", label: t("wo.filter.inPreparation") },
@@ -5678,7 +5678,7 @@ export const WorkOrdersPage: React.FC = () => {
     { key: "closed", label: t("wo.filter.closed") },
   ];
   const VIEW_LABEL: Record<string, string> = {
-    overdue: t("wo.sum.overdue"), mine: summaryCards[1]!.label, inPreparation: t("wo.sum.notSent"),
+    overdue: t("wo.sum.overdue"), mine: canApproveList || canAuthorizeList ? t("wo.sum.mySign") : t("wo.sum.mine"), inPreparation: t("wo.sum.notSent"),
     inProgress: t("wo.sum.inProgress"), postponed: t("wo.sum.deferred"), toApprove: t("wo.stageF.toApprove"),
     toAuthorize: t("wo.stageF.toAuthorize"), authorized: t("wo.filter.authorized"), open: t("wo.filter.open"),
     closed: t("wo.filter.closed"), postponedPending: t("wo.filter.postponedPending"), postponedRejected: t("wo.filter.postponedRejected"),
@@ -5686,19 +5686,17 @@ export const WorkOrdersPage: React.FC = () => {
   const activeFilters: { key: string; label: string; clear: () => void }[] = [
     ...(viewFilter ? [{ key: "view", label: VIEW_LABEL[viewFilter] ?? viewFilter, clear: () => setViewParam("") }] : []),
     ...(stageSel ? [{ key: "stage", label: STAGE_BUTTONS.find(b => b.key === stageSel)!.label, clear: () => setStageSel("") }] : []),
-    ...(typeSel ? [{ key: "type", label: t(`wo.type.${typeSel === "PREVENTIVE" ? "preventive" : typeSel === "CORRECTIVE" ? "corrective" : "inspection"}` as TranslationKey), clear: () => setTypeSel("") }] : []),
-    ...(prioSel ? [{ key: "prio", label: t("wo.fl.prio").replace("{p}", prioLabel(prioSel)), clear: () => setPrioSel("") }] : []),
-    ...(whoSel ? [{ key: "who", label: whoSel === "__none__" ? t("wo.fl.noOne") : whoSel, clear: () => setWhoSel("") }] : []),
-    ...(assetSel ? [{ key: "asset", label: assetSel, clear: () => setAssetSel("") }] : []),
     ...(overdueOnly ? [{ key: "overdueOnly", label: t("wo.fl.overdueOnly"), clear: () => setOverdueOnly(false) }] : []),
+    ...(groupSel !== null ? [{ key: "group", label: `G${groupSel} · ${t(`sfi.g.${groupSel}` as TranslationKey)}`, clear: () => setGroupSel(null) }] : []),
   ];
+  // Grupos con órdenes para lo que se está mirando (misma etapa y filtros, sin el grupo).
+  const groupsWithOrders = new Set(
+    (beforeGroup ? stageFilter(beforeGroup, stageSel) : []).map(w => w.sfiGroupNumber).filter((g): g is number => typeof g === "number"),
+  );
   const clearAllFilters = () => {
-    setStageSel(""); setTypeSel(""); setPrioSel(""); setWhoSel(""); setAssetSel(""); setOverdueOnly(false); setSearch("");
+    setStageSel(""); setOverdueOnly(false); setSearch(""); setGroupSel(null);
     setViewParam("");
   };
-  const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${
-    on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"
-  }`;
   const vesselNameForReport = vessels.find(v => v.code === selectedVesselCode)?.name ?? null;
 
   return (
@@ -5746,75 +5744,62 @@ export const WorkOrdersPage: React.FC = () => {
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loadingDetail")}</div>}
 
-      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        {summaryCards.map(c => {
-          const on = viewFilter === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setViewParam(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${
-                on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"
-              }`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* Filtros: sirven igual para el tablero y la lista. */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
-        <div className="flex flex-wrap gap-1.5">
-          {STAGE_BUTTONS.map(b => {
-            const on = stageSel === b.key;
-            const count = beforeStage ? stageFilter(beforeStage, b.key).length : 0;
+        {/* Grupo SFI: sólo el número; el nombre va en el tooltip (Preview V52). */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">{t("wo.fl.group")}</span>
+          <button type="button" aria-pressed={groupSel === null} onClick={() => setGroupSel(null)}
+            className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              groupSel === null ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {t("wo.fl.groupAll")}
+          </button>
+          {Array.from({ length: 10 }, (_, g) => {
+            const on = groupSel === g;
+            const has = groupsWithOrders.has(g);
+            const name = `G${g} · ${t(`sfi.g.${g}` as TranslationKey)}`;
             return (
-              <button key={b.key || "open"} type="button" onClick={() => setStageSel(b.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
-                  on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+              <button key={g} type="button" title={name} aria-label={name} aria-pressed={on}
+                disabled={!has && !on}
+                onClick={() => setGroupSel(on ? null : g)}
+                className={`min-w-[2.4rem] rounded-full border-[1.5px] px-2.5 py-1 text-xs font-bold transition-colors ${
+                  on ? "border-accent bg-accent text-accent-fg"
+                    : has ? "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                    : "border-fg/10 bg-surface text-text-industrial/60 opacity-35 cursor-default"
                 }`}>
-                {b.label}
-                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{count}</span>
+                G{g}
               </button>
             );
           })}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select value={typeSel} onChange={e => setTypeSel(e.target.value)} className={selCls(!!typeSel)}>
-            <option value="">{t("wo.fl.typeAll")}</option>
-            <option value="PREVENTIVE">{t("wo.type.preventive")}</option>
-            <option value="CORRECTIVE">{t("wo.type.corrective")}</option>
-            <option value="INSPECTION">{t("wo.type.inspection")}</option>
-          </select>
-          <select value={prioSel} onChange={e => setPrioSel(e.target.value)} className={selCls(!!prioSel)}>
-            <option value="">{t("wo.fl.prioAll")}</option>
-            {["CRITICAL", "HIGH", "MEDIUM", "LOW"].map(p => <option key={p} value={p}>{prioLabel(p)}</option>)}
-          </select>
-          <select value={whoSel} onChange={e => setWhoSel(e.target.value)} className={selCls(!!whoSel)}>
-            <option value="">{t("wo.fl.whoAll")}</option>
-            <option value="__none__">{t("wo.fl.noOne")}</option>
-            {whoOptions.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-          <select value={assetSel} onChange={e => setAssetSel(e.target.value)} className={`${selCls(!!assetSel)} max-w-[14rem]`}>
-            <option value="">{t("wo.fl.assetAll")}</option>
-            {assetOptions.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
+          {/* "Ver cerradas", "Sólo vencidas", "Agrupar por equipo" y el buscador van
+              en este mismo renglón: la barra entera es una sola fila. */}
+          <button type="button"
+            onClick={() => {
+              // Las cerradas no tienen columna en el tablero: se muestran en la lista.
+              if (stageSel === "closed") { setStageSel(""); setViewMode("kanban"); }
+              else { setStageSel("closed"); setViewMode("list"); }
+            }}
+            className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+              stageSel === "closed" ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
+            }`}>
+            <Archive className="w-3.5 h-3.5" /> {t("wo.fl.showClosed")}
+          </button>
           <button type="button" onClick={() => setOverdueOnly(v => !v)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
               overdueOnly ? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400" : "border-fg/10 bg-surface text-fg"
             }`}>
             <AlertTriangle className="w-3.5 h-3.5" /> {t("wo.fl.overdueOnly")}
           </button>
           {showBoard && (
             <button type="button" onClick={() => setGroupByAsset(v => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
                 groupByAsset ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
               }`}>
               <Layers className="w-3.5 h-3.5" /> {t("wo.fl.groupByAsset")}
             </button>
           )}
-          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1 w-full sm:w-auto">
             <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("wo.page.searchPlaceholder")}
               className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />

@@ -10,6 +10,7 @@ import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { MocRegiSections, initRegiForm, serializeRegi, computeRequiresFull, emptyActionRow, type RegiForm } from "../components/moc/MocRegiSections";
 
 // Borrador estructurado que devuelve el copiloto (POST /app/mocs/suggest-draft).
@@ -482,24 +483,30 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>{t("form.vessel")}</label>
+            <GuideField id="moc-vessel" missing={!vesselCode}><label className={labelCls}>{t("form.vessel").replace(/\s*\*\s*$/, "")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew || isLocked} className={inputCls}>
                 {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
               </select>
-            </div>
-            <div><label className={labelCls}>{t("moc.categoryReq")}</label>
+            </GuideField>
+            <GuideField id="moc-category" missing={!category}><label className={labelCls}>{t("moc.categoryReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!category && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <select value={category} onChange={e => onCategoryChange(e.target.value)} disabled={isLocked} className={inputCls}>
                 {Object.entries(CATEGORY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
+            </GuideField>
+            <div className="col-span-2">
+              <GuideField id="moc-title" missing={!title.trim()}><label className={labelCls}>{t("moc.titleReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!title.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} disabled={isLocked} placeholder={t("moc.titlePh")} className={inputCls} />
+              </GuideField>
             </div>
-            <div className="col-span-2"><label className={labelCls}>{t("moc.titleReq")}</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} disabled={isLocked} placeholder={t("moc.titlePh")} className={inputCls} />
+            <div className="col-span-2">
+              <GuideField id="moc-reason" missing={!reasonForChange.trim()}><label className={labelCls}>{t("moc.reasonReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!reasonForChange.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <AutoTextArea rows={2} value={reasonForChange} onChange={e => setReason(e.target.value)} disabled={isLocked} placeholder={template?.reasonPlaceholder} className={inputCls + " resize-y"} />
+              </GuideField>
             </div>
-            <div className="col-span-2"><label className={labelCls}>{t("moc.reasonReq")}</label>
-              <AutoTextArea rows={2} value={reasonForChange} onChange={e => setReason(e.target.value)} disabled={isLocked} placeholder={template?.reasonPlaceholder} className={inputCls + " resize-y"} />
-            </div>
-            <div className="col-span-2"><label className={labelCls}>{t("moc.proposedReq")}</label>
-              <AutoTextArea rows={2} value={proposedChange} onChange={e => setProposed(e.target.value)} disabled={isLocked} placeholder={template?.proposedPlaceholder} className={inputCls + " resize-y"} />
+            <div className="col-span-2">
+              <GuideField id="moc-proposed" missing={!proposedChange.trim()}><label className={labelCls}>{t("moc.proposedReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!proposedChange.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+                <AutoTextArea rows={2} value={proposedChange} onChange={e => setProposed(e.target.value)} disabled={isLocked} placeholder={template?.proposedPlaceholder} className={inputCls + " resize-y"} />
+              </GuideField>
             </div>
             <div><label className={labelCls}>{t("moc.risk")}</label>
               <select value={riskLevel} onChange={e => setRiskLevel(e.target.value)} disabled={isLocked} className={inputCls}>

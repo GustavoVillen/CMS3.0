@@ -72,7 +72,7 @@ export function Head({ title, sub, onBack, step, steps = 3 }: {
   );
 }
 
-/** Rótulo + contenido. `missing` lo pinta en amarillo con "Falta". */
+/** Rótulo + contenido. `missing` lo pinta en amarillo con "Falta"; si se pasa, el campo es obligatorio y lleva asterisco. */
 export function Field({ label, missing, optional, hint, children, id }: {
   label: string;
   missing?: boolean;
@@ -86,7 +86,8 @@ export function Field({ label, missing, optional, hint, children, id }: {
     <div id={id} data-missing={missing ? "1" : undefined}
       className={`-mx-3 px-3 py-3 rounded-2xl border-[1.5px] flex flex-col gap-2 ${missing ? "bg-warning/10 border-warning" : "border-transparent"}`}>
       <p className="text-sm font-extrabold text-fg flex items-center gap-2">
-        {label}
+        {/* Obligatorio = quien lo usa le pasa `missing` (estándar V50: asterisco siempre). */}
+        <span>{label}{missing !== undefined && !optional && <span className="ml-0.5 font-black text-danger" aria-hidden="true">*</span>}</span>
         {missing && <span className="text-[11px] font-extrabold uppercase tracking-wide text-warning">{t("ob.missing")}</span>}
         {optional && <span className="text-xs font-semibold text-text-industrial/45">{t("ob.optional")}</span>}
       </p>

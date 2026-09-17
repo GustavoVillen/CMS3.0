@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
@@ -65,7 +66,7 @@ function asNullableText(value: string): string | null {
   return trimmed || null;
 }
 
-const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
+const Field: React.FC<{ label: React.ReactNode; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
   <div className="space-y-1.5">
     <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider whitespace-nowrap">{label}</label>
     {hint && <p className="text-[10px] text-text-industrial/30">{hint}</p>}
@@ -157,23 +158,27 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-[1fr_7fr] gap-4">
             <div>
-              <Field label="Codigo_Embarcacion *">
-                <input
-                  value={code}
-                  onChange={e => setCode(e.target.value.toUpperCase())}
-                  required
-                  maxLength={20}
-                  placeholder="CODIGO"
-                  disabled={isEdit}
-                  className="input-field disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-              </Field>
+              <GuideField id="vessel-code" missing={!code.trim()}>
+                <Field label={<>Codigo_Embarcacion<RequiredMark />{!code.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</>}>
+                  <input
+                    value={code}
+                    onChange={e => setCode(e.target.value.toUpperCase())}
+                    required
+                    maxLength={20}
+                    placeholder="CODIGO"
+                    disabled={isEdit}
+                    className="input-field disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </Field>
+              </GuideField>
               <p className="mt-1.5 text-[10px] text-text-industrial/30">{t("vessel.codeHint")}</p>
             </div>
             <div>
-              <Field label="VesselName *">
-                <input value={name} onChange={e => setName(e.target.value)} required maxLength={120} placeholder={t("vessel.namePlaceholder")} className="input-field" />
-              </Field>
+              <GuideField id="vessel-name" missing={!name.trim()}>
+                <Field label={<>VesselName<RequiredMark />{!name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</>}>
+                  <input value={name} onChange={e => setName(e.target.value)} required maxLength={120} placeholder={t("vessel.namePlaceholder")} className="input-field" />
+                </Field>
+              </GuideField>
             </div>
           </div>
           <Field label="Armador">

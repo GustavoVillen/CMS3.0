@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardCheck, Plus, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ShieldAlert, Sparkles } from "lucide-react";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth } from "../lib/auth";
@@ -212,19 +213,19 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Vessel *</label>
+            <GuideField id="ea-vessel" missing={!vesselCode}><label className={labelCls}>Vessel<RequiredMark />{!vesselCode && <GuideNeedTag label="Falta" />}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew} className={inputCls}>
                 {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
               </select>
-            </div>
-            <div><label className={labelCls}>Tipo *</label>
+            </GuideField>
+            <GuideField id="ea-type" missing={!auditType}><label className={labelCls}>Tipo<RequiredMark />{!auditType && <GuideNeedTag label="Falta" />}</label>
               <select value={auditType} onChange={e => setAuditType(e.target.value)} className={inputCls}>
                 {Object.entries(AUDIT_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
-            </div>
-            <div><label className={labelCls}>Fecha *</label>
+            </GuideField>
+            <GuideField id="ea-date" missing={!auditDate}><label className={labelCls}>Fecha<RequiredMark />{!auditDate && <GuideNeedTag label="Falta" />}</label>
               <input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className={inputCls} />
-            </div>
+            </GuideField>
             <div><label className={labelCls}>Resultado general</label>
               <select value={overallResult} onChange={e => setResult(e.target.value)} className={inputCls}>
                 <option value="">—</option>
@@ -462,11 +463,11 @@ const PromoteToDefectModal: React.FC<{ audit: Audit; finding: Finding; onClose: 
             <p className="text-xs text-fg bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">{finding.description}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <GuideField id="ea-promote-asset" missing={!assetId}>
               <label onClick={() => { void suggestAsset(); }} title={t("wo.ai.suggestAssetTooltip")}
                 className={`flex items-center gap-1.5 ${labelCls} ${assets.length > 0 ? `cursor-pointer hover:text-accent ${suggesting ? "opacity-60 animate-pulse" : ""}` : "opacity-50"}`}>
                 {suggesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 text-accent" />}
-                {t("wo.modal.equipment")} *
+                {t("wo.modal.equipment")}<RequiredMark />{!assetId && <GuideNeedTag label="Falta" />}
               </label>
               {loadingAssets
                 ? <div className="flex items-center gap-2 py-2.5"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /></div>
@@ -476,7 +477,7 @@ const PromoteToDefectModal: React.FC<{ audit: Audit; finding: Finding; onClose: 
                   </select>
               }
               {suggested && assetId && <p className="text-[10px] text-accent flex items-center gap-1 mt-1"><Sparkles className="w-3 h-3" /> {t("wo.ai.assetSuggested")}</p>}
-            </div>
+            </GuideField>
             <div>
               <label className={labelCls}>{t("col.severity")}</label>
               <select value={severity} onChange={e => setSeverity(e.target.value)} className={inputCls}>
@@ -542,7 +543,10 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
           <label className="flex items-center gap-2 text-xs text-fg"><input type="checkbox" checked={detentionRelated} onChange={e => setDetention(e.target.checked)} /> Detention-related</label>
         </div>
       </div>
-      <div><label className={labelCls}>Descripción *</label><AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls + " text-xs resize-y"} /></div>
+      <GuideField id="ea-finding-desc" missing={!description.trim()}>
+        <label className={labelCls}>Descripción<RequiredMark />{!description.trim() && <GuideNeedTag label="Falta" />}</label>
+        <AutoTextArea rows={2} value={description} onChange={e => setDescription(e.target.value)} className={inputCls + " text-xs resize-y"} />
+      </GuideField>
       {err && <p className="text-[11px] text-red-700 dark:text-red-400">{err}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs text-text-industrial">Cancelar</button>

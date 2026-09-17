@@ -231,6 +231,93 @@ async function generatePermitCode(
   return `PTW-${prefix}-${vesselCode}-${yy}-${String(count + 1).padStart(4, "0")}`;
 }
 
+/**
+ * Permisos que exige el plan, creados al AUTORIZAR la OT (setWorkOrderApproval).
+ * Es un efecto del sistema, no una alta manual: no pide `permit.manage` a quien
+ * autoriza. Un permiso por tipo; si la OT ya tiene uno vivo de ese tipo (no
+ * cancelado ni rechazado) no se duplica. Devuelve sólo los creados.
+ */
+export async function createRequiredPermitsForWorkOrder(args: {
+  tenantId: string;
+  workOrder: { id: string; vesselCode: string; workOrderCode: string; title: string; assetId: string | null; location: string | null; startDate: Date | null; dueDate: Date | null };
+  types: string[];
+  actorUserId: string;
+}): Promise<Array<{ id: string; permitCode: string; type: string }>> {
+  const prisma = getPrismaClient();
+  if (!prisma || args.types.length === 0) return [];
+  const { tenantId, workOrder: wo } = args;
+
+  const asset = wo.assetId
+    ? await prisma.asset.findFirst({ where: { id: wo.assetId, tenantId }, select: { name: true } })
+    : null;
+  const location = wo.location?.trim() || asset?.name || wo.vesselCode;
+  const plannedStart = wo.startDate ?? wo.dueDate ?? new Date();
+  const plannedEnd = new Date(plannedStart.getTime() + 24 * 3600_000);
+
+  const created: Array<{ id: string; permitCode: string; type: string }> = [];
+  for (const raw of args.types) {
+    const type = parseType(raw);
+    const existing = await permitClient(prisma).permitToWork.findFirst({
+      where: { tenantId, workOrderId: wo.id, type, deletedAt: null, status: { notIn: ["CANCELLED", "REJECTED"] } },
+    });
+    if (existing) continue;
+    const permitCode = await generatePermitCode(prisma, tenantId, wo.vesselCode, type);
+    const row = await permitClient(prisma).permitToWork.create({
+      data: {
+        tenantId,
+        vesselCode: wo.vesselCode,
+        permitCode,
+        type,
+        status: "DRAFT",
+        assetId: wo.assetId,
+        workOrderId: wo.id,
+        location,
+        description: `${wo.workOrderCode} — ${wo.title}`,
+        plannedStart,
+        plannedEnd,
+        details: {},
+        createdByUserId: args.actorUserId,
+        updatedByUserId: args.actorUserId,
+      },
+    });
+    void publishAudit(prisma, {
+      tenantId,
+      actorUserId: args.actorUserId,
+      action: "Permit.created",
+      entityType: "Permit",
+      entityId: row.id,
+      metadata: { permitCode, vesselCode: wo.vesselCode, type, autoCreatedBy: "WORK_ORDER_AUTHORIZED", workOrderCode: wo.workOrderCode },
+    });
+    created.push({ id: row.id, permitCode, type });
+  }
+  return created;
+}
+
+/**
+ * Tipos exigidos por los planes de la OT que todavía no tienen un permiso
+ * CLOSED vinculado. Vacío = la OT se puede cerrar.
+ */
+export async function listMissingRequiredPermits(
+  tenantId: string,
+  workOrderId: string,
+  requiredTypes: string[],
+): Promise<Array<{ type: string; openPermitCode: string | null; openStatus: string | null }>> {
+  const prisma = getPrismaClient();
+  if (!prisma || requiredTypes.length === 0) return [];
+  const permits = await permitClient(prisma).permitToWork.findMany({
+    where: { tenantId, workOrderId, deletedAt: null, type: { in: requiredTypes } },
+    orderBy: [{ createdAt: "desc" }],
+  }) as Array<{ type: string; status: string; permitCode: string }>;
+  const missing: Array<{ type: string; openPermitCode: string | null; openStatus: string | null }> = [];
+  for (const type of requiredTypes) {
+    const ofType = permits.filter(p => p.type === type);
+    if (ofType.some(p => p.status === "CLOSED")) continue;
+    const open = ofType.find(p => !TERMINAL_STATUSES.has(p.status)) ?? null;
+    missing.push({ type, openPermitCode: open?.permitCode ?? null, openStatus: open?.status ?? null });
+  }
+  return missing;
+}
+
 export async function createPermit(session: TenantAccessSession, input: PermitWriteInput) {
   ensureCanManage(session);
 

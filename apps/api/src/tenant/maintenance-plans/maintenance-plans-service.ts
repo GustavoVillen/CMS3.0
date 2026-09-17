@@ -70,6 +70,8 @@ export interface CreateMaintenancePlanInput {
   samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
+  /** Permisos de trabajo que exige la tarea (se crean al autorizar la OT y se exigen al cerrarla). */
+  requiredPermitTypes?: string[] | null;
   triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
@@ -136,6 +138,8 @@ export interface UpdateMaintenancePlanInput {
   samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
+  /** Permisos de trabajo que exige la tarea (se crean al autorizar la OT y se exigen al cerrarla). */
+  requiredPermitTypes?: string[] | null;
   triggerResultMode?: "DUE_ONLY" | "AUTO_WO" | "APPROVAL_WO" | "CHECKLIST";
   checklistTemplate?: string | null;
   windowMode?: "AUTO" | "MANUAL";
@@ -1216,6 +1220,7 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     taskMasterId,
     samplingKind:      payload.samplingKind ?? null,
     samplingFluidType: payload.samplingFluidType ?? null,
+    requiredPermitTypes: normalizeRequiredPermitTypes(payload.requiredPermitTypes),
     triggerResultMode: payload.triggerResultMode ?? "DUE_ONLY",
     checklistTemplate: normalizeOptionalText(payload.checklistTemplate),
     windowMode: payload.windowMode ?? "AUTO",
@@ -1368,6 +1373,7 @@ export async function updateTenantMaintenancePlan(
   if (payload.taskMasterId !== undefined) data.taskMasterId = normalizeOptionalText(payload.taskMasterId);
   if (payload.samplingKind !== undefined)      data.samplingKind      = payload.samplingKind ?? null;
   if (payload.samplingFluidType !== undefined) data.samplingFluidType = payload.samplingFluidType ?? null;
+  if (payload.requiredPermitTypes !== undefined) data.requiredPermitTypes = normalizeRequiredPermitTypes(payload.requiredPermitTypes);
   if (payload.triggerResultMode !== undefined) data.triggerResultMode = payload.triggerResultMode;
   if (payload.checklistTemplate !== undefined) data.checklistTemplate = normalizeOptionalText(payload.checklistTemplate);
   if (payload.windowMode !== undefined) data.windowMode = payload.windowMode;
@@ -2979,4 +2985,21 @@ export async function getMaintenanceWorkloadProjection(
     overdueHours,
     ...(detailWeekStart ? { weekPlanIds: [...weekPlanIdSet] } : {}),
   };
+}
+
+const PLAN_PERMIT_TYPES = new Set([
+  "HOT_WORK", "ENCLOSED_SPACE_ENTRY", "WORKING_ALOFT", "ELECTRICAL_ISOLATION", "COLD_WORK", "UNDERWATER_WORK",
+]);
+
+/** Tipos de permiso válidos, sin repetir. Un tipo desconocido es error: no se descarta en silencio. */
+function normalizeRequiredPermitTypes(value: unknown): Array<"HOT_WORK" | "ENCLOSED_SPACE_ENTRY" | "WORKING_ALOFT" | "ELECTRICAL_ISOLATION" | "COLD_WORK" | "UNDERWATER_WORK"> {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new RouteError(400, "VALIDATION_ERROR", "requiredPermitTypes debe ser una lista.");
+  const out = new Set<string>();
+  for (const v of value) {
+    const type = String(v ?? "").trim().toUpperCase();
+    if (!PLAN_PERMIT_TYPES.has(type)) throw new RouteError(400, "VALIDATION_ERROR", `Tipo de permiso inválido: ${type}.`);
+    out.add(type);
+  }
+  return [...out] as ReturnType<typeof normalizeRequiredPermitTypes>;
 }

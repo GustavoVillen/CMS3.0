@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registrar avances — Preview V29</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{--fg:#1A1D24;--muted:rgba(26,29,36,.62);--faint:rgba(26,29,36,.42);--fg10:rgba(26,29,36,.10);--fg5:rgba(26,29,36,.05);--ac:#0284C7}
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#F4F5F7;color:var(--fg);font-size:14px}
+  i[data-lucide]{flex-shrink:0}
+  .bar{position:sticky;top:0;z-index:50;background:#111827;color:#fff;padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .bar b{font-size:13px;margin-right:6px} .bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer} .bar button.on{background:var(--ac)}
+  .bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px} .bar .sep{width:1px;height:20px;background:#4B5563;margin:0 4px}
+  .stage{display:flex;gap:24px;justify-content:center;align-items:flex-start;padding:22px 16px;flex-wrap:wrap}
+  .phone{width:390px;max-width:100%;height:780px;background:#fff;border-radius:34px;border:10px solid #1A1D24;overflow:hidden;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.2);display:flex;flex-direction:column}
+  .cap{font-size:12px;font-weight:800;color:var(--muted);text-align:center;margin-bottom:6px}
+  .scr{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+  .btn{border:1px solid var(--fg10);background:#fff;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;display:inline-flex;gap:6px;align-items:center;justify-content:center;cursor:pointer;color:var(--fg)}
+  .btn.pri{background:var(--ac);border-color:var(--ac);color:#fff} .btn.big{padding:13px;font-size:15px;width:100%} .btn:disabled{opacity:.45}
+  .h1{font-size:18px;font-weight:900;margin:0} .sub{font-size:12px;color:var(--muted)}
+  .wo{border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;cursor:pointer}
+  .wo:hover{border-color:var(--ac)} .wo .code{font-family:ui-monospace,monospace;font-size:11px;font-weight:800;color:var(--ac)}
+  .wo .last{font-size:11px;color:var(--faint)}
+  .pill{font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 8px}
+  .p-go{background:#DCFCE7;color:#15803D} .p-wait{background:#FEF3C7;color:#92400E} .p-ss{background:#EDE9FE;color:#6D28D9}
+  .ta{width:100%;min-height:120px;border:1.5px solid var(--fg10);border-radius:14px;padding:12px;font-size:15px;font-family:inherit;resize:none}
+  .ta:focus{outline:none;border-color:var(--ac)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px} .chip{border:1px solid var(--fg10);background:#fff;border-radius:99px;padding:6px 11px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .chip.on{background:#1A1D24;color:#fff;border-color:#1A1D24}
+  .mic{width:100%;border:0;border-radius:14px;padding:12px;background:#FEE2E2;color:#B91C1C;font-weight:800;font-size:14px;display:flex;gap:8px;align-items:center;justify-content:center;cursor:pointer}
+  .mic.rec{background:#DC2626;color:#fff;animation:pulse 1.2s infinite} @keyframes pulse{50%{opacity:.75}}
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap}
+  .thumb{width:74px;height:74px;border-radius:12px;background:linear-gradient(135deg,#94A3B8,#475569);position:relative;color:#fff;display:flex;align-items:center;justify-content:center}
+  .thumb .x{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:99px;background:#E11D48;color:#fff;display:flex;align-items:center;justify-content:center}
+  .add{width:74px;height:74px;border-radius:12px;border:2px dashed var(--fg10);display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--muted);cursor:pointer}
+  .lbl{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px}
+  .foot{border-top:1px solid var(--fg10);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+  .ai{border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.06);border-radius:14px;padding:10px 12px;font-size:12.5px}
+  .ai b{color:#6D28D9} .row{display:flex;gap:8px;align-items:center}
+  .tl{display:flex;flex-direction:column;gap:10px} .day{font-size:11px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+  .note{border:1px solid var(--fg10);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .note .who{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:center}
+  .note p{margin:0;font-size:13.5px;line-height:1.45}
+  .mini{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#94A3B8,#475569)}
+  .dlg{position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end}
+  .dlg>div{background:#fff;width:100%;border-radius:20px 20px 0 0;padding:16px;display:flex;flex-direction:column;gap:10px}
+  .desk{width:720px;max-width:100%;background:#fff;border-radius:16px;border:1px solid var(--fg10);overflow:hidden}
+  .desk .hd{padding:12px 16px;border-bottom:1px solid var(--fg10);display:flex;gap:8px;align-items:center}
+  .toast{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:9px 14px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap}
+  .ref{max-width:900px;margin:18px auto;background:#fff;border:1px solid var(--fg10);border-radius:14px;padding:14px 18px;font-size:13px;line-height:1.55}
+  .sev{font-size:10px;font-weight:800;border-radius:99px;padding:1px 7px;margin-right:6px} .hi{background:#FEE2E2;color:#B91C1C} .md{background:#FEF3C7;color:#92400E}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Registrar avances · Preview V29</b><span class="tag">DEMO · DATOS FICTICIOS</span><span class="sep"></span>
+  <button data-v="flow" class="on">Registrar (celular)</button><button data-v="timeline">Cómo se ven en la OT</button><button data-v="ref">Qué cambia</button>
+</div>
+<div id="root"></div>
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+const S={v:"flow",step:"pick",text:"",chips:new Set(),photos:0,rec:false,when:"now",status:"",toast:null,dlg:false};
+function toast(t){S.toast=t;render();setTimeout(()=>{S.toast=null;render();},1800);}
+const WOS=[
+ {c:"OT-DEM1-26-0057",t:"Cambio de termostato",eq:"Generador auxiliar 2",last:"último avance hace 2 h",p:["p-go","En curso"]},
+ {c:"OT-DEM1-26-0061",t:"Soldadura de refuerzo interno",eq:"Tanque de lastre 3 Br",last:"sin avances todavía",p:["p-wait","Esperando repuesto"]},
+ {c:"SS-DEM1-26-0012",t:"Rectificar tapa de cilindro",eq:"Motor principal Br",last:"en el taller · Taller Naval Demo",p:["p-ss","SS en taller"]},
+];
+const CHIPS=["Se desarmó","Se cambió la pieza","Se probó y funciona","Falta repuesto","Espera al taller","Trabajo terminado"];
+function picker(){
+  return `<div class="scr"><div><p class="h1">¿En qué trabajaste?</p><div class="sub">Tus órdenes abiertas, las más recientes primero.</div></div>
+  <div class="row" style="border:1px solid var(--fg10);border-radius:12px;padding:8px 10px">${I("search",15)}<span class="sub">Buscar OT, SS o equipo…</span></div>
+  ${WOS.map((w,i)=>`<div class="wo" onclick="S.step='sheet';S.wo=${i};render()"><div style="flex:1;min-width:0"><div class="row" style="gap:6px"><span class="code">${w.c}</span><span class="pill ${w.p[0]}">${w.p[1]}</span></div><b style="font-size:14px">${w.t}</b><div class="sub">${w.eq}</div><div class="last">${w.last}</div></div>${I("chevron-right",18)}</div>`).join("")}
+  <div class="sub" style="text-align:center">Se abre directo desde el botón <b>+ Avance</b> del celular y desde el Dashboard.</div></div>`;
+}
+function sheet(){
+  const w=WOS[S.wo??0];
+  const canSave=S.text.trim()||S.photos>0;
+  return `<div class="row" style="padding:12px 14px;border-bottom:1px solid var(--fg10)"><button class="btn" style="padding:6px" onclick="S.step='pick';render()">${I("arrow-left",16)}</button><div style="min-width:0;flex:1"><div class="code" style="font-family:ui-monospace,monospace;font-size:11px;font-weight:800;color:var(--ac)">${w.c}</div><b style="font-size:14px">${w.t}</b></div></div>
+  <div class="scr">
+    <div><div class="lbl">¿Qué se hizo?</div>
+      <textarea class="ta" id="ta" placeholder="Contalo como se lo dirías al jefe de máquinas…" oninput="S.text=this.value;keepTa()">${S.text}</textarea></div>
+    <button class="mic ${S.rec?'rec':''}" onclick="S.rec=!S.rec;if(!S.rec){S.text=(S.text?S.text+' ':'')+'Se desarmó la carcasa del termostato, tenía sarro; se limpió y se cambió la junta.';}render()">${I(S.rec?"square":"mic",18)}${S.rec?"Escuchando… tocá para terminar":"Dictar en vez de escribir"}</button>
+    <div><div class="lbl">Frases rápidas</div><div class="chips">${CHIPS.map(c=>`<span class="chip ${S.chips.has(c)?'on':''}" onclick="S.chips.has('${c}')?S.chips.delete('${c}'):S.chips.add('${c}');S.text=[...S.chips].join('. ')+(S.chips.size?'.':'');render()">${c}</span>`).join("")}</div></div>
+    <div><div class="lbl">Fotos o documentos (opcional)</div><div class="thumbs">
+      ${Array.from({length:S.photos},(_,i)=>`<div class="thumb">${I("image",20)}<span class="x" onclick="S.photos--;render()">${I("x",12)}</span></div>`).join("")}
+      <div class="add" onclick="S.photos++;render()">${I("camera",20)}Foto</div><div class="add" onclick="toast('Elige un archivo (demo)')">${I("paperclip",20)}Archivo</div></div></div>
+    <div><div class="lbl">¿Cuándo?</div><div class="chips">${[["now","Ahora"],["morning","Hoy a la mañana"],["yday","Ayer"],["other","Otra fecha…"]].map(([k,l])=>`<span class="chip ${S.when===k?'on':''}" onclick="S.when='${k}';render()">${l}</span>`).join("")}</div></div>
+    <div><div class="lbl">¿Cómo sigue? (opcional)</div><div class="chips">${[["go","Sigue en curso"],["wait","Espera repuesto"],["done","Listo para cerrar"]].map(([k,l])=>`<span class="chip ${S.status===k?'on':''}" onclick="S.status=S.status==='${k}'?'':'${k}';render()">${l}</span>`).join("")}</div></div>
+  </div>
+  <div class="foot"><button class="btn pri big" ${canSave?'':'disabled'} onclick="S.step='saved';render()">${I("check",18)}Guardar avance${S.photos?` · ${S.photos} foto${S.photos>1?'s':''}`:''}</button>
+    <div class="sub" style="text-align:center">${canSave?'Si no hay señal, queda guardado en el teléfono y se envía solo.':'Escribí, dictá o sacá una foto.'}</div></div>`;
+}
+function saved(){
+  return `<div class="scr" style="justify-content:center;text-align:center;gap:14px">
+   <div style="width:64px;height:64px;border-radius:99px;background:#DCFCE7;color:#15803D;display:flex;align-items:center;justify-content:center;margin:0 auto">${I("check",34)}</div>
+   <p class="h1">Avance guardado</p><div class="sub">OT-DEM1-26-0057 · hace un instante</div>
+   <div class="ai" style="text-align:left"><div class="row" style="margin-bottom:6px">${I("sparkles",15)}<b>La IA encontró repuestos en tu avance</b></div>
+     <div>¿Se usaron? Se descuentan del stock sólo si confirmás.</div>
+     <label class="row" style="margin-top:8px"><input type="checkbox" checked> 1 × Junta de termostato <span class="sub">(stock 4)</span></label>
+     <div class="row" style="margin-top:10px"><button class="btn" onclick="toast('No se descuenta nada (demo)')">No se usaron</button><button class="btn pri" onclick="toast('Descontado del stock (demo)')">Confirmar</button></div></div>
+   <button class="btn" onclick="S.step='sheet';S.text='';S.chips.clear();S.photos=0;S.status='';render()">${I("plus",16)}Otro avance en esta OT</button>
+   <button class="btn" onclick="S.step='pick';render()">Volver</button></div>`;
+}
+function flow(){
+  const body=S.step==="pick"?picker():S.step==="sheet"?sheet():saved();
+  return `<div class="stage"><div><div class="cap">Celular · un solo camino desde el botón + o el Dashboard</div><div class="phone">${body}${S.toast?`<div class="toast">${S.toast}</div>`:''}</div></div>
+  <div style="max-width:360px;font-size:13px;line-height:1.55;padding-top:30px"><b style="font-size:14px">Probalo</b><br>1. Elegí una OT (o una SS en el taller).<br>2. Escribí, <b>dictá</b> o tocá frases rápidas.<br>3. Sumá varias fotos.<br>4. Guardá: la IA te <b>pregunta</b> si se usaron repuestos antes de tocar el stock.<br><br><span class="sub">Hoy: hay que elegir primero el tipo (Texto, Foto, Video, Audio, Doc), va una sola foto por avance, el botón rápido del celular sólo cambia de pestaña y la IA descuenta repuestos sin preguntar.</span></div></div>`;
+}
+function timeline(){
+  const note=(who,side,txt,ph,ai)=>`<div class="note"><div class="who">${I(side==="ship"?"ship":"user",12)}<b style="color:var(--fg)">${who}</b> · ${side==="ship"?"Buque":"Taller"}${ai?` · <span style="color:#6D28D9;font-weight:700">${I("sparkles",11)} ${ai}</span>`:''}<span style="margin-left:auto" class="row">${I("pencil",13)}${I("trash-2",13)}</span></div><p>${txt}</p>${ph?`<div class="thumbs">${Array.from({length:ph},()=>'<div class="mini"></div>').join("")}</div>`:''}</div>`;
+  return `<div class="stage"><div class="desk"><div class="hd">${I("list-checks",16)}<b>Avances</b><span class="sub">· 4 avances · 3 fotos</span><button class="btn pri" style="margin-left:auto;padding:7px 11px">${I("plus",14)}Registrar avance</button></div>
+  <div style="padding:14px 16px" class="tl">
+   <div class="day">Hoy · martes 15/09</div>
+   ${note("Oscar Duarte","ship","Se armó todo y se probó en marcha 30 minutos: temperatura estable en 78 °C. <b>Listo para cerrar.</b>",2)}
+   ${note("Oscar Duarte","ship","Se cambió la junta del termostato.",0,"1 × Junta descontada del stock (confirmado)")}
+   <div class="day">Ayer · lunes 14/09</div>
+   ${note("Luis Pérez","ship","Se desarmó la carcasa del termostato, tenía sarro. <b>Espera repuesto</b> (junta).",1)}
+   ${note("Taller Naval Demo","shore","Se retiró la tapa para rectificar (desde la SS-DEM1-26-0012).",0)}
+  </div></div></div>`;
+}
+function ref(){
+  return `<div class="ref"><b style="font-size:15px">Qué cambia</b>
+  <ol style="padding-left:18px">
+   <li><b>Un solo camino</b> para registrar: el botón <b>+ Avance</b> del celular y el del Dashboard abren directo «¿En qué trabajaste?» (hoy el del celular sólo cambia de pestaña).</li>
+   <li><b>Sin elegir tipo primero</b>: se escribe o se <b>dicta</b>, y se suman <b>varias fotos o documentos</b> al mismo avance (hoy: un tipo y un archivo por avance). Audio y video separados salen del menú (0 usados en la base); el dictado reemplaza al audio.</li>
+   <li><b>Frases rápidas</b> para lo que se repite («Se desarmó», «Falta repuesto», «Trabajo terminado»…) y <b>¿Cuándo?</b> con Ahora / Hoy a la mañana / Ayer.</li>
+   <li><b>¿Cómo sigue?</b> opcional: «Sigue en curso», «Espera repuesto», «Listo para cerrar», que queda escrito en el avance y se ve resaltado.</li>
+   <li><span class="sev hi">STOCK</span><b>La IA ya no descuenta repuestos sola</b>: al guardar pregunta «¿Se usaron?» y descuenta sólo si se confirma (hoy lo hace sin avisar; hay 28 movimientos así en la base local).</li>
+   <li><b>Sin señal</b>: el avance queda en el teléfono y se envía solo cuando vuelve la conexión (hoy se pierde si falla el envío).</li>
+   <li><b>En la OT</b>: avances por día, con nombre de quien lo cargó, fotos en miniatura, editar y borrar con ventanita propia (hoy avisos del navegador). Las SS en taller aparecen en la lista para cargar avances desde el mismo lugar.</li>
+   <li>Textos en español, inglés y portugués (la ventana de carga hoy está sólo en español).</li>
+  </ol>
+  <p class="sub"><b>No cambia:</b> los avances existentes, el PDF de la OT ni la auditoría de cierre. <b>Para decidir:</b> las SS hoy tienen su propia «Hoja de ruta» (tabla aparte, sin fotos). Propongo mantenerla y sólo mostrar las SS en taller en el mismo selector; unificar los dos registros es un cambio de base de datos más grande.</p></div>`;
+}
+function keepTa(){ /* no re-render mientras se escribe */ }
+function render(){
+  document.querySelectorAll(".bar button").forEach(b=>{const k=Object.keys(b.dataset)[0];b.classList.toggle("on",S[k]===b.dataset[k]);});
+  document.getElementById("root").innerHTML=S.v==="flow"?flow():S.v==="timeline"?timeline():ref();
+  lucide.createIcons();
+}
+document.querySelectorAll(".bar button").forEach(b=>b.onclick=()=>{const k=Object.keys(b.dataset)[0];S[k]=b.dataset[k];render();});
+render();
+</script>
+</body>
+</html>

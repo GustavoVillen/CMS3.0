@@ -18,7 +18,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { WO_PRIORITY_OPTIONS } from "../lib/wo-form-catalog";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AlertDialog } from "./AlertDialog";
-import { GuideNeedTag } from "./GuideKit";
+import { GuideNeedTag, RequiredMark } from "./GuideKit";
 import { AutoTextArea } from "./AutoTextArea";
 import { type AssetOption } from "./AssetSearchDropdown";
 import { CreateWorkOrderModal, SegButtons } from "./CreateWorkOrderModal";
@@ -526,7 +526,7 @@ const NewServiceRequestWizardSteps: React.FC<NewServiceRequestWizardProps> = ({ 
                   return (
                   <div key={id} className={`rounded-xl border p-3 space-y-1.5 ${miss ? "border-amber-500/60 border-l-4 bg-amber-50 dark:bg-amber-500/10" : "border-accent/25 bg-accent/5"}`}>
                     <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
-                      <Handshake className="w-3.5 h-3.5 text-accent" /> {providerName(id)}
+                      <Handshake className="w-3.5 h-3.5 text-accent" /> {providerName(id)}<RequiredMark />
                       {miss && <GuideNeedTag label={t("mp.guide.missing")} />}
                     </p>
                     <AutoTextArea

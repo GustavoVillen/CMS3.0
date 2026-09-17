@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -135,12 +136,12 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
 
         <div className="overflow-y-auto flex-1 p-6 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Vessel *</label>
+            <GuideField id="nm-vessel" missing={!vesselCode}><label className={labelCls}>Vessel<RequiredMark />{!vesselCode && <GuideNeedTag label="Falta" />}</label>
               <select value={vesselCode} onChange={e => setVesselCode(e.target.value)} disabled={!isNew} className={inputCls}>
                 {vessels.map(v => <option key={v.code} value={v.code}>{v.code} — {v.name}</option>)}
               </select>
-            </div>
-            <div><label className={labelCls}>Categoría *</label>
+            </GuideField>
+            <div><label className={labelCls}>Categoría<RequiredMark /></label>
               <select value={category} onChange={e => setCategory(e.target.value)} className={inputCls}>
                 {Object.entries(CATEGORY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
@@ -155,7 +156,7 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
                 {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
-            <div><label className={labelCls}>Fecha/hora *</label>
+            <div><label className={labelCls}>Fecha/hora</label>
               <input type="datetime-local" value={occurredAt} onChange={e => setOccurred(e.target.value)} className={inputCls} />
             </div>
             <div><label className={labelCls}>Lugar</label>
@@ -164,8 +165,11 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
             <div className="col-span-2"><label className={labelCls}>Reportado por</label>
               <input value={reportedByName} onChange={e => setRBN(e.target.value)} placeholder="Nombre o cargo" className={inputCls} />
             </div>
-            <div className="col-span-2"><label className={labelCls}>Descripción *</label>
-              <AutoTextArea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Qué pasó y qué pudo haber pasado…" className={inputCls + " resize-y"} />
+            <div className="col-span-2">
+              <GuideField id="nm-description" missing={!description.trim()}>
+                <label className={labelCls}>Descripción<RequiredMark />{!description.trim() && <GuideNeedTag label="Falta" />}</label>
+                <AutoTextArea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Qué pasó y qué pudo haber pasado…" className={inputCls + " resize-y"} />
+              </GuideField>
             </div>
             <div className="col-span-2"><label className={labelCls}>Acción inmediata</label>
               <AutoTextArea rows={2} value={immediateAction} onChange={e => setIA(e.target.value)} className={inputCls + " resize-y"} />

@@ -49,7 +49,9 @@ export const Layout: React.FC = () => {
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 transform-[translateZ(0)]">
           <Header title={title} />
-          <main className="flex-1 overflow-y-auto p-6 bg-bg">
+          {/* scrollbar-gutter: el lugar de la barra vertical queda reservado siempre,
+              así la pantalla no se corre de costado cuando la barra aparece o desaparece. */}
+          <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-6 bg-bg">
             <Suspense fallback={<PageLoader />}>
               <Outlet />
             </Suspense>

@@ -11,6 +11,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
+import { archiveIfFinal } from "../settings/pdf-archive-service";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
@@ -429,5 +430,6 @@ export async function transitionDrydockSpec(
     },
   });
 
+  archiveIfFinal(session, "VAR", spec.id, next);
   return updated;
 }

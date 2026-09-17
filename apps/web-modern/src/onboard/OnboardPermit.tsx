@@ -49,7 +49,9 @@ export const OnboardPermit: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   const openWos = useOpenWorkOrders();
 
   const [step, setStep] = useState(1);
-  const [tried, setTried] = useState(false);
+  // Estándar V50 (pedido de Gustavo): lo que falta se marca desde que se abre,
+  // no recién al tocar el botón.
+  const [tried, setTried] = useState(true);
   const [type, setType] = useState<string | null>(null);
   const [workOrderId, setWorkOrderId] = useState<string | null>(null);
   const [location, setLocation] = useState("");
@@ -190,12 +192,12 @@ export const OnboardPermit: React.FC<{ onExit: () => void }> = ({ onExit }) => {
     <Screen
       scrollKey={step}
       head={<Head title={t("ob.tile.permit")} sub={t("ob.stepOf").replace("{n}", String(step)).replace("{name}", stepNames[step - 1]!)} step={step}
-        onBack={() => { if (step > 1) { setStep(step - 1); setTried(false); } else onExit(); }} />}
+        onBack={() => { if (step > 1) { setStep(step - 1); setTried(true); } else onExit(); }} />}
       foot={step === 1 ? undefined : (<>
         <MainButton missing={missingNow} busy={busy} disabled={step === 3 && aiBusy}
           label={step === 3 ? t("ob.permit.request") : t("ob.next")}
           icon={step === 3 ? <Send className="w-[18px] h-[18px]" /> : <ArrowRight className="w-[18px] h-[18px]" />}
-          onClick={() => { if (step < 3) { setStep(3); setTried(false); } else void send(); }}
+          onClick={() => { if (step < 3) { setStep(3); setTried(true); } else void send(); }}
           onMissing={() => { setTried(true); scrollToMissing(); }} />
         {step === 3 && <p className="text-center text-[12.5px] text-text-industrial/60">{t("ob.signsAs").replace("{name}", user?.name ?? "")}</p>}
       </>)}
@@ -205,7 +207,7 @@ export const OnboardPermit: React.FC<{ onExit: () => void }> = ({ onExit }) => {
         <div className="grid grid-cols-2 gap-2.5">
           {TYPES.map(x => (
             <OptionCard key={x.v} on={type === x.v} icon={<x.Icon className="w-[22px] h-[22px]" />} title={t(x.key)} sub={t(x.hint)}
-              onClick={() => { setType(x.v); setStep(2); setTried(false); }} />
+              onClick={() => { setType(x.v); setStep(2); setTried(true); }} />
           ))}
         </div>
       </>}

@@ -1,0 +1,271 @@
+<title>Para qué trabajo: primero el equipo</title>
+<meta name="theme-color" content="#0D1B2A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --stage:#E7EAEF; --bg:#F4F5F7; --surface:#FFFFFF; --surface2:#EEF1F5;
+  --fg:#1A1D24; --muted:#586070; --faint:#8A919D; --line:#E2E5EA;
+  --ac:#0284C7; --acfg:#FFFFFF; --acsoft:#E0F2FE;
+  --ok:#0E9F6E; --oksoft:#DCFCE7; --okfg:#166534;
+  --warn:#D97706; --warnsoft:#FEF3C7; --warnfg:#92400E;
+  --bad:#DC2626; --badsoft:#FEE2E2; --badfg:#991B1B;
+  --navy:#0D1B2A; --navyfg:#E0E1DD; --frame:#1A1D24;
+  --shadow:0 30px 60px -24px rgba(13,27,42,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+    --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+    --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+    --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+    --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+    --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+    --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#080D1D; --surface:#141D36; --surface2:#1C2541;
+  --fg:#E0E1DD; --muted:#A6ADB9; --faint:#7B8394; --line:rgba(255,255,255,.10);
+  --ac:#38BDF8; --acfg:#0B132B; --acsoft:rgba(56,189,248,.15);
+  --ok:#06D6A0; --oksoft:rgba(6,214,160,.14); --okfg:#34D399;
+  --warn:#FBBF24; --warnsoft:rgba(251,191,36,.13); --warnfg:#FBBF24;
+  --bad:#F87171; --badsoft:rgba(248,113,113,.14); --badfg:#FCA5A5;
+  --navy:#0B132B; --frame:#000; --shadow:0 30px 60px -24px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--stage);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--navy);color:var(--navyfg)}
+.bar .name{font-weight:800;font-size:14px}
+.bar .name small{font-weight:600;opacity:.6}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#F59E0B;color:#1A1D24;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sp{flex:1}
+.seg{display:flex;gap:3px;background:rgba(255,255,255,.08);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;color:inherit;opacity:.75;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.seg button.on{background:#38BDF8;color:#0B132B;opacity:1}
+.themeb{border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;border-radius:9px;min-height:34px;padding:0 10px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.stage{display:flex;gap:30px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding-block:26px 56px;padding-inline:16px}
+.phone{width:390px;max-width:100%;height:812px;background:var(--bg);border:11px solid var(--frame);border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sbar{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12.5px;font-weight:700;background:var(--surface)}
+.head{flex:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 12px 10px;display:flex;align-items:center;gap:10px}
+.iconb{width:44px;height:44px;flex:none;border-radius:12px;border:0;background:var(--surface2);display:grid;place-items:center;cursor:pointer;color:var(--fg)}
+.head h1{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+.head p{margin:0;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scr{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.eq{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:13px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.eq .ic{width:44px;height:44px;flex:none;border-radius:13px;background:var(--acsoft);color:var(--ac);display:grid;place-items:center}
+.eq .tx{min-width:0;flex:1}
+.eq b{display:block;font-size:15.5px;font-weight:800;line-height:1.2}
+.eq small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;font-weight:600}
+.eq .n{flex:none;font-size:12px;font-weight:800;background:var(--surface2);color:var(--muted);border-radius:99px;padding:3px 10px}
+.gen{border-style:dashed;border-color:color-mix(in srgb,var(--fg) 20%,transparent)}
+.gen .ic{background:var(--surface2);color:var(--muted)}
+.wo{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:13px;display:flex;flex-direction:column;gap:3px;cursor:pointer}
+.wo .top{display:flex;align-items:center;gap:8px}
+.wo b{font-size:15px;font-weight:800;line-height:1.25}
+.wo .cod{font-size:12px;color:var(--muted)}
+.chip{flex:none;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:99px;border:1px solid transparent}
+.c-open{background:var(--oksoft);color:var(--okfg)}
+.c-over{background:var(--badsoft);color:var(--badfg)}
+.c-hold{background:var(--warnsoft);color:var(--warnfg)}
+.crumb{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:38px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer}
+.sect{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:2px}
+.guide{width:340px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-top:14px}
+.guide h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.guide p{margin:0;color:var(--muted);font-size:14.5px;max-width:60ch}
+.gl{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.optb{min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;cursor:pointer;padding:6px}
+.optb.on{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.ref{max-width:860px;margin:0 auto;padding-block:30px 60px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.ref h2{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.ref h3{margin:0 0 8px;font-size:17px;font-weight:800}
+.ref p,.ref li{font-size:14.5px;line-height:1.55}
+.ref ul,.ref ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.rcard b{display:block;margin-bottom:3px}
+.opt{display:flex;flex-direction:column;gap:10px}
+@media (max-width:520px){
+  .bar{padding:7px 10px;gap:8px} .bar .name{display:none}
+  .stage{padding:0;gap:0}
+  .phone{width:100%;height:calc(100dvh - 50px);border:0;border-radius:0;box-shadow:none}
+  .sbar{display:none}
+  .guide{padding:22px 16px 40px;width:100%}
+}
+</style>
+
+<div class="bar">
+  <span class="name">Para qué trabajo <small>· Preview V39</small></span>
+  <span class="tag">Demo · datos ficticios</span>
+  <span class="sp"></span>
+  <div class="seg" id="tabs">
+    <button type="button" data-a="tab" data-p="app">Probar</button>
+    <button type="button" data-a="tab" data-p="ref">Qué cambia</button>
+  </div>
+  <button type="button" class="themeb" id="themeb" data-a="theme"></button>
+</div>
+<main id="root"></main>
+
+<script>
+const I=(n,s=16)=>`<i data-lucide="${n}" style="width:${s}px;height:${s}px"></i>`;
+
+// Reparto real de OT abiertas de un remolcador de la flota (33 órdenes, 11 equipos).
+const OT = [
+  ["Motor Principal #1", "Cambio de aceite y filtros de aceite", "OT-LTE-26-0412", "open"],
+  ["Motor Principal #1", "Limpieza del intercambiador de calor", "OT-LTE-26-0415", "over"],
+  ["Motor Principal #1", "Control de inyectores", "OT-LTE-26-0418", "open"],
+  ["Motor Principal #1", "Cambio de filtros de combustible", "OT-LTE-26-0421", "open"],
+  ["Motor Principal #1", "Ajuste de válvulas", "OT-LTE-26-0424", "hold"],
+  ["Motor Principal #1", "Control de turbo y sopladores", "OT-LTE-26-0427", "open"],
+  ["Motor Principal #1", "Cambio de correas", "OT-LTE-26-0430", "open"],
+  ["Motor Principal #1", "Control de anodos y refrigeración", "OT-LTE-26-0433", "over"],
+  ["Motor Principal #1", "Muestra de aceite para laboratorio", "OT-LTE-26-0436", "open"],
+  ["Motor Principal #1", "Control general de pérdidas", "OT-LTE-26-0439", "open"],
+  ["Motor Principal #2", "Cambio de aceite y filtros de aceite", "OT-LTE-26-0413", "open"],
+  ["Motor Principal #2", "Control de inyectores", "OT-LTE-26-0416", "open"],
+  ["Motor Principal #2", "Cambio de filtros de combustible", "OT-LTE-26-0419", "over"],
+  ["Motor Principal #2", "Ajuste de válvulas", "OT-LTE-26-0422", "open"],
+  ["Motor Principal #2", "Muestra de aceite para laboratorio", "OT-LTE-26-0425", "open"],
+  ["Motor Principal #2", "Control general de pérdidas", "OT-LTE-26-0428", "open"],
+  ["Motor Principal #3", "Cambio de aceite y filtros de aceite", "OT-LTE-26-0414", "open"],
+  ["Motor Principal #3", "Control de inyectores", "OT-LTE-26-0417", "open"],
+  ["Motor Principal #3", "Cambio de filtros de combustible", "OT-LTE-26-0420", "open"],
+  ["Motor Principal #3", "Ajuste de válvulas", "OT-LTE-26-0423", "hold"],
+  ["Motor Principal #3", "Muestra de aceite para laboratorio", "OT-LTE-26-0426", "open"],
+  ["Motor Principal #3", "Control general de pérdidas", "OT-LTE-26-0429", "open"],
+  ["Motor Principal #4", "Cambio de aceite y filtros de aceite", "OT-LTE-26-0431", "open"],
+  ["Motor Principal #4", "Control de inyectores", "OT-LTE-26-0434", "open"],
+  ["Motor Principal #4", "Muestra de aceite para laboratorio", "OT-LTE-26-0437", "open"],
+  ["Equipos de Máquinas en General", "Limpieza de sentinas", "OT-LTE-26-0440", "open"],
+  ["Equipos de Máquinas en General", "Control de bombas de achique", "OT-LTE-26-0441", "open"],
+  ["Cabrestante Proa Babor", "Engrase general y control de freno", "OT-LTE-26-0442", "open"],
+  ["Sistema de Gobierno y Maniobra", "Control de timones y mangueras", "OT-LTE-26-0443", "over"],
+  ["Caja reductora #2", "Cambio de aceite de caja", "OT-LTE-26-0444", "open"],
+  ["Caja reductora #4", "Cambio de aceite de caja", "OT-LTE-26-0445", "open"],
+  ["Motor Generador N°1 Babor", "Cambio de aceite y filtros", "OT-LTE-26-0446", "open"],
+  ["Motor de Lancha", "Service general fuera de borda", "OT-LTE-26-0447", "open"],
+];
+
+const S = {v:"app", equipo:null, theme:"system"};
+
+function equipos(){
+  const m = new Map();
+  for (const o of OT) { const g = m.get(o[0]) ?? []; g.push(o); m.set(o[0], g); }
+  return [...m.entries()].map(([label, items]) => ({label, items}))
+    .sort((a,b)=> b.items.length - a.items.length || a.label.localeCompare(b.label));
+}
+
+const chip = e => e==="over" ? `<span class="chip c-over">Vencida</span>`
+  : e==="hold" ? `<span class="chip c-hold">Postergada</span>`
+  : `<span class="chip c-open">Abierta</span>`;
+
+function pantalla(){
+  const eqs = equipos();
+  if (!S.equipo) {
+    return `<div class="scr">
+      <p class="sect">¿Para qué equipo?</p>
+      ${eqs.map(e=>`<button class="eq" data-a="eq" data-p="${e.label}">
+        <span class="ic">${I("cog",22)}</span>
+        <span class="tx"><b>${e.label}</b><small>${e.items.length===1?"1 orden abierta":e.items.length+" órdenes abiertas"}</small></span>
+        <span class="n">${e.items.length}</span>
+      </button>`).join("")}
+      <button class="eq gen" data-a="nada">
+        <span class="ic">${I("ship",22)}</span>
+        <span class="tx"><b>Consumo general del buque</b><small>Ej.: aceite de relleno, trapos, electrodos</small></span>
+        ${I("chevron-right",18)}
+      </button>
+    </div>`;
+  }
+  const e = eqs.find(x=>x.label===S.equipo);
+  return `<div class="scr">
+    <button class="crumb" data-a="volver">${I("arrow-left",15)} ${e.label} · ver equipos</button>
+    <p class="sect">¿A qué orden se le carga?</p>
+    ${e.items.map(o=>`<button class="wo" data-a="nada">
+      <span class="top"><b style="flex:1">${o[1]}</b>${chip(o[3])}</span>
+      <span class="cod mono">${o[2]}</span>
+    </button>`).join("")}
+  </div>`;
+}
+
+function app(){
+  return `<div class="stage">
+    <div class="phone">
+      <div class="sbar"><span class="mono">09:41</span><span>${I("signal",14)}${I("wifi",14)}${I("battery-full",16)}</span></div>
+      <div class="head">
+        <button class="iconb">${I("arrow-left",20)}</button>
+        <div style="min-width:0"><h1>¿Para qué trabajo?</h1><p>Descontar 3 repuestos</p></div>
+      </div>
+      ${pantalla()}
+    </div>
+    <aside class="guide">
+      <div><h2>Primero el equipo, después la tarea</h2>
+      <p style="margin-top:8px">Al terminar de cargar los repuestos, la app pregunta a qué trabajo se le cargan. Hoy muestra <b>todas</b> las órdenes abiertas del buque, una debajo de otra: en este remolcador son <b>33</b>. Ahora pregunta primero <b>el equipo</b> (11 botones, el que más órdenes tiene arriba) y después las tareas de ese equipo.</p></div>
+      <div><p class="gl">Para probar</p><ol class="steps">
+        <li>Tocá <b>Motor Principal #1</b>: quedan sus 10 órdenes, con un botón para volver a los equipos.</li>
+        <li>Cada orden muestra si está <b>vencida</b>, <b>postergada</b> o <b>abierta</b> — mismo criterio que la PC.</li>
+        <li><b>Consumo general del buque</b> sigue al final, para lo que no va contra una orden.</li>
+      </ol></div>
+      <p class="hint">Si el buque tuviera un solo equipo con órdenes abiertas, se saltea el paso y muestra sus tareas directo.</p>
+    </aside>
+  </div>`;
+}
+
+function ref(){
+  return `<article class="ref">
+  <h2>Para qué trabajo: primero el equipo · Preview V39</h2>
+  <p>Pedido: en <b>¿Para qué trabajo?</b> (el último paso del consumo de repuestos) mostrar primero los equipos que tienen OT abierta y, al tocar uno, las tareas de ese equipo.</p>
+
+  <section><h3>Por qué hace falta</h3>
+  <p>Las órdenes abiertas se acumulan por equipo: en un remolcador de la flota hay <b>33 órdenes abiertas repartidas en 11 equipos</b>, y cuatro motores principales se llevan 25. En una lista plana, elegir "Cambio de aceite y filtros" obliga a leer el código de la orden para saber de qué motor es. Con el equipo primero, ya no hay forma de equivocarse de motor.</p></section>
+
+  <section><h3>Cómo queda</h3>
+  <ul>
+    <li><b>Paso 1 — ¿Para qué equipo?</b> Un renglón por equipo con cuántas órdenes abiertas tiene. Primero los que más tienen. Al final, <b>Consumo general del buque</b>, igual que hoy.</li>
+    <li><b>Paso 2 — las tareas de ese equipo.</b> Título, código y el estado (Abierta / Vencida / Postergada, mismo criterio que la PC). Arriba, un botón para volver a los equipos.</li>
+    <li><b>Un solo equipo con órdenes abiertas</b> ⇒ se saltea el paso 1, como hace el selector del escritorio cuando hay un solo grupo.</li>
+    <li>Elegir la orden guarda el consumo, igual que ahora.</li>
+  </ul></section>
+
+  <section><h3>Qué NO cambia</h3>
+  <ul>
+    <li>Las órdenes que aparecen son las mismas de siempre (abiertas del buque elegido) y el movimiento de stock se graba igual.</li>
+    <li>Las órdenes sin equipo, si las hubiera, se agrupan bajo "Sin equipo". Hoy en la flota no hay ninguna.</li>
+    <li>El <b>Registro de avance</b> no se toca en este cambio: ahí la lista sigue como está. Decime si querés lo mismo.</li>
+  </ul></section>
+
+  <p class="hint">Preview. No se tocó nada de la aplicación.</p>
+  </article>`;
+}
+
+function render(){
+  const prev = document.querySelector(".scr");
+  const y = prev ? prev.scrollTop : 0;
+  const k = `${S.v}|${S.equipo}`;
+  const misma = !!prev && k === render.k;
+  render.k = k;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.p===S.v));
+  document.getElementById("themeb").innerHTML = `${I({system:"monitor",light:"sun",dark:"moon"}[S.theme],15)}<span>${{system:"Sistema",light:"Claro",dark:"Oscuro"}[S.theme]}</span>`;
+  document.getElementById("root").innerHTML = S.v==="ref" ? ref() : app();
+  if (window.lucide) lucide.createIcons();
+  const sc = document.querySelector(".scr");
+  if (sc && misma && y) sc.scrollTop = y;
+}
+document.addEventListener("click", e=>{
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const a = el.dataset.a, p = el.dataset.p;
+  if (a==="tab") S.v = p;
+  else if (a==="theme") { S.theme = {system:"light",light:"dark",dark:"system"}[S.theme];
+    const r=document.documentElement; if(S.theme==="system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",S.theme); }
+  else if (a==="eq") S.equipo = p;
+  else if (a==="volver") S.equipo = null;
+  render();
+});
+render();
+</script>

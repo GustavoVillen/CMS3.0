@@ -36,6 +36,7 @@ import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { hasPermission, roleHasPermission } from "../auth/role-permissions";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
+import { archivePdf } from "../settings/pdf-archive-service";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
 import { buildHojaRuta } from "./hoja-ruta";
 import { resolveServiceRequestSignatures } from "./signatures";
@@ -290,7 +291,7 @@ export async function listServiceRequests(session: TenantAccessSession, filters:
   const rows = await (prisma as any).serviceRequest.findMany({
     where,
     orderBy: [{ openDate: "desc" }, { serviceRequestCode: "desc" }],
-    include: { workOrder: { select: { id: true, workOrderCode: true, title: true, status: true, assetId: true } } },
+    include: { workOrder: { select: { id: true, workOrderCode: true, title: true, status: true, assetId: true, maintenancePlanId: true } } },
   });
 
   // El equipo lo tiene la OT de origen (la SS no guarda assetId propio). Se
@@ -307,7 +308,7 @@ export async function listServiceRequests(session: TenantAccessSession, filters:
   const creatorIds = [...new Set(rows.map((r: any) => r.createdByUserId).filter(Boolean))] as string[];
   const [assetRows, providerRows, creatorRows] = await Promise.all([
     assetIds.length > 0
-      ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
+      ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true, sfiCode: true } })
       : Promise.resolve([]),
     providerIds.length > 0
       ? (prisma as any).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
@@ -317,6 +318,23 @@ export async function listServiceRequests(session: TenantAccessSession, filters:
       : Promise.resolve([]),
   ]);
   const assetNameMap = new Map<string, string | null>(assetRows.map((a: any) => [a.id, a.name ?? null]));
+  const assetSfiMap  = new Map<string, string | null>(assetRows.map((a: any) => [a.id, a.sfiCode ?? null]));
+
+  // Grupo SFI para el filtro G0…G9 del tablero. La SS no tiene grupo propio: es
+  // el de su OT — el del plan que la originó y, sin plan, el del código SFI del
+  // equipo. Mismo criterio que el listado de OT (work-orders-service).
+  const planIds = [...new Set(rows.map((r: any) => r.workOrder?.maintenancePlanId).filter(Boolean))] as string[];
+  const planRows = planIds.length > 0
+    ? await (prisma as any).maintenancePlan.findMany({ where: { id: { in: planIds }, tenantId }, select: { id: true, sfiGroupNumber: true } })
+    : [];
+  const planGroupMap = new Map<string, number | null>(planRows.map((p: any) => [p.id, p.sfiGroupNumber ?? null]));
+  const sfiGroupOf = (wo: any): number | null => {
+    if (!wo) return null;
+    const fromPlan = wo.maintenancePlanId ? planGroupMap.get(wo.maintenancePlanId) : null;
+    if (typeof fromPlan === "number") return fromPlan;
+    const digit = /^\s*(\d)/.exec(assetSfiMap.get(wo.assetId) ?? "");
+    return digit ? Number(digit[1]) : null;
+  };
   const providerNameMap = new Map<string, string | null>(providerRows.map((p: any) => [p.id, p.name ?? null]));
   const creatorNameMap = new Map<string, string | null>(creatorRows.map((u: any) => [u.id, formNameOf(u)]));
 
@@ -324,6 +342,7 @@ export async function listServiceRequests(session: TenantAccessSession, filters:
     ...r,
     providerName: r.providerId ? (providerNameMap.get(r.providerId) ?? null) : null,
     createdByName: r.createdByUserId ? (creatorNameMap.get(r.createdByUserId) ?? null) : null,
+    sfiGroupNumber: sfiGroupOf(r.workOrder),
     workOrder: r.workOrder
       ? { ...r.workOrder, assetName: assetNameMap.get(r.workOrder.assetId) ?? null }
       : r.workOrder,
@@ -1609,7 +1628,7 @@ export async function completeServiceRequest(
   if (payload.receptionConform === undefined || payload.receptionConform === null) {
     throw new RouteError(400, "VALIDATION_ERROR", "Indicá si hay conformidad con el trabajo realizado.");
   }
-  return (prisma as any).serviceRequest.update({
+  const completed = await (prisma as any).serviceRequest.update({
     where: { id },
     data: {
       status: "COMPLETED",
@@ -1621,6 +1640,8 @@ export async function completeServiceRequest(
       updatedByUserId: session.user.id,
     },
   });
+  void archivePdf(session, { kind: "SS", id: completed.id });
+  return completed;
 }
 
 /**
@@ -1640,7 +1661,7 @@ export async function rejectServiceRequest(session: TenantAccessSession, id: str
   const motivo = String(reason ?? "").trim();
   if (!motivo) throw new RouteError(400, "VALIDATION_ERROR", "El motivo del rechazo es requerido.");
 
-  return (prisma as any).serviceRequest.update({
+  const rejected = await (prisma as any).serviceRequest.update({
     where: { id },
     data: {
       status: "REJECTED",
@@ -1650,6 +1671,8 @@ export async function rejectServiceRequest(session: TenantAccessSession, id: str
       updatedByUserId: session.user.id,
     },
   });
+  void archivePdf(session, { kind: "SS", id: rejected.id });
+  return rejected;
 }
 
 export async function cancelServiceRequest(session: TenantAccessSession, id: string, reason?: string | null) {
@@ -1659,7 +1682,7 @@ export async function cancelServiceRequest(session: TenantAccessSession, id: str
   if (["COMPLETED", "CANCELLED"].includes(current.status)) {
     throw new RouteError(409, "INVALID_STATUS", "La solicitud ya está cerrada.");
   }
-  return (prisma as any).serviceRequest.update({
+  const cancelled = await (prisma as any).serviceRequest.update({
     where: { id },
     data: {
       status: "CANCELLED",
@@ -1667,6 +1690,8 @@ export async function cancelServiceRequest(session: TenantAccessSession, id: str
       updatedByUserId: session.user.id,
     },
   });
+  void archivePdf(session, { kind: "SS", id: cancelled.id });
+  return cancelled;
 }
 
 // ── HOJA DE RUTA DEL PEDIDO ──────────────────────────────────────────────────

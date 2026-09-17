@@ -180,8 +180,8 @@ export async function getSidebarCounts(session: TenantAccessSession, vesselCode:
     safe(() => p.maintenancePlan.count({ where: { ...base, deletedAt: null, status: "OVERDUE" } })),
     // Fluid analyses con verdict crítico o que pide acción.
     safe(() => p.fluidAnalysisResult.count({ where: { tenantId: base.tenantId, verdict: { in: ["CRITICAL", "ACTION_REQUIRED"] } } })),
-    // Solicitudes de repuestos pendientes (DRAFT o SUBMITTED).
-    safe(() => p.spareRequest.count({ where: { tenantId: base.tenantId, deletedAt: null, status: { in: ["DRAFT", "SUBMITTED"] } } })),
+    // Solicitudes de repuestos pendientes: borradores sin enviar (enviada a Compras = terminada).
+    safe(() => p.spareRequest.count({ where: { tenantId: base.tenantId, deletedAt: null, status: "DRAFT" } })),
     // Checklists en curso con más de 24 h desde el evento (atrasados).
     safe(() => p.checklistExecution.count({ where: { ...base, status: "IN_PROGRESS", eventDateTime: { lt: dayAgo } } })),
     // Permisos: ACTIVE que expiran en < 4 h OR REQUESTED pendientes de aprobación.

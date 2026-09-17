@@ -244,6 +244,10 @@ enum TenantFormType {
   PERMIT_ALOFT
   PERMIT_ELECTRICAL
   PERMIT_UNDERWATER
+  // Informe de análisis de laboratorio (fluido, vibraciones, termografía…).
+  FLUID_ANALYSIS
+  // Reporte de defecto (documento controlado Mercurio).
+  DEFECT
   // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
 }
 
@@ -897,6 +901,20 @@ model TenantSetting {
   // destinatarios cargados tampoco se manda nada aunque este prendido.
   weeklyReportEnabled       Boolean  @default(false)
   weeklyReportRecipients    String[] @default([])
+  // Casilla del departamento de Compras. "Enviar a Compras" de una Solicitud de
+  // repuestos manda ahí el formulario PDF (spare-requests-service). Sin casilla
+  // la solicitud no se envía y queda en Borrador.
+  spareRequestMailbox       String?
+  // Archivo automático de PDFs en Google Drive vía un Apps Script publicado por la
+  // empresa (tenant/settings/pdf-archive-service.ts). Apagado por defecto.
+  // pdfArchiveFolders: { OT, SS, DEF, FA, APL, VAR, REQ, MOC, PLAN, OTHER } → nombre
+  // de carpeta; clave ausente => nombre por defecto.
+  pdfArchiveEnabled         Boolean   @default(false)
+  pdfArchiveScriptUrl       String?
+  pdfArchiveSecret          String?
+  pdfArchiveFolders         Json?
+  pdfArchiveLastError       String?
+  pdfArchiveLastErrorAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -1406,6 +1424,44 @@ model Asset {
   @@index([tenantId, vesselCode])
 }
 
+/// Informe de salud de un equipo, redactado por IA sobre todo lo que el sistema
+/// tiene de él (plan, OT, laboratorio, defectos, postergaciones, horas, MOC…).
+///
+/// INMUTABLE: "Generar nuevo" agrega una fila, nunca pisa la anterior. El
+/// historial es la evidencia de cómo se venía leyendo el equipo en el tiempo, y
+/// un informe que cambia después de leído no sirve para auditoría. Por eso no hay
+/// updatedAt ni deletedAt.
+///
+/// `metrics` y `sources` los calcula el SISTEMA (conteos exactos); `report` es el
+/// texto de la IA. Se guardan separados para que en pantalla y en el PDF los
+/// números nunca dependan de lo que escribió el modelo.
+///
+/// `assetId` es puntero suelto a Asset.id (mismo criterio que Defect/WorkOrder).
+model AssetHealthReport {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  assetId         String
+  /// GOOD | ATTENTION | RISK — lectura de la IA, no un dato de cumplimiento.
+  healthState     String
+  periodFrom      DateTime
+  periodTo        DateTime
+  /// Números clave calculados por el sistema (vencidas, defectos abiertos, …).
+  metrics         Json
+  /// Texto de la IA por secciones: summary, maintenance, lab, defects, recommendations.
+  report          Json
+  /// Qué y cuánto se leyó (planes, OT, análisis, defectos…).
+  sources         Json
+  locale          String
+  model           String
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdByName   String?
+
+  @@index([tenantId, assetId, createdAt])
+  @@index([tenantId, vesselCode])
+}
+
 /// Lectura de horómetro de un equipo. ÚNICA fuente de verdad de las "horas actuales":
 /// todo lo que muestre o calcule horas (ficha del equipo, planes por horas, mapa del plan,
 /// ítems por vencer, confiabilidad) lee de acá vía `tenant/asset-hours/asset-hours-service`.
@@ -1517,6 +1573,10 @@ model MaintenancePlan {
   // THERMAL, etc.) el sub-tipo no aplica.
   samplingKind         SampleKind?
   samplingFluidType    FluidType?
+  // Permisos de trabajo que exige la tarea. Al AUTORIZAR la OT se crea un
+  // PermitToWork DRAFT por tipo, y la OT no se cierra hasta que cada tipo tenga
+  // su permiso CLOSED. [] = no requiere (default de todos los planes existentes).
+  requiredPermitTypes  PermitType[]           @default([])
   triggerResultMode    TriggerResultMode      @default(DUE_ONLY)
   checklistTemplate    String?
   windowMode           ExecutionWindowMode    @default(AUTO)

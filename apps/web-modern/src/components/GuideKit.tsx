@@ -68,6 +68,18 @@ export const GuideNeedTag: React.FC<{ label: string }> = ({ label }) => (
   </span>
 );
 
+/**
+ * Asterisco rojo de campo obligatorio (estándar V50). Va SIEMPRE que el campo
+ * sea obligatorio, esté lleno o vacío; el "Falta" (GuideNeedTag) sólo mientras
+ * está vacío. `reason` = obligatorio por una regla ("por severidad Alta").
+ */
+export const RequiredMark: React.FC<{ reason?: string | null }> = ({ reason }) => (
+  <>
+    <span className="ml-0.5 font-black text-red-600 dark:text-red-400" aria-hidden="true">*</span>
+    {reason && <span className="ml-1 text-[10.5px] font-semibold normal-case tracking-normal text-amber-700 dark:text-amber-400">{reason}</span>}
+  </>
+);
+
 /** "Faltan N datos" (naranja) o "Completo" (verde) en el encabezado de un bloque. */
 export const GuidePill: React.FC<{ missing: number; completeLabel: string; missingOne: string; missingMany: string }> =
   ({ missing, completeLabel, missingOne, missingMany }) => missing > 0 ? (

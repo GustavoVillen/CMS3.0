@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Preview V4 — Solicitudes de repuestos</title>
+<style>
+  :root { --accent:#0891b2; --orange:#ea580c; --fg:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --navy:#0C2461; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: Inter, "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--fg); font-size:13px; }
+  .wrap { max-width:1150px; margin:0 auto; padding:20px 16px 60px; }
+  .banner { background:#fff3cd; border:1px solid #e0b100; border-radius:8px; padding:10px 14px; margin-bottom:14px; }
+  .demo { background:#fde68a; color:#7c5800; font-size:10px; font-weight:bold; padding:1px 6px; border-radius:4px; }
+  .note { background:#fff; border-radius:8px; padding:10px 14px; line-height:1.55; margin-bottom:10px; }
+  .note ul { margin:4px 0 0 18px; padding:0; }
+  h2 { font-size:15px; margin:26px 0 8px; }
+  .flow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#fff; border-radius:10px; padding:14px; }
+  .st { border-radius:8px; padding:8px 12px; font-weight:700; font-size:12px; border:1.5px solid; }
+  .st small { display:block; font-weight:400; font-size:10.5px; color:var(--muted); }
+  .arrow { color:var(--muted); font-size:18px; }
+  .gray { border-color:#cbd5e1; background:#f8fafc; } .blue { border-color:#60a5fa; background:#eff6ff; color:#1d4ed8; } .red { border-color:#fca5a5; background:#fef2f2; color:#b91c1c; }
+  .app { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .hdr { display:flex; align-items:center; gap:10px; }
+  .hdr h1 { font-size:18px; margin:0; }
+  .b { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:#f8fafc; font-size:12px; white-space:nowrap; }
+  .b.pri { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
+  .b.or { background:var(--orange); color:#fff; border-color:var(--orange); font-weight:700; }
+  .b.danger { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:10.5px; letter-spacing:.05em; color:var(--muted); padding:8px; border-bottom:1px solid var(--line); background:#f8fafc; text-transform:uppercase; }
+  td { padding:8px; border-bottom:1px solid var(--line); }
+  .badge { display:inline-block; border:1px solid; border-radius:5px; padding:1px 6px; font-size:10.5px; font-weight:700; }
+  .bd { color:#64748b; border-color:#cbd5e1; background:#f8fafc; } .bs { color:#1d4ed8; border-color:#93c5fd; background:#eff6ff; } .bc { color:#94a3b8; border-color:#e2e8f0; } .bo { color:#475569; border-color:#e2e8f0; background:#f1f5f9; }
+  .hi { outline:2px dashed #e0a800; outline-offset:2px; }
+  .modal { background:#fff; border-radius:16px; box-shadow:0 20px 50px rgba(0,0,0,.25); overflow:hidden; border:1px solid var(--line); }
+  .mh { display:flex; justify-content:space-between; align-items:center; padding:13px 18px; border-bottom:1px solid var(--line); }
+  .mh h3 { margin:0; font-size:14px; } .mh p { margin:2px 0 0; font-size:11px; color:var(--muted); }
+  .x { width:26px; height:26px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+  .mb { padding:14px 18px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  label { display:block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:4px; }
+  .in { border:1px solid var(--line); background:#f8fafc; border-radius:8px; padding:6px 9px; font-size:12px; }
+  .qty { width:56px; border:1px solid var(--line); border-radius:6px; padding:3px 6px; text-align:right; }
+  .mf { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid var(--line); }
+  .sent { background:#eff6ff; border:1px solid #93c5fd; border-radius:10px; padding:9px 12px; color:#1e3a8a; font-size:12px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .cap { font-size:11px; font-weight:700; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em; }
+  /* PDF */
+  .page { background:#fff; width:794px; margin:0 auto; padding:30px 36px 40px; box-shadow:0 2px 10px rgba(0,0,0,.2); font-family: Arial, sans-serif; font-size:11px; }
+  .page td, .page th { border:1px solid #555; padding:3px 6px; }
+  .page th { background:#f2f2f2; color:#111; font-size:10px; letter-spacing:0; }
+  .nav { background:var(--navy); color:#fff; font-weight:bold; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner"><b>Preview V4</b> — Solicitudes de repuestos como formulario del buque a Compras. Datos <span class="demo">DEMO</span>. Resaltado en amarillo = lo nuevo.</div>
+
+  <div class="note">
+    <b>Proceso nuevo (lo que definiste)</b>
+    <ul>
+      <li>El buque arma la solicitud (desde Repuestos tildando ítems, o desde esta pantalla) y toca <b>Enviar a Compras</b>.</li>
+      <li>El sistema manda un <b>correo a Compras con el formulario PDF</b> adjunto y la solicitud queda <b>Enviada</b>. No hay aprobación.</li>
+      <li>Ahí termina. Lo que llega se carga por <b>Recepción con remito</b> en Repuestos, como hoy.</li>
+      <li><b>Se sacan</b> de la pantalla: Aprobar, Rechazar, Entregar ítem y Reservas. Así el stock no se suma dos veces.</li>
+      <li>Las solicitudes viejas en Aprobada / Entregada se siguen viendo, sólo lectura.</li>
+      <li><b>Si el correo no sale</b> (sin casilla configurada o error), la solicitud <b>sigue en Borrador</b> y el aviso lo dice; podés descargar el PDF y mandarlo a mano. Nunca figura como enviada algo que no salió.</li>
+      <li>Si ya se envió y hay que anularla: <b>Anular</b> con motivo, y el sistema le avisa a Compras por correo.</li>
+      <li><b>Quién:</b> ven todos los de ese buque; crean, envían y anulan quienes tienen "Gestionar solicitudes de repuestos". Nadie aprueba.</li>
+    </ul>
+  </div>
+
+  <div class="flow">
+    <div class="st gray">Borrador<small>se arma y edita</small></div><span class="arrow">→</span>
+    <div class="st blue hi">Enviada a Compras<small>correo con PDF · fin</small></div><span class="arrow">→</span>
+    <div class="st red">Anulada<small>sólo si hace falta, con motivo</small></div>
+  </div>
+
+  <h2>1 · Lista</h2>
+  <div class="app">
+    <div class="hdr"><h1>🛒 Solicitudes de repuestos</h1><span style="margin-left:auto" class="b">▦ Excel</span><span class="b pri">＋ Nueva solicitud</span></div>
+    <div style="display:flex;gap:8px;margin:12px 0"><span class="in">Todos los estados ▾</span><span class="in">Todas las prioridades ▾</span><span class="in" style="flex:1">🔍 Buscar código, buque, repuesto…</span></div>
+    <table>
+      <tr><th>Código</th><th>Buque</th><th>Estado</th><th>Prioridad</th><th>Ítems</th><th class="hi">Pedido por</th><th class="hi">Enviada</th></tr>
+      <tr><td><b>REQ-M02-26-0004</b></td><td>MAO 02</td><td><span class="badge bs">Enviada a Compras</span></td><td style="color:#b91c1c;font-weight:600">Crítica</td><td>3</td><td>Edgar Alvarenga</td><td>17/09/2026</td></tr>
+      <tr><td><b>REQ-DCH-26-0012</b></td><td>DON CHICUETO</td><td><span class="badge bd">Borrador</span></td><td style="color:#1d4ed8;font-weight:600">Media</td><td>5</td><td>Juan Pérez</td><td>—</td></tr>
+      <tr><td><b>REQ-LTE-26-0003</b></td><td>LATERE</td><td><span class="badge bo">Entregada (anterior)</span></td><td>Media</td><td>2</td><td>—</td><td>02/08/2026</td></tr>
+    </table>
+    <p style="font-size:11px;color:#64748b;margin:8px 0 0">Estados y prioridades en el idioma de la empresa (hoy salen SUBMITTED, MEDIUM).</p>
+  </div>
+
+  <h2>2 · La solicitud abierta</h2>
+  <div class="two">
+    <div>
+      <p class="cap">En Borrador</p>
+      <div class="modal">
+        <div class="mh"><div><h3>REQ-M02-26-0004 <span class="badge bd">Borrador</span></h3><p>MAO 02 · pedida por Edgar Alvarenga · 17/09/2026</p></div><span class="x">✕</span></div>
+        <div class="mb">
+          <div class="grid">
+            <div><label>Buque</label><div class="in hi">MAO 02 ▾</div></div>
+            <div><label>Prioridad</label><div class="in">Crítica ▾</div></div>
+          </div>
+          <div style="margin-top:10px"><label>Motivo / justificación</label><div class="in hi" style="height:42px">Generador de babor parado, se consumió el último filtro.</div></div>
+          <table style="margin-top:12px" class="hi">
+            <tr><th>Repuesto</th><th>N° parte</th><th style="text-align:right">A bordo</th><th style="text-align:right">Cant.</th><th></th></tr>
+            <tr><td><b>Filtro de aceite</b><br><small style="color:#64748b">GEN-FIL-ACE-01 · Generador Cummins</small></td><td>LF3000</td><td style="text-align:right">0</td><td style="text-align:right"><input class="qty" value="4"> UN</td><td style="color:#dc2626">✕</td></tr>
+            <tr><td><b>Filtro de combustible</b><br><small style="color:#64748b">GEN-FIL-COMB-01 · Generador Cummins</small></td><td>FF5052</td><td style="text-align:right">1</td><td style="text-align:right"><input class="qty" value="3"> UN</td><td style="color:#dc2626">✕</td></tr>
+            <tr><td colspan="5" style="color:#0891b2;font-weight:600">＋ Agregar repuesto (buscar por nombre, código o N° de parte)</td></tr>
+          </table>
+        </div>
+        <div class="mf"><span class="b danger">🗑 Eliminar borrador</span><span><span class="b">⬇ PDF</span> <span class="b or hi">✉ Enviar a Compras</span></span></div>
+      </div>
+    </div>
+    <div>
+      <p class="cap">Enviada</p>
+      <div class="modal">
+        <div class="mh"><div><h3>REQ-M02-26-0004 <span class="badge bs">Enviada a Compras</span></h3><p>MAO 02 · pedida por Edgar Alvarenga · 17/09/2026</p></div><span class="x">✕</span></div>
+        <div class="mb">
+          <div class="sent hi">✉ Enviada a <b>compras@mercuriogroup.com.py</b> el 17/09/2026 10:42 por Edgar Alvarenga.</div>
+          <div class="grid" style="margin-top:10px">
+            <div><label>Buque</label><div class="in">MAO 02</div></div>
+            <div><label>Prioridad</label><div class="in">Crítica</div></div>
+          </div>
+          <div style="margin-top:10px"><label>Motivo / justificación</label><div class="in">Generador de babor parado, se consumió el último filtro.</div></div>
+          <table style="margin-top:12px">
+            <tr><th>Repuesto</th><th>N° parte</th><th style="text-align:right">Cant.</th></tr>
+            <tr><td><b>Filtro de aceite</b></td><td>LF3000</td><td style="text-align:right">4 UN</td></tr>
+            <tr><td><b>Filtro de combustible</b></td><td>FF5052</td><td style="text-align:right">3 UN</td></tr>
+          </table>
+          <p style="font-size:11px;color:#64748b">Cuando llegue, cargalo en Repuestos → Recepción con remito.</p>
+        </div>
+        <div class="mf"><span class="b danger">⊘ Anular</span><span><span class="b">⬇ PDF</span> <span class="b">✉ Reenviar correo</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>3 · Formulario PDF que recibe Compras</h2>
+  <div class="page">
+    <table>
+      <tr><td rowspan="2" style="width:120px;text-align:center;color:#2f6db5;font:bold 22px Georgia">M<br><span style="font-size:8px">MERCURIO GROUP</span></td>
+          <td style="text-align:center;font:bold 14px Georgia">SOLICITUD DE REPUESTOS</td>
+          <td style="width:160px"><b>N°</b> REQ-M02-26-0004</td></tr>
+      <tr><td style="text-align:center">Buque a Departamento de Compras</td><td><b>Fecha</b> 17/09/2026</td></tr>
+    </table>
+    <table style="margin-top:10px">
+      <tr><th style="width:18%">BUQUE</th><td>MAO 02</td><th style="width:18%">PRIORIDAD</th><td><b style="color:#b91c1c">CRÍTICA</b></td></tr>
+      <tr><th>PEDIDO POR</th><td colspan="3">Edgar Alvarenga</td></tr>
+    </table>
+    <table style="margin-top:10px">
+      <tr><td class="nav" colspan="6">REPUESTOS SOLICITADOS</td></tr>
+      <tr><th>#</th><th>REPUESTO</th><th>N° DE PARTE</th><th>PARA QUÉ (EQUIPO)</th><th>A BORDO</th><th>CANTIDAD</th></tr>
+      <tr><td>1</td><td>FILTRO DE ACEITE</td><td>LF3000</td><td>GENERADOR CUMMINS 4BTA 3.9</td><td style="text-align:center">0</td><td style="text-align:center"><b>04 UN</b></td></tr>
+      <tr><td>2</td><td>FILTRO DE COMBUSTIBLE</td><td>FF5052</td><td>GENERADOR CUMMINS 4BTA 3.9</td><td style="text-align:center">1</td><td style="text-align:center"><b>03 UN</b></td></tr>
+    </table>
+    <table style="margin-top:10px">
+      <tr><td class="nav">MOTIVO / JUSTIFICACIÓN</td></tr>
+      <tr><td style="height:40px">Generador de babor parado, se consumió el último filtro.</td></tr>
+    </table>
+    <table style="margin-top:18px">
+      <tr><td style="height:46px;width:50%;vertical-align:bottom;text-align:center">FIRMA JEFE DE MÁQUINAS / CAPITÁN</td><td style="vertical-align:bottom;text-align:center">RECIBIDO COMPRAS (firma y fecha)</td></tr>
+    </table>
+  </div>
+
+  <div class="note" style="margin-top:14px">
+    <b>Correo:</b> asunto "Solicitud de repuestos REQ-M02-26-0004 — MAO 02 — Prioridad Crítica", con la lista de ítems en el texto y el PDF adjunto.<br>
+    <b>Necesito de vos:</b> la dirección de correo de Compras.
+  </div>
+</div>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { RolePermissionsModal } from "../components/RolePermissionsModal";
 import { fmtDate } from "../lib/utils";
@@ -212,10 +213,10 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
           <>
             <div className="p-6 space-y-4">
               <p className="text-xs text-text-industrial/50">El miembro se crea activo inmediatamente. No necesita email ni contraseña.</p>
-              <div className="space-y-1.5">
-                <label className={labelCls}>USER *</label>
+              <GuideField id="team-new-name" missing={!displayName.trim()}>
+                <label className={labelCls}>USER<RequiredMark />{!displayName.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Ej: Superintendente Remolcadores" className={inputCls} autoFocus />
-              </div>
+              </GuideField>
               <div className="space-y-1.5">
                 <label className={labelCls}>Email (opcional)</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="opcional@empresa.com" className={inputCls} />
@@ -240,10 +241,10 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ onClose, onAdded }) => 
           <>
             <div className="p-6 space-y-4">
               <p className="text-xs text-text-industrial/50">Se genera un link de invitación. El usuario lo usa para registrarse.</p>
-              <div className="space-y-1.5">
-                <label className={labelCls}>{t("team.inviteEmail")}</label>
+              <GuideField id="team-invite-email" missing={!email.trim()}>
+                <label className={labelCls}>{t("team.inviteEmail")}<RequiredMark />{!email.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === "Enter") void handleInvite(); }} placeholder="nombre@empresa.com" className={inputCls} autoFocus />
-              </div>
+              </GuideField>
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("team.role")}</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className={selectCls}>
