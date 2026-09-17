@@ -392,8 +392,12 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
   // El Plan de mantenimiento sigue el estilo de documento del tenant (mismo
   // signal que la OT): así un tenant Mercurio recibe el formato controlado.
   const rawLegacy = settings?.workOrderPdfTemplate as string | undefined;
+  // MERCURIO_OT es una PLANTILLA de OT, no un FormStyle: sin normalizar, el plan
+  // de mantenimiento y el diferimiento comparaban style === "MERCURIO" contra
+  // "MERCURIO_OT" y caían al layout estándar aunque el tenant sea Mercurio
+  // (por eso el PDF del plan salía sin el membrete de documento controlado).
   const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN" || type === "DEFERRAL")
-    ? rawLegacy
+    ? (rawLegacy?.startsWith("MERCURIO") ? "MERCURIO" : rawLegacy)
     // Los permisos siguen el mismo signal, pero normalizado: MERCURIO_OT es una
     // plantilla de OT, no un FormStyle — para los permisos cualquier variante
     // Mercurio significa "documento controlado".

@@ -1,5 +1,22 @@
 HISTORY.txt
 
+[2026-09-17] PDF del plan (y del diferimiento) con formato Mercurio
+Agent: Claude Opus 5
+- Aprobado por Gustavo (APROBAR-CAMBIO). Una linea en resolveTenantForm: para
+  WORK_ORDER / MAINTENANCE_PLAN / DEFERRAL el estilo legacy del tenant se normaliza
+  igual que en los permisos — cualquier valor que empiece con "MERCURIO" vale como
+  FormStyle MERCURIO. mercurio tiene workOrderPdfTemplate = "MERCURIO_OT" (una
+  PLANTILLA de OT, no un FormStyle), asi que la comparacion style === "MERCURIO"
+  fallaba y el plan y el diferimiento salian con el layout estandar.
+- No cambia el PDF de la OT: ese elige plantilla por workOrderPdfTemplate en
+  work-order-pdf/data-loader.ts, no por form.meta.style, y ademas mercurio tiene
+  fila TenantForm WORK_ORDER con style MERCURIO.
+- Verificado: plan DCH-BBA-INC-EM-31 y APL-M01-26-0002 salen como documento
+  controlado (membrete, Revision N, Documento Controlado, pie de firmas).
+  Copias en claude/mockups/pdf-plan/.
+- El PDF del plan no lleva codigo de formulario (formCode vacio en los defaults):
+  si Mercurio define uno (REGI-...), se carga en TenantForm sin tocar codigo.
+
 [2026-09-17] Planes: la IA de Seguridad hace todo junto + guarda con laboratorio
 Agent: Claude Opus 5
 - "Sugerir con IA" de la seccion 4 ahora resuelve de una: LOTO + permiso de trabajo,
