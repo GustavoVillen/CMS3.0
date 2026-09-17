@@ -3095,14 +3095,12 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
               {/* ── 4 · Seguridad ── */}
               <div id="mp-sec-safety">
+                {/* El botón de IA va en el encabezado, a la izquierda de "Completo":
+                    la misma sugerencia resuelve el LOTO y si la tarea necesita permiso. */}
                 <GuideSection n={4} title={sectionMeta.safety.title} subtitle={sectionMeta.safety.sub} pill={sectionPill("safety")}
+                  action={aiPill(() => { void handleLotoClick(); }, loadingLoto, t("mp.ai.safetyTooltip"))}
                   open={openSecs.safety} onToggle={() => setOpenSecs(s => ({ ...s, safety: !s.safety }))}>
                   <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
-                    {/* El botón de IA va ARRIBA de la pregunta del permiso: la misma
-                        sugerencia resuelve el LOTO y si la tarea necesita permiso. */}
-                    <div className="flex items-center justify-end gap-1">
-                      {aiPill(() => { void handleLotoClick(); }, loadingLoto, t("mp.ai.safetyTooltip"))}
-                    </div>
                     {permitBlock}
                     <GuideField id="mp-f-loto" missing={missing.loto}>
                       <div className="flex items-center gap-1">

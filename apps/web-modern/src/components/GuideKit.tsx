@@ -14,32 +14,42 @@ export const GuideSection: React.FC<{
   title: string;
   subtitle: string;
   pill?: React.ReactNode;
+  /** Botón propio de la sección, a la izquierda del pill (ej. "Sugerir con IA"). */
+  action?: React.ReactNode;
   open: boolean;
   onToggle: () => void;
   locked?: boolean;
   lockedLabel?: string;
   lockedText?: string;
   children: React.ReactNode;
-}> = ({ n, title, subtitle, pill, open, onToggle, locked, lockedLabel, lockedText, children }) => (
+}> = ({ n, title, subtitle, pill, action, open, onToggle, locked, lockedLabel, lockedText, children }) => (
   <section className={`rounded-2xl border border-fg/10 ${locked ? "bg-fg/[0.03] opacity-75" : "bg-surface dark:bg-white/[0.02]"}`}>
-    <button type="button" onClick={locked ? undefined : onToggle} disabled={locked}
-      className="flex items-center gap-2.5 w-full text-left px-4 py-3 disabled:cursor-default">
-      <span className="w-[22px] h-[22px] rounded-full bg-fg text-surface text-[11px] font-bold flex items-center justify-center shrink-0">{n}</span>
-      <span className="min-w-0">
-        <span className="block text-[13px] font-extrabold text-fg">{title}</span>
-        <span className="block text-[11px] text-text-industrial/60">{locked ? lockedText : subtitle}</span>
-      </span>
+    {/* El encabezado NO es un solo <button>: `action` trae botones propios (ej.
+        "Sugerir con IA") y un botón dentro de otro es HTML inválido. Se abre y
+        se cierra desde el título y desde la flecha. */}
+    <div className="flex items-center gap-2.5 w-full px-4 py-3">
+      <button type="button" onClick={locked ? undefined : onToggle} disabled={locked}
+        className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default">
+        <span className="w-[22px] h-[22px] rounded-full bg-fg text-surface text-[11px] font-bold flex items-center justify-center shrink-0">{n}</span>
+        <span className="min-w-0">
+          <span className="block text-[13px] font-extrabold text-fg">{title}</span>
+          <span className="block text-[11px] text-text-industrial/60">{locked ? lockedText : subtitle}</span>
+        </span>
+      </button>
       <span className="ml-auto flex items-center gap-2 shrink-0">
         {locked ? (
           <span className="flex items-center gap-1 rounded-full bg-fg/10 px-2 py-0.5 text-[10px] font-bold text-text-industrial/60">
             <Lock className="w-2.5 h-2.5" /> {lockedLabel}
           </span>
-        ) : pill}
-        {!locked && (open
-          ? <ChevronUp className="w-4 h-4 text-text-industrial/40" />
-          : <ChevronDown className="w-4 h-4 text-text-industrial/40" />)}
+        ) : <>{action}{pill}</>}
+        {!locked && (
+          <button type="button" onClick={onToggle} aria-expanded={open} aria-label={title}
+            className="flex items-center text-text-industrial/40 hover:text-fg transition-colors">
+            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        )}
       </span>
-    </button>
+    </div>
     {open && !locked && <div className="px-4 pb-4 pt-1 space-y-3.5">{children}</div>}
   </section>
 );
