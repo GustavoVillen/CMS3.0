@@ -1773,7 +1773,6 @@ export const PermitsPage: React.FC = () => {
   const mocTrigger = useMocTrigger();
 
   type Stage = "open" | PermitStatus | "all";
-  const [cardSel, setCardSel] = useState<"" | "active" | "requested" | "approved" | "late">("");
   const [stageSel, setStageSel] = useState<Stage>(initialStatus ?? "open");
   const [typeSel, setTypeSel] = useState<"" | PermitType>("");
   const [vesselSel, setVesselSel] = useState("");
@@ -1783,18 +1782,8 @@ export const PermitsPage: React.FC = () => {
   const isLate = (p: Permit) => p.status === "ACTIVE" && !!p.validTo && new Date(p.validTo).getTime() < now;
   const needsGas = (p: Permit) => p.type === "ENCLOSED_SPACE_ENTRY" && p.status === "APPROVED" &&
     !(p.gasTests[0]?.verdict === "PASS" && now - new Date(p.gasTests[0].testedAt).getTime() <= 30 * 60_000);
-  const matchCard = (p: Permit, key: typeof cardSel) => {
-    switch (key) {
-      case "active":    return p.status === "ACTIVE";
-      case "requested": return p.status === "REQUESTED";
-      case "approved":  return p.status === "APPROVED";
-      case "late":      return isLate(p);
-      default:          return true;
-    }
-  };
   const beforeStage = useMemo(() => {
     let items = allItems;
-    if (cardSel) items = items.filter(p => matchCard(p, cardSel));
     if (typeSel) items = items.filter(p => p.type === typeSel);
     if (vesselSel) items = items.filter(p => p.vesselCode === vesselSel);
     const q = search.trim().toLowerCase();
@@ -1804,12 +1793,11 @@ export const PermitsPage: React.FC = () => {
     }
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allItems, cardSel, typeSel, vesselSel, search]);
+  }, [allItems, typeSel, vesselSel, search]);
   const OPEN_STATUSES: PermitStatus[] = ["DRAFT", "REQUESTED", "APPROVED", "ACTIVE"];
   const stageFilter = (items: Permit[], key: Stage) =>
     key === "all" ? items : key === "open" ? items.filter(p => OPEN_STATUSES.includes(p.status)) : items.filter(p => p.status === key);
   const shown = stageFilter(beforeStage, stageSel);
-  const count = (key: Exclude<typeof cardSel, "">) => allItems.filter(p => matchCard(p, key)).length;
   const vesselOptions = useMemo(() => [...new Set(allItems.map(p => p.vesselCode))], [allItems]);
   const vesselName = (code: string) => contextVessels.find(v => v.code === code)?.name || code;
 
@@ -1878,12 +1866,6 @@ export const PermitsPage: React.FC = () => {
     { key: "action", header: "", render: rowAction },
   ];
 
-  const summaryCards: { key: Exclude<typeof cardSel, "">; label: string; hint: string; icon: typeof Flame; cls: string; num: string }[] = [
-    { key: "active", label: t("pm.sum.active"), hint: t("pm.sum.activeHint"), icon: HardHat, cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
-    { key: "requested", label: t("pm.sum.requested"), hint: t("pm.sum.requestedHint"), icon: Hourglass, cls: "border-l-yellow-500", num: "text-yellow-700 dark:text-yellow-400" },
-    { key: "approved", label: t("pm.sum.approved"), hint: t("pm.sum.approvedHint"), icon: Play, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "late", label: t("pm.sum.late"), hint: t("pm.sum.lateHint"), icon: AlertTriangle, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-  ];
   const stages: [Stage, string][] = [
     ["open", t("pm.list.stageOpen")],
     ...(["DRAFT", "REQUESTED", "APPROVED", "ACTIVE", "CLOSED"] as PermitStatus[]).map(s => [s, t(STATUS_TKEY[s])] as [Stage, string]),
@@ -1899,21 +1881,6 @@ export const PermitsPage: React.FC = () => {
           <Plus className="w-3.5 h-3.5" /> {t("pm.list.new")}
         </button>
       </PageHeader>
-
-      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => { setCardSel(on ? "" : c.key); if (!on) setStageSel("all"); }}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{count(c.key)}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
 
       {/* Filtros */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">

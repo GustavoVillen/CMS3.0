@@ -1648,7 +1648,6 @@ const DeleteAssetModal: React.FC<DeleteAssetModalProps> = ({ asset, onClose, onD
   );
 };
 
-type AssetCard = "" | "noPlan" | "ism" | "notOperational" | "defects";
 
 export const AssetsPage: React.FC = () => {
   const t = useT();
@@ -1666,7 +1665,6 @@ export const AssetsPage: React.FC = () => {
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [sfiTab, setSfiTab] = useState<"ALL" | number | "NONE">("ALL");
   const [viewMode, setViewMode] = useState<"list" | "board">("list");
-  const [cardSel, setCardSel] = useState<AssetCard>("");
 
   const statusFilter = (searchParams.get("status") ?? "").trim();
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
@@ -1757,21 +1755,11 @@ export const AssetsPage: React.FC = () => {
 
   /** Crítico (A/B) sin tareas activas y sin la exención escrita: brecha de cobertura. */
   const isNoPlan = useCallback((a: Asset) => a.criticality !== "C" && !a.planNotRequired && !(planStats.get(a.id)?.active), [planStats]);
-  const matchCard = useCallback((a: Asset, k: AssetCard) => {
-    switch (k) {
-      case "noPlan":         return isNoPlan(a);
-      case "ism":            return a.isSafetyCritical;
-      case "notOperational": return a.status !== "OPERATIONAL";
-      case "defects":        return (openDefectCount.get(a.id) ?? 0) > 0;
-      default:               return true;
-    }
-  }, [isNoPlan, openDefectCount]);
 
   const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, a => a.id), [data, tmsaFilter]);
   const filteredAssets = useMemo(() => {
     let items = tmsaItems;
     if (!items) return items;
-    if (cardSel) items = items.filter(a => matchCard(a, cardSel));
     if (sfiTab !== "ALL") items = items.filter(a => sfiTabOfCode(a.sfiCode) === sfiTab);
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
@@ -1780,7 +1768,7 @@ export const AssetsPage: React.FC = () => {
         textMatches(a.manufacturer, q) || textMatches(a.model, q) || textMatches(a.serialNumber, q));
     }
     return items;
-  }, [tmsaItems, cardSel, matchCard, sfiTab, searchText]);
+  }, [tmsaItems, sfiTab, searchText]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1889,12 +1877,6 @@ export const AssetsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, vesselName, planStats, planCell, openDefectCount, rowAction]);
 
-  const summaryCards: { key: Exclude<AssetCard, "">; label: string; hint: string; icon: typeof Settings; cls: string; num: string; waits: boolean }[] = [
-    { key: "noPlan", label: t("asset.v23.sum.noPlan"), hint: t("asset.v23.sum.noPlanHint"), icon: CalendarX, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400", waits: true },
-    { key: "ism", label: t("asset.v23.sum.ism"), hint: t("asset.v23.sum.ismHint"), icon: ShieldAlert, cls: "border-l-violet-600", num: "text-violet-700 dark:text-violet-400", waits: false },
-    { key: "notOperational", label: t("asset.v23.sum.notOperational"), hint: t("asset.v23.sum.notOperationalHint"), icon: PowerOff, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400", waits: false },
-    { key: "defects", label: t("asset.v23.sum.defects"), hint: t("asset.v23.sum.defectsHint"), icon: AlertOctagon, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400", waits: true },
-  ];
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
   const vesselOptions = useMemo(() => [...new Set((tenantAssetsData?.items ?? []).map(a => a.vesselCode))], [tenantAssetsData]);
 
@@ -1944,21 +1926,6 @@ export const AssetsPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      {/* Resumen: tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.waits && linksLoading ? "…" : (tmsaItems ?? []).filter(a => matchCard(a, c.key)).length}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* Filtros */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
         {/* Grupos SFI con su nombre: en el tablero sobran (cada grupo ya es una columna). */}
@@ -1995,8 +1962,8 @@ export const AssetsPage: React.FC = () => {
             <option value="">{t("asset.v23.statusAll")}</option>
             {(["OPERATIONAL", "DEGRADED", "OUT_OF_SERVICE"] as const).map(s => <option key={s} value={s}>{t(`asset.v23.st.${s}` as TranslationKey)}</option>)}
           </select>
-          {(statusFilter || criticalityFilter || vesselFilter || searchText || cardSel) && (
-            <button type="button" onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); setCardSel(""); }}
+          {(statusFilter || criticalityFilter || vesselFilter || searchText) && (
+            <button type="button" onClick={() => { updateFilters({ status: "", criticality: "", vesselCode: "" }); setSearchText(""); }}
               className="rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 text-xs text-text-industrial/80 hover:text-fg">{t("common.clear")}</button>
           )}
           <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">

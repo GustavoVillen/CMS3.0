@@ -243,7 +243,9 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, links, linksLoading, on
                   )))}
                 {box(<CalendarCheck className="w-4 h-4" />, t("prov.plans"), null,
                   plansByVessel.length === 0 ? empty(t("prov.plansEmpty")) : plansByVessel.map(([vc, n]) => (
-                    <button key={vc} type="button" className={rel} onClick={() => navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(vc)}`)}>
+                    // Abre el listado de planes ya filtrado por buque Y por este taller.
+                    <button key={vc} type="button" className={rel}
+                      onClick={() => navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(vc)}&providerId=${encodeURIComponent(provider?.id ?? "")}`)}>
                       {/* Nombre del buque, no el código. */}
                       <b className="text-fg">{vesselName(vc)}</b>
                       <span className="text-text-industrial/55">{t("prov.plansN").replace("{n}", String(n))}</span>
@@ -325,7 +327,6 @@ export const ProvidersPage: React.FC = () => {
   // Se trae todo y se filtra en cliente (son pocas decenas).
   const { data, loading, error, reload } = useFetch<ListResponse>("/app/providers", []);
   const { linksFor, loading: linksLoading } = useProviderLinks();
-  const [cardSel, setCardSel] = useState<ProvCard>("");
   const [statusSel, setStatusSel] = useState<"ACTIVE" | "INACTIVE" | "">("ACTIVE");
   const [catSel, setCatSel] = useState("");
   const [search, setSearch] = useState("");
@@ -350,14 +351,13 @@ export const ProvidersPage: React.FC = () => {
   };
   const shown = useMemo(() => {
     let r = items;
-    if (cardSel) r = r.filter(p => matchCard(p, cardSel));
-    else if (statusSel) r = r.filter(p => p.status === statusSel);
+    if (statusSel) r = r.filter(p => p.status === statusSel);
     if (catSel) r = r.filter(p => p.category === catSel);
     const q = search.trim().toLowerCase();
     if (q) r = r.filter(p => textMatches(p.name, q) || textMatches(p.providerCode, q) || textMatches(p.category ?? "", q) || textMatches(p.contactName ?? "", q));
     return r;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, cardSel, statusSel, catSel, search, stats]);
+  }, [items, statusSel, catSel, search, stats]);
 
   const workCell = (p: Provider) => {
     const s = st(p);
@@ -391,12 +391,6 @@ export const ProvidersPage: React.FC = () => {
     { key: "status", header: t("col.status"), render: statusChip },
   ];
 
-  const summaryCards: { key: Exclude<ProvCard, "">; label: string; hint: string; icon: typeof Truck; cls: string; num: string }[] = [
-    { key: "ssOpen", label: t("prov.sum.ssOpen"), hint: t("prov.sum.ssOpenHint"), icon: Wrench, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "plans", label: t("prov.sum.plans"), hint: t("prov.sum.plansHint"), icon: CalendarCheck, cls: "border-l-violet-600", num: "text-violet-700 dark:text-violet-400" },
-    { key: "noContact", label: t("prov.sum.noContact"), hint: t("prov.sum.noContactHint"), icon: PhoneOff, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    { key: "inactive", label: t("prov.sum.inactive"), hint: t("prov.sum.inactiveHint"), icon: Archive, cls: "border-l-fg/30", num: "text-text-industrial/70" },
-  ];
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
   const selectedLinks = selected && selected !== "new" ? linksFor(selected) : null;
 
@@ -425,21 +419,6 @@ export const ProvidersPage: React.FC = () => {
         )}
       </PageHeader>
 
-      {/* Resumen: tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{linksLoading && (c.key === "ssOpen" || c.key === "plans") ? "…" : items.filter(p => matchCard(p, c.key)).length}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* Filtros */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -447,7 +426,7 @@ export const ProvidersPage: React.FC = () => {
             <option value="">{t("prov.catAll")}</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select value={statusSel} onChange={e => setStatusSel(e.target.value as typeof statusSel)} disabled={!!cardSel} className={selCls(statusSel !== "ACTIVE")}>
+          <select value={statusSel} onChange={e => setStatusSel(e.target.value as typeof statusSel)} className={selCls(statusSel !== "ACTIVE")}>
             <option value="ACTIVE">{t("prov.statusActive")}</option>
             <option value="INACTIVE">{t("prov.statusInactive")}</option>
             <option value="">{t("prov.statusAll")}</option>

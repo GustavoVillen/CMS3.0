@@ -1040,7 +1040,6 @@ const DrydockSpecDrawer: React.FC<{
 
 // ─── Página ─────────────────────────────────────────────────────────────────
 
-type SpecCard = "" | "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "REJECTED";
 
 export const DrydockSpecsPage: React.FC = () => {
   const t = useT();
@@ -1059,7 +1058,6 @@ export const DrydockSpecsPage: React.FC = () => {
   const tmsaFilter = useTmsaFilter();
   const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id) ?? [], [data, tmsaFilter]);
   const [detail, setDetail] = useState<DrydockSpec | null | "new">(null);
-  const [cardSel, setCardSel] = useState<SpecCard>("");
   const [search, setSearch] = useState("");
   // La explicación del proceso se puede plegar; se recuerda en este navegador.
   const [howtoOpen, setHowtoOpen] = useState(() => { try { return localStorage.getItem("dds.howto") !== "0"; } catch { return true; } });
@@ -1090,12 +1088,11 @@ export const DrydockSpecsPage: React.FC = () => {
 
   const shown = useMemo(() => {
     let r = tmsaItems;
-    if (cardSel) r = r.filter(s => s.status === cardSel);
     const q = search.trim().toLowerCase();
     if (q) r = r.filter(s => textMatches(s.title, q) || textMatches(s.specCode, q) || textMatches(s.shipyardName ?? "", q) || textMatches(vesselName(s.vesselCode), q));
     return r;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tmsaItems, cardSel, search, vessels]);
+  }, [tmsaItems, search, vessels]);
 
   const openSpec = (s: DrydockSpec) => { setDetail(s); open(s.specCode); };
 
@@ -1152,12 +1149,6 @@ export const DrydockSpecsPage: React.FC = () => {
     { key: "action", header: "", render: rowAction },
   ];
 
-  const summaryCards: { key: Exclude<SpecCard, "">; label: string; hint: string; icon: typeof Ship; cls: string; num: string }[] = [
-    { key: "DRAFT", label: t("dds.v26.sum.draft"), hint: t("dds.v26.sum.draftHint"), icon: Pencil, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
-    { key: "SUBMITTED", label: t("dds.v26.sum.submitted"), hint: t("dds.v26.sum.submittedHint"), icon: Inbox, cls: "border-l-violet-600", num: "text-violet-700 dark:text-violet-400" },
-    { key: "UNDER_REVIEW", label: t("dds.v26.sum.review"), hint: t("dds.v26.sum.reviewHint"), icon: ListChecks, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "REJECTED", label: t("dds.v26.sum.rejected"), hint: t("dds.v26.sum.rejectedHint"), icon: CornerUpLeft, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-  ];
   const flow: { who: "ship" | "shore" | "yard"; icon: typeof Ship; n: number }[] = [
     { who: "ship", icon: Pencil, n: 1 }, { who: "ship", icon: Send, n: 2 }, { who: "shore", icon: ListChecks, n: 3 },
     { who: "shore", icon: CheckCircle2, n: 4 }, { who: "yard", icon: FileDown, n: 5 },
@@ -1195,21 +1186,6 @@ export const DrydockSpecsPage: React.FC = () => {
             </div>
           </>
         )}
-      </div>
-
-      {/* Resumen: tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{tmsaItems.filter(s => s.status === c.key).length}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
       </div>
 
       <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-80">

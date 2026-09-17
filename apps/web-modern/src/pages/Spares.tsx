@@ -728,12 +728,6 @@ export const SparesPage: React.FC = () => {
     },
   ];
 
-  const summaryCards: { key: Exclude<SpareCard, "">; label: string; hint: string; icon: typeof Package; cls: string; num: string }[] = [
-    { key: "zero", label: t("sp.v23.sum.zero"), hint: t("sp.v23.sum.zeroHint"), icon: PackageX, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    { key: "low", label: t("sp.v23.sum.low"), hint: t("sp.v23.sum.lowHint"), icon: TrendingDown, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
-    { key: "reorder", label: t("sp.v23.sum.reorder"), hint: t("sp.v23.sum.reorderHint"), icon: RefreshCw, cls: "border-l-violet-600", num: "text-violet-700 dark:text-violet-400" },
-    { key: "critA", label: t("sp.v23.sum.critA"), hint: t("sp.v23.sum.critAHint"), icon: ShieldAlert, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-  ];
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
 
   return (
@@ -801,21 +795,6 @@ export const SparesPage: React.FC = () => {
           </button>
         )}
       </PageHeader>
-
-      {/* Resumen: tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{countBase.filter(s => matchCard(s, c.key)).length}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
 
       {/* Filtros */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3">

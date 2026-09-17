@@ -1,5 +1,25 @@
 HISTORY.txt
 
+[2026-09-17] Tarjetas de resumen fuera de todas las pantallas + permiso de trabajo con IA
+Agent: Claude Opus 5
+- Pedido de Gustavo: "sacar estos en todos los formularios, ocupan mucho espacio y no
+  los uso". Se quitaron las tarjetas de resumen de Equipos, Defectos, Especificacion de
+  Varada, Permisos, Proveedores y Repuestos (mismo bloque grid + border-l-4 en las 6).
+  Los deep-links que seteaban esas tarjetas siguen vivos donde existian (Repuestos
+  ?stock=sin_stock|bajo_reorden y Defectos ?verification=DUE); en las otras cuatro se
+  limpio el estado muerto (cardSel/matchCard y sus tipos).
+- Proveedores: el renglon "Tareas del plan asignadas" ahora abre /maintenance-plans
+  filtrado por buque Y por ese taller (?providerId=). Planes acepta ese parametro
+  (providerId del plan o de sus providerRequests) y muestra un chip con el nombre y X.
+- Planes, seccion 4 Seguridad: el boton "Sugerir con IA" paso ARRIBA de la pregunta del
+  permiso y ahora la misma sugerencia decide si la tarea requiere permiso de trabajo,
+  lo enciende y tilda los tipos. El prompt de LOTO devuelve dos lineas de cabecera
+  (PERMISO / TIPOS) que el service parsea; si la IA no las manda, el LOTO sale igual y
+  el permiso no se toca. Si dice SI pero no nombra un tipo valido, no enciende nada.
+  Probado con IA real: motor electrico -> Aislamiento electrico; fisura en tanque ->
+  Trabajo en caliente + Espacio confinado; control de nivel de aceite -> sin permiso.
+- Toca backend (prompt/parseo) + frontend. Sin schema.
+
 [2026-09-17] Planes de Mantenimiento: filtros en una fila y grupo SFI en botones
 Agent: Claude Opus 5
 - Pedido de Gustavo: maximizar alto y poner el selector de grupos. Se sacaron las 5

@@ -54,7 +54,21 @@ REGLAS DE CONCISIÓN (importante):
 - Sé breve: solo las energías a bloquear y las verificaciones críticas. Máximo 6 puntos, un paso corto por línea.
 - Directo y accionable. Sin justificaciones, sin teoría, sin redundancia.
 
-Responde ÚNICAMENTE con el procedimiento LOTO, en texto plano, sin introducción ni explicación adicional.`;
+ADEMÁS, decidí si la tarea necesita PERMISO DE TRABAJO. Sólo si el trabajo en sí
+cae en alguno de estos casos (si no, NO):
+- HOT_WORK: soldadura, corte, amolado, llama abierta o cualquier fuente de ignición.
+- ENCLOSED_SPACE_ENTRY: entrar a tanque, cofferdam, sentina cerrada, caja de mar o espacio sin ventilación.
+- WORKING_ALOFT: trabajo en altura, sobre la borda o con andamio/arnés.
+- ELECTRICAL_ISOLATION: intervenir tableros, cables o equipos energizados, o trabajar sobre media/alta tensión.
+- COLD_WORK: abrir sistemas presurizados o con combustible/aceite caliente sin fuente de ignición.
+- UNDERWATER_WORK: trabajo de buzo o bajo la línea de flotación.
+Un bloqueo LOTO común (cortar un breaker, cerrar una válvula) NO alcanza por sí solo
+para exigir permiso: el permiso es para los seis casos de arriba.
+
+FORMATO DE RESPUESTA — exactamente estas dos líneas primero y después el procedimiento:
+PERMISO: SI|NO
+TIPOS: <códigos separados por coma, sólo si PERMISO es SI; si es NO, dejá la línea vacía>
+<procedimiento LOTO en texto plano, sin introducción ni explicación adicional>`;
 
 const PROMPT_RISK = `Sos experto en HSE / Job Safety Analysis (JSA) para mantenimiento de máquinas navales.
 
@@ -239,18 +253,43 @@ export async function suggestPlanAcceptanceCriteria(
   return { text };
 }
 
+/** Tipos de permiso que entiende el plan (mismo set que valida el service). */
+const PERMIT_TYPES = [
+  "HOT_WORK", "ENCLOSED_SPACE_ENTRY", "WORKING_ALOFT",
+  "ELECTRICAL_ISOLATION", "COLD_WORK", "UNDERWATER_WORK",
+] as const;
+
 export async function suggestPlanLoto(
   session: TenantAccessSession,
   input: LotoInput,
-): Promise<{ text: string }> {
-  const text = await callClaude(
+): Promise<{ text: string; permitRequired: boolean; permitTypes: string[] }> {
+  const raw = await callClaude(
     session,
     "plan_loto_suggestion",
     PROMPT_LOTO,
     buildContext(input, { "Criterios de aceptación": input.acceptanceCriteria }, await getVesselAiContext(session.tenantSlug, input.vesselCode)),
     3000,
   );
-  return { text };
+
+  // Cabecera opcional: si la IA no la manda (respuestas viejas o modelo que la
+  // omite), el LOTO se devuelve igual y el permiso queda sin decidir (false).
+  const permitMatch = raw.match(/^PERMISO:\s*(SI|SÍ|NO)\s*$/im);
+  const typesMatch  = raw.match(/^TIPOS:\s*(.*)$/im);
+  const permitRequired = /^S/i.test(permitMatch?.[1] ?? "");
+  const permitTypes = permitRequired
+    ? [...new Set((typesMatch?.[1] ?? "")
+        .split(/[,;]/)
+        .map(s => s.trim().toUpperCase().replace(/\s+/g, "_"))
+        .filter((s): s is typeof PERMIT_TYPES[number] => (PERMIT_TYPES as readonly string[]).includes(s)))]
+    : [];
+
+  const text = raw
+    .replace(/^PERMISO:\s*(SI|SÍ|NO).*$/im, "")
+    .replace(/^TIPOS:.*$/im, "")
+    .trim();
+
+  // Dijo que sí pero no nombró ninguno válido: no se puede configurar nada.
+  return { text, permitRequired: permitRequired && permitTypes.length > 0, permitTypes };
 }
 
 export async function suggestPlanRisk(

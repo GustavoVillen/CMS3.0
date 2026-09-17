@@ -2214,12 +2214,6 @@ export const DefectsPage: React.FC = () => {
     { key: "action", header: "", render: row => rowAction(row) },
   ];
 
-  const summaryCards: { key: Exclude<typeof cardSel, "">; n: number; label: string; hint: string; icon: typeof Wrench; cls: string; num: string }[] = [
-    { key: "crit", n: summary.crit, label: t("def.sum.crit"), hint: t("def.sum.critHint"), icon: AlertOctagon, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    { key: "stop", n: summary.stop, label: t("def.sum.stop"), hint: t("def.sum.stopHint"), icon: Ban, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
-    { key: "nowo", n: summary.nowo, label: t("def.sum.nowo"), hint: t("def.sum.nowoHint"), icon: Wrench, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "verify", n: summary.verify, label: t("def.sum.verify"), hint: t("def.sum.verifyHint"), icon: ShieldQuestion, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
-  ];
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
 
   return (
@@ -2236,21 +2230,6 @@ export const DefectsPage: React.FC = () => {
 
       {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("def.loadingDetail")}</div>}
       {detailError && <AlertDialog message={detailError} onClose={() => setDetailError(null)} />}
-
-      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key;
-          return (
-            <button key={c.key} type="button" onClick={() => setCardSel(on ? "" : c.key)}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{c.n}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
 
       <EffectivenessReviewStrip
         items={reviewDue.data?.items ?? []}

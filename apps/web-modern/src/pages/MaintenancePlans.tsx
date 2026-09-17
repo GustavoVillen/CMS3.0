@@ -1631,14 +1631,25 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setLoadingLoto(true);
     setLoto(t("mp.modal.analyzing"));
     try {
-      const res = await api.post<{ text: string }>("/app/pms/maintenance-plans/suggest-loto", {
-        assetLabel: resolveAssetLabel(),
-        taskDesc: description || title || null,
-        taskType,
-        acceptanceCriteria: acceptanceCriteria || null,
-        vesselCode: vesselCode || null,
-      });
+      const res = await api.post<{ text: string; permitRequired?: boolean; permitTypes?: string[] }>(
+        "/app/pms/maintenance-plans/suggest-loto", {
+          assetLabel: resolveAssetLabel(),
+          taskDesc: description || title || null,
+          taskType,
+          acceptanceCriteria: acceptanceCriteria || null,
+          vesselCode: vesselCode || null,
+        });
       setLoto(res.text || prev);
+      // La misma sugerencia decide el permiso de trabajo: si hace falta, lo
+      // enciende y deja tildados los tipos; si no, lo apaga.
+      const tipos = (res.permitTypes ?? []).filter(x => (PLAN_PERMIT_TYPES as readonly string[]).includes(x));
+      if (res.permitRequired && tipos.length > 0) {
+        setRequiresPermit(true);
+        setRequiredPermitTypes(tipos as typeof requiredPermitTypes);
+      } else if (res.permitRequired === false) {
+        setRequiresPermit(false);
+        setRequiredPermitTypes([]);
+      }
     } catch {
       setLoto(prev);
     } finally {
@@ -3087,12 +3098,16 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                 <GuideSection n={4} title={sectionMeta.safety.title} subtitle={sectionMeta.safety.sub} pill={sectionPill("safety")}
                   open={openSecs.safety} onToggle={() => setOpenSecs(s => ({ ...s, safety: !s.safety }))}>
                   <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
+                    {/* El botón de IA va ARRIBA de la pregunta del permiso: la misma
+                        sugerencia resuelve el LOTO y si la tarea necesita permiso. */}
+                    <div className="flex items-center justify-end gap-1">
+                      {aiPill(() => { void handleLotoClick(); }, loadingLoto, t("mp.ai.safetyTooltip"))}
+                    </div>
                     {permitBlock}
                     <GuideField id="mp-f-loto" missing={missing.loto}>
                       <div className="flex items-center gap-1">
                         <label className={fLabelCls}>{t("mp.f.lotoTitle")}</label>
                         {missing.loto && <GuideNeedTag label={t("mp.guide.missing")} />}
-                        {aiPill(() => { void handleLotoClick(); }, loadingLoto, t("wo.ai.lotoTooltip"))}
                       </div>
                       <RichTextArea value={loto} onChange={setLoto} rows={2} className={inputCls} disabled={loadingLoto} />
                     </GuideField>
@@ -3607,6 +3622,10 @@ export const MaintenancePlansPage: React.FC = () => {
   const overdueParam = (overdueKeysPresent.length ? (searchParams.get(overdueKeysPresent[0]!) ?? "") : "").trim().toLowerCase();
   const overdueOnly  = overdueParam === "1" || overdueParam === "true" || overdueParam === "si";
 
+  // Deep-link desde la ficha del proveedor: ?providerId=<id> deja sólo las tareas
+  // que ese taller tiene asignadas (como responsable del plan o como pedido suyo).
+  const providerIdFilter = (searchParams.get("providerId") ?? "").trim();
+
   // Deep-link al grupo SFI (ej. desde el acceso del Dashboard): ?sfiTab=6.
   const sfiTabParam = (searchParams.get("sfiTab") ?? "").trim();
   const sfiTabParamNum = sfiTabParam === "" ? NaN : Number(sfiTabParam);
@@ -3672,6 +3691,11 @@ export const MaintenancePlansPage: React.FC = () => {
     const params = new URLSearchParams(searchParams);
     params.delete("weekStart");
     params.delete("weeks");
+    setSearchParams(params, { replace: true });
+  };
+  const clearProviderFilter = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("providerId");
     setSearchParams(params, { replace: true });
   };
 
@@ -3763,6 +3787,12 @@ export const MaintenancePlansPage: React.FC = () => {
     if (sfiTab !== "ALL") {
       items = items.filter(p => sfiTabOf(p.sfiGroupNumber) === sfiTab);
     }
+    // El taller puede estar como responsable del plan (providerId) o en la lista
+    // de pedidos a proveedores; vale cualquiera de las dos.
+    if (providerIdFilter) {
+      items = items.filter(p => p.providerId === providerIdFilter
+        || (p.providerRequests ?? []).some(r => r.providerId === providerIdFilter));
+    }
     if (executionFilter) {
       // El donut del Panel puede mandar VARIAS situaciones en una (ej.
       // "DUE,UPCOMING", que ahí van en un solo gajo). Y se compara contra la
@@ -3791,12 +3821,22 @@ export const MaintenancePlansPage: React.FC = () => {
       items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
     return { items, total: items.length };
-  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds]);
+  }, [rawData, baseItems, sfiTab, providerIdFilter, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds]);
 
   // Etapa, tarjeta y "Calidad del plan" se aplican sobre la base ya filtrada; los
   // contadores salen de la base, así cada tarjeta dice cuántas hay de verdad.
   const bucketOf = useCallback((p: MaintenancePlan) => planBucket(p, oosAssetIds.has(p.assetId)), [oosAssetIds]);
   const shownItems = useMemo(() => data?.items ?? [], [data]);
+  /** Nombre del taller del filtro ?providerId=, tomado del primer plan que lo trae. */
+  const providerFilterName = useMemo(() => {
+    if (!providerIdFilter) return "";
+    for (const p of data?.items ?? []) {
+      if (p.providerId === providerIdFilter && p.providerName) return p.providerName;
+      const hit = (p.providerRequests ?? []).find(r => r.providerId === providerIdFilter && r.providerName);
+      if (hit?.providerName) return hit.providerName;
+    }
+    return "";
+  }, [data, providerIdFilter]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -4469,6 +4509,20 @@ export const MaintenancePlansPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Filtro por proveedor (viene de la ficha del taller) */}
+      {providerIdFilter && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 w-fit">
+          <Filter className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span className="text-xs font-semibold text-fg">
+            {t("mp.page.providerFilter").replace("{name}", providerFilterName || "—")}
+          </span>
+          <span className="text-[10px] text-text-industrial/50">({shownItems.length})</span>
+          <button onClick={clearProviderFilter} title={t("mp.page.providerFilterClear")} className="text-text-industrial/50 hover:text-fg transition-colors">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
       {weekStartFilter && (

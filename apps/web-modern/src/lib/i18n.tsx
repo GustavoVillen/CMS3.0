@@ -3322,6 +3322,9 @@ const dict = {
   "mp.page.allVessels":        { es: "Todos los buques",       en: "All vessels",           pt: "Todas as embarcações" },
   "mp.page.loadingDetail":     { es: "Cargando detalle del plan…", en: "Loading plan detail…", pt: "Carregando detalhes do plano…" },
   "mp.page.weekFilter":        { es: "Tareas proyectadas la semana del {date}", en: "Tasks projected for the week of {date}", pt: "Tarefas projetadas na semana de {date}" },
+  "mp.ai.safetyTooltip":  { es: "Sugerir con IA: decide si necesita permiso de trabajo y arma el LOTO", en: "Suggest with AI: decides whether a work permit is needed and drafts the LOTO", pt: "Sugerir com IA: decide se precisa de permissão de trabalho e monta o LOTO" },
+  "mp.page.providerFilter":      { es: "Tareas asignadas a {name}", en: "Tasks assigned to {name}", pt: "Tarefas atribuídas a {name}" },
+  "mp.page.providerFilterClear": { es: "Quitar filtro de proveedor", en: "Clear provider filter", pt: "Remover filtro de fornecedor" },
   "mp.page.weekFilterClear":   { es: "Quitar filtro de semana", en: "Clear week filter", pt: "Remover filtro de semana" },
   "mp.page.detailLoadError":   { es: "No se pudo cargar el detalle del plan.", en: "Could not load plan detail.", pt: "Não foi possível carregar os detalhes do plano." },
 
