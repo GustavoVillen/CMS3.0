@@ -1,5 +1,21 @@
 HISTORY.txt
 
+[2026-09-17] Planes de Mantenimiento: filtros en una fila y grupo SFI en botones
+Agent: Claude Opus 5
+- Pedido de Gustavo: maximizar alto y poner el selector de grupos. Se sacaron las 5
+  tarjetas de resumen, el panel "Calidad del plan", los botones de etapa
+  (Para hacer/Proximas/Al dia/Todas) y los desplegables Sistema/Tipo/Quien lo hace.
+- Queda UNA fila: GRUPO (Sin filtro + G0-G9, apagados los que no tienen planes, con
+  el nombre en el tooltip) + Agrupar por equipo + buscador. La lista arranca ~240 px
+  mas arriba.
+- CAMBIO DE COMPORTAMIENTO: la pantalla ya no abre en "Para hacer" — abre con TODOS
+  los planes (377 en DCH). El filtro de etapa era uno de los botones que se sacaron.
+  Tambien se perdieron los filtros por tipo de tarea, por quien lo hace y los de
+  calidad (sin criterio / sin responsable / sin nivel de riesgo).
+- Se limpio el estado muerto que quedaba (stageSel, cardSel, qualitySel, typeSel,
+  whoSel, qualityMatch/qualityCounts/bucketCounts y la guia de "sin vencimiento").
+  El deep-link ?sfiTab= sigue funcionando. Solo frontend: deploy = build web.
+
 [2026-09-17] Muestreos y Analisis: filtros en una fila
 Agent: Claude Opus 5
 - Mismo criterio que los tableros de OT y SS: fuera las 4 tarjetas de resumen y los

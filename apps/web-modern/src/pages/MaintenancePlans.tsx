@@ -3644,13 +3644,8 @@ export const MaintenancePlansPage: React.FC = () => {
   // Abre en "Para hacer". Si se llega con un filtro en el link (Dashboard, TMSA,
   // semana, equipo…) se respeta ese filtro y se muestran todas.
   const arrivedFiltered = !!(executionFilter || overdueOnly || weekStartFilter || assetFilter || sfiTabParam || searchParams.get("tmsa"));
-  const [stageSel, setStageSel] = useState<"todo" | "soon" | "ok" | "all">(() => (arrivedFiltered ? "all" : "todo"));
-  const [cardSel, setCardSel] = useState<"" | PlanBucket>("");
-  const [qualitySel, setQualitySel] = useState<"" | "nodue" | "criteria" | "responsible" | "risk">("");
-  const [typeSel, setTypeSel] = useState<"" | "MAINTENANCE" | "INSPECTION">("");
-  const [whoSel, setWhoSel] = useState<"" | "onboard" | "provider">("");
-  const [qualityOpen, setQualityOpen] = useState(() => { try { return localStorage.getItem("mp.quality") !== "0"; } catch { return true; } });
-  const toggleQuality = () => setQualityOpen(v => { try { localStorage.setItem("mp.quality", v ? "0" : "1"); } catch { /* sin almacenamiento */ } return !v; });
+  // La lista muestra TODOS los planes: los botones de etapa, las tarjetas de
+  // resumen y el panel de calidad se sacaron el 17-sep para ganar alto.
   const [moreOpen, setMoreOpen] = useState(false);
 
   const updateFilters = (next: { status?: string; vesselCode?: string; executionStatus?: string }) => {
@@ -3795,49 +3790,13 @@ export const MaintenancePlansPage: React.FC = () => {
     if (weekStartFilter) {
       items = weekPlanIds ? items.filter(p => weekPlanIds.has(p.id)) : [];
     }
-    if (typeSel) items = items.filter(p => p.taskType === typeSel);
-    if (whoSel) items = items.filter(p => (whoSel === "provider") === planHasProvider(p));
     return { items, total: items.length };
-  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds, typeSel, whoSel]);
+  }, [rawData, baseItems, sfiTab, overdueOnly, searchText, weekStartFilter, weekPlanIds, executionFilter, tmsaFilter, oosAssetIds]);
 
   // Etapa, tarjeta y "Calidad del plan" se aplican sobre la base ya filtrada; los
   // contadores salen de la base, así cada tarjeta dice cuántas hay de verdad.
   const bucketOf = useCallback((p: MaintenancePlan) => planBucket(p, oosAssetIds.has(p.assetId)), [oosAssetIds]);
-  const qualityMatch = useCallback((p: MaintenancePlan, k: string) => {
-    if (p.status === "INACTIVE") return false;
-    switch (k) {
-      case "nodue":       return hasNoDue(p);
-      case "criteria":    return p.hasAcceptanceCriteria === false;
-      case "responsible": return !(p.responsible ?? "").trim();
-      case "risk":        return !p.riskLevel;
-      default:            return true;
-    }
-  }, []);
-  const shownItems = useMemo(() => {
-    const items = data?.items ?? [];
-    if (qualitySel) return items.filter(p => qualityMatch(p, qualitySel));
-    if (cardSel) return items.filter(p => bucketOf(p) === cardSel);
-    switch (stageSel) {
-      case "todo": return items.filter(p => { const b = bucketOf(p); return b === "over" || b === "now"; });
-      case "soon": return items.filter(p => bucketOf(p) === "soon");
-      case "ok":   return items.filter(p => { const b = bucketOf(p); return b === "ok" || b === "oos"; });
-      default:     return items;
-    }
-  }, [data, qualitySel, cardSel, stageSel, bucketOf, qualityMatch]);
-  const bucketCounts = useMemo(() => {
-    const c: Record<PlanBucket, number> = { over: 0, now: 0, soon: 0, ok: 0, nodue: 0, oos: 0 };
-    for (const p of data?.items ?? []) c[bucketOf(p)] += 1;
-    return c;
-  }, [data, bucketOf]);
-  const qualityCounts = useMemo(() => {
-    const items = (data?.items ?? []).filter(p => p.status !== "INACTIVE");
-    return {
-      nodue: items.filter(p => qualityMatch(p, "nodue")).length,
-      criteria: items.filter(p => qualityMatch(p, "criteria")).length,
-      responsible: items.filter(p => qualityMatch(p, "responsible")).length,
-      risk: items.filter(p => qualityMatch(p, "risk")).length,
-    };
-  }, [data, qualityMatch]);
+  const shownItems = useMemo(() => data?.items ?? [], [data]);
 
   // ── Counts per SFI tab (from raw data, before SFI filter) ─────────────────
   const sfiTabCounts = useMemo(() => {
@@ -4410,30 +4369,9 @@ export const MaintenancePlansPage: React.FC = () => {
     return { vessel, asset, group };
   }, [vesselFilter, selectedVesselCode, assetFilter, sfiTab, data]);
 
-  const summaryCards: { key: PlanBucket; label: string; hint: string; icon: typeof Wrench; cls: string; num: string }[] = [
-    { key: "over", label: t("mp.v27.sum.over"), hint: t("mp.v27.sum.overHint"), icon: AlarmClock, cls: "border-l-red-600", num: "text-red-700 dark:text-red-400" },
-    { key: "now", label: t("mp.v27.sum.now"), hint: t("mp.v27.sum.nowHint"), icon: PlayCircle, cls: "border-l-orange-500", num: "text-orange-700 dark:text-orange-400" },
-    { key: "soon", label: t("mp.v27.sum.soon"), hint: t("mp.v27.sum.soonHint"), icon: CalendarClock, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-    { key: "nodue", label: t("mp.v27.sum.nodue"), hint: t("mp.v27.sum.nodueHint"), icon: CalendarX, cls: "border-l-amber-500", num: "text-amber-700 dark:text-amber-400" },
-    { key: "oos", label: t("mp.v27.sum.oos"), hint: t("mp.v27.sum.oosHint"), icon: PowerOff, cls: "border-l-slate-400", num: "text-text-industrial/70" },
-  ];
-  const qualityItems: { key: "nodue" | "criteria" | "responsible" | "risk"; tone: string; label: string; hint: string }[] = [
-    { key: "nodue", tone: "text-red-700 dark:text-red-400", label: t("mp.v27.q.nodue"), hint: t("mp.v27.q.nodueHint") },
-    { key: "criteria", tone: "text-amber-700 dark:text-amber-400", label: t("mp.v27.q.criteria"), hint: t("mp.v27.q.criteriaHint") },
-    { key: "responsible", tone: "text-amber-700 dark:text-amber-400", label: t("mp.v27.q.responsible"), hint: t("mp.v27.q.responsibleHint") },
-    { key: "risk", tone: "text-amber-700 dark:text-amber-400", label: t("mp.v27.q.risk"), hint: t("mp.v27.q.riskHint") },
-  ];
-  const qualityTopics = qualityItems.filter(q => qualityCounts[q.key] > 0).length;
-  const stageCount = (k: typeof stageSel) => {
-    const items = data?.items ?? [];
-    if (k === "todo") return bucketCounts.over + bucketCounts.now;
-    if (k === "soon") return bucketCounts.soon;
-    if (k === "ok") return bucketCounts.ok + bucketCounts.oos;
-    return items.length;
-  };
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;
-  const anyListFilter = !!(searchText || typeSel || whoSel || sfiTab !== "ALL" || overdueOnly || cardSel || qualitySel);
-  const clearListFilters = () => { setOverdueOnly(false); setSfiTab("ALL"); setSearchText(""); setTypeSel(""); setWhoSel(""); setCardSel(""); setQualitySel(""); };
+  const anyListFilter = !!(searchText || sfiTab !== "ALL" || overdueOnly);
+  const clearListFilters = () => { setOverdueOnly(false); setSfiTab("ALL"); setSearchText(""); };
 
   return (
     <div className="space-y-4">
@@ -4481,85 +4419,35 @@ export const MaintenancePlansPage: React.FC = () => {
             Para recuperarlas: volver a ofrecer setGridView / setShowMatrix. */}
       </PageHeader>
 
-      {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
-        {summaryCards.map(c => {
-          const on = cardSel === c.key && !qualitySel;
-          return (
-            <button key={c.key} type="button" onClick={() => { setQualitySel(""); setCardSel(on ? "" : c.key); }}
-              className={`flex flex-col items-start gap-0.5 rounded-2xl border-[1.5px] border-l-4 bg-surface px-3 py-2.5 text-left transition-all ${c.cls} ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-              <span className={`text-2xl font-extrabold leading-tight ${c.num}`}>{loading && !data ? "…" : bucketCounts[c.key]}</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70"><c.icon className="w-3.5 h-3.5" />{c.label}</span>
-              <span className="text-[10px] text-text-industrial/40">{c.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Calidad del plan: lo que falta para que avise y se pueda auditar. */}
-      {qualityTopics > 0 && (
-        <div className="rounded-2xl border border-fg/10 bg-surface px-4 py-2.5">
-          <button type="button" onClick={toggleQuality} className="flex w-full items-center gap-2 text-left">
-            <ClipboardCheck className="w-4 h-4 text-fg" />
-            <span className="text-sm font-extrabold text-fg">{t("mp.v27.qualityTitle")}</span>
-            <span className="hidden sm:inline text-[11.5px] text-text-industrial/55">· {t("mp.v27.qualitySub")}</span>
-            <span className="ml-auto rounded-full border border-amber-400/60 bg-amber-500/10 px-2 py-0.5 text-[10.5px] font-extrabold text-amber-800 dark:text-amber-300">
-              {t("mp.v27.qualityTopics").replace("{n}", String(qualityTopics))}
-            </span>
+      {/* Filtros en UNA fila (17-sep): grupo SFI en botones, como en los tableros
+          de OT y SS. Se sacaron las tarjetas de resumen, el panel de calidad, los
+          botones de etapa y los desplegables de sistema / tipo / quién lo hace. */}
+      <div className="rounded-2xl border border-fg/10 bg-surface px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">{t("wo.fl.group")}</span>
+          <button type="button" aria-pressed={sfiTab === "ALL"} onClick={() => setSfiTab("ALL")}
+            className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              sfiTab === "ALL" ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {t("wo.fl.groupAll")}
           </button>
-          {qualityOpen && (
-            <div className="mt-2.5 grid grid-cols-2 lg:grid-cols-4 gap-2">
-              {qualityItems.map(q => {
-                const on = qualitySel === q.key;
-                return (
-                  <button key={q.key} type="button" disabled={qualityCounts[q.key] === 0} onClick={() => { setCardSel(""); setQualitySel(on ? "" : q.key); }}
-                    className={`flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition-all disabled:opacity-45 ${on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"}`}>
-                    <span className={`text-lg font-black ${qualityCounts[q.key] ? q.tone : "text-emerald-700 dark:text-emerald-400"}`}>{qualityCounts[q.key]}</span>
-                    <span className="text-xs font-bold text-fg">{q.label}</span>
-                    <span className="text-[10.5px] text-text-industrial/50">{q.hint}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Filtros */}
-      <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
-        <div className="flex flex-wrap gap-1.5">
-          {([["todo", t("mp.v27.stageTodo")], ["soon", t("mp.v27.stageSoon")], ["ok", t("mp.v27.stageOk")], ["all", t("mp.v27.stageAll")]] as const).map(([k, label]) => {
-            const on = stageSel === k && !cardSel && !qualitySel;
+          {SFI_TABS.filter(tab => tab.key !== "ALL").map(tab => {
+            const on = sfiTab === tab.key;
+            const has = (sfiTabCounts[String(tab.key)] ?? 0) > 0;
+            const name = `${tab.label} · ${t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])}`;
             return (
-              <button key={k} type="button" onClick={() => { setCardSel(""); setQualitySel(""); setStageSel(k); }}
-                className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${on ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"}`}>
-                {label}
-                <span className={`rounded-full px-1.5 text-[10px] ${on ? "bg-white/25" : "bg-fg/10"}`}>{stageCount(k)}</span>
+              <button key={String(tab.key)} type="button" title={name} aria-label={name} aria-pressed={on}
+                disabled={!has && !on}
+                onClick={() => setSfiTab(on ? "ALL" : tab.key)}
+                className={`min-w-[2.4rem] rounded-full border-[1.5px] px-2.5 py-1 text-xs font-bold transition-colors ${
+                  on ? "border-accent bg-accent text-accent-fg"
+                    : has ? "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                    : "border-fg/10 bg-surface text-text-industrial/60 opacity-35 cursor-default"
+                }`}>
+                {tab.label}
               </button>
             );
           })}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Sistema (grupo SFI). Se oculta si se llegó ya filtrado desde el Dashboard. */}
-          {!sfiTabParam && !assetFilter && (
-            <select value={String(sfiTab)} onChange={e => setSfiTab((e.target.value === "ALL" || e.target.value === "NONE" ? e.target.value : Number(e.target.value)) as SfiTab)}
-              className={`${selCls(sfiTab !== "ALL")} max-w-[15rem]`}>
-              <option value="ALL">{t("mp.v27.sfiAll")}</option>
-              {SFI_TABS.filter(tab => tab.key !== "ALL" && (sfiTabCounts[String(tab.key)] ?? 0) > 0).map(tab => (
-                <option key={String(tab.key)} value={String(tab.key)}>{tab.key} · {t(`sfi.g.${tab.key}` as Parameters<typeof t>[0])} ({sfiTabCounts[String(tab.key)]})</option>
-              ))}
-            </select>
-          )}
-          <select value={typeSel} onChange={e => setTypeSel(e.target.value as typeof typeSel)} className={selCls(!!typeSel)}>
-            <option value="">{t("mp.v27.typeAll")}</option>
-            <option value="MAINTENANCE">{t("mp.taskType.MAINTENANCE" as Parameters<typeof t>[0])}</option>
-            <option value="INSPECTION">{t("mp.taskType.INSPECTION" as Parameters<typeof t>[0])}</option>
-          </select>
-          <select value={whoSel} onChange={e => setWhoSel(e.target.value as typeof whoSel)} className={selCls(!!whoSel)}>
-            <option value="">{t("mp.v27.whoAll")}</option>
-            <option value="onboard">{t("mp.v27.whoOnboard")}</option>
-            <option value="provider">{t("mp.v27.whoProvider")}</option>
-          </select>
           <button type="button" onClick={() => setGroupByEquipment(v => !v)} aria-pressed={groupByEquipment}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${groupByEquipment ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
             <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
@@ -4581,17 +4469,6 @@ export const MaintenancePlansPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Guía para las tareas sin vencimiento */}
-      {qualitySel === "nodue" && (
-        <div className="flex items-start gap-3 rounded-2xl border-[1.5px] border-amber-400/60 bg-amber-500/[0.07] px-3.5 py-3">
-          <span className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 bg-amber-600"><CalendarX className="w-4.5 h-4.5" /></span>
-          <div>
-            <p className="text-sm font-black text-fg">{t("mp.v27.nodueGuideTitle").replace("{n}", String(qualityCounts.nodue))}</p>
-            <p className="text-[12.5px] text-text-industrial/70">{t("mp.v27.nodueGuideDesc")}</p>
-          </div>
-        </div>
-      )}
 
       {/* ── Filtro por semana (desde el gráfico de carga) ─────────────────────── */}
       {weekStartFilter && (
@@ -4665,7 +4542,7 @@ export const MaintenancePlansPage: React.FC = () => {
               loading={loading}
               error={error}
               keyFn={row => row.id}
-              emptyText={stageSel === "todo" && !cardSel && !qualitySel ? t("mp.v27.emptyTodo") : t("empty.maintenancePlans")}
+              emptyText={t("empty.maintenancePlans")}
               // Si ya hay un plan activo en la URL (su ventana aún no se dibujó por el
               // gap de render), reemplazamos en vez de apilar: clickear otro plan
               // dejaba /A y /B en el historial y cerrar el 2º reabría el 1º.
@@ -4684,7 +4561,7 @@ export const MaintenancePlansPage: React.FC = () => {
           {/* Celular: tarjetas con la acción a mano. */}
           <div className="md:hidden flex flex-col gap-2">
             {loading && !data && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>}
-            {data && shownItems.length === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{stageSel === "todo" && !cardSel && !qualitySel ? t("mp.v27.emptyTodo") : t("empty.maintenancePlans")}</p>}
+            {data && shownItems.length === 0 && <p className="py-8 text-center text-sm text-text-industrial/40">{t("empty.maintenancePlans")}</p>}
             {shownItems.slice(0, 150).map(p => {
               const b = bucketOf(p);
               const rel = dueRelative(p, t);
