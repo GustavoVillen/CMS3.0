@@ -9,9 +9,10 @@
 //   SMTP_HOST=smtp.office365.com      # Outlook 365. Gmail: smtp.gmail.com
 //   SMTP_PORT=587
 //   SMTP_SECURE=false                 # true solo para el puerto 465
-//   SMTP_USER=solicitudes@mercuriogroup.com.py
+//   SMTP_USER=documentos.mercuriogroup@gmail.com
 //   SMTP_PASS=<clave de aplicacion>   # NO la clave de la persona
-//   SMTP_FROM="Mercurio Naviera <solicitudes@mercuriogroup.com.py>"   # opcional
+//   SMTP_FROM="Mercurio Naviera <documentos.mercuriogroup@gmail.com>"   # opcional
+//   MAIL_ARCHIVE_CC=                  # copia de todo (default: SMTP_USER; "off" apaga)
 //
 // Sin SMTP_HOST/USER/PASS el envio queda APAGADO: `isMailConfigured()` da false
 // y quien llama sigue con su camino manual (ver el envio al proveedor de la SS).
@@ -111,15 +112,43 @@ const asList = (v: string | string[] | undefined): string[] =>
   (Array.isArray(v) ? v : v ? [v] : []).map(s => s.trim()).filter(Boolean);
 
 /**
+ * Casilla que recibe copia de TODO lo que manda el sistema (pedido de Gustavo,
+ * sep 2026): así queda el registro de los envíos en un solo lugar, con sus
+ * adjuntos. Por defecto es la misma casilla desde la que se envía; se puede
+ * apuntar a otra con `MAIL_ARCHIVE_CC`, o apagar con `MAIL_ARCHIVE_CC=off`.
+ */
+function archiveCopyAddress(cfg: SmtpConfig): string | null {
+  const configured = (process.env.MAIL_ARCHIVE_CC || "").trim();
+  if (configured.toLowerCase() === "off") return null;
+  const address = configured || cfg.user;
+  return address || null;
+}
+
+/** Correos en minúscula, sin repetidos: el que ya está en "Para" no va también en copia. */
+function mergeCopy(to: string[], cc: string[], extra: string | null): string[] {
+  const seen = new Set(to.map(a => a.toLowerCase()));
+  const out: string[] = [];
+  for (const address of [...cc, ...(extra ? [extra] : [])]) {
+    const key = address.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(address);
+  }
+  return out;
+}
+
+/**
  * Manda el correo. NUNCA tira: devuelve `sent:false` con el motivo, porque el
  * que llama tiene que poder decidir que hacer (avisar, dejarlo para mandar a
  * mano, no avanzar el estado).
  */
 export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const to = asList(input.to);
-  const cc = asList(input.cc);
   const cfg = readSmtpConfig();
-  if (!cfg) return { sent: false, to, cc, reason: "NOT_CONFIGURED" };
+  if (!cfg) return { sent: false, to, cc: asList(input.cc), reason: "NOT_CONFIGURED" };
+  // La copia a la casilla del sistema se agrega acá y no en cada flujo: así no
+  // hay correo que se escape del archivo por olvido al agregar un envío nuevo.
+  const cc = mergeCopy(to, asList(input.cc), archiveCopyAddress(cfg));
   if (to.length === 0) return { sent: false, to, cc, reason: "SEND_FAILED", error: "Sin destinatario." };
 
   try {
