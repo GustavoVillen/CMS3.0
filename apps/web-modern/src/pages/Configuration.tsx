@@ -8,6 +8,7 @@ import { fetchHiddenNavPaths, saveHiddenNavPaths } from "../lib/nav-config";
 import { WeeklyReportSettings } from "../components/WeeklyReportSettings";
 import { PdfArchiveSettings } from "../components/PdfArchiveSettings";
 import { SpareRequestSettings } from "../components/SpareRequestSettings";
+import { ServiceRequestMailSettings } from "../components/ServiceRequestMailSettings";
 import { useAuth } from "../lib/auth";
 
 export const ConfigurationPage: React.FC = () => {
@@ -146,6 +147,7 @@ export const ConfigurationPage: React.FC = () => {
           que el usuario no puede usar. */}
       {isAdmin && <WeeklyReportSettings />}
       {isAdmin && <SpareRequestSettings />}
+      {isAdmin && <ServiceRequestMailSettings />}
       {isAdmin && <PdfArchiveSettings />}
     </div>
   );

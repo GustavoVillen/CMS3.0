@@ -7,6 +7,7 @@ import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-serv
 import { getRolePermissions, setRolePermissions } from "./settings/role-permissions-config-service";
 import { getWeeklyReportConfig, setWeeklyReportConfig } from "./settings/weekly-report-config-service";
 import { getSpareRequestConfig, setSpareRequestConfig } from "./settings/spare-request-config-service";
+import { getServiceRequestMailConfig, setServiceRequestMailConfig } from "./settings/service-request-mail-config-service";
 import {
   archivePdf, archiveEntityAttachment, getPdfArchiveConfig, setPdfArchiveConfig, testPdfArchive,
   startGoogleConnect, completeGoogleConnect, disconnectGoogle, GOOGLE_CALLBACK_PATH,
@@ -2805,6 +2806,19 @@ export async function handleTenantRoutes(
   }
 
   // Casilla de Compras para "Enviar a Compras" de las Solicitudes de repuestos.
+  // A quién se manda la Solicitud de Servicio (proveedor o casilla interna) + copias.
+  if (method === "GET" && url.pathname === "/app/tenant/service-request-mail-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await getServiceRequestMailConfig(session));
+    return true;
+  }
+  if (method === "PATCH" && url.pathname === "/app/tenant/service-request-mail-config") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const body = await readJsonBody(request) as { toProvider?: unknown; ccRecipients?: unknown };
+    sendJson(response, 200, await setServiceRequestMailConfig(session, body ?? {}));
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/app/tenant/spare-request-config") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     sendJson(response, 200, await getSpareRequestConfig(session));

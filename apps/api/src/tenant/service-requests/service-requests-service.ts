@@ -41,6 +41,7 @@ import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-o
 import { buildHojaRuta } from "./hoja-ruta";
 import { resolveServiceRequestSignatures } from "./signatures";
 import { isMailConfigured, sendMail } from "../../common/mailer";
+import { readServiceRequestMailConfig } from "../settings/service-request-mail-config-service";
 
 // Estados de OT desde los que se puede pedir un servicio externo. DEFERRED entra
 // a pedido del cliente: diferir el trabajo no impide gestionar el servicio del
@@ -1481,6 +1482,10 @@ export interface SendToProviderResult {
   sent: boolean;
   /** Casilla a la que se mando. */
   to: string[];
+  /** Copia. */
+  cc?: string[];
+  /** Se pidio mandar al proveedor pero no tiene correo: salio a la casilla interna. */
+  fellBackToMailbox?: boolean;
   /** Por que no salio: sin casilla configurada, o fallo el envio. */
   reason?: "NOT_CONFIGURED" | "SEND_FAILED";
   error?: string;
@@ -1524,7 +1529,21 @@ export async function sendServiceRequestToProvider(
     prisma, current, !!payload.acknowledgeMissingSampleNumbers,
   );
 
-  const to = providerMailbox();
+  // A quién se manda: lo decide la empresa en Configuración. Apagado (default)
+  // va a la casilla interna y desde ahí se reenvía al taller; encendido va
+  // directo al correo del proveedor de la SS.
+  const mailConfig = await readServiceRequestMailConfig(current.tenantId);
+  const providerRow = current.providerId
+    ? await (prisma as any).provider.findFirst({
+        where: { id: current.providerId, tenantId: current.tenantId },
+        select: { name: true, contactEmail: true },
+      }) as { name: string | null; contactEmail: string | null } | null
+    : null;
+  const providerEmail = mailConfig.toProvider ? (providerRow?.contactEmail ?? "").trim() : "";
+  // Si se pidió mandar al proveedor pero no tiene correo cargado, NO se inventa
+  // un destinatario: cae en la casilla interna y el resultado lo avisa.
+  const fellBackToMailbox = mailConfig.toProvider && !providerEmail;
+  const to = providerEmail || providerMailbox();
   if (!isMailConfigured()) return { sent: false, to: [to], reason: "NOT_CONFIGURED" };
 
   // Nombre del buque, nunca el codigo (ver CLAUDE.md "Nombres, no codigos").
@@ -1533,12 +1552,7 @@ export async function sendServiceRequestToProvider(
     select: { name: true },
   });
   const vesselName: string = vessel?.name ?? current.vesselCode;
-  const taller = current.providerId
-    ? (await (prisma as any).provider.findFirst({
-        where: { id: current.providerId, tenantId: current.tenantId },
-        select: { name: true },
-      }))?.name ?? null
-    : normalizeOptionalText(current.tallerNotes);
+  const taller = providerRow ? providerRow.name : normalizeOptionalText(current.tallerNotes);
   const servicio = normalizeOptionalText(current.description) ?? normalizeOptionalText(current.title);
 
   // Muestras que viajan con el pedido, con su número y su equipo: es la lista de
@@ -1551,6 +1565,7 @@ export async function sendServiceRequestToProvider(
 
   const result = await sendMail({
     to,
+    cc: mailConfig.ccRecipients,
     subject: `Solicitud de Servicio ${current.serviceRequestCode} — ${vesselName}`,
     text: [
       "Estimados,",
@@ -1594,7 +1609,7 @@ export async function sendServiceRequestToProvider(
   });
   await logUnnumberedSend(prisma, session, current, samples.missing);
 
-  return { sent: true, to: result.to, serviceRequest };
+  return { sent: true, to: result.to, cc: result.cc, fellBackToMailbox, serviceRequest };
 }
 
 export interface CompleteServiceRequestInput {

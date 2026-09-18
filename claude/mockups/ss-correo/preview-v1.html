@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V1 — Envío de la Solicitud de Servicio</title>
+<style>
+  :root { --bg:#f1f5f9; --card:#fff; --fg:#0f172a; --muted:#64748b; --line:#e2e8f0;
+          --accent:#0369a1; --accent-soft:#e0f2fe; --danger:#b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#0b1220; --card:#111a2b; --fg:#e2e8f0; --muted:#94a3b8;
+      --line:#1e293b; --accent:#38bdf8; --accent-soft:#0c2d44; --danger:#f87171; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px 16px 60px; }
+  .wrap { max-width:640px; margin:0 auto; }
+  .tag { display:inline-block; font-size:11px; color:var(--muted); border:1px dashed var(--line);
+         border-radius:999px; padding:2px 8px; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin-bottom:20px; }
+  .card h3 { margin:0 0 4px; font-size:14px; font-weight:800; display:flex; align-items:center; gap:8px; }
+  .sub { margin:0 0 16px; font-size:12px; color:var(--muted); max-width:52ch; }
+  .check { display:flex; gap:10px; align-items:flex-start; border:1px solid var(--line);
+           border-radius:12px; padding:10px 12px; margin-bottom:6px; cursor:pointer; }
+  .check input { margin-top:2px; width:16px; height:16px; accent-color:var(--accent); }
+  .check b { font-size:12.5px; font-weight:700; }
+  .check span { display:block; font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .lbl { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+         color:var(--muted); margin:16px 0 6px; }
+  .row { display:flex; gap:8px; margin-bottom:8px; }
+  .row input { flex:1; padding:9px 11px; border:1px solid var(--line); border-radius:10px;
+               background:transparent; color:var(--fg); font-size:13px; }
+  .row button { padding:9px 12px; border-radius:10px; border:1px solid var(--line);
+                background:transparent; color:var(--fg); font-size:12px; font-weight:700; cursor:pointer; }
+  .mail { display:flex; align-items:center; gap:8px; border:1px solid var(--line);
+          border-radius:10px; padding:8px 11px; margin-bottom:6px; font-size:13px; }
+  .mail .x { margin-left:auto; border:0; background:transparent; color:var(--danger);
+             cursor:pointer; font-size:14px; }
+  .empty { font-size:12px; color:var(--muted); margin:2px 0 8px; }
+  .save { margin-top:14px; padding:10px 16px; border:0; border-radius:12px; background:var(--accent);
+          color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+  .warn { margin-top:12px; font-size:11.5px; color:var(--muted); border-left:3px solid var(--line);
+          padding-left:10px; }
+  svg { width:16px; height:16px; stroke:var(--accent); fill:none; stroke-width:1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">Preview V1 · datos de ejemplo</span>
+
+  <!-- ── Estado A: encendido ──────────────────────────────────────────── -->
+  <div class="card">
+    <h3><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 7l8 6 8-6"/></svg> Envío de la Solicitud de Servicio</h3>
+    <p class="sub">Cuando se toca “Enviar al Proveedor”, el sistema manda la SS en PDF por correo.
+       Acá se define a quién le llega.</p>
+
+    <label class="check">
+      <input type="checkbox" checked>
+      <span style="color:var(--fg)"><b>Mandarla directo al correo del proveedor</b>
+        <span>Usa el correo cargado en la ficha del proveedor de esa SS. Si está destildado, la SS llega a la casilla interna de la empresa y desde ahí se reenvía al taller.</span></span>
+    </label>
+
+    <p class="lbl">Con copia a</p>
+    <div class="mail">jbael@mercuriogroup.com.py <button class="x" title="Quitar">✕</button></div>
+    <div class="mail">superintendencia@mercuriogroup.com.py <button class="x" title="Quitar">✕</button></div>
+    <div class="row">
+      <input placeholder="correo@empresa.com">
+      <button>+ Agregar</button>
+    </div>
+
+    <button class="save">Guardar cambios</button>
+    <p class="warn">Si el proveedor de esa SS no tiene correo cargado, la solicitud se manda igual a
+      la casilla interna y el sistema lo avisa en pantalla — no se queda sin enviar.</p>
+  </div>
+
+  <!-- ── Estado B: apagado (como funciona hoy) ────────────────────────── -->
+  <div class="card">
+    <h3><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 7l8 6 8-6"/></svg> Envío de la Solicitud de Servicio</h3>
+    <p class="sub">Cuando se toca “Enviar al Proveedor”, el sistema manda la SS en PDF por correo.
+       Acá se define a quién le llega.</p>
+
+    <label class="check">
+      <input type="checkbox">
+      <span style="color:var(--fg)"><b>Mandarla directo al correo del proveedor</b>
+        <span>Destildado: la SS llega a <b>jbael@mercuriogroup.com.py</b> y desde ahí se reenvía al taller.</span></span>
+    </label>
+
+    <p class="lbl">Con copia a</p>
+    <p class="empty">Sin direcciones: la SS se manda sólo al destinatario.</p>
+    <div class="row">
+      <input placeholder="correo@empresa.com">
+      <button>+ Agregar</button>
+    </div>
+
+    <button class="save">Guardar cambios</button>
+  </div>
+</div>
+</body>
+</html>

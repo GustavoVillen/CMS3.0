@@ -907,6 +907,13 @@ model TenantSetting {
   // repuestos manda ahí el formulario PDF (spare-requests-service). Sin casilla
   // la solicitud no se envía y queda en Borrador.
   spareRequestMailbox       String?
+  // Solicitud de Servicio: a quién se le manda el PDF al "Enviar al Proveedor".
+  // Apagado (default) = va a la casilla interna de Mercurio y desde ahí se
+  // reenvía al taller. Encendido = va directo al correo del proveedor de la SS
+  // (si el proveedor no tiene correo cargado, cae en la casilla interna).
+  // serviceRequestCcRecipients: copia, en los dos casos.
+  serviceRequestToProvider  Boolean   @default(false)
+  serviceRequestCcRecipients String[] @default([])
   // Archivo automático de PDFs en el Google Drive de la empresa: el admin conecta
   // su cuenta con un botón (OAuth, permiso drive.file) y CMS3 sube los PDF a una
   // carpeta propia (tenant/settings/pdf-archive-service.ts). Apagado por defecto.

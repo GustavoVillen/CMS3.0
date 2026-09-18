@@ -1455,7 +1455,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
   // Aviso posterior a "Enviar al Proveedor". `mailedTo` = casilla a la que lo
   // mandó el sistema; null = no hay casilla configurada y el correo se manda a
   // mano (se descargó el .docx y se abrió el borrador).
-  const [sentNotice, setSentNotice] = useState<{ mailedTo: string | null } | null>(null);
+  const [sentNotice, setSentNotice] = useState<{ mailedTo: string | null; cc?: string[]; fellBack?: boolean } | null>(null);
   // Nombre del buque para el asunto/cuerpo del mail: nunca el código (ver
   // CLAUDE.md "Nombres, no códigos").
   const { vessels } = useVesselContext();
@@ -1877,10 +1877,10 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
     const ack = { acknowledgeMissingSampleNumbers: !!opts?.acknowledgeMissingSampleNumbers };
     setBusy(true);
     try {
-      const r = await api.post<{ sent: boolean; to: string[]; reason?: string; error?: string }>(
+      const r = await api.post<{ sent: boolean; to: string[]; cc?: string[]; fellBackToMailbox?: boolean; reason?: string; error?: string }>(
         `/app/pms/service-requests/${fresh.id}/send-to-provider`, ack);
       if (r.sent) {
-        setSentNotice({ mailedTo: r.to.join(", ") });
+        setSentNotice({ mailedTo: r.to.join(", "), cc: r.cc ?? [], fellBack: !!r.fellBackToMailbox });
         return;
       }
       if (r.reason === "SEND_FAILED") {
@@ -2689,6 +2689,16 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
                 El correo salió a <span className="font-semibold">{sentNotice.mailedTo}</span> con el
                 formulario en PDF adjunto. La solicitud quedó en ejecución.
               </p>
+              {(sentNotice.cc?.length ?? 0) > 0 && (
+                <p className="text-[11px] text-text-industrial/60">
+                  Con copia a <span className="font-semibold">{sentNotice.cc!.join(", ")}</span>.
+                </p>
+              )}
+              {sentNotice.fellBack && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  El proveedor no tiene correo cargado en su ficha: salió a la casilla interna.
+                </p>
+              )}
               <p className="text-[11px] text-text-industrial/50">
                 Queda asentado en la hoja de ruta del pedido.
               </p>
