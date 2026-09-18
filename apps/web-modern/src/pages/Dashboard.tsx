@@ -12,6 +12,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { parseLocalDate, sfiGroupDigit } from "../lib/utils";
 import { useCopilotEmitter, CopilotFlowProvider, CopilotChoiceStep, createCopilotFlowKey } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
+import { ClassCycleStrip } from "../components/ClassCycleBar";
 import { useAuth, useCan } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
@@ -1195,6 +1196,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </div>
         );
       })()}
+
+      {/* Ciclo de clase del buque elegido (misma barra que Certificados). Sin
+          buque elegido no aparece: es por embarcación. */}
+      <ClassCycleStrip vesselCode={selectedVesselCode} vesselName={selectedVessel?.name ?? null} />
 
       {/* Carga rápida de horómetros (desde el widget "Horas de Equipos"). */}
       {showHoursEntry && assetHours.data && (

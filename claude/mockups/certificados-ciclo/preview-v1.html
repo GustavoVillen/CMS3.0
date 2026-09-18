@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V1 · Certificados de clase con barra de ciclo</title>
+<style>
+  :root{--bg:#f3f5f8;--card:#fff;--line:#e3e7ec;--fg:#141c26;--mut:#5b6776;--accent:#1668b3;
+        --int:#f5b93b;--per:#9cc3ea;--ren:#6d5bd0;--red:#c62828;--green:#1f8a4c}
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 26px 40px;background:var(--bg);font-family:Inter,"Segoe UI",system-ui,sans-serif;color:var(--fg)}
+  .demo{display:inline-block;background:#fff3cd;color:#7a5a00;border:1px solid #f0d58c;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;margin-bottom:8px}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--mut);font-size:12px;margin-bottom:14px}
+  .bar-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+  .chip{border:1.5px solid #d6dde5;background:#fff;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;color:#4a5563;cursor:pointer}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .search{margin-left:auto;border:1px solid #d6dde5;background:#f7f9fb;border-radius:8px;padding:5px 10px;font-size:12px;width:240px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11.5px;color:var(--mut);margin:4px 2px 10px}
+  .legend i{display:inline-block;width:18px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+  .table{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .row{display:grid;grid-template-columns:190px 210px minmax(420px,1fr) 230px;gap:14px;align-items:center;padding:12px 16px;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .head{background:#f7f9fb;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#6b7684;padding:9px 16px}
+  .head span.sort{cursor:pointer} .head span.sort:hover{color:var(--fg)}
+  .vessel b{font-size:13px} .small{font-size:11px;color:var(--mut)}
+  .cert{font-size:12px;font-weight:600} .code{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--accent)}
+  .warn{display:inline-flex;gap:4px;align-items:center;margin-top:3px;font-size:10.5px;color:#9a5b00;background:#fff4de;border:1px solid #f3d9a4;border-radius:6px;padding:1px 6px}
+  /* Barra */
+  .cycle{position:relative;padding:16px 0 18px}
+  .track{position:relative;height:14px;border-radius:7px;background:#e8ecf1;overflow:visible}
+  .elapsed{position:absolute;left:0;top:0;bottom:0;border-radius:7px 0 0 7px;background:#cfd8e3}
+  .win{position:absolute;top:0;bottom:0}
+  .win.int{background:repeating-linear-gradient(45deg,var(--int) 0 5px,#f9d27f 5px 10px)}
+  .done{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#1f8a4c;color:#fff;font-size:10px;font-weight:900;display:grid;place-items:center;border:2px solid #fff;z-index:2;box-shadow:0 0 0 1px #1f8a4c}
+  .warn.info{color:#44505e;background:#eef2f6;border-color:#d6dde5}
+  .win.per{background:repeating-linear-gradient(45deg,var(--per) 0 5px,#c5dcf3 5px 10px)}
+  .win.ren{background:repeating-linear-gradient(45deg,var(--ren) 0 5px,#9d91e3 5px 10px);border-radius:0 7px 7px 0}
+  .tick{position:absolute;top:-3px;width:2px;height:20px;background:#6b7684;transform:translateX(-1px)}
+  .lbl{position:absolute;top:22px;transform:translateX(-50%);font-size:10px;color:var(--mut);white-space:nowrap}
+  .lbl.l{transform:none;top:38px;font-weight:600} .lbl.r{transform:translateX(-100%);top:38px;font-weight:600}
+  .cycle{padding-bottom:26px}
+  .today{position:absolute;top:-10px;bottom:-4px;width:0;border-left:2.5px solid #0d1b2a;z-index:3}
+  .today::before{content:"";position:absolute;top:-6px;left:-7px;border:6px solid transparent;border-top:7px solid #0d1b2a}
+  .today span{position:absolute;top:-24px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;color:#0d1b2a;background:#fff;padding:0 4px;border-radius:4px;white-space:nowrap}
+  .today.over{border-left-color:var(--red)} .today.over::before{border-top-color:var(--red)} .today.over span{color:var(--red)}
+  /* Situación */
+  .st{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.35}
+  .st .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;color:#fff}
+  .st b{display:block}
+  .tip{position:fixed;z-index:9;pointer-events:none;background:#0d1b2a;color:#fff;font-size:11.5px;line-height:1.5;border-radius:8px;padding:8px 10px;box-shadow:0 6px 20px rgba(0,0,0,.25);display:none;max-width:320px}
+  .notes{margin-top:20px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 20px;font-size:13.5px;line-height:1.55;max-width:1100px}
+  .notes h3{margin:14px 0 6px;font-size:14px} .notes h3:first-child{margin-top:0}
+  .notes ul{margin:0;padding-left:18px} .notes li{margin-bottom:4px}
+  .ok{display:inline-block;background:var(--accent);color:#fff;border-radius:6px;padding:2px 8px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .q{background:#fff8e6;border:1px solid #f3d9a4;border-radius:8px;padding:10px 14px;margin-top:10px}
+  @media (max-width:1100px){
+    .row{grid-template-columns:1fr 1fr;gap:8px 14px}
+    .row .cycle{grid-column:1 / -1;order:3}
+    .row .stc{grid-column:1 / -1;order:4}
+    .head{display:none}
+    .search{width:100%;margin-left:0}
+  }
+</style>
+</head>
+<body>
+<span class="demo">PROTOTIPO · datos REALES: 37 certificados de clase de Mercurio + los Ship Status de MisDocs\Survey Status · hoy = 18/09/2026 · no toca el sistema</span>
+<h1>Certificados</h1>
+<div class="sub" id="count"></div>
+
+<div class="bar-top">
+  <button class="chip on" data-f="all">Todos</button>
+  <button class="chip" data-f="Remolcador">Remolcadores</button>
+  <button class="chip" data-f="barge">Barcazas</button>
+  <button class="chip" data-f="action">Con algo por hacer</button>
+  <input class="search" id="q" placeholder="Buscar buque o sociedad de clase…">
+</div>
+
+<div class="legend">
+  <span><i style="background:#cfd8e3"></i>Tiempo transcurrido del ciclo</span>
+  <span><i style="background:repeating-linear-gradient(45deg,#9cc3ea 0 4px,#c5dcf3 4px 8px)"></i>Ventana periódica (± 6 meses)</span>
+  <span><i style="background:repeating-linear-gradient(45deg,#f5b93b 0 4px,#f9d27f 4px 8px)"></i>Ventana intermedia (± 6 meses)</span>
+  <span><i style="background:repeating-linear-gradient(45deg,#6d5bd0 0 4px,#9d91e3 4px 8px)"></i>Ventana de renovación (6 meses antes)</span>
+  <span><b style="display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:#1f8a4c;color:#fff;font-size:9px;vertical-align:-2px;margin-right:4px">✓</b>Inspección hecha (Ship Status)</span>
+  <span><b style="color:#0d1b2a">▼ Hoy</b></span>
+</div>
+
+<div class="table" id="tbl"></div>
+<div class="tip" id="tip"></div>
+
+<div class="notes">
+  <h3>Qué cambia en la pantalla</h3>
+  <ul>
+    <li><b>Hoy:</b> una tabla con código, nombre, buque, emisor, vencimiento y estado. Para saber si un buque está en ventana de intermedia hay que hacer la cuenta a mano.</li>
+    <li><b>Propuesta:</b> cada certificado muestra su <b>ciclo de clase</b> en una barra: inicio, cada inspección con su ventana sombreada, la ventana de renovación y el vencimiento. <b>▼ Hoy</b> marca dónde está el buque. Un <b>✓ verde</b> marca cada inspección ya hecha, con su fecha.</li>
+    <li>A la derecha, la <b>situación de hoy en palabras</b> (color + ícono + texto): "En ventana de intermedia · cierra el …", "Intermedia sin registrar · la ventana cerró el …", "Próxima: periódica en 8 meses", "Vencido".</li>
+    <li>Al pasar el mouse por la barra aparecen todas las fechas exactas.</li>
+    <li>Botón <b>"Con algo por hacer"</b>: sólo los buques dentro de una ventana abierta, con una inspección sin registrar o vencidos. La lista siempre se ordena por lo más urgente primero.</li>
+    <li>Se mantiene todo lo de hoy (editar, renovar, adjuntar PDF). Nadie ve certificados que antes no veía.</li>
+  </ul>
+
+  <h3>Reglas</h3>
+  <ul>
+    <li><b>Remolcadores:</b> ciclo de 6 años · intermedia a los 3 años ± 6 meses · renovación en los últimos 6 meses.</li>
+    <li><b>Barcazas:</b> ciclo de 8 años · periódicas a los 2 y a los 6 años · intermedia a los 4 años · todas ± 6 meses (así lo informan los Ship Status de RINA) · renovación en los últimos 6 meses.</li>
+    <li><b>Fin del ciclo</b> = vencimiento del certificado. <b>Inicio</b> = fin menos la duración del ciclo.</li>
+    <li><b>Inspecciones hechas:</b> en el sistema saldrían del <b>plan de mantenimiento</b>, donde ya están cargadas las inspecciones de clase de cada buque con los Ship Status. Cuando se reporte la próxima intermedia en el plan, el ✓ aparece solo en la barra.</li>
+  </ul>
+
+  <div class="q">
+    <b>Dos cosas que encontré en los datos:</b>
+    <ol style="margin:6px 0 0;padding-left:18px">
+      <li><b>7 certificados tienen la fecha vieja</b> (los marcados con ⚠): MGT 01, 03, 04, 05, 06 y 17 ya renovaron clase y su Ship Status dice que vencen en 2034; MAO 02 dice 2032. En el sistema figuran vencidos o con otra fecha. En este prototipo ya usé la fecha del Ship Status. <b>¿Corrijo esas 7 fechas en producción?</b></li>
+      <li><b>MAO 01: la intermedia no está registrada y su ventana cerró el 15/09/2026</b> (hace 3 días), según su Ship Status. Conviene confirmarlo con la clase.</li>
+      <li style="list-style:none;margin-left:-18px;margin-top:6px;color:#5b6776">Las barcazas GLT 001/007/008 y YT 010/012/013 no tienen Ship Status en la carpeta: su barra se calcula sólo con las reglas, sin ✓.</li>
+    </ol>
+  </div>
+
+  <p style="margin:14px 0 0">Si querés que lo implemente así, escribí <span class="ok">PROCEDER</span>. Si querés cambios, decímelos y armo la V2.</p>
+</div>
+
+<script>
+const DATA = [{"buque": "DON CHICUETO", "tipo": "Remolcador", "emisor": "RINA", "code": "CERT-DCH-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2030-11-10", "years": 6, "hasSS": true, "end": "2030-11-10", "intDone": null, "perDone": null}, {"buque": "LATERE", "tipo": "Remolcador", "emisor": "NK", "code": "CERT-LTE-007", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-08-31", "years": 6, "hasSS": true, "end": "2027-08-31", "intDone": "2024-11-12", "perDone": null}, {"buque": "MAO 01", "tipo": "Remolcador", "emisor": "RINA", "code": "CERT-M01-026", "name": "Certificado de Clase (Renovacion)", "certVence": "2029-03-15", "years": 6, "hasSS": true, "end": "2029-03-15", "intDone": null, "perDone": null}, {"buque": "MAO 02", "tipo": "Remolcador", "emisor": "RINA", "code": "CERT-M02-012", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2029-03-15", "years": 6, "hasSS": true, "end": "2032-03-11", "intDone": null, "perDone": null}, {"buque": "GLT 001", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-GLT001-012", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2032-03-03", "years": 8, "hasSS": false, "end": "2032-03-03", "intDone": null, "perDone": null}, {"buque": "GLT 007", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-GLT007-016", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2033-02-20", "years": 8, "hasSS": false, "end": "2033-02-20", "intDone": null, "perDone": null}, {"buque": "GLT 008", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-GLT008-012", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2033-02-22", "years": 8, "hasSS": false, "end": "2033-02-22", "intDone": null, "perDone": null}, {"buque": "MGT 01", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT01-007", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-04-12", "years": 8, "hasSS": true, "end": "2034-04-12", "intDone": null, "perDone": "2024-09-26"}, {"buque": "MGT 02", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT02-007", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-04-01", "years": 8, "hasSS": true, "end": "2026-04-01", "intDone": "2022-05-04", "perDone": "2024-10-03"}, {"buque": "MGT 03", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT03-007", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-04-01", "years": 8, "hasSS": true, "end": "2034-04-01", "intDone": null, "perDone": "2024-10-03"}, {"buque": "MGT 04", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT04-008", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-04-01", "years": 8, "hasSS": true, "end": "2034-04-01", "intDone": null, "perDone": "2024-10-01"}, {"buque": "MGT 08", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT08-009", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-07-15", "years": 8, "hasSS": true, "end": "2027-07-15", "intDone": "2023-11-07", "perDone": "2025-07-03"}, {"buque": "MGT 09", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT09-013", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-08-07", "years": 8, "hasSS": true, "end": "2027-08-07", "intDone": "2023-11-07", "perDone": "2025-07-29"}, {"buque": "MGT 10", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-MGT10-009", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2029-11-21", "years": 8, "hasSS": true, "end": "2029-11-21", "intDone": "2025-01-15", "perDone": null}, {"buque": "MGT 11", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-MGT11-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2029-11-21", "years": 8, "hasSS": true, "end": "2029-11-21", "intDone": "2025-02-19", "perDone": null}, {"buque": "MGT 12", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-MGT12-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2029-11-21", "years": 8, "hasSS": true, "end": "2029-11-21", "intDone": "2025-01-11", "perDone": null}, {"buque": "MGT 13", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-MGT13-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2029-11-21", "years": 8, "hasSS": true, "end": "2029-11-21", "intDone": "2024-10-09", "perDone": null}, {"buque": "MGT 14", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-MGT14-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2030-04-20", "years": 8, "hasSS": true, "end": "2030-04-20", "intDone": "2025-07-18", "perDone": null}, {"buque": "MGT 15", "tipo": "Barcaza Tanque - Rake", "emisor": "NK", "code": "CERT-MGT15-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2030-04-20", "years": 8, "hasSS": true, "end": "2030-04-20", "intDone": "2025-06-27", "perDone": null}, {"buque": "MGT 16", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT16-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-11-25", "years": 8, "hasSS": true, "end": "2026-11-25", "intDone": "2023-04-21", "perDone": "2025-04-25"}, {"buque": "MGT 17", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT17-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-03-26", "years": 8, "hasSS": true, "end": "2034-03-26", "intDone": null, "perDone": "2025-01-09"}, {"buque": "MGT 18", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT18-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-01-26", "years": 8, "hasSS": true, "end": "2027-01-26", "intDone": "2023-08-11", "perDone": "2024-11-11"}, {"buque": "MGT 19", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT19-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-09-13", "years": 8, "hasSS": true, "end": "2026-09-13", "intDone": "2023-02-28", "perDone": "2025-02-06"}, {"buque": "MGT 20", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT20-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-08-21", "years": 8, "hasSS": true, "end": "2026-08-21", "intDone": "2023-04-11", "perDone": "2025-03-25"}, {"buque": "MGT 21", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT21-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-02-21", "years": 8, "hasSS": true, "end": "2027-02-21", "intDone": "2023-08-29", "perDone": "2025-07-29"}, {"buque": "MGT 22", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT22-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-02-22", "years": 8, "hasSS": true, "end": "2027-02-22", "intDone": "2023-08-29", "perDone": "2025-07-15"}, {"buque": "MGT 23", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT23-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-03-28", "years": 8, "hasSS": true, "end": "2027-03-28", "intDone": "2023-09-12", "perDone": "2025-05-20"}, {"buque": "MGT 24", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT24-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-04-15", "years": 8, "hasSS": true, "end": "2027-04-15", "intDone": "2023-08-11", "perDone": "2025-10-04"}, {"buque": "MGT 25", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT25-010", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-05-05", "years": 8, "hasSS": true, "end": "2027-05-05", "intDone": "2023-05-29", "perDone": "2025-07-16"}, {"buque": "MGT 26", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT26-012", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-05-17", "years": 8, "hasSS": true, "end": "2027-05-17", "intDone": "2023-09-01", "perDone": "2025-05-20"}, {"buque": "MGT 27", "tipo": "Barcaza Tanque - Rake", "emisor": "RINA", "code": "CERT-MGT27-012", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-05-30", "years": 8, "hasSS": true, "end": "2027-05-30", "intDone": "2023-08-12", "perDone": "2025-09-03"}, {"buque": "MGT 05", "tipo": "Barcaza Tanque - Box", "emisor": "RINA", "code": "CERT-MGT05-008", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-04-01", "years": 8, "hasSS": true, "end": "2034-04-01", "intDone": null, "perDone": "2024-10-01"}, {"buque": "MGT 06", "tipo": "Barcaza Tanque - Box", "emisor": "RINA", "code": "CERT-MGT06-008", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2026-04-01", "years": 8, "hasSS": true, "end": "2034-04-01", "intDone": null, "perDone": "2024-10-10"}, {"buque": "MGT 07", "tipo": "Barcaza Tanque - Box", "emisor": "RINA", "code": "CERT-MGT07-017", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2027-04-26", "years": 8, "hasSS": true, "end": "2027-04-26", "intDone": "2023-10-31", "perDone": "2025-07-03"}, {"buque": "YT 010", "tipo": "Barcaza Tanque - Box", "emisor": "LR", "code": "CERT-YT010-011", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2031-11-24", "years": 8, "hasSS": false, "end": "2031-11-24", "intDone": null, "perDone": null}, {"buque": "YT 012", "tipo": "Barcaza Tanque - Box", "emisor": "LR", "code": "CERT-YT012-013", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2032-08-27", "years": 8, "hasSS": false, "end": "2032-08-27", "intDone": null, "perDone": null}, {"buque": "YT 013", "tipo": "Barcaza Tanque - Box", "emisor": "LR", "code": "CERT-YT013-013", "name": "CERTIFICADO DE CLASIFICACION", "certVence": "2032-11-19", "years": 8, "hasSS": false, "end": "2032-11-19", "intDone": null, "perDone": null}];
+const TODAY = new Date("2026-09-18T00:00:00");
+const MS_DAY = 86400000;
+const D = s => new Date(s + "T00:00:00");
+const addMonths = (d, m) => { const x = new Date(d); x.setMonth(x.getMonth() + m); return x; };
+const fmt = d => d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+const monthsBetween = (a, b) => Math.max(0, Math.round((b - a) / (MS_DAY * 30.44)));
+const isTug = r => r.tipo === "Remolcador";
+
+function build(r) {
+  const end = D(r.end);
+  const start = addMonths(end, -12 * r.years);
+  const pos = d => Math.max(0, Math.min(100, (d - start) / (end - start) * 100));
+  const marks = isTug(r)
+    ? [{ kind: "int", at: 36, label: "Intermedia" }]
+    : [{ kind: "per", at: 24, label: "Periódica" }, { kind: "int", at: 48, label: "Intermedia" }, { kind: "per", at: 72, label: "Periódica" }];
+  const done = { int: r.intDone && D(r.intDone), per: r.perDone && D(r.perDone) };
+  const wins = marks.map(m => {
+    const target = addMonths(start, m.at), from = addMonths(target, -6), to = addMonths(target, 6);
+    const d = done[m.kind];
+    // Hecha = el Ship Status registra una inspección de ese tipo cerca de esa fecha (margen de un cuarto de ciclo:
+    // ClassNK programa la intermedia distinto que RINA y cae antes de la ventana calculada).
+    const margin = r.years * 3;
+    const doneAt = d && d >= addMonths(target, -margin) && d <= addMonths(target, margin) ? d : null;
+    return { ...m, target, from, to, doneAt };
+  });
+  const ren = { kind: "ren", label: "Renovación", from: addMonths(end, -6), to: end, target: end, doneAt: null };
+  const all = [...wins, ren];
+  // Una ventana ya cerrada sin registro sólo alarma si es la última cerrada (las anteriores no las informa el Ship Status).
+  const closed = wins.filter(w => w.to < TODAY);
+  const lastClosed = closed[closed.length - 1];
+  const open = all.find(w => TODAY >= w.from && TODAY <= w.to && !w.doneAt);
+  let st;
+  if (TODAY > end) st = { lvl: 4, color: "var(--red)", ic: "!", title: "Vencido", text: `hace ${monthsBetween(end, TODAY)} meses (${fmt(end)})` };
+  // Sólo alarma si el Ship Status informa ese tipo de inspección (ClassNK no informa periódicas).
+  else if (r.hasSS && lastClosed && !lastClosed.doneAt && (lastClosed.kind === "int" || r.perDone) && !(open && open.kind === lastClosed.kind))
+    st = { lvl: 3, color: "var(--red)", ic: "!", title: `${lastClosed.label} sin registrar`, text: `la ventana cerró el ${fmt(lastClosed.to)}` };
+  else if (open) {
+    const left = monthsBetween(TODAY, open.to);
+    st = { lvl: 2, color: open.kind === "ren" ? "var(--ren)" : "#c98a00", ic: "●",
+           title: `En ventana de ${open.label.toLowerCase()}`, text: `cierra el ${fmt(open.to)} · quedan ${left} meses` };
+  } else {
+    const next = all.find(w => w.from > TODAY && !w.doneAt);
+    const m = monthsBetween(TODAY, next.from);
+    st = { lvl: m <= 6 ? 1 : 0, color: m <= 6 ? "#c98a00" : "var(--green)", ic: m <= 6 ? "◷" : "✓",
+           title: m <= 6 ? `${next.label}: la ventana abre pronto` : "Al día",
+           text: `Próxima: ${next.label.toLowerCase()} · desde ${fmt(next.from)} (en ${m} meses)` };
+  }
+  return { r, start, end, pos, all, st };
+}
+
+function rowHtml(b, i) {
+  const { r, pos, all, st, start, end } = b;
+  const today = pos(TODAY), over = TODAY > end;
+  const wins = all.map(w => `<div class="win ${w.kind}" style="left:${pos(w.from)}%;width:${pos(w.to) - pos(w.from)}%"></div>`).join("");
+  const ticks = all.filter(w => w.kind !== "ren").map(w =>
+    `<div class="tick" style="left:${pos(w.target)}%"></div><div class="lbl" style="left:${pos(w.target)}%">${w.kind === "int" ? "Int." : "Per."} ${w.target.getFullYear()}</div>`).join("");
+  const dones = all.filter(w => w.doneAt).map(w => `<div class="done" style="left:${pos(w.doneAt)}%">✓</div>`).join("");
+  const warn = r.end !== r.certVence
+    ? `<div class="warn">⚠ Cargado: vence ${fmt(D(r.certVence))} · Ship Status: ${fmt(end)}</div>`
+    : !r.hasSS ? `<div class="warn info">Sin Ship Status: fechas calculadas</div>` : "";
+  return `<div class="row">
+    <div class="vessel"><b>${r.buque}</b><div class="small">${r.tipo}</div></div>
+    <div><div class="cert">${r.name.charAt(0) + r.name.slice(1).toLowerCase()}</div>
+      <div class="small">${r.emisor} · <span class="code">${r.code}</span></div>${warn}</div>
+    <div class="cycle" data-i="${i}">
+      <div class="track">
+        <div class="elapsed" style="width:${today}%"></div>
+        ${wins}${ticks}${dones}
+        <div class="today${over ? " over" : ""}" style="left:${today}%"><span>${over ? "Hoy · vencido" : "Hoy"}</span></div>
+      </div>
+      <div class="lbl l" style="left:0">${fmt(start)}</div>
+      <div class="lbl r" style="left:100%">Vence ${fmt(end)}</div>
+    </div>
+    <div class="st stc"><span class="ic" style="background:${st.color}">${st.ic}</span><div><b style="color:${st.color}">${st.title}</b><span class="small">${st.text}</span></div></div>
+  </div>`;
+}
+
+const built = DATA.map(build);
+let filter = "all", q = "";
+function render() {
+  const rows = built.map((b, i) => [b, i])
+    .filter(([b]) => filter === "all" || (filter === "barge" ? !isTug(b.r) : filter === "action" ? b.st.lvl >= 2 : b.r.tipo === filter))
+    .filter(([b]) => !q || (b.r.buque + " " + b.r.emisor).toLowerCase().includes(q))
+    .sort(([a], [b]) => b.st.lvl - a.st.lvl || a.end - b.end);
+  document.getElementById("tbl").innerHTML =
+    `<div class="row head"><span>Buque</span><span>Certificado</span><span>Ciclo de clase</span><span>Situación hoy ▾</span></div>` +
+    (rows.length ? rows.map(([b, i]) => rowHtml(b, i)).join("") : `<div class="row"><span class="small">No hay certificados con ese filtro.</span></div>`);
+  document.getElementById("count").textContent = `${rows.length} de ${built.length} certificados · ordenados por lo más urgente`;
+}
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+  document.querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === c)); filter = c.dataset.f; render();
+});
+document.getElementById("q").oninput = e => { q = e.target.value.trim().toLowerCase(); render(); };
+
+const tip = document.getElementById("tip");
+document.addEventListener("mousemove", e => {
+  const c = e.target.closest(".cycle");
+  if (!c) { tip.style.display = "none"; return; }
+  const b = built[+c.dataset.i];
+  tip.innerHTML = `<b>${b.r.buque}</b> · ciclo de ${b.r.years} años<br>Inicio: ${fmt(b.start)}<br>` +
+    b.all.map(w => w.kind === "ren"
+      ? `Renovación: ventana ${fmt(w.from)} → ${fmt(w.to)}`
+      : `${w.label} ${w.target.getFullYear()}: ventana ${fmt(w.from)} → ${fmt(w.to)}${w.doneAt ? " · <b style='color:#7ee2a8'>✓ hecha " + fmt(w.doneAt) + "</b>" : ""}`).join("<br>") +
+    `<br>Vence: ${fmt(b.end)}`;
+  tip.style.display = "block";
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - 330) + "px";
+  tip.style.top = (e.clientY + 14) + "px";
+});
+render();
+</script>
+</body>
+</html>

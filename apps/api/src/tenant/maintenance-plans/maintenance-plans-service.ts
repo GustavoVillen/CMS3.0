@@ -9,6 +9,7 @@ import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
+import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
 
 /**
  * ISM 10.1 — origen normativo de la tarea. Mismo enum que usan los ítems de
@@ -1429,6 +1430,14 @@ export async function updateTenantMaintenancePlan(
   }
 
   const updated = await prisma.maintenancePlan.update({ where: { id: current.id }, data });
+  // El admin corrigió a mano la última ejecución de una inspección de clase:
+  // también llega al certificado (que después se puede corregir con el Ship Status).
+  if (payload.lastExecutionDate !== undefined && updated.lastExecutionDate) {
+    await applyClassSurveyToCertificate(prismaRaw, {
+      tenantId: updated.tenantId, vesselCode: updated.vesselCode, planTitle: updated.title,
+      executedAt: updated.lastExecutionDate, nextDueDate: updated.nextDueDate, actorUserId: session.user.id,
+    });
+  }
   void publishAudit(prismaRaw, {
     tenantId: current.tenantId,
     actorUserId: session.user.id,
@@ -1707,6 +1716,11 @@ export async function quickClosePlan(
         updatedByUserId: session.user.id,
       },
     });
+    // Inspección de clase: la fecha pasa al certificado de clase del buque.
+    await applyClassSurveyToCertificate(tx, {
+      tenantId: plan.tenantId, vesselCode: plan.vesselCode, planTitle: plan.title,
+      executedAt: completedAt, nextDueDate: nextDue.nextDueDate, actorUserId: session.user.id,
+    });
     const workLogs = await loadRecentWorkLogs(tx.workLog, plan.tenantId, plan.id);
 
     return { plan: { ...updatedPlan, workLogs }, workLog, workOrder };
@@ -1869,6 +1883,10 @@ export async function updatePlanExecution(
           nextDueHours: nextDue.nextDueHours,
           updatedByUserId: session.user.id,
         },
+      });
+      await applyClassSurveyToCertificate(tx, {
+        tenantId: plan.tenantId, vesselCode: plan.vesselCode, planTitle: plan.title,
+        executedAt: latest.completedDate, nextDueDate: nextDue.nextDueDate, actorUserId: session.user.id,
       });
     }
   });

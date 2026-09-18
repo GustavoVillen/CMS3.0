@@ -272,13 +272,22 @@ const sectionLabelStyle: React.CSSProperties = { backgroundColor: "#0f172a", col
 
 // ── CategoryBadge ─────────────────────────────────────────────────────────────
 
-function CategoryBadge({ type }: { type: string }) {
+/** `short`: nombre corto y sin partir, para la tarjeta del tablero; el completo queda en el tooltip. */
+function CategoryBadge({ type, short = false }: { type: string; short?: boolean }) {
   const t = useT();
-  if (type === "INSPECTION")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20">{t("wo.type.inspection")}</span>;
-  if (type === "CORRECTIVE")
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">{t("wo.type.corrective")}</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">{t("wo.type.preventive")}</span>;
+  const kind = type === "INSPECTION" ? "inspection" : type === "CORRECTIVE" ? "corrective" : "preventive";
+  const cls = kind === "inspection"
+    ? "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20"
+    : kind === "corrective"
+    ? "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20"
+    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
+  const full = t(`wo.type.${kind}` as TranslationKey);
+  if (short) {
+    // Se achica (y recorta) antes que la prioridad: en una columna con scroll no
+    // entra todo y la prioridad es lo que no se puede perder.
+    return <span title={full} className={`inline-block min-w-0 truncate whitespace-nowrap text-[9.5px] px-1.5 rounded-full border font-bold ${cls}`}>{t(`wo.typeShort.${kind}` as TranslationKey)}</span>;
+  }
+  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${cls}`}>{full}</span>;
 }
 
 // ── WoStatusBadge ─────────────────────────────────────────────────────────────
@@ -4651,49 +4660,6 @@ function SrChips({ items }: { items: SrLite[] }) {
   );
 }
 
-/**
- * Etiqueta de estado de la TARJETA del tablero.
- *
- * Hermana de `WoStageBadge`, que es la de la columna "Tramitación" del listado.
- * Se separan por dos motivos: acá los textos son cortos (en una tarjeta no
- * entra "Aprobada. Pendiente de autorización") y acá "En proceso" tiene
- * prioridad — en el listado el avance ya lo muestra la columna "Estado".
- *
- * Por qué existe: la COLUMNA del tablero ordena por el trámite (quién firmó),
- * no por el trabajo. Una orden autorizada puede no haber arrancado nunca, y la
- * columna "Autorizada y en proceso" las mezcla: se ven tres tarjetas juntas y
- * sólo una está en marcha. El dashboard, que cuenta por avance real, decía
- * "1 en progreso" y no había forma de saber cuál era.
- *
- * "En proceso" gana sobre la etapa de trámite: es el único dato que la columna
- * no puede mostrar. Las dos cosas no se pisan — el avance vive en `status` y el
- * trámite en las fechas de firma.
- */
-const WO_CARD_STAGE_BADGE: Record<Exclude<WoStage, "HIDDEN">, { key: TranslationKey; cls: string }> = {
-  EN_PREPARACION: { key: "wo.stage.enPreparacion", cls: "bg-fg/10 text-text-industrial/70 border-fg/15" },
-  SOLICITADA:     { key: "wo.stage.solicitada",    cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30" },
-  APROBADA:       { key: "wo.stage.aprobada",      cls: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30" },
-  AUTORIZADA:     { key: "wo.stage.autorizada",    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
-  DIFERIDA:       { key: "wo.stage.diferida",      cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
-};
-
-function WoCardStageBadge({ wo }: { wo: WorkOrder }) {
-  const t = useT();
-  const base = "inline-block max-w-full truncate text-[10px] px-2 py-0.5 rounded-full border font-bold";
-
-  // Relleno pleno, no tono suave: es lo que se busca de un vistazo en el tablero.
-  if (wo.status === "IN_PROGRESS") {
-    const label = t("wo.stage.inProgress");
-    return <span title={label} className={`${base} bg-emerald-600 text-white border-emerald-700`}>{label}</span>;
-  }
-
-  const stage = woStage(wo);
-  if (stage === "HIDDEN") return null;   // cerrada o anulada: no llega al tablero
-  const { key, cls } = WO_CARD_STAGE_BADGE[stage];
-  const label = t(key);
-  return <span title={label} className={`${base} ${cls}`}>{label}</span>;
-}
-
 /** Acción visible de una tarjeta/fila: el próximo paso de la OT (si el usuario puede darlo). */
 type WoCardAction = { label: string; icon: typeof Send; tone: "accent" | "green"; run: () => void } | null;
 
@@ -4733,12 +4699,15 @@ function WoPriorityChip({ priority }: { priority: string }) {
   );
 }
 
-function WoActionButton({ action }: { action: WoCardAction }) {
+/** `compact`: más finito, para la tarjeta del tablero (Preview V51). */
+function WoActionButton({ action, compact = false }: { action: WoCardAction; compact?: boolean }) {
   if (!action) return null;
   const Icon = action.icon;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
-      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+      className={`flex w-full items-center justify-center gap-1 border px-2 font-bold transition-colors ${
+        compact ? "rounded-md py-px text-[10.5px]" : "rounded-lg py-1 text-[11px]"
+      } ${
         action.tone === "green"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
@@ -4763,42 +4732,62 @@ function KanbanCardContent({ wo, deferralMap, srs, showAsset, action }: {
   // tarjeta lo recorta a dos; sin el chip parecía que era del primer equipo.
   const assetNames = woAssetNames(wo);
   const initials = (wo.assignedToUserName ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]!.toUpperCase()).join("");
+  // Preview V51 — tarjeta comprimida: sin la etiqueta de etapa (la dice la
+  // columna), salvo "En proceso", que la columna no puede mostrar; y equipo,
+  // vencimiento, SS y responsable en un único renglón.
+  const inProgressLabel = wo.status === "IN_PROGRESS" ? t("wo.stage.inProgress") : null;
   return (
     <>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* El código nunca se parte: es lo que se busca a simple vista. */}
-        <span className="font-mono font-bold text-fg text-xs whitespace-nowrap">{wo.workOrderCode}</span>
-        <CategoryBadge type={wo.type} />
+        <span className="font-mono font-bold text-fg text-[11px] whitespace-nowrap">{wo.workOrderCode}</span>
+        <CategoryBadge type={wo.type} short />
+        {inProgressLabel && (
+          <span title={inProgressLabel} className="shrink-0 whitespace-nowrap rounded-full border border-emerald-700 bg-emerald-600 px-1.5 text-[9.5px] font-bold text-white">{inProgressLabel}</span>
+        )}
+        {rejected && (
+          <span className="shrink-0 whitespace-nowrap rounded-md bg-red-500/15 px-1.5 text-[9.5px] font-extrabold text-red-700 dark:text-red-400">{t("wo.card.rejected")}</span>
+        )}
         <span className="ml-auto"><WoPriorityChip priority={wo.priority} /></span>
       </div>
-      <WoCardStageBadge wo={wo} />
-      {rejected && (
-        <span className="self-start rounded-md bg-red-500/15 px-1.5 py-px text-[10px] font-extrabold text-red-700 dark:text-red-400">{t("wo.card.rejected")}</span>
-      )}
-      {wo.title && <p className="text-[13px] text-fg font-semibold leading-snug line-clamp-2">{wo.title}</p>}
-      {assetNames.length > 1 ? (
-        <span
-          title={assetNames.join(", ")}
-          className="self-start inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-accent"
-        >
-          <Wrench className="w-2.5 h-2.5" />
-          {t("wo.multiAsset.count").replace("{n}", String(assetNames.length))}
-        </span>
-      ) : showAsset && assetNames[0] ? (
-        <span className="flex items-center gap-1 text-[11px] text-text-industrial/60 truncate"><Wrench className="w-3 h-3 shrink-0" />{assetNames[0]}</span>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <WoDueLabel wo={wo} />
-        {deferral && <DeferralStatusBadge status={deferral.status} />}
-        <SrChips items={srs} />
+      {wo.title && <p className="text-[12.5px] text-fg font-semibold leading-tight line-clamp-2">{wo.title}</p>}
+      {/* Un renglón; si la tarjeta viene cargada (vencida + varias SS) lo que no
+          entra baja al siguiente en vez de quedar cortado contra el borde. */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px]">
+        {assetNames.length > 1 ? (
+          <span
+            title={assetNames.join(", ")}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 text-[10px] font-bold text-accent"
+          >
+            <Wrench className="w-2.5 h-2.5" />
+            {t("wo.multiAsset.count").replace("{n}", String(assetNames.length))}
+          </span>
+        ) : showAsset && assetNames[0] ? (
+          // Base de 4.5rem: el equipo nunca desaparece; crece y se recorta con lo que sobre.
+          <span title={assetNames[0]} className="flex flex-[1_1_4.5rem] min-w-0 items-center gap-1 text-text-industrial/60"><Wrench className="w-3 h-3 shrink-0" /><span className="truncate">{assetNames[0]}</span></span>
+        ) : null}
+        <span className="shrink-0"><WoDueLabel wo={wo} /></span>
+        {deferral && <span className="shrink-0"><DeferralStatusBadge status={deferral.status} /></span>}
+        {srs.length === 1 ? (
+          <span className="shrink-0 flex items-center gap-1" title={`${srs[0]!.serviceRequestCode} · ${SS_STATUS_LABEL[srs[0]!.status] ?? srs[0]!.status}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${SS_DOT_CLS[srs[0]!.status] ?? "bg-fg/20"}`} />
+            <span className="font-mono text-[9px] text-text-industrial/60">{srs[0]!.serviceRequestCode}</span>
+          </span>
+        ) : srs.length > 1 ? (
+          // Con varias SS no entran los códigos en un renglón: un chip y la lista en el tooltip.
+          <span className="shrink-0 rounded-full bg-fg/10 px-1.5 font-mono text-[9px] font-bold text-text-industrial/70"
+            title={srs.map(sr => `${sr.serviceRequestCode} · ${SS_STATUS_LABEL[sr.status] ?? sr.status}`).join("\n")}>
+            {srs.length} SS
+          </span>
+        ) : null}
         <span
           title={wo.assignedToUserName ?? t("wo.fl.noOne")}
-          className={`ml-auto flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-extrabold ${initials ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300" : "bg-fg/5 text-text-industrial/40"}`}
+          className={`ml-auto shrink-0 flex h-[17px] w-[17px] items-center justify-center rounded-full text-[8px] font-extrabold ${initials ? "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300" : "bg-fg/5 text-text-industrial/40"}`}
         >
           {initials || "?"}
         </span>
       </div>
-      <WoActionButton action={action} />
+      <WoActionButton action={action} compact />
     </>
   );
 }
@@ -4835,7 +4824,7 @@ function KanbanCard({ wo, deferralMap, srs, isLoading, draggingId, onOpen, onDra
       }}
       onDragEnd={() => onDragStart(null as unknown as WorkOrder)}
       onClick={() => !isDragging && !isLoading && onOpen(wo)}
-      className={`w-full border rounded-xl px-2.5 py-2 space-y-1.5 select-none flex flex-col
+      className={`w-full border rounded-xl px-2 pt-1 pb-1.5 space-y-[3px] select-none flex flex-col
         ${borderCls}
         ${prioLeft}
         ${isDragging ? "opacity-30" : "hover:shadow-md"}

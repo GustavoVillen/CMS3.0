@@ -9,6 +9,7 @@
  */
 
 import type { TenantAccessSession } from "../auth/session-store";
+import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { computeNextDueDate, computeNextDueHours } from "../pms/execution-windows-service";
@@ -152,6 +153,11 @@ export async function confirmAndIntegrateDailyReport(
         nextDueHours: nextDueHours ?? plan.nextDueHours,
         executionStatus: "FUTURE",
       },
+    });
+    // Inspección de clase: la fecha pasa al certificado de clase del buque.
+    await applyClassSurveyToCertificate(prisma, {
+      tenantId: tenant.id, vesselCode: plan.vesselCode, planTitle: plan.title,
+      executedAt: completedAt, nextDueDate: nextDueDate ?? plan.nextDueDate ?? null, actorUserId: session.user.id,
     });
 
     // Create WorkLog record

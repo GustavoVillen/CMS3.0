@@ -13,11 +13,14 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useAuth, useCan } from "../lib/auth";
-import { useT } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
+import { AlertDialog } from "../components/AlertDialog";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { ClassCycleBar, ClassCycleLegend, ClassCycleSituation, computeClassCycle, type ClassCycleInfo, type ClassCycleModel } from "../components/ClassCycleBar";
+import { useVesselContext } from "../lib/vessel-context";
 
 interface CertificateRenewal {
   id: string;
@@ -56,6 +59,19 @@ interface Certificate {
   originalSourceName?: string | null;
   originalSourceMimeOrExt?: string | null;
   createdAt: string;
+  /** Esquema de clase del buque (sólo en el listado). null = tipo de buque desconocido. */
+  classCycle?: ClassCycleInfo | null;
+  // Inspecciones de clase: el certificado es la fuente válida (Ship Status).
+  // Mantenimiento las actualiza al registrar la inspección.
+  classRenewalDate?: string | null;
+  intermediateSurveyDate?: string | null;
+  intermediateSurveyDueDate?: string | null;
+  periodicSurveyDate?: string | null;
+  periodicSurveyDueDate?: string | null;
+  drydockSurveyDate?: string | null;
+  drydockSurveyDueDate?: string | null;
+  tailshaftSurveyDate?: string | null;
+  tailshaftSurveyDueDate?: string | null;
 }
 
 interface ListResponse { items: Certificate[]; total: number; }
@@ -111,6 +127,22 @@ const CERT_STATUS_STYLES: Record<string, string> = {
   CLOSED: "bg-fg/5 text-text-industrial/40 border-fg/10",
 };
 
+// ── Inspecciones de clase ───────────────────────────────────────────────────
+
+const SURVEY_KEYS = [
+  "classRenewalDate", "intermediateSurveyDate", "intermediateSurveyDueDate", "periodicSurveyDate",
+  "periodicSurveyDueDate", "drydockSurveyDate", "drydockSurveyDueDate", "tailshaftSurveyDate", "tailshaftSurveyDueDate",
+] as const;
+type SurveyKey = typeof SURVEY_KEYS[number];
+
+/** Filas con última + vencimiento propio (la renovación vence en expiryDate, va aparte). */
+const SURVEY_ROWS: Array<{ label: TranslationKey; last: SurveyKey; due: SurveyKey }> = [
+  { label: "cert.survey.intermediate", last: "intermediateSurveyDate", due: "intermediateSurveyDueDate" },
+  { label: "cert.survey.periodic",     last: "periodicSurveyDate",     due: "periodicSurveyDueDate" },
+  { label: "cert.survey.drydock",      last: "drydockSurveyDate",      due: "drydockSurveyDueDate" },
+  { label: "cert.survey.tailshaft",    last: "tailshaftSurveyDate",    due: "tailshaftSurveyDueDate" },
+];
+
 
 // ── ExpiryCell ──────────────────────────────────────────────────────────────
 
@@ -152,6 +184,13 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
   const [uploading, setUploading] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  // Inspecciones de clase (la renovación vence en expiryDate).
+  const [surveys, setSurveys] = useState<Record<SurveyKey, string>>(() =>
+    Object.fromEntries(SURVEY_KEYS.map(k => [k, asDateInput(initial?.[k])])) as Record<SurveyKey, string>);
+  const setSurvey = (k: SurveyKey, v: string) => setSurveys(s => ({ ...s, [k]: v }));
+  const { vessels: vesselOptions } = useVesselContext();
+  // La periódica es de las barcazas: en un remolcador no se muestra.
+  const isTug = /remolcador|empuje|tug/i.test(vesselOptions.find(v => v.code === vesselCode)?.vesselType ?? "");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasLink = originalSourceLink.trim() !== "";
@@ -267,6 +306,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
         originalSourceLink: originalSourceLink.trim() || null,
         originalSourceName: originalSourceName.trim() || null,
         originalSourceMimeOrExt: originalSourceMimeOrExt.trim() || null,
+        ...Object.fromEntries(SURVEY_KEYS.map(k => [k, surveys[k] || null])),
       };
       if (isEdit) {
         await api.patch(`/app/certificates/${initial!.id}`, payload);
@@ -284,7 +324,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
   // ESC guard
   const isDirty = useDirtyTracker({
     certCode, name, vesselCode, authority, issueDate, expiryDate, lastInsp, notes,
-    originalSourceLink, originalSourceName, originalSourceMimeOrExt, assetId, planId,
+    originalSourceLink, originalSourceName, originalSourceMimeOrExt, assetId, planId, surveys,
   });
   const requestClose = useEscapeGuard({
     isDirty,
@@ -354,19 +394,47 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.authority")}<RequiredMark />{!authority.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
             <input value={authority} onChange={e => setAuthority(e.target.value)} required placeholder="Prefectura Naval Argentina" className={inputCls} />
           </GuideField>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <GuideField id="cert-issue-date" missing={!issueDate}>
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.issued")}<RequiredMark />{!issueDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
               <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} required className={inputCls} />
-            </GuideField>
-            <GuideField id="cert-expiry-date" missing={!expiryDate}>
-              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.expiry")}<RequiredMark />{!expiryDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-              <input type="date" value={expiryDate} onChange={e => setExpiry(e.target.value)} required className={inputCls} />
             </GuideField>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Últ. Inspección</label>
               <input type="date" value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />
             </div>
+          </div>
+          {/* Inspecciones de clase: el certificado manda (se corrigen con el Ship
+              Status); Mantenimiento las completa al registrar cada inspección. */}
+          <div className="rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-accent/80">{t("cert.survey.title")}</p>
+              <p className="text-[11px] text-text-industrial/60">{t("cert.survey.hint")}</p>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_9.5rem_9.5rem] items-center gap-x-3 gap-y-2">
+              <span />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50">{t("cert.survey.last")}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50">{t("cert.survey.due")}</span>
+
+              <span className="text-xs font-semibold text-fg">{t("cert.survey.renewal")}</span>
+              <input type="date" aria-label={`${t("cert.survey.renewal")} · ${t("cert.survey.last")}`} value={surveys.classRenewalDate}
+                onChange={e => setSurvey("classRenewalDate", e.target.value)} className={inputCls} />
+              <GuideField id="cert-expiry-date" missing={!expiryDate}>
+                <input type="date" aria-label={`${t("cert.survey.renewal")} · ${t("cert.survey.due")}`} value={expiryDate}
+                  onChange={e => setExpiry(e.target.value)} required className={inputCls} />
+              </GuideField>
+
+              {SURVEY_ROWS.filter(r => !(isTug && r.last === "periodicSurveyDate")).map(r => (
+                <React.Fragment key={r.last}>
+                  <span className="text-xs font-semibold text-fg">{t(r.label)}</span>
+                  <input type="date" aria-label={`${t(r.label)} · ${t("cert.survey.last")}`} value={surveys[r.last]}
+                    onChange={e => setSurvey(r.last, e.target.value)} className={inputCls} />
+                  <input type="date" aria-label={`${t(r.label)} · ${t("cert.survey.due")}`} value={surveys[r.due]}
+                    onChange={e => setSurvey(r.due, e.target.value)} className={inputCls} />
+                </React.Fragment>
+              ))}
+            </div>
+            {!expiryDate && <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">{t("cert.survey.expiryRequired")}<RequiredMark /></p>}
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.status")}</label>
@@ -479,7 +547,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
             </div>
           )}
 
-          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+          {error && <AlertDialog message={error} onClose={() => setError(null)} />}
           <div className="flex justify-end gap-3 pt-2">
             {isEdit && (
               <button
@@ -603,13 +671,45 @@ export const CertificatesPage: React.FC = () => {
     }
   }, []);
 
+  // ── Ciclo de clase (Preview certificados-ciclo V1) ──
+  const { vessels } = useVesselContext();
+  const [kindFilter, setKindFilter] = useState<"" | "TUG" | "BARGE" | "action">("");
+  const [search, setSearch] = useState("");
+  const models = useMemo(() => {
+    const m = new Map<string, ClassCycleModel>();
+    for (const c of data?.items ?? []) if (c.classCycle) m.set(c.id, computeClassCycle(c, c.classCycle));
+    return m;
+  }, [data]);
+  // Lo más urgente primero; los que no tienen ciclo, al final por vencimiento.
+  const urgency = useCallback((c: Certificate) => models.get(c.id)?.level ?? -1, [models]);
+  const shownItems = useMemo(() => {
+    if (!tmsaItems) return tmsaItems;
+    const q = search.trim().toLowerCase();
+    const vesselName = (code: string) => vessels.find(v => v.code === code)?.name ?? code;
+    return tmsaItems
+      .filter(c => !kindFilter
+        || (kindFilter === "action" ? urgency(c) >= 2 : c.classCycle?.vesselKind === kindFilter))
+      .filter(c => !q || `${vesselName(c.vesselCode)} ${c.issuingAuthority} ${c.name}`.toLowerCase().includes(q))
+      .sort((a, b) => urgency(b) - urgency(a) || a.expiryDate.localeCompare(b.expiryDate));
+  }, [tmsaItems, kindFilter, search, vessels, urgency]);
+
   const columns: Column<Certificate>[] = useMemo(() => [
-    { key: "certificateCode", header: t("col.code"),      render: r => <span className="font-mono font-bold text-fg text-xs">{r.certificateCode}</span> },
     {
-      key: "name", header: t("col.name"),
+      key: "vesselCode", header: t("col.vessel"),
+      sortValue: r => vessels.find(v => v.code === r.vesselCode)?.name ?? r.vesselCode,
       render: r => (
+        <div className="min-w-[8rem]">
+          <VesselLabel code={r.vesselCode} className="text-xs font-bold" />
+          <div className="text-[11px] text-text-industrial/50">{vessels.find(v => v.code === r.vesselCode)?.vesselType ?? ""}</div>
+        </div>
+      ),
+    },
+    {
+      key: "name", header: t("cert.cycle.certificate"),
+      render: r => (
+        <div className="min-w-[11rem] max-w-[16rem]">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-medium text-fg line-clamp-1">{r.name}</span>
+          <span className="font-medium text-fg line-clamp-2">{r.name}</span>
           {/* Tiene un plan que lo renueva: al ejecutar ese mantenimiento el
               sistema va a ofrecer cargar la vigencia nueva. */}
           {r.maintenancePlanId && (
@@ -631,12 +731,34 @@ export const CertificatesPage: React.FC = () => {
             </span>
           )}
         </div>
+        <div className="text-[11px] text-text-industrial/60">
+          {r.issuingAuthority} · <span className="font-mono text-accent">{r.certificateCode}</span>
+        </div>
+        </div>
       ),
     },
-    { key: "vesselCode",      header: t("col.vessel"),    render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
-    { key: "issuingAuthority",header: t("col.authority"), render: r => <span className="text-text-industrial/80">{r.issuingAuthority}</span> },
-    { key: "expiryDate",      header: t("col.expiry"),    render: r => <ExpiryCell date={r.expiryDate} /> },
-    { key: "status",          header: t("col.status"),    render: r => <StatusBadge status={r.status} /> },
+    {
+      key: "cycle", header: t("cert.cycle.col"), sortable: false,
+      render: r => {
+        const m = models.get(r.id);
+        // Sin tipo de buque no hay esquema de clase: se muestra el vencimiento como antes.
+        if (!m || !r.classCycle) return (
+          <div className="flex items-center gap-3 text-xs">
+            <ExpiryCell date={r.expiryDate} />
+            <span className="text-[11px] text-text-industrial/50">{t("cert.cycle.noType")}</span>
+          </div>
+        );
+        return <ClassCycleBar model={m} cycleYears={r.classCycle.cycleYears} />;
+      },
+    },
+    {
+      key: "status", header: t("cert.cycle.situation"),
+      sortValue: r => urgency(r),
+      render: r => {
+        const m = models.get(r.id);
+        return m ? <ClassCycleSituation model={m} /> : <StatusBadge status={r.status} />;
+      },
+    },
     {
       key: "actions", header: "", sortable: false,
       render: r => isAdmin ? (
@@ -649,7 +771,7 @@ export const CertificatesPage: React.FC = () => {
         </button>
       ) : null,
     },
-  ], [t, isAdmin]);
+  ], [t, isAdmin, vessels, models, urgency]);
 
   return (
     <div className="space-y-5">
@@ -681,9 +803,22 @@ export const CertificatesPage: React.FC = () => {
       </PageHeader>
 
       <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 flex flex-wrap items-center gap-1.5">
+        {([["", "cert.cycle.filter.all"], ["TUG", "cert.cycle.filter.tugs"], ["BARGE", "cert.cycle.filter.barges"], ["action", "cert.cycle.filter.action"]] as const).map(([k, key]) => (
+          <button key={k} type="button" aria-pressed={kindFilter === k} onClick={() => setKindFilter(k)}
+            className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              kindFilter === k ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {t(key)}
+          </button>
+        ))}
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("cert.cycle.search")}
+          className="w-full sm:w-64 sm:ml-auto rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1 text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+      </div>
+      <ClassCycleLegend />
       <DataTable
         columns={columns}
-        data={tmsaItems}
+        data={shownItems}
         loading={loading}
         error={error}
         keyFn={r => r.id}

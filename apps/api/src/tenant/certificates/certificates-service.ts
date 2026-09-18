@@ -5,6 +5,7 @@ import { RouteError } from "../../http/route-error";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
+import { loadClassCycles } from "./class-cycle";
 
 export interface CertificateListFilters {
   vesselCode?: string | null;
@@ -77,7 +78,12 @@ export async function listTenantCertificates(session: TenantAccessSession, filte
   // alerta del dashboard (?status=EXPIRING_SOON). Mantenemos withComputedStatus
   // como única fuente de verdad y aplicamos el filtro de status post-mapeo.
   const rows = await prisma.certificate.findMany({ where, orderBy: { expiryDate: "asc" } });
-  const computed = await attachLinks(prisma, tenant.id, rows.map(withComputedStatus));
+  const [linked, cycles] = await Promise.all([
+    attachLinks(prisma, tenant.id, rows.map(withComputedStatus)),
+    loadClassCycles(prisma, tenant.id, rows.map(r => r.vesselCode)),
+  ]);
+  // Barra del ciclo de clase: null si no se sabe si el buque es remolcador o barcaza.
+  const computed = linked.map(r => ({ ...r, classCycle: cycles.get(r.vesselCode) ?? null }));
   return filters.status ? computed.filter(r => r.status === filters.status) : computed;
 }
 
@@ -120,6 +126,63 @@ export interface CertificateWriteInput {
   originalSourceLink?: string | null;
   originalSourceName?: string | null;
   originalSourceMimeOrExt?: string | null;
+  // Inspecciones de clase (ver SURVEY_PAIRS).
+  classRenewalDate?: string | null;
+  intermediateSurveyDate?: string | null;
+  intermediateSurveyDueDate?: string | null;
+  periodicSurveyDate?: string | null;
+  periodicSurveyDueDate?: string | null;
+  drydockSurveyDate?: string | null;
+  drydockSurveyDueDate?: string | null;
+  tailshaftSurveyDate?: string | null;
+  tailshaftSurveyDueDate?: string | null;
+}
+
+type SurveyField =
+  | "classRenewalDate" | "intermediateSurveyDate" | "intermediateSurveyDueDate"
+  | "periodicSurveyDate" | "periodicSurveyDueDate" | "drydockSurveyDate" | "drydockSurveyDueDate"
+  | "tailshaftSurveyDate" | "tailshaftSurveyDueDate";
+
+/** Última inspección → su vencimiento. La renovación vence en `expiryDate`. */
+const SURVEY_PAIRS: Array<{ last: SurveyField; due: SurveyField | "expiryDate"; label: string }> = [
+  { last: "classRenewalDate",       due: "expiryDate",                label: "renovación" },
+  { last: "intermediateSurveyDate", due: "intermediateSurveyDueDate", label: "inspección intermedia" },
+  { last: "periodicSurveyDate",     due: "periodicSurveyDueDate",     label: "inspección periódica" },
+  { last: "drydockSurveyDate",      due: "drydockSurveyDueDate",      label: "inspección en seco" },
+  { last: "tailshaftSurveyDate",    due: "tailshaftSurveyDueDate",    label: "inspección del eje portahélice" },
+];
+const SURVEY_FIELDS: SurveyField[] = [
+  "classRenewalDate", "intermediateSurveyDate", "intermediateSurveyDueDate", "periodicSurveyDate",
+  "periodicSurveyDueDate", "drydockSurveyDate", "drydockSurveyDueDate", "tailshaftSurveyDate", "tailshaftSurveyDueDate",
+];
+
+/** undefined = no viene (no se toca) · null/"" = se borra · otra cosa = fecha válida. */
+function optionalDate(value: unknown, field: string): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) throw new RouteError(400, "VALIDATION_ERROR", `${field} no es una fecha válida.`);
+  return d;
+}
+
+/** Lee los campos de inspección que vinieron en el payload. */
+function readSurveyDates(input: Partial<CertificateWriteInput>): Partial<Record<SurveyField, Date | null>> {
+  const out: Partial<Record<SurveyField, Date | null>> = {};
+  for (const f of SURVEY_FIELDS) {
+    const v = optionalDate(input[f], f);
+    if (v !== undefined) out[f] = v;
+  }
+  return out;
+}
+
+/** Un vencimiento no puede quedar antes de su última inspección. */
+function validateSurveyPairs(values: Partial<Record<SurveyField | "expiryDate", Date | null>>): void {
+  for (const p of SURVEY_PAIRS) {
+    const last = values[p.last], due = values[p.due];
+    if (last && due && due.getTime() < last.getTime()) {
+      throw new RouteError(400, "VALIDATION_ERROR", `El vencimiento de la ${p.label} no puede ser anterior a su última fecha.`);
+    }
+  }
 }
 
 export type AutoCertificateStatus = "ACTIVE" | "EXPIRING_SOON" | "EXPIRED";
@@ -250,8 +313,11 @@ export async function createTenantCertificate(session: TenantAccessSession, inpu
   const assetId = normalizeText(input.assetId);
   const maintenancePlanId = normalizeText(input.maintenancePlanId);
   await validateLinks(prisma, tenant.id, vesselCode, assetId, maintenancePlanId);
+  const surveys = readSurveyDates(input);
+  validateSurveyPairs({ ...surveys, expiryDate });
 
   const data: Record<string, unknown> = {
+    ...surveys,
     tenantId: tenant.id,
     vesselCode,
     certificateCode: code,
@@ -343,6 +409,12 @@ export async function updateTenantCertificate(session: TenantAccessSession, id: 
   }
   if (input.originalSourceName !== undefined) data.originalSourceName = normalizeText(input.originalSourceName);
   if (input.originalSourceMimeOrExt !== undefined) data.originalSourceMimeOrExt = normalizeText(input.originalSourceMimeOrExt);
+  // Inspecciones de clase: se valida contra lo que queda guardado (lo nuevo + lo que ya estaba).
+  const surveys = readSurveyDates(input);
+  Object.assign(data, surveys);
+  const merged: Partial<Record<SurveyField | "expiryDate", Date | null>> = { expiryDate: nextExpiryDate };
+  for (const f of SURVEY_FIELDS) merged[f] = f in surveys ? surveys[f]! : (cert as unknown as Record<SurveyField, Date | null>)[f];
+  validateSurveyPairs(merged);
 
   const updated = await prisma.certificate.update({ where: { id }, data });
   const changedKeys = Object.keys(data).filter(k => !["updatedByUserId"].includes(k));
@@ -382,7 +454,8 @@ export interface CertificateRenewInput {
  * Es SIEMPRE una acción explícita del usuario: el certificado es un documento
  * legal emitido por un tercero, así que sus fechas salen del papel del proveedor
  * y no de cuándo se registró el mantenimiento. Por eso ningún cierre de plan u
- * OT toca certificados por su cuenta.
+ * OT toca la emisión ni el vencimiento. (Las fechas de las inspecciones de
+ * clase sí las actualiza Mantenimiento: ver applyClassSurveyToCertificate.)
  */
 export async function renewTenantCertificate(session: TenantAccessSession, id: string, input: CertificateRenewInput) {
   const prisma = getPrismaClient();

@@ -277,12 +277,15 @@ function SsPriorityChip({ priority }: { priority: string }) {
   );
 }
 
-function SsActionButton({ action }: { action: SsCardAction }) {
+/** `compact`: más finito, para la tarjeta del tablero (Preview V51). */
+function SsActionButton({ action, compact = false }: { action: SsCardAction; compact?: boolean }) {
   if (!action) return null;
   const Icon = action.icon;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
-      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+      className={`flex w-full items-center justify-center gap-1 border px-2 font-bold transition-colors ${
+        compact ? "rounded-md py-px text-[10.5px]" : "rounded-lg py-1 text-[11px]"
+      } ${
         action.tone === "green"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
@@ -330,34 +333,39 @@ function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart, showAsset, ac
       }}
       onDragEnd={() => onDragStart(null)}
       onClick={() => !isDragging && !busy && onOpen(sr)}
-      className={`w-full border rounded-xl px-2.5 py-2 space-y-1.5 select-none flex flex-col cursor-grab
+      className={`w-full border rounded-xl px-2 pt-1 pb-1.5 space-y-[3px] select-none flex flex-col cursor-grab
         ${long ? "border-fg/10 bg-red-500/[0.05]" : "border-fg/10 bg-surface"}
         ${prioLeft}
         ${isDragging ? "opacity-30" : "hover:shadow-md"}
         ${busy ? "opacity-60 pointer-events-none" : ""}
         transition-all`}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* El código nunca se parte: es lo que se busca a simple vista. */}
-        <span className="font-mono font-bold text-fg text-xs whitespace-nowrap">{sr.serviceRequestCode}</span>
+        <span className="font-mono font-bold text-fg text-[11px] whitespace-nowrap">{sr.serviceRequestCode}</span>
         <span className="ml-auto"><SsPriorityChip priority={sr.priority} /></span>
       </div>
-      {srServicio(sr) && <p className="text-[13px] text-fg font-semibold leading-snug line-clamp-2">{srServicio(sr)}</p>}
-      {showAsset && sr.workOrder?.assetName && (
-        <span className="flex items-center gap-1 text-[11px] text-text-industrial/60 truncate"><Wrench className="w-3 h-3 shrink-0" />{sr.workOrder.assetName}</span>
-      )}
-      <span className={`flex items-center gap-1 text-[11px] truncate ${shop ? "font-semibold text-fg" : "font-bold text-amber-700 dark:text-amber-400"}`}>
-        <Handshake className="w-3 h-3 shrink-0" />{shop || t("ss.card.noShop")}
-      </span>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SsAgeLabel sr={sr} />
+      {srServicio(sr) && <p className="text-[12.5px] text-fg font-semibold leading-tight line-clamp-2">{srServicio(sr)}</p>}
+      {/* Equipo, taller y antigüedad en un renglón; si no entran, lo que sobra
+          baja al siguiente en vez de quedar cortado (Preview V51). */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px]">
+        {showAsset && sr.workOrder?.assetName && (
+          <span title={sr.workOrder.assetName} className="flex flex-[1_1_4rem] min-w-0 items-center gap-1 text-text-industrial/60">
+            <Wrench className="w-3 h-3 shrink-0" /><span className="truncate">{sr.workOrder.assetName}</span>
+          </span>
+        )}
+        <span title={shop || t("ss.card.noShop")}
+          className={`flex flex-[1_1_4.5rem] min-w-0 items-center gap-1 ${shop ? "font-semibold text-fg" : "font-bold text-amber-700 dark:text-amber-400"}`}>
+          <Handshake className="w-3 h-3 shrink-0" /><span className="truncate">{shop || t("ss.card.noShop")}</span>
+        </span>
+        <span className="shrink-0"><SsAgeLabel sr={sr} /></span>
         {sr.workOrder && (
-          <span className="ml-auto rounded-md border border-accent/25 bg-accent/5 px-1.5 py-px font-mono text-[10px] font-bold text-accent" title={t("ss.col.wo")}>
+          <span className="shrink-0 ml-auto rounded-md border border-accent/25 bg-accent/5 px-1.5 font-mono text-[9.5px] font-bold text-accent" title={t("ss.col.wo")}>
             {sr.workOrder.workOrderCode}
           </span>
         )}
       </div>
-      <SsActionButton action={action} />
+      <SsActionButton action={action} compact />
     </div>
   );
 }

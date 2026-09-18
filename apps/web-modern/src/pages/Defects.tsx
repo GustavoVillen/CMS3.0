@@ -796,6 +796,21 @@ interface DefectModalProps {
 
 const fldCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60 transition-all";
 
+/**
+ * Tarea de la OT correctiva nacida de un defecto: el problema + las acciones
+ * preventivas del RCA, citando el DEF para que la OT quede trazable al informe.
+ * Sin acciones preventivas, la tarea es sólo la descripción del defecto (como antes).
+ */
+function woTaskFromDefect(description: string, preventiveActions: string, defectCode: string, t: (k: TranslationKey) => string): string {
+  const actions = preventiveActions
+    .replace(/\*\*([^*]+)\*\*/g, "$1")   // la tarea de la OT es texto plano
+    .split("\n").map(l => l.trim()).filter(Boolean)
+    // Cada acción en su renglón; las que ya vienen numeradas o con viñeta se dejan.
+    .map(l => (/^([-•*]|\d+[.)])\s/.test(l) ? l : `• ${l}`));
+  if (actions.length === 0) return description;
+  return `${description.trim()}\n\n${t("def.woTask.preventiveHeader").replace("{code}", defectCode)}\n${actions.join("\n")}`;
+}
+
 const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onReload, initialAction, onRecurrence }) => {
   const t = useT();
   const woTerms = useWoTerms();
@@ -1288,7 +1303,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           assetId: defect.assetId,
           type: "CORRECTIVE",
           priority: defect.severity,
-          description: defect.description,
+          description: woTaskFromDefect(description || defect.description, rcaPreventiveActions, defect.defectCode, t),
         }}
         onClose={() => { setShowCreateWo(false); onClose(); }}
         onSaved={async (woId) => {

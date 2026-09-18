@@ -2331,6 +2331,21 @@ model Certificate {
   deletedAt           DateTime?
   deletedByUserId     String?
 
+  // Inspecciones de clase (sep 2026). El certificado es la fuente válida: la
+  // fecha real la informa el Ship Status de la sociedad de clase. Mantenimiento
+  // las actualiza al registrar la inspección (class-cycle.ts) y se corrigen a
+  // mano desde la ventana del certificado. El vencimiento de la renovación es
+  // `expiryDate`. Casco = máquinas; dique seco y eje van aparte.
+  classRenewalDate           DateTime?
+  intermediateSurveyDate     DateTime?
+  intermediateSurveyDueDate  DateTime?
+  periodicSurveyDate         DateTime?
+  periodicSurveyDueDate      DateTime?
+  drydockSurveyDate          DateTime?
+  drydockSurveyDueDate       DateTime?
+  tailshaftSurveyDate        DateTime?
+  tailshaftSurveyDueDate     DateTime?
+
   // Plan de mantenimiento que renueva este certificado. Algunos certificados los
   // emite un proveedor al terminar un servicio tercerizado (ej. el SERVICE anual
   // del AIS): al reportar esa ejecución se ofrece renovar el certificado.

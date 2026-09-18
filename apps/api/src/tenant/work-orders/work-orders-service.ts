@@ -15,6 +15,7 @@ import { archivePdf } from "../settings/pdf-archive-service";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "./wo-inspection-flow";
+import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -1594,6 +1595,12 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
             executionStatus: "COMPLETED",
             updatedByUserId: session.user.id,
           },
+        });
+        // Inspección de clase: la fecha pasa al certificado de clase del buque.
+        const planRow = plan as unknown as { vesselCode: string; title: string };
+        await applyClassSurveyToCertificate(tx, {
+          tenantId: plan.tenantId, vesselCode: planRow.vesselCode, planTitle: planRow.title,
+          executedAt: completedDateAnchored, nextDueDate: nextDue.nextDueDate, actorUserId: session.user.id,
         });
       }
     }
