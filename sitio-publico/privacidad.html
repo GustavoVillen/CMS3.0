@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de privacidad — CMS3.0</title>
+<meta name="description" content="Qué datos trata CMS3.0, cómo usa el acceso a Google Drive y cómo revocarlo.">
+<style>
+  :root { --fg:#0f172a; --muted:#64748b; --accent:#0369a1; --line:#e2e8f0; --bg:#f8fafc; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:56px 20px 72px; }
+  header { border-bottom:1px solid var(--line); padding-bottom:24px; margin-bottom:32px; }
+  h1 { font-size:28px; margin:0 0 6px; letter-spacing:-.02em; }
+  h2 { font-size:18px; margin:34px 0 10px; }
+  .lead { color:var(--muted); margin:0; font-size:14px; }
+  ul { padding-left:20px; }
+  li { margin:6px 0; }
+  a { color:var(--accent); }
+  code { background:#eef2f7; padding:1px 5px; border-radius:4px; font-size:14px; }
+  footer { margin-top:48px; padding-top:20px; border-top:1px solid var(--line);
+           color:var(--muted); font-size:14px; }
+  footer a { margin-right:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Política de privacidad</h1>
+    <p class="lead">CMS3.0 — última actualización: 17 de septiembre de 2026</p>
+  </header>
+
+  <p>
+    CMS3.0 es un sistema de mantenimiento planificado que se contrata por empresa. Los datos que
+    contiene (buques, equipos, planes, órdenes de trabajo, repuestos, usuarios) son de la empresa
+    que lo contrata, que decide quién accede a ellos.
+  </p>
+
+  <h2>Qué datos se tratan</h2>
+  <ul>
+    <li><b>De las personas usuarias:</b> nombre, correo, rol, idioma, buques asignados y registro de
+      actividad (inicios de sesión y acciones sobre los registros), para trazabilidad y auditoría.</li>
+    <li><b>De la operación:</b> la información técnica que cada empresa carga en el sistema.</li>
+  </ul>
+
+  <h2>Conexión con Google Drive</h2>
+  <p>
+    Una empresa puede conectar su cuenta de Google para que los PDF que genera el sistema (órdenes de
+    trabajo, solicitudes de servicio, defectos, planes y demás) se archiven solos en su Drive. Es
+    opcional: si no se conecta, el sistema funciona igual.
+  </p>
+  <ul>
+    <li>El permiso solicitado es <code>drive.file</code>: CMS3.0 sólo ve y administra los archivos y
+      carpetas que él mismo crea. <b>No puede leer, listar ni modificar el resto del Drive</b> de la
+      cuenta conectada.</li>
+    <li>Al conectar, crea una carpeta propia (<i>CMS3 — Documentos</i>) con una subcarpeta por tipo
+      de documento, y sube ahí los PDF que genera el sistema.</li>
+    <li>De la cuenta conectada se guarda únicamente el permiso de acceso que devuelve Google y la
+      dirección de correo, para mostrar en pantalla con qué cuenta quedó conectada. Ese permiso no se
+      comparte con nadie ni sale del servidor del sistema.</li>
+    <li>El contenido del Drive no se usa para entrenar modelos de inteligencia artificial ni se cede
+      a terceros.</li>
+  </ul>
+  <p>
+    La conexión se corta en cualquier momento desde <i>Configuración → Archivo de PDFs en Google
+    Drive → Desconectar</i>, o desde la propia cuenta de Google en
+    <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">Aplicaciones
+    con acceso a tu cuenta</a>. Al desconectar, el permiso deja de existir y el sistema no vuelve a
+    subir archivos; los documentos ya archivados quedan en el Drive de la empresa, que es su dueña.
+  </p>
+
+  <h2>Inteligencia artificial</h2>
+  <p>
+    Algunas funciones (asistente, sugerencias, informes) envían el texto necesario a un proveedor de
+    IA para resolver la consulta. Se manda lo mínimo para la tarea y no se usa para entrenar sus
+    modelos.
+  </p>
+
+  <h2>Dónde viven los datos y por cuánto tiempo</h2>
+  <p>
+    Los datos se alojan en un servidor propio con acceso restringido y copias de respaldo periódicas.
+    Se conservan mientras dure el contrato con la empresa; al terminar, se entregan o se eliminan
+    según lo que la empresa indique.
+  </p>
+
+  <h2>Derechos y contacto</h2>
+  <p>
+    Cualquier persona usuaria puede pedir acceso, corrección o eliminación de sus datos personales a
+    través de su empresa o escribiendo a
+    <a href="mailto:gustavovillen@gmail.com">gustavovillen@gmail.com</a>.
+  </p>
+
+  <footer>
+    <a href="/">Inicio</a>
+    <a href="/condiciones.html">Condiciones del servicio</a>
+  </footer>
+</div>
+</body>
+</html>
