@@ -188,7 +188,84 @@ export async function getTenantSpare(session: TenantAccessSession, id: string) {
 
   const record = await prisma.spare.findFirst({ where });
   if (!record) throw new RouteError(404, "NOT_FOUND", "Spare no encontrado.");
-  return conStock(prisma, tenantId, record);
+  const withStock = await conStock(prisma, tenantId, record);
+  return { ...withStock, assets: await listSpareAssets(prisma, tenantId, record.id) };
+}
+
+// ── Equipos donde se usa el repuesto ─────────────────────────────────────────
+//
+// Uno o varios (pedido de Gustavo, sep 2026): el repuesto de la caja reductora
+// puede servir a los dos motores. Es una asociación que carga el usuario; no se
+// deduce de los planes (eso ya se muestra aparte en "Dónde se usa").
+
+async function listSpareAssets(
+  prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
+  tenantId: string,
+  spareId: string,
+) {
+  const links = await prisma.spareAsset.findMany({
+    where: { tenantId, spareId },
+    select: { asset: { select: { id: true, assetCode: true, name: true, criticality: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return links.map(l => l.asset).filter(Boolean);
+}
+
+/** El equipo tiene que ser del mismo tenant y del MISMO BUQUE que el repuesto. */
+async function loadSpareAndAsset(session: TenantAccessSession, spareId: string, assetId: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  if (!canManage(session)) throw new RouteError(403, "FORBIDDEN", "No autorizado para editar repuestos.");
+  const tenantId = await getTenantIdOrThrow(session);
+
+  const where: Record<string, unknown> = { id: spareId, tenantId, deletedAt: null };
+  applyVesselScope(session, where, null, true);
+  const spare = await prisma.spare.findFirst({ where, select: { id: true, vesselCode: true } });
+  if (!spare) throw new RouteError(404, "NOT_FOUND", "Spare no encontrado.");
+
+  const asset = await prisma.asset.findFirst({
+    where: { id: assetId, tenantId, deletedAt: null },
+    select: { id: true, vesselCode: true },
+  });
+  if (!asset) throw new RouteError(404, "ASSET_NOT_FOUND", "Equipo no encontrado.");
+  if (asset.vesselCode !== spare.vesselCode) {
+    throw new RouteError(400, "VESSEL_MISMATCH", "El equipo es de otro buque.");
+  }
+  return { prisma, tenantId, spare };
+}
+
+export async function linkSpareAsset(session: TenantAccessSession, spareId: string, assetId: string) {
+  const { prisma, tenantId } = await loadSpareAndAsset(session, spareId, assetId);
+  // Idempotente: volver a asociar el mismo equipo no duplica ni falla.
+  const existing = await prisma.spareAsset.findFirst({ where: { spareId, assetId }, select: { id: true } });
+  if (!existing) {
+    await prisma.spareAsset.create({
+      data: { tenantId, spareId, assetId, createdByUserId: session.user.id },
+    });
+    void publishAudit(prisma, {
+      tenantId,
+      actorUserId: session.user.id,
+      action: "Spare.assetLinked",
+      entityType: "Spare",
+      entityId: spareId,
+      metadata: { assetId },
+    });
+  }
+  return { assets: await listSpareAssets(prisma, tenantId, spareId) };
+}
+
+export async function unlinkSpareAsset(session: TenantAccessSession, spareId: string, assetId: string) {
+  const { prisma, tenantId } = await loadSpareAndAsset(session, spareId, assetId);
+  await prisma.spareAsset.deleteMany({ where: { tenantId, spareId, assetId } });
+  void publishAudit(prisma, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "Spare.assetUnlinked",
+    entityType: "Spare",
+    entityId: spareId,
+    metadata: { assetId },
+  });
+  return { assets: await listSpareAssets(prisma, tenantId, spareId) };
 }
 
 export async function createTenantSpare(session: TenantAccessSession, payload: CreateSpareInput) {

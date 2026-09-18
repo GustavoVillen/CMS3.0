@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  AlertTriangle, CalendarCheck, ChevronRight, ClipboardList, FileDown, FileSpreadsheet, History, Loader2, MapPin, Package, PackageX, Plus, RefreshCw, Save, Search,
+  AlertTriangle, CalendarCheck, ChevronRight, ClipboardList, FileDown, FileSpreadsheet, History, Layers, Loader2, MapPin, Package, PackageX, Plus, RefreshCw, Save, Search,
   ShieldAlert, ShoppingCart, Ship, SlidersHorizontal, Trash2, TrendingDown, Truck, X,
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
@@ -42,7 +42,11 @@ interface Spare {
   longDescription: string | null; sfiCode: string | null; leadTimeDays: number | null;
   // Repuesto equivalente / no-OEM (dispara MOC EQUIPMENT_CHANGE si criticality=A)
   isEquivalent: boolean;
+  /** Equipos a los que se asoció el repuesto (uno o varios). Sólo viene en la ficha. */
+  assets?: SpareAssetLink[];
 }
+/** Equipo asociado a un repuesto. */
+interface SpareAssetLink { id: string; assetCode: string; name: string | null; criticality?: string | null }
 interface ListResponse { items: Spare[]; total: number; }
 // SFI: solo grupo (0-9). Nombres desde i18n `sfi.g.<n>`.
 const SFI_GROUP_NUMBERS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
@@ -182,6 +186,55 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
   const [adjSaving,  setAdjSaving]  = useState(false);
 
   const movements = useFetch<{ items: StockMovement[] }>(spare ? `/app/pms/stock-movements?spareId=${spare.id}` : null, [spare?.id]);
+
+  // ── Equipos donde se usa el repuesto (uno o varios) ──
+  // La lista viene con la ficha; el buscador trae los equipos del MISMO buque.
+  const [linkedAssets, setLinkedAssets] = useState<SpareAssetLink[]>(spare?.assets ?? []);
+  const [assetQuery, setAssetQuery] = useState("");
+  const [assetOptions, setAssetOptions] = useState<SpareAssetLink[]>([]);
+  const [linkingAsset, setLinkingAsset] = useState(false);
+  useEffect(() => { setLinkedAssets(spare?.assets ?? []); }, [spare?.id, spare?.assets]);
+  useEffect(() => {
+    const code = vesselCode.trim().toUpperCase();
+    if (!code || isNew) { setAssetOptions([]); return; }
+    let alive = true;
+    api.get<{ items: SpareAssetLink[] }>(`/app/pms/assets?vesselCode=${encodeURIComponent(code)}&limit=500`)
+      .then(r => { if (alive) setAssetOptions(r.items ?? []); })
+      .catch(() => { if (alive) setAssetOptions([]); });
+    return () => { alive = false; };
+  }, [vesselCode, isNew]);
+
+  const assetSuggestions = useMemo(() => {
+    const q = assetQuery.trim().toLowerCase();
+    if (!q) return [];
+    const already = new Set(linkedAssets.map(a => a.id));
+    return assetOptions
+      .filter(a => !already.has(a.id))
+      .filter(a => `${a.name ?? ""} ${a.assetCode}`.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [assetQuery, assetOptions, linkedAssets]);
+
+  const linkAsset = async (assetId: string) => {
+    if (!spare || linkingAsset) return;
+    setLinkingAsset(true);
+    try {
+      const r = await api.post<{ assets: SpareAssetLink[] }>(`/app/pms/spares/${spare.id}/assets`, { assetId });
+      setLinkedAssets(r.assets ?? []);
+      setAssetQuery("");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("common.error"));
+    } finally { setLinkingAsset(false); }
+  };
+  const unlinkAsset = async (assetId: string) => {
+    if (!spare || linkingAsset) return;
+    setLinkingAsset(true);
+    try {
+      const r = await api.delete<{ assets: SpareAssetLink[] }>(`/app/pms/spares/${spare.id}/assets/${assetId}`);
+      setLinkedAssets(r.assets ?? []);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("common.error"));
+    } finally { setLinkingAsset(false); }
+  };
 
   const handleSave = async () => {
     setError(null);
@@ -478,6 +531,41 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
             {/* Derecha: dónde se usa, qué pasó y quién lo trae */}
             {!isNew && (
               <div className="space-y-3 min-w-0">
+                {box(<Layers className="w-4 h-4" />, t("sp.assets.title"),
+                  linkedAssets.length ? t("sp.assets.count").replace("{n}", String(linkedAssets.length)) : null,
+                  <>
+                    {linkedAssets.length === 0 && empty(t("sp.assets.empty"))}
+                    {linkedAssets.map(a => (
+                      <div key={a.id} className={rel}>
+                        <b className="text-fg truncate">{a.name || a.assetCode}</b>
+                        <span className="font-mono text-[11px] text-text-industrial/55 shrink-0">{a.assetCode}</span>
+                        {a.criticality && <span className="text-[11px] text-text-industrial/50 shrink-0">{t("sp.assets.criticality").replace("{c}", a.criticality)}</span>}
+                        {canEdit && (
+                          <button type="button" onClick={() => { void unlinkAsset(a.id); }} disabled={linkingAsset}
+                            title={t("common.remove")} aria-label={t("common.remove")}
+                            className="ml-auto shrink-0 px-1.5 rounded-lg text-red-700 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-50">✕</button>
+                        )}
+                      </div>
+                    ))}
+                    {canEdit && (
+                      <>
+                        <input value={assetQuery} onChange={e => setAssetQuery(e.target.value)}
+                          placeholder={t("sp.assets.search")} className={inputCls} />
+                        {assetSuggestions.length > 0 && (
+                          <div className="rounded-xl border border-fg/10 overflow-hidden">
+                            {assetSuggestions.map(a => (
+                              <button key={a.id} type="button" onClick={() => { void linkAsset(a.id); }} disabled={linkingAsset}
+                                className="w-full flex items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-accent/10 disabled:opacity-50">
+                                <b className="text-fg truncate">{a.name || a.assetCode}</b>
+                                <span className="font-mono text-[11px] text-text-industrial/55 shrink-0">{a.assetCode}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-text-industrial/45">{t("sp.assets.hint")}</p>
+                      </>
+                    )}
+                  </>)}
                 {box(<CalendarCheck className="w-4 h-4" />, t("sp.v23.usedIn"), usedIn.length ? t("sp.v23.tasksN").replace("{n}", String(usedIn.length)) : null,
                   usedIn.length === 0 ? empty(t("sp.v23.usedInEmpty")) : usedIn.slice(0, 8).map(({ plan, line }) => (
                     <button key={plan.id} type="button" className={rel} onClick={() => navigate(`/maintenance-plans?openId=${encodeURIComponent(plan.id)}`)}>

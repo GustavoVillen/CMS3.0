@@ -11,6 +11,8 @@ import {
   createTenantSpare,
   deleteTenantSpare,
   getTenantSpare,
+  linkSpareAsset,
+  unlinkSpareAsset,
   listReorderAlerts,
   listTenantSpares,
   parseBelowReorderQuery,
@@ -361,6 +363,21 @@ export async function handleSparesRoutes(
     response.end(buffer);
     void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, vesselCode: spare.vesselCode });
     return true;
+  }
+
+  // Equipos donde se usa el repuesto (uno o varios).
+  const spareAssetMatch = url.pathname.match(/^\/app\/pms\/spares\/([^/]+)\/assets(?:\/([^/]+))?$/);
+  if (spareAssetMatch) {
+    const spareId = spareAssetMatch[1]!;
+    if (method === "POST") {
+      const body = await readJsonBody(request) as { assetId?: string };
+      sendJson(response, 200, await linkSpareAsset(session, spareId, String(body?.assetId ?? "")));
+      return true;
+    }
+    if (method === "DELETE" && spareAssetMatch[2]) {
+      sendJson(response, 200, await unlinkSpareAsset(session, spareId, spareAssetMatch[2]));
+      return true;
+    }
   }
 
   if (/^\/app\/pms\/spares\/[^/]+$/.test(url.pathname)) {

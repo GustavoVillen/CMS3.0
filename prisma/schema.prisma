@@ -1449,6 +1449,7 @@ model Asset {
   equipmentClass   EquipmentClass?  @relation(fields: [equipmentClassId], references: [id], onDelete: SetNull)
   parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
   children         Asset[]          @relation("AssetHierarchy")
+  spareLinks       SpareAsset[]
   inspectionExecs  InspectionExecution[]
   hoursReadings    AssetHoursReading[]
 
@@ -2881,6 +2882,7 @@ model Spare {
   stockMovements     StockMovement[]
   requestItems       SpareRequestItem[]
   reservations       StockReservation[]
+  assetLinks         SpareAsset[]
 
   @@unique([tenantId, vesselCode, sku])
   @@index([tenantId])
@@ -2948,6 +2950,25 @@ model GoodsReceipt {
   @@unique([tenantId, receiptCode])
   @@index([tenantId])
   @@index([tenantId, vesselCode])
+}
+
+/// Equipos donde se usa un repuesto (uno o varios). Lo carga el usuario desde la
+/// ficha del repuesto. `Spare.linkedAssetId` (un solo equipo) queda como estaba
+/// para no tocar lo ya cargado; esta tabla es la asociación real.
+model SpareAsset {
+  id              String   @id @default(cuid())
+  tenantId        String
+  spareId         String
+  assetId         String
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  spare           Spare    @relation(fields: [spareId], references: [id], onDelete: Cascade)
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([spareId, assetId])
+  @@index([tenantId, spareId])
+  @@index([tenantId, assetId])
 }
 
 model SpareRequest {

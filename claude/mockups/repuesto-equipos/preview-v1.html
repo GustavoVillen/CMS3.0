@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V1 — Repuesto: equipos asociados</title>
+<style>
+  :root {
+    --bg:#f1f5f9; --card:#ffffff; --fg:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --accent:#0369a1; --accent-soft:#e0f2fe; --danger:#b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0b1220; --card:#111a2b; --fg:#e2e8f0; --muted:#94a3b8; --line:#1e293b;
+      --accent:#38bdf8; --accent-soft:#0c2d44; --danger:#f87171;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px 16px 60px; }
+  .wrap { max-width:520px; margin:0 auto; }
+  .note { color:var(--muted); font-size:12px; margin:0 0 18px; }
+  .note b { color:var(--fg); }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:18px; }
+  .box > header { display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--line); }
+  .box > header h3 { margin:0; font-size:13px; font-weight:800; letter-spacing:.01em; }
+  .box > header .count { margin-left:auto; font-size:11px; color:var(--muted); }
+  .body { padding:10px 12px; display:flex; flex-direction:column; gap:6px; }
+  .empty { color:var(--muted); font-size:12.5px; padding:10px 2px; }
+  .row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line);
+         border-radius:10px; background:transparent; }
+  .row b { font-weight:700; }
+  .row .code { font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted);
+               background:var(--accent-soft); padding:4px 6px; border-radius:6px; }
+  .row .crit { font-size:11px; color:var(--muted); margin-left:auto; }
+  .row .x { border:0; background:transparent; color:var(--danger); font-size:15px; cursor:pointer;
+            line-height:1; padding:2px 4px; border-radius:6px; }
+  .row .x:hover { background:rgba(185,28,28,.1); }
+  .add { display:flex; gap:8px; padding:4px 2px 2px; }
+  .add input { flex:1; padding:8px 10px; border:1px solid var(--line); border-radius:10px;
+               background:transparent; color:var(--fg); font-size:13px; }
+  .add input::placeholder { color:var(--muted); }
+  .add button { padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:transparent;
+                color:var(--fg); font-size:12px; font-weight:700; cursor:pointer; }
+  .sug { border:1px solid var(--line); border-radius:10px; margin-top:6px; overflow:hidden; }
+  .sug div { padding:8px 10px; font-size:13px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+  .sug div:hover { background:var(--accent-soft); }
+  .sug .sc { font:600 11px/1 ui-monospace,monospace; color:var(--muted); }
+  .hint { color:var(--muted); font-size:11.5px; padding:2px 2px 6px; }
+  svg { width:16px; height:16px; stroke:var(--accent); fill:none; stroke-width:1.8; }
+  .tag { display:inline-block; font-size:11px; color:var(--muted); border:1px dashed var(--line);
+         border-radius:999px; padding:2px 8px; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">Preview V1 · datos de ejemplo</span>
+  <p class="note">
+    Caja nueva en la ficha del repuesto (columna derecha, arriba de <b>Dónde se usa</b>).
+    Asocia el repuesto a <b>uno o varios equipos</b>. Sólo quien puede editar repuestos ve el
+    buscador y la X; el resto ve la lista.
+  </p>
+
+  <!-- ── Caja nueva: con equipos asociados ─────────────────────────────── -->
+  <div class="box">
+    <header>
+      <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>
+      <h3>Equipos donde se usa</h3>
+      <span class="count">3 equipos</span>
+    </header>
+    <div class="body">
+      <div class="row"><b>Motor principal Br.</b><span class="code">DCH-MP-01</span><span class="crit">Criticidad A</span><button class="x" title="Quitar">✕</button></div>
+      <div class="row"><b>Motor principal Er.</b><span class="code">DCH-MP-02</span><span class="crit">Criticidad A</span><button class="x" title="Quitar">✕</button></div>
+      <div class="row"><b>Generador N°1</b><span class="code">DCH-GE-01</span><span class="crit">Criticidad B</span><button class="x" title="Quitar">✕</button></div>
+
+      <div class="add">
+        <input placeholder="Buscar equipo por nombre o código…" value="gen">
+        <button>Agregar</button>
+      </div>
+      <div class="sug">
+        <div><b>Generador N°2</b><span class="sc">DCH-GE-02</span></div>
+        <div><b>Generador de emergencia</b><span class="sc">DCH-GE-EM</span></div>
+      </div>
+      <p class="hint">Sólo equipos del mismo buque que el repuesto.</p>
+    </div>
+  </div>
+
+  <!-- ── Caja nueva: sin equipos ───────────────────────────────────────── -->
+  <div class="box">
+    <header>
+      <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>
+      <h3>Equipos donde se usa</h3>
+    </header>
+    <div class="body">
+      <p class="empty">Todavía no se asoció este repuesto a ningún equipo.</p>
+      <div class="add">
+        <input placeholder="Buscar equipo por nombre o código…">
+        <button>Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Referencia: caja existente, para comparar el estilo ──────────── -->
+  <div class="box">
+    <header>
+      <svg viewBox="0 0 24 24"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg>
+      <h3>Quién lo trae</h3>
+    </header>
+    <div class="body">
+      <p class="empty">No hay recepciones cargadas de este repuesto.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>
