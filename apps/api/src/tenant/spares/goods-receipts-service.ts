@@ -18,6 +18,8 @@ import { RouteError } from "../../http/route-error";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { serializeFileUrl } from "../files/files-router";
+import { readGoodsReceiptFile } from "./goods-receipt-uploads-service";
+import { archiveUploadedFile } from "../settings/pdf-archive-service";
 import { claimUploadedFile } from "../files/file-access-service";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { takeAdvisoryXactLock } from "../../common/advisory-lock";
@@ -634,6 +636,26 @@ export async function commitGoodsReceipt(
       createdSpares: result.lines.filter(l => l.created).length,
     },
   });
+
+  // El remito escaneado va al Drive de la empresa, en la carpeta del buque, con
+  // el nombre que pidió Gustavo: "2026-09-18. CONDOR S.A.C.I. 0001-0001234".
+  if (fileUrl) {
+    const savedName = fileUrl.split("/").pop() ?? "";
+    const content = savedName ? readGoodsReceiptFile(session.tenantSlug, savedName) : null;
+    if (content) {
+      const fecha = receivedAt.toISOString().slice(0, 10);
+      const proveedor = normText(providerName) ?? "Sin proveedor";
+      const numero = normText(documentNumber) ?? result.receiptCode;
+      const ext = savedName.includes(".") ? savedName.slice(savedName.lastIndexOf(".")) : "";
+      void archiveUploadedFile(session, {
+        kind: "RCP",
+        vesselCode,
+        fileName: `${fecha}. ${proveedor}. ${numero}${ext}`,
+        mimeType: normText(input.file?.mime) ?? "application/pdf",
+        content,
+      });
+    }
+  }
 
   return result;
 }

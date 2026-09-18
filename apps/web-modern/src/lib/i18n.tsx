@@ -126,6 +126,7 @@ const dict = {
   "config.pdfArchive.folder.APL":   { es: "Aplazamientos (APL)", en: "Deferrals (APL)", pt: "Adiamentos (APL)" },
   "config.pdfArchive.folder.VAR":   { es: "Especificaciones de varada (VAR)", en: "Drydock specifications (VAR)", pt: "Especificações de docagem (VAR)" },
   "config.pdfArchive.folder.REQ":   { es: "Pedidos de repuestos (REQ)", en: "Spare requests (REQ)", pt: "Pedidos de peças (REQ)" },
+  "config.pdfArchive.folder.RCP":   { es: "Recepciones de repuestos (remitos)", en: "Spare receipts (delivery notes)", pt: "Recebimentos de peças (remessas)" },
   "config.pdfArchive.folder.MOC":   { es: "Gestión del cambio (MOC)", en: "Management of change (MOC)", pt: "Gestão de mudanças (MOC)" },
   "config.pdfArchive.folder.PLAN":  { es: "Planes de mantenimiento", en: "Maintenance plans", pt: "Planos de manutenção" },
   "config.pdfArchive.folder.OTHER": { es: "Otros (permisos, inspecciones, checklists, simulacros, partes, fichas)", en: "Other (permits, inspections, checklists, drills, reports, data sheets)", pt: "Outros (permissões, inspeções, checklists, simulados, relatórios, fichas)" },

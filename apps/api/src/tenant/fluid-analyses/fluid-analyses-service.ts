@@ -1,7 +1,8 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
-import { archivePdf } from "../settings/pdf-archive-service";
+import { archivePdf, archiveAttachment } from "../settings/pdf-archive-service";
+import { readFluidReportFile } from "./fluid-uploads-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { resolveTenantTime, fmtDate } from "../../common/tenant-time";
 import { buildResultDefectDescription } from "./analysis-text";
@@ -627,6 +628,24 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
     result = await (prisma as any).fluidAnalysisResult.create({
       data: { ...baseData, tenantId, sampleId, enteredByUserId: session.user.id },
     });
+  }
+
+  // El informe del laboratorio (fluidos, vibraciones, termografía…) también va
+  // al Drive de la empresa, al lado del análisis, como "<código FA> Att1".
+  const reportUrl = normText(input.reportUrl);
+  if (reportUrl) {
+    const savedName = reportUrl.split("/").pop() ?? "";
+    const content = savedName ? readFluidReportFile(session.tenantSlug, savedName) : null;
+    if (content) {
+      void archiveAttachment(session, {
+        kind: "FA",
+        vesselCode: sample.vesselCode,
+        docCode: sample.sampleCode,
+        originalName: savedName,
+        mimeType: normText(input.reportMime) ?? "application/pdf",
+        content,
+      });
+    }
   }
 
   // Move sample to REPORTED. El horómetro leído del reporte se guarda acá:

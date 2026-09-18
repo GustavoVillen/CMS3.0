@@ -195,17 +195,61 @@ export async function trashByName(accessToken: string, folderId: string, fileNam
   }
 }
 
-export async function uploadPdf(
+/**
+ * Nombres de los archivos de la carpeta que empiezan con ese texto. Se usa para
+ * saber en qué número de adjunto (Att1, Att2…) va un documento.
+ */
+export async function listFileNames(accessToken: string, folderId: string, startsWith: string): Promise<string[]> {
+  const params = new URLSearchParams({
+    q: `${quote(folderId)} in parents and name contains ${quote(startsWith)} and trashed = false`,
+    fields: "files(name)",
+    pageSize: "200",
+  });
+  const found = await driveFetch(accessToken, `${FILES_URL}?${params.toString()}`);
+  const files = (found.files as Array<{ name?: string }> | undefined) ?? [];
+  return files.map(f => f.name ?? "").filter(Boolean);
+}
+
+/**
+ * Busca en la carpeta un archivo que CMS3 haya subido con esa marca interna
+ * (`appProperties`, privadas de la app). Sirve para reconocer que un archivo ya
+ * está archivado y no volver a subirlo con otro número.
+ */
+export async function findByAppProperty(
+  accessToken: string,
+  folderId: string,
+  key: string,
+  value: string,
+): Promise<{ id: string; name: string } | null> {
+  const params = new URLSearchParams({
+    q: `${quote(folderId)} in parents and trashed = false and appProperties has { key=${quote(key)} and value=${quote(value)} }`,
+    fields: "files(id,name)",
+    pageSize: "1",
+  });
+  const found = await driveFetch(accessToken, `${FILES_URL}?${params.toString()}`);
+  const file = ((found.files as Array<{ id?: string; name?: string }> | undefined) ?? [])[0];
+  return file?.id ? { id: file.id, name: file.name ?? "" } : null;
+}
+
+/** Sube un archivo a la carpeta. `mimeType` porque no todo es PDF: el remito puede ser una foto. */
+export async function uploadFile(
   accessToken: string,
   folderId: string,
   fileName: string,
+  mimeType: string,
   content: Buffer,
+  appProperties?: Record<string, string>,
 ): Promise<string> {
   const boundary = `cms3-${randomBytes(12).toString("hex")}`;
-  const metadata = JSON.stringify({ name: fileName, parents: [folderId], mimeType: "application/pdf" });
+  const metadata = JSON.stringify({
+    name: fileName,
+    parents: [folderId],
+    mimeType,
+    ...(appProperties ? { appProperties } : {}),
+  });
   const head = Buffer.from(
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
-    `--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`,
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
   );
   const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
   const body = Buffer.concat([head, content, tail]);

@@ -10,7 +10,8 @@
 // La subida NUNCA rompe el flujo del usuario: corre sin esperar y los errores
 // quedan en `pdfArchiveLastError` para que el admin los vea en Configuración.
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { extname } from "node:path";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
@@ -23,15 +24,17 @@ import {
   getAccessToken,
   getAccountEmail,
   googleOAuthConfig,
+  findByAppProperty,
+  listFileNames,
   revokeToken,
   trashByName,
-  uploadPdf,
+  uploadFile,
   type GoogleOAuthConfig,
 } from "./google-drive-client";
 
-export const PDF_ARCHIVE_KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "MOC", "PLAN", "OTHER"] as const;
+export const PDF_ARCHIVE_KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "RCP", "MOC", "PLAN", "OTHER"] as const;
 export type PdfArchiveKind = (typeof PDF_ARCHIVE_KINDS)[number];
-type DocumentKind = Exclude<PdfArchiveKind, "OTHER">;
+type DocumentKind = Exclude<PdfArchiveKind, "OTHER" | "RCP">;
 
 export const DEFAULT_PDF_ARCHIVE_FOLDERS: Record<PdfArchiveKind, string> = {
   OT: "OT",
@@ -41,6 +44,7 @@ export const DEFAULT_PDF_ARCHIVE_FOLDERS: Record<PdfArchiveKind, string> = {
   APL: "APL",
   VAR: "VAR",
   REQ: "REQ",
+  RCP: "Recepciones",
   MOC: "MOC",
   PLAN: "Planes de Mantenimiento",
   OTHER: "Otros",
@@ -441,6 +445,274 @@ async function resolveVesselFolder(tenantId: string, vesselCode: string | null |
 }
 
 /**
+ * Sube el archivo a "<raíz>/<buque>/<tipo>[/Borrador]", pisando la versión
+ * anterior con el mismo nombre. Es común a los PDF que genera el sistema y a los
+ * archivos que sube la gente (informes de laboratorio, remitos).
+ */
+async function pushToDrive(params: {
+  tenantId: string;
+  settings: NonNullable<StoredSettings>;
+  googleConfig: GoogleOAuthConfig;
+  refreshToken: string;
+  kind: PdfArchiveKind;
+  vesselCode: string | null | undefined;
+  fileName: string;
+  mimeType: string;
+  content: Buffer;
+  final: boolean;
+}): Promise<void> {
+  const { tenantId, settings, googleConfig, refreshToken, kind, final } = params;
+  const safeName = params.fileName.replace(/[\\/:*?"<>|]/g, "_");
+  // Primero el buque, después el tipo: "<raíz>/DON CHICUETO/OT/…".
+  const vesselFolder = await resolveVesselFolder(tenantId, params.vesselCode);
+  const folderName = resolveFolders(settings.pdfArchiveFolders)[kind];
+  const typePath = `${vesselFolder}/${folderName}`;
+  const cache = readFolderIds(settings.pdfArchiveFolderIds);
+  const cacheBefore = JSON.stringify(cache);
+
+  await enqueue(`${tenantId}:${kind}:${safeName}`, async () => {
+    const accessToken = await getAccessToken(googleConfig, refreshToken);
+    const rootFolderId = settings.pdfArchiveRootFolderId
+      ?? await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
+    const segments = final ? [vesselFolder, folderName] : [vesselFolder, folderName, DRAFT_FOLDER];
+    const targetId = await resolveFolderId(accessToken, rootFolderId, cache, segments);
+
+    await trashByName(accessToken, targetId, safeName);
+    await uploadFile(accessToken, targetId, safeName, params.mimeType, params.content);
+
+    // Quedó el registro final: el borrador ya no hace falta. Sólo si la
+    // carpeta Borrador existe (no la creamos para borrar algo que no está).
+    const draftId = final ? cache[`${typePath}/${DRAFT_FOLDER}`] : null;
+    if (draftId) await trashByName(accessToken, draftId, safeName);
+
+    if (JSON.stringify(cache) !== cacheBefore || rootFolderId !== settings.pdfArchiveRootFolderId) {
+      await getPrismaClient()!.tenantSetting.update({
+        where: { tenantId },
+        data: { pdfArchiveFolderIds: cache, pdfArchiveRootFolderId: rootFolderId },
+      });
+    }
+  });
+}
+
+/**
+ * Adjunto de un documento (foto, video, PDF del laboratorio, escaneo…). Se
+ * archiva como "<código> Att1", "<código> Att2"… al lado del documento.
+ *
+ * Reglas, por pedido de Gustavo:
+ *  - Nunca pisa un adjunto anterior: cuenta los que ya están y usa el siguiente.
+ *  - Salvo que sea EL MISMO archivo: cada subida queda marcada con la huella de
+ *    su contenido (`appProperties` de Drive), así que volver a archivar lo mismo
+ *    no duplica ni renumera.
+ * La cola es por documento (no por archivo) para que dos fotos subidas juntas no
+ * se lleven el mismo número.
+ */
+export async function archiveAttachment(
+  session: TenantAccessSession,
+  input: {
+    kind: PdfArchiveKind;
+    vesselCode: string | null | undefined;
+    /** Número del documento al que pertenece: OT-2026-0001, FA-…, DEF-… */
+    docCode: string;
+    originalName: string;
+    mimeType: string;
+    content: Buffer;
+  },
+): Promise<void> {
+  let tenantId: string | null = null;
+  try {
+    const googleConfig = googleOAuthConfig();
+    if (!googleConfig) return;
+    tenantId = await findTenantId(session);
+    if (!tenantId) return;
+    const settings = await loadSettings(tenantId);
+    if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveGoogleRefreshToken) return;
+    const refreshToken = settings.pdfArchiveGoogleRefreshToken;
+    const docCode = input.docCode.trim();
+    if (!docCode) return;
+
+    const fingerprint = createHash("sha256").update(input.content).digest("hex");
+    const ext = extname(input.originalName).toLowerCase() || extensionForMime(input.mimeType);
+    const vesselFolder = await resolveVesselFolder(tenantId, input.vesselCode);
+    const folderName = resolveFolders(settings.pdfArchiveFolders)[input.kind];
+    const cache = readFolderIds(settings.pdfArchiveFolderIds);
+    const cacheBefore = JSON.stringify(cache);
+    const prefix = `${docCode} Att`;
+
+    await enqueue(`${tenantId}:att:${docCode}`, async () => {
+      const accessToken = await getAccessToken(googleConfig, refreshToken);
+      const rootFolderId = settings.pdfArchiveRootFolderId
+        ?? await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
+      const targetId = await resolveFolderId(accessToken, rootFolderId, cache, [vesselFolder, folderName]);
+
+      // Mismo archivo ya archivado: no se toca (ni se renumera ni se duplica).
+      const already = await findByAppProperty(accessToken, targetId, "cms3Fingerprint", fingerprint);
+      if (!already) {
+        const names = await listFileNames(accessToken, targetId, prefix);
+        let maxIndex = 0;
+        for (const name of names) {
+          const match = new RegExp(`^${escapeRegExp(prefix)}(\\d+)`, "i").exec(name);
+          if (match) maxIndex = Math.max(maxIndex, Number(match[1]));
+        }
+        const fileName = `${prefix}${maxIndex + 1}${ext}`.replace(/[\\/:*?"<>|]/g, "_");
+        await uploadFile(accessToken, targetId, fileName, input.mimeType || "application/octet-stream", input.content, {
+          cms3Fingerprint: fingerprint,
+          cms3Doc: docCode,
+        });
+      }
+
+      if (JSON.stringify(cache) !== cacheBefore || rootFolderId !== settings.pdfArchiveRootFolderId) {
+        await getPrismaClient()!.tenantSetting.update({
+          where: { tenantId: tenantId! },
+          data: { pdfArchiveFolderIds: cache, pdfArchiveRootFolderId: rootFolderId },
+        });
+      }
+    });
+  } catch (err) {
+    await recordArchiveError(tenantId, session.tenantSlug, `${input.kind} adjunto`, err);
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * De qué documento cuelga cada adjunto. La clave es el `entityType` con el que
+ * el frontend sube el archivo (`/app/attachments/upload?entityType=…`).
+ */
+const ATTACHMENT_OWNERS: Record<string, { kind: PdfArchiveKind; delegate: string; codeField: string; vesselField: string }> = {
+  WorkOrder:      { kind: "OT",   delegate: "workOrder",       codeField: "workOrderCode",      vesselField: "vesselCode" },
+  ServiceRequest: { kind: "SS",   delegate: "serviceRequest",  codeField: "serviceRequestCode", vesselField: "vesselCode" },
+  Defect:         { kind: "DEF",  delegate: "defect",          codeField: "defectCode",         vesselField: "vesselCode" },
+  FluidSample:    { kind: "FA",   delegate: "fluidSample",     codeField: "sampleCode",         vesselField: "vesselCode" },
+  MaintenancePlan:{ kind: "PLAN", delegate: "maintenancePlan", codeField: "taskCode",           vesselField: "vesselCode" },
+};
+
+/**
+ * Adjunto subido desde una pantalla (foto, video o documento). Resuelve a qué
+ * documento pertenece y lo archiva como "<código> AttN" al lado de él.
+ *
+ * Los adjuntos de un registro de avance (WorkLog) se archivan con la OT: para
+ * la gente son fotos "de la OT", no de un registro suelto.
+ */
+export async function archiveEntityAttachment(
+  session: TenantAccessSession,
+  input: { entityType: string; entityId: string | null; originalName: string; mimeType: string; content: Buffer },
+): Promise<void> {
+  try {
+    if (!input.entityId || !googleOAuthConfig()) return;
+    const tenantId = await findTenantId(session);
+    if (!tenantId) return;
+    const prisma = getPrismaClient();
+    if (!prisma) return;
+
+    let entityType = input.entityType;
+    let entityId: string = input.entityId;
+    if (entityType === "WorkLog") {
+      const log = await (prisma as any).workLog.findFirst({
+        where: { id: entityId, tenantId },
+        select: { workOrderId: true },
+      }) as { workOrderId: string | null } | null;
+      if (!log?.workOrderId) return;
+      entityType = "WorkOrder";
+      entityId = log.workOrderId;
+    }
+
+    const owner = ATTACHMENT_OWNERS[entityType];
+    if (!owner) return;
+    const row = await (prisma as any)[owner.delegate].findFirst({
+      where: { id: entityId, tenantId },
+      select: { [owner.codeField]: true, [owner.vesselField]: true },
+    }) as Record<string, string | null> | null;
+    if (!row) return;
+
+    await archiveAttachment(session, {
+      kind: owner.kind,
+      vesselCode: row[owner.vesselField],
+      docCode: row[owner.codeField] ?? "",
+      originalName: input.originalName,
+      mimeType: input.mimeType,
+      content: input.content,
+    });
+  } catch (err) {
+    // El adjunto ya quedó guardado en CMS3: el archivo en Drive nunca rompe la subida.
+    log.warn("[pdf-archive] attachment archive failed", session.tenantSlug, input.entityType, errorMessage(err));
+  }
+}
+
+/** Extensión de reserva cuando el nombre original no trae ninguna (fotos de la cámara, videos). */
+function extensionForMime(mimeType: string): string {
+  const map: Record<string, string> = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/heic": ".heic",
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/webm": ".webm",
+  };
+  return map[mimeType.toLowerCase()] ?? "";
+}
+
+/**
+ * Archiva un archivo que subió la gente, no uno generado por el sistema: el
+ * remito de una recepción, con el nombre que se le quiera dar. Nunca tira:
+ * se llama con `void` desde los services, igual que `archivePdf`.
+ */
+export async function archiveUploadedFile(
+  session: TenantAccessSession,
+  input: { kind: PdfArchiveKind; vesselCode: string | null | undefined; fileName: string; mimeType: string; content: Buffer },
+): Promise<void> {
+  let tenantId: string | null = null;
+  try {
+    const googleConfig = googleOAuthConfig();
+    if (!googleConfig) return;
+    tenantId = await findTenantId(session);
+    if (!tenantId) return;
+    const settings = await loadSettings(tenantId);
+    if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveGoogleRefreshToken) return;
+
+    await pushToDrive({
+      tenantId, settings, googleConfig,
+      refreshToken: settings.pdfArchiveGoogleRefreshToken,
+      kind: input.kind,
+      vesselCode: input.vesselCode,
+      fileName: input.fileName,
+      mimeType: input.mimeType || "application/octet-stream",
+      content: input.content,
+      final: true,
+    });
+    if (settings.pdfArchiveLastError) {
+      await getPrismaClient()!.tenantSetting.update({
+        where: { tenantId },
+        data: { pdfArchiveLastError: null, pdfArchiveLastErrorAt: null },
+      });
+    }
+  } catch (err) {
+    await recordArchiveError(tenantId, session.tenantSlug, input.kind, err);
+  }
+}
+
+/** Deja el error a la vista del admin en Configuración; nunca corta el flujo del usuario. */
+async function recordArchiveError(
+  tenantId: string | null,
+  tenantSlug: string,
+  kind: string,
+  err: unknown,
+): Promise<void> {
+  const message = errorMessage(err).slice(0, 500);
+  log.warn("[pdf-archive] upload failed", tenantSlug, kind, message);
+  if (!tenantId) return;
+  try {
+    await getPrismaClient()!.tenantSetting.update({
+      where: { tenantId },
+      data: { pdfArchiveLastError: `${kind}: ${message}`, pdfArchiveLastErrorAt: new Date() },
+    });
+  } catch { /* si ni esto se puede guardar, queda el log */ }
+}
+
+/**
  * Manda el PDF al Drive de la empresa si el archivo está activo. Nunca tira:
  * se llama con `void` desde los endpoints de PDF y desde las transiciones.
  */
@@ -454,7 +726,6 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
     const settings = await loadSettings(tenantId);
     if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveGoogleRefreshToken) return;
     const refreshToken = settings.pdfArchiveGoogleRefreshToken;
-    const folders = resolveFolders(settings.pdfArchiveFolders);
 
     let fileName: string;
     let final: boolean;
@@ -494,36 +765,9 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
       if (!buffer) buffer = await buildPdf(input.kind, session, input.id);
     }
 
-    const safeName = fileName.replace(/[\\/:*?"<>|]/g, "_");
-    const content = buffer!;
-    // Primero el buque, después el tipo: "<raíz>/DON CHICUETO/OT/…".
-    const vesselFolder = await resolveVesselFolder(tenantId, vesselCode);
-    const folderName = folders[input.kind];
-    const typePath = `${vesselFolder}/${folderName}`;
-    const cache = readFolderIds(settings.pdfArchiveFolderIds);
-    const cacheBefore = JSON.stringify(cache);
-
-    await enqueue(`${tenantId}:${input.kind}:${safeName}`, async () => {
-      const accessToken = await getAccessToken(googleConfig, refreshToken);
-      const rootFolderId = settings.pdfArchiveRootFolderId
-        ?? await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
-      const segments = final ? [vesselFolder, folderName] : [vesselFolder, folderName, DRAFT_FOLDER];
-      const targetId = await resolveFolderId(accessToken, rootFolderId, cache, segments);
-
-      await trashByName(accessToken, targetId, safeName);
-      await uploadPdf(accessToken, targetId, safeName, content);
-
-      // Quedó el registro final: el borrador ya no hace falta. Sólo si la
-      // carpeta Borrador existe (no la creamos para borrar algo que no está).
-      const draftId = final ? cache[`${typePath}/${DRAFT_FOLDER}`] : null;
-      if (draftId) await trashByName(accessToken, draftId, safeName);
-
-      if (JSON.stringify(cache) !== cacheBefore || rootFolderId !== settings.pdfArchiveRootFolderId) {
-        await getPrismaClient()!.tenantSetting.update({
-          where: { tenantId: tenantId! },
-          data: { pdfArchiveFolderIds: cache, pdfArchiveRootFolderId: rootFolderId },
-        });
-      }
+    await pushToDrive({
+      tenantId, settings, googleConfig, refreshToken,
+      kind: input.kind, vesselCode, fileName, mimeType: "application/pdf", content: buffer!, final,
     });
     // Anduvo: el aviso de error viejo ya no describe el estado actual.
     if (settings.pdfArchiveLastError) {

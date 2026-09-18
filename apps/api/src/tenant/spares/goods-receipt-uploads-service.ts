@@ -2,7 +2,7 @@
 // celular). Mismo patrón que fluid-uploads-service.ts: un directorio por
 // tenant, nombre en disco aleatorio y servido sólo por /app/files/... con
 // sesión válida (ver tenant/files/files-router.ts).
-import { createWriteStream, mkdirSync, createReadStream, statSync } from "node:fs";
+import { readFileSync, createWriteStream, mkdirSync, createReadStream, statSync } from "node:fs";
 import { join, extname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
@@ -57,6 +57,17 @@ export async function saveGoodsReceiptFile(
     mime: mimeForReceiptFile(originalName),
     absolutePath: filePath,
   };
+}
+
+/** Contenido del remito ya subido, para archivarlo en el Drive de la empresa. */
+export function readGoodsReceiptFile(tenantSlug: string, savedName: string): Buffer | null {
+  if (savedName.includes("..") || savedName.includes("/") || savedName.includes("\\")) return null;
+  if (tenantSlug.includes("..") || tenantSlug.includes("/") || tenantSlug.includes("\\")) return null;
+  try {
+    return readFileSync(join(UPLOADS_ROOT, tenantSlug, savedName));
+  } catch {
+    return null;
+  }
 }
 
 export function serveGoodsReceiptUpload(

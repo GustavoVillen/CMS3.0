@@ -8,7 +8,7 @@ import { getRolePermissions, setRolePermissions } from "./settings/role-permissi
 import { getWeeklyReportConfig, setWeeklyReportConfig } from "./settings/weekly-report-config-service";
 import { getSpareRequestConfig, setSpareRequestConfig } from "./settings/spare-request-config-service";
 import {
-  archivePdf, getPdfArchiveConfig, setPdfArchiveConfig, testPdfArchive,
+  archivePdf, archiveEntityAttachment, getPdfArchiveConfig, setPdfArchiveConfig, testPdfArchive,
   startGoogleConnect, completeGoogleConnect, disconnectGoogle, GOOGLE_CALLBACK_PATH,
 } from "./settings/pdf-archive-service";
 import { getPublicOrigin } from "../http/request-url";
@@ -74,7 +74,7 @@ import { getMonthlyAiUsageForUser, getLatestVesselPositionsByTenant, getAiBudget
 import { parseUploadedFile, assertFileSize } from "./copiloto/file-parser-service";
 import { listTenantAssets } from "./assets/assets-service";
 import { listTenantAttachments, registerAttachmentRecord, softDeleteTenantAttachment } from "./attachments/attachments-service";
-import { saveAttachment } from "./attachments/attachment-uploads-service";
+import { saveAttachment, mimeTypeForFilename } from "./attachments/attachment-uploads-service";
 import { claimUploadedFile } from "./files/file-access-service";
 import { listTenantCapas } from "./capa/capa-service";
 import { listTenantCertificates, getTenantCertificateById, createTenantCertificate, updateTenantCertificate, deleteTenantCertificate, renewTenantCertificate } from "./certificates/certificates-service";
@@ -949,6 +949,12 @@ export async function handleTenantRoutes(
       // (se ve igual el archivo via URL)
       void err;
     }
+    // Copia en el Drive de la empresa, como "<código del documento> AttN".
+    void archiveEntityAttachment(session, {
+      entityType, entityId, originalName,
+      mimeType: mimeTypeForFilename(originalName),
+      content: buffer,
+    });
     sendJson(response, 200, { ...result, attachmentId });
     return true;
   }

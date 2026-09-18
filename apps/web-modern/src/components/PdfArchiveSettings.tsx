@@ -10,7 +10,7 @@ import { useT } from "../lib/i18n";
 import { AlertDialog } from "./AlertDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-const KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "MOC", "PLAN", "OTHER"] as const;
+const KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "RCP", "MOC", "PLAN", "OTHER"] as const;
 type Kind = (typeof KINDS)[number];
 
 interface PdfArchiveConfig {
