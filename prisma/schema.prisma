@@ -905,16 +905,21 @@ model TenantSetting {
   // repuestos manda ahí el formulario PDF (spare-requests-service). Sin casilla
   // la solicitud no se envía y queda en Borrador.
   spareRequestMailbox       String?
-  // Archivo automático de PDFs en Google Drive vía un Apps Script publicado por la
-  // empresa (tenant/settings/pdf-archive-service.ts). Apagado por defecto.
+  // Archivo automático de PDFs en el Google Drive de la empresa: el admin conecta
+  // su cuenta con un botón (OAuth, permiso drive.file) y CMS3 sube los PDF a una
+  // carpeta propia (tenant/settings/pdf-archive-service.ts). Apagado por defecto.
   // pdfArchiveFolders: { OT, SS, DEF, FA, APL, VAR, REQ, MOC, PLAN, OTHER } → nombre
   // de carpeta; clave ausente => nombre por defecto.
-  pdfArchiveEnabled         Boolean   @default(false)
-  pdfArchiveScriptUrl       String?
-  pdfArchiveSecret          String?
-  pdfArchiveFolders         Json?
-  pdfArchiveLastError       String?
-  pdfArchiveLastErrorAt     DateTime?
+  // pdfArchiveFolderIds: cache nombre de carpeta → id de Drive (se rearma solo).
+  // El refresh token NUNCA sale de la API: no se devuelve en la config del frontend.
+  pdfArchiveEnabled            Boolean   @default(false)
+  pdfArchiveGoogleRefreshToken String?
+  pdfArchiveGoogleAccount      String?
+  pdfArchiveRootFolderId       String?
+  pdfArchiveFolderIds          Json?
+  pdfArchiveFolders            Json?
+  pdfArchiveLastError          String?
+  pdfArchiveLastErrorAt        DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

@@ -7,7 +7,11 @@ import { getHiddenNavPaths, setHiddenNavPaths } from "./settings/nav-config-serv
 import { getRolePermissions, setRolePermissions } from "./settings/role-permissions-config-service";
 import { getWeeklyReportConfig, setWeeklyReportConfig } from "./settings/weekly-report-config-service";
 import { getSpareRequestConfig, setSpareRequestConfig } from "./settings/spare-request-config-service";
-import { archivePdf, getPdfArchiveConfig, setPdfArchiveConfig, testPdfArchive } from "./settings/pdf-archive-service";
+import {
+  archivePdf, getPdfArchiveConfig, setPdfArchiveConfig, testPdfArchive,
+  startGoogleConnect, completeGoogleConnect, disconnectGoogle, GOOGLE_CALLBACK_PATH,
+} from "./settings/pdf-archive-service";
+import { getPublicOrigin } from "../http/request-url";
 import { hasPermission, resolvePermissionsForRole } from "./auth/role-permissions";
 import { RouteError } from "../http/route-error";
 import { enforceRateLimit } from "../http/rate-limiter";
@@ -2766,6 +2770,30 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     enforceRateLimit(request, `pdf-archive-test:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
     sendJson(response, 200, await testPdfArchive(session));
+    return true;
+  }
+  // Conectar la cuenta de Google Drive: el front abre esta URL en la misma pestaña.
+  if (method === "POST" && url.pathname === "/app/tenant/pdf-archive/google/start") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf-archive-connect:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    sendJson(response, 200, await startGoogleConnect(session, getPublicOrigin(request)));
+    return true;
+  }
+  // Vuelta de Google: navegación del navegador, sin sesión (va firmada en el `state`).
+  if (method === "GET" && url.pathname === GOOGLE_CALLBACK_PATH) {
+    enforceRateLimit(request, "pdf-archive-callback", { maxRequests: 60, windowMs: 60_000 });
+    const target = await completeGoogleConnect(getPublicOrigin(request), {
+      code: url.searchParams.get("code"),
+      state: url.searchParams.get("state"),
+      error: url.searchParams.get("error"),
+    });
+    response.writeHead(302, { Location: target, "Cache-Control": "no-store" });
+    response.end();
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/tenant/pdf-archive/google/disconnect") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    sendJson(response, 200, await disconnectGoogle(session));
     return true;
   }
 

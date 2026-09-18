@@ -1,20 +1,32 @@
-// Archivo automático de PDFs en Google Drive.
+// Archivo automático de PDFs en el Google Drive de la empresa.
 //
-// La empresa publica un Apps Script con SU cuenta de Google (docs/drive-archive/)
-// y carga acá la URL y la clave. Cada vez que se genera un PDF se manda al
-// script: si el documento todavía no es final va a "<carpeta>/Borrador"; cuando
-// queda cerrado/aprobado/rechazado/cancelado va a "<carpeta>/" como registro
-// final y el script borra la copia de Borrador.
+// El admin conecta la cuenta de Google de la empresa con un botón (OAuth con
+// permiso `drive.file`, ver google-drive-client.ts) y CMS3 sube cada PDF a una
+// carpeta propia: si el documento todavía no es final va a
+// "<raíz>/<tipo>/Borrador"; cuando queda cerrado/aprobado/rechazado/cancelado va
+// a "<raíz>/<tipo>/" como registro final y se borra la copia de Borrador.
 //
-// Mismo patrón de config que `weekly-report-config-service.ts`. La subida NUNCA
-// rompe el flujo del usuario: corre sin esperar y los errores quedan en
-// `pdfArchiveLastError` para que el admin los vea en Configuración.
+// La subida NUNCA rompe el flujo del usuario: corre sin esperar y los errores
+// quedan en `pdfArchiveLastError` para que el admin los vea en Configuración.
 
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { log } from "../../common/logger";
+import {
+  buildAuthUrl,
+  ensureFolder,
+  exchangeCode,
+  folderUrl,
+  getAccessToken,
+  getAccountEmail,
+  googleOAuthConfig,
+  revokeToken,
+  trashByName,
+  uploadPdf,
+  type GoogleOAuthConfig,
+} from "./google-drive-client";
 
 export const PDF_ARCHIVE_KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "MOC", "PLAN", "OTHER"] as const;
 export type PdfArchiveKind = (typeof PDF_ARCHIVE_KINDS)[number];
@@ -32,6 +44,13 @@ export const DEFAULT_PDF_ARCHIVE_FOLDERS: Record<PdfArchiveKind, string> = {
   PLAN: "Planes de Mantenimiento",
   OTHER: "Otros",
 };
+
+/** Carpeta que CMS3 crea en el Drive de la empresa. Con `drive.file` es la única que ve. */
+const ROOT_FOLDER_NAME = "CMS3 — Documentos";
+const DRAFT_FOLDER = "Borrador";
+/** Ruta del callback de Google: tiene que coincidir con la registrada en Google Cloud. */
+export const GOOGLE_CALLBACK_PATH = "/app/tenant/pdf-archive/google/callback";
+const STATE_TTL_MS = 10 * 60 * 1000;
 
 /**
  * Cómo encontrar cada documento y cuándo es final. `finalStatuses: null` =
@@ -74,17 +93,17 @@ async function buildPdf(kind: DocumentKind, session: TenantAccessSession, id: st
 // ── Configuración ────────────────────────────────────────────────────────────
 
 export interface PdfArchiveConfig {
+  /** La instalación tiene credenciales de Google cargadas: sin esto no se puede conectar. */
+  available: boolean;
   enabled: boolean;
-  scriptUrl: string;
-  secret: string;
+  connected: boolean;
+  /** Mail de la cuenta conectada, sólo para mostrarlo. El token nunca sale de la API. */
+  account: string | null;
+  folderUrl: string | null;
   folders: Record<PdfArchiveKind, string>;
   lastError: string | null;
   lastErrorAt: string | null;
 }
-
-// Sólo URLs de Apps Script publicados: además de validar lo que carga el admin,
-// evita que el servidor termine haciendo POST a cualquier dirección.
-const SCRIPT_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
 
 function resolveFolders(raw: unknown): Record<PdfArchiveKind, string> {
   const stored = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -96,11 +115,15 @@ function resolveFolders(raw: unknown): Record<PdfArchiveKind, string> {
   return out;
 }
 
-async function findTenantId(session: TenantAccessSession): Promise<string | null> {
+async function findTenantIdBySlug(tenantSlug: string): Promise<string | null> {
   const prisma = getPrismaClient();
   if (!prisma) return null;
-  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug }, select: { id: true } });
+  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug }, select: { id: true } });
   return tenant?.id ?? null;
+}
+
+async function findTenantId(session: TenantAccessSession): Promise<string | null> {
+  return findTenantIdBySlug(session.tenantSlug);
 }
 
 async function loadSettings(tenantId: string) {
@@ -109,8 +132,10 @@ async function loadSettings(tenantId: string) {
     where: { tenantId },
     select: {
       pdfArchiveEnabled: true,
-      pdfArchiveScriptUrl: true,
-      pdfArchiveSecret: true,
+      pdfArchiveGoogleRefreshToken: true,
+      pdfArchiveGoogleAccount: true,
+      pdfArchiveRootFolderId: true,
+      pdfArchiveFolderIds: true,
       pdfArchiveFolders: true,
       pdfArchiveLastError: true,
       pdfArchiveLastErrorAt: true,
@@ -118,11 +143,15 @@ async function loadSettings(tenantId: string) {
   });
 }
 
-function toConfig(s: Awaited<ReturnType<typeof loadSettings>>): PdfArchiveConfig {
+type StoredSettings = Awaited<ReturnType<typeof loadSettings>>;
+
+function toConfig(s: StoredSettings): PdfArchiveConfig {
   return {
+    available: !!googleOAuthConfig(),
     enabled: s?.pdfArchiveEnabled ?? false,
-    scriptUrl: s?.pdfArchiveScriptUrl ?? "",
-    secret: s?.pdfArchiveSecret ?? "",
+    connected: !!s?.pdfArchiveGoogleRefreshToken,
+    account: s?.pdfArchiveGoogleAccount ?? null,
+    folderUrl: s?.pdfArchiveRootFolderId ? folderUrl(s.pdfArchiveRootFolderId) : null,
     folders: resolveFolders(s?.pdfArchiveFolders),
     lastError: s?.pdfArchiveLastError ?? null,
     lastErrorAt: s?.pdfArchiveLastErrorAt?.toISOString() ?? null,
@@ -135,7 +164,14 @@ function ensureAdmin(session: TenantAccessSession) {
   }
 }
 
-/** Incluye la clave: la ruta es sólo para TENANT_ADMIN, que la necesita para pegarla en el script. */
+function requireGoogleConfig(): GoogleOAuthConfig {
+  const config = googleOAuthConfig();
+  if (!config) {
+    throw new RouteError(503, "GOOGLE_NOT_CONFIGURED", "La conexión con Google Drive no está habilitada en este servidor.");
+  }
+  return config;
+}
+
 export async function getPdfArchiveConfig(session: TenantAccessSession): Promise<PdfArchiveConfig> {
   ensureAdmin(session);
   const tenantId = await findTenantId(session);
@@ -145,7 +181,7 @@ export async function getPdfArchiveConfig(session: TenantAccessSession): Promise
 
 export async function setPdfArchiveConfig(
   session: TenantAccessSession,
-  body: { enabled?: unknown; scriptUrl?: unknown; folders?: unknown; regenerateSecret?: unknown },
+  body: { enabled?: unknown; folders?: unknown },
 ): Promise<PdfArchiveConfig> {
   ensureAdmin(session);
   const prisma = getPrismaClient();
@@ -153,13 +189,10 @@ export async function setPdfArchiveConfig(
   const tenantId = await findTenantId(session);
   if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Empresa no encontrada.");
 
+  const current = await loadSettings(tenantId);
   const enabled = body?.enabled === true;
-  const scriptUrl = typeof body?.scriptUrl === "string" ? body.scriptUrl.trim() : "";
-  if (scriptUrl && !SCRIPT_URL_RE.test(scriptUrl)) {
-    throw new RouteError(400, "INVALID_SCRIPT_URL", "La URL tiene que ser la del script publicado (https://script.google.com/macros/s/…/exec).");
-  }
-  if (enabled && !scriptUrl) {
-    throw new RouteError(400, "SCRIPT_URL_REQUIRED", "Para activar el archivo cargá la URL del script.");
+  if (enabled && !current?.pdfArchiveGoogleRefreshToken) {
+    throw new RouteError(400, "GOOGLE_NOT_CONNECTED", "Para activar el archivo conectá primero la cuenta de Google Drive.");
   }
 
   const folders: Record<string, string> = {};
@@ -172,40 +205,151 @@ export async function setPdfArchiveConfig(
     folders[kind] = v || DEFAULT_PDF_ARCHIVE_FOLDERS[kind];
   }
 
-  const current = await loadSettings(tenantId);
-  const secret = body?.regenerateSecret === true || !current?.pdfArchiveSecret
-    ? randomBytes(24).toString("hex")
-    : current.pdfArchiveSecret;
+  await prisma.tenantSetting.update({
+    where: { tenantId },
+    data: { pdfArchiveEnabled: enabled, pdfArchiveFolders: folders },
+  });
+  return toConfig(await loadSettings(tenantId));
+}
 
+// ── Conectar la cuenta de Google ─────────────────────────────────────────────
+
+/**
+ * `state` firmado: el callback llega desde Google sin sesión (es una navegación
+ * del navegador, y las sesiones de CMS3 van por bearer token). La firma es lo
+ * que prueba que ese ida y vuelta lo arrancó un admin de esta empresa.
+ */
+function signState(config: GoogleOAuthConfig, payload: string): string {
+  return createHmac("sha256", config.clientSecret).update(payload).digest("hex");
+}
+
+function buildState(config: GoogleOAuthConfig, tenantSlug: string, userId: string): string {
+  const payload = [tenantSlug, userId, String(Date.now() + STATE_TTL_MS), randomBytes(8).toString("hex")].join("|");
+  return `${Buffer.from(payload, "utf8").toString("base64url")}.${signState(config, payload)}`;
+}
+
+function readState(config: GoogleOAuthConfig, state: string): { tenantSlug: string } {
+  const [encoded, signature] = String(state || "").split(".");
+  if (!encoded || !signature) throw new RouteError(400, "INVALID_STATE", "La conexión con Google no se pudo validar.");
+  const payload = Buffer.from(encoded, "base64url").toString("utf8");
+  const expected = signState(config, payload);
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    throw new RouteError(400, "INVALID_STATE", "La conexión con Google no se pudo validar.");
+  }
+  const [tenantSlug, , expiresAt] = payload.split("|");
+  if (!tenantSlug || Number(expiresAt) < Date.now()) {
+    throw new RouteError(400, "EXPIRED_STATE", "La conexión con Google tardó demasiado. Probá de nuevo.");
+  }
+  return { tenantSlug };
+}
+
+function redirectUriFor(origin: string): string {
+  return `${origin.replace(/\/+$/, "")}${GOOGLE_CALLBACK_PATH}`;
+}
+
+/** Devuelve la URL de Google a la que mandamos al admin para que elija su cuenta. */
+export async function startGoogleConnect(session: TenantAccessSession, origin: string): Promise<{ url: string }> {
+  ensureAdmin(session);
+  const config = requireGoogleConfig();
+  const tenantId = await findTenantId(session);
+  if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Empresa no encontrada.");
+  const state = buildState(config, session.tenantSlug, session.user.id);
+  return { url: buildAuthUrl(config, redirectUriFor(origin), state) };
+}
+
+/**
+ * Vuelta de Google. Guarda el permiso permanente y deja creada la carpeta raíz.
+ * Devuelve a dónde mandar el navegador (Configuración, con el resultado).
+ */
+export async function completeGoogleConnect(
+  origin: string,
+  query: { code?: string | null; state?: string | null; error?: string | null },
+): Promise<string> {
+  const config = requireGoogleConfig();
+  const done = (result: string) => `/configuracion?drive=${result}`;
+  if (query.error) return done("cancelado");
+
+  try {
+    const { tenantSlug } = readState(config, String(query.state ?? ""));
+    const code = String(query.code ?? "");
+    if (!code) return done("error");
+
+    const prisma = getPrismaClient();
+    const tenantId = prisma ? await findTenantIdBySlug(tenantSlug) : null;
+    if (!tenantId) return done("error");
+
+    const { refreshToken, accessToken } = await exchangeCode(config, code, redirectUriFor(origin));
+    const account = await getAccountEmail(accessToken);
+    const rootFolderId = await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
+
+    await prisma!.tenantSetting.update({
+      where: { tenantId },
+      data: {
+        pdfArchiveGoogleRefreshToken: refreshToken,
+        pdfArchiveGoogleAccount: account,
+        pdfArchiveRootFolderId: rootFolderId,
+        // Las carpetas por tipo se rearman solas en la primera subida.
+        pdfArchiveFolderIds: {},
+        pdfArchiveLastError: null,
+        pdfArchiveLastErrorAt: null,
+      },
+    });
+    return done("ok");
+  } catch (err) {
+    log.warn("[pdf-archive] connect failed", errorMessage(err));
+    return done("error");
+  }
+}
+
+export async function disconnectGoogle(session: TenantAccessSession): Promise<PdfArchiveConfig> {
+  ensureAdmin(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenantId = await findTenantId(session);
+  if (!tenantId) throw new RouteError(404, "TENANT_NOT_FOUND", "Empresa no encontrada.");
+
+  const current = await loadSettings(tenantId);
+  if (current?.pdfArchiveGoogleRefreshToken) {
+    // Si Google ya no lo conoce (permiso revocado a mano), igual limpiamos acá.
+    try { await revokeToken(current.pdfArchiveGoogleRefreshToken); }
+    catch (err) { log.warn("[pdf-archive] revoke failed", errorMessage(err)); }
+  }
   await prisma.tenantSetting.update({
     where: { tenantId },
     data: {
-      pdfArchiveEnabled: enabled,
-      pdfArchiveScriptUrl: scriptUrl || null,
-      pdfArchiveSecret: secret,
-      pdfArchiveFolders: folders,
+      pdfArchiveEnabled: false,
+      pdfArchiveGoogleRefreshToken: null,
+      pdfArchiveGoogleAccount: null,
+      pdfArchiveRootFolderId: null,
+      pdfArchiveFolderIds: {},
+      pdfArchiveLastError: null,
+      pdfArchiveLastErrorAt: null,
     },
   });
   return toConfig(await loadSettings(tenantId));
 }
 
-/** "Probar conexión": el script contesta sin tocar Drive si la clave es correcta. */
+/** "Probar conexión": pide un permiso de acceso y se asegura de que la carpeta esté. */
 export async function testPdfArchive(session: TenantAccessSession): Promise<{ ok: true }> {
   ensureAdmin(session);
+  const config = requireGoogleConfig();
   const tenantId = await findTenantId(session);
   const s = tenantId ? await loadSettings(tenantId) : null;
-  if (!s?.pdfArchiveScriptUrl || !s.pdfArchiveSecret) {
-    throw new RouteError(400, "NOT_CONFIGURED", "Primero guardá la URL del script.");
+  if (!s?.pdfArchiveGoogleRefreshToken) {
+    throw new RouteError(400, "NOT_CONFIGURED", "Primero conectá la cuenta de Google Drive.");
   }
   try {
-    await callScript(s.pdfArchiveScriptUrl, { action: "ping", secret: s.pdfArchiveSecret });
+    const accessToken = await getAccessToken(config, s.pdfArchiveGoogleRefreshToken);
+    const rootFolderId = await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
+    await getPrismaClient()!.tenantSetting.update({
+      where: { tenantId: tenantId! },
+      data: { pdfArchiveRootFolderId: rootFolderId, pdfArchiveLastError: null, pdfArchiveLastErrorAt: null },
+    });
   } catch (err) {
-    throw new RouteError(502, "SCRIPT_ERROR", `El script no respondió bien: ${errorMessage(err)}`);
+    throw new RouteError(502, "DRIVE_ERROR", `Google Drive no respondió bien: ${errorMessage(err)}`);
   }
-  await getPrismaClient()!.tenantSetting.update({
-    where: { tenantId: tenantId! },
-    data: { pdfArchiveLastError: null, pdfArchiveLastErrorAt: null },
-  });
   return { ok: true };
 }
 
@@ -215,24 +359,36 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function callScript(url: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  // Apps Script ejecuta el POST y responde con un redirect a la salida: fetch lo sigue.
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60_000),
-  });
-  const text = await res.text();
-  let data: Record<string, unknown>;
-  try {
-    data = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    // Típico: el script no está publicado para "Cualquier persona" y Google devuelve una página de login.
-    throw new Error(`respuesta inesperada (HTTP ${res.status}). Revisá que el script esté publicado con acceso "Cualquier persona".`);
+function readFolderIds(raw: unknown): Record<string, string> {
+  const stored = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(stored)) {
+    if (typeof value === "string" && value) out[key] = value;
   }
-  if (data.ok !== true) throw new Error(String(data.error ?? "error desconocido"));
-  return data;
+  return out;
+}
+
+/**
+ * Id de una carpeta bajo la raíz, creándola si hace falta. El cache
+ * (`pdfArchiveFolderIds`) evita una búsqueda en Drive por cada PDF; si alguien
+ * borra la carpeta en Drive, Drive avisa y el error queda en Configuración.
+ */
+async function resolveFolderId(
+  accessToken: string,
+  rootFolderId: string,
+  cache: Record<string, string>,
+  segments: string[],
+): Promise<string> {
+  let parentId = rootFolderId;
+  let path = "";
+  for (const segment of segments) {
+    path = path ? `${path}/${segment}` : segment;
+    const cached = cache[path];
+    if (cached) { parentId = cached; continue; }
+    parentId = await ensureFolder(accessToken, segment, parentId);
+    cache[path] = parentId;
+  }
+  return parentId;
 }
 
 // Dos subidas del mismo archivo (generar el PDF y cerrar enseguida) se encolan:
@@ -263,13 +419,14 @@ export type ArchivePdfInput =
 export async function archivePdf(session: TenantAccessSession, input: ArchivePdfInput): Promise<void> {
   let tenantId: string | null = null;
   try {
+    const googleConfig = googleOAuthConfig();
+    if (!googleConfig) return;
     tenantId = await findTenantId(session);
     if (!tenantId) return;
     const settings = await loadSettings(tenantId);
-    if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveScriptUrl || !settings.pdfArchiveSecret) return;
+    if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveGoogleRefreshToken) return;
+    const refreshToken = settings.pdfArchiveGoogleRefreshToken;
     const folders = resolveFolders(settings.pdfArchiveFolders);
-    const scriptUrl = settings.pdfArchiveScriptUrl;
-    const secret = settings.pdfArchiveSecret;
 
     let fileName: string;
     let final: boolean;
@@ -301,16 +458,32 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
     }
 
     const safeName = fileName.replace(/[\\/:*?"<>|]/g, "_");
-    const content = buffer!.toString("base64");
+    const content = buffer!;
+    const folderName = folders[input.kind];
+    const cache = readFolderIds(settings.pdfArchiveFolderIds);
+    const cacheBefore = JSON.stringify(cache);
+
     await enqueue(`${tenantId}:${input.kind}:${safeName}`, async () => {
-      await callScript(scriptUrl, {
-        action: "upload",
-        secret,
-        folder: folders[input.kind],
-        final,
-        fileName: safeName,
-        base64: content,
-      });
+      const accessToken = await getAccessToken(googleConfig, refreshToken);
+      const rootFolderId = settings.pdfArchiveRootFolderId
+        ?? await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
+      const segments = final ? [folderName] : [folderName, DRAFT_FOLDER];
+      const targetId = await resolveFolderId(accessToken, rootFolderId, cache, segments);
+
+      await trashByName(accessToken, targetId, safeName);
+      await uploadPdf(accessToken, targetId, safeName, content);
+
+      // Quedó el registro final: el borrador ya no hace falta. Sólo si la
+      // carpeta Borrador existe (no la creamos para borrar algo que no está).
+      const draftId = final ? cache[`${folderName}/${DRAFT_FOLDER}`] : null;
+      if (draftId) await trashByName(accessToken, draftId, safeName);
+
+      if (JSON.stringify(cache) !== cacheBefore || rootFolderId !== settings.pdfArchiveRootFolderId) {
+        await getPrismaClient()!.tenantSetting.update({
+          where: { tenantId: tenantId! },
+          data: { pdfArchiveFolderIds: cache, pdfArchiveRootFolderId: rootFolderId },
+        });
+      }
     });
     // Anduvo: el aviso de error viejo ya no describe el estado actual.
     if (settings.pdfArchiveLastError) {

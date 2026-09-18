@@ -1,9 +1,10 @@
 // Archivo automático de PDFs en Google Drive (Configuración → sección).
 // Sólo TENANT_ADMIN: la pantalla no la renderiza para otros roles y el backend
-// lo vuelve a chequear. La guía para publicar el script está en docs/drive-archive/.
+// lo vuelve a chequear. El admin conecta la cuenta de Google de la empresa con
+// un botón; no hay URLs ni claves que copiar (ver docs/drive-archive/).
 
 import React, { useEffect, useState } from "react";
-import { FolderUp, Loader2, CheckCircle, Copy, RefreshCw, PlugZap, AlertTriangle } from "lucide-react";
+import { FolderUp, Loader2, CheckCircle, Link2, Unlink, ExternalLink, PlugZap, AlertTriangle } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { AlertDialog } from "./AlertDialog";
@@ -13,9 +14,11 @@ const KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "MOC", "PLAN", "OTH
 type Kind = (typeof KINDS)[number];
 
 interface PdfArchiveConfig {
+  available: boolean;
   enabled: boolean;
-  scriptUrl: string;
-  secret: string;
+  connected: boolean;
+  account: string | null;
+  folderUrl: string | null;
   folders: Record<Kind, string>;
   lastError: string | null;
   lastErrorAt: string | null;
@@ -34,9 +37,15 @@ export const PdfArchiveSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [alert, setAlert] = useState<string | null>(null);
-  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  const flash = (msg: string) => {
+    setSuccess(msg);
+    setTimeout(() => setSuccess(null), 3000);
+  };
 
   useEffect(() => {
     api.get<PdfArchiveConfig>("/app/tenant/pdf-archive-config")
@@ -46,10 +55,17 @@ export const PdfArchiveSettings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const flash = (msg: string) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(null), 3000);
-  };
+  // Vuelta de Google: el backend redirige acá con el resultado en la URL.
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get("drive");
+    if (!result) return;
+    if (result === "ok") flash(t("config.pdfArchive.connected"));
+    else setAlert(t(result === "cancelado" ? "config.pdfArchive.connectCancelled" : "config.pdfArchive.connectError"));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("drive");
+    window.history.replaceState({}, "", url.toString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const update = (patch: Partial<PdfArchiveConfig>) => {
     setConfig((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -57,20 +73,43 @@ export const PdfArchiveSettings: React.FC = () => {
     setSuccess(null);
   };
 
-  async function save(regenerateSecret = false) {
+  async function save() {
     if (!config) return;
     setSaving(true);
     setSuccess(null);
     try {
       const saved = await api.patch<PdfArchiveConfig>("/app/tenant/pdf-archive-config", {
         enabled: config.enabled,
-        scriptUrl: config.scriptUrl,
         folders: config.folders,
-        regenerateSecret,
       });
       setConfig(saved);
       setDirty(false);
       flash(t("config.saved"));
+    } catch (e) {
+      setAlert(e instanceof ApiError ? e.message : t("config.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function connect() {
+    setConnecting(true);
+    setSuccess(null);
+    try {
+      const { url } = await api.post<{ url: string }>("/app/tenant/pdf-archive/google/start", {});
+      window.location.href = url;
+    } catch (e) {
+      setAlert(e instanceof ApiError ? e.message : t("config.pdfArchive.connectError"));
+      setConnecting(false);
+    }
+  }
+
+  async function disconnect() {
+    setSaving(true);
+    try {
+      setConfig(await api.post<PdfArchiveConfig>("/app/tenant/pdf-archive/google/disconnect", {}));
+      setDirty(false);
+      flash(t("config.pdfArchive.disconnected"));
     } catch (e) {
       setAlert(e instanceof ApiError ? e.message : t("config.saveError"));
     } finally {
@@ -91,14 +130,6 @@ export const PdfArchiveSettings: React.FC = () => {
     } finally {
       setTesting(false);
     }
-  }
-
-  async function copySecret() {
-    if (!config?.secret) return;
-    try {
-      await navigator.clipboard.writeText(config.secret);
-      flash(t("config.pdfArchive.copied"));
-    } catch { /* sin permiso de portapapeles: el texto está a la vista para copiar a mano */ }
   }
 
   return (
@@ -126,45 +157,57 @@ export const PdfArchiveSettings: React.FC = () => {
             </div>
           )}
 
-          <label className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border hover:bg-fg/5 cursor-pointer select-none">
+          {/* Cuenta de Google: un botón, sin URLs ni claves. */}
+          <div className="rounded-lg border border-border p-3 space-y-2">
+            {config.connected ? (
+              <>
+                <p className="text-xs text-fg/80 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-success-sea shrink-0" />
+                  {t("config.pdfArchive.connectedAs")} <b className="text-fg">{config.account ?? t("config.pdfArchive.googleAccount")}</b>
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {config.folderUrl && (
+                    <a href={config.folderUrl} target="_blank" rel="noreferrer" className={secondaryBtn}>
+                      <ExternalLink className="w-3.5 h-3.5" /> {t("config.pdfArchive.openFolder")}
+                    </a>
+                  )}
+                  <button type="button" onClick={() => setConfirmDisconnect(true)} disabled={saving} className={secondaryBtn}>
+                    <Unlink className="w-3.5 h-3.5" /> {t("config.pdfArchive.disconnect")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-fg/60">
+                  {config.available ? t("config.pdfArchive.connectHint") : t("config.pdfArchive.unavailable")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { void connect(); }}
+                  disabled={connecting || !config.available}
+                  className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                  {t("config.pdfArchive.connect")}
+                </button>
+              </>
+            )}
+          </div>
+
+          <label
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border select-none ${
+              config.connected ? "hover:bg-fg/5 cursor-pointer" : "opacity-50 cursor-not-allowed"
+            }`}
+          >
             <input
               type="checkbox"
               checked={config.enabled}
+              disabled={!config.connected}
               onChange={(e) => update({ enabled: e.target.checked })}
               className="w-4 h-4 rounded accent-accent shrink-0"
             />
             <span className="text-xs font-medium text-fg/80">{t("config.pdfArchive.enable")}</span>
           </label>
-
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">{t("config.pdfArchive.scriptUrl")}</p>
-            <input
-              type="url"
-              value={config.scriptUrl}
-              onChange={(e) => update({ scriptUrl: e.target.value })}
-              placeholder="https://script.google.com/macros/s/…/exec"
-              className={inputCls}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">{t("config.pdfArchive.secret")}</p>
-            {config.secret ? (
-              <div className="flex items-center gap-2 flex-wrap">
-                <code className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-border bg-fg/[0.03] text-xs text-fg/80 break-all">
-                  {config.secret}
-                </code>
-                <button type="button" onClick={() => { void copySecret(); }} className={secondaryBtn}>
-                  <Copy className="w-3.5 h-3.5" /> {t("config.pdfArchive.copy")}
-                </button>
-                <button type="button" onClick={() => setConfirmRegenerate(true)} disabled={saving} className={secondaryBtn}>
-                  <RefreshCw className="w-3.5 h-3.5" /> {t("config.pdfArchive.regenerate")}
-                </button>
-              </div>
-            ) : (
-              <p className="text-xs text-fg/40">{t("config.pdfArchive.secretHint")}</p>
-            )}
-          </div>
 
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">{t("config.pdfArchive.folders")}</p>
@@ -193,7 +236,7 @@ export const PdfArchiveSettings: React.FC = () => {
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {t("config.save")}
             </button>
-            <button type="button" onClick={() => { void test(); }} disabled={testing || !config.scriptUrl} className={secondaryBtn}>
+            <button type="button" onClick={() => { void test(); }} disabled={testing || !config.connected} className={secondaryBtn}>
               {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlugZap className="w-3.5 h-3.5" />}
               {t("config.pdfArchive.test")}
             </button>
@@ -207,13 +250,13 @@ export const PdfArchiveSettings: React.FC = () => {
       )}
 
       {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
-      {confirmRegenerate && (
+      {confirmDisconnect && (
         <ConfirmDialog
-          message={t("config.pdfArchive.regenerateConfirm")}
+          message={t("config.pdfArchive.disconnectConfirm")}
           confirmLabel={t("common.confirm")}
           cancelLabel={t("common.cancel")}
-          onConfirm={() => { setConfirmRegenerate(false); void save(true); }}
-          onCancel={() => setConfirmRegenerate(false)}
+          onConfirm={() => { setConfirmDisconnect(false); void disconnect(); }}
+          onCancel={() => setConfirmDisconnect(false)}
         />
       )}
     </section>

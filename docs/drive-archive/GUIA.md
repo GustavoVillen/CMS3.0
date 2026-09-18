@@ -1,34 +1,40 @@
-# Guía: conectar CMS3 con Google Drive
+# Archivo de PDFs en Google Drive — guía del usuario
 
-Se hace **una sola vez**, con la cuenta de Google dueña de la carpeta (ej. mercuriogroupflota@gmail.com).
+Cada PDF que genera CMS3 se guarda solo en el Google Drive de la empresa. Se configura
+una sola vez, desde la propia pantalla, y no hace falta saber nada técnico.
 
-## 1. Copiar la clave en CMS3
+## Conectar la cuenta
+
 1. Entrar a CMS3 como administrador → **Configuración** → **Archivo de PDFs en Google Drive**.
-2. Tocar **Guardar** una vez (sin activar todavía). Aparece la **clave**: copiarla.
+2. Tocar **Conectar con Google Drive**.
+3. Se abre Google: elegir la **cuenta de la empresa** (la dueña del Drive donde se van a
+   guardar los documentos) y tocar **Continuar / Permitir**.
+4. Vuelve a CMS3 con el cartel "Cuenta de Google conectada".
+5. Tildar **Activar el archivo automático** y tocar **Guardar**.
 
-## 2. Crear el script en Google
-1. Con la cuenta de Mercurio abrir **script.google.com** → **Nuevo proyecto**.
-2. Borrar lo que aparece y pegar todo el contenido de `apps-script.gs`.
-3. En `ROOT_FOLDER_ID` pegar el ID de la carpeta raíz (lo que sigue a `/folders/` en el enlace de Drive).
-   Para MisDocs: `1n5EmXXxG04HMOxcd0_luyayBANnUsNR_`
-4. En `SECRET` pegar la clave copiada de CMS3.
-5. Guardar (ícono de disquete).
+Listo. Con **Probar conexión** se puede confirmar cuando se quiera.
 
-## 3. Publicarlo
-1. Botón **Implementar** → **Nueva implementación**.
-2. Tipo (engranaje): **Aplicación web**.
-3. **Ejecutar como:** Yo. **Quién tiene acceso:** Cualquier persona.
-4. **Implementar** → Google pide permisos: **Autorizar acceso** → elegir la cuenta →
-   "Google no verificó esta app" → **Configuración avanzada** → **Ir a … (no seguro)** → **Permitir**.
-   (Es normal: el script es de la propia empresa.)
-5. Copiar la **URL de la aplicación web** (termina en `/exec`).
+## Qué hace
 
-## 4. Terminar en CMS3
-1. Volver a Configuración, pegar la URL, tildar **Activar** y **Guardar**.
-2. Tocar **Probar conexión**: tiene que decir que conectó.
-3. Listo. Desde ahora cada PDF que se genere cae en Drive.
+- Crea en ese Drive una carpeta **CMS3 — Documentos** y adentro una por tipo de documento
+  (OT, SS, DEF, FA, APL, VAR, REQ, MOC, Planes de Mantenimiento, Otros). Los nombres de esas
+  carpetas se pueden cambiar en la misma pantalla.
+- Mientras el documento está **abierto**, el PDF va a `<tipo>/Borrador` y se pisa cada vez que
+  se genera de nuevo.
+- Cuando el documento queda **cerrado, aprobado, rechazado o cancelado**, el PDF pasa a
+  `<tipo>/` como registro final y se borra la copia de Borrador.
+- Los planes de mantenimiento y los PDFs sueltos (permisos, inspecciones, checklists…) van
+  directo a su carpeta, sin borrador.
 
-## Si algo cambia
-- **Se modifica el script:** Implementar → Gestionar implementaciones → editar → Versión: nueva. La URL no cambia.
-- **Se regenera la clave en CMS3:** hay que pegar la nueva en `SECRET` y volver a publicar como arriba.
-- **Error en Configuración:** el aviso rojo dice qué pasó. Lo más común: la clave no coincide o el acceso no quedó en "Cualquier persona".
+CMS3 sólo puede ver y tocar lo que él mismo guarda ahí: no tiene acceso al resto del Drive.
+
+## Cosas para saber
+
+- **Desconectar** corta el archivo automático. Lo que ya está guardado queda en el Drive.
+- Si algo falla (se revocó el permiso, se borró la carpeta a mano, no había internet), el PDF
+  se genera igual y el aviso del error aparece arriba de la sección. Se destraba con
+  **Probar conexión** o volviendo a conectar la cuenta.
+- El archivo automático arranca **apagado** en una empresa nueva.
+
+Para dar de alta la conexión del lado de Google (una sola vez por instalación, lo hace el
+equipo de CMS3) ver [ALTA-GOOGLE.md](ALTA-GOOGLE.md).

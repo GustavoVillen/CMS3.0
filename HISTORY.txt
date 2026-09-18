@@ -1,5 +1,27 @@
 HISTORY.txt
 
+[2026-09-17] Archivo de PDFs en Drive: boton "Conectar con Google" en vez del Apps Script
+Agent: Claude Opus 5
+- Gustavo freno el esquema anterior: pedia al usuario publicar un Apps Script y pegar
+  URL + clave. Ahora el admin toca "Conectar con Google Drive", elige la cuenta de la
+  empresa y autoriza. Permiso pedido: drive.file (no sensible: sin verificacion ni
+  auditoria de Google, y CMS3 solo ve lo que el mismo crea).
+- CMS3 crea la carpeta "CMS3 - Documentos" con una subcarpeta por tipo. No puede
+  escribir en carpetas preexistentes (haria falta el Google Picker). Se mantiene la
+  regla Borrador -> registro final y que un error nunca rompa el flujo del usuario.
+- Backend: tenant/settings/google-drive-client.ts (OAuth + Drive v3 con fetch, sin
+  dependencias nuevas) + pdf-archive-service.ts. El callback llega sin sesion (es una
+  navegacion del navegador): lo valida un `state` firmado con HMAC. El refresh token
+  nunca se devuelve al frontend.
+- PASOS DE DEPLOY: db push + prisma generate (bajan pdfArchiveScriptUrl/Secret, suben
+  pdfArchiveGoogleRefreshToken/Account/RootFolderId/FolderIds; verificado antes en
+  produccion: 0 tenants con script cargado y 0 activos), build de web y restart.
+  Sin dependencias nuevas.
+- Queda PENDIENTE el alta en Google Cloud (docs/drive-archive/ALTA-GOOGLE.md) y las
+  variables GOOGLE_OAUTH_CLIENT_ID/SECRET en el .env de cada instalacion: hasta
+  entonces el boton sale deshabilitado y no se sube ningun PDF. Cada empresa nueva
+  necesita ademas su URI de redireccion en Google (no acepta comodines).
+
 [2026-09-17] PDF del plan (y del diferimiento) con formato Mercurio
 Agent: Claude Opus 5
 - Aprobado por Gustavo (APROBAR-CAMBIO). Una linea en resolveTenantForm: para
