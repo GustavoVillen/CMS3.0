@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, Archive, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
+import { AlertTriangle, Archive, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Pause, Pencil, PenLine, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -4877,7 +4877,7 @@ function groupWosByAsset(items: WorkOrder[], multiLabel: string): { key: string;
     });
 }
 
-function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload, grouped, onlyStage, cardAction }: {
+function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, onReload, grouped, onlyStages, cardAction }: {
   items: WorkOrder[];
   deferralMap: Map<string, { id: string; deferralCode: string; status: string; toNextDrydock?: boolean }>;
   srMap: Map<string, SrLite[]>;
@@ -4887,8 +4887,8 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
   onReload: () => void;
   /** Agrupar las tarjetas por equipo (opcional: por defecto se ven todas). */
   grouped: boolean;
-  /** Con un filtro de etapa, sólo esa columna. */
-  onlyStage?: WoStage;
+  /** Con un filtro de etapa, sólo esas columnas. */
+  onlyStages?: WoStage[];
   /** Próximo paso visible de cada tarjeta. */
   cardAction: (wo: WorkOrder) => WoCardAction;
 }) {
@@ -4961,8 +4961,8 @@ function KanbanBoard({ items, deferralMap, srMap, loadingId, loading, onOpen, on
     <>
       {dropError && <AlertDialog message={dropError} onClose={() => setDropError(null)} />}
       {/* Columnas de ancho mínimo: en el celular se deslizan de costado en vez de apretarse. */}
-      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStage ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
-        {KANBAN_COLS.filter(col => !onlyStage || col.colId === onlyStage).map(col => {
+      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStages ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
+        {KANBAN_COLS.filter(col => !onlyStages || onlyStages.includes(col.colId)).map(col => {
           const colItems = items.filter(w => woStage(w) === col.colId);
           const isOver   = overCol === col.colId && col.droppable;
           return (
@@ -5403,7 +5403,7 @@ export const WorkOrdersPage: React.FC = () => {
   //   - `stageSel`: los botones de etapa (Abiertas / En preparación / …).
   //   - tipo, prioridad, responsable, equipo, "sólo vencidas" y el buscador.
   // Antes los filtros sólo existían en la lista y se borraban al pasar al tablero.
-  const [stageSel, setStageSel] = useState<"" | "inPreparation" | "toApprove" | "toAuthorize" | "authorized" | "postponed" | "closed">("");
+  const [stageSel, setStageSel] = useState<"" | "inPreparation" | "toApprove" | "toAuthorize" | "pending" | "authorized" | "postponed" | "closed">("");
   // Los desplegables de tipo / prioridad / responsable / equipo y los botones de
   // etapa se sacaron a pedido del usuario (17-sep): la barra quedó en una sola
   // fila (grupo + sólo vencidas + agrupar + buscador). El buscador ya encuentra
@@ -5434,6 +5434,7 @@ export const WorkOrdersPage: React.FC = () => {
       // Pendientes de tramitación: mismas etapas que las columnas del tablero.
       case "toApprove":         return items.filter(w => woStage(w) === "SOLICITADA");
       case "toAuthorize":       return items.filter(w => woStage(w) === "APROBADA");
+      case "pending":           return items.filter(w => woStage(w) === "SOLICITADA" || woStage(w) === "APROBADA");
       // "en proceso" gana sobre la etapa de firma, igual que la etiqueta de la tarjeta.
       case "inProgress":        return items.filter(w => w.status === "IN_PROGRESS");
       case "authorized":        return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "AUTORIZADA");
@@ -5498,9 +5499,9 @@ export const WorkOrdersPage: React.FC = () => {
 
   // Las cerradas no tienen columna en el tablero: con esa etapa se muestra la lista.
   const showBoard = viewMode === "kanban" && stageSel !== "closed" && viewFilter !== "closed";
-  const STAGE_TO_COLUMN: Record<string, WoStage> = {
-    inPreparation: "EN_PREPARACION", toApprove: "SOLICITADA", toAuthorize: "APROBADA",
-    authorized: "AUTORIZADA", postponed: "DIFERIDA",
+  const STAGE_TO_COLUMNS: Record<string, WoStage[]> = {
+    inPreparation: ["EN_PREPARACION"], toApprove: ["SOLICITADA"], toAuthorize: ["APROBADA"],
+    pending: ["SOLICITADA", "APROBADA"], authorized: ["AUTORIZADA"], postponed: ["DIFERIDA"],
   };
 
   /**
@@ -5673,6 +5674,7 @@ export const WorkOrdersPage: React.FC = () => {
     { key: "inPreparation", label: t("wo.filter.inPreparation") },
     { key: "toApprove", label: t("wo.stageF.toApprove") },
     { key: "toAuthorize", label: t("wo.stageF.toAuthorize") },
+    { key: "pending", label: t("wo.fl.pendingSign") },
     { key: "authorized", label: t("wo.filter.authorized") },
     { key: "postponed", label: t("wo.filter.postponed") },
     { key: "closed", label: t("wo.filter.closed") },
@@ -5785,6 +5787,19 @@ export const WorkOrdersPage: React.FC = () => {
             }`}>
             <Archive className="w-3.5 h-3.5" /> {t("wo.fl.showClosed")}
           </button>
+          {/* Pendientes de aprobación + pendientes de autorización: las dos columnas
+              del tablero que esperan una firma. */}
+          <button type="button" aria-pressed={stageSel === "pending"}
+            onClick={() => {
+              if (stageSel === "pending") setStageSel("");
+              else { setStageSel("pending"); if (viewFilter === "closed") setViewParam(""); }
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+              stageSel === "pending" ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
+            }`}>
+            <PenLine className="w-3.5 h-3.5" /> {t("wo.fl.pendingSign")}
+            <span className="rounded-full bg-fg/10 px-1.5 text-[10px] font-bold">{beforeStage ? applyViewKey(beforeStage, "pending").length : 0}</span>
+          </button>
           <button type="button" onClick={() => setOverdueOnly(v => !v)}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
               overdueOnly ? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400" : "border-fg/10 bg-surface text-fg"
@@ -5835,7 +5850,7 @@ export const WorkOrdersPage: React.FC = () => {
       ) : (
         <KanbanBoard items={tmsaDisplayItems ?? []} deferralMap={deferralMap} srMap={srMap} loadingId={detailLoadingId} loading={loading}
           onOpen={wo => openLink(wo.workOrderCode)} onReload={reload}
-          grouped={groupByAsset} onlyStage={stageSel ? STAGE_TO_COLUMN[stageSel] : undefined} cardAction={cardAction} />
+          grouped={groupByAsset} onlyStages={stageSel ? STAGE_TO_COLUMNS[stageSel] : undefined} cardAction={cardAction} />
       )}
 
       {/* Acciones de las tarjetas / filas: mismos pasos que dentro de la OT. */}

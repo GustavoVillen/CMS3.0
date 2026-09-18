@@ -10,7 +10,7 @@
 
 import React, { useState } from "react";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, Archive, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
+import { AlertTriangle, Archive, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, PenLine, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
@@ -244,6 +244,8 @@ const SS_KANBAN_COLS: Array<{ colId: Exclude<SsStage, "HIDDEN">; headerCls: stri
 
 const SS_OPEN_STATUSES = ["DRAFT", "SOLICITADA", "APROBADA", "AUTORIZADA", "IN_PROGRESS"];
 const SS_TERMINAL_STATUSES = ["COMPLETED", "REJECTED", "CANCELLED"];
+/** Pendientes de aprobación y de autorización. */
+const SS_PENDING_SIGN = ["SOLICITADA", "APROBADA"];
 
 /**
  * Días en el taller a partir de los cuales la SS se marca en rojo. La SS no
@@ -391,7 +393,7 @@ function groupSrsByAsset(items: ServiceRequest[]): { key: string; label: string;
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, onlyStage, cardAction }: {
+function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, onlyStages, cardAction }: {
   items: ServiceRequest[];
   loading: boolean;
   onOpen: (sr: ServiceRequest) => void;
@@ -400,8 +402,8 @@ function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, 
   onApproval: (sr: ServiceRequest, step: "SOLICITA" | "APRUEBA" | "AUTORIZA") => void;
   /** Agrupar las tarjetas por equipo (opcional: por defecto se ven todas). */
   grouped: boolean;
-  /** Con un filtro de etapa, sólo esa columna. */
-  onlyStage?: Exclude<SsStage, "HIDDEN">;
+  /** Con un filtro de etapa, sólo esas columnas. */
+  onlyStages?: Exclude<SsStage, "HIDDEN">[];
   cardAction: (sr: ServiceRequest) => SsCardAction;
 }) {
   const t = useT();
@@ -489,8 +491,8 @@ function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, 
     <>
       {dropError && <AlertDialog message={dropError} onClose={() => setDropError(null)} />}
       {/* Columnas de ancho mínimo: en el celular se deslizan de costado en vez de apretarse. */}
-      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStage ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
-        {SS_KANBAN_COLS.filter(col => !onlyStage || col.colId === onlyStage).map(col => {
+      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStages ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
+        {SS_KANBAN_COLS.filter(col => !onlyStages || onlyStages.includes(col.colId)).map(col => {
           const colItems = items.filter(sr => ssStage(sr) === col.colId);
           const isOver   = overCol === col.colId;
           return (
@@ -589,6 +591,8 @@ export function ServiceRequestsPage() {
   const [groupSel, setGroupSel] = useState<number | null>(null);
   // "Ver cerradas": completadas, rechazadas y canceladas, en modo lista.
   const [closedOnly, setClosedOnly] = useState(false);
+  // "Por aprobar / autorizar": las dos columnas que esperan una firma.
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [groupByAsset, setGroupByAsset] = useState(false);
   const [showNewSs, setShowNewSs] = useState(false);
   // SS recién creada desde "+ Nueva SS": se abre cuando llega en la lista recargada.
@@ -681,10 +685,11 @@ export function ServiceRequestsPage() {
   const stageFilter = React.useCallback((list: ServiceRequest[], key: SsStageKey): ServiceRequest[] => {
     // "Ver cerradas": completadas, rechazadas y canceladas, todas juntas.
     if (closedOnly) return list.filter(sr => SS_TERMINAL_STATUSES.includes(sr.status));
+    if (pendingOnly) list = list.filter(sr => SS_PENDING_SIGN.includes(sr.status));
     if (key) return list.filter(sr => sr.status === key);
     if (search.trim() || statusSet || cardSel === "rejected") return list;
     return list.filter(sr => SS_OPEN_STATUSES.includes(sr.status));
-  }, [closedOnly, search, statusSet, cardSel]);
+  }, [closedOnly, pendingOnly, search, statusSet, cardSel]);
 
   const displayItems = React.useMemo(() => stageFilter(beforeStage, stageSel), [beforeStage, stageFilter, stageSel]);
 
@@ -835,6 +840,7 @@ export function ServiceRequestsPage() {
     ...(statusSet ? [{ key: "status", label: [...statusSet].map(s => t(`ss.stage.${s}` as TranslationKey)).join(" · "), clear: clearStatusParam }] : []),
     ...(cardSel ? [{ key: "card", label: CARD_LABEL[cardSel], clear: () => setViewParam("") }] : []),
     ...(stageSel ? [{ key: "stage", label: STAGE_BUTTONS.find(b => b.key === stageSel)!.label, clear: () => setStageSel("") }] : []),
+    ...(pendingOnly ? [{ key: "pending", label: t("wo.fl.pendingSign"), clear: () => setPendingOnly(false) }] : []),
     ...(groupSel !== null ? [{ key: "group", label: `G${groupSel} · ${t(`sfi.g.${groupSel}` as TranslationKey)}`, clear: () => setGroupSel(null) }] : []),
   ];
   // Grupos con solicitudes para lo que se está mirando (misma etapa y filtros, sin el grupo).
@@ -842,7 +848,7 @@ export function ServiceRequestsPage() {
     stageFilter(beforeGroup, stageSel).map(sr => sr.sfiGroupNumber).filter((g): g is number => typeof g === "number"),
   );
   const clearAllFilters = () => {
-    setStageSel(""); setSearch(""); setGroupSel(null); setClosedOnly(false);
+    setStageSel(""); setSearch(""); setGroupSel(null); setClosedOnly(false); setPendingOnly(false);
     const params = new URLSearchParams(searchParams);
     params.delete("view"); params.delete("status");
     setSearchParams(params, { replace: true });
@@ -902,11 +908,23 @@ export function ServiceRequestsPage() {
               // Las cerradas no tienen columna en el tablero: se muestran en la lista.
               setClosedOnly(v => !v);
               setViewMode(closedOnly ? "kanban" : "list");
+              setPendingOnly(false);
             }}
             className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
               closedOnly ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
             }`}>
             <Archive className="w-3.5 h-3.5" /> {t("wo.fl.showClosed")}
+          </button>
+          <button type="button" aria-pressed={pendingOnly}
+            onClick={() => {
+              if (!pendingOnly && closedOnly) { setClosedOnly(false); setViewMode("kanban"); }
+              setPendingOnly(v => !v);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+              pendingOnly ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
+            }`}>
+            <PenLine className="w-3.5 h-3.5" /> {t("wo.fl.pendingSign")}
+            <span className="rounded-full bg-fg/10 px-1.5 text-[10px] font-bold">{beforeStage.filter(sr => SS_PENDING_SIGN.includes(sr.status)).length}</span>
           </button>
           {showBoard && (
             <button type="button" onClick={() => setGroupByAsset(v => !v)}
@@ -964,7 +982,8 @@ export function ServiceRequestsPage() {
           onReload={reload}
           onApproval={(sr, step) => setListApproval({ sr, step })}
           grouped={groupByAsset}
-          onlyStage={stageSel && !SS_TERMINAL_STATUSES.includes(stageSel) ? (stageSel as Exclude<SsStage, "HIDDEN">) : undefined}
+          onlyStages={pendingOnly ? ["SOLICITADA", "APROBADA"]
+            : stageSel && !SS_TERMINAL_STATUSES.includes(stageSel) ? [stageSel as Exclude<SsStage, "HIDDEN">] : undefined}
           cardAction={cardAction}
         />
       )}

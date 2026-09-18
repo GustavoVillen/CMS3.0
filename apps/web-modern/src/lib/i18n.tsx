@@ -3870,6 +3870,7 @@ const dict = {
   "wo.fl.assetAll":           { es: "Equipo: todos",     en: "Equipment: all",  pt: "Equipamento: todos" },
   "wo.fl.noOne":              { es: "Sin responsable",   en: "Unassigned",      pt: "Sem responsável" },
   "wo.fl.overdueOnly":        { es: "Sólo vencidas",     en: "Overdue only",    pt: "Só vencidas" },
+  "wo.fl.pendingSign":        { es: "Por aprobar / autorizar", en: "To approve / authorize", pt: "A aprovar / autorizar" },
   "wo.fl.group":              { es: "Grupo",             en: "Group",           pt: "Grupo" },
   "wo.fl.groupAll":           { es: "Sin filtro",        en: "No filter",       pt: "Sem filtro" },
   "wo.fl.showClosed":         { es: "Ver cerradas",      en: "Show closed",     pt: "Ver fechadas" },
