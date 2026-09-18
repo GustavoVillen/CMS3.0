@@ -644,6 +644,7 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
         originalName: savedName,
         mimeType: normText(input.reportMime) ?? "application/pdf",
         content,
+        localUrl: reportUrl,
       });
     }
   }

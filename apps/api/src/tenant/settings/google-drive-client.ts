@@ -265,3 +265,23 @@ export async function uploadFile(
 export function folderUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
 }
+
+/** ¿Sigue existiendo (y sin borrar) el archivo? Se chequea antes de borrar el original del servidor. */
+export async function fileExists(accessToken: string, fileId: string): Promise<boolean> {
+  try {
+    const data = await driveFetch(accessToken, `${FILES_URL}/${fileId}?fields=id,trashed,size`);
+    return !!data.id && data.trashed !== true;
+  } catch {
+    return false;
+  }
+}
+
+/** Baja el contenido del archivo desde Drive, para servirlo cuando el original ya no está en el disco. */
+export async function downloadFile(accessToken: string, fileId: string): Promise<Buffer> {
+  const res = await fetch(`${FILES_URL}/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Drive respondió ${res.status} al bajar el archivo.`);
+  return Buffer.from(await res.arrayBuffer());
+}

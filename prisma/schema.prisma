@@ -1214,6 +1214,32 @@ model AuditEvent {
   @@index([createdAt])
 }
 
+// ─── Archivo subido con copia en el Drive de la empresa ──────────────────────
+// Mapa "archivo del servidor → archivo en Drive". Con esto, pasados 2 años se
+// puede borrar el original del disco y seguir mostrándolo igual: la API lo trae
+// del Drive en el momento (tenant/settings/archived-files-service.ts). El
+// usuario no cambia de pantalla ni necesita permisos de Google.
+model ArchivedFile {
+  id             String    @id @default(cuid())
+  tenantId       String
+  /// Ruta interna del archivo, tal como se guarda en los registros:
+  /// "/uploads/attachments/mercurio/workorder/<uuid>.jpg"
+  localUrl       String
+  driveFileId    String
+  driveName      String
+  mimeType       String
+  sizeBytes      Int
+  vesselCode     String?
+  /// Tipo de carpeta en Drive (OT, FA, RCP…), para diagnóstico.
+  kind           String
+  archivedAt     DateTime  @default(now())
+  /// Cuándo se borró la copia del servidor. null = el original sigue en disco.
+  localDeletedAt DateTime?
+
+  @@unique([tenantId, localUrl])
+  @@index([tenantId, localDeletedAt])
+}
+
 // ─── Usage Event (append-only) ────────────────────────────────────────────────
 // Unified log: AI token consumption + HTTP bytes traffic (satellite link cost).
 // Distinguished by `kind`. SUPERADMIN-visible. Retention: 6 months (purged by cron).

@@ -318,6 +318,28 @@ async function runUsagePurge(): Promise<void> {
 setTimeout(() => { runUsagePurge().catch(() => {}); }, 60_000);
 setInterval(() => { runUsagePurge().catch(() => {}); }, 24 * 60 * 60 * 1_000).unref();
 
+// ── Retención de archivos subidos — el Drive como archivo definitivo ─────────
+// Lo que la gente sube (fotos, videos, informes de laboratorio, remitos) se
+// copia al Drive de la empresa. Pasados 2 años el original se borra del disco y
+// se sigue mostrando igual: la API lo baja del Drive cuando alguien lo abre.
+// No borra nada si la empresa desconectó la cuenta o si la copia no está viva
+// en Drive (ver tenant/settings/archived-files-service.ts).
+async function runArchivedFilesPurge(): Promise<void> {
+  try {
+    const { runArchivedFilesRetention } = await import("./tenant/settings/archived-files-service");
+    const { removed, freedBytes } = await runArchivedFilesRetention();
+    if (removed > 0) {
+      process.stdout.write(`[archived-files] ${removed} archivos borrados del disco (${Math.round(freedBytes / 1024 / 1024)} MB), disponibles desde Drive
+`);
+    }
+  } catch (err) {
+    process.stderr.write(`[archived-files] aborted: ${err instanceof Error ? err.message : String(err)}
+`);
+  }
+}
+setTimeout(() => { runArchivedFilesPurge().catch(() => {}); }, 120_000);
+setInterval(() => { runArchivedFilesPurge().catch(() => {}); }, 24 * 60 * 60 * 1_000).unref();
+
 // ── Parte semanal de flota por correo ───────────────────────────────────────
 //
 // Lunes 07:00 (apertura) y viernes 17:00 (cierre), EN LA HORA DE CADA EMPRESA.

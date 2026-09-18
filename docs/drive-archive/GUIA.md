@@ -31,6 +31,17 @@ Listo. Con **Probar conexión** se puede confirmar cuando se quiera.
 
 CMS3 sólo puede ver y tocar lo que él mismo guarda ahí: no tiene acceso al resto del Drive.
 
+## Espacio: el Drive como archivo definitivo
+
+Todo lo que se sube (fotos, videos, informes del laboratorio, remitos) queda con copia en el
+Drive. **Pasados 2 años, el original se borra del servidor** y el sistema lo sigue mostrando
+igual: cuando alguien lo abre, CMS3 lo trae del Drive en el momento. Nadie necesita entrar al
+Drive ni tener permisos de Google; los permisos siguen siendo los de CMS3.
+
+No se borra nada si la cuenta está desconectada, ni si la copia no está viva en el Drive: se
+verifica archivo por archivo antes de borrar el original. Los PDF que genera el sistema no
+entran en esto — se regeneran solos.
+
 ## Cosas para saber
 
 - **Desconectar** corta el archivo automático. Lo que ya está guardado queda en el Drive.

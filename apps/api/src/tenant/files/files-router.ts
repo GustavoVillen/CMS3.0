@@ -30,6 +30,8 @@ import { serveGoodsReceiptUpload } from "../spares/goods-receipt-uploads-service
 import { serveAttachment } from "../attachments/attachment-uploads-service";
 import { sendJson } from "../../http/json-response";
 import { assertFileAccess } from "./file-access-service";
+import { readFromDrive } from "../settings/archived-files-service";
+import { applySecurityHeaders } from "../../http/security-headers";
 
 /**
  * Traduce un path con prefijo legacy `/uploads/...` al equivalente
@@ -44,6 +46,32 @@ export function serializeFileUrl(dbUrl: string | null): string | null {
 
 function notFound(response: ServerResponse): boolean {
   sendJson(response, 404, { error: { code: "NOT_FOUND", message: "Archivo no encontrado." } });
+  return true;
+}
+
+/**
+ * El original ya no está en el disco: pasados 2 años se borra y queda sólo la
+ * copia del Drive de la empresa (archived-files-service.ts). Se baja al vuelo y
+ * se sirve igual, así el usuario no se entera ni necesita permisos de Google.
+ * Los permisos ya los chequeó `assertFileAccess` antes de llegar acá.
+ */
+async function serveOrFetchFromDrive(
+  served: boolean,
+  response: ServerResponse,
+  tenantSlug: string,
+  pathname: string,
+): Promise<boolean> {
+  if (served) return true;
+  const localUrl = "/uploads/" + pathname.slice("/app/files/".length);
+  const file = await readFromDrive(tenantSlug, localUrl);
+  if (!file) return notFound(response);
+  applySecurityHeaders(response);
+  response.writeHead(200, {
+    "Content-Type": file.mimeType,
+    "Content-Length": file.content.length,
+    "Cache-Control": "private, max-age=300",
+  });
+  response.end(file.content);
   return true;
 }
 
@@ -78,7 +106,7 @@ export async function handleFilesRoutes(
     const [, pathSlug, filename] = certMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     await assertFileAccess(session, "certificates", url.pathname);
-    return serveCertificateUpload(response, tenantSlug, filename!) || notFound(response);
+    return serveOrFetchFromDrive(serveCertificateUpload(response, tenantSlug, filename!), response, tenantSlug, url.pathname);
   }
 
   // /app/files/checklists/{tenantSlug}/{filename}
@@ -87,7 +115,7 @@ export async function handleFilesRoutes(
     const [, pathSlug, filename] = checklistMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     await assertFileAccess(session, "checklists", url.pathname);
-    return serveChecklistUpload(response, tenantSlug, filename!) || notFound(response);
+    return serveOrFetchFromDrive(serveChecklistUpload(response, tenantSlug, filename!), response, tenantSlug, url.pathname);
   }
 
   // /app/files/fluid-reports/{tenantSlug}/{filename}
@@ -96,7 +124,7 @@ export async function handleFilesRoutes(
     const [, pathSlug, filename] = fluidMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     await assertFileAccess(session, "fluid-reports", url.pathname);
-    return serveFluidReportUpload(response, tenantSlug, filename!) || notFound(response);
+    return serveOrFetchFromDrive(serveFluidReportUpload(response, tenantSlug, filename!), response, tenantSlug, url.pathname);
   }
 
   // /app/files/wo-scans/{tenantSlug}/{filename}
@@ -105,7 +133,7 @@ export async function handleFilesRoutes(
     const [, pathSlug, filename] = woScanMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     await assertFileAccess(session, "wo-scans", url.pathname);
-    return serveWorkOrderScanUpload(response, tenantSlug, filename!) || notFound(response);
+    return serveOrFetchFromDrive(serveWorkOrderScanUpload(response, tenantSlug, filename!), response, tenantSlug, url.pathname);
   }
 
   // /app/files/goods-receipts/{tenantSlug}/{filename}
@@ -114,7 +142,7 @@ export async function handleFilesRoutes(
     const [, pathSlug, filename] = receiptMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     await assertFileAccess(session, "goods-receipts", url.pathname);
-    return serveGoodsReceiptUpload(response, tenantSlug, filename!) || notFound(response);
+    return serveOrFetchFromDrive(serveGoodsReceiptUpload(response, tenantSlug, filename!), response, tenantSlug, url.pathname);
   }
 
   // /app/files/attachments/{tenantSlug}/{entityType}/{filename}
@@ -123,7 +151,7 @@ export async function handleFilesRoutes(
     const [, pathSlug, entityType, filename] = attMatch;
     if (pathSlug !== tenantSlug) return tenantMismatch(response);
     await assertFileAccess(session, "attachments", url.pathname);
-    return serveAttachment(response, tenantSlug, entityType!, filename!) || notFound(response);
+    return serveOrFetchFromDrive(serveAttachment(response, tenantSlug, entityType!, filename!), response, tenantSlug, url.pathname);
   }
 
   return false;

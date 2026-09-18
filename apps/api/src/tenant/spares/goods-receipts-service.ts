@@ -653,6 +653,7 @@ export async function commitGoodsReceipt(
         fileName: `${fecha}. ${proveedor}. ${numero}${ext}`,
         mimeType: normText(input.file?.mime) ?? "application/pdf",
         content,
+        localUrl: fileUrl,
       });
     }
   }

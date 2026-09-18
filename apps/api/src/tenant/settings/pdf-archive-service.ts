@@ -16,6 +16,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { log } from "../../common/logger";
+import { recordArchivedFile } from "./archived-files-service";
 import {
   buildAuthUrl,
   ensureFolder,
@@ -362,6 +363,21 @@ export async function testPdfArchive(session: TenantAccessSession): Promise<{ ok
   return { ok: true };
 }
 
+/**
+ * Credenciales para hablar con el Drive de una empresa. Lo usa también la
+ * retención de archivos (archived-files-service.ts) para bajar del Drive lo que
+ * ya no está en el disco.
+ */
+export async function getTenantDriveAccess(
+  tenantId: string,
+): Promise<{ config: GoogleOAuthConfig; refreshToken: string } | null> {
+  const config = googleOAuthConfig();
+  if (!config) return null;
+  const settings = await loadSettings(tenantId);
+  if (!settings?.pdfArchiveGoogleRefreshToken) return null;
+  return { config, refreshToken: settings.pdfArchiveGoogleRefreshToken };
+}
+
 // ── Subida ───────────────────────────────────────────────────────────────────
 
 function errorMessage(err: unknown): string {
@@ -460,8 +476,9 @@ async function pushToDrive(params: {
   mimeType: string;
   content: Buffer;
   final: boolean;
-}): Promise<void> {
+}): Promise<{ driveFileId: string; driveName: string }> {
   const { tenantId, settings, googleConfig, refreshToken, kind, final } = params;
+  let driveFileId = "";
   const safeName = params.fileName.replace(/[\\/:*?"<>|]/g, "_");
   // Primero el buque, después el tipo: "<raíz>/DON CHICUETO/OT/…".
   const vesselFolder = await resolveVesselFolder(tenantId, params.vesselCode);
@@ -478,7 +495,7 @@ async function pushToDrive(params: {
     const targetId = await resolveFolderId(accessToken, rootFolderId, cache, segments);
 
     await trashByName(accessToken, targetId, safeName);
-    await uploadFile(accessToken, targetId, safeName, params.mimeType, params.content);
+    driveFileId = await uploadFile(accessToken, targetId, safeName, params.mimeType, params.content);
 
     // Quedó el registro final: el borrador ya no hace falta. Sólo si la
     // carpeta Borrador existe (no la creamos para borrar algo que no está).
@@ -492,6 +509,7 @@ async function pushToDrive(params: {
       });
     }
   });
+  return { driveFileId, driveName: safeName };
 }
 
 /**
@@ -516,6 +534,8 @@ export async function archiveAttachment(
     originalName: string;
     mimeType: string;
     content: Buffer;
+    /** Ruta interna del archivo ("/uploads/…"), para poder borrarlo del disco a los 2 años. */
+    localUrl?: string | null;
   },
 ): Promise<void> {
   let tenantId: string | null = null;
@@ -546,6 +566,8 @@ export async function archiveAttachment(
 
       // Mismo archivo ya archivado: no se toca (ni se renumera ni se duplica).
       const already = await findByAppProperty(accessToken, targetId, "cms3Fingerprint", fingerprint);
+      let driveFileId = already?.id ?? "";
+      let driveName = already?.name ?? "";
       if (!already) {
         const names = await listFileNames(accessToken, targetId, prefix);
         let maxIndex = 0;
@@ -553,10 +575,23 @@ export async function archiveAttachment(
           const match = new RegExp(`^${escapeRegExp(prefix)}(\\d+)`, "i").exec(name);
           if (match) maxIndex = Math.max(maxIndex, Number(match[1]));
         }
-        const fileName = `${prefix}${maxIndex + 1}${ext}`.replace(/[\\/:*?"<>|]/g, "_");
-        await uploadFile(accessToken, targetId, fileName, input.mimeType || "application/octet-stream", input.content, {
+        driveName = `${prefix}${maxIndex + 1}${ext}`.replace(/[\\/:*?"<>|]/g, "_");
+        driveFileId = await uploadFile(accessToken, targetId, driveName, input.mimeType || "application/octet-stream", input.content, {
           cms3Fingerprint: fingerprint,
           cms3Doc: docCode,
+        });
+      }
+      // Queda anotado para la retención: a los 2 años el original se borra del
+      // servidor y se sigue sirviendo desde el Drive.
+      if (input.localUrl && driveFileId) {
+        await recordArchivedFile(tenantId!, {
+          localUrl: input.localUrl,
+          driveFileId,
+          driveName,
+          mimeType: input.mimeType || "application/octet-stream",
+          sizeBytes: input.content.length,
+          vesselCode: input.vesselCode,
+          kind: input.kind,
         });
       }
 
@@ -597,7 +632,7 @@ const ATTACHMENT_OWNERS: Record<string, { kind: PdfArchiveKind; delegate: string
  */
 export async function archiveEntityAttachment(
   session: TenantAccessSession,
-  input: { entityType: string; entityId: string | null; originalName: string; mimeType: string; content: Buffer },
+  input: { entityType: string; entityId: string | null; originalName: string; mimeType: string; content: Buffer; localUrl?: string | null },
 ): Promise<void> {
   try {
     if (!input.entityId || !googleOAuthConfig()) return;
@@ -633,6 +668,7 @@ export async function archiveEntityAttachment(
       originalName: input.originalName,
       mimeType: input.mimeType,
       content: input.content,
+      localUrl: input.localUrl,
     });
   } catch (err) {
     // El adjunto ya quedó guardado en CMS3: el archivo en Drive nunca rompe la subida.
@@ -662,7 +698,15 @@ function extensionForMime(mimeType: string): string {
  */
 export async function archiveUploadedFile(
   session: TenantAccessSession,
-  input: { kind: PdfArchiveKind; vesselCode: string | null | undefined; fileName: string; mimeType: string; content: Buffer },
+  input: {
+    kind: PdfArchiveKind;
+    vesselCode: string | null | undefined;
+    fileName: string;
+    mimeType: string;
+    content: Buffer;
+    /** Ruta interna ("/uploads/…"), para poder borrarlo del disco a los 2 años. */
+    localUrl?: string | null;
+  },
 ): Promise<void> {
   let tenantId: string | null = null;
   try {
@@ -673,7 +717,7 @@ export async function archiveUploadedFile(
     const settings = await loadSettings(tenantId);
     if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveGoogleRefreshToken) return;
 
-    await pushToDrive({
+    const uploaded = await pushToDrive({
       tenantId, settings, googleConfig,
       refreshToken: settings.pdfArchiveGoogleRefreshToken,
       kind: input.kind,
@@ -683,6 +727,17 @@ export async function archiveUploadedFile(
       content: input.content,
       final: true,
     });
+    if (input.localUrl && uploaded.driveFileId) {
+      await recordArchivedFile(tenantId, {
+        localUrl: input.localUrl,
+        driveFileId: uploaded.driveFileId,
+        driveName: uploaded.driveName,
+        mimeType: input.mimeType || "application/octet-stream",
+        sizeBytes: input.content.length,
+        vesselCode: input.vesselCode,
+        kind: input.kind,
+      });
+    }
     if (settings.pdfArchiveLastError) {
       await getPrismaClient()!.tenantSetting.update({
         where: { tenantId },

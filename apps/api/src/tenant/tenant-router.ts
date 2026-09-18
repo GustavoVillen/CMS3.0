@@ -954,6 +954,7 @@ export async function handleTenantRoutes(
       entityType, entityId, originalName,
       mimeType: mimeTypeForFilename(originalName),
       content: buffer,
+      localUrl: result.url,
     });
     sendJson(response, 200, { ...result, attachmentId });
     return true;
