@@ -810,7 +810,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, codeFrom: { delegate: "dailyReport", codeField: "reportCode", id } });
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, from: { delegate: "dailyReport", codeField: "reportCode", vesselField: "vesselCode", id } });
     return true;
   }
 
@@ -889,7 +889,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, codeFrom: { delegate: "voyageTankReport", codeField: "reportCode", id } });
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, from: { delegate: "voyageTankReport", codeField: "reportCode", vesselField: "vesselCode", id } });
     return true;
   }
 
@@ -1944,7 +1944,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: `${drill.drillCode}.pdf`, buffer });
+    void archivePdf(session, { kind: "OTHER", fileName: `${drill.drillCode}.pdf`, buffer, from: { delegate: "drill", vesselField: "vesselCode", id } });
     return true;
   }
   if (method === "GET" && url.pathname === "/app/drills") {
@@ -2194,7 +2194,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: `${exec.executionCode}-${exec.vesselCode}.pdf`, buffer });
+    void archivePdf(session, { kind: "OTHER", fileName: `${exec.executionCode}-${exec.vesselCode}.pdf`, buffer, vesselCode: exec.vesselCode });
     return true;
   }
   if (/^\/app\/checklist-executions\/[^/]+\/responses$/.test(url.pathname)) {
@@ -2532,7 +2532,7 @@ export async function handleTenantRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: `${fileName}.pdf`, buffer });
+    void archivePdf(session, { kind: "OTHER", fileName: `${fileName}.pdf`, buffer, from: { delegate: "permitToWork", vesselField: "vesselCode", id } });
     return true;
   }
   // Mismo formulario en Word: el permiso se completa y se firma a bordo.

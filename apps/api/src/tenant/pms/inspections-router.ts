@@ -127,7 +127,7 @@ export async function handleInspectionsRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: `${exec.executionCode}-${exec.vesselCode}.pdf`, buffer });
+    void archivePdf(session, { kind: "OTHER", fileName: `${exec.executionCode}-${exec.vesselCode}.pdf`, buffer, vesselCode: exec.vesselCode });
     return true;
   }
 

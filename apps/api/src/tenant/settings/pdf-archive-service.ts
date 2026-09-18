@@ -2,9 +2,10 @@
 //
 // El admin conecta la cuenta de Google de la empresa con un botón (OAuth con
 // permiso `drive.file`, ver google-drive-client.ts) y CMS3 sube cada PDF a una
-// carpeta propia: si el documento todavía no es final va a
-// "<raíz>/<tipo>/Borrador"; cuando queda cerrado/aprobado/rechazado/cancelado va
-// a "<raíz>/<tipo>/" como registro final y se borra la copia de Borrador.
+// carpeta propia, ordenada primero por buque y después por tipo: si el documento
+// todavía no es final va a "<raíz>/<buque>/<tipo>/Borrador"; cuando queda
+// cerrado/aprobado/rechazado/cancelado va a "<raíz>/<buque>/<tipo>/" como
+// registro final y se borra la copia de Borrador.
 //
 // La subida NUNCA rompe el flujo del usuario: corre sin esperar y los errores
 // quedan en `pdfArchiveLastError` para que el admin los vea en Configuración.
@@ -48,24 +49,28 @@ export const DEFAULT_PDF_ARCHIVE_FOLDERS: Record<PdfArchiveKind, string> = {
 /** Carpeta que CMS3 crea en el Drive de la empresa. Con `drive.file` es la única que ve. */
 const ROOT_FOLDER_NAME = "CMS3 — Documentos";
 const DRAFT_FOLDER = "Borrador";
+/** Primer nivel: el buque, por NOMBRE (nunca el código). Ver nombres-no-codigos. */
+const FLEET_FOLDER = "General";
 /** Ruta del callback de Google: tiene que coincidir con la registrada en Google Cloud. */
 export const GOOGLE_CALLBACK_PATH = "/app/tenant/pdf-archive/google/callback";
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 /**
- * Cómo encontrar cada documento y cuándo es final. `finalStatuses: null` =
- * no tiene ciclo cerrado (planes): va siempre directo a su carpeta.
+ * Cómo encontrar cada documento, de qué buque es y cuándo es final.
+ * `finalStatuses: null` = no tiene ciclo cerrado (planes): va siempre directo a
+ * su carpeta. `vesselField` da el primer nivel de carpetas.
  */
-const DOCUMENTS: Record<DocumentKind, { delegate: string; codeField: string; finalStatuses: string[] | null }> = {
-  OT: { delegate: "workOrder", codeField: "workOrderCode", finalStatuses: ["CLOSED", "CANCELLED"] },
-  SS: { delegate: "serviceRequest", codeField: "serviceRequestCode", finalStatuses: ["COMPLETED", "REJECTED", "CANCELLED"] },
-  DEF: { delegate: "defect", codeField: "defectCode", finalStatuses: ["CLOSED"] },
-  FA: { delegate: "fluidSample", codeField: "sampleCode", finalStatuses: ["REPORTED", "ARCHIVED"] },
-  APL: { delegate: "deferral", codeField: "deferralCode", finalStatuses: ["APPROVED", "ACTIVE", "REJECTED", "CLOSED", "EXPIRED"] },
-  VAR: { delegate: "drydockSpec", codeField: "specCode", finalStatuses: ["APPROVED", "CANCELLED"] },
-  REQ: { delegate: "spareRequest", codeField: "requestCode", finalStatuses: ["FULFILLED", "REJECTED", "CANCELLED"] },
-  MOC: { delegate: "mocRecord", codeField: "mocCode", finalStatuses: ["REVIEWED", "REJECTED", "CANCELLED"] },
-  PLAN: { delegate: "maintenancePlan", codeField: "taskCode", finalStatuses: null },
+const DOCUMENTS: Record<DocumentKind, { delegate: string; codeField: string; vesselField: string; finalStatuses: string[] | null }> = {
+  OT: { delegate: "workOrder", codeField: "workOrderCode", vesselField: "vesselCode", finalStatuses: ["CLOSED", "CANCELLED"] },
+  SS: { delegate: "serviceRequest", codeField: "serviceRequestCode", vesselField: "vesselCode", finalStatuses: ["COMPLETED", "REJECTED", "CANCELLED"] },
+  DEF: { delegate: "defect", codeField: "defectCode", vesselField: "vesselCode", finalStatuses: ["CLOSED"] },
+  FA: { delegate: "fluidSample", codeField: "sampleCode", vesselField: "vesselCode", finalStatuses: ["REPORTED", "ARCHIVED"] },
+  APL: { delegate: "deferral", codeField: "deferralCode", vesselField: "vesselCode", finalStatuses: ["APPROVED", "ACTIVE", "REJECTED", "CLOSED", "EXPIRED"] },
+  VAR: { delegate: "drydockSpec", codeField: "specCode", vesselField: "vesselCode", finalStatuses: ["APPROVED", "CANCELLED"] },
+  // El pedido de repuestos puede no ser de un buque puntual: ahí va a "General".
+  REQ: { delegate: "spareRequest", codeField: "requestCode", vesselField: "requestedForVesselCode", finalStatuses: ["FULFILLED", "REJECTED", "CANCELLED"] },
+  MOC: { delegate: "mocRecord", codeField: "mocCode", vesselField: "vesselCode", finalStatuses: ["REVIEWED", "REJECTED", "CANCELLED"] },
+  PLAN: { delegate: "maintenancePlan", codeField: "taskCode", vesselField: "vesselCode", finalStatuses: null },
 };
 
 /** Estados finales por tipo, para que los services decidan si disparar el archivo. */
@@ -408,9 +413,32 @@ function enqueue(key: string, job: () => Promise<void>): Promise<void> {
 
 export type ArchivePdfInput =
   | { kind: DocumentKind; id: string; buffer?: Buffer }
-  // `codeFrom`: cuando el nombre de descarga usa el id interno, en Drive se
-  // prefiere el número de documento (si el registro lo tiene cargado).
-  | { kind: "OTHER"; fileName: string; buffer: Buffer; codeFrom?: { delegate: string; codeField: string; id: string } };
+  // `vesselCode`: el buque bajo el que se archiva; sin él va a "General".
+  // `from`: datos a buscar en el propio registro — `codeField` cuando el nombre
+  // de descarga usa el id interno y en Drive se prefiere el número de documento,
+  // `vesselField` cuando el que llama no tiene el buque a mano.
+  | {
+      kind: "OTHER";
+      fileName: string;
+      buffer: Buffer;
+      vesselCode?: string | null;
+      from?: { delegate: string; id: string; codeField?: string; vesselField?: string };
+    };
+
+/**
+ * Nombre de la carpeta del buque. Siempre el NOMBRE ("DON CHICUETO"), no el
+ * código: es lo que la gente reconoce al abrir el Drive.
+ */
+async function resolveVesselFolder(tenantId: string, vesselCode: string | null | undefined): Promise<string> {
+  const code = (vesselCode ?? "").trim();
+  if (!code) return FLEET_FOLDER;
+  const vessel = await getPrismaClient()!.vessel.findFirst({
+    where: { tenantId, code },
+    select: { name: true },
+  });
+  const name = (vessel?.name ?? "").trim() || code;
+  return name.replace(/[\\/]/g, "-").slice(0, 100);
+}
 
 /**
  * Manda el PDF al Drive de la empresa si el archivo está activo. Nunca tira:
@@ -430,36 +458,48 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
 
     let fileName: string;
     let final: boolean;
+    let vesselCode: string | null | undefined;
     let buffer = input.buffer;
 
     if (input.kind === "OTHER") {
       fileName = input.fileName;
       final = true;
-      if (input.codeFrom) {
-        const row = await (getPrismaClient() as any)[input.codeFrom.delegate].findFirst({
-          where: { id: input.codeFrom.id, tenantId },
-          select: { [input.codeFrom.codeField]: true },
-        }) as Record<string, string | null> | null;
-        if (!row) return;
-        const code = row[input.codeFrom.codeField];
-        if (code) fileName = `${code}.pdf`;
+      vesselCode = input.vesselCode;
+      if (input.from) {
+        const select: Record<string, boolean> = {};
+        if (input.from.codeField) select[input.from.codeField] = true;
+        if (input.from.vesselField) select[input.from.vesselField] = true;
+        if (Object.keys(select).length) {
+          const row = await (getPrismaClient() as any)[input.from.delegate].findFirst({
+            where: { id: input.from.id, tenantId },
+            select,
+          }) as Record<string, string | null> | null;
+          if (!row) return;
+          const code = input.from.codeField ? row[input.from.codeField] : null;
+          if (code) fileName = `${code}.pdf`;
+          if (input.from.vesselField) vesselCode = row[input.from.vesselField] ?? vesselCode;
+        }
       }
     } else {
       const doc = DOCUMENTS[input.kind];
       // Filtro por tenant: el id viene de la URL o del service, nunca se confía solo en él.
       const row = await (getPrismaClient() as any)[doc.delegate].findFirst({
         where: { id: input.id, tenantId, deletedAt: null },
-        select: { [doc.codeField]: true, status: true },
+        select: { [doc.codeField]: true, [doc.vesselField]: true, status: true },
       }) as Record<string, string> | null;
       if (!row) return;
       fileName = `${row[doc.codeField]}.pdf`;
+      vesselCode = row[doc.vesselField];
       final = isFinalStatus(input.kind, row.status);
       if (!buffer) buffer = await buildPdf(input.kind, session, input.id);
     }
 
     const safeName = fileName.replace(/[\\/:*?"<>|]/g, "_");
     const content = buffer!;
+    // Primero el buque, después el tipo: "<raíz>/DON CHICUETO/OT/…".
+    const vesselFolder = await resolveVesselFolder(tenantId, vesselCode);
     const folderName = folders[input.kind];
+    const typePath = `${vesselFolder}/${folderName}`;
     const cache = readFolderIds(settings.pdfArchiveFolderIds);
     const cacheBefore = JSON.stringify(cache);
 
@@ -467,7 +507,7 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
       const accessToken = await getAccessToken(googleConfig, refreshToken);
       const rootFolderId = settings.pdfArchiveRootFolderId
         ?? await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
-      const segments = final ? [folderName] : [folderName, DRAFT_FOLDER];
+      const segments = final ? [vesselFolder, folderName] : [vesselFolder, folderName, DRAFT_FOLDER];
       const targetId = await resolveFolderId(accessToken, rootFolderId, cache, segments);
 
       await trashByName(accessToken, targetId, safeName);
@@ -475,7 +515,7 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
 
       // Quedó el registro final: el borrador ya no hace falta. Sólo si la
       // carpeta Borrador existe (no la creamos para borrar algo que no está).
-      const draftId = final ? cache[`${folderName}/${DRAFT_FOLDER}`] : null;
+      const draftId = final ? cache[`${typePath}/${DRAFT_FOLDER}`] : null;
       if (draftId) await trashByName(accessToken, draftId, safeName);
 
       if (JSON.stringify(cache) !== cacheBefore || rootFolderId !== settings.pdfArchiveRootFolderId) {

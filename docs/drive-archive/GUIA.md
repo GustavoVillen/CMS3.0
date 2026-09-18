@@ -16,13 +16,16 @@ Listo. Con **Probar conexión** se puede confirmar cuando se quiera.
 
 ## Qué hace
 
-- Crea en ese Drive una carpeta **CMS3 — Documentos** y adentro una por tipo de documento
-  (OT, SS, DEF, FA, APL, VAR, REQ, MOC, Planes de Mantenimiento, Otros). Los nombres de esas
-  carpetas se pueden cambiar en la misma pantalla.
-- Mientras el documento está **abierto**, el PDF va a `<tipo>/Borrador` y se pisa cada vez que
-  se genera de nuevo.
+- Crea en ese Drive una carpeta **CMS3 — Documentos**, adentro una por **buque** (con el
+  nombre del buque, no el código) y dentro de cada una las de tipo de documento (OT, SS, DEF,
+  FA, APL, VAR, REQ, MOC, Planes de Mantenimiento, Otros). Los nombres de las carpetas de tipo
+  se pueden cambiar en la misma pantalla.
+- Lo que no es de un buque puntual (por ejemplo un pedido de repuestos de flota) va a la
+  carpeta **General**.
+- Mientras el documento está **abierto**, el PDF va a `<buque>/<tipo>/Borrador` y se pisa cada
+  vez que se genera de nuevo.
 - Cuando el documento queda **cerrado, aprobado, rechazado o cancelado**, el PDF pasa a
-  `<tipo>/` como registro final y se borra la copia de Borrador.
+  `<buque>/<tipo>/` como registro final y se borra la copia de Borrador.
 - Los planes de mantenimiento y los PDFs sueltos (permisos, inspecciones, checklists…) van
   directo a su carpeta, sin borrador.
 

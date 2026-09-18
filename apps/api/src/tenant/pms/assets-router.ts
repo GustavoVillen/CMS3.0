@@ -141,7 +141,7 @@ export async function handleAssetRoutes(
       "Content-Length": buffer.length,
     });
     response.end(buffer);
-    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer });
+    void archivePdf(session, { kind: "OTHER", fileName: filename, buffer, vesselCode: asset.vesselCode });
     return true;
   }
 
