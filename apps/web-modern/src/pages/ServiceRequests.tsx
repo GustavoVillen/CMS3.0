@@ -30,6 +30,7 @@ import {
   type SsFormDoc, type SsPaperValues,
 } from "../components/service-requests/SsPaperForm";
 import { downloadDocx } from "../lib/download-docx";
+import { BlankFormButton } from "../components/BlankFormButton";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
 import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark } from "../components/GuideKit";
 import { WizardStepper } from "../components/NewWorkOrderWizard";
@@ -867,6 +868,7 @@ export function ServiceRequestsPage() {
             </button>
           ))}
         </div>
+        <BlankFormButton url="/app/pms/service-requests/blank/docx" filename="SS-en-blanco" label={t("ss.list.blankForm")} />
         {canManage && (
           <button type="button" onClick={() => setShowNewSs(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("ss.list.new")}

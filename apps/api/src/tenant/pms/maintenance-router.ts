@@ -92,6 +92,8 @@ import { rewriteDeficiencies } from "../work-orders/work-orders-rewrite-ai";
 import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf, buildWorkOrderDoc } from "./work-order-pdf-service";
 import { serveDoc } from "./doc-export";
+import { serveDocx } from "./docx-export";
+import { buildBlankWorkOrderDocx } from "./blank-forms";
 import { buildMaintenancePlanPdf } from "./maintenance-plan-pdf-service";
 import { buildDueSoonPlansXlsx } from "./maintenance-plans-due-excel-service";
 import { buildOpenWorkOrdersReportPdf } from "./work-orders-open-report-pdf-service";
@@ -130,6 +132,14 @@ export async function handleMaintenanceRoutes(
   const tenantSlug = requireTenantSlug(request, env);
   const session = requireTenantAccessSession(request, tenantSlug);
   enforceAuditorListOnly(method, url.pathname, session.user.role);
+
+  // OT en blanco (.docx) para completar a mano. Antes de las rutas
+  // /work-orders/:id, que si no tomarían "blank" como id.
+  if (method === "GET" && url.pathname === "/app/pms/work-orders/blank/docx") {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    serveDocx(response, await buildBlankWorkOrderDocx(session), "OT-en-blanco");
+    return true;
+  }
 
   if (method === "GET" && url.pathname === "/app/pms/maintenance-plans") {
     const items = await listTenantMaintenancePlans(session, {

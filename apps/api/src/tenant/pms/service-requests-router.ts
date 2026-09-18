@@ -17,6 +17,7 @@ import { buildServiceRequestPdf, buildServiceRequestDoc, buildServiceRequestDocx
 import { serveDoc } from "./doc-export";
 import { resolveTenantForm } from "./tenant-forms-service";
 import { serveDocx } from "./docx-export";
+import { buildBlankServiceRequestDocx } from "./blank-forms";
 import { archivePdf } from "../settings/pdf-archive-service";
 import {
   addHojaRutaEntry,
@@ -57,6 +58,14 @@ export async function handleServiceRequestsRoutes(
 
   const tenantSlug = requireTenantSlug(request, env);
   const session = requireTenantAccessSession(request, tenantSlug);
+
+  // SS en blanco (.docx) para completar a mano. Antes de /service-requests/:id/docx,
+  // que si no tomaría "blank" como id.
+  if (method === "GET" && url.pathname === "/app/pms/service-requests/blank/docx") {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    serveDocx(response, await buildBlankServiceRequestDocx(session), "SS-en-blanco");
+    return true;
+  }
 
   if (method === "GET" && url.pathname === "/app/pms/service-requests") {
     const items = await listServiceRequests(session, {

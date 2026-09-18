@@ -14,6 +14,7 @@ import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
+import { BlankFormButton } from "../components/BlankFormButton";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard, WizardStepper } from "../components/NewWorkOrderWizard";
@@ -5761,6 +5762,8 @@ export const WorkOrdersPage: React.FC = () => {
             </div>
           )}
         </div>
+        <BlankFormButton url="/app/pms/work-orders/blank/docx" filename={`${woTerms.abbr}-en-blanco`}
+          label={t("wo.list.blankForm").replace("{abbr}", woTerms.abbr)} />
         {canCreate && (
           <button onClick={() => setShowNewWoWizard(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
             <Plus className="w-3.5 h-3.5" /> {t("wo.new")}

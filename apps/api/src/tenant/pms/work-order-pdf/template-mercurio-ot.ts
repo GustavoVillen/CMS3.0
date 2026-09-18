@@ -33,18 +33,18 @@ const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
 
 // ── Opciones de los recuadros (literal del papel) ────────────────────────────
-const REQUESTED_BY = [
+export const REQUESTED_BY = [
   { v: "CUBIERTA", l: "CUBIERTA" }, { v: "MAQUINAS", l: "MAQUINAS" },
   { v: "TECNICA", l: "TECNICA" },   { v: "OPS_SSMA", l: "OPS / SSMA" },
 ];
-const ASSIGNED_TO = [
+export const ASSIGNED_TO = [
   { v: "TRIPULACION", l: "TRIPULACION" }, { v: "TERCERIZADO", l: "TERCERIZADO" },
   { v: "TECNICA", l: "TECNICA" },         { v: "OPS_SSMA", l: "OPS / SSMA" },
 ];
-const SYSTEM_AREAS = [
+export const SYSTEM_AREAS = [
   { v: "MAQUINAS", l: "MAQUINAS" }, { v: "RE_CUBIERTA", l: "R/E CUBIERTA" }, { v: "BARCAZAS", l: "BARCAZAS" },
 ];
-const MAINT_KINDS = [
+export const MAINT_KINDS = [
   { v: "PREVENTIVO", l: "PREVENTIVO" },
   { v: "CORRECTIVO_PROGRAMADO", l: "CORRECTIVO PROGRAMADO" },
   { v: "CORRECTIVO_NO_PROGRAMADO", l: "CORRECTIVO NO PROGRAMADO" },
@@ -53,14 +53,14 @@ const MAINT_KINDS = [
 ];
 // El papel expresa la prioridad como plazo. Es el mismo eje que WorkOrderPriority
 // (no se duplica en el schema): sólo cambia la etiqueta impresa.
-const PRIORITIES = [
+export const PRIORITIES = [
   { v: "CRITICAL", l: "INMEDIATO" },
   { v: "HIGH",     l: "DENTRO DE LAS 24HS" },
   { v: "MEDIUM",   l: "DENTRO DE LA SEMANA" },
   { v: "LOW",      l: "DENTRO DEL MES" },
 ];
 // Autorizaciones de trabajo: se tildan desde los PermitToWork vinculados a la OT.
-const PERMIT_ROWS = [
+export const PERMIT_ROWS = [
   { v: "ENCLOSED_SPACE_ENTRY", l: "CONFINADO" },
   { v: "HOT_WORK",             l: "CALIENTE" },
   { v: "ELECTRICAL_ISOLATION", l: "ELECTRICO" },
