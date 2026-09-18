@@ -248,6 +248,8 @@ enum TenantFormType {
   FLUID_ANALYSIS
   // Reporte de defecto (documento controlado Mercurio).
   DEFECT
+  // Informe de salud del equipo (lectura de la IA sobre el historial).
+  ASSET_HEALTH
   // extensible: SPARE_INVENTORY, SPARE_CONSUMPTION, OPEN_WO_REPORT, etc.
 }
 

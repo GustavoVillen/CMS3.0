@@ -12,6 +12,8 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getAssetHealthReport, type HealthMetrics, type HealthReportText, type HealthSources } from "../assets/asset-health-service";
 import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, renderLabeledTextBox } from "./pdf-helpers";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
+import { resolveTenantForm } from "./tenant-forms-service";
+import { renderMercurioAssetHealthPdf } from "./asset-health-pdf-mercurio";
 
 const CM = 28.35;
 const PAGE_H = 841.89;
@@ -58,6 +60,53 @@ export async function buildAssetHealthReportPdf(
   const dateStr = new Date(r.createdAt).toISOString().slice(0, 10);
   // Los códigos traen "#" ("LTE-MP-#4"): fuera del nombre de archivo.
   const fileName = `informe-salud-${String(r.asset.assetCode).replace(/[^A-Za-z0-9._-]+/g, "")}-${dateStr}.pdf`;
+
+  // Documento controlado para los tenants con estilo Mercurio (mismo criterio
+  // que el plan de mantenimiento y el diferimiento).
+  const form = await resolveTenantForm(session.tenantSlug, "ASSET_HEALTH");
+  if (form.meta.style === "MERCURIO") {
+    const hours = metrics.currentHours != null ? `${Math.round(metrics.currentHours).toLocaleString(locale)} h` : "—";
+    const mercurioBuffer = await renderMercurioAssetHealthPdf({
+      meta: form.meta,
+      logoBuffer: form.logoBuffer ?? tenantLogoBuffer,
+      tenantName: tenantName ?? session.tenantSlug,
+      report: {
+        healthState: r.healthState,
+        createdAt: r.createdAt,
+        createdByName: r.createdByName ?? null,
+        periodFrom: r.periodFrom,
+        periodTo: r.periodTo,
+      },
+      asset: {
+        assetCode: r.asset.assetCode,
+        name: r.asset.name ?? null,
+        vesselCode: r.asset.vesselCode ?? "",
+        vesselName: r.asset.vesselName ?? null,
+      },
+      kpis: [
+        { label: "Tareas del plan vencidas", value: `${metrics.plansOverdue} de ${metrics.plansActive}` },
+        { label: "Defectos abiertos", value: String(metrics.defectsOpen) },
+        { label: "Analisis en rojo / precaucion", value: `${metrics.labBad} / ${metrics.labCaution}` },
+        { label: metrics.currentHoursDate ? `Horas de marcha al ${fmt(metrics.currentHoursDate)}` : "Horas de marcha", value: hours },
+      ],
+      sections: [
+        { label: "Resumen:", body: text.summary },
+        { label: "Mantenimiento planificado:", body: text.maintenance },
+        { label: "Analisis de laboratorio:", body: text.lab },
+        { label: "Defectos y fallas repetidas:", body: text.defects },
+        { label: "Que conviene revisar (sugerencias de la IA):", body: text.recommendations.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n") },
+        ...(text.limitations ? [{ label: "Limitaciones de la lectura:", body: text.limitations }] : []),
+        { label: "Que se tuvo en cuenta:", body: [
+          `${sources.plans} planes`, `${sources.workOrders} ordenes de trabajo`, `${sources.workLogs} ejecuciones sin OT`,
+          `${sources.labAnalyses} analisis de laboratorio`, `${sources.defects} defectos`, `${sources.deferrals} postergaciones`,
+          `${sources.inspections} inspecciones`, `${sources.mocs} MOC`, `${sources.hoursReadings} lecturas de horas`,
+          `${sources.alerts} alertas automaticas`,
+        ].join(" · ") },
+      ],
+      tz, locale,
+    });
+    return { buffer: mercurioBuffer, fileName };
+  }
 
   const buffer = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, info: { Title: `Informe de salud — ${assetTitle}` } });

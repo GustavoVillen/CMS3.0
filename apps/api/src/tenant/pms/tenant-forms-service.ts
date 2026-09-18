@@ -20,7 +20,7 @@ export type TenantFormType =
   // Un formulario controlado por tipo de permiso de trabajo (REGI-SYE-01.4..01.9).
   | "PERMIT_ENCLOSED_SPACE" | "PERMIT_HOT_WORK" | "PERMIT_COLD_WORK"
   | "PERMIT_ALOFT" | "PERMIT_ELECTRICAL" | "PERMIT_UNDERWATER"
-  | "FLUID_ANALYSIS" | "DEFECT";
+  | "FLUID_ANALYSIS" | "DEFECT" | "ASSET_HEALTH";
 
 const PUBLIC_DIR = join(process.cwd(), "..", "web-modern", "public");
 
@@ -195,6 +195,19 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     formCode: "",
     title: "PLAN DE MANTENIMIENTO",
     revision: 2,
+    effectiveFrom: "01.05.2025",
+    codePattern: null,
+    footer: MERCURIO_FOOTER,
+    config: EMPTY_CONFIG,
+  },
+  // El informe de salud no emite código propio: es una lectura fechada del
+  // historial del equipo. Style default STANDARD → sólo los tenants con estilo
+  // Mercurio reciben el documento controlado, igual que el plan.
+  ASSET_HEALTH: {
+    style: "STANDARD",
+    formCode: "",
+    title: "INFORME DE SALUD DEL EQUIPO",
+    revision: 1,
     effectiveFrom: "01.05.2025",
     codePattern: null,
     footer: MERCURIO_FOOTER,
@@ -396,7 +409,7 @@ export async function resolveTenantForm(slug: string, type: TenantFormType): Pro
   // de mantenimiento y el diferimiento comparaban style === "MERCURIO" contra
   // "MERCURIO_OT" y caían al layout estándar aunque el tenant sea Mercurio
   // (por eso el PDF del plan salía sin el membrete de documento controlado).
-  const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN" || type === "DEFERRAL")
+  const legacyStyle = (type === "WORK_ORDER" || type === "MAINTENANCE_PLAN" || type === "DEFERRAL" || type === "ASSET_HEALTH")
     ? (rawLegacy?.startsWith("MERCURIO") ? "MERCURIO" : rawLegacy)
     // Los permisos siguen el mismo signal, pero normalizado: MERCURIO_OT es una
     // plantilla de OT, no un FormStyle — para los permisos cualquier variante

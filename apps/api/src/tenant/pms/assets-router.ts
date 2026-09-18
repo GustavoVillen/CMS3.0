@@ -125,6 +125,11 @@ export async function handleAssetRoutes(
         "Content-Length": buffer.length,
       });
       response.end(buffer);
+      // Copia en el Drive: carpeta del buque → "Informes de salud".
+      void archivePdf(session, {
+        kind: "SAL", fileName, buffer,
+        from: { delegate: "assetHealthReport", id: reportId, vesselField: "vesselCode" },
+      });
       return true;
     }
   }

@@ -33,9 +33,11 @@ import {
   type GoogleOAuthConfig,
 } from "./google-drive-client";
 
-export const PDF_ARCHIVE_KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "RCP", "MOC", "PLAN", "OTHER"] as const;
+export const PDF_ARCHIVE_KINDS = ["OT", "SS", "DEF", "FA", "APL", "VAR", "REQ", "RCP", "SAL", "MOC", "PLAN", "OTHER"] as const;
 export type PdfArchiveKind = (typeof PDF_ARCHIVE_KINDS)[number];
-type DocumentKind = Exclude<PdfArchiveKind, "OTHER" | "RCP">;
+type DocumentKind = Exclude<PdfArchiveKind, "OTHER" | "RCP" | "SAL">;
+/** Carpetas que no son de un documento con ciclo propio: archivos sueltos. */
+type LooseKind = Exclude<PdfArchiveKind, DocumentKind>;
 
 export const DEFAULT_PDF_ARCHIVE_FOLDERS: Record<PdfArchiveKind, string> = {
   OT: "OT",
@@ -46,6 +48,7 @@ export const DEFAULT_PDF_ARCHIVE_FOLDERS: Record<PdfArchiveKind, string> = {
   VAR: "VAR",
   REQ: "REQ",
   RCP: "Recepciones",
+  SAL: "Informes de salud",
   MOC: "MOC",
   PLAN: "Planes de Mantenimiento",
   OTHER: "Otros",
@@ -438,7 +441,7 @@ export type ArchivePdfInput =
   // de descarga usa el id interno y en Drive se prefiere el número de documento,
   // `vesselField` cuando el que llama no tiene el buque a mano.
   | {
-      kind: "OTHER";
+      kind: LooseKind;
       fileName: string;
       buffer: Buffer;
       vesselCode?: string | null;
@@ -787,7 +790,7 @@ export async function archivePdf(session: TenantAccessSession, input: ArchivePdf
     let vesselCode: string | null | undefined;
     let buffer = input.buffer;
 
-    if (input.kind === "OTHER") {
+    if (!("id" in input)) {
       fileName = input.fileName;
       final = true;
       vesselCode = input.vesselCode;
