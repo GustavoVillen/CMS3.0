@@ -175,6 +175,10 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
   const handleSfiGroupChange = (g: string) => { setSfiGroup(g); setSfiCode(g ? `${g}00` : ""); };
 
   const [saving,      setSaving]      = useState(false);
+  // Guardar deja el modal abierto: sin esto, lo recién guardado se sigue
+  // comparando contra el estado con el que se abrió y el cartel de "cambios sin
+  // guardar" no se iba nunca (useDirtyTracker re-toma la foto cuando cambia la clave).
+  const [savedTick,   setSavedTick]   = useState(0);
   const [error,       setError]       = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -291,6 +295,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
       }
 
       onSaved(result);
+      setSavedTick(n => n + 1);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t("common.saveError"));
     } finally { setSaving(false); }
@@ -342,7 +347,7 @@ const SpareModal: React.FC<SpareModalProps> = ({ spare, plans, receipts, onClose
     minStock, reorderPoint, targetStock, location, status,
     internalPartNumber, manufacturerPartNumber, longDescription, sfiCode, leadTimeDays,
     isEquivalent,
-  });
+  }, savedTick);
   const requestClose = useEscapeGuard({ isDirty: canEdit && isDirty, onSave: canEdit ? handleSave : undefined, onClose });
 
   // Nexos: tareas del plan que lo usan y recepciones donde entró.
