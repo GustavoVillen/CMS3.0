@@ -112,6 +112,8 @@ export async function buildAdvisorEvidence(
   tenantId: string,
   /** Buque del encabezado; null = toda la flota del alcance. */
   requestedVesselCode: string | null = null,
+  /** Grupo de buques (ej. todas las barcazas): se analiza sólo esa lista. */
+  onlyVesselCodes: string[] | null = null,
 ): Promise<AdvisorEvidencePack> {
   const now = new Date();
   const since90 = new Date(now.getTime() - 90 * DAY);
@@ -126,7 +128,8 @@ export async function buildAdvisorEvidence(
 
   // Buques del alcance (el Director es admin: toda la flota). Todas las
   // consultas de abajo filtran por tenant Y por estos códigos.
-  const vessels = await listVesselsInScope(prisma, session, tenantId, requestedVesselCode);
+  const vessels = (await listVesselsInScope(prisma, session, tenantId, requestedVesselCode))
+    .filter(v => !onlyVesselCodes || onlyVesselCodes.includes(v.code));
   const vesselCodes = vessels.map(v => v.code);
   const vesselName = new Map(vessels.map(v => [v.code, v.name]));
   const vName = (code: string | null | undefined) => (code ? vesselName.get(code) ?? null : null);

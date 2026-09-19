@@ -5,7 +5,8 @@
 //   - Arriba: lo más importante hoy, 4 semáforos y los buques que preocupan.
 //   - Abajo: lista de temas por "para cuándo". Cada tema se abre con un solo
 //     botón y muestra 3 pasos: Qué pasa → Qué hacer → Actuar.
-// El buque es el del encabezado: sin buque elegido se ve la flota.
+// El buque es el del encabezado. Sin buque elegido se pide elegir uno, o un
+// grupo entero (todas las barcazas juntas, ?grupo=barcazas).
 //
 // El análisis lo arma el servidor (maintenance-advisor-service.ts): el código
 // junta los registros reales y la IA los analiza. Los semáforos, los buckets y
@@ -13,6 +14,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Compass, Loader2, RefreshCw, ChevronRight, ChevronDown, History, Ship } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
@@ -43,6 +45,10 @@ interface ReportListItem { id: string; createdAt: string; findings: number }
 
 type Tab = "todo" | "follow";
 
+/** Barcaza = el tipo de buque la nombra (mismo criterio que el servidor). */
+const isBargeType = (vesselType: string | null | undefined) =>
+  !!vesselType && vesselType.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().includes("BARCAZA");
+
 const whenText = (iso: string, t: ReturnType<typeof useT>) => {
   const d = new Date(iso);
   const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -54,7 +60,20 @@ const whenText = (iso: string, t: ReturnType<typeof useT>) => {
 export const MaintenanceAdvisorPage: React.FC = () => {
   const t = useT();
   const { selectedVesselCode, setSelectedVesselCode, vessels } = useVesselContext();
-  const scopeName = selectedVesselCode ? vessels.find(v => v.code === selectedVesselCode)?.name ?? selectedVesselCode : t("advisor.scope.fleet");
+  // Además de un buque, un grupo entero (hoy: todas las barcazas). Va en la URL
+  // (?grupo=barcazas) para que recargar o compartir el link deje lo mismo. Si
+  // se elige un buque en el encabezado, manda el buque.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const barges = useMemo(() => vessels.filter(v => isBargeType(v.vesselType)), [vessels]);
+  const group: "BARGES" | null = !selectedVesselCode && searchParams.get("grupo") === "barcazas" && barges.length > 0 ? "BARGES" : null;
+  const setGroup = useCallback((g: "BARGES" | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (g) next.set("grupo", "barcazas"); else next.delete("grupo");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const scopeName = selectedVesselCode
+    ? vessels.find(v => v.code === selectedVesselCode)?.name ?? selectedVesselCode
+    : group ? t("advisor.group.barges").replace("{n}", String(barges.length)) : t("advisor.scope.fleet");
   const vesselName = useCallback((code: string) => vessels.find(v => v.code === code)?.name ?? code, [vessels]);
 
   const [reports, setReports] = useState<ReportListItem[] | null>(null);
@@ -80,7 +99,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
 
   useCopilotEmitter({ module: "MAINTENANCE_ADVISOR", screen: "ADVISOR_DASHBOARD", entityId: report?.id, vesselCode: selectedVesselCode ?? undefined });
 
-  const scopeQs = selectedVesselCode ? `vesselCode=${encodeURIComponent(selectedVesselCode)}` : "";
+  const scopeQs = selectedVesselCode ? `vesselCode=${encodeURIComponent(selectedVesselCode)}` : group ? `group=${group}` : "";
 
   const openReport = useCallback(async (id: string) => {
     const r = await api.get<AdvisorReport>(`/app/maintenance-advisor/reports/${encodeURIComponent(id)}`);
@@ -115,16 +134,22 @@ export const MaintenanceAdvisorPage: React.FC = () => {
     } catch { /* la pestaña queda vacía; el error real aparece al operar */ }
   }, [scopeQs]);
 
-  // El asesor trabaja de a un buque: con "Todos los buques" no se carga nada.
+  // Elegir un buque (en el encabezado o tocando su barra) deja el grupo atrás.
   useEffect(() => {
-    if (!selectedVesselCode) { setReport(null); setReports(null); setActions([]); setLoading(false); return; }
+    if (selectedVesselCode && searchParams.get("grupo")) setGroup(null);
+  }, [selectedVesselCode, searchParams, setGroup]);
+
+  // El asesor trabaja de a un buque o un grupo: con "Todos los buques" y sin
+  // grupo no se carga nada (se pide elegir).
+  useEffect(() => {
+    if (!selectedVesselCode && !group) { setReport(null); setReports(null); setActions([]); setLoading(false); return; }
     void load(); void loadActions();
-  }, [selectedVesselCode, load, loadActions]);
+  }, [selectedVesselCode, group, load, loadActions]);
 
   const generate = async () => {
     setGenerating(true);
     try {
-      const r = await api.post<{ id: string }>("/app/maintenance-advisor/reports", { vesselCode: selectedVesselCode ?? null });
+      const r = await api.post<{ id: string }>("/app/maintenance-advisor/reports", group ? { group } : { vesselCode: selectedVesselCode ?? null });
       const list = await api.get<{ items: ReportListItem[] }>(`/app/maintenance-advisor/reports${scopeQs ? `?${scopeQs}` : ""}`);
       setReports(list.items);
       await openReport(r.id);
@@ -147,6 +172,22 @@ export const MaintenanceAdvisorPage: React.FC = () => {
   }, [report]);
   const health = report ? areaHealth(report.metrics) : null;
 
+  // Modo grupo: qué barcazas preocupan más (temas por buque, por "para cuándo").
+  const shipBars = useMemo(() => {
+    const map = new Map<string, Record<Bucket, number>>();
+    for (const f of report?.findings ?? []) {
+      for (const code of findingVesselCodes(f, evidence)) {
+        const row = map.get(code) ?? { today: 0, week: 0, month: 0, later: 0 };
+        row[BUCKET_OF[f.priority]] += 1;
+        map.set(code, row);
+      }
+    }
+    const rows = Array.from(map, ([code, c]) => ({ code, c, total: c.today + c.week + c.month + c.later }));
+    rows.sort((a, b) => b.c.today - a.c.today || b.c.week - a.c.week || b.total - a.total);
+    return rows.slice(0, 8);
+  }, [report, evidence]);
+  const maxBar = Math.max(1, ...shipBars.map(r => r.total));
+
   // Buques del encabezado agrupados por tipo, para elegir uno de un toque.
   const vesselGroups = useMemo(() => {
     const groups = new Map<string, typeof vessels>();
@@ -158,7 +199,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
       .sort((a, b) => (Number(!a.type) - Number(!b.type)) || a.type.localeCompare(b.type));
   }, [vessels]);
 
-  if (!selectedVesselCode) {
+  if (!selectedVesselCode && !group) {
     return (
       <div className="p-4 md:p-6 space-y-4 max-w-[1400px] mx-auto">
         <PageHeader icon={Compass} title={t("advisor.title")} />
@@ -169,6 +210,12 @@ export const MaintenanceAdvisorPage: React.FC = () => {
             <p className="text-sm text-text-industrial/70 max-w-lg mx-auto">{t("advisor.pick.body")}</p>
           </div>
           <div className="space-y-4 max-w-4xl mx-auto">
+            {barges.length > 1 && (
+              <button onClick={() => setGroup("BARGES")}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl border-[1.5px] border-violet-400 bg-violet-500/5 px-4 py-3 text-[14px] font-extrabold text-violet-800 dark:text-violet-200 hover:bg-violet-500/10">
+                🛳️ {t("advisor.group.analyzeBarges").replace("{n}", String(barges.length))}
+              </button>
+            )}
             {vesselGroups.map(g => (
               <div key={g.type || "_"}>
                 <p className="mb-2 text-[11.5px] font-extrabold uppercase tracking-wider text-text-industrial/60">{g.type || t("advisor.pick.other")}</p>
@@ -202,6 +249,9 @@ export const MaintenanceAdvisorPage: React.FC = () => {
       {/* Alcance + análisis anteriores */}
       <div className="relative -mt-2 text-[13px] text-text-industrial/70 flex flex-wrap items-center gap-x-2">
         <b className="text-fg">{scopeName}</b>
+        {group && (
+          <button className="font-bold text-blue-700 dark:text-blue-400 hover:underline" onClick={() => setGroup(null)}>· {t("advisor.group.change")}</button>
+        )}
         {report && <span>· {t("advisor.analyzedAt").replace("{when}", whenText(report.createdAt, t))}</span>}
         {reports && reports.length > 1 && (
           <button className="inline-flex items-center gap-1 font-bold text-blue-700 dark:text-blue-400 hover:underline" onClick={() => setHistoryOpen(o => !o)}>
@@ -242,7 +292,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
       ) : (
         <>
           {/* ═══ De un vistazo ═══ */}
-          <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
+          <div className={`grid gap-3 grid-cols-1 ${group ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
             <Card title={t("advisor.card.today")} ai>
               <p className="text-[17px] font-extrabold text-fg leading-snug">{report.summary.whatNeedsAttentionNow || "—"}</p>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -254,7 +304,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card title={t("advisor.card.healthVessel")}>
+            <Card title={t(group ? "advisor.card.healthBarges" : "advisor.card.healthVessel")}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {health && AREAS.map(area => {
                   const h = health[area];
@@ -275,6 +325,33 @@ export const MaintenanceAdvisorPage: React.FC = () => {
               </div>
             </Card>
 
+            {group && (
+              <Card title={t("advisor.card.ships")}>
+                {shipBars.length === 0 ? (
+                  <p className="text-sm text-text-industrial/60">{t("advisor.ships.none")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {shipBars.map(row => (
+                      <button key={row.code} onClick={() => setSelectedVesselCode(row.code)} title={t("advisor.ships.pick")}
+                        className="grid grid-cols-[110px_1fr_20px] gap-2 items-center w-full text-left text-[12.5px] hover:opacity-80">
+                        <span className="font-extrabold text-fg truncate">{vesselName(row.code)}</span>
+                        <span className="h-3.5 rounded-full bg-fg/5 flex overflow-hidden">
+                          {BUCKETS.map(b => row.c[b] > 0 && (
+                            <i key={b} className={`block h-full ${BUCKET_STYLE[b].bar}`} style={{ width: `${(row.c[b] / maxBar) * 100}%` }} />
+                          ))}
+                        </span>
+                        <span className="font-extrabold text-text-industrial/70 text-right">{row.total}</span>
+                      </button>
+                    ))}
+                    <div className="flex flex-wrap gap-3 pt-1 text-[11px] text-text-industrial/60">
+                      {BUCKETS.filter(b => b !== "later").map(b => (
+                        <span key={b} className="inline-flex items-center gap-1"><i className={`inline-block w-2.5 h-2.5 rounded-sm ${BUCKET_STYLE[b].bar}`} />{t(BUCKET_LABEL[b]).toLowerCase()}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
 
           {/* ═══ Pestañas ═══ */}

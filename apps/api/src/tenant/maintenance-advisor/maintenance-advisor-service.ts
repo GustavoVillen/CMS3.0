@@ -24,6 +24,7 @@ import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildAdvisorEvidence, type EvidenceItem } from "./advisor-evidence";
+import { listVesselsInScope } from "../compliance/compliance-service";
 import { ADVISOR_PROMPT } from "./advisor-prompt";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
 
@@ -87,9 +88,33 @@ async function actorName(prisma: any, session: TenantAccessSession): Promise<str
 
 // ── Lectura ──────────────────────────────────────────────────────────────────
 
-/** Alcance de un informe: el buque analizado, o null si fue toda la flota. */
+// ── Grupos de buques ─────────────────────────────────────────────────────────
+// Además de un buque, se puede analizar un grupo entero (pedido de Gustavo:
+// "todas las barcazas al mismo tiempo"). Barcaza = el tipo de buque la nombra,
+// igual criterio que el puntaje de cumplimiento (vesselType es texto libre).
+export const ADVISOR_GROUPS = ["BARGES"] as const;
+export type AdvisorGroup = typeof ADVISOR_GROUPS[number];
+
+export function parseAdvisorGroup(v: unknown): AdvisorGroup | null {
+  return ADVISOR_GROUPS.includes(v as AdvisorGroup) ? v as AdvisorGroup : null;
+}
+
+function isBargeType(vesselType: string | null | undefined): boolean {
+  return !!vesselType && vesselType.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().includes("BARCAZA");
+}
+
+/** Buques del grupo, dentro del alcance del usuario. */
+async function groupVesselCodes(prisma: any, session: TenantAccessSession, tenantId: string, group: AdvisorGroup): Promise<string[]> {
+  const vessels = await listVesselsInScope(prisma, session, tenantId, null);
+  if (group === "BARGES") return vessels.filter(v => isBargeType(v.vesselType)).map(v => v.code);
+  return [];
+}
+
+/** Alcance de un informe: "group:<G>", el buque analizado, o null si fue toda la flota. */
 function reportScope(sources: unknown): string | null {
-  const v = (sources as { scopeVesselCode?: unknown } | null)?.scopeVesselCode;
+  const src = sources as { scopeVesselCode?: unknown; scopeGroup?: unknown } | null;
+  if (typeof src?.scopeGroup === "string" && src.scopeGroup) return `group:${src.scopeGroup}`;
+  const v = src?.scopeVesselCode;
   return typeof v === "string" && v ? v : null;
 }
 
@@ -97,17 +122,18 @@ function reportScope(sources: unknown): string | null {
  * Informes del alcance pedido: el buque del encabezado, o los de toda la flota
  * si no hay buque elegido. Los informes viejos (sin alcance guardado) son de flota.
  */
-export async function listAdvisorReports(session: TenantAccessSession, vesselCode: string | null = null) {
+export async function listAdvisorReports(session: TenantAccessSession, vesselCode: string | null = null, group: AdvisorGroup | null = null) {
   ensureDirector(session);
   const prisma = db();
   const tenantId = await resolveTenantId(session);
   const rows = await prisma.maintenanceAdvisorReport.findMany({
-    where: { tenantId, ...(vesselCode ? { vesselCodes: { has: vesselCode } } : {}) },
+    where: { tenantId, ...(vesselCode && !group ? { vesselCodes: { has: vesselCode } } : {}) },
     orderBy: { createdAt: "desc" },
     take: 300,
     select: { id: true, createdAt: true, createdByName: true, findings: true, vesselCodes: true, sources: true },
   });
-  const scoped = rows.filter((r: any) => reportScope(r.sources) === (vesselCode || null)).slice(0, 60);
+  const wanted = group ? `group:${group}` : vesselCode || null;
+  const scoped = rows.filter((r: any) => reportScope(r.sources) === wanted).slice(0, 60);
   return {
     items: scoped.map((r: any) => {
       const findings = (Array.isArray(r.findings) ? r.findings : []) as AdvisorFinding[];
@@ -182,7 +208,7 @@ Every free-text field — including role names — must be in the output languag
 
 const MAX_FINDINGS = 10;
 
-export async function generateAdvisorReport(session: TenantAccessSession, vesselCode: string | null = null) {
+export async function generateAdvisorReport(session: TenantAccessSession, vesselCode: string | null = null, group: AdvisorGroup | null = null) {
   ensureDirector(session);
   const apiKey = aiApiKey();
   if (!apiKey) throw new RouteError(503, "AI_NOT_CONFIGURED", aiApiKeyName() + " no esta configurada.");
@@ -190,8 +216,11 @@ export async function generateAdvisorReport(session: TenantAccessSession, vessel
   const tenantId = await resolveTenantId(session);
   await assertAiBudgetAvailableBySlug(session.tenantSlug);
 
-  const scopeVesselCode = typeof vesselCode === "string" && vesselCode.trim() ? vesselCode.trim() : null;
-  const pack = await buildAdvisorEvidence(prisma, session, tenantId, scopeVesselCode);
+  const scopeGroup = group;
+  const scopeVesselCode = !scopeGroup && typeof vesselCode === "string" && vesselCode.trim() ? vesselCode.trim() : null;
+  const groupCodes = scopeGroup ? await groupVesselCodes(prisma, session, tenantId, scopeGroup) : null;
+  if (groupCodes && groupCodes.length === 0) throw new RouteError(400, "NO_VESSELS", "No hay buques en ese grupo.");
+  const pack = await buildAdvisorEvidence(prisma, session, tenantId, scopeVesselCode, groupCodes);
   if (pack.vesselCodes.length === 0) {
     throw new RouteError(400, "NO_VESSELS", "No hay buques para analizar.");
   }
@@ -263,7 +292,7 @@ export async function generateAdvisorReport(session: TenantAccessSession, vessel
       insufficient: insufficient as any,
       // Sólo se guardan las evidencias citadas: son las que "Ver evidencia" muestra.
       evidence: citedEvidence(pack.evidence, findings) as any,
-      sources: { ...pack.sources, evidenceTotal: pack.evidence.length, dataGaps: pack.dataGaps, scopeVesselCode } as any,
+      sources: { ...pack.sources, evidenceTotal: pack.evidence.length, dataGaps: pack.dataGaps, scopeVesselCode, scopeGroup } as any,
       locale,
       model,
       createdByUserId: session.user.id,
@@ -673,12 +702,13 @@ export async function applyAdvisorProposal(session: TenantAccessSession, reportI
 
 // ── Acciones de seguimiento ──────────────────────────────────────────────────
 
-export async function listAdvisorActions(session: TenantAccessSession, filters: { status?: string | null; vesselCode?: string | null } = {}) {
+export async function listAdvisorActions(session: TenantAccessSession, filters: { status?: string | null; vesselCode?: string | null; group?: AdvisorGroup | null } = {}) {
   ensureDirector(session);
   const prisma = db();
   const tenantId = await resolveTenantId(session);
   const where: Record<string, unknown> = { tenantId };
-  if (filters.vesselCode) where.vesselCode = filters.vesselCode;
+  if (filters.group) where.vesselCode = { in: await groupVesselCodes(prisma, session, tenantId, filters.group) };
+  else if (filters.vesselCode) where.vesselCode = filters.vesselCode;
   if (filters.status === "ACTIVE") where.status = { in: ["OPEN", "IN_PROGRESS"] };
   else if (filters.status && ACTION_STATUSES.includes(filters.status as ActionStatus)) where.status = filters.status;
   const items = await prisma.maintenanceAdvisorAction.findMany({

@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-19] Asesor tecnico: analizar todas las barcazas juntas
+Agent: Claude Opus 5
+- Pedido de Gustavo. En la pantalla de elegir hay un boton "Analizar todas las barcazas juntas (N)" (barcaza =
+  el tipo de buque dice "Barcaza", mismo criterio que el puntaje de cumplimiento). Queda en la URL (?grupo=barcazas).
+- En modo grupo vuelve la tarjeta "Barcazas que necesitan atencion" (barras por barcaza; tocar una la elige en el
+  encabezado). Elegir un buque deja el grupo atras.
+- Backend: generate/list/actions aceptan group=BARGES; el alcance se guarda en sources.scopeGroup (sin schema).
+  buildAdvisorEvidence acepta una lista de buques.
+
 [2026-09-19] Consola SUPERADMIN adaptada al celular (Preview V1)
 Agent: Claude Opus 5
 - Pedido de Gustavo: usar la consola /platform desde el telefono, con todas sus funciones, en la misma direccion.

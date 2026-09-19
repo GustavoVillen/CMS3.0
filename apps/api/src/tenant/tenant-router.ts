@@ -62,7 +62,7 @@ import { buildTmsaMaintenancePdf } from "./tmsa/tmsa-pdf-service";
 import {
   listAdvisorReports, getAdvisorReport, generateAdvisorReport, draftAdvisorEmail,
   listAdvisorActions, createAdvisorAction, updateAdvisorAction,
-  listAdvisorMessages, askAdvisor, applyAdvisorProposal,
+  listAdvisorMessages, askAdvisor, applyAdvisorProposal, parseAdvisorGroup,
 } from "./maintenance-advisor/maintenance-advisor-service";
 import { getIsmChapter10Evidence, getIsmMetricDetail } from "./ism/ism-service";
 import { suggestIsmAssessment } from "./ism/ism-ai-suggestions";
@@ -2435,15 +2435,15 @@ export async function handleTenantRoutes(
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
     const parts = url.pathname.split("/").slice(3); // tras /app/maintenance-advisor/
     if (method === "GET" && parts.length === 1 && parts[0] === "reports") {
-      sendJson(response, 200, await listAdvisorReports(session, url.searchParams.get("vesselCode")));
+      sendJson(response, 200, await listAdvisorReports(session, url.searchParams.get("vesselCode"), parseAdvisorGroup(url.searchParams.get("group"))));
       return true;
     }
     if (method === "POST" && parts.length === 1 && parts[0] === "reports") {
       // Cada análisis lee toda la flota y consume IA "profunda".
       enforceRateLimit(request, `ai-advisor:${session.user.id}`, { maxRequests: 4, windowMs: 10 * 60_000 });
       // Buque del encabezado (o vacío = toda la flota).
-      const body = await readJsonBody(request).catch(() => ({})) as { vesselCode?: string | null };
-      sendJson(response, 200, await generateAdvisorReport(session, body?.vesselCode ?? null));
+      const body = await readJsonBody(request).catch(() => ({})) as { vesselCode?: string | null; group?: string | null };
+      sendJson(response, 200, await generateAdvisorReport(session, body?.vesselCode ?? null, parseAdvisorGroup(body?.group)));
       return true;
     }
     if (method === "GET" && parts.length === 2 && parts[0] === "reports") {
@@ -2472,7 +2472,7 @@ export async function handleTenantRoutes(
       return true;
     }
     if (method === "GET" && parts.length === 1 && parts[0] === "actions") {
-      sendJson(response, 200, await listAdvisorActions(session, { status: url.searchParams.get("status"), vesselCode: url.searchParams.get("vesselCode") }));
+      sendJson(response, 200, await listAdvisorActions(session, { status: url.searchParams.get("status"), vesselCode: url.searchParams.get("vesselCode"), group: parseAdvisorGroup(url.searchParams.get("group")) }));
       return true;
     }
     if (method === "POST" && parts.length === 1 && parts[0] === "actions") {

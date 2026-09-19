@@ -5730,6 +5730,13 @@ const dict = {
   "advisor.pick.title": { es: "Elegí una embarcación", en: "Choose a vessel", pt: "Escolha uma embarcação" },
   "advisor.pick.body": { es: "El asesor analiza un buque por vez. Tocalo acá o elegilo arriba, en el encabezado.", en: "The advisor analyses one vessel at a time. Tap it here or choose it in the header.", pt: "O assessor analisa uma embarcação por vez. Toque aqui ou escolha no cabeçalho." },
   "advisor.pick.other": { es: "Otros", en: "Others", pt: "Outros" },
+  "advisor.group.barges": { es: "Todas las barcazas ({n})", en: "All barges ({n})", pt: "Todas as barcaças ({n})" },
+  "advisor.group.analyzeBarges": { es: "Analizar todas las barcazas juntas ({n})", en: "Analyse all barges together ({n})", pt: "Analisar todas as barcaças juntas ({n})" },
+  "advisor.group.change": { es: "cambiar", en: "change", pt: "mudar" },
+  "advisor.card.healthBarges": { es: "Cómo están las barcazas", en: "How the barges are doing", pt: "Como estão as barcaças" },
+  "advisor.card.ships": { es: "Barcazas que necesitan atención", en: "Barges needing attention", pt: "Barcaças que precisam de atenção" },
+  "advisor.ships.none": { es: "Ninguna barcaza con temas pendientes.", en: "No barge with pending topics.", pt: "Nenhuma barcaça com temas pendentes." },
+  "advisor.ships.pick": { es: "Ver sólo esta barcaza", en: "Show only this barge", pt: "Ver só esta barcaça" },
   "advisor.error.generic": { es: "No se pudo completar. Probá de nuevo.", en: "It could not be completed. Try again.", pt: "Não foi possível concluir. Tente de novo." },
 
 } satisfies Record<string, Record<Locale, string>>;
