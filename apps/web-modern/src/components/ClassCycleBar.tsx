@@ -10,7 +10,7 @@ import { useFetch } from "../lib/hooks";
  *
  * El ciclo termina en el vencimiento del certificado y dura 6 años en los
  * remolcadores y 8 en las barcazas. Encima se dibujan las ventanas de cada
- * inspección (± 6 meses), la de renovación (los últimos 6 meses), un ✓ donde
+ * inspección (± 6 meses), la de renovación (los últimos 12 meses), un ✓ donde
  * el plan de mantenimiento registra la inspección hecha y la marca de HOY.
  */
 
@@ -41,7 +41,9 @@ export interface ClassCycleModel {
   focus: CycleWindow | null;
 }
 
+/** Intermedias y periódicas: ± 6 meses de la fecha. Renovación: 12 meses antes del vencimiento. */
 const WINDOW_MONTHS = 6;
+const RENEWAL_WINDOW_MONTHS = 12;
 
 /** Fecha ISO de la API → día local, sin corrimiento por zona horaria. */
 function toDay(iso: string): Date {
@@ -75,7 +77,7 @@ export function computeClassCycle(cert: ClassCycleDates, info: ClassCycleInfo, t
     const doneAt = near(done[k], rule) ? done[k] : null;
     return { kind: m.kind, target, from: addMonths(target, -WINDOW_MONTHS), to: addMonths(target, WINDOW_MONTHS), doneAt };
   });
-  windows.push({ kind: "ren", target: end, from: addMonths(end, -WINDOW_MONTHS), to: end, doneAt: null });
+  windows.push({ kind: "ren", target: end, from: addMonths(end, -RENEWAL_WINDOW_MONTHS), to: end, doneAt: null });
 
   if (now > end) return { start, end, windows, level: 4, focus: windows[windows.length - 1] };
 

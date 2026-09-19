@@ -772,7 +772,7 @@ const dict = {
   "cert.cycle.legend.elapsed":      { es: "Tiempo transcurrido del ciclo", en: "Elapsed cycle time", pt: "Tempo decorrido do ciclo" },
   "cert.cycle.legend.periodic":     { es: "Ventana periódica (± 6 meses)", en: "Periodic window (± 6 months)", pt: "Janela periódica (± 6 meses)" },
   "cert.cycle.legend.intermediate": { es: "Ventana intermedia (± 6 meses)", en: "Intermediate window (± 6 months)", pt: "Janela intermediária (± 6 meses)" },
-  "cert.cycle.legend.renewal":      { es: "Ventana de renovación (6 meses antes)", en: "Renewal window (6 months before)", pt: "Janela de renovação (6 meses antes)" },
+  "cert.cycle.legend.renewal":      { es: "Ventana de renovación (12 meses antes)", en: "Renewal window (12 months before)", pt: "Janela de renovação (12 meses antes)" },
   "cert.cycle.legend.done":         { es: "Inspección hecha", en: "Survey done", pt: "Vistoria feita" },
   "cert.cycle.filter.all":    { es: "Todos",               en: "All",                  pt: "Todos" },
   "cert.cycle.filter.tugs":   { es: "Remolcadores",        en: "Tugs",                 pt: "Rebocadores" },

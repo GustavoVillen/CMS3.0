@@ -8,7 +8,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
  * define el tipo de buque:
  *   - remolcador: ciclo de 6 años, intermedia a los 3.
  *   - barcaza:    ciclo de 8 años, periódicas a los 2 y 6, intermedia a los 4.
- * Las ventanas (± 6 meses, renovación 6 meses antes) las arma la UI.
+ * Las ventanas (± 6 meses, renovación 12 meses antes) las arma la UI.
  *
  * Las fechas de cada inspección viven en el propio certificado, que es la
  * fuente válida (se corrigen con el Ship Status real). Mantenimiento las
