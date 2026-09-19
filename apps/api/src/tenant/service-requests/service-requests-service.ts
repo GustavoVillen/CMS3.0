@@ -1618,6 +1618,12 @@ export interface CompleteServiceRequestInput {
   receptionItem?: string | null;
   receivedByName?: string | null;
   receptionConform?: boolean | null;
+  /**
+   * Observaciones del formulario, cuando el usuario acepta agregarles el informe
+   * de la auditoría de recepción (service-request-complete-audit.ts). Viaja acá
+   * porque después de completar la SS queda bloqueada. Ausente = no se toca.
+   */
+  observations?: string | null;
 }
 
 /**
@@ -1651,6 +1657,7 @@ export async function completeServiceRequest(
       receptionItem: normalizeOptionalText(payload.receptionItem),
       receivedByName: recibe,
       receptionConform: payload.receptionConform,
+      ...(payload.observations !== undefined ? { observations: normalizeOptionalText(payload.observations) } : {}),
       receivedAt: new Date(),
       updatedByUserId: session.user.id,
     },

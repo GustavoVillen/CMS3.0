@@ -39,6 +39,7 @@ import { isJustCreated, clearJustCreated } from "../lib/just-created";
 import { LabSamplesPanel, countUnnumbered, type LabSamplesData } from "../components/service-requests/LabSamplesPanel";
 import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { WoCloseAuditModal } from "../components/work-orders/WoCloseAuditModal";
 import { PersonSelect } from "../components/PersonSelect";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
@@ -1211,18 +1212,20 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
  * La conformidad es una decisión explícita (no hay default): "no conforme" es
  * la evidencia de que el trabajo del tercero no se aceptó.
  */
+type ReceptionValues = { receivedByName: string; receptionItem: string; receptionConform: boolean; closeNotes: string };
+
 function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
   onClose: () => void;
-  onConfirm: (v: { receivedByName: string; receptionItem: string; receptionConform: boolean; closeNotes: string }) => Promise<void>;
+  onConfirm: (v: ReceptionValues) => Promise<void>;
   busy: boolean;
   /** Lo que ya se escribió en el recuadro ENTREGA / RECEPCION del formulario. */
-  initial?: { recibe: string; item: string; conforme: boolean | null };
+  initial?: { recibe: string; item: string; conforme: boolean | null; notas?: string };
 }) {
   const t = useT();
   const [recibe, setRecibe] = useState(initial?.recibe ?? "");
   const [item, setItem] = useState(initial?.item ?? "");
   const [conforme, setConforme] = useState<boolean | null>(initial?.conforme ?? null);
-  const [notas, setNotas] = useState("");
+  const [notas, setNotas] = useState(initial?.notas ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const confirmar = async () => {
@@ -1467,6 +1470,11 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
   const [actionError, setActionError] = useState<string | null>(null);
   // Pasos que piden datos (antes eran prompt()/confirm() nativos).
   const [receiving, setReceiving] = useState(false);
+  // Recepción ya cargada, esperando la auditoría de IA. Se completa recién desde
+  // la ventana de auditoría (con o sin el informe en Observaciones).
+  const [receptionAudit, setReceptionAudit] = useState<ReceptionValues | null>(null);
+  // Comentarios de la recepción: sobreviven a "Volver a la solicitud".
+  const [receptionNotes, setReceptionNotes] = useState("");
   // Aviso posterior a "Enviar al Proveedor". `mailedTo` = casilla a la que lo
   // mandó el sistema; null = no hay casilla configurada y el correo se manda a
   // mano (se descargó el .docx y se abrió el borrador).
@@ -2622,9 +2630,42 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
       {receiving && (
         <ReceiveServiceModal
           busy={busy}
-          initial={{ recibe: form.recibe, item: form.recepcionItem, conforme: form.conforme }}
+          initial={{ recibe: form.recibe, item: form.recepcionItem, conforme: form.conforme, notas: receptionNotes }}
           onClose={() => setReceiving(false)}
-          onConfirm={async v => { await act("complete", v); setReceiving(false); }}
+          onConfirm={async v => { setReceptionNotes(v.closeNotes); setReceptionAudit(v); setReceiving(false); }}
+        />
+      )}
+      {/* Auditoría de IA antes de completar, igual que al cerrar la OT. No frena
+          nada: desde acá se completa con el informe, sin él, o se vuelve a la
+          solicitud a corregir. */}
+      {receptionAudit && (
+        <WoCloseAuditModal
+          endpoint={`/app/pms/service-requests/${sr.id}/complete-audit`}
+          code={sr.serviceRequestCode}
+          draft={receptionAudit}
+          texts={{
+            eyebrow: "ss.completeAudit.eyebrow",
+            running: "ss.completeAudit.running",
+            errorHint: "ss.completeAudit.errorHint",
+            questionsHint: "ss.completeAudit.questionsHint",
+            appendAndClose: "ss.completeAudit.appendAndClose",
+            closeWithout: "ss.completeAudit.closeWithout",
+            back: "ss.completeAudit.back",
+          }}
+          onCancel={() => {
+            // Lo cargado en la recepción queda en la hoja para no volver a tipearlo.
+            patchForm({ recibe: receptionAudit.receivedByName, recepcionItem: receptionAudit.receptionItem, conforme: receptionAudit.receptionConform });
+            setReceptionAudit(null);
+          }}
+          onConfirmClose={append => {
+            const v = receptionAudit;
+            setReceptionAudit(null);
+            const observations = append?.trim()
+              ? [form.observations.trim(), append.trim()].filter(Boolean).join("\n\n")
+              : undefined;
+            act("complete", { ...v, observations }).catch(e =>
+              setActionError(e instanceof Error ? e.message : "No se pudo completar la acción."));
+          }}
         />
       )}
       {cancelling && (

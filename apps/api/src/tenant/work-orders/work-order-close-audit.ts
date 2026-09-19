@@ -31,7 +31,7 @@ const FEATURE = "wo_close_audit";
 // Cláusulas del Capítulo 10 del Código ISM, literales. Son las mismas que usa el
 // módulo /ism (ism-ai-suggestions.ts): el informe tiene que citar el criterio
 // real, no una paráfrasis inventada por el modelo.
-const ISM_CLAUSES = `10.1 — La Compañía debe establecer procedimientos para asegurar que el buque se mantiene de conformidad con las reglas y reglamentos pertinentes y con cualquier requisito adicional que establezca la Compañía.
+export const ISM_CLAUSES = `10.1 — La Compañía debe establecer procedimientos para asegurar que el buque se mantiene de conformidad con las reglas y reglamentos pertinentes y con cualquier requisito adicional que establezca la Compañía.
 10.2.1 — Las inspecciones se realizan a intervalos apropiados.
 10.2.2 — Toda no conformidad se notifica, indicando su posible causa, si se conoce.
 10.2.3 — Se adoptan las medidas correctivas apropiadas.
@@ -42,7 +42,7 @@ const ISM_CLAUSES = `10.1 — La Compañía debe establecer procedimientos para 
 // Grupos de evidencia del Elemento 4 que el propio PMS audita (tmsa-service.ts).
 // Se listan para que los hallazgos se anclen a un requisito que el sistema ya
 // mide, y no a un número de TMSA inventado.
-const TMSA_ELEMENTS = `4.1 — Cobertura del PMS y uso del sistema de defectos.
+export const TMSA_ELEMENTS = `4.1 — Cobertura del PMS y uso del sistema de defectos.
 4.2 — Equipo crítico, certificados, inspecciones y especificación de varada.
 4.3 — Mantenimiento planificado ejecutado en fecha y control de diferimientos.
 4.4 — Repuestos críticos y auditoría de ingeniería.
@@ -88,61 +88,65 @@ Es el texto que se va a pegar tal cual en el campo Observaciones de la OT, que s
 
 Si te paso "Respuestas del usuario", son la aclaración a preguntas que hiciste antes: incorporalas como evidencia válida y NO vuelvas a preguntar lo mismo.`;
 
+// Formato del informe. Lo comparte la auditoría de la SS
+// (service-request-complete-audit.ts): la misma ventana muestra los dos.
+export const AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    verdict: {
+      type: "string",
+      enum: ["CONFORME", "CON_OBSERVACIONES", "NO_CONFORME"],
+      description: "CONFORME: la evidencia sostiene el cierre. CON_OBSERVACIONES: se puede cerrar pero hay que dejar registro. NO_CONFORME: falta evidencia esencial o hay un desvío de seguridad.",
+    },
+    summary: { type: "string", description: "2 o 3 líneas: qué se auditó y a qué conclusión llegaste." },
+    findings: {
+      type: "array",
+      description: "Hallazgos de la auditoría. Vacío si no hay ninguno.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          criterion: { type: "string", description: 'Criterio citado: "ISM 10.2.4", "TMSA 4A.2", "Buena práctica: …".' },
+          evidence: { type: "string", description: "Qué muestra (o qué falta en) la evidencia del registro auditado." },
+          recommendedAction: { type: "string", description: "Corrección concreta para cerrar la brecha." },
+          severity: { type: "string", enum: ["MAYOR", "MENOR", "OBSERVACION"] },
+        },
+        required: ["criterion", "evidence", "recommendedAction", "severity"],
+      },
+    },
+    nextSteps: {
+      type: "array",
+      description: "Próximos pasos concretos tras el cierre (abrir OT por los pendientes, registrar el defecto, abrir MOC, programar la inspección…). Vacío si no hace falta ninguno.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          action: { type: "string", description: "Qué hacer, en imperativo y con el alcance concreto." },
+          why: { type: "string", description: "Por qué: qué dato del registro auditado lo dispara." },
+          module: {
+            type: "string",
+            enum: ["ORDEN_DE_TRABAJO", "DEFECTO", "SOLICITUD_DE_SERVICIO", "DIFERIMIENTO", "MOC", "RCA", "PLAN_DE_MANTENIMIENTO", "REPUESTOS", "INSPECCION", "CERTIFICADO", "PERMISO_DE_TRABAJO", "OTRO"],
+            description: "Módulo del sistema donde se hace.",
+          },
+        },
+        required: ["action", "why", "module"],
+      },
+    },
+    questions: {
+      type: "array",
+      description: "Máximo 5 dudas que la evidencia no resuelve y que cambian la conclusión. Cada una contestable en una línea. Vacío si no tenés dudas.",
+      items: { type: "string" },
+    },
+    observationsText: { type: "string", description: "Nota de cierre lista para pegar en el campo Observaciones." },
+  },
+  required: ["verdict", "summary", "findings", "nextSteps", "questions", "observationsText"],
+};
+
 const AUDIT_TOOL: Anthropic.Tool = {
   name: "wo_close_audit",
   description: "Registra la auditoría de cierre de la orden de trabajo.",
-  input_schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      verdict: {
-        type: "string",
-        enum: ["CONFORME", "CON_OBSERVACIONES", "NO_CONFORME"],
-        description: "CONFORME: la evidencia sostiene el cierre. CON_OBSERVACIONES: se puede cerrar pero hay que dejar registro. NO_CONFORME: falta evidencia esencial o hay un desvío de seguridad.",
-      },
-      summary: { type: "string", description: "2 o 3 líneas: qué se auditó y a qué conclusión llegaste." },
-      findings: {
-        type: "array",
-        description: "Hallazgos de la auditoría. Vacío si no hay ninguno.",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            criterion: { type: "string", description: 'Criterio citado: "ISM 10.2.4", "TMSA 4A.2", "Buena práctica: …".' },
-            evidence: { type: "string", description: "Qué muestra (o qué falta en) la evidencia de esta OT." },
-            recommendedAction: { type: "string", description: "Corrección concreta para cerrar la brecha." },
-            severity: { type: "string", enum: ["MAYOR", "MENOR", "OBSERVACION"] },
-          },
-          required: ["criterion", "evidence", "recommendedAction", "severity"],
-        },
-      },
-      nextSteps: {
-        type: "array",
-        description: "Próximos pasos concretos tras el cierre (abrir OT por los pendientes, registrar el defecto, abrir MOC, programar la inspección…). Vacío si no hace falta ninguno.",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            action: { type: "string", description: "Qué hacer, en imperativo y con el alcance concreto." },
-            why: { type: "string", description: "Por qué: qué dato de esta OT lo dispara." },
-            module: {
-              type: "string",
-              enum: ["ORDEN_DE_TRABAJO", "DEFECTO", "SOLICITUD_DE_SERVICIO", "DIFERIMIENTO", "MOC", "RCA", "PLAN_DE_MANTENIMIENTO", "REPUESTOS", "INSPECCION", "CERTIFICADO", "PERMISO_DE_TRABAJO", "OTRO"],
-              description: "Módulo del sistema donde se hace.",
-            },
-          },
-          required: ["action", "why", "module"],
-        },
-      },
-      questions: {
-        type: "array",
-        description: "Máximo 5 dudas que la evidencia no resuelve y que cambian la conclusión. Cada una contestable en una línea. Vacío si no tenés dudas.",
-        items: { type: "string" },
-      },
-      observationsText: { type: "string", description: "Nota de cierre lista para pegar en el campo Observaciones." },
-    },
-    required: ["verdict", "summary", "findings", "nextSteps", "questions", "observationsText"],
-  },
+  input_schema: AUDIT_RESULT_SCHEMA,
 };
 
 export interface WoCloseAuditDraft {
@@ -364,8 +368,11 @@ export async function auditWorkOrderClose(
 
   const toolBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   if (!toolBlock) throw new RouteError(502, "AI_CALL_FAILED", "La IA no devolvio una auditoria estructurada.");
-  const out = toolBlock.input as Partial<WoCloseAuditResult>;
+  return normalizeAuditResult(toolBlock.input as Partial<WoCloseAuditResult>);
+}
 
+/** Sanea la salida del modelo: la consume una ventana, no puede venir rota. */
+export function normalizeAuditResult(out: Partial<WoCloseAuditResult>): WoCloseAuditResult {
   const verdict = out.verdict === "CONFORME" || out.verdict === "NO_CONFORME" || out.verdict === "CON_OBSERVACIONES"
     ? out.verdict
     : "CON_OBSERVACIONES";

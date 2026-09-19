@@ -4499,8 +4499,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         a la OT a corregir. */}
     {closeAuditOpts && (
       <WoCloseAuditModal
-        workOrderId={workOrder.id}
-        workOrderCode={workOrder.workOrderCode}
+        endpoint={`/app/pms/work-orders/${workOrder.id}/close-audit`}
+        code={workOrder.workOrderCode}
         draft={{
           woResult,
           executedByName,

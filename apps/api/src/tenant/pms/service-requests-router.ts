@@ -40,6 +40,7 @@ import {
   unsubmitServiceRequest,
   updateServiceRequest,
 } from "../service-requests/service-requests-service";
+import { auditServiceRequestComplete } from "../service-requests/service-request-complete-audit";
 
 function requireTenantSlug(request: IncomingMessage, env: AppEnv): string {
   const slug = resolveTenantSlugFromRequest(request, env);
@@ -238,6 +239,17 @@ export async function handleServiceRequestsRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof completeServiceRequest>[2];
     sendJson(response, 200, await completeServiceRequest(session, id, body ?? {}));
+    return true;
+  }
+
+  // Auditoría de IA previa a la recepción. Corre ANTES de /complete porque su
+  // informe puede terminar en Observaciones, que viaja en el cuerpo de /complete.
+  // No cambia nada en la base: sólo lee y devuelve el análisis.
+  if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/complete-audit$/.test(url.pathname)) {
+    enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof auditServiceRequestComplete>[2];
+    sendJson(response, 200, await auditServiceRequestComplete(session, id, body ?? {}));
     return true;
   }
 

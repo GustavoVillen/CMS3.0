@@ -4,6 +4,10 @@
 // terminar pegado en Observaciones, y Observaciones viaja en el cuerpo del
 // cierre. El backend hace el análisis (work-order-close-audit.ts).
 //
+// La misma ventana audita la recepción de una Solicitud de Servicio
+// (service-request-complete-audit.ts): cambian el endpoint, lo que se manda y
+// algunos textos (prop `texts`); el informe tiene el mismo formato.
+//
 // La auditoría NO frena el cierre (decisión de producto): muestra, pregunta y
 // recomienda; cerrar o no lo decide la persona. Si la IA falla, esta ventana lo
 // dice y deja cerrar igual — un problema de la IA no puede trabar la operación.
@@ -74,16 +78,24 @@ const SEVERITY_CLS: Record<Finding["severity"], string> = {
   OBSERVACION: "bg-fg/10 border-fg/20 text-text-industrial/70",
 };
 
-export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel, onConfirmClose }: {
-  workOrderId: string;
-  workOrderCode: string;
-  draft: WoCloseAuditDraft;
+/** Textos que cambian según lo que se audita. Por defecto, los de la OT. */
+type AuditTextKey = "eyebrow" | "running" | "errorHint" | "questionsHint" | "appendAndClose" | "closeWithout" | "back";
+
+export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onConfirmClose }: {
+  /** POST que corre la auditoría (ej. /app/pms/work-orders/:id/close-audit). */
+  endpoint: string;
+  /** Código del registro auditado, para el encabezado. */
+  code: string;
+  /** Lo que el usuario está cargando y todavía no guardó. */
+  draft: WoCloseAuditDraft | object;
+  texts?: Partial<Record<AuditTextKey, TranslationKey>>;
   /** Volver a la OT sin cerrarla (para corregir lo que marcó la auditoría). */
   onCancel: () => void;
   /** Cerrar la OT. `observationsAppend` es el informe, si el usuario lo aceptó. */
   onConfirmClose: (observationsAppend: string | null) => void;
 }) {
   const t = useT();
+  const tx = (k: AuditTextKey) => t(texts?.[k] ?? (`wo.closeAudit.${k}` as TranslationKey));
   const [result, setResult]   = useState<AuditResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -95,17 +107,14 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
   const runAudit = useCallback(async (withAnswers: Record<string, string>) => {
     setLoading(true); setError(null);
     try {
-      const res = await api.post<AuditResult>(
-        `/app/pms/work-orders/${workOrderId}/close-audit`,
-        { draft, answers: withAnswers },
-      );
+      const res = await api.post<AuditResult>(endpoint, { draft, answers: withAnswers });
       setResult(res);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("wo.closeAudit.error"));
     } finally {
       setLoading(false);
     }
-  }, [workOrderId, draft, t]);
+  }, [endpoint, draft, t]);
 
   // Una sola corrida al abrir. `runAudit` queda fuera de las dependencias a
   // propósito: cambia con cada render del padre y re-dispararía la auditoría
@@ -126,9 +135,9 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
             <ShieldCheck className="w-4 h-4 text-accent shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">
-                {t("wo.closeAudit.eyebrow")}
+                {tx("eyebrow")}
               </p>
-              <h2 className="text-sm font-bold text-fg font-mono truncate">{workOrderCode}</h2>
+              <h2 className="text-sm font-bold text-fg font-mono truncate">{code}</h2>
             </div>
           </div>
           <ModalCloseButton onClose={onCancel} />
@@ -140,7 +149,7 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
           {loading && (
             <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
               <Loader2 className="w-6 h-6 text-accent animate-spin" />
-              <p className="text-sm font-bold text-fg">{t("wo.closeAudit.running")}</p>
+              <p className="text-sm font-bold text-fg">{tx("running")}</p>
               <p className="text-xs text-text-industrial/50 max-w-md">{t("wo.closeAudit.runningHint")}</p>
             </div>
           )}
@@ -149,7 +158,7 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
             <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-4 space-y-1">
               <p className="text-xs font-bold text-red-700 dark:text-red-300">{t("wo.closeAudit.errorTitle")}</p>
               <p className="text-xs text-red-700 dark:text-red-300/80">{error}</p>
-              <p className="text-[11px] text-text-industrial/50 pt-1">{t("wo.closeAudit.errorHint")}</p>
+              <p className="text-[11px] text-text-industrial/50 pt-1">{tx("errorHint")}</p>
             </div>
           )}
 
@@ -160,7 +169,7 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
                 <HelpCircle className="w-4 h-4 text-accent shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-bold text-fg">{t("wo.closeAudit.questionsTitle")}</p>
-                  <p className="text-xs text-text-industrial/50">{t("wo.closeAudit.questionsHint")}</p>
+                  <p className="text-xs text-text-industrial/50">{tx("questionsHint")}</p>
                 </div>
               </div>
               {result!.questions.map((q, i) => (
@@ -257,7 +266,7 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
             onClick={onCancel}
             className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 transition-colors"
           >
-            {t("wo.closeAudit.back")}
+            {tx("back")}
           </button>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -287,7 +296,7 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
                   onClick={() => onConfirmClose(null)}
                   className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 disabled:opacity-40 transition-colors"
                 >
-                  {t("wo.closeAudit.closeWithout")}
+                  {tx("closeWithout")}
                 </button>
                 <button
                   type="button"
@@ -295,7 +304,7 @@ export function WoCloseAuditModal({ workOrderId, workOrderCode, draft, onCancel,
                   onClick={() => onConfirmClose(result?.observationsText ?? null)}
                   className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
                 >
-                  {t("wo.closeAudit.appendAndClose")}
+                  {tx("appendAndClose")}
                 </button>
               </>
             )}
