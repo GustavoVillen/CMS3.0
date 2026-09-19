@@ -1,5 +1,12 @@
 HISTORY.txt
 
+[2026-09-19] Asesor tecnico: con "Todos los buques" pide elegir una embarcacion
+Agent: Claude Opus 5
+- Pedido de Gustavo: el asesor trabaja de a un buque. Si el encabezado dice "Todos los buques", la pantalla no
+  carga ni analiza nada y muestra "Elegi una embarcacion" con los buques agrupados por tipo (un toque lo elige
+  en el encabezado). Se quito la tarjeta "Buques que necesitan atencion" (era la vista de flota).
+- Solo frontend (MaintenanceAdvisor.tsx + i18n advisor.pick.*). Los informes de flota ya guardados no se borran.
+
 [2026-09-19] Asesor tecnico: conversacion compacta (Preview V4)
 Agent: Claude Opus 5
 - Gustavo: la charla con el asesor alargaba mucho la pantalla. Ahora cada campo muestra solo el ultimo intercambio;

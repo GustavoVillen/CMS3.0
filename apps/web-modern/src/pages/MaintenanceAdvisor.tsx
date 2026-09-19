@@ -12,7 +12,7 @@
 // los buques de cada tema salen de datos del sistema, no del texto de la IA.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Compass, Loader2, RefreshCw, ChevronRight, ChevronDown, History } from "lucide-react";
+import { Compass, Loader2, RefreshCw, ChevronRight, ChevronDown, History, Ship } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
@@ -115,7 +115,11 @@ export const MaintenanceAdvisorPage: React.FC = () => {
     } catch { /* la pestaña queda vacía; el error real aparece al operar */ }
   }, [scopeQs]);
 
-  useEffect(() => { void load(); void loadActions(); }, [load, loadActions]);
+  // El asesor trabaja de a un buque: con "Todos los buques" no se carga nada.
+  useEffect(() => {
+    if (!selectedVesselCode) { setReport(null); setReports(null); setActions([]); setLoading(false); return; }
+    void load(); void loadActions();
+  }, [selectedVesselCode, load, loadActions]);
 
   const generate = async () => {
     setGenerating(true);
@@ -143,21 +147,47 @@ export const MaintenanceAdvisorPage: React.FC = () => {
   }, [report]);
   const health = report ? areaHealth(report.metrics) : null;
 
-  // Buques que preocupan: temas por buque, apilados por "para cuándo".
-  const shipBars = useMemo(() => {
-    const map = new Map<string, Record<Bucket, number>>();
-    for (const f of report?.findings ?? []) {
-      for (const code of findingVesselCodes(f, evidence)) {
-        const row = map.get(code) ?? { today: 0, week: 0, month: 0, later: 0 };
-        row[BUCKET_OF[f.priority]] += 1;
-        map.set(code, row);
-      }
+  // Buques del encabezado agrupados por tipo, para elegir uno de un toque.
+  const vesselGroups = useMemo(() => {
+    const groups = new Map<string, typeof vessels>();
+    for (const v of vessels) {
+      const key = v.vesselType?.trim() || "";
+      groups.set(key, [...(groups.get(key) ?? []), v]);
     }
-    const rows = Array.from(map, ([code, c]) => ({ code, c, total: c.today + c.week + c.month + c.later }));
-    rows.sort((a, b) => b.c.today - a.c.today || b.c.week - a.c.week || b.total - a.total);
-    return rows.slice(0, 6);
-  }, [report, evidence]);
-  const maxBar = Math.max(1, ...shipBars.map(r => r.total));
+    return Array.from(groups, ([type, list]) => ({ type, list: [...list].sort((a, b) => a.name.localeCompare(b.name)) }))
+      .sort((a, b) => (Number(!a.type) - Number(!b.type)) || a.type.localeCompare(b.type));
+  }, [vessels]);
+
+  if (!selectedVesselCode) {
+    return (
+      <div className="p-4 md:p-6 space-y-4 max-w-[1400px] mx-auto">
+        <PageHeader icon={Compass} title={t("advisor.title")} />
+        <div className="rounded-2xl border border-fg/10 bg-surface p-6 md:p-8">
+          <div className="text-center space-y-2 mb-6">
+            <Ship className="w-9 h-9 mx-auto text-violet-600" />
+            <p className="text-lg font-extrabold text-fg">{t("advisor.pick.title")}</p>
+            <p className="text-sm text-text-industrial/70 max-w-lg mx-auto">{t("advisor.pick.body")}</p>
+          </div>
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {vesselGroups.map(g => (
+              <div key={g.type || "_"}>
+                <p className="mb-2 text-[11.5px] font-extrabold uppercase tracking-wider text-text-industrial/60">{g.type || t("advisor.pick.other")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {g.list.map(v => (
+                    <button key={v.code} onClick={() => setSelectedVesselCode(v.code)}
+                      className="rounded-xl border-[1.5px] border-fg/15 bg-surface px-3.5 py-2 text-[13px] font-extrabold text-fg hover:border-violet-500 hover:bg-violet-500/5">
+                      🚢 {v.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-[1400px] mx-auto">
@@ -212,7 +242,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
       ) : (
         <>
           {/* ═══ De un vistazo ═══ */}
-          <div className={`grid gap-3 grid-cols-1 ${selectedVesselCode ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+          <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
             <Card title={t("advisor.card.today")} ai>
               <p className="text-[17px] font-extrabold text-fg leading-snug">{report.summary.whatNeedsAttentionNow || "—"}</p>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -224,7 +254,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card title={t(selectedVesselCode ? "advisor.card.healthVessel" : "advisor.card.healthFleet")}>
+            <Card title={t("advisor.card.healthVessel")}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {health && AREAS.map(area => {
                   const h = health[area];
@@ -245,33 +275,6 @@ export const MaintenanceAdvisorPage: React.FC = () => {
               </div>
             </Card>
 
-            {!selectedVesselCode && (
-              <Card title={t("advisor.card.ships")}>
-                {shipBars.length === 0 ? (
-                  <p className="text-sm text-text-industrial/60">{t("advisor.ships.none")}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {shipBars.map(row => (
-                      <button key={row.code} onClick={() => setSelectedVesselCode(row.code)} title={t("advisor.ships.pick")}
-                        className="grid grid-cols-[110px_1fr_20px] gap-2 items-center w-full text-left text-[12.5px] hover:opacity-80">
-                        <span className="font-extrabold text-fg truncate">{vesselName(row.code)}</span>
-                        <span className="h-3.5 rounded-full bg-fg/5 flex overflow-hidden">
-                          {BUCKETS.map(b => row.c[b] > 0 && (
-                            <i key={b} className={`block h-full ${BUCKET_STYLE[b].bar}`} style={{ width: `${(row.c[b] / maxBar) * 100}%` }} />
-                          ))}
-                        </span>
-                        <span className="font-extrabold text-text-industrial/70 text-right">{row.total}</span>
-                      </button>
-                    ))}
-                    <div className="flex flex-wrap gap-3 pt-1 text-[11px] text-text-industrial/60">
-                      {BUCKETS.filter(b => b !== "later").map(b => (
-                        <span key={b} className="inline-flex items-center gap-1"><i className={`inline-block w-2.5 h-2.5 rounded-sm ${BUCKET_STYLE[b].bar}`} />{t(BUCKET_LABEL[b]).toLowerCase()}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            )}
           </div>
 
           {/* ═══ Pestañas ═══ */}
