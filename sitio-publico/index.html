@@ -3,61 +3,537 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CMS3.0 — Sistema de mantenimiento planificado</title>
-<meta name="description" content="CMS3.0 es un sistema de mantenimiento planificado (PMS) para flotas fluviales y marítimas.">
+<title>CMS3.0 — Mantenimiento planificado para flotas</title>
+<meta name="description" content="CMS3.0 es un sistema de mantenimiento planificado (PMS) para flotas fluviales y marítimas: planes por equipo, órdenes de trabajo, repuestos, certificados y la evidencia que piden clase, bandera y TMSA.">
+<link rel="canonical" href="https://www.cms3.shipcms.cloud/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="CMS3.0 — Mantenimiento planificado para flotas">
+<meta property="og:description" content="Planes, órdenes de trabajo, repuestos y certificados de toda la flota en un solo lugar, con la evidencia lista para la auditoría.">
+<meta property="og:url" content="https://www.cms3.shipcms.cloud/">
+<meta name="theme-color" content="#0B2540">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B2540'/%3E%3Cpath d='M6 19c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 2 2 2' fill='none' stroke='%2334C3B0' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='10' r='3' fill='%23fff'/%3E%3C/svg%3E">
 <style>
-  :root { --fg:#0f172a; --muted:#64748b; --accent:#0369a1; --line:#e2e8f0; --bg:#f8fafc; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg);
-         font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:760px; margin:0 auto; padding:56px 20px 72px; }
-  header { border-bottom:1px solid var(--line); padding-bottom:24px; margin-bottom:32px; }
-  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.02em; }
-  h2 { font-size:19px; margin:36px 0 10px; }
-  .lead { color:var(--muted); margin:0; }
-  ul { padding-left:20px; }
-  li { margin:6px 0; }
-  a { color:var(--accent); }
-  footer { margin-top:48px; padding-top:20px; border-top:1px solid var(--line);
-           color:var(--muted); font-size:14px; }
-  footer a { margin-right:16px; }
+  :root{
+    --ink:#0B2540; --ink-2:#12345A; --ocean:#0F5A9E; --teal:#0E8A7E; --teal-l:#34C3B0;
+    --amber:#B5730B; --amber-bg:#FBF6E9; --red:#D14343; --green:#1F9D55; --yellow:#E0A100;
+    --fg:#0F172A; --muted:#5B6B7F; --line:#E3E8EF; --bg:#FFFFFF; --soft:#F4F7FA;
+    --radius:14px; --shadow:0 18px 50px -20px rgba(11,37,64,.35);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  a{color:var(--ocean)}
+  img,svg{display:block}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+  h1,h2,h3{letter-spacing:-.02em;line-height:1.15;margin:0}
+  h2{font-size:clamp(28px,3.4vw,40px)}
+  h3{font-size:19px}
+  .eyebrow{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:0 0 12px}
+  .lead{font-size:clamp(17px,1.6vw,19px);color:var(--muted);max-width:640px}
+  section{padding:88px 0}
+  .sec-head{max-width:720px;margin:0 0 44px}
+  .sec-head p{margin:14px 0 0}
+
+  /* botones */
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:10px;
+       font-weight:600;text-decoration:none;font-size:15.5px;transition:transform .15s,box-shadow .15s,background .15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--teal-l);color:var(--ink);box-shadow:0 8px 24px -10px rgba(52,195,176,.8)}
+  .btn-primary:hover{background:#4fd3c1}
+  .btn-ghost{color:#fff;border:1px solid rgba(255,255,255,.28)}
+  .btn-ghost:hover{background:rgba(255,255,255,.08)}
+  .btn-dark{background:var(--ink);color:#fff}
+
+  /* nav */
+  .nav{position:sticky;top:0;z-index:50;background:rgba(11,37,64,.92);backdrop-filter:saturate(1.4) blur(10px);
+       border-bottom:1px solid rgba(255,255,255,.08)}
+  .nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;gap:20px}
+  .brand{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-weight:800;font-size:19px;letter-spacing:-.01em}
+  .brand small{font-weight:500;color:#9FB3C8;font-size:13px;letter-spacing:0}
+  .nav ul{display:flex;gap:26px;list-style:none;margin:0;padding:0}
+  .nav ul a{color:#C9D6E3;text-decoration:none;font-size:14.5px;font-weight:500}
+  .nav ul a:hover{color:#fff}
+  .nav .btn{padding:9px 16px;font-size:14px}
+
+  /* hero */
+  .hero{background:radial-gradient(1200px 500px at 85% -10%,rgba(52,195,176,.20),transparent 60%),
+                   radial-gradient(900px 500px at -10% 110%,rgba(15,90,158,.45),transparent 60%),var(--ink);
+        color:#fff;padding:80px 0 0;overflow:hidden}
+  .hero-grid{display:grid;grid-template-columns:1fr;gap:44px}
+  .hero h1{font-size:clamp(36px,5.2vw,60px);max-width:820px}
+  .hero h1 em{font-style:normal;color:var(--teal-l)}
+  .hero .lead{color:#B8C7D6;margin:22px 0 32px}
+  .hero-cta{display:flex;flex-wrap:wrap;gap:12px}
+  .hero-note{margin:18px 0 0;font-size:14px;color:#8FA6BD}
+
+  /* maqueta de la app */
+  .mock{margin:56px auto -2px;max-width:1080px;background:#fff;border-radius:14px 14px 0 0;
+        box-shadow:0 -10px 80px -20px rgba(0,0,0,.6);overflow:hidden;color:var(--fg)}
+  .mock-bar{display:flex;align-items:center;gap:7px;padding:10px 14px;background:#EEF2F6;border-bottom:1px solid var(--line)}
+  .mock-bar i{width:11px;height:11px;border-radius:50%;background:#CBD5E1}
+  .mock-bar span{margin-left:12px;font-size:12px;color:var(--muted);background:#fff;border-radius:6px;padding:3px 12px;border:1px solid var(--line)}
+  .mock-body{display:grid;grid-template-columns:180px 1fr 250px;min-height:380px}
+  .m-side{background:var(--ink);padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+  .m-side b{color:#fff;font-size:13px;margin:0 6px 12px}
+  .m-side span{font-size:12px;color:#9FB3C8;padding:6px 8px;border-radius:6px}
+  .m-side span.on{background:rgba(52,195,176,.18);color:#fff}
+  .m-main{padding:18px 20px;background:var(--soft)}
+  .m-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .m-title b{font-size:15px}
+  .m-title small{font-size:11px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;align-items:center;gap:10px}
+  .donut{width:44px;height:44px;border-radius:50%;flex:none;position:relative}
+  .donut::after{content:"";position:absolute;inset:8px;background:#fff;border-radius:50%}
+  .kpi div{font-size:11px;color:var(--muted);line-height:1.3}
+  .kpi div b{display:block;font-size:17px;color:var(--fg)}
+  .tbl{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12px}
+  .tbl .r{display:grid;grid-template-columns:1.3fr 1.6fr .8fr .9fr;gap:8px;padding:8px 12px;border-top:1px solid var(--line);align-items:center}
+  .tbl .r:first-child{border-top:0;background:#F8FAFC;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:700}
+  .p-red{background:#FDECEC;color:var(--red)} .p-yel{background:#FFF6DB;color:#9A6B00}
+  .p-grn{background:#E6F6EC;color:var(--green)} .p-blu{background:#E7F0FA;color:var(--ocean)}
+  .m-copi{border-left:1px solid var(--line);padding:16px 14px;background:#fff;display:flex;flex-direction:column;gap:10px}
+  .m-copi b{font-size:12.5px;display:flex;align-items:center;gap:6px}
+  .bubble{font-size:11.5px;line-height:1.45;background:#F1F7F6;border:1px solid #D4EAE6;border-radius:10px;padding:9px 10px;color:#23413D}
+  .bubble.q{background:var(--soft);border-color:var(--line);color:var(--fg);align-self:flex-end;max-width:85%}
+  .chip{font-size:10.5px;border:1px solid var(--line);border-radius:99px;padding:3px 9px;color:var(--muted);align-self:flex-start}
+
+  /* franja normativa */
+  .norms{background:var(--ink-2);color:#C9D6E3;padding:22px 0}
+  .norms .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 34px;font-size:14px}
+  .norms b{color:#fff;font-weight:600}
+  .norms span{display:flex;align-items:center;gap:8px}
+  .norms span::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal-l)}
+
+  /* perfiles */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:26px}
+  .card .ic{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;margin-bottom:16px;background:#E8F5F3;color:var(--teal)}
+  .card p{color:var(--muted);margin:10px 0 0;font-size:15px}
+  .card ul{margin:14px 0 0;padding:0;list-style:none;font-size:14.5px}
+  .card li{padding:5px 0 5px 22px;position:relative}
+  .card li::before{content:"";position:absolute;left:2px;top:12px;width:10px;height:6px;border-left:2px solid var(--teal);border-bottom:2px solid var(--teal);transform:rotate(-45deg)}
+
+  /* módulos */
+  .modules{background:var(--soft)}
+  .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .mod{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px}
+  .mod h3{font-size:17px;display:flex;align-items:center;gap:10px}
+  .mod h3 i{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:#E7F0FA;color:var(--ocean);flex:none}
+  .mod p{margin:10px 0 0;color:var(--muted);font-size:14.5px}
+
+  /* circuito */
+  .split{display:grid;grid-template-columns:1fr 1.1fr;gap:56px;align-items:center}
+  .flow{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow)}
+  .flow h4{margin:0 0 16px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .steps{list-style:none;margin:0;padding:0;position:relative}
+  .steps::before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:2px;background:linear-gradient(var(--ocean),var(--teal))}
+  .steps li{position:relative;padding:0 0 18px 48px}
+  .steps li:last-child{padding-bottom:0}
+  .steps li::before{content:attr(data-n);position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;
+                    background:#fff;border:2px solid var(--ocean);color:var(--ocean);font-weight:700;font-size:13px;display:grid;place-items:center}
+  .steps li.done::before{background:var(--teal);border-color:var(--teal);color:#fff}
+  .steps b{display:block;font-size:15px}
+  .steps span{font-size:13.5px;color:var(--muted)}
+  .branch{margin-top:18px;padding:14px 16px;border:1px dashed #B9C6D3;border-radius:10px;font-size:13.5px;color:var(--muted)}
+  .branch b{color:var(--fg)}
+  .checks{list-style:none;margin:24px 0 0;padding:0;display:grid;gap:14px}
+  .checks li{display:grid;grid-template-columns:28px 1fr;gap:12px;font-size:15.5px}
+  .checks li::before{content:"✓";width:28px;height:28px;border-radius:8px;background:#E8F5F3;color:var(--teal);font-weight:800;display:grid;place-items:center}
+  .checks li span{color:var(--muted);display:block;font-size:14.5px}
+
+  /* copiloto */
+  .copilot{background:var(--ink);color:#fff}
+  .copilot .lead{color:#B8C7D6}
+  .copilot .eyebrow{color:var(--teal-l)}
+  .ai-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:8px}
+  .ai{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);border-radius:12px;padding:20px}
+  .ai h3{font-size:16.5px}
+  .ai p{margin:8px 0 0;color:#AFC0D1;font-size:14.5px}
+  .rule{margin-top:28px;display:flex;gap:14px;align-items:flex-start;background:rgba(52,195,176,.10);border:1px solid rgba(52,195,176,.35);border-radius:12px;padding:18px 20px}
+  .rule b{color:var(--teal-l)}
+  .rule p{margin:0;color:#D5E1EC;font-size:15px}
+
+  /* a bordo */
+  .phone{width:270px;margin:0 auto;border-radius:36px;background:#0B1624;padding:12px;box-shadow:var(--shadow)}
+  .screen{border-radius:26px;overflow:hidden;background:var(--soft);min-height:500px}
+  .ph-top{background:var(--ink);color:#fff;padding:18px 16px 16px}
+  .ph-top small{color:#9FB3C8;font-size:11px}
+  .ph-top b{display:block;font-size:16px;margin-top:2px}
+  .ph-body{padding:12px;display:grid;gap:9px}
+  .ph-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center}
+  .ph-card b{display:block;font-size:13px}
+  .ph-card small{color:var(--muted)}
+  .ph-btns{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .ph-btn{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 8px;text-align:center;font-size:11.5px;font-weight:600;color:var(--ink)}
+  .ph-btn i{display:block;font-style:normal;font-size:18px;margin-bottom:4px}
+  .ph-main{background:var(--teal);color:#fff;border-radius:12px;padding:13px;text-align:center;font-weight:700;font-size:13px}
+
+  /* cumplimiento */
+  .compliance{background:var(--soft)}
+  .reg{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .reg div{background:#fff;border:1px solid var(--line);border-top:3px solid var(--amber);border-radius:12px;padding:20px}
+  .reg small{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);background:var(--amber-bg);padding:3px 8px;border-radius:6px}
+  .reg b{display:block;margin:12px 0 6px;font-size:16px}
+  .reg p{margin:0;color:var(--muted);font-size:14px}
+  .disclaimer{margin:22px 0 0;font-size:13.5px;color:var(--muted)}
+
+  /* seguridad */
+  .sec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px 36px}
+  .sec-grid div{border-left:3px solid var(--ocean);padding-left:16px}
+  .sec-grid b{display:block;font-size:16px;margin-bottom:6px}
+  .sec-grid p{margin:0;color:var(--muted);font-size:14.5px}
+
+  /* puesta en marcha */
+  .onboard{background:linear-gradient(180deg,#fff,var(--soft))}
+  .road{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;counter-reset:r}
+  .road div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px;position:relative}
+  .road div::before{counter-increment:r;content:counter(r,decimal-leading-zero);font-weight:800;font-size:28px;color:#D5DEE8;display:block;margin-bottom:8px}
+  .road b{display:block;font-size:16px;margin-bottom:6px}
+  .road p{margin:0;color:var(--muted);font-size:14.5px}
+
+  /* contacto */
+  .cta{background:radial-gradient(800px 380px at 80% 0%,rgba(52,195,176,.22),transparent 60%),var(--ink);color:#fff;text-align:center}
+  .cta h2{max-width:760px;margin:0 auto}
+  .cta .lead{color:#B8C7D6;margin:18px auto 30px}
+  .cta .hero-cta{justify-content:center}
+  .cta .mail{margin-top:22px;font-size:15px;color:#9FB3C8}
+  .cta .mail a{color:#fff}
+
+  footer{background:#07192C;color:#8FA6BD;font-size:14px;padding:28px 0}
+  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px}
+  footer a{color:#C9D6E3;text-decoration:none;margin-left:20px}
+  footer a:first-child{margin-left:0}
+  footer a:hover{color:#fff}
+
+  @media (max-width:980px){
+    .nav ul{display:none}
+    .mock-body{grid-template-columns:1fr}
+    .m-side,.m-copi{display:none}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .cards,.mod-grid,.ai-grid,.sec-grid{grid-template-columns:1fr 1fr}
+    .reg,.road{grid-template-columns:1fr 1fr}
+    .split{grid-template-columns:1fr;gap:40px}
+  }
+  @media (max-width:640px){
+    section{padding:64px 0}
+    .hero{padding-top:56px}
+    .brand small{display:none}
+    .cards,.mod-grid,.ai-grid,.sec-grid,.reg,.road{grid-template-columns:1fr}
+    .tbl .r{grid-template-columns:1.2fr 1fr .9fr}
+    .tbl .r > :nth-child(2){display:none}
+    footer a{margin:0 16px 0 0}
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>CMS3.0</h1>
-    <p class="lead">Sistema de mantenimiento planificado para flotas fluviales y marítimas.</p>
-  </header>
 
-  <p>
-    CMS3.0 organiza el mantenimiento de buques y barcazas: planes por equipo, órdenes de trabajo,
-    solicitudes de servicio, defectos, repuestos, análisis de fluidos, inspecciones y la evidencia
-    documental que piden las auditorías de clase, bandera y TMSA.
-  </p>
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="CMS3.0, inicio">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#12345A"/><path d="M6 19c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 2 2 2" fill="none" stroke="#34C3B0" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="10" r="3" fill="#fff"/></svg>
+      CMS3.0 <small>Mantenimiento planificado</small>
+    </a>
+    <ul>
+      <li><a href="#modulos">Qué incluye</a></li>
+      <li><a href="#circuito">Cómo trabaja</a></li>
+      <li><a href="#copiloto">Asistente IA</a></li>
+      <li><a href="#cumplimiento">Cumplimiento</a></li>
+      <li><a href="#empezar">Puesta en marcha</a></li>
+    </ul>
+    <a class="btn btn-primary" href="#contacto">Pedir una demostración</a>
+  </div>
+</nav>
 
-  <h2>Qué resuelve</h2>
-  <ul>
-    <li>Planes de mantenimiento por equipo, con su origen normativo y su criterio de aceptación.</li>
-    <li>Órdenes de trabajo y solicitudes de servicio, desde la generación hasta el cierre.</li>
-    <li>Defectos, diferimientos, gestión del cambio y análisis de causa raíz.</li>
-    <li>Repuestos, consumos y pedidos a Compras.</li>
-    <li>Documentos en PDF de cada registro, con archivo automático en el Google Drive de la empresa.</li>
-  </ul>
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <p class="eyebrow">Sistema de mantenimiento planificado · PMS</p>
+        <h1>El mantenimiento de tu flota, <em>en orden y listo para la auditoría.</em></h1>
+        <p class="lead">
+          CMS3.0 reúne en un solo lugar los planes de cada equipo, las órdenes de trabajo, los repuestos,
+          los certificados y la evidencia que piden clase, bandera y TMSA. La tripulación carga desde a bordo,
+          la superintendencia controla desde tierra, y cada registro queda firmado y trazable.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#contacto">Pedir una demostración</a>
+          <a class="btn btn-ghost" href="#modulos">Ver qué incluye</a>
+        </div>
+        <p class="hero-note">Para flotas fluviales y marítimas · Remolcadores, barcazas y buques · Español, inglés y portugués</p>
+      </div>
+    </div>
 
-  <h2>Acceso</h2>
-  <p>
-    Cada empresa entra por su propia dirección. El acceso es para clientes con cuenta activa; no hay
-    registro abierto al público. Para conocer el sistema, escribinos.
-  </p>
+    <!-- Maqueta ilustrativa: datos de ejemplo, no de un cliente real -->
+    <div class="mock" aria-hidden="true">
+      <div class="mock-bar"><i></i><i></i><i></i><span>tuempresa.cms3.shipcms.cloud</span></div>
+      <div class="mock-body">
+        <div class="m-side">
+          <b>CMS3.0</b>
+          <span class="on">Tablero</span><span>Planes de mantenimiento</span><span>Órdenes de trabajo</span>
+          <span>Solicitudes de servicio</span><span>Defectos</span><span>Repuestos</span>
+          <span>Certificados</span><span>ISM · Cap. 10</span>
+        </div>
+        <div class="m-main">
+          <div class="m-title"><b>Estado de la flota</b><small>Todos los buques ▾</small></div>
+          <div class="kpis">
+            <div class="kpi"><span class="donut" style="background:conic-gradient(var(--teal) 0 62%,var(--yellow) 0 84%,var(--red) 0)"></span><div>Planes<b>412</b></div></div>
+            <div class="kpi"><span class="donut" style="background:conic-gradient(var(--ocean) 0 48%,var(--teal) 0 80%,#CBD5E1 0)"></span><div>OT abiertas<b>27</b></div></div>
+            <div class="kpi"><span class="donut" style="background:conic-gradient(var(--yellow) 0 35%,var(--teal) 0 90%,var(--red) 0)"></span><div>Solicitudes<b>9</b></div></div>
+            <div class="kpi"><span class="donut" style="background:conic-gradient(var(--teal) 0 92%,var(--red) 0)"></span><div>Certificados<b>96%</b></div></div>
+          </div>
+          <div class="tbl">
+            <div class="r"><span>Buque</span><span>Tarea</span><span>Vence</span><span>Estado</span></div>
+            <div class="r"><span>RÍO BERMEJO</span><span>Motor principal Bb — cambio de aceite</span><span>hace 2 d</span><span><em class="pill p-red">Vencido</em></span></div>
+            <div class="r"><span>ALBATROS II</span><span>Generador 1 — inspección de inyectores</span><span>en 5 d</span><span><em class="pill p-yel">Por vencer</em></span></div>
+            <div class="r"><span>BARCAZA B-114</span><span>Bomba de achique — prueba funcional</span><span>en 12 d</span><span><em class="pill p-blu">En proceso</em></span></div>
+            <div class="r"><span>RÍO BERMEJO</span><span>Compresor de aire — análisis de aceite</span><span>en 21 d</span><span><em class="pill p-grn">Al día</em></span></div>
+          </div>
+        </div>
+        <div class="m-copi">
+          <b>✦ Copiloto</b>
+          <div class="bubble q">¿Qué me falta para cerrar esta OT?</div>
+          <div class="bubble">Falta el resultado del trabajo y la firma de quien lo ejecutó. Los repuestos ya están descontados del stock del buque.</div>
+          <span class="chip">Completar ítems pendientes</span>
+          <span class="chip">Buscar en el manual del equipo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
 
-  <h2>Contacto</h2>
-  <p><a href="mailto:gustavovillen@gmail.com">gustavovillen@gmail.com</a></p>
-
-  <footer>
-    <a href="/privacidad.html">Política de privacidad</a>
-    <a href="/condiciones.html">Condiciones del servicio</a>
-  </footer>
+<div class="norms">
+  <div class="wrap">
+    <span>Pensado para el <b>Código IGS (ISM), Cap. 10</b></span>
+    <span><b>TMSA</b> Elemento 4</span>
+    <span>Inspecciones de <b>clase</b> y <b>bandera</b></span>
+    <span>Auditorías de <b>vetting</b></span>
+  </div>
 </div>
+
+<!-- Perfiles -->
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Una sola herramienta, tres miradas</p>
+      <h2>Cada persona ve lo que necesita para hacer su parte.</h2>
+      <p class="lead">Menos planillas sueltas, menos papeles que se pierden entre el buque y la oficina.</p>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V8"/><circle cx="12" cy="5" r="3"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg></div>
+        <h3>Tripulación a bordo</h3>
+        <p>Capitán, Jefe de Máquinas y tripulación registran el trabajo hecho, sin vueltas.</p>
+        <ul>
+          <li>Qué vence hoy y qué está atrasado</li>
+          <li>Abrir una orden de trabajo desde el celular</li>
+          <li>Horas de equipos, avances y consumo de repuestos</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></div>
+        <h3>Superintendencia</h3>
+        <p>Planifica, aprueba y controla el estado técnico de toda la flota desde tierra.</p>
+        <ul>
+          <li>Tablero con vencidos y próximos por buque</li>
+          <li>Aprobación y autorización de trabajos</li>
+          <li>Solicitudes a talleres y proveedores</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <h3>Dirección y calidad</h3>
+        <p>Tiene la evidencia a mano cuando llega el auditor, sin armar carpetas a último momento.</p>
+        <ul>
+          <li>Historial completo de cada equipo</li>
+          <li>Documentos en PDF con el formato de la empresa</li>
+          <li>Registro de quién hizo qué y cuándo</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Módulos -->
+<section class="modules" id="modulos">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Qué incluye</p>
+      <h2>Todo el ciclo del mantenimiento, conectado.</h2>
+      <p class="lead">Los módulos se hablan entre sí: una orden de trabajo descuenta repuestos, actualiza el plan, deja rastro en el historial del equipo y aparece en los informes.</p>
+    </div>
+    <div class="mod-grid">
+      <div class="mod"><h3><i>⚓</i>Flota y equipos</h3><p>Buques y barcazas con su árbol de equipos bajo codificación SFI, criticidad, horómetros e instrumentos a calibrar.</p></div>
+      <div class="mod"><h3><i>🗓</i>Planes de mantenimiento</h3><p>Tareas por calendario o por horas de servicio, con su origen normativo y criterio de aceptación. Vista de planilla y diagrama de Gantt.</p></div>
+      <div class="mod"><h3><i>🔧</i>Órdenes de trabajo</h3><p>Desde el pedido hasta el cierre: aprobación, autorización, permisos de trabajo, listas de verificación y resultado.</p></div>
+      <div class="mod"><h3><i>🤝</i>Solicitudes de servicio</h3><p>Trabajos de talleres y proveedores externos, siempre colgando de una orden de trabajo autorizada.</p></div>
+      <div class="mod"><h3><i>⚠</i>Defectos y diferimientos</h3><p>Registro de fallas con análisis de causa raíz, diferimientos autorizados y especificación de varada para el astillero.</p></div>
+      <div class="mod"><h3><i>📦</i>Repuestos</h3><p>Catálogo con números de parte, stock por buque, pedidos a Compras, recepción contra remito y consumos trazables.</p></div>
+      <div class="mod"><h3><i>🛡</i>Certificados e inspecciones</h3><p>Certificados del buque con su ciclo de clase y vencimientos, inspecciones internas, auditorías externas y simulacros.</p></div>
+      <div class="mod"><h3><i>🧪</i>Análisis de fluidos</h3><p>Muestras de aceite y otros fluidos: el informe del laboratorio se lee solo y se sigue la tendencia de cada equipo.</p></div>
+      <div class="mod"><h3><i>👥</i>Tripulación</h3><p>Nómina, horas de descanso, matriz de competencias y certificados de cada tripulante.</p></div>
+      <div class="mod"><h3><i>🔁</i>Gestión del cambio</h3><p>Cambios de equipos o procedimientos (MOC) y cuasi accidentes, con su evaluación y seguimiento.</p></div>
+      <div class="mod"><h3><i>📊</i>Informes</h3><p>Tablero, parte semanal automático, informe mensual y exportación a Excel de cada listado.</p></div>
+      <div class="mod"><h3><i>📄</i>Documentos</h3><p>Cada registro sale en PDF con el formato de los formularios de la empresa, y puede archivarse solo en su Google Drive.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Circuito -->
+<section id="circuito">
+  <div class="wrap split">
+    <div>
+      <p class="eyebrow">Cómo trabaja</p>
+      <h2>Cada trabajo sigue un circuito claro, con firmas en cada paso.</h2>
+      <p class="lead">Nadie tiene que acordarse de a quién mandarle qué: el sistema lleva la orden de trabajo de una mano a la otra y deja constancia de cada decisión.</p>
+      <ul class="checks">
+        <li><div>Nada se pierde entre el buque y la oficina<span>Lo que se carga a bordo lo ve tierra en el momento.</span></div></li>
+        <li><div>Cada rol hace lo que le toca<span>Permisos por rol, configurables por la empresa, y alcance por buque.</span></div></li>
+        <li><div>El plan se actualiza solo<span>Al cerrar la orden, la próxima fecha del plan se recalcula sola.</span></div></li>
+      </ul>
+    </div>
+    <div class="flow">
+      <h4>Orden de trabajo</h4>
+      <ol class="steps">
+        <li class="done" data-n="1"><b>En preparación</b><span>A bordo se arma el pedido: equipo, falla o tarea del plan.</span></li>
+        <li class="done" data-n="2"><b>Aprobada</b><span>Se habilitan avances, permisos de trabajo y consumo de repuestos.</span></li>
+        <li data-n="3"><b>Autorizada</b><span>Tierra da el visto bueno final.</span></li>
+        <li data-n="4"><b>Cerrada</b><span>Resultado, firmas y PDF. El plan se reprograma.</span></li>
+      </ol>
+      <div class="branch"><b>¿Hace falta un taller?</b> De una orden autorizada sale la solicitud de servicio al proveedor, con su propia aprobación, porque mueve dinero hacia afuera.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Copiloto -->
+<section class="copilot" id="copiloto">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Asistente de inteligencia artificial</p>
+      <h2>Un copiloto que mira la pantalla con vos.</h2>
+      <p class="lead">Vive en el panel lateral, ve el formulario que tenés abierto y ayuda a completarlo. Consulta los datos de la flota y los manuales técnicos que la empresa cargó.</p>
+    </div>
+    <div class="ai-grid">
+      <div class="ai"><h3>Lee documentos por vos</h3><p>El informe del laboratorio, la foto de una orden en papel o el PDF de un servicio: extrae los datos y los deja cargados para revisar.</p></div>
+      <div class="ai"><h3>Busca en tus manuales</h3><p>Pregunta por un valor de torque o un intervalo de servicio y responde con lo que dice el manual del equipo.</p></div>
+      <div class="ai"><h3>Ayuda a redactar</h3><p>Borradores de análisis de riesgo, permisos de trabajo, criterios de aceptación y análisis de causa, a nivel de tripulación.</p></div>
+      <div class="ai"><h3>Resume el estado técnico</h3><p>Informes de salud de un equipo y del mes, a partir de su historial real de trabajos, fallas y análisis.</p></div>
+    </div>
+    <div class="rule">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34C3B0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:2px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <p><b>Sugiere, no decide.</b> La criticidad, la causa de una falla y el cumplimiento los califica siempre una persona. El asistente propone; el responsable firma.</p>
+    </div>
+  </div>
+</section>
+
+<!-- A bordo -->
+<section>
+  <div class="wrap split">
+    <div class="phone" aria-hidden="true">
+      <div class="screen">
+        <div class="ph-top"><small>A bordo · Jefe de Máquinas</small><b>ALBATROS II</b></div>
+        <div class="ph-body">
+          <div class="ph-card"><div><b>3 tareas vencidas</b><small>Abrir OT y mandar a aprobar</small></div><em class="pill p-red">!</em></div>
+          <div class="ph-card"><div><b>5 por vencer</b><small>Próximos 7 días</small></div><em class="pill p-yel">7d</em></div>
+          <div class="ph-btns">
+            <div class="ph-btn"><i>🔧</i>Nueva OT</div>
+            <div class="ph-btn"><i>⏱</i>Horas de equipos</div>
+            <div class="ph-btn"><i>📝</i>Registrar avance</div>
+            <div class="ph-btn"><i>📦</i>Consumo de repuestos</div>
+            <div class="ph-btn"><i>🛡</i>Permiso de trabajo</div>
+            <div class="ph-btn"><i>✅</i>Check list</div>
+          </div>
+          <div class="ph-main">Lo que mandaste · 4 pendientes</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="eyebrow">Desde el celular</p>
+      <h2>A bordo se carga en el momento, no a fin de mes.</h2>
+      <p class="lead">El Capitán y el Jefe de Máquinas tienen una aplicación pensada para el celular, con lo justo para el día a día. Lo demás se completa en la computadora.</p>
+      <ul class="checks">
+        <li><div>Abrir una orden y mandarla a aprobar<span>Desde la tarea vencida del plan, en pocos toques.</span></div></li>
+        <li><div>Firmar desde cualquier lugar<span>La superintendencia aprueba y autoriza desde su teléfono.</span></div></li>
+        <li><div>Pensado para conexiones lentas<span>Pantallas livianas para enlaces satelitales y señal intermitente.</span></div></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- Cumplimiento -->
+<section class="compliance" id="cumplimiento">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Cumplimiento</p>
+      <h2>La evidencia se arma mientras se trabaja.</h2>
+      <p class="lead">Cada plan declara qué norma lo pide. Cada trabajo queda con fecha, responsable y firma. Cuando llega la auditoría, el sistema muestra dónde está la prueba de cada punto.</p>
+    </div>
+    <div class="reg">
+      <div><small>Lo exige</small><b>Código IGS · Cap. 10</b><p>Panel de autoevaluación del mantenimiento del buque y los equipos críticos, punto por punto.</p></div>
+      <div><small>Lo sugiere</small><b>TMSA · Elemento 4</b><p>Evidencia de confiabilidad y mantenimiento, con gestión del cambio y análisis de causa raíz.</p></div>
+      <div><small>Clase y bandera</small><b>Certificados</b><p>Vencimientos, ciclo de clase y ventanas de inspección de cada buque, a la vista.</p></div>
+      <div><small>Trazabilidad</small><b>Registro de auditoría</b><p>Quién entró, qué cambió y cuándo, para cada registro del sistema.</p></div>
+    </div>
+    <p class="disclaimer">CMS3.0 es una herramienta de gestión: ayuda a cumplir y a demostrarlo, pero el cumplimiento sigue siendo de la empresa y de su sistema de gestión de la seguridad.</p>
+  </div>
+</section>
+
+<!-- Seguridad -->
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Tus datos</p>
+      <h2>Tu información, separada y resguardada.</h2>
+    </div>
+    <div class="sec-grid">
+      <div><b>Cada empresa, en lo suyo</b><p>Cada naviera entra por su propia dirección y sólo ve sus buques, su gente y sus datos.</p></div>
+      <div><b>Permisos por rol y por buque</b><p>Capitán, Jefe de Máquinas, Superintendente, Compras, Auditor: cada uno con su alcance, ajustable por la empresa.</p></div>
+      <div><b>Copias de respaldo</b><p>Respaldos diarios y semanales, con copia fuera del servidor y un procedimiento de recuperación probado.</p></div>
+      <div><b>En tu idioma</b><p>Toda la interfaz en español, inglés y portugués, según la configuración de cada empresa.</p></div>
+      <div><b>Los datos son tuyos</b><p>Exportación a Excel de cada listado y PDF de cada registro. Al terminar el contrato, se entregan.</p></div>
+      <div><b>IA con lo mínimo</b><p>Al asistente se le envía sólo lo necesario para cada consulta, y no se usa para entrenar modelos.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Puesta en marcha -->
+<section class="onboard" id="empezar">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Puesta en marcha</p>
+      <h2>No empezás de cero: partimos de lo que ya tenés.</h2>
+      <p class="lead">Tus planillas de mantenimiento, los manuales de los equipos y tus formularios son el punto de partida.</p>
+    </div>
+    <div class="road">
+      <div><b>Relevamiento</b><p>Buques, equipos, planes y formularios que la empresa ya usa hoy.</p></div>
+      <div><b>Carga inicial</b><p>Importamos los planes desde tus planillas Excel y los completamos con los manuales de los equipos.</p></div>
+      <div><b>Práctica</b><p>Un entorno de práctica con tus propios datos, que se reinicia cada noche, para que la tripulación aprenda sin miedo a romper nada.</p></div>
+      <div><b>En marcha</b><p>Manuales paso a paso y videos tutoriales en español, y acompañamiento en las primeras semanas.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Contacto -->
+<section class="cta" id="contacto">
+  <div class="wrap">
+    <h2>Veámoslo funcionando con un buque tuyo.</h2>
+    <p class="lead">Coordinemos una demostración de media hora. Traé un plan de mantenimiento real y te mostramos cómo queda cargado.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="mailto:gustavovillen@gmail.com?subject=Demostraci%C3%B3n%20de%20CMS3.0">Pedir una demostración</a>
+    </div>
+    <p class="mail">o escribinos a <a href="mailto:gustavovillen@gmail.com">gustavovillen@gmail.com</a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 CMS3.0 · ¿Ya sos cliente? Entrá por la dirección de tu empresa.</span>
+    <span><a href="/privacidad.html">Política de privacidad</a><a href="/condiciones.html">Condiciones del servicio</a></span>
+  </div>
+</footer>
+
 </body>
 </html>
