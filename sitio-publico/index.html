@@ -11,7 +11,9 @@
 <meta property="og:description" content="Planes, órdenes de trabajo, repuestos y certificados de toda la flota en un solo lugar, con la evidencia lista para la auditoría.">
 <meta property="og:url" content="https://www.cms3.shipcms.cloud/">
 <meta name="theme-color" content="#0B2540">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B2540'/%3E%3Cpath d='M6 19c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 2 2 2' fill='none' stroke='%2334C3B0' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='10' r='3' fill='%23fff'/%3E%3C/svg%3E">
+<meta property="og:image" content="https://www.cms3.shipcms.cloud/logo.png">
+<link rel="icon" type="image/png" href="/logo.png">
+<link rel="apple-touch-icon" href="/logo.png">
 <style>
   :root{
     --ink:#0B2540; --ink-2:#12345A; --ocean:#0F5A9E; --teal:#0E8A7E; --teal-l:#34C3B0;
@@ -204,7 +206,8 @@
   .cta .mail a{color:#fff}
 
   footer{background:#07192C;color:#8FA6BD;font-size:14px;padding:28px 0}
-  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px}
+  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px}
+  .f-brand{display:flex;align-items:center;gap:10px}
   footer a{color:#C9D6E3;text-decoration:none;margin-left:20px}
   footer a:first-child{margin-left:0}
   footer a:hover{color:#fff}
@@ -234,7 +237,7 @@
 <nav class="nav">
   <div class="wrap">
     <a class="brand" href="#top" aria-label="CMS3.0, inicio">
-      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#12345A"/><path d="M6 19c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 2 2 2" fill="none" stroke="#34C3B0" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="10" r="3" fill="#fff"/></svg>
+      <img src="/logo-white.png" alt="" width="47" height="42">
       CMS3.0 <small>Mantenimiento planificado</small>
     </a>
     <ul>
@@ -530,7 +533,7 @@
 
 <footer>
   <div class="wrap">
-    <span>© 2026 CMS3.0 · ¿Ya sos cliente? Entrá por la dirección de tu empresa.</span>
+    <span class="f-brand"><img src="/logo-white.png" alt="" width="27" height="24">© 2026 CMS3.0 · ¿Ya sos cliente? Entrá por la dirección de tu empresa.</span>
     <span><a href="/privacidad.html">Política de privacidad</a><a href="/condiciones.html">Condiciones del servicio</a></span>
   </div>
 </footer>
