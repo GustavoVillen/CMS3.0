@@ -33,6 +33,8 @@ const BLOCKED_MEMBERSHIP_STATUS = new Set(["REVOKED", "SUSPENDED", "INVITED"]);
 export interface LiveMembership {
   role: TenantRole;
   assignedVesselCodes: string[];
+  /** Sólo vale para un admin: la marca en otro rol no abre nada. */
+  isMaintenanceDirector: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export async function loadLiveMembership(
       role: true,
       status: true,
       assignedVesselCodes: true,
+      isMaintenanceDirector: true,
       user: { select: { status: true } },
     },
   });
@@ -70,6 +73,7 @@ export function membershipToLive(membership: {
   role?: unknown;
   status?: unknown;
   assignedVesselCodes?: unknown;
+  isMaintenanceDirector?: unknown;
   user?: { status?: unknown } | null;
 } | null | undefined): LiveMembership | null {
   if (!membership) return null;
@@ -79,6 +83,7 @@ export function membershipToLive(membership: {
   return {
     role: membership.role as TenantRole,
     assignedVesselCodes: (membership.assignedVesselCodes ?? []) as string[],
+    isMaintenanceDirector: membership.role === "TENANT_ADMIN" && membership.isMaintenanceDirector === true,
   };
 }
 
@@ -115,5 +120,6 @@ export async function enforceLiveTenantSession(request: IncomingMessage): Promis
   // (routers y services) ve el rol, los buques y los permisos actuales.
   session.user.role = live.role;
   session.user.assignedVesselCodes = live.assignedVesselCodes;
+  session.user.isMaintenanceDirector = live.isMaintenanceDirector;
   session.user.permissions = await resolvePermissionsForRole(session.tenantSlug, live.role);
 }

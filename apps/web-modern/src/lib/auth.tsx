@@ -16,6 +16,13 @@ export interface AuthUser {
    * sólo decide qué botones se muestran.
    */
   permissions?: string[];
+  /** Admin marcado como Director de Mantenimiento en Equipo (pantalla del asesor). */
+  isMaintenanceDirector?: boolean;
+}
+
+/** ¿Ve la pantalla del asesor técnico? El servidor valida igual. */
+export function isMaintenanceDirector(user: AuthUser | null | undefined): boolean {
+  return user?.role === "TENANT_ADMIN" && user.isMaintenanceDirector === true;
 }
 
 export interface AuthTenant {
@@ -104,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const res = await api.post<{
         session: { accessToken: string; refreshToken: string };
-        user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[]; permissions?: string[] };
+        user: { id: string; firstName?: string; lastName?: string; email?: string; role: string; assignedVesselCodes: string[]; permissions?: string[]; isMaintenanceDirector?: boolean };
         bootstrap: { tenant: { slug: string; displayName: string; timezone: string; currency: string; locale: string; defaultLocale?: string; logoUrl?: string | null; logoUrlLight?: string | null; workOrderPdfTemplate?: string | null } };
       }>("/app/auth/login", { identifier, password });
 
@@ -123,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: u.role,
           assignedVesselCodes: u.assignedVesselCodes ?? [],
           permissions: u.permissions ?? [],
+          isMaintenanceDirector: u.isMaintenanceDirector === true,
         },
         tenant: {
           id: "",
@@ -179,6 +187,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const current = prev.user.permissions ?? [];
           if (current.length === mine.length && current.every(p => mine.includes(p))) return prev;
           const next = { ...prev, user: { ...prev.user, permissions: mine } };
+          localStorage.setItem("gpms_auth", JSON.stringify(next));
+          return next;
+        });
+      })
+      .catch(() => { /* ignore */ });
+    // Misma idea para la marca de Director de Mantenimiento: si un admin se la
+    // puso o se la sacó, el menú se entera al abrir la app.
+    api.get<{ user?: { isMaintenanceDirector?: boolean } }>("/app/me")
+      .then(res => {
+        if (cancelled || !res?.user) return;
+        const flag = res.user.isMaintenanceDirector === true;
+        setState(prev => {
+          if (!prev.user || (prev.user.isMaintenanceDirector === true) === flag) return prev;
+          const next = { ...prev, user: { ...prev.user, isMaintenanceDirector: flag } };
           localStorage.setItem("gpms_auth", JSON.stringify(next));
           return next;
         });

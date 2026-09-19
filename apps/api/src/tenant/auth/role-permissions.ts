@@ -259,6 +259,15 @@ export function ensurePermission(session: TenantAccessSession, key: PermissionKe
   if (!hasPermission(session, key)) throw new RouteError(403, "FORBIDDEN", message);
 }
 
+/**
+ * Director de Mantenimiento = TENANT_ADMIN con la marca en Equipo. No es una
+ * autorización de la matriz: el admin las tiene todas, y la pantalla del asesor
+ * es exclusiva de quien tiene la marca (el DPA sin marca no la ve).
+ */
+export function isMaintenanceDirector(session: TenantAccessSession): boolean {
+  return session.user.role === "TENANT_ADMIN" && session.user.isMaintenanceDirector === true;
+}
+
 /** Sanea lo que manda el cliente antes de guardarlo. */
 export function sanitizeMatrix(input: unknown): RolePermissionMatrix {
   if (!input || typeof input !== "object" || Array.isArray(input)) {

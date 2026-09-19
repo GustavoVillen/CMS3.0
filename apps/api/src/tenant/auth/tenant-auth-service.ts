@@ -210,6 +210,7 @@ export async function loginTenantUser(
         role: membership.role,
         assignedVesselCodes: membership.assignedVesselCodes,
         locale,
+        isMaintenanceDirector: membership.role === "TENANT_ADMIN" && membership.isMaintenanceDirector === true,
       },
       bootstrap: buildTenantBootstrapPayload(
         {

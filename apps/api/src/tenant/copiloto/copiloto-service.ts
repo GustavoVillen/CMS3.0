@@ -40,6 +40,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { loadCurrentHoursNumberByAsset } from "../asset-hours/asset-hours-service";
 import { resolvePlanDueStatus, EXECUTION_STATUSES } from "./plan-due-status";
+import { buildAdvisorCopilotBlock } from "../maintenance-advisor/maintenance-advisor-service";
 
 // ---------------------------------------------------------------------------
 // Immutable guardrails — never exposed to prompt editing
@@ -1833,6 +1834,16 @@ export async function streamCopilotoChat(
           `and say in one line that the button opens the SS to that workshop. If it is not in the catalog, say so and ask. ` +
           `If the user has not named one yet, ask which workshop does the job before any other empty field.`,
       });
+    }
+
+    // Pantalla del Director de Mantenimiento: el copiloto responde con el
+    // criterio del asesor técnico y conoce el informe abierto. El bloque lo
+    // arma el service del asesor, que vuelve a validar la marca de Director.
+    if (ctx.screen === "ADVISOR_DASHBOARD" && req.session) {
+      const advisorBlock = await buildAdvisorCopilotBlock(req.session, typeof ctx.entityId === "string" ? ctx.entityId : null);
+      if (advisorBlock) {
+        volatileSystemBlocks.push({ type: "text", text: `## TECHNICAL MANAGER ADVISOR MODE\n${advisorBlock}` });
+      }
     }
 
     // Paso de elección de un flujo guiado: el recordatorio va pegado al

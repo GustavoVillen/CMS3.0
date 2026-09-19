@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { AuthProvider, useAuth } from "./lib/auth";
+import { AuthProvider, useAuth, isMaintenanceDirector } from "./lib/auth";
 import { PlatformAuthProvider, usePlatformAuth } from "./lib/platform-auth";
 import { I18nProvider, type Locale } from "./lib/i18n";
 import { VesselProvider } from "./lib/vessel-context";
@@ -90,6 +90,7 @@ const CrewMatrixPage = React.lazy(() => import("./pages/CrewMatrix").then(m => (
 const RequirementsMatrixPage = React.lazy(() => import("./pages/RequirementsMatrix").then(m => ({ default: m.RequirementsMatrixPage })));
 const MocPage = React.lazy(() => import("./pages/Moc").then(m => ({ default: m.MocPage })));
 const TmsaPage = React.lazy(() => import("./pages/Tmsa").then(m => ({ default: m.TmsaPage })));
+const MaintenanceAdvisorPage = React.lazy(() => import("./pages/MaintenanceAdvisor").then(m => ({ default: m.MaintenanceAdvisorPage })));
 const IsmPage = React.lazy(() => import("./pages/Ism").then(m => ({ default: m.IsmPage })));
 
 // Platform (sólo SUPERADMIN — un tenant normal nunca descarga estos chunks)
@@ -139,6 +140,13 @@ function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
 function RequireRole({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user || !roles.includes(user.role)) return <AccessDenied />;
+  return <>{children}</>;
+}
+
+/** Pantalla exclusiva del admin marcado como Director de Mantenimiento. */
+function RequireMaintenanceDirector({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!isMaintenanceDirector(user)) return <AccessDenied />;
   return <>{children}</>;
 }
 
@@ -285,6 +293,7 @@ export default function App() {
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/reports"           element={<MonthlyReportsPage />} />
               <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN"]}><TmsaPage /></RequireRole>} />
+              <Route path="/maintenance-director" element={<RequireMaintenanceDirector><MaintenanceAdvisorPage /></RequireMaintenanceDirector>} />
               <Route path="/ism"               element={<RequireRole roles={["TENANT_ADMIN"]}><IsmPage /></RequireRole>} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />

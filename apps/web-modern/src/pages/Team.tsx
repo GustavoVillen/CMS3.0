@@ -35,6 +35,8 @@ interface Member {
   experienceYears: number | null;
   qualificationDocUrl: string | null;
   qualificationNotes: string | null;
+  /** Admin marcado como Director de Mantenimiento (pantalla del asesor técnico). */
+  isMaintenanceDirector?: boolean;
 }
 
 interface PendingInvite {
@@ -394,11 +396,12 @@ const MemberCredentialsSection: React.FC<MemberCredentialsSectionProps> = ({
 interface MemberDrawerProps {
   member: Member;
   currentUserId: string | undefined;
+  viewerIsAdmin: boolean;
   onClose: () => void;
   onChanged: () => void;
 }
 
-const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onClose, onChanged }) => {
+const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, viewerIsAdmin, onClose, onChanged }) => {
   const t = useT();
   const roleLabels = useRoleLabels();
   const [newRole, setNewRole]       = useState(member.role);
@@ -436,6 +439,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
     member.experienceYears != null ? String(member.experienceYears) : "");
   const [qualificationDocUrl, setQualificationDocUrl] = useState(member.qualificationDocUrl ?? "");
   const [qualificationNotes, setQualificationNotes]   = useState(member.qualificationNotes ?? "");
+  const [isDirector, setIsDirector] = useState(member.isMaintenanceDirector === true);
 
   const toggleVessel = (code: string) => {
     setSelectedVessels(prev => {
@@ -461,7 +465,12 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
     qualificationDocUrl.trim() !== (member.qualificationDocUrl ?? "") ||
     qualificationNotes.trim() !== (member.qualificationNotes ?? "");
   const canEdit = !isSelf && !isRevoked;
-  const dirty = canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged || formNameChanged || signatureChanged || qualChanged);
+  // Director de Mantenimiento: sólo sobre un admin y sólo lo marca un admin.
+  // Se permite también sobre uno mismo (un único admin tiene que poder marcarse).
+  const canSetDirector = viewerIsAdmin && !isRevoked && newRole === "TENANT_ADMIN";
+  const directorChanged = canSetDirector && isDirector !== (member.isMaintenanceDirector === true);
+  const dirty = (canEdit && (emailChanged || passwordSet || roleChanged || vesselsChanged || formNameChanged || signatureChanged || qualChanged))
+    || directorChanged;
 
   const handleSaveAll = async () => {
     if (emailChanged) {
@@ -496,6 +505,11 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
           qualificationNotes: qualificationNotes.trim() || null,
         });
       }
+      if (directorChanged) {
+        await api.put(`/app/team/members/${member.userId}/profile`, { isMaintenanceDirector: isDirector });
+        // Marcarse a uno mismo cambia el menú: se recarga para que aparezca (o se vaya).
+        if (isSelf) { window.location.reload(); return; }
+      }
       onChanged();
       onClose();
     } catch (err) {
@@ -526,7 +540,7 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
   };
 
   // ESC: cerrar / preguntar guardar si hay cambios
-  const drawerDirty = useDirtyTracker({ newRole, email, password });
+  const drawerDirty = useDirtyTracker({ newRole, email, password, isDirector });
   const requestClose = useEscapeGuard({ isDirty: drawerDirty, onSave: handleSaveAll, onClose });
 
   return (
@@ -668,6 +682,21 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
             </div>
           )}
 
+          {canSetDirector && (
+            <label className="flex items-start gap-3 rounded-xl border border-violet-400/40 bg-violet-500/5 p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 w-4 h-4 accent-violet-600"
+                checked={isDirector}
+                onChange={e => setIsDirector(e.target.checked)}
+              />
+              <span>
+                <span className="block text-xs font-bold text-fg">{t("role.maintenanceDirector")}</span>
+                <span className="block text-[11px] text-text-industrial/60 leading-snug">{t("team.maintenanceDirector.hint")}</span>
+              </span>
+            </label>
+          )}
+
           {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
@@ -707,6 +736,19 @@ const MemberDrawer: React.FC<MemberDrawerProps> = ({ member, currentUserId, onCl
                 )}
               </div>
             )}
+          </div>
+        )}
+        {/* Uno mismo sólo puede cambiar su propia marca de Director. */}
+        {isSelf && canSetDirector && (
+          <div className="px-6 py-4 border-t border-fg/10 shrink-0 flex justify-end">
+            <button
+              onClick={() => { void handleSaveAll(); }}
+              disabled={saving || !dirty}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-40 transition-all"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              {t("common.save")}
+            </button>
           </div>
         )}
       </div>
@@ -774,7 +816,7 @@ export const TeamPage: React.FC = () => {
     {
       key: "role",
       header: t("team.role"),
-      render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-fg"}`}>{roleLabels[m.role] ?? m.role}</span>,
+      render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-fg"}`}>{m.isMaintenanceDirector ? t("role.maintenanceDirector") : roleLabels[m.role] ?? m.role}</span>,
     },
     {
       key: "status",
@@ -846,6 +888,7 @@ export const TeamPage: React.FC = () => {
         <MemberDrawer
           member={editMember}
           currentUserId={user?.id}
+          viewerIsAdmin={user?.role === "TENANT_ADMIN"}
           onClose={() => setEditMember(null)}
           onChanged={triggerReload}
         />

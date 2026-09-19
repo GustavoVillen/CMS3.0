@@ -1,5 +1,70 @@
 HISTORY.txt
 
+[2026-09-19] Asesor tecnico: conversacion compacta (Preview V4)
+Agent: Claude Opus 5
+- Gustavo: la charla con el asesor alargaba mucho la pantalla. Ahora cada campo muestra solo el ultimo intercambio;
+  lo anterior queda en "Ver conversacion (N)". Si el ultimo intercambio termino con "Usar esta propuesta", todo se
+  pliega a "Ajustado con el asesor · ver conversacion" (el plan ya se ve en "Que hacer").
+- Respuestas cortas: el prompt pide 1-2 oraciones (max 40 palabras) cuando hay propuesta, sin repetir el plan, y el
+  servidor recorta por oraciones completas (shortenToSentences, 45/90 palabras; test advisor-reply-length.test.ts).
+- Archivos: AdvisorParts.tsx (TalkBox), maintenance-advisor-service.ts, i18n (advisor.talk.*).
+  Restauracion: tag CMS_UI_BASELINE_DIRMANT_V4 + claude/backups/director-mantenimiento-v4-20260919/.
+
+[2026-09-19] Plan de mantenimiento: el proximo vencimiento sigue a la ultima ejecucion al editar
+Agent: Claude Opus 5
+- Bug (Gustavo): al editar "Ultima ejecucion" el campo "Proximo vencimiento" seguia mostrando la fecha vieja.
+  El backend ya recalculaba al guardar (updateTenantMaintenancePlan), pero la pantalla no lo reflejaba, y si el
+  usuario tocaba el vencimiento para "corregirlo" pasaba a ser un vencimiento fijado a mano.
+- Fix (solo frontend, MaintenancePlans.tsx): mientras el vencimiento no se toque a mano, el campo muestra en vivo
+  ultima + frecuencia (previewNextDueValue) y al guardar no se manda (lo calcula el backend). Si se escribe a mano,
+  ese valor manda como antes. Copia previa: claude/backups/proximo-vencimiento-20260919/.
+
+[2026-09-19] Asesor tecnico: el Director le contesta al asesor (Preview V3)
+Agent: Claude Opus 5
+- En "Que pasa" y "Que hacer" de cada tema hay un campo para contestarle al asesor (ej.: "no se puede en 7 dias,
+  ¿se puede en remoto?"). El asesor responde solo con datos del sistema, no acepta como hecho lo que el sistema no
+  muestra, y puede proponer otro plan con aviso de lo que no resuelve. "Usar esta propuesta" lo adopta: el "Que hacer",
+  los chips, el correo, el seguimiento y el copiloto usan el plan nuevo; el original queda visible.
+- Schema (db push local): modelo nuevo MaintenanceAdvisorMessage (aditivo). El informe sigue inmutable: el plan
+  vigente es la ultima propuesta con appliedAt.
+- Backend: listAdvisorMessages / askAdvisor (AI_MODEL.deep, prompt del asesor + REPLY_CONTRACT) / applyAdvisorProposal;
+  rutas /app/maintenance-advisor/reports/:id/messages[/:msgId/apply]. Frontend: TalkBox en AdvisorParts.tsx.
+- Restauracion: tag CMS_UI_BASELINE_DIRMANT_V3 + claude/backups/director-mantenimiento-v3-20260919/.
+
+[2026-09-19] Asesor tecnico: rediseño simple (Preview V2)
+Agent: Claude Opus 5
+- Gustavo rechazo la V1 por poco intuitiva. V2 aprobada (claude/mockups/director-mantenimiento/preview-v2.html).
+- Pantalla: "Lo mas importante hoy" (1 frase) + conteo Para hoy / Esta semana / Este mes; 4 semaforos
+  (Plan, Fallas, Repuestos, Cierre de OT) calculados con metricas del sistema; barras de buques; lista
+  por "para cuando" con un solo boton "Resolver" que abre Que pasa -> Que hacer -> Actuar (evidencia,
+  correo y seguimiento adentro, sin ventanas). 2 pestanas: Por resolver / En seguimiento.
+- El buque es el del encabezado: la pantalla y "Actualizar analisis" siguen al selector (flota o un buque).
+  Backend: generateAdvisorReport/listAdvisorReports/listAdvisorActions aceptan vesselCode; el alcance del
+  informe se guarda en sources.scopeVesselCode (sin cambio de schema). Metricas nuevas closedWorkOrders60d y
+  criticalSparesWithMin (JSON). Prompt: titular de una frase y titulos en palabras simples.
+- Frontend: MaintenanceAdvisor.tsx reescrita; components/maintenance-advisor/AdvisorParts.tsx (nuevo),
+  advisor-types.ts; AdvisorModals.tsx eliminado. i18n: bloque advisor.* reemplazado (es/en/pt).
+- Restauracion: tag CMS_UI_BASELINE_DIRMANT_V2 + claude/backups/director-mantenimiento-v2-20260919/.
+
+[2026-09-19] Director de Mantenimiento + asesor tecnico (CMS3 Technical Manager Advisor)
+Agent: Claude Opus 5
+- Preview V1 aprobada (claude/mockups/director-mantenimiento/preview-v1.html).
+- No es un rol nuevo: es un TENANT_ADMIN con la marca TenantMembership.isMaintenanceDirector
+  (hay ~360 chequeos "es admin" a mano). Se marca en Equipo; solo la pone un admin, solo
+  sobre un admin, y se apaga sola si le cambian el rol. Viaja en la sesion y se resincroniza
+  en cada request (live-session-guard).
+- Schema (db push local): campo isMaintenanceDirector + modelos MaintenanceAdvisorReport
+  (inmutable, con foto de la evidencia) y MaintenanceAdvisorAction (seguimiento).
+- Backend: tenant/maintenance-advisor/ (advisor-evidence.ts arma el paquete con etiquetas
+  E-n; advisor-prompt.ts = prompt de Gustavo tal cual; service valida citas, redacta correos
+  con IA rapida y maneja acciones). Rutas /app/maintenance-advisor/*. El copiloto usa el
+  criterio del asesor en esa pantalla (screen ADVISOR_DASHBOARD).
+- Frontend: pages/MaintenanceAdvisor.tsx (/maintenance-director), components/maintenance-advisor/,
+  menu "Direccion", casilla en Equipo, etiqueta en el encabezado, i18n es/en/pt.
+- Calidad de datos marcada como tal: planes "vencidos" hace >10 anios (carga sin historial) y
+  repuestos criticos bajo minimo sin ningun movimiento de stock.
+- Restauracion: tag CMS_UI_BASELINE_DIRMANT + copias en claude/backups/director-mantenimiento-20260919/.
+
 [2026-09-17] Archivo de PDFs en Drive: boton "Conectar con Google" en vez del Apps Script
 Agent: Claude Opus 5
 - Gustavo freno el esquema anterior: pedia al usuario publicar un Apps Script y pegar

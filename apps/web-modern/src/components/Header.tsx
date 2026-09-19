@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { User, LogOut, ChevronDown, Ship, Sun, Moon, BookOpen, LayoutDashboard, ArrowLeft } from "lucide-react";
-import { useAuth } from "../lib/auth";
+import { useAuth, isMaintenanceDirector } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
@@ -155,7 +155,7 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
                 {user?.name ?? user?.identifier ?? t("header.userFallback")}
               </span>
               <span className="text-[10px] text-fg/50 leading-tight">
-                {user?.role?.replace(/_/g, " ") ?? ""}
+                {isMaintenanceDirector(user) ? t("role.maintenanceDirector") : user?.role?.replace(/_/g, " ") ?? ""}
               </span>
             </div>
             <ChevronDown className={`w-3 h-3 text-fg/40 transition-transform ${menuOpen ? "rotate-180" : ""}`} />

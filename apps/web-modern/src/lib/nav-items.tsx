@@ -11,6 +11,7 @@ import {
   Timer,
   Anchor,
   LifeBuoy,
+  Compass,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
   // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
@@ -32,6 +33,8 @@ export type NavItem = {
   path: string;
   end?: boolean;
   roles?: Role[];
+  /** Sólo el admin marcado como Director de Mantenimiento (no se oculta desde Configuración). */
+  maintenanceDirectorOnly?: boolean;
 };
 
 export type NavSection = {
@@ -44,6 +47,14 @@ export type NavSection = {
 export const LOCKED_NAV_PATHS: ReadonlySet<string> = new Set(["/", "/configuration"]);
 
 export const NAV: NavSection[] = [
+  {
+    // Pantalla exclusiva del Director de Mantenimiento (admin con la marca en Equipo).
+    titleKey: "nav.section.direction",
+    items: [
+      { icon: Compass,         labelKey: "nav.maintenanceAdvisor", path: "/maintenance-director",
+        maintenanceDirectorOnly: true },
+    ],
+  },
   {
     titleKey: "nav.section.operation",
     items: [

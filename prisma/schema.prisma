@@ -1126,6 +1126,10 @@ model TenantMembership {
   experienceYears       Int?             // años de experiencia
   qualificationDocUrl   String?          // respaldo documental (título, matrícula)
   qualificationNotes    String?          // aclaraciones (especialidad, alcance)
+  // Director de Mantenimiento: un TENANT_ADMIN marcado. No es un rol aparte
+  // (el sistema chequea "es admin" en cientos de lugares); la marca sólo le
+  // abre la pantalla del asesor técnico. Sin efecto si el rol no es admin.
+  isMaintenanceDirector Boolean          @default(false)
   joinedAt              DateTime?
   invitedAt             DateTime         @default(now())
   createdAt             DateTime         @default(now())
@@ -1501,6 +1505,100 @@ model AssetHealthReport {
 
   @@index([tenantId, assetId, createdAt])
   @@index([tenantId, vesselCode])
+}
+
+/// Informe del asesor técnico del Director de Mantenimiento (CMS3 Technical
+/// Manager Advisor). Inmutable: cada análisis de la flota es una fila nueva.
+/// `evidence` es la FOTO de los registros que leyó la IA (E-1, E-2…): "Ver
+/// evidencia" muestra lo de ese momento aunque después cambien los registros.
+model MaintenanceAdvisorReport {
+  id              String   @id @default(cuid())
+  tenantId        String
+  periodFrom      DateTime
+  periodTo        DateTime
+  vesselCodes     String[] @default([])
+  /// Números calculados por el sistema (no por la IA).
+  metrics         Json
+  /// Respuesta corta de la IA a las 4 preguntas del asesor.
+  summary         Json
+  /// Hallazgos ya validados: citas a evidencia inexistente descartadas.
+  findings        Json
+  /// Temas sin información suficiente y qué dato falta.
+  insufficient    Json
+  evidence        Json
+  sources         Json
+  locale          String
+  model           String
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdByName   String?
+
+  actions         MaintenanceAdvisorAction[]
+  messages        MaintenanceAdvisorMessage[]
+
+  @@index([tenantId, createdAt])
+}
+
+/// Conversación del Director con el asesor sobre un tema (hallazgo) de un
+/// informe (Preview V3). El Director escribe en "Qué pasa" (step WHAT) o en
+/// "Qué hacer" (step DO); el asesor contesta y puede proponer otro plan.
+/// El plan vigente del tema es la última propuesta con `appliedAt`: el original
+/// del informe no se toca (el informe es inmutable).
+model MaintenanceAdvisorMessage {
+  id              String    @id @default(cuid())
+  tenantId        String
+  reportId        String
+  findingKey      String
+  /// WHAT | DO
+  step            String
+  /// DIRECTOR | ADVISOR
+  role            String
+  text            String
+  /// Plan propuesto por el asesor: { action, who, when, targetDays, verify }.
+  proposal        Json?
+  /// Aviso del asesor sobre la propuesta (lo que no se puede resolver así).
+  warning         String?
+  /// El Director adoptó esta propuesta como plan del tema.
+  appliedAt       DateTime?
+  appliedByUserId String?
+  createdAt       DateTime  @default(now())
+  createdByUserId String
+  createdByName   String?
+
+  report          MaintenanceAdvisorReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, reportId, findingKey])
+}
+
+/// Acción de seguimiento creada por el Director desde un hallazgo del asesor.
+/// Se cierra sólo con la verificación de la evidencia pedida.
+model MaintenanceAdvisorAction {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  reportId             String?
+  findingKey           String?
+  title                String
+  vesselCode           String?
+  responsibleName      String
+  targetDate           DateTime
+  /// CRITICAL | HIGH | MEDIUM | LOW
+  priority             String
+  /// OPEN | IN_PROGRESS | VERIFIED | CANCELLED
+  status               String    @default("OPEN")
+  verificationCriteria String?
+  verificationNote     String?
+  evidenceIds          String[]  @default([])
+  createdAt            DateTime  @default(now())
+  createdByUserId      String
+  updatedAt            DateTime  @updatedAt
+  closedAt             DateTime?
+  closedByUserId       String?
+  closedByName         String?
+
+  report               MaintenanceAdvisorReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([reportId])
 }
 
 /// Lectura de horómetro de un equipo. ÚNICA fuente de verdad de las "horas actuales":

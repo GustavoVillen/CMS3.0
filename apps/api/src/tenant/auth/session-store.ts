@@ -22,6 +22,8 @@ export interface TenantAccessSession {
      * chequeo cae a los defaults del rol.
      */
     permissions?: string[];
+    /** Admin marcado como Director de Mantenimiento (pantalla del asesor técnico). */
+    isMaintenanceDirector?: boolean;
   };
 }
 

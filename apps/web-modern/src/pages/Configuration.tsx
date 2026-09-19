@@ -80,7 +80,9 @@ export const ConfigurationPage: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-5">
-            {NAV.map((section) => (
+            {NAV.map((section) => ({ ...section, items: section.items.filter(i => !i.maintenanceDirectorOnly) }))
+              .filter((section) => section.items.length > 0)
+              .map((section) => (
               <div key={section.titleKey}>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40 mb-2">
                   {t(section.titleKey)}

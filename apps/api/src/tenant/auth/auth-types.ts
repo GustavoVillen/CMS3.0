@@ -28,6 +28,7 @@ export interface TenantSessionUser {
   role: TenantRole;
   assignedVesselCodes: string[];
   locale: LocaleCode;
+  isMaintenanceDirector?: boolean;
 }
 
 export interface TenantLoginResponse {

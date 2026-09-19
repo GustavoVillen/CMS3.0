@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { UserCircle, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { useAuth } from "../lib/auth";
+import { useAuth, isMaintenanceDirector } from "../lib/auth";
 import { useResizable } from "../lib/hooks";
 import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
@@ -216,6 +216,7 @@ export const Sidebar: React.FC = () => {
           const visible = section.items.filter(
             item =>
               (!item.roles || item.roles.includes(user?.role ?? "")) &&
+              (!item.maintenanceDirectorOnly || isMaintenanceDirector(user)) &&
               !hiddenNavPaths.includes(item.path),
           );
           if (visible.length === 0) return null;

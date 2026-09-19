@@ -116,6 +116,7 @@ export async function listTeamMembers(
     experienceYears: m.experienceYears ?? null,
     qualificationDocUrl: m.qualificationDocUrl ?? null,
     qualificationNotes: m.qualificationNotes ?? null,
+    isMaintenanceDirector: m.role === "TENANT_ADMIN" && m.isMaintenanceDirector === true,
     hasSignature: opts.withSignatures ? (m.user.signatureUrl != null) : hasSigSet!.has(m.userId),
     ...(opts.withSignatures ? { signatureUrl: m.user.signatureUrl } : {}),
   }));
@@ -193,9 +194,14 @@ export async function updateMemberProfile(
     experienceYears?: number | null;
     qualificationDocUrl?: string | null;
     qualificationNotes?: string | null;
+    /** Marca de Director de Mantenimiento: sólo sobre un admin y sólo la pone un admin. */
+    isMaintenanceDirector?: boolean;
   },
 ) {
   ensureAdmin(session);
+  if (input.isMaintenanceDirector !== undefined && session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Sólo un administrador puede marcar al Director de Mantenimiento.");
+  }
   // La firma viaja como data URI base64; limitamos su tamaño (~1.5MB) por las dudas.
   if (input.signatureUrl && input.signatureUrl.length > 1_500_000) {
     throw new RouteError(400, "SIGNATURE_TOO_LARGE", "La imagen de firma es demasiado grande.");
@@ -221,6 +227,23 @@ export async function updateMemberProfile(
   if (input.qualificationDocUrl !== undefined) membershipData.qualificationDocUrl = input.qualificationDocUrl?.trim() || null;
   if (input.qualificationNotes !== undefined) membershipData.qualificationNotes = input.qualificationNotes?.trim() || null;
 
+  let directorChange: boolean | null = null;
+  if (input.isMaintenanceDirector !== undefined) {
+    const next = input.isMaintenanceDirector === true;
+    const target = await (prisma as any).tenantMembership.findFirst({
+      where: { tenantId, userId, status: { not: "REVOKED" } },
+      select: { role: true, isMaintenanceDirector: true },
+    });
+    if (!target) throw new RouteError(404, "USER_NOT_FOUND", "Miembro no encontrado.");
+    if (next && target.role !== "TENANT_ADMIN") {
+      throw new RouteError(400, "DIRECTOR_REQUIRES_ADMIN", "El Director de Mantenimiento tiene que tener rol de administrador.");
+    }
+    if (target.isMaintenanceDirector !== next) {
+      membershipData.isMaintenanceDirector = next;
+      directorChange = next;
+    }
+  }
+
   // Nada que cambiar: no es un error, sólo una llamada vacía.
   if (Object.keys(data).length === 0 && Object.keys(membershipData).length === 0) return { ok: true };
 
@@ -244,6 +267,16 @@ export async function updateMemberProfile(
     touched += result.count;
   }
   if (touched === 0) throw new RouteError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+  if (directorChange !== null) {
+    // Abre (o cierra) una pantalla exclusiva: queda en la auditoría quién y cuándo.
+    void publishAudit(prisma, {
+      tenantId,
+      actorUserId: session.user.id,
+      action: directorChange ? "TeamMember.maintenanceDirectorGranted" : "TeamMember.maintenanceDirectorRevoked",
+      entityType: "User",
+      entityId: userId,
+    });
+  }
   return { ok: true };
 }
 
@@ -380,9 +413,11 @@ export async function updateMemberRole(session: TenantAccessSession, userId: str
   // Preservar assignedVesselCodes en el cambio de rol — antes los reseteaba a []
   // salvo para FLEET_SUPERINTENDENT, lo que dejaba a los técnicos sin scope y veían
   // datos vacíos por el fail-closed. Ahora se mantienen y el admin los ajusta aparte.
+  // La marca de Director de Mantenimiento sólo tiene sentido en un admin: si deja
+  // de serlo, se apaga (no queda "dormida" para reaparecer si vuelve a ser admin).
   await (prisma as any).tenantMembership.update({
     where: { id: membership.id },
-    data: { role },
+    data: { role, ...(role !== "TENANT_ADMIN" ? { isMaintenanceDirector: false } : {}) },
   });
 
   return { userId, role };

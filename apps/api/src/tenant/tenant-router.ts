@@ -59,6 +59,11 @@ import { buildCompliancePdf } from "./compliance/compliance-pdf-service";
 import { getTmsaMaintenanceEvidence, getTmsaMetricDetail } from "./tmsa/tmsa-service";
 import { suggestTmsaAssessment } from "./tmsa/tmsa-ai-suggestions";
 import { buildTmsaMaintenancePdf } from "./tmsa/tmsa-pdf-service";
+import {
+  listAdvisorReports, getAdvisorReport, generateAdvisorReport, draftAdvisorEmail,
+  listAdvisorActions, createAdvisorAction, updateAdvisorAction,
+  listAdvisorMessages, askAdvisor, applyAdvisorProposal,
+} from "./maintenance-advisor/maintenance-advisor-service";
 import { getIsmChapter10Evidence, getIsmMetricDetail } from "./ism/ism-service";
 import { suggestIsmAssessment } from "./ism/ism-ai-suggestions";
 import { buildIsmChapter10Pdf } from "./ism/ism-pdf-service";
@@ -312,6 +317,7 @@ export async function handleTenantRoutes(
                   assignedVesselCodes: membership.assignedVesselCodes,
                   locale: membership.user.preferredLocale ?? "es",
                   permissions: await resolvePermissionsForRole(slug, membership.role),
+                  isMaintenanceDirector: membership.role === "TENANT_ADMIN" && membership.isMaintenanceDirector === true,
                 },
               });
             }
@@ -2421,6 +2427,64 @@ export async function handleTenantRoutes(
     });
     response.end(buffer);
     return true;
+  }
+
+  // ── Asesor técnico del Director de Mantenimiento ──────────────────────────
+  // Todo exclusivo del admin con la marca Director (lo valida el service).
+  if (url.pathname.startsWith("/app/maintenance-advisor/")) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const parts = url.pathname.split("/").slice(3); // tras /app/maintenance-advisor/
+    if (method === "GET" && parts.length === 1 && parts[0] === "reports") {
+      sendJson(response, 200, await listAdvisorReports(session, url.searchParams.get("vesselCode")));
+      return true;
+    }
+    if (method === "POST" && parts.length === 1 && parts[0] === "reports") {
+      // Cada análisis lee toda la flota y consume IA "profunda".
+      enforceRateLimit(request, `ai-advisor:${session.user.id}`, { maxRequests: 4, windowMs: 10 * 60_000 });
+      // Buque del encabezado (o vacío = toda la flota).
+      const body = await readJsonBody(request).catch(() => ({})) as { vesselCode?: string | null };
+      sendJson(response, 200, await generateAdvisorReport(session, body?.vesselCode ?? null));
+      return true;
+    }
+    if (method === "GET" && parts.length === 2 && parts[0] === "reports") {
+      sendJson(response, 200, await getAdvisorReport(session, decodeURIComponent(parts[1]!)));
+      return true;
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "reports" && parts[2] === "draft") {
+      enforceRateLimit(request, `ai-advisor-draft:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+      const body = await readJsonBody(request) as Parameters<typeof draftAdvisorEmail>[2];
+      sendJson(response, 200, await draftAdvisorEmail(session, decodeURIComponent(parts[1]!), body));
+      return true;
+    }
+    // Conversación con el asesor sobre un tema (Preview V3).
+    if (method === "GET" && parts.length === 3 && parts[0] === "reports" && parts[2] === "messages") {
+      sendJson(response, 200, await listAdvisorMessages(session, decodeURIComponent(parts[1]!)));
+      return true;
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "reports" && parts[2] === "messages") {
+      enforceRateLimit(request, `ai-advisor-reply:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+      const body = await readJsonBody(request) as Parameters<typeof askAdvisor>[2];
+      sendJson(response, 200, await askAdvisor(session, decodeURIComponent(parts[1]!), body));
+      return true;
+    }
+    if (method === "POST" && parts.length === 5 && parts[0] === "reports" && parts[2] === "messages" && parts[4] === "apply") {
+      sendJson(response, 200, await applyAdvisorProposal(session, decodeURIComponent(parts[1]!), decodeURIComponent(parts[3]!)));
+      return true;
+    }
+    if (method === "GET" && parts.length === 1 && parts[0] === "actions") {
+      sendJson(response, 200, await listAdvisorActions(session, { status: url.searchParams.get("status"), vesselCode: url.searchParams.get("vesselCode") }));
+      return true;
+    }
+    if (method === "POST" && parts.length === 1 && parts[0] === "actions") {
+      const body = await readJsonBody(request) as Parameters<typeof createAdvisorAction>[1];
+      sendJson(response, 200, await createAdvisorAction(session, body));
+      return true;
+    }
+    if (method === "PATCH" && parts.length === 2 && parts[0] === "actions") {
+      const body = await readJsonBody(request) as Parameters<typeof updateAdvisorAction>[2];
+      sendJson(response, 200, await updateAdvisorAction(session, decodeURIComponent(parts[1]!), body));
+      return true;
+    }
   }
 
   // ── Código ISM · Capítulo 10 (Mantenimiento del buque y el equipo) ────────

@@ -22,7 +22,16 @@ describe("membershipToLive — quién sigue pudiendo operar", () => {
       assignedVesselCodes: ["DCH"],
       user: activeUser,
     });
-    assert.deepEqual(live, { role: "TECHNICIAN_OPERATOR", assignedVesselCodes: ["DCH"] });
+    assert.deepEqual(live, { role: "TECHNICIAN_OPERATOR", assignedVesselCodes: ["DCH"], isMaintenanceDirector: false });
+  });
+
+  test("marca de Director de Mantenimiento: sólo vale en un admin", () => {
+    const admin = membershipToLive({ role: "TENANT_ADMIN", status: "ACTIVE", assignedVesselCodes: [], isMaintenanceDirector: true, user: activeUser });
+    assert.equal(admin?.isMaintenanceDirector, true);
+    const superint = membershipToLive({ role: "FLEET_SUPERINTENDENT", status: "ACTIVE", assignedVesselCodes: [], isMaintenanceDirector: true, user: activeUser });
+    assert.equal(superint?.isMaintenanceDirector, false);
+    const dpa = membershipToLive({ role: "TENANT_ADMIN", status: "ACTIVE", assignedVesselCodes: [], user: activeUser });
+    assert.equal(dpa?.isMaintenanceDirector, false);
   });
 
   test("dado de baja (sin membership): cortado", () => {
