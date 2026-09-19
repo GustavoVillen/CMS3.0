@@ -535,6 +535,30 @@ function previewNextDue(
   return { text: fmtDate(nd.toISOString().slice(0, 10)) ?? "—" };
 }
 
+/**
+ * Mismo cálculo que `previewNextDue`, pero como valor para el campo editable
+ * (yyyy-mm-dd, o las horas). Se arma la fecha a mano para no correr el día por
+ * la zona horaria. Es sólo lo que se MUESTRA: al guardar, el backend recalcula.
+ */
+function previewNextDueValue(
+  tt: string, lastDate: string, lastHours: string, freqMonths: string, freqHours: string,
+): string | null {
+  const fm = Number(freqMonths) || 0;
+  const fh = Number(freqHours) || 0;
+  if (needsHours(tt)) {
+    const lh = Number(lastHours);
+    return Number.isFinite(lh) && lastHours.trim() !== "" && fh > 0 ? String(lh + fh) : null;
+  }
+  if (!lastDate || fm <= 0) return null;
+  const d = new Date(lastDate + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return null;
+  if (needsMonths(tt)) d.setMonth(d.getMonth() + fm);
+  else if (needsDays(tt)) d.setDate(d.getDate() + fm);
+  else if (needsWeeks(tt)) d.setDate(d.getDate() + fm * 7);
+  else return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 // Rótulo de campo de la ventana por secciones (V15): en minúscula, más legible.
@@ -1338,6 +1362,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // manda al guardar y el backend sigue calculándolo solo desde la frecuencia.
   const [nextDueDateOverride, setNextDueDateOverride] = useState(toDateInput(plan?.nextDueDate ?? null));
   const [nextDueHoursOverride, setNextDueHoursOverride] = useState(String(plan?.nextDueHours ?? ""));
+  // ¿El usuario escribió el próximo vencimiento a mano? Mientras no lo toque, el
+  // campo sigue a la última ejecución (última + frecuencia) y al guardar lo
+  // calcula el backend. Si lo toca, su valor manda.
+  const [nextDueTouched, setNextDueTouched] = useState(false);
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
@@ -1536,6 +1564,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setLastExecHours(String(plan.lastExecutionHours ?? ""));
     setNextDueDateOverride(toDateInput(plan.nextDueDate ?? null));
     setNextDueHoursOverride(String(plan.nextDueHours ?? ""));
+    setNextDueTouched(false);
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
     setWindowMode(plan.windowMode ?? "AUTO");
     setWindowLeadDays(String(plan.windowLeadDays ?? ""));
@@ -1828,8 +1857,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         // pisando en silencio un vencimiento fijado a mano en un guardado previo.
         const lastExecDateChanged = canEditMilestones && !needsHours(triggerType) && lastExecDate !== toDateInput(plan.lastExecutionDate ?? null);
         const lastExecHoursChanged = canEditMilestones && needsHours(triggerType) && lastExecHours !== String(plan.lastExecutionHours ?? "");
-        const nextDueDateChanged = canEditMilestones && !needsHours(triggerType) && nextDueDateOverride !== toDateInput(plan.nextDueDate ?? null);
-        const nextDueHoursChanged = canEditMilestones && needsHours(triggerType) && nextDueHoursOverride !== String(plan.nextDueHours ?? "");
+        // Sólo si lo escribió a mano: si no, el vencimiento que se ve es el
+        // calculado desde la última ejecución y lo recalcula el backend.
+        const nextDueDateChanged = canEditMilestones && nextDueTouched && !needsHours(triggerType) && nextDueDateOverride !== toDateInput(plan.nextDueDate ?? null);
+        const nextDueHoursChanged = canEditMilestones && nextDueTouched && needsHours(triggerType) && nextDueHoursOverride !== String(plan.nextDueHours ?? "");
         await api.patch(`/app/pms/maintenance-plans/${plan.id}`, {
           ...(assetId ? { assetId } : {}),
           ...(isAdmin && taskCode.trim() && taskCode.trim() !== plan.taskCode ? { taskCode: taskCode.trim().toUpperCase() } : {}),
@@ -2916,6 +2947,14 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                         calcula solo desde la frecuencia (el backend lo confirma). */}
                     {!isNew && (() => {
                       const preview = previewNextDue(triggerType, lastExecDate, lastExecHours, frequencyMonths, frequencyHours);
+                      // Cambió la última ejecución y el vencimiento no se tocó a mano:
+                      // el campo muestra el nuevo cálculo (última + frecuencia).
+                      const lastExecEdited = needsHours(triggerType)
+                        ? lastExecHours !== String(plan?.lastExecutionHours ?? "")
+                        : lastExecDate !== toDateInput(plan?.lastExecutionDate ?? null);
+                      const autoNextDue = lastExecEdited && !nextDueTouched
+                        ? previewNextDueValue(triggerType, lastExecDate, lastExecHours, frequencyMonths, frequencyHours)
+                        : null;
                       return (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="space-y-1.5">
@@ -2936,8 +2975,8 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                             <label className={fLabelCls}>{t("mp.modal.nextDueDate")}</label>
                             {canEditMilestones ? (
                               needsHours(triggerType)
-                                ? <input type="number" value={nextDueHoursOverride} onChange={e => setNextDueHoursOverride(e.target.value)} placeholder="Horas" className={`${inputCls} font-mono text-accent`} />
-                                : <input type="date" value={nextDueDateOverride} onChange={e => setNextDueDateOverride(e.target.value)} className={`${inputCls} font-mono text-accent`} />
+                                ? <input type="number" value={autoNextDue ?? nextDueHoursOverride} onChange={e => { setNextDueTouched(true); setNextDueHoursOverride(e.target.value); }} placeholder="Horas" className={`${inputCls} font-mono text-accent`} />
+                                : <input type="date" value={autoNextDue ?? nextDueDateOverride} onChange={e => { setNextDueTouched(true); setNextDueDateOverride(e.target.value); }} className={`${inputCls} font-mono text-accent`} />
                             ) : (
                               <p className="py-2 text-sm font-mono text-accent">
                                 {isAdmin
