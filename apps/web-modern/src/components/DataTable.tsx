@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Loader2, AlertCircle, SearchX, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useT } from "../lib/i18n";
 
 export { fmtDate } from "../lib/utils";
 
@@ -14,6 +15,11 @@ export interface Column<T> {
   // Ancho fijo de la columna (ej. "180px", "20%"). Solo tiene efecto con
   // layoutFixed (table-fixed): evita que el ancho cambie según el contenido.
   width?: string;
+  // Sólo con mobileCards: la columna va arriba de la tarjeta, sin rótulo (el
+  // nombre a la izquierda, el estado a la derecha)…
+  mobileTitle?: boolean;
+  // …o no se muestra en el celular (IP, IDs internos: lo que no se lee ahí).
+  mobileHidden?: boolean;
 }
 
 // Agrupación opt-in. Cuando se pasa, las filas se agrupan por keyFn con un
@@ -67,9 +73,28 @@ interface DataTableProps<T> {
   // flag) para ordenar la lista de corrido. Sin este callback, con groupBy el
   // orden por columna queda desactivado como antes.
   onSortUngroup?: () => void;
+  // Opt-in: en pantallas chicas (< md) cada fila se muestra como tarjeta, con
+  // un "Ordenar por" arriba en lugar de los encabezados. En escritorio la
+  // tabla queda igual. No aplica con groupBy.
+  mobileCards?: boolean;
 }
 
-export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, rowClassName, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup, onSortUngroup }: DataTableProps<T>) {
+const DESKTOP_QUERY = "(min-width: 768px)"; // breakpoint md de Tailwind
+
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(() => typeof window === "undefined" || window.matchMedia(DESKTOP_QUERY).matches);
+  React.useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_QUERY);
+    const onChange = () => setIsDesktop(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isDesktop;
+}
+
+export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText = "Sin registros", onRowClick, rowClassName, layoutFixed = false, groupBy, collapsedGroups, onToggleGroup, onSortUngroup, mobileCards = false }: DataTableProps<T>) {
+  const t = useT();
+  const isDesktop = useIsDesktop();
   const [searchParams, setSearchParams] = useSearchParams();
   const validSortKeys = useMemo(() => columns.map(col => col.key), [columns]);
 
@@ -218,6 +243,81 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
       <p className="text-sm">{emptyText}</p>
     </div>
   );
+
+  if (mobileCards && !groupBy && !isDesktop) {
+    const cell = (col: Column<T>, row: T) =>
+      col.render ? col.render(row) : (row as Record<string, unknown>)[col.key] as React.ReactNode;
+    const visible   = columns.filter(col => !col.mobileHidden);
+    const titleCols = visible.filter(col => col.mobileTitle);
+    const bodyCols  = visible.filter(col => !col.mobileTitle && col.header.trim());
+    const footCols  = visible.filter(col => !col.mobileTitle && !col.header.trim());
+    const sortOptions = columns.filter(headerSortable);
+
+    const applySort = (key: string | null, dir: "asc" | "desc") => {
+      const params = new URLSearchParams(searchParams);
+      setSortKey(key);
+      setSortDirection(dir);
+      if (key) { params.set("sort", key); params.set("dir", dir); }
+      else { params.delete("sort"); params.delete("dir"); }
+      setSearchParams(params, { replace: true });
+    };
+
+    return (
+      <div className="space-y-2">
+        {sortOptions.length > 0 && (
+          <div className="flex items-center gap-2 text-xs text-fg/50">
+            <span className="shrink-0">{t("common.sortBy")}</span>
+            <select
+              value={sortKey ?? ""}
+              onChange={e => applySort(e.target.value || null, sortDirection)}
+              className="flex-1 min-w-0 min-h-9 rounded-lg border border-border bg-surface px-2 text-xs text-fg"
+            >
+              <option value="">{t("common.sortNone")}</option>
+              {sortOptions.map(col => <option key={col.key} value={col.key}>{col.header}</option>)}
+            </select>
+            <button
+              type="button"
+              disabled={!sortKey}
+              onClick={() => applySort(sortKey, sortDirection === "asc" ? "desc" : "asc")}
+              title={sortDirection === "asc" ? t("common.sortAsc") : t("common.sortDesc")}
+              aria-label={sortDirection === "asc" ? t("common.sortAsc") : t("common.sortDesc")}
+              className="min-h-9 w-9 flex items-center justify-center rounded-lg border border-border bg-surface text-fg/60 disabled:opacity-40"
+            >
+              {sortDirection === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
+        {sortedData.map(row => (
+          <div
+            key={keyFn(row)}
+            onClick={() => onRowClick?.(row)}
+            className={`rounded-xl border border-border bg-surface p-3 ${onRowClick ? "cursor-pointer active:bg-fg/[0.04]" : ""} ${rowClassName?.(row) ?? ""}`}
+          >
+            {titleCols.length > 0 && (
+              <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
+                {titleCols.map((col, i) => (
+                  <div key={col.key} className={i === 0 ? "min-w-0" : "shrink-0"}>{cell(col, row)}</div>
+                ))}
+              </div>
+            )}
+            {bodyCols.length > 0 && (
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                {bodyCols.map(col => (
+                  <React.Fragment key={col.key}>
+                    <dt className="text-fg/50">{col.header}</dt>
+                    <dd className="text-right text-fg/80 min-w-0 break-words [&>*]:ml-auto">{cell(col, row)}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            )}
+            {footCols.map(col => (
+              <div key={col.key} className="mt-2">{cell(col, row)}</div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">

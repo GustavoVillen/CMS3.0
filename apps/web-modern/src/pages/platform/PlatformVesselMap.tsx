@@ -107,9 +107,9 @@ export function PlatformVesselMapPage() {
   }, [positions]);
 
   return (
-    <div className="h-full flex flex-col gap-4">
+    <div className="md:h-full flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div>
           <h1 className="text-lg font-bold text-fg">Posición de Embarcaciones</h1>
           <p className="text-xs text-text-industrial/50 mt-0.5">
@@ -137,13 +137,33 @@ export function PlatformVesselMapPage() {
       </div>
 
       {/* Map */}
-      <div className="flex-1 rounded-xl overflow-hidden border border-fg/10 min-h-0">
+      {/* En el celular el mapa tiene alto fijo y la lista va debajo, con scroll de página. */}
+      <div className="h-[55dvh] md:h-auto shrink-0 md:shrink md:flex-1 rounded-xl overflow-hidden border border-fg/10 min-h-0">
         <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
       </div>
 
-      {/* Table */}
+      {/* Tarjetas (celular) */}
       {positions.length > 0 && (
-        <div className="shrink-0 rounded-xl border border-fg/10 overflow-hidden">
+        <div className="md:hidden space-y-2">
+          {positions.map((p, i) => (
+            <div key={i} className="rounded-xl border border-fg/10 bg-surface p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-mono font-bold text-fg text-sm">{p.vesselCode}</p>
+                <span className="text-xs text-text-industrial/40 shrink-0">{fmtAge(p.seenAt)}</span>
+              </div>
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs mt-2">
+                <dt className="text-text-industrial/40">Tenant</dt><dd className="text-right text-text-industrial/60">{p.tenantSlug}</dd>
+                <dt className="text-text-industrial/40">Usuario</dt><dd className="text-right text-text-industrial/60 break-all">{p.userEmail}</dd>
+                <dt className="text-text-industrial/40">Lat / Long</dt><dd className="text-right font-mono text-text-industrial/50">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</dd>
+              </dl>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Table (escritorio) */}
+      {positions.length > 0 && (
+        <div className="hidden md:block shrink-0 rounded-xl border border-fg/10 overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-fg/10 bg-fg/5">

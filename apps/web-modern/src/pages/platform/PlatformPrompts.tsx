@@ -54,30 +54,32 @@ function usePlatformList<T>(path: string) {
 
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
-          <h2 className="text-sm font-bold text-fg">{title}</h2>
+    // En el celular sube desde abajo; en ambos casos se desplaza si no entra.
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm md:p-4">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-t-2xl md:rounded-2xl w-full max-w-xl shadow-2xl max-h-[92dvh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-fg/5 shrink-0">
+          <h2 className="text-sm font-bold text-fg truncate">{title}</h2>
           <ModalCloseButton onClose={onClose} />
         </div>
-        <div className="px-6 py-5 space-y-4">{children}</div>
+        <div className="px-4 md:px-6 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
       {children}
     </div>
   );
 }
 
-const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+// text-base en el celular: con menos de 16px el iPhone agranda la pantalla al tocar el campo.
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
 const sel = inp + " appearance-none";
-const textarea = inp + " resize-none font-mono text-xs leading-relaxed";
+const textarea = inp.replace("md:text-sm", "md:text-xs") + " resize-none font-mono leading-relaxed";
 
 function ErrMsg({ msg }: { msg: string }) {
   return <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
@@ -107,7 +109,7 @@ function CreatePromptModal({ onClose, onCreated }: { onClose: () => void; onCrea
   return (
     <ModalWrapper title="Crear Prompt" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_6rem] md:grid-cols-2 gap-3">
           <Field label="Capability">
             <select className={sel} value={form.capability} onChange={set("capability")}>
               {CAPABILITIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -119,10 +121,10 @@ function CreatePromptModal({ onClose, onCreated }: { onClose: () => void; onCrea
             </select>
           </Field>
         </div>
-        <Field label="Título">
+        <Field label="Título" required>
           <input className={inp} required value={form.title} onChange={set("title")} placeholder="Prompt de copiloto naval" />
         </Field>
-        <Field label="Contenido del prompt">
+        <Field label="Contenido del prompt" required>
           <textarea className={textarea} required rows={10} value={form.content} onChange={set("content")} placeholder="Eres un asistente especializado en gestión de mantenimiento naval..." />
         </Field>
         {err && <ErrMsg msg={err} />}
@@ -148,10 +150,10 @@ function EditPromptModal({ prompt, onClose, onSaved }: { prompt: Prompt; onClose
   return (
     <ModalWrapper title={`Editar — ${prompt.capability} · ${prompt.locale.toUpperCase()} · v${prompt.version}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Título">
+        <Field label="Título" required>
           <input className={inp} required value={form.title} onChange={set("title")} />
         </Field>
-        <Field label="Contenido del prompt">
+        <Field label="Contenido del prompt" required>
           <textarea className={textarea} required rows={12} value={form.content} onChange={set("content")} />
         </Field>
         {err && <ErrMsg msg={err} />}
@@ -210,7 +212,7 @@ export const PlatformPromptsPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {prompts.map(p => (
-            <div key={p.id} className="bento-card space-y-3 cursor-pointer hover:border-fg/20 transition-all hover:scale-[1.02]" onClick={() => setEditing(p)}>
+            <div key={p.id} className="bento-card space-y-3 cursor-pointer hover:border-fg/20 transition-all md:hover:scale-[1.02]" onClick={() => setEditing(p)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-text-industrial/30 font-bold">
@@ -235,7 +237,7 @@ export const PlatformPromptsPage: React.FC = () => {
                   <button
                     onClick={() => handleAction(p, "publish")}
                     disabled={actLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-xs font-bold hover:bg-green-500/20 disabled:opacity-50 transition-all">
+                    className="flex-1 md:flex-none justify-center min-h-10 md:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-xs font-bold hover:bg-green-500/20 disabled:opacity-50 transition-all">
                     <Send className="w-3 h-3" /> Publicar
                   </button>
                 )}
@@ -243,7 +245,7 @@ export const PlatformPromptsPage: React.FC = () => {
                   <button
                     onClick={() => handleAction(p, "rollback")}
                     disabled={actLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-xs font-bold hover:bg-yellow-500/20 disabled:opacity-50 transition-all">
+                    className="flex-1 md:flex-none justify-center min-h-10 md:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-xs font-bold hover:bg-yellow-500/20 disabled:opacity-50 transition-all">
                     <RotateCcw className="w-3 h-3" /> Revertir
                   </button>
                 )}

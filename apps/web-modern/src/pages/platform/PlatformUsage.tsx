@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, Download, LineChart as LineChartIcon, X } from "lucide-react";
+import { Activity, Download, LineChart as LineChartIcon, X, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { platformFetch, platformAuthedFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
@@ -158,7 +158,7 @@ function aggregateByMinute(items: UsageEvent[]): AggregatedRow[] {
 const COMMON_COLS_RAW: Column<UsageEvent>[] = [
   { key: "createdAt",  header: "Fecha",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR")}</span> },
   { key: "tenantSlug", header: "Tenant",  render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
-  { key: "userEmail",  header: "Usuario", render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
+  { key: "userEmail",  header: "Usuario", mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
   { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
 ];
@@ -188,7 +188,7 @@ const HTTP_COLS_RAW: Column<UsageEvent>[] = [
 const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "createdAt",  header: "Minuto",  render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
   { key: "tenantSlug", header: "Tenant",  render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
-  { key: "userEmail",  header: "Usuario", render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
+  { key: "userEmail",  header: "Usuario", mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
   { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
 ];
@@ -212,7 +212,7 @@ const AI_COLS_AGG: Column<AggregatedRow>[] = [
 const HTTP_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "createdAt",  header: "Minuto",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
   { key: "tenantSlug", header: "Tenant",   render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
-  { key: "userEmail",  header: "Usuario",  render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[260px]" title={r.userEmail}>{r.userEmail}</span> },
+  { key: "userEmail",  header: "Usuario",  mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[260px]" title={r.userEmail}>{r.userEmail}</span> },
   { key: "ipAddress",  header: "IP",       render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "requests",   header: "Reqs",     render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
   { key: "bytesIn",    header: "↑ In",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesIn)}</span> },
@@ -348,7 +348,7 @@ const UsageChart: React.FC<{
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div style={{ width: "100%", height: 320 }}>
+      <div className="w-full h-[240px] md:h-[320px]">
         <ResponsiveContainer>
           <LineChart data={points} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
             <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
@@ -392,6 +392,7 @@ export const PlatformUsagePage: React.FC = () => {
   const [feature, setFeature]       = React.useState("");
   const [from, setFrom] = React.useState("");
   const [to, setTo]     = React.useState("");
+  const [showFilters, setShowFilters] = React.useState(false);
 
   const [data, setData] = React.useState<ListResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -519,7 +520,7 @@ export const PlatformUsagePage: React.FC = () => {
       </PageHeader>
 
       {/* Tabs IA / HTTP */}
-      <div className="flex gap-1.5 items-center">
+      <div className="flex flex-wrap gap-1.5 items-center">
         <button onClick={() => setKind("ai_call")}
           className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "ai_call" ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/20"}`}>
           Tokens IA
@@ -529,7 +530,7 @@ export const PlatformUsagePage: React.FC = () => {
           Bytes Satelital
         </button>
 
-        <span className="ml-4 text-[10px] text-text-industrial/40 uppercase tracking-wider">Agrupar:</span>
+        <span className="md:ml-4 text-[10px] text-text-industrial/40 uppercase tracking-wider">Agrupar:</span>
         <button onClick={() => setGroupBy("minute")}
           className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "minute" ? "bg-fg/10 border-fg/20 text-fg" : "bg-transparent border-fg/10 text-text-industrial/50 hover:border-fg/20"}`}>
           Por minuto
@@ -540,24 +541,29 @@ export const PlatformUsagePage: React.FC = () => {
         </button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-2 items-end">
+      {/* Filtros: en el celular quedan plegados detrás de un botón */}
+      <button onClick={() => setShowFilters(v => !v)}
+        className="md:hidden w-full min-h-10 flex items-center justify-between px-3 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg">
+        <span className="flex items-center gap-1.5"><Filter className="w-3.5 h-3.5" /> Filtros</span>
+        {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+      <div className={`${showFilters ? "flex" : "hidden"} md:flex flex-wrap gap-2 items-end`}>
         <input value={tenantSlug} onChange={e => setTenantSlug(e.target.value)} placeholder="Tenant slug…"
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-32" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-full md:w-32" />
         <input value={userEmail} onChange={e => setUserEmail(e.target.value)} placeholder="Email contiene…"
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-48" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-full md:w-48" />
         {kind === "ai_call" && (
           <select value={feature} onChange={e => setFeature(e.target.value)}
-            className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50">
+            className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50">
             <option value="">Toda feature</option>
             <option value="copiloto">copiloto</option>
             <option value="fluid_analyses">fluid_analyses</option>
           </select>
         )}
         <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
         <input type="date" value={to} onChange={e => setTo(e.target.value)}
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-1.5 text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
+          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
         <button onClick={reload}
           className="px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all">
           Aplicar
@@ -597,6 +603,7 @@ export const PlatformUsagePage: React.FC = () => {
           error={error}
           keyFn={r => r.id}
           emptyText="Sin eventos en el rango seleccionado"
+          mobileCards
         />
       ) : (
         <DataTable
@@ -606,6 +613,7 @@ export const PlatformUsagePage: React.FC = () => {
           error={error}
           keyFn={r => r.id}
           emptyText="Sin eventos en el rango seleccionado"
+          mobileCards
         />
       )}
     </div>

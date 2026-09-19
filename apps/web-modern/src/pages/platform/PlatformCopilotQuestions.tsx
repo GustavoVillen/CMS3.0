@@ -41,7 +41,7 @@ const COLUMNS: Column<CopilotQuestion>[] = [
   { key: "screen",     header: "Pantalla",   render: r => <span className="text-xs text-text-industrial/60">{r.screen ?? "—"}</span> },
   { key: "vesselCode", header: "Buque",      render: r => <span className="font-mono text-xs text-text-industrial/60">{r.vesselCode ?? "—"}</span> },
   {
-    key: "question", header: "Pregunta",
+    key: "question", header: "Pregunta", mobileTitle: true,
     render: r => (
       <div className="flex items-start gap-1.5 max-w-[460px]">
         {r.hasAttachment && <Paperclip className="w-3 h-3 text-accent shrink-0 mt-0.5" />}
@@ -59,31 +59,38 @@ export const PlatformCopilotQuestionsPage: React.FC = () => {
     : "/platform/copilot-questions";
   const { data, loading, error, reload } = usePlatformFetch<ListResponse>(path);
 
+  // En escritorio el buscador va en el encabezado; en el celular, en su propia
+  // fila a lo ancho (en el encabezado no entra).
+  const searchForm = (className: string) => (
+    <form
+      onSubmit={e => { e.preventDefault(); setQuery(search); }}
+      className={`relative ${className}`}
+    >
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-industrial/40 pointer-events-none" />
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Buscar en preguntas…"
+        className="w-full md:w-72 pl-7 bg-fg/5 border border-border rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+      />
+      {query && (
+        <button type="button" onClick={() => { setSearch(""); setQuery(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-text-industrial/50 hover:text-fg">limpiar</button>
+      )}
+    </form>
+  );
+
   return (
     <div className="space-y-5">
       <PageHeader icon={MessageCircleQuestion} title="Preguntas Copiloto" total={data?.total} onReload={reload}>
-        <form
-          onSubmit={e => { e.preventDefault(); setQuery(search); }}
-          className="relative"
-        >
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-industrial/40 pointer-events-none" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar en preguntas…"
-            className="w-72 pl-7 bg-fg/5 border border-border rounded-lg px-3 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-          />
-          {query && (
-            <button type="button" onClick={() => { setSearch(""); setQuery(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-text-industrial/50 hover:text-fg">limpiar</button>
-          )}
-        </form>
+        {searchForm("hidden md:block")}
       </PageHeader>
+      {searchForm("md:hidden")}
       {data?.total === 0 && !loading && (
         <div className="text-center py-16 text-text-industrial/20 text-sm">
           {query ? "Sin preguntas que coincidan con la búsqueda" : "Aún no hay preguntas registradas"}
         </div>
       )}
-      <DataTable columns={COLUMNS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="Sin preguntas registradas" />
+      <DataTable columns={COLUMNS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="Sin preguntas registradas" mobileCards />
     </div>
   );
 };

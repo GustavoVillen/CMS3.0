@@ -135,7 +135,7 @@ const UserPicker: React.FC<{
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
           placeholder={current ? `${current.fullName ?? current.legacyUserId ?? current.email} — buscar otro usuario…` : "Buscar usuario por nombre, usuario o email…"}
-          className="flex-1 bg-transparent text-xs text-fg placeholder:text-text-industrial/40 focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-base md:text-xs text-fg placeholder:text-text-industrial/40 focus:outline-none"
         />
       </div>
       {open && results.length > 0 && (
@@ -163,11 +163,11 @@ const UserPicker: React.FC<{
 
 const EVENT_COLS: Column<ActivityEvent>[] = [
   {
-    key: "at", header: "Fecha",
+    key: "at", header: "Fecha", mobileTitle: true,
     render: (r) => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.at).toLocaleString("es-AR")}</span>,
   },
   {
-    key: "type", header: "Tipo",
+    key: "type", header: "Tipo", mobileTitle: true,
     render: (r) => {
       const b = TYPE_BADGE[r.type];
       const Icon = b.icon;
@@ -311,7 +311,7 @@ export const PlatformUserActivityPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="text-right text-xs text-text-industrial/60 leading-relaxed">
+              <div className="md:text-right text-xs text-text-industrial/60 leading-relaxed">
                 <div>Última señal: <span className="text-fg/80">{u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString("es-AR") : "—"}</span></div>
                 <div>Última IP: <span className="font-mono text-fg/70">{u.lastIp ?? "—"}</span></div>
                 <div>Alta: <span className="text-fg/60">{new Date(u.createdAt).toLocaleDateString("es-AR")}</span></div>
@@ -354,7 +354,7 @@ export const PlatformUserActivityPage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-1">
                 {TYPE_CHIPS.map((c) => (
                   <button key={c.type} onClick={() => toggleType(c.type)}
-                    className={`px-2 py-1 rounded-lg border text-[11px] transition-all ${
+                    className={`px-3 md:px-2 py-2 md:py-1 rounded-lg border text-[11px] transition-all ${
                       types.has(c.type) ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-accent/30"
                     }`}>
                     {c.label}
@@ -376,6 +376,7 @@ export const PlatformUserActivityPage: React.FC = () => {
               error={error}
               keyFn={(r) => r.id}
               emptyText="Sin actividad registrada en este período."
+              mobileCards
             />
           </section>
         </>

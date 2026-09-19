@@ -8,6 +8,8 @@ import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/D
 import { PageHeader } from "../../components/PageHeader";
 import { PasswordInput } from "../../components/PasswordInput";
 import { ModalCloseButton } from "../../components/ModalCloseButton";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { AlertDialog } from "../../components/AlertDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,28 +75,30 @@ function usePlatformList<T>(path: string) {
 
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
-          <h2 className="text-sm font-bold text-fg">{title}</h2>
+    // En el celular sube desde abajo; en ambos casos se desplaza si no entra.
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm md:p-4">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-t-2xl md:rounded-2xl w-full max-w-md shadow-2xl max-h-[92dvh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-fg/5 shrink-0">
+          <h2 className="text-sm font-bold text-fg truncate">{title}</h2>
           <ModalCloseButton onClose={onClose} />
         </div>
-        <div className="px-6 py-5 space-y-4">{children}</div>
+        <div className="px-4 md:px-6 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
       {children}
     </div>
   );
 }
 
-const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+// text-base en el celular: con menos de 16px el iPhone agranda la pantalla al tocar el campo.
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
 const sel = inp + " appearance-none";
 
 function ErrMsg({ msg }: { msg: string }) {
@@ -268,19 +272,21 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
         <Field label="Logo de la empresa">
           <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
         </Field>
-        <Field label="Slug (único, solo minúsculas y guiones)">
+        <Field label="Slug (único, solo minúsculas y guiones)" required>
           <input className={inp} required value={form.slug} onChange={set("slug")} placeholder="mi-empresa" pattern="[a-z0-9-]+" />
         </Field>
-        <Field label="Nombre para mostrar">
+        <Field label="Nombre para mostrar" required>
           <input className={inp} required value={form.displayName} onChange={set("displayName")} placeholder="Mi Empresa S.A." />
         </Field>
-        <Field label="Email de soporte">
+        <Field label="Email de soporte" required>
           <input className={inp} type="email" required value={form.supportEmail} onChange={set("supportEmail")} placeholder="soporte@empresa.com" />
         </Field>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Field label="Locale"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
           <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-          <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
+          <div className="col-span-2 md:col-span-1">
+            <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
+          </div>
         </div>
         <Field label="Plantilla PDF de Orden de Trabajo">
           <select className={sel} value={form.workOrderPdfTemplate} onChange={set("workOrderPdfTemplate")}>
@@ -313,13 +319,15 @@ function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose
         <Field label="Logo de la empresa">
           <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
         </Field>
-        <Field label="Nombre para mostrar"><input className={inp} required value={form.displayName} onChange={set("displayName")} /></Field>
-        <Field label="Email de soporte"><input className={inp} type="email" required value={form.supportEmail} onChange={set("supportEmail")} /></Field>
+        <Field label="Nombre para mostrar" required><input className={inp} required value={form.displayName} onChange={set("displayName")} /></Field>
+        <Field label="Email de soporte" required><input className={inp} type="email" required value={form.supportEmail} onChange={set("supportEmail")} /></Field>
         <Field label="Estado"><select className={sel} value={form.status} onChange={set("status")}>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Field label="Locale"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
           <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-          <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
+          <div className="col-span-2 md:col-span-1">
+            <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
+          </div>
         </div>
         <Field label="Plantilla PDF de Orden de Trabajo">
           <select className={sel} value={form.workOrderPdfTemplate} onChange={set("workOrderPdfTemplate")}>
@@ -347,7 +355,7 @@ function AddDomainModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; 
   return (
     <ModalWrapper title="Agregar Dominio" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Host (sin protocolo)"><input className={inp} required value={host} onChange={e => setHost(e.target.value)} placeholder="empresa.com" /></Field>
+        <Field label="Host (sin protocolo)" required><input className={inp} required value={host} onChange={e => setHost(e.target.value)} placeholder="empresa.com" /></Field>
         <label className="flex items-center gap-2 text-sm text-text-industrial/70 cursor-pointer">
           <input type="checkbox" checked={isPrimary} onChange={e => setIsPrimary(e.target.checked)} className="accent-red-500" /> Marcar como dominio primario
         </label>
@@ -383,7 +391,7 @@ function AddInviteModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; 
   return (
     <ModalWrapper title="Crear Invitación" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email"><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
+        <Field label="Email" required><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
           <Field label="Locale"><select className={sel} value={form.locale} onChange={set("locale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
@@ -408,8 +416,8 @@ function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: stri
   return (
     <ModalWrapper title="Crear Usuario de Tenant" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email"><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
-        <Field label="Contraseña"><PasswordInput className={inp} required value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
+        <Field label="Email" required><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
+        <Field label="Contraseña" required><PasswordInput className={inp} required value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
         <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
         <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
         {err && <ErrMsg msg={err} />}
@@ -503,6 +511,8 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
   const [addUser, setAddUser]           = useState(false);
   const [addInvite, setAddInvite]       = useState(false);
   const [editUser, setEditUser] = useState<TenantUser | null>(null);
+  const [revoking, setRevoking] = useState<TenantUser | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
 
   const { data: domains, loading: dLoading, reload: dReload } = usePlatformList<TenantDomain[]>(`/platform/tenants/${tenant.slug}/domains`);
   const { data: users,   loading: uLoading, error: uError, reload: uReload } = usePlatformList<{ items: TenantUser[]; total: number }>(`/platform/tenants/${tenant.slug}/users`);
@@ -516,18 +526,12 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
   // Revoca el acceso de un user al tenant. Soft delete: la membership pasa a
   // REVOKED pero el user y su historial se conservan.
   const revokeUser = async (u: TenantUser) => {
-    const name = u.firstName ? `${u.firstName} (${u.email})` : u.email;
-    if (!window.confirm(
-      `¿Revocar el acceso de ${name} al tenant?\n\n` +
-      `Perderá la posibilidad de loguearse, pero el historial se mantiene. ` +
-      `Podés reactivarlo después editando el usuario.`
-    )) return;
+    setRevoking(null);
     try {
       await platformDelete(`/platform/tenants/${tenant.slug}/users/${u.id}`);
       uReload();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Error al revocar.";
-      window.alert(msg);
+      setRevokeError(e instanceof Error ? e.message : "Error al revocar.");
     }
   };
 
@@ -540,13 +544,14 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
 
   return (
     <>
-      <div className="fixed inset-0 top-12 left-56 z-40 flex">
-        <div className="flex-1 bg-black/50 backdrop-blur-sm" />
-        <aside className="w-[460px] bg-surface dark:bg-[#0A1020] border-l border-fg/10 flex flex-col h-full overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5 shrink-0">
-            <div>
+      {/* Escritorio: panel a la derecha del menú. Celular: toda la pantalla bajo la barra superior. */}
+      <div className="fixed inset-0 top-12 md:left-56 z-40 flex">
+        <div className="hidden md:block flex-1 bg-black/50 backdrop-blur-sm" />
+        <aside className="w-full md:w-[460px] bg-surface dark:bg-[#0A1020] md:border-l border-fg/10 flex flex-col h-full overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-fg/5 shrink-0">
+            <div className="min-w-0">
               <p className="text-xs font-mono text-text-industrial/40">{tenant.slug}</p>
-              <h2 className="text-base font-bold text-fg">{tenant.displayName}</h2>
+              <h2 className="text-base font-bold text-fg truncate">{tenant.displayName}</h2>
             </div>
             <ModalCloseButton onClose={onClose} />
           </div>
@@ -554,13 +559,13 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
           <div className="flex border-b border-fg/5 shrink-0">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-700 dark:text-red-400" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3 md:px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-700 dark:text-red-400" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>
                 <t.icon className="w-3.5 h-3.5" />{t.label}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-3 md:p-6 pb-[calc(0.75rem+env(safe-area-inset-bottom))] space-y-4">
 
             {tab === "domains" && (
               <>
@@ -573,15 +578,15 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   : !domains?.length
                   ? <div className="text-center py-10 text-text-industrial/20 text-sm">Sin dominios registrados</div>
                   : domains.map(d => (
-                    <div key={d.id} className="flex items-center justify-between bento-card py-3 px-4">
-                      <div>
+                    <div key={d.id} className="flex items-center justify-between gap-3 bento-card py-3 px-4">
+                      <div className="min-w-0 break-all">
                         <p className="text-sm font-mono text-fg">{d.host}</p>
                         <p className="text-[10px] text-text-industrial/30 mt-0.5">{fmtDate(d.createdAt)}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {d.isPrimary
                           ? <span className="flex items-center gap-1 text-[10px] text-yellow-700 dark:text-yellow-400 font-bold"><Star className="w-3 h-3" /> Primario</span>
-                          : <button onClick={() => setPrimary(d)} className="flex items-center gap-1 text-[10px] text-text-industrial/30 hover:text-yellow-400 transition-colors"><StarOff className="w-3 h-3" /> Hacer primario</button>
+                          : <button onClick={() => setPrimary(d)} className="flex items-center gap-1 min-h-10 md:min-h-0 text-[10px] text-text-industrial/30 hover:text-yellow-400 transition-colors"><StarOff className="w-3 h-3" /> Hacer primario</button>
                         }
                       </div>
                     </div>
@@ -606,30 +611,33 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
                   : !users?.items.length
                   ? <div className="text-center py-10 text-text-industrial/20 text-sm">Sin usuarios</div>
                   : users.items.map(u => (
-                    <div key={u.id} className="bento-card py-3 px-4 flex items-start justify-between gap-3">
+                    <div key={u.id} className="bento-card py-3 px-4 flex flex-col md:flex-row md:items-start md:justify-between gap-2 md:gap-3">
                       <div className="min-w-0">
                         <p className="text-sm text-fg font-medium truncate">{u.firstName || u.email}</p>
                         <p className="text-[10px] text-text-industrial/40 mt-0.5 truncate">{u.firstName ? u.email : "—"}</p>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 md:shrink-0">
                         <span className="text-[10px] font-bold text-accent">{ROLE_LABELS[u.role] ?? u.role.replace(/_/g," ")}</span>
                         <StatusBadge status={u.membershipStatus} />
-                        <button
-                          onClick={() => setEditUser(u)}
-                          title="Editar usuario"
-                          className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/30 hover:text-yellow-400 transition-all"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        {u.membershipStatus !== "REVOKED" && (
+                        {/* En el celular los botones llevan texto y son más grandes para el dedo. */}
+                        <div className="flex w-full md:w-auto gap-2">
                           <button
-                            onClick={() => { void revokeUser(u); }}
-                            title="Revocar acceso al tenant"
-                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-industrial/30 hover:text-red-400 transition-all"
+                            onClick={() => setEditUser(u)}
+                            title="Editar usuario"
+                            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 min-h-10 md:min-h-0 p-1.5 rounded-lg border border-fg/10 md:border-0 text-xs font-bold md:font-normal text-fg md:text-text-industrial/30 hover:bg-fg/10 hover:text-yellow-400 transition-all"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Pencil className="w-3.5 h-3.5" /><span className="md:hidden">Editar</span>
                           </button>
-                        )}
+                          {u.membershipStatus !== "REVOKED" && (
+                            <button
+                              onClick={() => setRevoking(u)}
+                              title="Revocar acceso al tenant"
+                              className="flex-1 md:flex-none flex items-center justify-center gap-1.5 min-h-10 md:min-h-0 p-1.5 rounded-lg border border-fg/10 md:border-0 text-xs font-bold md:font-normal text-danger md:text-text-industrial/30 hover:bg-red-500/10 hover:text-red-400 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /><span className="md:hidden">Revocar acceso</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))
@@ -670,6 +678,20 @@ function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; on
       {addUser      && <AddTenantUserModal tenantSlug={tenant.slug} onClose={() => setAddUser(false)} onAdded={() => { uReload(); onChanged(); }} />}
       {addInvite    && <AddInviteModal tenantSlug={tenant.slug} onClose={() => setAddInvite(false)} onAdded={() => iReload()} />}
       {editUser && <EditUserModal tenantSlug={tenant.slug} user={editUser} onClose={() => setEditUser(null)} onSaved={uReload} />}
+      {revoking && (
+        <ConfirmDialog
+          message={
+            `¿Revocar el acceso de ${revoking.firstName ? `${revoking.firstName} (${revoking.email})` : revoking.email} al tenant?\n\n` +
+            `Perderá la posibilidad de loguearse, pero el historial se mantiene. ` +
+            `Podés reactivarlo después editando el usuario.`
+          }
+          confirmLabel="Revocar"
+          cancelLabel="Cancelar"
+          onConfirm={() => { void revokeUser(revoking); }}
+          onCancel={() => setRevoking(null)}
+        />
+      )}
+      {revokeError && <AlertDialog message={revokeError} onClose={() => setRevokeError(null)} />}
     </>
   );
 }
@@ -684,18 +706,31 @@ export const PlatformTenantsPage: React.FC = () => {
 
   const BASE_COLS: Column<Tenant>[] = [
     { key: "slug",         header: "Slug",    render: r => <span className="font-mono font-bold text-fg text-xs">{r.slug}</span> },
-    { key: "displayName",  header: "Nombre",  render: r => <span className="font-medium text-fg">{r.displayName}</span> },
-    { key: "status",       header: "Estado",  render: r => <StatusBadge status={r.status} /> },
+    { key: "displayName",  header: "Nombre",  mobileTitle: true, render: r => <span className="font-medium text-fg">{r.displayName}</span> },
+    { key: "status",       header: "Estado",  mobileTitle: true, render: r => <StatusBadge status={r.status} /> },
     { key: "defaultLocale",header: "Locale",  render: r => r.defaultLocale },
     { key: "currency",     header: "Moneda",  render: r => r.currency },
     { key: "createdAt",    header: "Creado",  render: r => fmtDate(r.createdAt) },
     {
       key: "id", header: "",
       render: r => (
-        <button title="Ver detalle" onClick={e => { e.stopPropagation(); setDetail(r); }}
-          className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all">
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+        <>
+          <button title="Ver detalle" onClick={e => { e.stopPropagation(); setDetail(r); }}
+            className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all">
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+          {/* Celular: la tarjeta no tiene fila que "clickear", así que las dos salidas van a la vista. */}
+          <div className="md:hidden flex gap-2">
+            <button onClick={e => { e.stopPropagation(); setEditing(r); }}
+              className="flex-1 min-h-10 flex items-center justify-center gap-1.5 rounded-xl border border-fg/10 text-xs font-bold text-fg">
+              <Pencil className="w-3.5 h-3.5" /> Editar
+            </button>
+            <button onClick={e => { e.stopPropagation(); setDetail(r); }}
+              className="flex-1 min-h-10 flex items-center justify-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-700 dark:text-red-400">
+              Usuarios y más <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </>
       ),
     },
   ];
@@ -709,7 +744,7 @@ export const PlatformTenantsPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      <DataTable columns={BASE_COLS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay tenants registrados" onRowClick={r => setEditing(r)} />
+      <DataTable columns={BASE_COLS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay tenants registrados" onRowClick={r => setEditing(r)} mobileCards />
 
       {creating && <CreateTenantModal onClose={() => setCreating(false)} onCreated={reload} />}
       {editing  && <EditTenantModal tenant={editing} onClose={() => setEditing(null)} onSaved={reload} />}

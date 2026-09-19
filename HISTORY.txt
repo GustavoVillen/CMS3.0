@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-09-19] Consola SUPERADMIN adaptada al celular (Preview V1)
+Agent: Claude Opus 5
+- Pedido de Gustavo: usar la consola /platform desde el telefono, con todas sus funciones, en la misma direccion.
+- En pantallas chicas (< md): barra inferior (Empresas / Accesos / Auditoria / Consumo + "Mas" con las 9 pantallas
+  y cerrar sesion), tablas como tarjetas con "Ordenar por", ventanas que suben desde abajo y se desplazan,
+  detalle de empresa a pantalla completa, filtros de Consumo plegados. Escritorio sin cambios.
+- DataTable: prop opcional mobileCards (+ Column.mobileTitle / mobileHidden); las pantallas de tenant no la usan.
+- Revocar usuario de un tenant: window.confirm -> ConfirmDialog (error en AlertDialog). Campos obligatorios con *.
+- Solo frontend: deploy = pull + build web. Sin schema, sin backend, sin permisos nuevos.
+  Restauracion: tag CMS_UI_SUPERADMIN_MOVIL_PRE + claude/backups/superadmin-movil-pre/.
+
 [2026-09-19] Asesor tecnico: con "Todos los buques" pide elegir una embarcacion
 Agent: Claude Opus 5
 - Pedido de Gustavo: el asesor trabaja de a un buque. Si el encabezado dice "Todos los buques", la pantalla no

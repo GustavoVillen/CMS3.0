@@ -39,28 +39,30 @@ function usePlatformList<T>(path: string) {
 
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/5">
-          <h2 className="text-sm font-bold text-fg">{title}</h2>
+    // En el celular sube desde abajo; en ambos casos se desplaza si no entra.
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm md:p-4">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-t-2xl md:rounded-2xl w-full max-w-md shadow-2xl max-h-[92dvh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-fg/5 shrink-0">
+          <h2 className="text-sm font-bold text-fg truncate">{title}</h2>
           <ModalCloseButton onClose={onClose} />
         </div>
-        <div className="px-6 py-5 space-y-4">{children}</div>
+        <div className="px-4 md:px-6 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
       {children}
     </div>
   );
 }
 
-const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+// text-base en el celular: con menos de 16px el iPhone agranda la pantalla al tocar el campo.
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
 const sel = inp + " appearance-none";
 
 function ErrMsg({ msg }: { msg: string }) {
@@ -91,10 +93,10 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   return (
     <ModalWrapper title="Crear Usuario de Plataforma" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email">
+        <Field label="Email" required>
           <input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@plataforma.com" />
         </Field>
-        <Field label="Contraseña">
+        <Field label="Contraseña" required>
           <PasswordInput className={inp} required value={form.password} onChange={set("password")} placeholder="••••••••" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -172,10 +174,10 @@ export const PlatformUsersPage: React.FC = () => {
   const [editing, setEditing]   = useState<PlatformUser | null>(null);
 
   const COLUMNS: Column<PlatformUser>[] = [
-    { key: "email",     header: "Email",   render: r => <span className="font-mono text-fg text-xs">{r.email}</span> },
+    { key: "email",     header: "Email",   mobileTitle: true, render: r => <span className="font-mono text-fg text-xs break-all md:break-normal">{r.email}</span> },
     { key: "firstName", header: "Nombre",  render: r => [r.firstName, r.lastName].filter(Boolean).join(" ") || "—" },
     { key: "role",      header: "Rol",     render: r => <span className="text-xs font-bold text-red-700 dark:text-red-400">{r.role}</span> },
-    { key: "status",    header: "Estado",  render: r => <StatusBadge status={r.status} /> },
+    { key: "status",    header: "Estado",  mobileTitle: true, render: r => <StatusBadge status={r.status} /> },
     { key: "createdAt", header: "Creado",  render: r => fmtDate(r.createdAt) },
   ];
 
@@ -188,7 +190,7 @@ export const PlatformUsersPage: React.FC = () => {
         </button>
       </PageHeader>
 
-      <DataTable columns={COLUMNS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay usuarios de plataforma" onRowClick={r => setEditing(r)} />
+      <DataTable columns={COLUMNS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay usuarios de plataforma" onRowClick={r => setEditing(r)} mobileCards />
 
       {creating && <CreateUserModal onClose={() => setCreating(false)} onCreated={reload} />}
       {editing  && <EditUserModal user={editing} onClose={() => setEditing(null)} onSaved={reload} />}

@@ -217,7 +217,7 @@ const AccessMap: React.FC<{
 
 const ACTIVE_COLS: Column<ActiveUser>[] = [
   {
-    key: "userEmail", header: "Usuario",
+    key: "userEmail", header: "Usuario", mobileTitle: true,
     render: (r) => (
       <div className="leading-tight">
         <div className="text-xs text-fg/90 truncate max-w-[220px]" title={r.userEmail}>{r.userEmail}</div>
@@ -239,7 +239,7 @@ const ACTIVE_COLS: Column<ActiveUser>[] = [
   },
   { key: "requestCount", header: "Acciones", render: (r) => <span className="font-mono text-xs text-text-industrial/70">{r.requestCount}</span> },
   {
-    key: "lastSeenAt", header: "Visto",
+    key: "lastSeenAt", header: "Visto", mobileTitle: true,
     render: (r) => (
       <span className="text-xs text-text-industrial/60" title={new Date(r.lastSeenAt).toLocaleString("es-AR")}>
         {fmtAge(r.lastSeenAt)}
@@ -250,11 +250,11 @@ const ACTIVE_COLS: Column<ActiveUser>[] = [
 
 const LOGIN_COLS: Column<LoginRow>[] = [
   {
-    key: "createdAt", header: "Fecha",
+    key: "createdAt", header: "Fecha", mobileTitle: true,
     render: (r) => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR")}</span>,
   },
   {
-    key: "success", header: "Resultado",
+    key: "success", header: "Resultado", mobileTitle: true,
     sortValue: (r) => (r.success ? 1 : 0),
     render: (r) => r.success
       ? <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-success/10 text-success border-success/25">INGRESÓ</span>
@@ -391,7 +391,7 @@ export const PlatformAccessPage: React.FC = () => {
       </p>
 
       {/* ── Mapa ── */}
-      <div className="rounded-xl border border-border overflow-hidden" style={{ height: 380 }}>
+      <div className="rounded-xl border border-border overflow-hidden h-[260px] md:h-[380px]">
         <AccessMap users={mappable} focusUserId={focusUserId} />
       </div>
 
@@ -420,6 +420,7 @@ export const PlatformAccessPage: React.FC = () => {
           keyFn={(r) => r.userId}
           onRowClick={(r) => setFocusUserId(r.userId)}
           emptyText="Nadie usó la app en esta ventana de tiempo."
+          mobileCards
         />
       </section>
 
@@ -433,11 +434,11 @@ export const PlatformAccessPage: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           <input value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} placeholder="Empresa (slug)"
-            className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-fg placeholder:text-text-industrial/30 focus:outline-none focus:border-accent/40" />
+            className="w-full md:w-auto px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-base md:text-xs text-fg placeholder:text-text-industrial/30 focus:outline-none focus:border-accent/40" />
           <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="Usuario"
-            className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-fg placeholder:text-text-industrial/30 focus:outline-none focus:border-accent/40" />
+            className="w-full md:w-auto px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-base md:text-xs text-fg placeholder:text-text-industrial/30 focus:outline-none focus:border-accent/40" />
           <select value={result} onChange={(e) => setResult(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-fg focus:outline-none focus:border-accent/40">
+            className="w-full md:w-auto px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-base md:text-xs text-fg focus:outline-none focus:border-accent/40">
             <option value="">Todos</option>
             <option value="success">Solo ingresos</option>
             <option value="failed">Solo rechazados</option>
@@ -451,6 +452,7 @@ export const PlatformAccessPage: React.FC = () => {
           error={loginsError}
           keyFn={(r) => r.id}
           emptyText="Sin ingresos registrados."
+          mobileCards
         />
       </section>
     </div>
