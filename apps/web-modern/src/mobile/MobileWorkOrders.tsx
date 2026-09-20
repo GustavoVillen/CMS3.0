@@ -12,6 +12,7 @@ import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
+import { hourAssetsOf, hourReadingIssue } from "../lib/wo-hours";
 
 interface WO {
   id: string;
@@ -44,6 +45,9 @@ interface WO {
   actualHours: number | null;
   runningHoursAtExecution: number | null;
   maintenancePlanId: string | null;
+  assetId?: string;
+  // Sólo en el detalle completo (no en la lista): planes de la OT, con lo que pide el cierre por horas.
+  plans?: Array<{ assetId: string; assetName: string | null; triggerType?: string; lastExecutionHours?: number | null }>;
   executedByName: string | null;
   completedDate: string | null;
   observations: string | null;
@@ -484,6 +488,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const { data, loading, reload } = useFetch<{ items: WO[] }>("/app/pms/work-orders");
   const { user } = useAuth();
   const woTerms = useWoTerms();
+  const t = useT();
   // Solo superintendente/admin aprueban SS → ven el filtro "Para aprobar".
   // Aprobar / autorizar la OT: lo que diga Equipo → Permisos ("Aprobar OT",
   // "Autorizar OT"), igual que el backend. Por defecto, Superintendente y DPA.
@@ -505,6 +510,11 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
   const [observations, setObs]    = useState("");
   const [actualHours, setActualHours] = useState("");
   const [runningHours, setRunningHours] = useState("");
+  // Horas por equipo: la del equipo principal vive en `runningHours`; las de los demás, acá.
+  const [extraHours, setExtraHours] = useState<Record<string, string>>({});
+  const [hoursAlert, setHoursAlert] = useState<string | null>(null);
+  const hourAssets = React.useMemo(() => hourAssetsOf(selected?.plans, selected?.assetId), [selected?.plans, selected?.assetId]);
+  const hoursOf = (assetId: string) => (assetId === selected?.assetId ? runningHours : extraHours[assetId] ?? "");
   const [executedByName, setExecutedByName] = useState("");
   const [executionDate, setExecutionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [photoFile, setPhotoFile]   = useState<File | null>(null);
@@ -599,6 +609,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     setObs("");
     setActualHours("");
     setRunningHours("");
+    setExtraHours({});
     setExecutedByName("");
     setExecutionDate(new Date().toISOString().slice(0, 10));
     clearPhoto();
@@ -621,6 +632,16 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
 
   const handleClose = useCallback(async () => {
     if (!selected) return;
+    // Cada equipo con planes por horas necesita SU lectura: sin ella su plan no
+    // puede recalcular el próximo vencimiento.
+    for (const a of hourAssets) {
+      const issue = hourReadingIssue(hoursOf(a.assetId), a.lastHours);
+      if (issue === "missing") { setHoursAlert(t("wo.modal.hoursRequired").replace("{asset}", a.assetName)); return; }
+      if (issue === "below") {
+        setHoursAlert(t("wo.modal.hoursBelowLast").replace("{asset}", a.assetName).replace("{h}", (a.lastHours ?? 0).toLocaleString()));
+        return;
+      }
+    }
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/pms/work-orders/${selected.id}/close`, {
@@ -630,6 +651,9 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
         executedByName: executedByName.trim() || null,
         actualHours: actualHours ? Number(actualHours) : null,
         runningHoursAtExecution: runningHours ? Number(runningHours) : null,
+        runningHoursByAsset: hourAssets.length > 0
+          ? hourAssets.map(a => ({ assetId: a.assetId, hours: Number(hoursOf(a.assetId)) }))
+          : undefined,
       });
       // Subir foto si fue capturada (no bloquea el cierre si la subida falla)
       if (photoFile) {
@@ -645,7 +669,8 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     } finally {
       setSaving(false);
     }
-  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, photoFile, reload]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, extraHours, hourAssets, photoFile, reload, t]);
 
   const onChecklistSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -717,6 +742,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       observations.trim() !== "" ||
       actualHours.trim() !== "" ||
       runningHours.trim() !== "" ||
+      Object.values(extraHours).some(v => v.trim() !== "") ||
       executedByName.trim() !== ""
     );
 
@@ -810,21 +836,54 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
               />
             </div>
-            {selected.maintenancePlanId && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Horas motor</p>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={runningHours}
-                  onChange={e => setRunningHours(e.target.value)}
-                  placeholder="ej. 3500"
-                  className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
-                />
-              </div>
-            )}
+            {/* Horas del equipo: una lectura por cada equipo con planes por horas
+                (sus horómetros son distintos). Sin planes por horas queda el
+                campo suelto de siempre, opcional. */}
+            {hourAssets.length > 0
+              ? hourAssets.map(a => {
+                  const value = hoursOf(a.assetId);
+                  const below = hourReadingIssue(value, a.lastHours) === "below";
+                  return (
+                    <div key={a.assetId} className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">
+                        {hourAssets.length === 1 ? t("wo.mobile.engineHours") : a.assetName}
+                        <RequiredMark />
+                      </p>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.1"
+                        value={value}
+                        onChange={e => a.assetId === selected.assetId
+                          ? setRunningHours(e.target.value)
+                          : setExtraHours(prev => ({ ...prev, [a.assetId]: e.target.value }))}
+                        placeholder="ej. 3500"
+                        className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                      />
+                      {a.lastHours != null && (
+                        <p className={`text-[11px] ${below ? "font-semibold text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>
+                          {t("wo.modal.lastReading").replace("{h}", a.lastHours.toLocaleString())}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              : selected.maintenancePlanId && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">{t("wo.mobile.engineHours")}</p>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={runningHours}
+                    onChange={e => setRunningHours(e.target.value)}
+                    placeholder="ej. 3500"
+                    className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50"
+                  />
+                </div>
+              )}
           </div>
 
           <div className="space-y-1.5">
@@ -869,6 +928,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           </div>
 
           {err && <p className="text-xs text-red-700 dark:text-red-400">{err}</p>}
+          {hoursAlert && <AlertDialog message={hoursAlert} onClose={() => setHoursAlert(null)} />}
           <button
             type="button"
             onClick={handleClose}

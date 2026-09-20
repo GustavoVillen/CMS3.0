@@ -158,7 +158,10 @@ export interface CloseWorkOrderInput {
   observations?: string | null;
   supportingDocUrl?: string | null;
   independentVerifier?: string | null;
+  /** Horas del equipo PRINCIPAL de la OT. Vale cuando no llega `runningHoursByAsset`. */
   runningHoursAtExecution?: number | null;
+  /** Lectura de horas de cada equipo de la OT: cada plan recalcula con la del suyo. */
+  runningHoursByAsset?: Array<{ assetId: string; hours: number }> | null;
   actualHours?: number | null;
   spareUsages?: Array<{ spareId: string; qty: number; unit: string }>;
 }
@@ -1472,6 +1475,63 @@ async function requiredPermitTypesForWorkOrder(
   return [...new Set(plans.flatMap(p => p.requiredPermitTypes ?? []))];
 }
 
+const HOUR_TRIGGERS = new Set(["HOURS", "RUNNING_HOURS"]);
+
+/**
+ * Horas de cada equipo al cerrar la OT (assetId → horas).
+ *
+ * Una OT puede cubrir planes de equipos con horómetros distintos (Motor Babor y
+ * Motor Estribor), así que UN solo número no dice de cuál es. `runningHoursByAsset`
+ * trae una lectura por equipo; sin ella (celular, cierre automático desde
+ * Defectos, cargas históricas) el número único vale para el equipo principal, como
+ * siempre. Las validaciones corren antes de escribir nada.
+ */
+async function resolveClosingHoursByAsset(
+  prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,
+  wo: { id: string; tenantId: string; assetId: string; maintenancePlanId?: string | null },
+  payload: CloseWorkOrderInput,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const readings = payload.runningHoursByAsset;
+  if (readings !== undefined && readings !== null) {
+    if (!Array.isArray(readings)) {
+      throw new RouteError(400, "VALIDATION_ERROR", "runningHoursByAsset debe ser una lista de {assetId, hours}.");
+    }
+    const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
+    const planIds = await listWorkOrderPlanIds(prismaRaw, wo);
+    const plans = planIds.length > 0
+      ? await (prismaRaw as any).maintenancePlan.findMany({
+          where: { id: { in: planIds }, tenantId: wo.tenantId, deletedAt: null },
+          select: { assetId: true, triggerType: true, lastExecutionHours: true },
+        }) as Array<{ assetId: string; triggerType: string; lastExecutionHours: number | null }>
+      : [];
+    const woAssets = new Set([wo.assetId, ...plans.map(p => p.assetId)]);
+    for (const r of readings) {
+      const assetId = String(r?.assetId ?? "").trim();
+      const hours = Number(r?.hours);
+      if (!woAssets.has(assetId)) {
+        throw new RouteError(400, "VALIDATION_ERROR", "Una de las lecturas de horas es de un equipo que no pertenece a esta OT.");
+      }
+      if (!Number.isFinite(hours) || hours < 0) {
+        throw new RouteError(400, "VALIDATION_ERROR", "Las horas del equipo deben ser un número mayor o igual a cero.");
+      }
+      // Piso: no puede ser menor a la última lectura con la que se ejecutó un plan por horas del equipo.
+      const lasts = plans
+        .filter(p => p.assetId === assetId && HOUR_TRIGGERS.has(p.triggerType) && p.lastExecutionHours != null)
+        .map(p => p.lastExecutionHours as number);
+      const floor = lasts.length > 0 ? Math.max(...lasts) : null;
+      if (floor !== null && hours < floor) {
+        throw new RouteError(400, "VALIDATION_ERROR", `Las horas informadas (${hours}) son menores a la última lectura del equipo (${floor}).`);
+      }
+      out.set(assetId, hours);
+    }
+  }
+  if (!out.has(wo.assetId) && payload.runningHoursAtExecution != null) {
+    out.set(wo.assetId, payload.runningHoursAtExecution);
+  }
+  return out;
+}
+
 export async function closeWorkOrder(session: TenantAccessSession, id: string, payload: CloseWorkOrderInput) {
   ensureCanOperateWorkOrders(session);
 
@@ -1505,6 +1565,8 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
       );
     }
   }
+
+  const hoursByAsset = await resolveClosingHoursByAsset(prismaRaw, current, payload);
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
   // Anclaje a mediodía UTC para el recálculo de vencimientos (mismo fix que
@@ -1545,7 +1607,8 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         closeNotes: normalizeOptionalText(payload.observations),
         independentVerifier: normalizeOptionalText(payload.independentVerifier),
         supportingDocUrl: normalizeOptionalText(payload.supportingDocUrl),
-        runningHoursAtExecution: payload.runningHoursAtExecution ?? null,
+        // La OT guarda la lectura del equipo principal (es la que muestran el PDF y la auditoría).
+        runningHoursAtExecution: hoursByAsset.get(current.assetId) ?? null,
         actualHours: payload.actualHours ?? null,
         updatedByUserId: closerUserId,
       },
@@ -1570,11 +1633,10 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
         where: { id: { in: planIds }, tenantId: current.tenantId, deletedAt: null },
       });
       for (const plan of plans) {
-        // Las horas informadas son las del equipo de LA OT. Un plan de otro
-        // equipo (astillero: válvulas, manifold, LCI…) no puede tomarlas: su
-        // cuentahoras es otro. Ese avanza por fecha y conserva sus horas.
-        const sameAsset = plan.assetId === current.assetId;
-        const reportedHours = sameAsset ? payload.runningHoursAtExecution ?? null : null;
+        // Cada plan toma la lectura de SU equipo. Un plan de un equipo sin
+        // lectura (astillero: válvulas, manifold, LCI…) no puede tomar la de
+        // otro: su cuentahoras es otro. Ese avanza por fecha y conserva sus horas.
+        const reportedHours = hoursByAsset.get(plan.assetId) ?? null;
         const executionHours = reportedHours ?? plan.lastExecutionHours;
         const nextDue = recalculateNextDue(
           {
@@ -1633,7 +1695,12 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     action: "WorkOrder.closed",
     entityType: "WorkOrder",
     entityId: current.id,
-    metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, woResult: payload.woResult },
+    metadata: {
+      workOrderCode: current.workOrderCode, vesselCode: current.vesselCode, woResult: payload.woResult,
+      ...(hoursByAsset.size > 0
+        ? { runningHoursByAsset: [...hoursByAsset].map(([assetId, hours]) => ({ assetId, hours })) }
+        : {}),
+    },
   });
 
   // Cerrar aplazamientos asociados a esta OT (sourceType=WORK_ORDER, sourceId=woId)
@@ -1722,23 +1789,25 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     log.error("[closeWorkOrder] failed to auto-resolve linked external-audit defects:", err);
   }
 
-  // La muestra DRAFT ya se creó al AUTORIZAR la OT (ver setWorkOrderApproval).
+  // Las muestras DRAFT ya se crearon al AUTORIZAR la OT (ver setWorkOrderApproval).
   // Acá solo completamos sus datos reales de ejecución (horas/fecha), que al
-  // autorizar todavía no se conocían.
+  // autorizar todavía no se conocían. Cada muestra toma las horas de SU equipo:
+  // una OT con dos motores tiene dos muestras.
   try {
     const sampleDel = (prismaRaw as unknown as {
       fluidSample: {
-        findFirst(a: { where: Record<string, unknown> }): Promise<{ id: string; runningHours: number | null } | null>;
+        findMany(a: { where: Record<string, unknown> }): Promise<Array<{ id: string; assetId: string; runningHours: number | null }>>;
         update(a: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
       };
     }).fluidSample;
-    const linkedSample = await sampleDel.findFirst({
+    const linkedSamples = await sampleDel.findMany({
       where: { tenantId: current.tenantId, sourceWorkOrderId: current.id, status: "DRAFT", deletedAt: null },
     });
-    if (linkedSample && linkedSample.runningHours == null) {
+    for (const linkedSample of linkedSamples) {
+      if (linkedSample.runningHours != null) continue;
       await sampleDel.update({
         where: { id: linkedSample.id },
-        data: { sampledAt: completedDate, runningHours: payload.runningHoursAtExecution ?? null, updatedByUserId: session.user.id },
+        data: { sampledAt: completedDate, runningHours: hoursByAsset.get(linkedSample.assetId) ?? null, updatedByUserId: session.user.id },
       });
     }
   } catch (err) {

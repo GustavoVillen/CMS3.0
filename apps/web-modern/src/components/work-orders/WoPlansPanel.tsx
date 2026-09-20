@@ -20,6 +20,9 @@ export interface WoPlanRow {
   assetName: string | null;
   isPrimary: boolean;
   requiredPermitTypes?: string[];
+  triggerType?: string;
+  frequencyHours?: number | null;
+  lastExecutionHours?: number | null;
 }
 
 interface PlanOption { id: string; taskCode: string; title: string; assetName?: string | null; status?: string }

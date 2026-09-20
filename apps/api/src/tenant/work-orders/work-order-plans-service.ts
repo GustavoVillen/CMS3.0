@@ -28,6 +28,11 @@ export interface WorkOrderPlanRow {
   isPrimary: boolean;     // = WorkOrder.maintenancePlanId
   /** Permisos de trabajo que exige el plan (se piden al cerrar la OT). */
   requiredPermitTypes: string[];
+  /** Disparador del plan (HOURS, MONTHS…). Con horas, el cierre pide la lectura del equipo. */
+  triggerType: string;
+  frequencyHours: number | null;
+  /** Última lectura de horas con la que se ejecutó el plan (referencia y piso al cerrar). */
+  lastExecutionHours: number | null;
 }
 
 type AnyPrisma = NonNullable<ReturnType<typeof getPrismaClient>>;
@@ -94,7 +99,10 @@ export async function listWorkOrderPlans(
 
   const plans = await (prismaRaw as any).maintenancePlan.findMany({
     where: { id: { in: ids }, tenantId, deletedAt: null },
-    select: { id: true, taskCode: true, title: true, assetId: true, requiredPermitTypes: true },
+    select: {
+      id: true, taskCode: true, title: true, assetId: true, requiredPermitTypes: true,
+      triggerType: true, frequencyHours: true, lastExecutionHours: true,
+    },
   });
   const assetIds = [...new Set(plans.map((p: any) => p.assetId))] as string[];
   const assets = assetIds.length > 0
@@ -116,6 +124,9 @@ export async function listWorkOrderPlans(
       assetName: assetNames.get(p.assetId) ?? null,
       isPrimary: p.id === workOrder.maintenancePlanId,
       requiredPermitTypes: p.requiredPermitTypes ?? [],
+      triggerType: p.triggerType,
+      frequencyHours: p.frequencyHours ?? null,
+      lastExecutionHours: p.lastExecutionHours ?? null,
     });
   }
   return rows;

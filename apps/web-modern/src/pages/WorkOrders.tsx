@@ -20,6 +20,7 @@ import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOr
 import { NewWorkOrderWizard, WizardStepper } from "../components/NewWorkOrderWizard";
 import { isJustCreated, clearJustCreated, markJustCreated } from "../lib/just-created";
 import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark } from "../components/GuideKit";
+import { hourAssetsOf, hourReadingIssue } from "../lib/wo-hours";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 // WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
 // la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
@@ -1238,6 +1239,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [runningHoursAtExecution, setRunningHoursAtExecution] = useState(
     (workOrder as any).runningHoursAtExecution != null ? String((workOrder as any).runningHoursAtExecution) : ""
   );
+  // Horas por equipo: una OT puede cubrir planes de equipos con horómetros
+  // distintos (Motor Babor y Motor Estribor), y un solo número no dice de cuál es.
+  // Se pide una lectura por cada equipo con planes por horas, el principal primero.
+  // La del principal vive en `runningHoursAtExecution` (es la que guarda "Guardar");
+  // las demás sólo viajan en el cierre.
+  const [extraHours, setExtraHours] = useState<Record<string, string>>({});
+  const hourAssets = useMemo(() => hourAssetsOf(workOrder.plans, workOrder.assetId), [workOrder.plans, workOrder.assetId]);
+  const hoursOf = useCallback(
+    (assetId: string) => (assetId === workOrder.assetId ? runningHoursAtExecution : extraHours[assetId] ?? ""),
+    [workOrder.assetId, runningHoursAtExecution, extraHours],
+  );
   const [observations, setObservations]     = useState(workOrder.observations ?? workOrder.closeNotes ?? "");
   // Último valor de Observaciones traído del servidor. Sirve para refrescar el
   // campo tras un avance (la IA lo reconsolida) SIN pisar ediciones manuales del
@@ -2257,6 +2269,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // click que lo agrega, y el estado todavía no se actualizó.
   const onClose_WO = useCallback(async (opts?: { completedDate?: string; closedByUserId?: string; observationsOverride?: string }) => {
     if (!woResult) { setErr(t("wo.modal.resultRequired")); return; }
+    // Cada equipo con planes por horas necesita SU lectura: sin ella su plan no
+    // puede recalcular el próximo vencimiento.
+    for (const a of hourAssets) {
+      const issue = hourReadingIssue(hoursOf(a.assetId), a.lastHours);
+      if (issue === "missing") { setErr(t("wo.modal.hoursRequired").replace("{asset}", a.assetName)); return; }
+      if (issue === "below") {
+        setErr(t("wo.modal.hoursBelowLast").replace("{asset}", a.assetName).replace("{h}", (a.lastHours ?? 0).toLocaleString()));
+        return;
+      }
+    }
     setClosing(true); setErr(null);
     try {
       const [chkUrl, supUrl] = await Promise.all([
@@ -2273,6 +2295,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         observations: normalizeOptionalText(opts?.observationsOverride ?? observations),
         supportingDocUrl: supUrl,
         runningHoursAtExecution: runningHoursAtExecution ? Number(runningHoursAtExecution) : null,
+        runningHoursByAsset: hourAssets.length > 0
+          ? hourAssets.map(a => ({ assetId: a.assetId, hours: Number(hoursOf(a.assetId)) }))
+          : undefined,
         actualHours: actualHours ? Number(actualHours) : null,
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
         closedByUserId: opts?.closedByUserId || undefined,
@@ -2294,7 +2319,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [woResult, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder,
       executedByName, executionDate, observations,
       runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id,
-      workOrder.maintenancePlanId, onPlanExecuted]);
+      workOrder.maintenancePlanId, onPlanExecuted, hourAssets, hoursOf]);
 
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   const canPostpone = workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS";
@@ -2711,22 +2736,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   );
   const resultMoreFields = (
     <>
-            <div className={workOrder.maintenancePlanId ? "grid grid-cols-2 gap-3" : ""}>
-              {workOrder.maintenancePlanId && (
-                <div className="space-y-1.5">
-                  <label className={labelCls}>{t("wo.modal.runningHours")}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={runningHoursAtExecution}
-                    onChange={e => setRunningHoursAtExecution(e.target.value)}
-                    disabled={!isEditable}
-                    className={inputCls}
-                    placeholder={t("wo.modal.runningHoursPlaceholder")}
-                  />
-                </div>
-              )}
+            {/* Las horas de cada equipo van en hoursFields(), que se pinta antes de este bloque. */}
+            <div>
               <div className="space-y-1.5">
                 <label className={labelCls}>
                   {t("wo.modal.actualHours")}
@@ -3132,6 +3143,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     { key: "result",        label: t("wo.modal.result"),        ok: !!woResult },
     { key: "executedBy",    label: t("wo.modal.executedBy"),    ok: !!executedByName.trim() },
     { key: "executionDate", label: t("wo.modal.executionDate"), ok: !!executionDate },
+    // Una lectura de horas por equipo con planes por horas (sin ella el plan no avanza).
+    ...(isClosed ? [] : hourAssets.map(a => ({
+      key: `hours:${a.assetId}`,
+      label: t("wo.guide.chip.hours").replace("{asset}", a.assetName),
+      ok: hourReadingIssue(hoursOf(a.assetId), a.lastHours) === null,
+    }))),
   ];
   const closeMissing = closeChecks.filter(c => !c.ok);
   const missingKeys = new Set(
@@ -3152,7 +3169,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   /** Lleva al campo: vista guiada, abre su bloque, lo centra y lo resalta un instante. */
   const goField = (key: string) => {
     setWoView("guided");
-    const sec = FIELD_SECTION[key];
+    const sec = FIELD_SECTION[key] ?? (key.startsWith("hours:") ? "closure" : undefined);
     if (sec) setOpenSecs(prev => ({ ...prev, [sec]: true }));
     window.setTimeout(() => {
       document.getElementById(`wo-field-${key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3200,6 +3217,68 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       {extra}
     </div>
   );
+
+  /**
+   * Horas del equipo al momento de ejecución. Una OT con planes por horas de
+   * varios equipos pide una lectura por equipo (sus horómetros son distintos);
+   * con un solo equipo queda el campo de siempre. En una OT cerrada sólo se ve
+   * la lectura guardada del equipo principal.
+   */
+  const hoursFields = (guided: boolean) => {
+    const list = isClosed ? hourAssets.filter(a => a.assetId === workOrder.assetId) : hourAssets;
+    const entries = list.length > 0
+      ? list.map(a => ({
+          assetId: a.assetId,
+          lastHours: a.lastHours,
+          required: !isClosed,
+          label: list.length === 1 && a.assetId === workOrder.assetId
+            ? t("wo.modal.runningHours")
+            : t("wo.modal.runningHoursOf").replace("{asset}", a.assetName),
+          assetName: a.assetName,
+        }))
+      : workOrder.maintenancePlanId
+        ? [{ assetId: workOrder.assetId, lastHours: null, required: false, label: t("wo.modal.runningHours"), assetName: "" }]
+        : [];
+    if (entries.length === 0) return null;
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+        {entries.map(e => {
+          const key = `hours:${e.assetId}`;
+          const isMain = e.assetId === workOrder.assetId;
+          const value = hoursOf(e.assetId);
+          const below = e.required && hourReadingIssue(value, e.lastHours) === "below";
+          const label = <>{e.label}{e.required && <RequiredMark />}</>;
+          const body = (
+            <>
+              {guided ? guideLabel(label, key) : <label className={labelCls}>{label}</label>}
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={value}
+                onChange={ev => isMain
+                  ? setRunningHoursAtExecution(ev.target.value)
+                  : setExtraHours(prev => ({ ...prev, [e.assetId]: ev.target.value }))}
+                disabled={!isEditable}
+                className={inputCls}
+                placeholder={t("wo.modal.runningHoursPlaceholder")}
+              />
+              {e.lastHours != null && !isClosed && (
+                <p className={`text-[11px] ${below ? "font-semibold text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>
+                  {below
+                    ? t("wo.modal.hoursBelowLast").replace("{asset}", e.assetName).replace("{h}", e.lastHours.toLocaleString())
+                    : t("wo.modal.lastReading").replace("{h}", e.lastHours.toLocaleString())}
+                </p>
+              )}
+            </>
+          );
+          return guided
+            ? <React.Fragment key={key}>{needWrap(key, body)}</React.Fragment>
+            : <div key={key} className="space-y-1.5">{body}</div>;
+        })}
+      </div>
+    );
+  };
 
   const canSendToApprove = isEditable && tramitaPhase === "EN_PREPARACION";
   const sendToApprove = () => {
@@ -3556,7 +3635,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       {stageLabel(t("wo.guide.step.closure"), !isApproved)}
 
       <GuideSection n={7} title={t("wo.guide.sec.closure")} subtitle={t("wo.guide.sec.closureSub")}
-        pill={isResultEditable ? sectionPill(["taskCompleted", "result", "executedBy", "executionDate"]) : undefined}
+        pill={isResultEditable ? sectionPill(["taskCompleted", "result", "executedBy", "executionDate", ...hourAssets.map(a => `hours:${a.assetId}`)]) : undefined}
         open={secOpen("closure")} onToggle={() => toggleSec("closure")} {...lockedProps}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           {needWrap("taskCompleted", <>
@@ -3606,6 +3685,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
           </>)}
         </div>
+        {hoursFields(true)}
         {resultMoreFields}
       </GuideSection>
 
@@ -4225,6 +4305,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
               </div>
             </div>
+            {hoursFields(false)}
             {resultMoreFields}
 
             {spareUsagesBox}
