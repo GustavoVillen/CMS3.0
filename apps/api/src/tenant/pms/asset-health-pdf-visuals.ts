@@ -135,7 +135,7 @@ function labKind(m: HealthMetrics): { kind: Kind; text: string } {
   return { kind: "good", text: "Sin alertas" };
 }
 function defectKind(m: HealthMetrics): { kind: Kind; text: string } {
-  return m.defectsOpen > 0 ? { kind: "warn", text: `${m.defectsOpen} abiertos` } : { kind: "good", text: "Sin abiertos" };
+  return m.defectsOpen > 0 ? { kind: "warn", text: m.defectsOpen === 1 ? "1 abierto" : `${m.defectsOpen} abiertos` } : { kind: "good", text: "Sin abiertos" };
 }
 
 // ── Bloques ──────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ export function drawTiles(
     { title: "ÓRDENES DE TRABAJO (12 MESES)", value: String(m.workOrdersInPeriod), suffix: "ejecutadas",
       bar: [[woPrev, B], [m.correctiveWorkOrders, A]],
       legend: [[B, `${woPrev} preventivas`], [A, `${m.correctiveWorkOrders} correctivas`]],
-      pill: { kind: "neu", text: m.workOrdersOpen > 0 ? `${m.workOrdersOpen} abiertas` : "Informativo" } },
+      pill: { kind: "neu", text: m.workOrdersOpen > 0 ? (m.workOrdersOpen === 1 ? "1 abierta" : `${m.workOrdersOpen} abiertas`) : "Informativo" } },
     { title: "ANÁLISIS DE LABORATORIO", value: String(m.labInPeriod), suffix: "en el período",
       bar: [[labOk, G], [m.labCaution, A], [m.labBad, R]],
       legend: [[G, `${labOk} normal`], [A, `${m.labCaution} precaución`], [R, `${m.labBad} crítico`]], pill: lk },
