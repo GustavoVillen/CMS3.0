@@ -1,5 +1,20 @@
 HISTORY.txt
 
+[2026-09-20] Asesor tecnico: radiografia de equipos (salud) + comparacion con el analisis anterior
+Agent: Claude Opus 5
+- Pedido de Gustavo: el plan al dia no alcanza; un equipo puede estar DELICADO aunque se lo este reparando.
+- advisor-asset-health.ts: por equipo y 12 meses suma senales (correctivos, reparaciones NO planificadas,
+  defectos repetidos/reabiertos, laboratorio en alarma/precaucion, postergaciones, vencidos, consumo de repuestos
+  muy por encima de sus gemelos, degradado hoy, critico sin respaldo) y da DELICADO (>=9) / EN OBSERVACION (>=5).
+  Umbral subido tras probar en mercurio: con 6 casi todos los motores salian delicados.
+- Tambien: mismo modelo de equipo fallando en >=3 buques (decision de flota) y fecha estimada de los planes por
+  HORAS segun el ritmo de marcha de los ultimos 90 dias.
+- Comparacion con el analisis anterior del mismo alcance (flechas en los semaforos, "empeoro" por equipo):
+  se guarda en MaintenanceAdvisorReport.trend; la radiografia en .assetHealth (columnas nuevas, aditivas).
+- Pantalla: 5to recuadro "Salud de equipos" con icono de radiografia en "Como esta el buque" + ventana con la
+  lista, el por que en palabras, "Abrir equipo" e "Informe de salud" (abre el informe IA del equipo via
+  /equipment?open=<id>&salud=1). La IA recibe todo esto y lo usa en sus temas.
+
 [2026-09-19] Asesor tecnico: analizar todas las barcazas juntas
 Agent: Claude Opus 5
 - Pedido de Gustavo. En la pantalla de elegir hay un boton "Analizar todas las barcazas juntas (N)" (barcaza =

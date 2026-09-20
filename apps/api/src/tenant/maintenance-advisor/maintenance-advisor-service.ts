@@ -24,6 +24,7 @@ import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/
 import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildAdvisorEvidence, type EvidenceItem } from "./advisor-evidence";
+import type { AssetHealthRow } from "./advisor-asset-health";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { ADVISOR_PROMPT } from "./advisor-prompt";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
@@ -156,6 +157,42 @@ export async function getAdvisorReport(session: TenantAccessSession, reportId: s
   return report;
 }
 
+// ── Comparación con el análisis anterior ─────────────────────────────────────
+// "¿Mejoró o empeoró?" es la pregunta del Director. Se compara contra el último
+// informe del MISMO alcance: los números clave y el estado de cada equipo.
+
+const TREND_KEYS = [
+  "plansOverdue", "plansOverdueCritical", "correctivePct90d", "deferralsActive", "defectsOpenHigh",
+  "labAlarmsWithoutAction", "closedWithoutEvidence60d", "criticalSparesBelowMin", "assetsWithRepeatedDefects",
+  "fragileAssets", "watchAssets",
+] as const;
+
+export interface AdvisorTrend {
+  previousAt: string;
+  metrics: Record<string, { before: number | null; now: number | null }>;
+  /** Estado anterior de cada equipo de la radiografía, por id. */
+  assets: Record<string, { state: string; score: number }>;
+}
+
+function buildTrend(previous: any, metrics: Record<string, unknown>, rows: AssetHealthRow[]): AdvisorTrend | null {
+  if (!previous) return null;
+  const prevMetrics = (previous.metrics ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
+  const changed: AdvisorTrend["metrics"] = {};
+  for (const k of TREND_KEYS) {
+    const before = num(prevMetrics[k]);
+    const now = num(metrics[k]);
+    if (before === null && now === null) continue;
+    changed[k] = { before, now };
+  }
+  const prevRows = (Array.isArray(previous.assetHealth?.rows) ? previous.assetHealth.rows : []) as AssetHealthRow[];
+  const assets: AdvisorTrend["assets"] = {};
+  for (const r of prevRows) assets[r.assetId] = { state: r.state, score: r.score };
+  // Los equipos que hoy están en la lista y antes no aparecían: empeoraron.
+  for (const r of rows) if (!assets[r.assetId]) assets[r.assetId] = { state: "OK", score: 0 };
+  return { previousAt: new Date(previous.createdAt).toISOString(), metrics: changed, assets };
+}
+
 // ── Generación ───────────────────────────────────────────────────────────────
 
 const OUTPUT_CONTRACT = `
@@ -168,6 +205,13 @@ You receive a JSON "evidence pack" built by CMS3 with exact database queries acr
 - Name vessels by NAME, never by code.
 - You cannot see anything outside this pack. Do not mention records, dates, measurements, costs or causes that are not in it.
 - Status/severity codes come in English (OVERDUE, CRITICAL, ACTION_REQUIRED…): write them as words in the output language.
+- "saludDeEquipos" is the equipment radiography the system already computed: equipment that keeps failing, is repaired
+  unplanned, or that the laboratory flags. Being repaired does NOT clear it. Raise a finding for the worst ones even
+  when their maintenance plan is up to date, and say what to do about the equipment itself (root cause, overhaul,
+  replacement, interval change, spare strategy) — not just "close the work order".
+- "mismoModeloEnVariosBuques" means the same equipment model fails across vessels: treat it as a fleet decision.
+- "planesPorHorasEstimados" gives when hours-based tasks will really fall due at the current running-hours pace.
+- "comparacionConElAnalisisAnterior" compares with the previous analysis: mention clearly what got worse or better.
 
 Return ONLY this JSON (no markdown fences, no text around it):
 {
@@ -225,6 +269,13 @@ export async function generateAdvisorReport(session: TenantAccessSession, vessel
     throw new RouteError(400, "NO_VESSELS", "No hay buques para analizar.");
   }
 
+  // Último informe del mismo alcance, para decir si mejoró o empeoró.
+  const previousList = await listAdvisorReports(session, scopeVesselCode, scopeGroup);
+  const previous = previousList.items[0]
+    ? await prisma.maintenanceAdvisorReport.findFirst({ where: { id: previousList.items[0].id, tenantId }, select: { createdAt: true, metrics: true, assetHealth: true } })
+    : null;
+  const trend = buildTrend(previous, pack.metrics as unknown as Record<string, unknown>, pack.assetHealth.rows);
+
   const locale = await getTenantAiLocale(session.tenantSlug);
   const model = AI_MODEL.deep;
   const client = createAiClient({ apiKey, timeout: 240_000, maxRetries: 1 });
@@ -242,7 +293,13 @@ export async function generateAdvisorReport(session: TenantAccessSession, vessel
     ],
     messages: [{
       role: "user",
-      content: `${localeUserReminder(locale)}\nToday: ${today}\n${JSON.stringify({ ...pack.payload, dataGaps: pack.dataGaps })}`,
+      content: `${localeUserReminder(locale)}\nToday: ${today}\n${JSON.stringify({
+        ...pack.payload,
+        dataGaps: pack.dataGaps,
+        comparacionConElAnalisisAnterior: trend
+          ? { desde: trend.previousAt.slice(0, 10), numeros: trend.metrics, nota: "before = análisis anterior, now = éste. Si algo empeoró, decilo; si mejoró, reconocelo." }
+          : null,
+      })}`,
     }],
   } as any) as Anthropic.Message;
 
@@ -292,6 +349,8 @@ export async function generateAdvisorReport(session: TenantAccessSession, vessel
       insufficient: insufficient as any,
       // Sólo se guardan las evidencias citadas: son las que "Ver evidencia" muestra.
       evidence: citedEvidence(pack.evidence, findings) as any,
+      assetHealth: pack.assetHealth as any,
+      trend: trend as any,
       sources: { ...pack.sources, evidenceTotal: pack.evidence.length, dataGaps: pack.dataGaps, scopeVesselCode, scopeGroup } as any,
       locale,
       model,

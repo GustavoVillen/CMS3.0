@@ -93,6 +93,88 @@ export function currentPlan(f: AdvisorFinding, messages: AdvisorMessage[]): Advi
   return { action: f.recommendedAction, who: f.responsibleRole, when: f.target, targetDays: f.targetDays, verify: f.verify, adjusted: false, appliedId: null };
 }
 
+// ── Radiografía de equipos (20/09/2026) ──────────────────────────────────────
+
+export type AssetHealthState = "FRAGILE" | "WATCH" | "OK";
+
+export interface AssetHealthSignal { code: string; n?: number }
+
+export interface AssetHealthRow {
+  assetId: string;
+  assetName: string;
+  assetCode: string;
+  vesselCode: string;
+  vesselName: string | null;
+  criticality: string;
+  safetyCritical: boolean;
+  state: AssetHealthState;
+  score: number;
+  signals: AssetHealthSignal[];
+  counts: {
+    correctives: number; unplanned: number; defects: number; defectsReopened: number;
+    labAlarms: number; labCautions: number; deferrals: number; overduePlans: number;
+    spareIssues: number; spareQty: number;
+  };
+  noBackup: boolean;
+}
+
+export interface FleetModelIssue {
+  manufacturer: string | null;
+  model: string;
+  vessels: string[];
+  assets: number;
+  defects: number;
+  unplanned: number;
+}
+
+export interface AssetHealthResult {
+  rows: AssetHealthRow[];
+  fragile: number;
+  watch: number;
+  fleetModels: FleetModelIssue[];
+}
+
+/** Comparación con el análisis anterior del mismo alcance. */
+export interface AdvisorTrend {
+  previousAt: string;
+  metrics: Record<string, { before: number | null; now: number | null }>;
+  assets: Record<string, { state: string; score: number }>;
+}
+
+export const SIGNAL_LABEL: Record<string, TranslationKey> = {
+  UNPLANNED: "advisor.signal.unplanned",
+  CORRECTIVE: "advisor.signal.corrective",
+  DEFECTS_REPEATED: "advisor.signal.defects",
+  DEFECT_REOPENED: "advisor.signal.reopened",
+  LAB_ALARM: "advisor.signal.labAlarm",
+  LAB_CAUTION: "advisor.signal.labCaution",
+  DEFERRAL: "advisor.signal.deferral",
+  OVERDUE: "advisor.signal.overdue",
+  SPARES: "advisor.signal.spares",
+  NO_BACKUP: "advisor.signal.noBackup",
+  DEGRADED: "advisor.signal.degraded",
+};
+
+/** Señales que pintan rojo (las que más delatan al equipo). */
+export const SIGNAL_STRONG = new Set(["UNPLANNED", "LAB_ALARM", "NO_BACKUP", "DEGRADED"]);
+
+export const ASSET_STATE_STYLE: Record<AssetHealthState, { badge: string; label: TranslationKey }> = {
+  FRAGILE: { badge: "bg-red-600 text-white", label: "advisor.assetState.fragile" },
+  WATCH: { badge: "bg-amber-400/30 text-amber-900 dark:text-amber-200", label: "advisor.assetState.watch" },
+  OK: { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", label: "advisor.assetState.ok" },
+};
+
+/**
+ * Flecha de comparación contra el análisis anterior. En estos números, MENOS es
+ * mejor (vencidos, defectos, equipos delicados): bajar es 🟢, subir es 🔴.
+ */
+export function trendOf(t: AdvisorTrend | null | undefined, key: string): { dir: "up" | "down" | "same"; before: number; now: number } | null {
+  const m = t?.metrics?.[key];
+  if (!m || m.before == null || m.now == null) return null;
+  if (m.before === m.now) return { dir: "same", before: m.before, now: m.now };
+  return { dir: m.now > m.before ? "up" : "down", before: m.before, now: m.now };
+}
+
 export interface AdvisorMetrics {
   plansOverdue: number;
   plansOverdueCritical: number;
@@ -105,6 +187,9 @@ export interface AdvisorMetrics {
   defectsOpenHigh: number;
   closedWithoutEvidence60d: number;
   closedWorkOrders60d?: number;
+  fragileAssets?: number;
+  watchAssets?: number;
+  hoursPlansDueSoon?: number;
 }
 
 // ─── Para cuándo (en vez de Crítica / Alta / Media / Baja) ────────────────────

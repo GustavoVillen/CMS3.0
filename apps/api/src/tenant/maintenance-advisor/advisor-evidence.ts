@@ -17,13 +17,14 @@ import { listVesselsInScope, getComplianceScores } from "../compliance/complianc
 import { listDueItems } from "../pms/due-items-service";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
+import { buildAssetHealth, signalText, type AssetHealthResult } from "./advisor-asset-health";
 import { log } from "../../common/logger";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
 export type EvidenceKind =
   | "PLAN" | "WORK_ORDER" | "DEFECT" | "DEFERRAL" | "LAB" | "SPARE" | "SPARE_REQUEST"
-  | "CERTIFICATE" | "PROVIDER_NC" | "CREW" | "ALERT" | "KPI";
+  | "CERTIFICATE" | "PROVIDER_NC" | "CREW" | "ALERT" | "KPI" | "ASSET";
 
 export interface EvidenceItem {
   id: string;               // E-n
@@ -54,6 +55,9 @@ export interface AdvisorMetrics {
   closedWithoutEvidence60d: number;
   closedWorkOrders60d: number;        // base del semáforo "Cierre de OT"
   criticalSparesWithMin: number;      // repuestos críticos con mínimo definido
+  fragileAssets: number;              // equipos delicados (radiografía)
+  watchAssets: number;                // equipos en observación
+  hoursPlansDueSoon: number;          // planes por horas que llegan en ≤30 días al ritmo actual
   certificatesDue60d: number;
 }
 
@@ -68,6 +72,8 @@ export interface AdvisorEvidencePack {
   evidence: EvidenceItem[];
   dataGaps: string[];
   sources: Record<string, number>;
+  /** Radiografía de equipos: se guarda con el informe y la muestra la pantalla. */
+  assetHealth: AssetHealthResult;
 }
 
 // ── Constantes ───────────────────────────────────────────────────────────────
@@ -139,7 +145,11 @@ export async function buildAdvisorEvidence(
     vessels: vessels.length, plansOverdue: 0, plansOverdueCritical: 0, plansOverdueUnreliableDate: 0, correctivePct90d: null,
     workOrders90d: 0, deferralsActive: 0, criticalSparesBelowMin: 0, criticalSparesNeverCounted: 0, assetsWithRepeatedDefects: 0,
     labAlarmsWithoutAction: 0, defectsOpenHigh: 0, closedWithoutEvidence60d: 0, closedWorkOrders60d: 0, criticalSparesWithMin: 0, certificatesDue60d: 0,
+    fragileAssets: 0, watchAssets: 0, hoursPlansDueSoon: 0,
   };
+
+  // Planes vencidos por equipo: lo usa la radiografía sin repetir la consulta.
+  const overdueByAsset = new Map<string, number>();
 
   // Equipos: nombre, criticidad y marca ISM 10.3, para priorizar por riesgo.
   const assetInfo = new Map<string, { name: string; code: string; criticality: string; safety: boolean; vesselCode: string }>();
@@ -153,6 +163,8 @@ export async function buildAdvisorEvidence(
     for (const a of rows) assetInfo.set(a.id, { name: a.name, code: a.assetCode, criticality: a.criticality, safety: a.isSafetyCritical, vesselCode: a.vesselCode });
   }
   const aName = (id: string | null | undefined) => (id ? assetInfo.get(id)?.name ?? null : null);
+  const riskTagOf = (criticality: string, safety: boolean) =>
+    [`criticidad ${criticality}`, safety ? "crítico para la seguridad (ISM 10.3)" : null].filter(Boolean).join(", ");
   const riskTag = (id: string | null | undefined) => {
     const a = id ? assetInfo.get(id) : null;
     if (!a) return "";
@@ -171,7 +183,7 @@ export async function buildAdvisorEvidence(
 
   if (vesselCodes.length === 0) {
     gaps.push("No hay buques en el alcance del usuario.");
-    return { periodFrom: since365, periodTo: now, vesselCodes, metrics, payload, evidence: [], dataGaps: gaps, sources };
+    return { periodFrom: since365, periodTo: now, vesselCodes, metrics, payload, evidence: [], dataGaps: gaps, sources, assetHealth: { rows: [], fragile: 0, watch: 0, fleetModels: [] } };
   }
 
   // ── Buques + cumplimiento ──
@@ -193,6 +205,7 @@ export async function buildAdvisorEvidence(
   await section("planes vencidos", async () => {
     const due = (await listDueItems(session, { executionStatus: "OVERDUE", vesselCode: requestedVesselCode })) as any[];
     const overdue = due.filter(p => vesselCodes.includes(p.vesselCode));
+    for (const p of overdue) overdueByAsset.set(p.assetId, (overdueByAsset.get(p.assetId) ?? 0) + 1);
     await loadAssets(overdue.map(p => p.assetId));
     const score = (p: any) => {
       const a = assetInfo.get(p.assetId);
@@ -628,6 +641,96 @@ export async function buildAdvisorEvidence(
     sources.alerts = alerts.length;
   });
 
+  // ── Radiografía de equipos (pedido de Gustavo: el plan al día no alcanza) ──
+  let assetHealth: AssetHealthResult = { rows: [], fragile: 0, watch: 0, fleetModels: [] };
+  await section("salud de equipos", async () => {
+    assetHealth = await buildAssetHealth(prisma, tenantId, vesselCodes, vName, overdueByAsset);
+    metrics.fragileAssets = assetHealth.fragile;
+    metrics.watchAssets = assetHealth.watch;
+    payload.saludDeEquipos = {
+      delicados: assetHealth.fragile,
+      enObservacion: assetHealth.watch,
+      nota: "Un equipo delicado sigue siéndolo aunque se lo esté reparando: la señal es que se repara seguido, sin planificar, o el laboratorio lo marca.",
+      equipos: assetHealth.rows.map(r => ({
+        ev: book.add({
+          kind: "ASSET", code: r.assetCode, vesselCode: r.vesselCode, vesselName: r.vesselName, assetName: r.assetName,
+          date: d(now), title: r.assetName,
+          detail: [`${r.state === "FRAGILE" ? "Delicado" : "En observación"}`, riskTagOf(r.criticality, r.safetyCritical), ...r.signals.map(signalText)].filter(Boolean).join(" · "),
+          link: `/equipment?open=${encodeURIComponent(r.assetId)}`,
+        }),
+        equipo: r.assetName, buque: r.vesselName, estado: r.state === "FRAGILE" ? "DELICADO" : "EN_OBSERVACION",
+        riesgoEquipo: riskTagOf(r.criticality, r.safetyCritical), sinRespaldo: r.noBackup,
+        senales: r.signals.map(signalText), numeros: r.counts,
+      })),
+      mismoModeloEnVariosBuques: assetHealth.fleetModels.map(m => ({
+        fabricante: m.manufacturer, modelo: m.model, buques: m.vessels, equipos: m.assets,
+        defectos: m.defects, reparacionesNoPlanificadas: m.unplanned,
+        ev: book.add({
+          kind: "ASSET", code: m.model, vesselCode: null, vesselName: null, assetName: null, date: d(now),
+          title: `${m.manufacturer ? m.manufacturer + " " : ""}${m.model} — mismo modelo con fallas en ${m.vessels.length} buques`,
+          detail: `${m.defects} defectos y ${m.unplanned} reparaciones no planificadas en ${m.assets} equipos de ${m.vessels.length} buques (${m.vessels.join(", ")})`,
+          link: `/equipment`,
+        }),
+      })),
+    };
+    sources.assetsChecked = assetHealth.rows.length;
+  });
+
+  // ── Planes por horas: cuándo vencen de verdad, al ritmo de marcha actual ──
+  await section("planes por horas", async () => {
+    const plans = await prisma.maintenancePlan.findMany({
+      where: { ...inScope, deletedAt: null, status: "ACTIVE", triggerType: { in: ["HOURS", "RUNNING_HOURS"] }, nextDueHours: { not: null } },
+      select: { taskCode: true, title: true, assetId: true, vesselCode: true, nextDueHours: true },
+      take: 300,
+    });
+    if (plans.length === 0) return;
+    await loadAssets(plans.map((p: any) => p.assetId));
+    const assetIds = Array.from(new Set(plans.map((p: any) => p.assetId)));
+    const readings = await prisma.assetHoursReading.findMany({
+      where: { tenantId, assetId: { in: assetIds }, readingDate: { gte: since90 } },
+      orderBy: { readingDate: "asc" },
+      select: { assetId: true, readingDate: true, runningHours: true },
+    });
+    // Ritmo = horas ganadas / días entre la primera y la última lectura del período.
+    const pace = new Map<string, { perDay: number; current: number }>();
+    const byAssetReadings = new Map<string, Array<{ date: Date; hours: number }>>();
+    for (const r of readings) {
+      byAssetReadings.set(r.assetId, [...(byAssetReadings.get(r.assetId) ?? []), { date: new Date(r.readingDate), hours: r.runningHours }]);
+    }
+    for (const [assetId, list] of byAssetReadings) {
+      if (list.length < 2) continue;
+      const first = list[0]!, last = list[list.length - 1]!;
+      const days = Math.max(1, daysBetween(last.date, first.date));
+      const perDay = (last.hours - first.hours) / days;
+      if (perDay > 0) pace.set(assetId, { perDay, current: last.hours });
+    }
+    const rows = plans.map((p: any) => {
+      const pc = pace.get(p.assetId);
+      if (!pc || p.nextDueHours == null) return null;
+      const missing = p.nextDueHours - pc.current;
+      const days = Math.round(missing / pc.perDay);
+      if (days > 120) return null;
+      const when = new Date(now.getTime() + Math.max(days, 0) * DAY);
+      return { p, days, when, perDay: Math.round(pc.perDay * 10) / 10, current: Math.round(pc.current) };
+    }).filter(Boolean) as Array<{ p: any; days: number; when: Date; perDay: number; current: number }>;
+    rows.sort((a, b) => a.days - b.days);
+    metrics.hoursPlansDueSoon = rows.filter(r => r.days <= 30).length;
+    payload.planesPorHorasEstimados = {
+      nota: "Fecha estimada con el ritmo de horas de marcha de los últimos 90 días; el plan por horas no tiene fecha propia.",
+      enMenosDe30Dias: metrics.hoursPlansDueSoon,
+      detalle: rows.slice(0, 15).map(r => ({
+        ev: book.add({
+          kind: "PLAN", code: r.p.taskCode, vesselCode: r.p.vesselCode, vesselName: vName(r.p.vesselCode), assetName: aName(r.p.assetId),
+          date: d(r.when), title: r.p.title,
+          detail: `Vence a las ${r.p.nextDueHours} h; hoy lleva ${r.current} h y suma ${r.perDay} h por día → llega ${r.days <= 0 ? "ya" : `en ${r.days} días`} (estimado ${d(r.when)})`,
+          link: `/maintenance-plans/${encodeURIComponent(r.p.taskCode)}`,
+        }),
+        plan: r.p.taskCode, equipo: aName(r.p.assetId), buque: vName(r.p.vesselCode), diasEstimados: r.days, horasPorDia: r.perDay,
+      })),
+    };
+    sources.hoursPlans = rows.length;
+  });
+
   // Los planes vencidos que ya tienen una postergación activa quedaron contados
   // en las dos secciones: se aclara para que la IA no los sume dos veces.
   payload.notas = [
@@ -637,7 +740,7 @@ export async function buildAdvisorEvidence(
 
   return {
     periodFrom: since365, periodTo: now, vesselCodes, metrics, payload,
-    evidence: book.all(), dataGaps: gaps, sources,
+    evidence: book.all(), dataGaps: gaps, sources, assetHealth,
   };
 }
 

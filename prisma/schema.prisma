@@ -1526,6 +1526,11 @@ model MaintenanceAdvisorReport {
   /// Temas sin información suficiente y qué dato falta.
   insufficient    Json
   evidence        Json
+  /// Radiografía de equipos: cómo está cada equipo (delicado / en observación),
+  /// con sus señales. La calcula el código, no la IA.
+  assetHealth     Json?
+  /// Comparación con el análisis anterior del mismo alcance (mejoró / empeoró).
+  trend           Json?
   sources         Json
   locale          String
   model           String

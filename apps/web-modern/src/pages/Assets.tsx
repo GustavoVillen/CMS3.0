@@ -751,6 +751,8 @@ interface AssetModalProps {
   onSaved: () => void;
   /** Pide la baja (abre la confirmación en la página). */
   onDeleteRequest?: (a: Asset) => void;
+  /** Llega desde el asesor técnico (?salud=1): abre el informe de salud del equipo. */
+  openHealth?: boolean;
 }
 
 interface AssetNameOption {
@@ -767,6 +769,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   onClose,
   onSaved,
   onDeleteRequest,
+  openHealth,
 }) => {
   const t = useT();
   const can = useCan();
@@ -789,7 +792,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
   const canGenerateHealth = can("assetHealth.generate");
   const canViewHealth = canGenerateHealth || can("assetHealth.view");
   const [healthItems, setHealthItems] = useState<HealthReportSummary[]>([]);
-  const [healthOpen, setHealthOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(!!openHealth);
   useEffect(() => {
     if (!initial?.id || !canViewHealth) return;
     let alive = true;
@@ -1670,6 +1673,8 @@ export const AssetsPage: React.FC = () => {
   const criticalityFilter = (searchParams.get("criticality") ?? "").trim();
   const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
   const openAssetId = (searchParams.get("open") ?? "").trim();
+  // El asesor técnico manda acá con ?salud=1 para abrir el informe del equipo.
+  const [openHealthFor, setOpenHealthFor] = useState<string | null>(null);
   const tmsaFilter = useTmsaFilter();
   const [searchText, setSearchText] = useState("");
 
@@ -1741,8 +1746,10 @@ export const AssetsPage: React.FC = () => {
       .then(detailed => setEditing(detailed))
       .catch(() => {})
       .finally(() => setDetailLoadingId(null));
+    if (searchParams.get("salud") === "1") setOpenHealthFor(openAssetId);
     const params = new URLSearchParams(searchParams);
     params.delete("open");
+    params.delete("salud");
     setSearchParams(params, { replace: true });
   }, [openAssetId, searchParams, setSearchParams]);
 
@@ -1897,6 +1904,7 @@ export const AssetsPage: React.FC = () => {
             void reloadTenantAssets();
             void plansFetch.reload();
           }}
+          openHealth={!!editing && openHealthFor === editing.id}
           onDeleteRequest={a => setDeleteTarget(a)}
         />
       )}

@@ -13,8 +13,8 @@
 // los buques de cada tema salen de datos del sistema, no del texto de la IA.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Compass, Loader2, RefreshCw, ChevronRight, ChevronDown, History, Ship } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Compass, Loader2, RefreshCw, ChevronRight, ChevronDown, History, Ship, ScanLine, Sparkles, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
@@ -25,10 +25,13 @@ import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { EvidenceList, DraftPanel, FollowPanel, TalkBox } from "../components/maintenance-advisor/AdvisorParts";
 import {
-  AREAS, AREA_ICON, AREA_LABEL, BUCKETS, BUCKET_ICON, BUCKET_LABEL, BUCKET_OF, BUCKET_STYLE, HEALTH_LABEL, HEALTH_STYLE,
-  areaHealth, currentPlan, dueBadge, findingAreas, findingEvidence, findingVesselCodes,
-  type AdvisorAction, type AdvisorFinding, type AdvisorMessage, type AdvisorMetrics, type Area, type Bucket, type EvidenceItem,
+  AREAS, AREA_ICON, AREA_LABEL, ASSET_STATE_STYLE, BUCKETS, BUCKET_ICON, BUCKET_LABEL, BUCKET_OF, BUCKET_STYLE,
+  HEALTH_LABEL, HEALTH_STYLE, SIGNAL_LABEL, SIGNAL_STRONG,
+  areaHealth, currentPlan, dueBadge, findingAreas, findingEvidence, findingVesselCodes, trendOf,
+  type AdvisorAction, type AdvisorFinding, type AdvisorMessage, type AdvisorMetrics, type AdvisorTrend, type Area, type Bucket,
+  type AssetHealthResult, type AssetHealthRow, type EvidenceItem,
 } from "../components/maintenance-advisor/advisor-types";
+import { ModalCloseButton } from "../components/ModalCloseButton";
 
 interface AdvisorReport {
   id: string;
@@ -39,6 +42,8 @@ interface AdvisorReport {
   findings: AdvisorFinding[];
   insufficient: Array<{ topic: string; missingData: string }>;
   evidence: EvidenceItem[];
+  assetHealth: AssetHealthResult | null;
+  trend: AdvisorTrend | null;
 }
 
 interface ReportListItem { id: string; createdAt: string; findings: number }
@@ -87,6 +92,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [actions, setActions] = useState<AdvisorAction[]>([]);
   const [woFor, setWoFor] = useState<{ vesselCode?: string; title: string; priority: string } | null>(null);
+  const [xrayOpen, setXrayOpen] = useState(false);
   // Conversación del Director con el asesor, de todos los temas del informe abierto.
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const mergeMessages = useCallback((items: AdvisorMessage[]) => {
@@ -319,9 +325,35 @@ export const MaintenanceAdvisorPage: React.FC = () => {
                           <b className={HEALTH_STYLE[h.health].word}>{t(HEALTH_LABEL[h.health])}</b> · {t(h.text).replace("{n}", String(h.n ?? ""))}
                         </span>
                       </span>
+                      <TrendArrow tr={trendOf(report.trend, AREA_TREND_KEY[area])} />
                     </button>
                   );
                 })}
+                {/* Radiografía: el plan al día no alcanza. Ocupa el ancho del recuadro. */}
+                {(() => {
+                  const rows = report.assetHealth?.rows ?? [];
+                  const fragile = report.assetHealth?.fragile ?? report.metrics.fragileAssets ?? 0;
+                  const watch = report.assetHealth?.watch ?? report.metrics.watchAssets ?? 0;
+                  const state = fragile > 0 ? "bad" : watch > 0 ? "warn" : "ok";
+                  const tr = trendOf(report.trend, "fragileAssets");
+                  return (
+                    <button onClick={() => setXrayOpen(true)} disabled={rows.length === 0}
+                      className="sm:col-span-2 flex items-center gap-2.5 rounded-xl border border-fg/10 p-2.5 text-left transition-colors hover:border-fg/25 disabled:opacity-60 disabled:hover:border-fg/10">
+                      <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${HEALTH_STYLE[state].dot}`}>
+                        <ScanLine className="w-5 h-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px] font-extrabold text-fg leading-tight">{t("advisor.area.assets")}</span>
+                        <span className="block text-[11.5px] text-text-industrial/70 leading-tight mt-0.5">
+                          <b className={HEALTH_STYLE[state].word}>{fragile > 0 ? t("advisor.h.fragile").replace("{n}", String(fragile)) : watch > 0 ? t("advisor.h.watch").replace("{n}", String(watch)) : t("advisor.h.assetsOk")}</b>
+                          {fragile > 0 && watch > 0 && ` · ${t("advisor.h.watch").replace("{n}", String(watch))}`}
+                          {rows.length > 0 && ` · ${t("advisor.h.seeXray")}`}
+                        </span>
+                      </span>
+                      <TrendArrow tr={tr} />
+                    </button>
+                  );
+                })()}
               </div>
             </Card>
 
@@ -420,6 +452,9 @@ export const MaintenanceAdvisorPage: React.FC = () => {
         </>
       )}
 
+      {xrayOpen && report?.assetHealth && (
+        <XrayModal health={report.assetHealth} trend={report.trend} scopeName={scopeName} onClose={() => setXrayOpen(false)} />
+      )}
       {woFor && (
         <CreateWorkOrderModal
           initialVesselCode={woFor.vesselCode}
@@ -435,6 +470,98 @@ export const MaintenanceAdvisorPage: React.FC = () => {
 };
 
 // ─── Piezas ──────────────────────────────────────────────────────────────────
+
+/** Qué número de la comparación le corresponde a cada semáforo. */
+const AREA_TREND_KEY: Record<Area, string> = {
+  plan: "plansOverdueCritical", failures: "defectsOpenHigh", spares: "criticalSparesBelowMin", closure: "closedWithoutEvidence60d",
+};
+
+/** Flecha contra el análisis anterior: en estos números, bajar es bueno. */
+const TrendArrow: React.FC<{ tr: ReturnType<typeof trendOf> }> = ({ tr }) => {
+  const t = useT();
+  if (!tr || tr.dir === "same") return null;
+  const worse = tr.dir === "up";
+  const Icon = worse ? ArrowUpRight : ArrowDownRight;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[11.5px] font-extrabold shrink-0 ${worse ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}
+      title={t("advisor.trend.was").replace("{n}", String(tr.before))}>
+      <Icon className="w-3.5 h-3.5" />{tr.before}→{tr.now}
+    </span>
+  );
+};
+
+/** Radiografía: qué equipos están delicados y por qué. */
+const XrayModal: React.FC<{ health: AssetHealthResult; trend: AdvisorTrend | null; scopeName: string; onClose: () => void }> = ({ health, trend, scopeName, onClose }) => {
+  const t = useT();
+  const navigate = useNavigate();
+  const worse = (r: AssetHealthRow) => {
+    const before = trend?.assets?.[r.assetId];
+    if (!before) return false;
+    return before.state === "OK" || (before.state === "WATCH" && r.state === "FRAGILE");
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 bg-black/60 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-4xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 border-t-4 border-t-violet-600 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-fg/10">
+          <ScanLine className="w-5 h-5 text-violet-600" />
+          <h2 className="flex-1 text-sm font-black text-fg">{t("advisor.xray.title")} — {scopeName}</h2>
+          <ModalCloseButton onClose={onClose} />
+        </div>
+        <div className="p-5 max-h-[70vh] overflow-y-auto">
+          <p className="text-[12px] text-text-industrial/70 mb-3">{t("advisor.xray.hint")}</p>
+          {health.rows.length === 0 ? (
+            <p className="text-sm text-text-industrial/70">{t("advisor.xray.none")}</p>
+          ) : (
+            <div className="space-y-2">
+              {health.rows.map(r => (
+                <div key={r.assetId} className="rounded-xl border border-fg/10 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-[10.5px] font-black rounded-md px-2 py-0.5 uppercase ${ASSET_STATE_STYLE[r.state].badge}`}>{t(ASSET_STATE_STYLE[r.state].label)}</span>
+                    <b className="text-[14px] text-fg">{r.assetName}</b>
+                    <span className="text-[11.5px] text-text-industrial/70">🚢 {r.vesselName ?? r.vesselCode} · {t("advisor.xray.criticality").replace("{c}", r.criticality)}{r.safetyCritical ? " · ISM 10.3" : ""}</span>
+                    {worse(r) && <span className="text-[11px] font-extrabold text-red-700 dark:text-red-400">▲ {t("advisor.trend.worse")}</span>}
+                    <span className="flex-1" />
+                    <button className="rounded-lg border border-fg/15 px-2.5 py-1 text-[11.5px] font-bold hover:bg-fg/5"
+                      onClick={() => navigate(`/equipment?open=${encodeURIComponent(r.assetId)}`)}>{t("advisor.xray.openAsset")}</button>
+                    <button className="inline-flex items-center gap-1 rounded-lg bg-violet-600 text-white px-2.5 py-1 text-[11.5px] font-bold hover:bg-violet-700"
+                      onClick={() => navigate(`/equipment?open=${encodeURIComponent(r.assetId)}&salud=1`)}>
+                      <Sparkles className="w-3.5 h-3.5" /> {t("advisor.xray.healthReport")}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {r.signals.map((sg, i) => (
+                      <span key={i} className={`text-[11.5px] font-bold rounded-full px-2.5 py-0.5 ${SIGNAL_STRONG.has(sg.code) ? "bg-red-500/10 text-red-700 dark:text-red-400" : "bg-fg/5 text-text-industrial"}`}>
+                        {SIGNAL_LABEL[sg.code] ? t(SIGNAL_LABEL[sg.code]).replace("{n}", String(sg.n ?? "")) : sg.code}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {health.fleetModels.length > 0 && (
+            <div className="mt-5">
+              <p className="text-[11.5px] font-extrabold uppercase tracking-wider text-text-industrial/60 mb-2">{t("advisor.xray.fleetModels")}</p>
+              <div className="space-y-1.5">
+                {health.fleetModels.map((m, i) => (
+                  <p key={i} className="rounded-xl border border-dashed border-fg/20 px-3 py-2 text-[12.5px] text-fg">
+                    <b>{[m.manufacturer, m.model].filter(Boolean).join(" ")}</b> — {t("advisor.xray.fleetModelDetail")
+                      .replace("{v}", String(m.vessels.length)).replace("{a}", String(m.assets))
+                      .replace("{d}", String(m.defects)).replace("{u}", String(m.unplanned))}
+                    <span className="block text-[11.5px] text-text-industrial/70">{m.vessels.join(", ")}</span>
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-fg/10 bg-fg/[0.02]">
+          <button className="rounded-xl border border-fg/15 px-3.5 py-2 text-[13px] font-bold hover:bg-fg/5" onClick={onClose}>{t("common.close")}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Card: React.FC<{ title: string; ai?: boolean; children: React.ReactNode }> = ({ title, ai, children }) => (
   <div className="rounded-2xl border border-fg/10 bg-surface p-4">
