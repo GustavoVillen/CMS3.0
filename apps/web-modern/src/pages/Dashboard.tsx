@@ -27,7 +27,6 @@ import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumption
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
 import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
 import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
-import { UpcomingTasksModal, type UpcomingTasksResponse } from "../components/UpcomingTasksModal";
 import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
 
@@ -145,9 +144,6 @@ export const Dashboard: React.FC = () => {
   const dailyReports      = useFetch<ListResponse<{ id: string; reportDate: string; createdAt: string }>>("/app/daily-reports");
   // Reportes sin procesar (drafts / estado inicial) — alerta superior del Dashboard.
   const pendingCounts     = useFetch<PendingCounts>("/app/dashboard/sidebar-counts");
-  // Planes que vencen + OT abiertas, desde lo atrasado hasta el domingo de la
-  // semana que viene (acceso grande "Tareas de la próxima semana").
-  const upcomingTasks     = useFetch<UpcomingTasksResponse>("/app/dashboard/upcoming-tasks");
   // Lecturas de horómetro del buque seleccionado (widget "Horas de Equipos").
   // Sólo con buque elegido: la planilla de horas es siempre por buque. useFetch
   // inyecta el vesselCode del contexto, así que el path no lo lleva.
@@ -243,7 +239,6 @@ export const Dashboard: React.FC = () => {
   // equipos, abre el panel de semáforo + historial sin salir del Dashboard).
   const [mpChooserMode, setMpChooserMode] = React.useState<"planList" | "status">("planList");
   const [statusAssetId, setStatusAssetId] = React.useState<string | null>(null);
-  const [showUpcoming, setShowUpcoming] = React.useState(false);
 
   // Densidad compacta fija — pensada para pantallas chicas. Con 4 tarjetas por
   // fila (ver la grilla principal) la dona baja de 128 a 108px: si se dejaba el
@@ -1094,25 +1089,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             <Table2 className="w-6 h-6 text-orange-600 dark:text-orange-400 shrink-0" />
             <span className="font-bold text-sm text-fg">{t("nav.maintenanceSheet")}</span>
           </button>
-          {/* Qué hay que hacer hasta el domingo que viene: planes que vencen + OT
-              abiertas, en una sola lista. El número de la derecha es el total, y
-              se pinta en rojo si hay atrasos. */}
-          <button
-            onClick={() => setShowUpcoming(true)}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"
-          >
-            <CalendarClock className="w-6 h-6 text-accent shrink-0" />
-            <span className="font-bold text-sm text-fg flex-1 min-w-0">{t("dashboard.upcoming.button")}</span>
-            {upcomingTasks.data && upcomingTasks.data.totals.total > 0 && (
-              <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-bold border ${
-                upcomingTasks.data.totals.overdue > 0
-                  ? "bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-400"
-                  : "bg-accent/10 border-accent/30 text-accent"
-              }`}>
-                {upcomingTasks.data.totals.total}
-              </span>
-            )}
-          </button>
           <button
             onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets("status"); setShowMpChooser(true); }}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"
@@ -1147,14 +1123,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
 
       {statusAssetId && (
         <EquipmentMaintenanceStatusModal assetId={statusAssetId} onClose={() => setStatusAssetId(null)} />
-      )}
-
-      {showUpcoming && (
-        <UpcomingTasksModal
-          data={upcomingTasks.data}
-          loading={upcomingTasks.loading}
-          onClose={() => setShowUpcoming(false)}
-        />
       )}
 
       {/* Reportes sin procesar (drafts / estado inicial) por módulo. Ubicado
