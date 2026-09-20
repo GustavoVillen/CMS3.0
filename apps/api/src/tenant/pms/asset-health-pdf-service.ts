@@ -14,6 +14,7 @@ import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, renderLabeledTextBox } f
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 import { resolveTenantForm } from "./tenant-forms-service";
 import { renderMercurioAssetHealthPdf } from "./asset-health-pdf-mercurio";
+import { drawHealthBody } from "./asset-health-pdf-visuals";
 
 const CM = 28.35;
 const PAGE_H = 841.89;
@@ -21,12 +22,6 @@ const PAGE_W = 595.28;
 const MARGIN_V = Math.round(1.5 * CM);
 const FOOTER_SIZE = 30;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_SIZE - MARGIN_V;
-
-const STATE_TEXT: Record<string, { label: string; color: string; bg: string }> = {
-  GOOD:      { label: "Bueno",    color: "#047857", bg: "#ecfdf5" },
-  ATTENTION: { label: "Atención", color: "#92400e", bg: "#fffbeb" },
-  RISK:      { label: "Riesgo",   color: "#b91c1c", bg: "#fef2f2" },
-};
 
 export async function buildAssetHealthReportPdf(
   session: TenantAccessSession,
@@ -40,7 +35,6 @@ export async function buildAssetHealthReportPdf(
   const metrics = r.metrics as HealthMetrics;
   const text = r.report as HealthReportText;
   const sources = r.sources as HealthSources;
-  const state = STATE_TEXT[r.healthState] ?? STATE_TEXT.ATTENTION!;
   const assetTitle = r.asset.name ?? r.asset.assetCode;
 
   let tenantName: string | null = null;
@@ -65,7 +59,6 @@ export async function buildAssetHealthReportPdf(
   // que el plan de mantenimiento y el diferimiento).
   const form = await resolveTenantForm(session.tenantSlug, "ASSET_HEALTH");
   if (form.meta.style === "MERCURIO") {
-    const hours = metrics.currentHours != null ? `${Math.round(metrics.currentHours).toLocaleString(locale)} h` : "—";
     const mercurioBuffer = await renderMercurioAssetHealthPdf({
       meta: form.meta,
       logoBuffer: form.logoBuffer ?? tenantLogoBuffer,
@@ -83,26 +76,7 @@ export async function buildAssetHealthReportPdf(
         vesselCode: r.asset.vesselCode ?? "",
         vesselName: r.asset.vesselName ?? null,
       },
-      kpis: [
-        { label: "Tareas del plan vencidas", value: `${metrics.plansOverdue} de ${metrics.plansActive}` },
-        { label: "Defectos abiertos", value: String(metrics.defectsOpen) },
-        { label: "Analisis en rojo / precaucion", value: `${metrics.labBad} / ${metrics.labCaution}` },
-        { label: metrics.currentHoursDate ? `Horas de marcha al ${fmt(metrics.currentHoursDate)}` : "Horas de marcha", value: hours },
-      ],
-      sections: [
-        { label: "Resumen:", body: text.summary },
-        { label: "Mantenimiento planificado:", body: text.maintenance },
-        { label: "Analisis de laboratorio:", body: text.lab },
-        { label: "Defectos y fallas repetidas:", body: text.defects },
-        { label: "Que conviene revisar (sugerencias de la IA):", body: text.recommendations.map((t: string, i: number) => `${i + 1}. ${t}`).join("\n") },
-        ...(text.limitations ? [{ label: "Limitaciones de la lectura:", body: text.limitations }] : []),
-        { label: "Que se tuvo en cuenta:", body: [
-          `${sources.plans} planes`, `${sources.workOrders} ordenes de trabajo`, `${sources.workLogs} ejecuciones sin OT`,
-          `${sources.labAnalyses} analisis de laboratorio`, `${sources.defects} defectos`, `${sources.deferrals} postergaciones`,
-          `${sources.inspections} inspecciones`, `${sources.mocs} MOC`, `${sources.hoursReadings} lecturas de horas`,
-          `${sources.alerts} alertas automaticas`,
-        ].join(" · ") },
-      ],
+      metrics, text, sources,
       tz, locale,
     });
     return { buffer: mercurioBuffer, fileName };
@@ -138,57 +112,19 @@ export async function buildAssetHealthReportPdf(
     doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(border).lineWidth(1.5).stroke();
     y += 12;
 
-    // ── Estado (una línea: badge) ──
-    doc.roundedRect(ML, y, W, 26, 5).fillColor(state.bg).fill();
-    doc.fontSize(11).font("Helvetica-Bold").fillColor(state.color)
-      .text(`Estado: ${state.label}`, ML + 10, y + 8, { width: W / 2 });
-    doc.fontSize(7.5).font("Helvetica").fillColor(gray)
-      .text("Lectura de la IA", ML + W / 2, y + 10, { width: W / 2 - 10, align: "right" });
-    y += 34;
-
-    // ── Números (una línea cada uno) ──
-    const hours = metrics.currentHours != null
-      ? `${Math.round(metrics.currentHours).toLocaleString(locale)} h`
-      : "—";
-    const kpis: Array<[string, string]> = [
-      [`${metrics.plansOverdue} de ${metrics.plansActive}`, "Tareas del plan vencidas"],
-      [String(metrics.defectsOpen), "Defectos abiertos"],
-      [`${metrics.labBad} / ${metrics.labCaution}`, "Análisis en rojo / precaución"],
-      [hours, metrics.currentHoursDate ? `Horas de marcha al ${fmt(metrics.currentHoursDate)}` : "Horas de marcha"],
-    ];
-    const KW = (W - 18) / 4;
-    kpis.forEach(([value, label], i) => {
-      const x = ML + i * (KW + 6);
-      doc.roundedRect(x, y, KW, 38, 4).strokeColor(border).lineWidth(0.8).stroke();
-      doc.fontSize(12).font("Helvetica-Bold").fillColor(black).text(sanitizePdfText(value), x + 7, y + 6, { width: KW - 14, lineBreak: false, ellipsis: true });
-      doc.fontSize(7).font("Helvetica").fillColor(gray).text(sanitizePdfText(label), x + 7, y + 24, { width: KW - 14, lineBreak: false, ellipsis: true });
-    });
-    y += 44;
-    doc.fontSize(7).font("Helvetica-Oblique").fillColor(gray)
-      .text("Los números los calcula el sistema; la IA redacta la lectura y las sugerencias.", ML, y, { width: W });
-    y += 16;
-
-    // ── Texto ──
-    const box = (label: string, body: string) => {
+    // ── Cuerpo gráfico (compartido con el PDF de Mercurio) ──
+    const flow = { get y() { return y; }, set y(v: number) { y = v; }, ensureSpace };
+    const textBox = (label: string, body: string) => {
       ensureSpace(40);
       y = renderLabeledTextBox(doc, {
-        label, text: body || "—", x: ML, y, width: W,
+        label: label || " ", text: body || "—", x: ML, y, width: W,
         pageBottom: CONTENT_BOTTOM, pageTop: MARGIN_V, fontSize: 9, sectionGap: 10,
       });
     };
-    box("Resumen", text.summary);
-    box("Mantenimiento planificado", text.maintenance);
-    box("Análisis de laboratorio", text.lab);
-    box("Defectos y fallas repetidas", text.defects);
-    box("Qué conviene revisar (sugerencias de la IA)", text.recommendations.map((t, i) => `${i + 1}. ${t}`).join("\n"));
-    if (text.limitations) box("Limitaciones de la lectura", text.limitations);
-
-    const sourceLine = [
-      `${sources.plans} planes`, `${sources.workOrders} órdenes de trabajo`, `${sources.workLogs} ejecuciones sin OT`,
-      `${sources.labAnalyses} análisis de laboratorio`, `${sources.defects} defectos`, `${sources.deferrals} postergaciones`,
-      `${sources.inspections} inspecciones`, `${sources.mocs} MOC`, `${sources.hoursReadings} lecturas de horas`, `${sources.alerts} alertas automáticas`,
-    ].join(" · ");
-    box("Qué se tuvo en cuenta", `${sourceLine}\nLa IA sugiere; el diagnóstico y las decisiones técnicas son del Superintendente.`);
+    drawHealthBody(doc, flow, {
+      x: ML, w: W, locale, fmtDate: (d) => fmt(d),
+      healthState: r.healthState, metrics, text, sources,
+    }, textBox);
 
     // ── Pie ──
     const range = doc.bufferedPageRange();

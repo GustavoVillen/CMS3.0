@@ -8,6 +8,8 @@
 
 import PDFDocument from "pdfkit";
 import { sanitizePdfText } from "./pdf-helpers";
+import type { HealthMetrics, HealthReportText, HealthSources } from "../assets/asset-health-service";
+import { drawHealthBody } from "./asset-health-pdf-visuals";
 import { fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 import {
   FORM_COLORS, FOOTER_H, PAGE_H,
@@ -22,18 +24,9 @@ const W        = PW - ML - MR;
 const MARGIN_T = 36;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 
-const PT_PER_MM = 72 / 25.4;
-const TITLE_GAP = 7 * PT_PER_MM;
-const LABEL_H   = 15;
 const KEEP_MIN  = 26;
 
-const { NAVY, BLACK, GRAY, LIGHT } = FORM_COLORS;
-
-const STATE_LABEL: Record<string, { label: string; color: string }> = {
-  GOOD:      { label: "Bueno",    color: "#166534" },
-  ATTENTION: { label: "Atencion", color: "#92400e" },
-  RISK:      { label: "Riesgo",   color: "#991b1b" },
-};
+const { BLACK } = FORM_COLORS;
 
 export interface MercurioAssetHealthData {
   meta: ControlledDocMeta;
@@ -47,10 +40,12 @@ export interface MercurioAssetHealthData {
     periodTo: Date | string;
   };
   asset: { assetCode: string; name: string | null; vesselCode: string; vesselName: string | null };
-  /** Números del sistema (no de la IA). */
-  kpis: Array<{ label: string; value: string }>;
-  /** Secciones de texto, en orden. */
-  sections: Array<{ label: string; body: string }>;
+  /** Números del sistema (no de la IA): de acá salen las tarjetas y los colores. */
+  metrics: HealthMetrics;
+  /** Lectura redactada por la IA. */
+  text: HealthReportText;
+  /** Qué evidencia se leyó. */
+  sources: HealthSources;
   tz: string;
   locale: string;
 }
@@ -61,9 +56,8 @@ function val(v: unknown): string {
 }
 
 export async function renderMercurioAssetHealthPdf(data: MercurioAssetHealthData): Promise<Buffer> {
-  const { meta, logoBuffer, tenantName, report, asset, kpis, sections, tz, locale } = data;
+  const { meta, logoBuffer, tenantName, report, asset, metrics, text, sources, tz, locale } = data;
   const fmtDate = (d: unknown) => fmtDateTz(d as string | null | undefined, tz, locale);
-  const state = STATE_LABEL[report.healthState] ?? STATE_LABEL.ATTENTION!;
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -84,7 +78,7 @@ export async function renderMercurioAssetHealthPdf(data: MercurioAssetHealthData
       ml: ML, w: W, marginT: MARGIN_T, contentBottom: CONTENT_BOTTOM,
       drawFooter: (page) => drawControlledDocFooter(doc, { meta, rightInfo: rightInfo(page), x: ML, w: W }),
     });
-    const { cell, textArea, ensureSpace } = canvas;
+    const { textArea, ensureSpace } = canvas;
 
     // ── HEADER (documento controlado) ───────────────────────────────────────
     const hdrH = drawControlledDocHeader(doc, {
@@ -92,74 +86,30 @@ export async function renderMercurioAssetHealthPdf(data: MercurioAssetHealthData
     });
     canvas.y = MARGIN_T + hdrH + 6;
 
-    // ── IDENTIFICACIÓN ──────────────────────────────────────────────────────
-    const RH = 20;
-    const lbl = { bold: true, fontSize: 8, bg: LIGHT, color: BLACK } as const;
-    const LBL_W = 95, R_LBL_W = 70, R_VAL_W = 120;
-    const midW = W - LBL_W - R_LBL_W - R_VAL_W;
+    // Texto libre en caja con salto de página (el textArea del canvas dibuja el
+    // pie de Mercurio en cada salto y evita el bug del texto fuera del recuadro).
+    const textBox = (label: string, body: string) => {
+      ensureSpace((label ? 15 : 0) + KEEP_MIN);
+      if (label) {
+        doc.fontSize(9.5).font("Helvetica-Bold").fillColor(BLACK).text(label, ML, canvas.y, { lineBreak: false });
+        canvas.y += 15;
+      }
+      canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(body || "—", { keepMarkdown: true }), 36);
+    };
 
-    ensureSpace(RH);
-    cell(ML, canvas.y, LBL_W, RH, "Embarcacion", lbl);
-    cell(ML + LBL_W, canvas.y, midW, RH, sanitizePdfText(vesselText), { bold: true, fontSize: 9, align: "center" });
-    cell(ML + LBL_W + midW, canvas.y, R_LBL_W, RH, "Fecha", lbl);
-    cell(ML + LBL_W + midW + R_LBL_W, canvas.y, R_VAL_W, RH, fmtDate(report.createdAt), { fontSize: 9, align: "center" });
-    canvas.y += RH;
-
-    ensureSpace(RH);
-    cell(ML, canvas.y, LBL_W, RH, "Equipo:", lbl);
-    cell(ML + LBL_W, canvas.y, midW, RH, sanitizePdfText(val(asset.name ?? asset.assetCode)), { fontSize: 9 });
-    cell(ML + LBL_W + midW, canvas.y, R_LBL_W, RH, "Codigo", lbl);
-    cell(ML + LBL_W + midW + R_LBL_W, canvas.y, R_VAL_W, RH, sanitizePdfText(val(asset.assetCode)), { bold: true, fontSize: 9, color: "#1d4ed8", align: "center" });
-    canvas.y += RH;
-
-    ensureSpace(RH);
-    cell(ML, canvas.y, LBL_W, RH, "Periodo:", lbl);
-    cell(ML + LBL_W, canvas.y, midW, RH, `${fmtDate(report.periodFrom)} a ${fmtDate(report.periodTo)}`, { fontSize: 9, align: "center" });
-    cell(ML + LBL_W + midW, canvas.y, R_LBL_W, RH, "Estado", lbl);
-    cell(ML + LBL_W + midW + R_LBL_W, canvas.y, R_VAL_W, RH, state.label, { bold: true, fontSize: 9, color: state.color, align: "center" });
-    canvas.y += RH;
-
-    ensureSpace(RH);
-    const GEN_LBL_W = 140;
-    cell(ML, canvas.y, GEN_LBL_W, RH, "Generado por:", lbl);
-    cell(ML + GEN_LBL_W, canvas.y, W - GEN_LBL_W, RH,
-      sanitizePdfText(`${val(report.createdByName)} — ${fmtDateTimeTz(report.createdAt as string | Date, tz, locale)}`), { fontSize: 9 });
-    canvas.y += RH;
-
-    // ── NÚMEROS DEL SISTEMA ─────────────────────────────────────────────────
-    if (kpis.length > 0) {
-      const KR = 20;
-      ensureSpace(KR * 2);
-      const cw = Math.floor(W / kpis.length);
-      kpis.forEach((k, i) => cell(ML + i * cw, canvas.y, cw, KR, sanitizePdfText(k.label), { bold: true, fontSize: 7, bg: LIGHT, color: GRAY }));
-      canvas.y += KR;
-      kpis.forEach((k, i) => cell(ML + i * cw, canvas.y, cw, KR, sanitizePdfText(k.value), { bold: true, fontSize: 9, color: BLACK }));
-      canvas.y += KR + 2;
-      doc.fontSize(7).font("Helvetica-Oblique").fillColor(GRAY)
-        .text("Los numeros los calcula el sistema; la IA redacta la lectura y las sugerencias.", ML, canvas.y, { width: W });
-      canvas.y += 12;
-    }
-
-    // ── SECCIONES DE TEXTO ──────────────────────────────────────────────────
-    function labelLine(label: string, keepWithH = KEEP_MIN) {
-      ensureSpace(TITLE_GAP + LABEL_H + keepWithH);
-      canvas.y += TITLE_GAP;
-      const y0 = canvas.y;
-      doc.fontSize(9.5).font("Helvetica-Bold").fillColor(BLACK).text(label, ML, y0, { lineBreak: false });
-      const lblW = doc.font("Helvetica-Bold").fontSize(9.5).widthOfString(label);
-      doc.moveTo(ML, y0 + 12).lineTo(ML + lblW, y0 + 12).strokeColor(BLACK).lineWidth(0.6).stroke();
-      canvas.y = y0 + 15;
-    }
-    for (const s of sections) {
-      labelLine(s.label);
-      canvas.y += textArea(ML, canvas.y, W, sanitizePdfText(s.body || "—", { keepMarkdown: true }), 36);
-    }
-
-    // Quién decide: el informe es una lectura de la IA, no un dictamen.
-    canvas.y += 6;
-    ensureSpace(14);
-    doc.fontSize(7.5).font("Helvetica-Oblique").fillColor(NAVY)
-      .text("La IA sugiere; el diagnostico y las decisiones tecnicas son del Superintendente.", ML, canvas.y, { width: W });
+    // ── CUERPO GRÁFICO (compartido con el PDF estándar) ──────────────────────
+    drawHealthBody(doc, canvas, {
+      x: ML, w: W, locale,
+      fmtDate: (d) => fmtDate(d),
+      healthState: report.healthState, metrics, text, sources,
+      ficha: {
+        vessel: vesselText,
+        equipment: val(asset.name ?? asset.assetCode),
+        code: val(asset.assetCode),
+        period: `${fmtDate(report.periodFrom)} a ${fmtDate(report.periodTo)}`,
+        generated: `Generado por ${val(report.createdByName)} el ${fmtDateTimeTz(report.createdAt as string | Date, tz, locale)}`,
+      },
+    }, textBox);
 
     drawControlledDocFooter(doc, { meta, rightInfo: rightInfo(canvas.page), x: ML, w: W });
     doc.end();
