@@ -1379,12 +1379,22 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
   const param = selectedParam || availableParams[0];
   const threshold = thresholds.find(t => t.parameter === param);
 
-  const data = points.map(p => ({
-    label: new Date(p.sampledAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short" }),
-    sampleCode: p.sampleCode,
-    value: p.values[param] ?? null,
-    verdict: p.verdict,
-  })).filter(d => d.value !== null);
+  // El año va en la etiqueta: la tendencia mezcla muestras de años distintos y
+  // "16-sept" antes de "04-jun" parecía un error de orden. Se arma a mano —
+  // pedirle el año al locale da "16 de sept de 26", demasiado largo para el eje.
+  //
+  // En UTC, como el resto de la app (lib/utils.fmtDate): la fecha de muestreo se
+  // carga sin hora y queda a medianoche UTC, así que leerla en la hora local
+  // argentina (UTC-3) retrocedía la etiqueta un día.
+  const data = points.map(p => {
+    const d = new Date(p.sampledAt);
+    return {
+      label: `${d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", timeZone: "UTC" })}-${String(d.getUTCFullYear()).slice(-2)}`,
+      sampleCode: p.sampleCode,
+      value: p.values[param] ?? null,
+      verdict: p.verdict,
+    };
+  }).filter(d => d.value !== null);
 
   if (data.length < 2) {
     return (
@@ -1406,7 +1416,9 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
       <div className="rounded-xl border border-fg/10 bg-fg/5 p-3">
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={data} margin={{ top: 5, right: 12, left: 0, bottom: 5 }}>
-            <XAxis dataKey="label" stroke="#64748b" fontSize={10} />
+            {/* Con el año la etiqueta creció y en 12 muestras se pisaban: que
+                recharts saltee las del medio antes que superponerlas. */}
+            <XAxis dataKey="label" stroke="#64748b" fontSize={10} interval="preserveStartEnd" minTickGap={10} />
             <YAxis stroke="#64748b" fontSize={10} />
             <Tooltip
               contentStyle={{ background: "#0D1526", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
