@@ -186,11 +186,21 @@ export function milestone(p: SheetPlan, which: "last" | "next"): string | number
 // de significar algo. Con el ciclo propio: mensual avisa 3 días antes, trimestral
 // 9, anual 30.
 //
+// PISO DE 7 DÍAS (pedido del usuario, sep 2026): tres días de aviso para una
+// mensual era poco para preparar el trabajo a bordo. Ahora el aviso nunca baja de
+// 7 días… salvo que eso tape más de un tercio del ciclo, que es lo que evita que
+// una tarea semanal o diaria quede amarilla de forma permanente (con ella el
+// amarillo volvería a no significar nada). Mensual avisa 7 días antes, trimestral
+// sigue en 9, anual en 30, quincenal 5 y semanal algo más de 2.
+//
 // Ojo: esto es sólo el COLOR de la planilla (pantalla y Excel). El estado del
 // plan —lo que cuentan el Dashboard, el Gantt y los reportes— no cambia.
 const SOON_FRACTION = 0.1;
+const SOON_MIN_DAYS = 7;
 const SOON_MAX_DAYS = 30;
 const SOON_MAX_HOURS = 250;
+/** Tope de seguridad: el aviso nunca cubre más de esta parte del ciclo. */
+const SOON_MAX_CYCLE_SHARE = 1 / 3;
 const DAY_MS = 86_400_000;
 
 /** Largo del ciclo en días: el real (última → próximo) o, si falta, la frecuencia. */
@@ -205,6 +215,14 @@ function cycleDays(p: SheetPlan): number | null {
   if (p.triggerType === "DAY") return n;
   if (p.triggerType === "WEEK") return n * 7;
   return null;
+}
+
+/** Días de anticipación con que se enciende el amarillo, según el ciclo de la tarea. */
+function soonThresholdDays(cycle: number | null): number {
+  // Sin ciclo conocido no hay con qué escalar: queda el plazo fijo del resto del PMS.
+  if (cycle == null || cycle <= 0) return SOON_MAX_DAYS;
+  const byCycle = Math.max(cycle * SOON_FRACTION, SOON_MIN_DAYS);
+  return Math.min(byCycle, SOON_MAX_DAYS, cycle * SOON_MAX_CYCLE_SHARE);
 }
 
 export type Severity = "overdue" | "soon" | "none" | "outOfService";
@@ -241,9 +259,7 @@ export function severityOf(p: SheetPlan): Severity {
   if (p.nextDueDate) {
     const left = (new Date(p.nextDueDate).getTime() - Date.now()) / DAY_MS;
     if (left < 0) return "overdue";
-    const cycle = cycleDays(p);
-    const threshold = cycle ? Math.min(cycle * SOON_FRACTION, SOON_MAX_DAYS) : SOON_MAX_DAYS;
-    return left <= threshold ? "soon" : "none";
+    return left <= soonThresholdDays(cycleDays(p)) ? "soon" : "none";
   }
 
   return status === "DUE" || status === "UPCOMING" ? "soon" : "none";
