@@ -334,7 +334,9 @@ export const MaintenanceAdvisorPage: React.FC = () => {
                   const rows = report.assetHealth?.rows ?? [];
                   const fragile = report.assetHealth?.fragile ?? report.metrics.fragileAssets ?? 0;
                   const watch = report.assetHealth?.watch ?? report.metrics.watchAssets ?? 0;
-                  const state = fragile > 0 ? "bad" : watch > 0 ? "warn" : "ok";
+                  // Informes anteriores al 20/09 no tienen radiografía: no es "Bien", es sin dato.
+                  const noData = !report.assetHealth;
+                  const state = noData ? "nodata" : fragile > 0 ? "bad" : watch > 0 ? "warn" : "ok";
                   const tr = trendOf(report.trend, "fragileAssets");
                   return (
                     <button onClick={() => setXrayOpen(true)} disabled={rows.length === 0}
@@ -345,8 +347,11 @@ export const MaintenanceAdvisorPage: React.FC = () => {
                       <span className="min-w-0 flex-1">
                         <span className="block text-[12.5px] font-extrabold text-fg leading-tight">{t("advisor.area.assets")}</span>
                         <span className="block text-[11.5px] text-text-industrial/70 leading-tight mt-0.5">
-                          <b className={HEALTH_STYLE[state].word}>{fragile > 0 ? t("advisor.h.fragile").replace("{n}", String(fragile)) : watch > 0 ? t("advisor.h.watch").replace("{n}", String(watch)) : t("advisor.h.assetsOk")}</b>
-                          {fragile > 0 && watch > 0 && ` · ${t("advisor.h.watch").replace("{n}", String(watch))}`}
+                          <b className={HEALTH_STYLE[state].word}>
+                            {noData ? t("advisor.status.nodata") : fragile > 0 ? t("advisor.h.fragile").replace("{n}", String(fragile)) : watch > 0 ? t("advisor.h.watch").replace("{n}", String(watch)) : t("advisor.h.assetsOk")}
+                          </b>
+                          {noData && ` · ${t("advisor.h.assetsNoData")}`}
+                          {!noData && fragile > 0 && watch > 0 && ` · ${t("advisor.h.watch").replace("{n}", String(watch))}`}
                           {rows.length > 0 && ` · ${t("advisor.h.seeXray")}`}
                         </span>
                       </span>

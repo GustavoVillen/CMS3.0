@@ -187,9 +187,13 @@ function buildTrend(previous: any, metrics: Record<string, unknown>, rows: Asset
   }
   const prevRows = (Array.isArray(previous.assetHealth?.rows) ? previous.assetHealth.rows : []) as AssetHealthRow[];
   const assets: AdvisorTrend["assets"] = {};
-  for (const r of prevRows) assets[r.assetId] = { state: r.state, score: r.score };
-  // Los equipos que hoy están en la lista y antes no aparecían: empeoraron.
-  for (const r of rows) if (!assets[r.assetId]) assets[r.assetId] = { state: "OK", score: 0 };
+  // Sin radiografía anterior no hay con qué comparar los equipos: se deja vacío
+  // (si no, el primer análisis marcaba "empeoró" en todos).
+  if (prevRows.length > 0) {
+    for (const r of prevRows) assets[r.assetId] = { state: r.state, score: r.score };
+    // Los equipos que hoy están en la lista y antes no aparecían: empeoraron.
+    for (const r of rows) if (!assets[r.assetId]) assets[r.assetId] = { state: "OK", score: 0 };
+  }
   return { previousAt: new Date(previous.createdAt).toISOString(), metrics: changed, assets };
 }
 
