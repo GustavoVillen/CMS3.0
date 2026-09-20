@@ -198,7 +198,7 @@ export function drawStateHero(
   // Derecha: lectura + escala
   const rx = x + LEFT + PAD;
   doc.font("Helvetica").fontSize(6.2).fillColor(MUTED)
-    .text(`LECTURA DE LA IA · ${st.note.toUpperCase()}`, rx, y + 10, { width: textW, characterSpacing: 0.5, lineBreak: false });
+    .text(`LECTURA GENERAL · ${st.note.toUpperCase()}`, rx, y + 10, { width: textW, characterSpacing: 0.5, lineBreak: false });
   if (!compact) doc.font("Helvetica").fontSize(9.2).fillColor(INK).text(summary, rx, y + 22, { width: textW, lineGap: 2 });
   else doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(MUTED).text("El resumen completo va debajo de esta tarjeta.", rx, y + 26, { width: textW, lineBreak: false });
 
@@ -297,7 +297,7 @@ function parseLines(text: string): { items: string[]; bullets: boolean } {
   return { items: lines.map(l => l.replace(marker, "")), bullets };
 }
 
-/** Sugerencias de la IA: una fila por sugerencia (círculo numerado); la primera resaltada. */
+/** Sugerencias: una fila por sugerencia (círculo numerado); la primera resaltada. */
 export function drawRecommendations(
   doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; items: string[]; highlightKind: Kind },
 ) {
@@ -323,7 +323,7 @@ export function drawRecommendations(
   flow.y += 3;
   flow.ensureSpace(12);
   doc.font("Helvetica-Oblique").fontSize(6.8).fillColor(MUTED)
-    .text("Ordenadas por la IA de mayor a menor urgencia. La decisión técnica es del Superintendente.", o.x, flow.y, { width: o.w, lineBreak: false });
+    .text("Ordenadas de mayor a menor urgencia. La decisión técnica es del Superintendente.", o.x, flow.y, { width: o.w, lineBreak: false });
   flow.y += 12;
 }
 
@@ -361,7 +361,7 @@ export function drawAreaCard(
   flow.y += 2;
 }
 
-/** Evidencia usada por la IA, como etiquetas; las que valen 0 van atenuadas. */
+/** Evidencia revisada, como etiquetas; las que valen 0 van atenuadas. */
 export function drawSourceChips(doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; sources: HealthSources }) {
   const s = o.sources;
   const chips: Array<[number, string]> = [
@@ -430,7 +430,7 @@ export function drawHealthBody(
   drawTiles(doc, flow, { x, w, metrics: m, locale: input.locale, fmtDate: d => input.fmtDate(d) });
 
   const st = STATE_KIND[input.healthState] ?? STATE_KIND.ATTENTION!;
-  drawSectionTitle(doc, flow, { x, w, title: "Qué conviene revisar", note: "sugerencias de la IA", keepWith: 40 });
+  drawSectionTitle(doc, flow, { x, w, title: "Qué conviene revisar", note: "sugerencias", keepWith: 40 });
   drawRecommendations(doc, flow, { x, w, items: text.recommendations ?? [], highlightKind: st.kind });
 
   flow.y += 4;
@@ -450,12 +450,12 @@ export function drawHealthBody(
   }
 
   flow.y += 4;
-  drawSectionTitle(doc, flow, { x, w, title: "Qué se tuvo en cuenta", note: "evidencia usada por la IA", keepWith: 24 });
+  drawSectionTitle(doc, flow, { x, w, title: "Qué se tuvo en cuenta", note: "evidencia revisada", keepWith: 24 });
   drawSourceChips(doc, flow, { x, w, sources: input.sources });
 
   flow.ensureSpace(14);
   doc.font("Helvetica-Oblique").fontSize(7.2).fillColor(NAVY)
-    .text("La IA sugiere; el diagnóstico y las decisiones técnicas son del Superintendente.", x, flow.y + 4, { width: w, lineBreak: false });
+    .text("Las sugerencias son orientativas; el diagnóstico y las decisiones técnicas son del Superintendente.", x, flow.y + 4, { width: w, lineBreak: false });
   flow.y += 16;
 }
 
