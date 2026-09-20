@@ -3,6 +3,14 @@
 // (getUpcomingTasks), mismos tres bloques (Vencido / Esta semana / Próxima
 // semana), para colgar en la sala de máquinas o llevarla a la reunión.
 //
+// Dentro de cada bloque las tareas van AGRUPADAS POR EQUIPO: el trabajo se hace
+// equipo por equipo, y con la tabla plana las tareas de un mismo motor quedaban
+// desparramadas entre las de los demás. El equipo (y el buque, cuando el informe
+// es de toda la flota) titulan el grupo en vez de repetirse en cada fila, así que
+// esas dos columnas ya no existen y "Tarea" se lleva el ancho que liberan.
+// El grupo se arma por assetId, no por nombre: "Motor Principal Babor" existe en
+// todos los buques y son equipos distintos.
+//
 // Tabla plana: cada fila entra en una altura fija y el texto largo se recorta con
 // ellipsis, así que no hay cajas de texto libre multi-página (no aplica
 // renderLabeledTextBox; ver skill pms-pdf-generation).
@@ -31,6 +39,7 @@ const BLACK  = "#111827";
 const GRAY   = "#6B7280";
 const BORDER = "#9CA3AF";
 const RED    = "#B91C1C";
+const SUBHDR = "#E5E7EB"; // banda del equipo, un escalón por debajo de la del bloque
 
 const BUCKETS: { key: UpcomingTaskBucket; label: string; color: string }[] = [
   { key: "OVERDUE",   label: "Vencido",         color: "#991B1B" },
@@ -130,8 +139,13 @@ export async function buildUpcomingTasksPdf(
 
     /** Una fila = una línea. Los títulos largos (o con saltos propios) se
      *  recortan a mano: con lineBreak:false pdfkit igual parte en los saltos y
-     *  la segunda línea se salía de la celda. */
-    function fitOneLine(text: string, maxWidth: number): string {
+     *  la segunda línea se salía de la celda.
+     *
+     *  Los 2pt de margen no son adorno: con el recorte pegado al límite (403,6
+     *  sobre 404 disponibles) pdfkit partía igual y la cola caía fuera de la
+     *  celda, encima de la fila siguiente. */
+    function fitOneLine(text: string, width: number): string {
+      const maxWidth = width - 2;
       const flat = text.replace(/\s+/g, " ").trim();
       if (doc.widthOfString(flat) <= maxWidth) return flat;
       let lo = 0;
@@ -207,13 +221,12 @@ export async function buildUpcomingTasksPdf(
     }
 
     // ── Columnas ────────────────────────────────────────────────────────────
+    // Equipo y Embarcación no son columnas: titulan el grupo.
     const cols = [
       { key: "origin", title: "Origen",        w: Math.floor(W * 0.07) },
-      { key: "code",   title: "Código",        w: Math.floor(W * 0.13) },
-      { key: "vessel", title: "Embarcación",   w: Math.floor(W * 0.14) },
-      { key: "asset",  title: "Equipo",        w: Math.floor(W * 0.20) },
-      { key: "task",   title: "Tarea",         w: Math.floor(W * 0.29) },
-      { key: "due",    title: "Vencimiento",   w: Math.floor(W * 0.10) },
+      { key: "code",   title: "Código",        w: Math.floor(W * 0.16) },
+      { key: "task",   title: "Tarea",         w: Math.floor(W * 0.53) },
+      { key: "due",    title: "Vencimiento",   w: Math.floor(W * 0.12) },
     ];
     const usedW = cols.reduce((s, c) => s + c.w, 0);
     cols.push({ key: "status", title: "Estado", w: W - usedW });
@@ -228,10 +241,32 @@ export async function buildUpcomingTasksPdf(
       y += HH;
     }
 
-    function drawRow(item: UpcomingTaskItem, overdue: boolean) {
+    /** Salta de hoja si no entra, y en la hoja nueva repone el encabezado de columnas. */
+    function ensureSpaceWithHeader(h: number) {
+      if (y + h > CONTENT_BOTTOM) { ensureSpace(h); drawTableHeader(); }
+    }
+
+    const ASSET_H = 17;
+    /** Banda con el nombre del equipo. Al continuar en otra hoja se repite con "(cont.)". */
+    function drawAssetHeader(label: string, count: number, cont: boolean) {
+      doc.rect(ML, y, W, ASSET_H).fillColor(SUBHDR).fill();
+      doc.rect(ML, y, W, ASSET_H).strokeColor(BORDER).lineWidth(0.4).stroke();
+      doc.fontSize(9).font("Helvetica-Bold").fillColor(BLACK)
+        .text(fitOneLine(`${label}${cont ? " (cont.)" : ""}`, W - 200), ML + 8, y + 5, { width: W - 200, lineBreak: false });
+      doc.fontSize(8).font("Helvetica").fillColor(GRAY)
+        .text(`${count} tarea${count !== 1 ? "s" : ""}`, ML + W - 200, y + 5, { width: 192, align: "right", lineBreak: false });
+      y += ASSET_H;
+    }
+
+    function drawRow(item: UpcomingTaskItem, overdue: boolean, group: { label: string; count: number }) {
       const HH = 18;
-      // Al saltar de página, la tabla arranca con su encabezado de columnas.
-      if (y + HH > CONTENT_BOTTOM) { ensureSpace(HH); drawTableHeader(); }
+      // Al saltar de página se repiten el equipo y el encabezado de columnas: si
+      // no, la hoja nueva arranca con filas sueltas sin saber de qué equipo son.
+      if (y + HH > CONTENT_BOTTOM) {
+        ensureSpace(HH);
+        drawTableHeader();
+        drawAssetHeader(group.label, group.count, true);
+      }
       const dueText = item.dueDate
         ? fmtDate(item.dueDate)
         : item.dueHours != null ? `${item.dueHours.toLocaleString("es-AR")} hs` : "—";
@@ -240,16 +275,34 @@ export async function buildUpcomingTasksPdf(
       cx += cols[0].w;
       cell(cx, y, cols[1].w, HH, sanitizePdfText(item.code), { fontSize: 8, bold: true });
       cx += cols[1].w;
-      cell(cx, y, cols[2].w, HH, sanitizePdfText(vesselNameMap.get(item.vesselCode) ?? item.vesselCode), { fontSize: 8 });
+      cell(cx, y, cols[2].w, HH, sanitizePdfText(item.title), { fontSize: 8 });
       cx += cols[2].w;
-      cell(cx, y, cols[3].w, HH, sanitizePdfText(assetNameMap.get(item.assetId) ?? "—"), { fontSize: 8 });
+      cell(cx, y, cols[3].w, HH, dueText, { fontSize: 8, align: "center", bold: overdue, color: overdue ? RED : BLACK });
       cx += cols[3].w;
-      cell(cx, y, cols[4].w, HH, sanitizePdfText(item.title), { fontSize: 8 });
-      cx += cols[4].w;
-      cell(cx, y, cols[5].w, HH, dueText, { fontSize: 8, align: "center", bold: overdue, color: overdue ? RED : BLACK });
-      cx += cols[5].w;
-      cell(cx, y, cols[6].w, HH, STATUS_LABELS[item.status] ?? item.status, { fontSize: 8, align: "center", color: overdue ? RED : BLACK });
+      cell(cx, y, cols[4].w, HH, STATUS_LABELS[item.status] ?? item.status, { fontSize: 8, align: "center", color: overdue ? RED : BLACK });
       y += HH;
+    }
+
+    /**
+     * Las tareas del bloque, agrupadas por equipo. Se agrupa por assetId (el
+     * mismo nombre de equipo se repite entre buques) y el orden lo da la primera
+     * tarea de cada equipo, así que los grupos quedan por urgencia, igual que
+     * antes. En un informe de toda la flota el título lleva también el buque.
+     */
+    function groupByAsset(items: UpcomingTaskItem[]) {
+      const groups = new Map<string, { label: string; items: UpcomingTaskItem[] }>();
+      for (const item of items) {
+        const key = item.assetId || `__sin-equipo__${item.vesselCode}`;
+        let group = groups.get(key);
+        if (!group) {
+          const assetName = assetNameMap.get(item.assetId) || "Sin equipo";
+          const vesselName = vesselNameMap.get(item.vesselCode) ?? item.vesselCode;
+          group = { label: sanitizePdfText(scopeName ? assetName : `${assetName} — ${vesselName}`), items: [] };
+          groups.set(key, group);
+        }
+        group.items.push(item);
+      }
+      return [...groups.values()];
     }
 
     // ── Bloques ─────────────────────────────────────────────────────────────
@@ -257,7 +310,7 @@ export async function buildUpcomingTasksPdf(
       const items = data.items.filter(i => i.bucket === bucket.key);
       if (items.length === 0) continue;
 
-      ensureSpace(22 + 18 + 18); // header de grupo + header de tabla + 1 fila
+      ensureSpace(22 + 18 + ASSET_H + 18); // bloque + header de tabla + equipo + 1 fila
       const GH = 22;
       doc.rect(ML, y, W, GH).fillColor(bucket.color).fill();
       doc.rect(ML, y, W, GH).strokeColor(BORDER).lineWidth(0.4).stroke();
@@ -267,9 +320,20 @@ export async function buildUpcomingTasksPdf(
         .text(`${items.length} tarea${items.length !== 1 ? "s" : ""}`, ML + W - 200, y + 7, { width: 192, align: "right", lineBreak: false });
       y += GH;
 
+      // El encabezado de columnas va una sola vez por bloque (y de nuevo al
+      // cambiar de hoja): repetirlo en cada equipo llenaba la hoja de franjas
+      // azules, porque la mayoría de los equipos tiene una o dos tareas.
       drawTableHeader();
-      for (const item of items) drawRow(item, bucket.key === "OVERDUE");
-      y += 8;
+      for (const group of groupByAsset(items)) {
+        // El equipo no se queda solo al pie de la hoja: entra con al menos una tarea.
+        ensureSpaceWithHeader(ASSET_H + 18);
+        drawAssetHeader(group.label, group.items.length, false);
+        for (const item of group.items) {
+          drawRow(item, bucket.key === "OVERDUE", { label: group.label, count: group.items.length });
+        }
+        y += 4;
+      }
+      y += 6;
     }
 
     drawFooter();
