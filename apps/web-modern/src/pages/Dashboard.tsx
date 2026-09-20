@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, ShieldCheck, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical, NotebookPen } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical, NotebookPen } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -985,13 +985,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <LayoutGrid className="w-7 h-7" />
             </button>
           </div>
-          <button
-            onClick={() => { setInspKind("chooser"); setInspPlans(null); setInspError(null); }}
-            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-          >
-            <ShieldCheck className="w-6 h-6 text-success-sea shrink-0" />
-            <span className="font-bold text-sm text-fg">{t("dashboard.generateInspection")}</span>
-          </button>
           {canManagePermits && (
             <button
               onClick={() => setShowNewPermit(true)}
