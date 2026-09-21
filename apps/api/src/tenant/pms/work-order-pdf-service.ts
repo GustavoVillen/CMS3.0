@@ -8,11 +8,14 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { loadWorkOrderPdfContext, WO_PDF_TEMPLATES } from "./work-order-pdf";
 import { renderWorkOrderDoc } from "./work-order-pdf/word-work-order";
+import { sealPdf } from "../../common/pdf-seal";
 
+// Sellado acá y no en el router: la descarga, el correo y el archivo en Drive
+// salen todos de esta función, así que ninguna copia queda sin sello.
 export async function buildWorkOrderPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   const ctx = await loadWorkOrderPdfContext(session, id);
   const render = WO_PDF_TEMPLATES[ctx.templateKey] ?? WO_PDF_TEMPLATES.STANDARD;
-  return render(ctx);
+  return sealPdf(await render(ctx), session.tenantSlug, String(ctx.docCode ?? ctx.wo?.workOrderCode ?? id));
 }
 
 // Versión Word (.doc) de la OT — mismo contexto que el PDF.

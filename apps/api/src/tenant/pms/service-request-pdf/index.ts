@@ -6,9 +6,13 @@ import { loadServiceRequestPdfContext } from "./data-loader";
 import { renderServiceRequestPdf } from "./template-service-request";
 import { renderServiceRequestDoc, renderServiceRequestHtml } from "./word-service-request";
 import { wrapHtmlAsDocx } from "../docx-export";
+import { sealPdf } from "../../../common/pdf-seal";
 
+// Sellado acá: la descarga, el envío al proveedor y el archivo en Drive usan
+// todos esta función.
 export async function buildServiceRequestPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
-  return renderServiceRequestPdf(await loadServiceRequestPdfContext(session, id));
+  const ctx = await loadServiceRequestPdfContext(session, id);
+  return sealPdf(await renderServiceRequestPdf(ctx), session.tenantSlug, ctx.docCode);
 }
 
 export async function buildServiceRequestDoc(session: TenantAccessSession, id: string): Promise<Buffer> {
