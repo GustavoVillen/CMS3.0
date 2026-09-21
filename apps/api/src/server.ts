@@ -469,4 +469,24 @@ if (!BACKGROUND_JOBS_DISABLED) {
   setInterval(() => { runWeeklyReportScheduler().catch(() => {}); }, 15 * 60 * 1_000).unref();
 }
 
+// ── Respaldo semanal en Excel al Drive de la empresa ────────────────────────
+// Domingo 05:00 (hora de cada empresa): OT, SS, defectos, equipos, repuestos,
+// proveedores, plan de mantenimiento y planilla a bordo por buque, en planillas
+// para leer. Para que la empresa se quede con sus datos si deja CMS3. Tick cada
+// hora: si el servidor estuvo caído el domingo, sale cuando vuelve (lo ya
+// subido se reconoce en el Drive). Ver tenant/excel/weekly-excel-backup-service.ts.
+async function runWeeklyExcelBackupScheduler(): Promise<void> {
+  try {
+    const { runWeeklyExcelBackups } = await import("./tenant/excel/weekly-excel-backup-service");
+    await runWeeklyExcelBackups();
+  } catch (err) {
+    process.stderr.write(`[excel-backup] aborted: ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+
+if (!BACKGROUND_JOBS_DISABLED) {
+  setTimeout(() => { runWeeklyExcelBackupScheduler().catch(() => {}); }, 5 * 60_000);
+  setInterval(() => { runWeeklyExcelBackupScheduler().catch(() => {}); }, 60 * 60 * 1_000).unref();
+}
+
 // restart: 1776615000000

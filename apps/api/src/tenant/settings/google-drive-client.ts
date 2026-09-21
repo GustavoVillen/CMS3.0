@@ -195,6 +195,27 @@ export async function trashByName(accessToken: string, folderId: string, fileNam
   }
 }
 
+/** Subcarpetas de una carpeta (sólo las que creó CMS3: con drive.file no ve otras). */
+export async function listFolders(accessToken: string, parentId: string): Promise<Array<{ id: string; name: string }>> {
+  const params = new URLSearchParams({
+    q: `${quote(parentId)} in parents and mimeType = ${quote(FOLDER_MIME)} and trashed = false`,
+    fields: "files(id,name)",
+    pageSize: "200",
+  });
+  const found = await driveFetch(accessToken, `${FILES_URL}?${params.toString()}`);
+  const files = (found.files as Array<{ id?: string; name?: string }> | undefined) ?? [];
+  return files.filter(f => f.id).map(f => ({ id: f.id!, name: f.name ?? "" }));
+}
+
+/** Manda a la papelera un archivo o carpeta por id. La papelera de Drive lo guarda 30 días. */
+export async function trashById(accessToken: string, fileId: string): Promise<void> {
+  await driveFetch(accessToken, `${FILES_URL}/${fileId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trashed: true }),
+  });
+}
+
 /**
  * Nombres de los archivos de la carpeta que empiezan con ese texto. Se usa para
  * saber en qué número de adjunto (Att1, Att2…) va un documento.

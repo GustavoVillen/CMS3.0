@@ -381,6 +381,24 @@ export async function getTenantDriveAccess(
   return { config, refreshToken: settings.pdfArchiveGoogleRefreshToken };
 }
 
+/**
+ * Drive de la empresa para los trabajos automáticos (respaldo semanal en Excel).
+ * Sólo si el archivo está conectado Y activo: si el admin lo apagó en
+ * Configuración, tampoco se sube el respaldo. Puede tirar si Google no responde.
+ */
+export async function getTenantDriveRoot(
+  tenantId: string,
+): Promise<{ accessToken: string; rootFolderId: string } | null> {
+  const googleConfig = googleOAuthConfig();
+  if (!googleConfig) return null;
+  const settings = await loadSettings(tenantId);
+  if (!settings?.pdfArchiveEnabled || !settings.pdfArchiveGoogleRefreshToken) return null;
+  const accessToken = await getAccessToken(googleConfig, settings.pdfArchiveGoogleRefreshToken);
+  const rootFolderId = settings.pdfArchiveRootFolderId
+    ?? await ensureFolder(accessToken, ROOT_FOLDER_NAME, null);
+  return { accessToken, rootFolderId };
+}
+
 // ── Subida ───────────────────────────────────────────────────────────────────
 
 function errorMessage(err: unknown): string {
@@ -753,7 +771,7 @@ export async function archiveUploadedFile(
 }
 
 /** Deja el error a la vista del admin en Configuración; nunca corta el flujo del usuario. */
-async function recordArchiveError(
+export async function recordArchiveError(
   tenantId: string | null,
   tenantSlug: string,
   kind: string,
