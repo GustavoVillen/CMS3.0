@@ -9,7 +9,7 @@ import { useAuth } from "../lib/auth";
 import { DataTable, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
-import { VesselLabel } from "../components/EntityLabels";
+import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { AutoTextArea } from "../components/AutoTextArea";
 
@@ -187,6 +187,8 @@ export const DueItemsPage: React.FC = () => {
     }
   }, [reload, reloadSummary, t]);
 
+  const vesselName = useVesselName();
+
   const columns: Column<DueItem>[] = useMemo(() => [
     {
       key: "taskCode",
@@ -201,16 +203,19 @@ export const DueItemsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
+      filterValue: row => vesselName(row.vesselCode),
       render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "executionStatus",
       header: t("mp.executionStatus"),
+      filterValue: row => row.executionStatus,
       render: row => <ExecutionStatusBadge status={row.executionStatus} />,
     },
     {
       key: "triggerType",
       header: t("mp.triggerType"),
+      filterValue: row => row.triggerType || "",
       render: row => row.triggerType || "\u2014",
     },
     {
@@ -257,7 +262,7 @@ export const DueItemsPage: React.FC = () => {
         );
       },
     },
-  ], [handleOpenWorkOrder, openWoLoadingId, t]);
+  ], [handleOpenWorkOrder, openWoLoadingId, t, vesselName]);
 
   return (
     <div className="space-y-5">

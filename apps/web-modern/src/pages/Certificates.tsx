@@ -697,6 +697,7 @@ export const CertificatesPage: React.FC = () => {
     {
       key: "vesselCode", header: t("col.vessel"),
       sortValue: r => vessels.find(v => v.code === r.vesselCode)?.name ?? r.vesselCode,
+      filterValue: r => vessels.find(v => v.code === r.vesselCode)?.name ?? r.vesselCode,
       render: r => (
         <div className="min-w-[8rem]">
           <VesselLabel code={r.vesselCode} className="text-xs font-bold" />

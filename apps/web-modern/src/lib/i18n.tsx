@@ -2628,6 +2628,7 @@ const dict = {
   "mp.v27.setStartHint": { es: "Abre la tarea: en «Cuándo se hace» cargá la última ejecución (fecha u horas).", en: "Opens the task: in \"When\" enter the last execution (date or hours).", pt: "Abre a tarefa: em «Quando» registre a última execução (data ou horas)." },
   "mp.v27.viewList": { es: "Lista", en: "List", pt: "Lista" },
   "mp.v27.viewCalendar": { es: "Calendario", en: "Calendar", pt: "Calendário" },
+  "mp.v27.viewSheet": { es: "Planilla", en: "Sheet", pt: "Planilha" },
   "mp.v27.more": { es: "Más", en: "More", pt: "Mais" },
   "mp.v27.moreExcel": { es: "Importar o exportar tareas", en: "Import or export tasks", pt: "Importar ou exportar tarefas" },
   "mp.v27.sum.over": { es: "Vencidas", en: "Overdue", pt: "Vencidas" },
@@ -3430,6 +3431,22 @@ const dict = {
   "mp.grid.estimatedHours":    { es: "HS EST.",                en: "EST. HRS",              pt: "HS EST." },
   "mp.grid.saveError":         { es: "No se pudo guardar",     en: "Could not save",        pt: "Não foi possível salvar" },
   "mp.grid.resizeHint":        { es: "Arrastrá para ajustar el ancho", en: "Drag to resize column", pt: "Arraste para ajustar a largura" },
+
+  // Filtro por columna (embudo del encabezado, estilo Excel) — lo usan la
+  // planilla del plan y la tabla general, así que las claves son genéricas.
+  "table.filter.tooltip":    { es: "Filtrar esta columna",   en: "Filter this column",    pt: "Filtrar esta coluna" },
+  "table.filter.sortAsc":    { es: "Ordenar A → Z",          en: "Sort A → Z",            pt: "Ordenar A → Z" },
+  "table.filter.sortDesc":   { es: "Ordenar Z → A",          en: "Sort Z → A",            pt: "Ordenar Z → A" },
+  "table.filter.search":     { es: "Buscar valor…",          en: "Search value…",         pt: "Buscar valor…" },
+  "table.filter.selectAll":  { es: "(Seleccionar todo)",     en: "(Select all)",          pt: "(Selecionar tudo)" },
+  "table.filter.noMatch":    { es: "Ningún valor coincide con la búsqueda.", en: "No value matches the search.", pt: "Nenhum valor corresponde à busca." },
+  "table.filter.clear":      { es: "Quitar filtro",          en: "Clear filter",          pt: "Remover filtro" },
+  "table.filter.clearAll":   { es: "Limpiar todo",           en: "Clear all",             pt: "Limpar tudo" },
+  "table.filter.needOne":    { es: "Hay que dejar al menos un valor tildado.", en: "At least one value must stay checked.", pt: "É preciso deixar ao menos um valor marcado." },
+  "table.filter.showing":    { es: "Mostrando {n} de {total}", en: "Showing {n} of {total}", pt: "Mostrando {n} de {total}" },
+  "table.filter.emptyFiltered": { es: "Ningún registro coincide con los filtros de columna puestos.", en: "No record matches the column filters in place.", pt: "Nenhum registro corresponde aos filtros de coluna aplicados." },
+  "table.filter.values":     { es: "{n} valores",            en: "{n} values",            pt: "{n} valores" },
+  "table.filter.blank":      { es: "(Vacío)",                en: "(Blank)",               pt: "(Vazio)" },
 
   // ── Planilla de a bordo (pages/MaintenanceSheet.tsx) ─────────────────────────
   "msheet.title":              { es: "Planilla a Bordo",       en: "Onboard Sheet",         pt: "Planilha de Bordo" },

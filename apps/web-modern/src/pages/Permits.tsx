@@ -1842,7 +1842,7 @@ export const PermitsPage: React.FC = () => {
       ),
     },
     {
-      key: "type", header: t("pm.type"), sortValue: r => t(TYPE_TKEY[r.type]),
+      key: "type", header: t("pm.type"), sortValue: r => t(TYPE_TKEY[r.type]), filterValue: r => t(TYPE_TKEY[r.type]),
       render: p => { const Icon = TYPE_ICON[p.type]; return <span className="inline-flex items-center gap-1.5 text-[11.5px] font-bold text-fg whitespace-nowrap"><span className={`w-6 h-6 rounded-lg flex items-center justify-center ${TYPE_TONE[p.type]}`}><Icon className="w-3.5 h-3.5" /></span>{t(TYPE_TKEY[p.type])}</span>; },
     },
     {
@@ -1862,7 +1862,7 @@ export const PermitsPage: React.FC = () => {
     },
     { key: "validTo", header: t("pm.list.col.when"), sortValue: r => r.validTo ?? r.plannedStart, render: whenCell },
     { key: "participants", header: t("pm.list.col.people"), render: peopleCell },
-    { key: "status", header: t("pm.list.col.stage"), render: stageChip },
+    { key: "status", header: t("pm.list.col.stage"), filterValue: r => t(STATUS_TKEY[r.status]), render: stageChip },
     { key: "action", header: "", render: rowAction },
   ];
 

@@ -809,10 +809,10 @@ export const SparesPage: React.FC = () => {
         </div>
       ),
     },
-    { key: "category", header: t("col.category"), sortValue: r => r.category ?? "", render: r => <span className="text-xs text-text-industrial/60">{r.category ?? "—"}</span> },
-    { key: "criticality", header: t("col.criticality"), sortValue: r => r.criticality, render: r => critChip(r.criticality) },
+    { key: "category", header: t("col.category"), sortValue: r => r.category ?? "", filterValue: r => r.category ?? "", render: r => <span className="text-xs text-text-industrial/60">{r.category ?? "—"}</span> },
+    { key: "criticality", header: t("col.criticality"), sortValue: r => r.criticality, filterValue: r => r.criticality, render: r => critChip(r.criticality) },
     { key: "onHand", header: t("col.stockCurrent"), sortValue: r => r.onHand - r.minStock, render: r => <StockBar spare={r} /> },
-    { key: "location", header: t("sp.v23.col.where"), render: r => <span className="text-xs text-text-industrial/60">{r.location ?? "—"}</span> },
+    { key: "location", header: t("sp.v23.col.where"), filterValue: r => r.location ?? "", render: r => <span className="text-xs text-text-industrial/60">{r.location ?? "—"}</span> },
     {
       key: "usedIn", header: t("sp.v23.usedIn"), sortValue: r => planCount.get(r.id) ?? 0,
       render: r => planCount.get(r.id)

@@ -787,6 +787,7 @@ export function ServiceRequestsPage() {
     {
       key: "shop", header: t("ss.col.shop"), sortable: true,
       sortValue: r => ssShopName(r),
+      filterValue: r => ssShopName(r) || t("ss.card.noShopShort"),
       render: r => ssShopName(r)
         ? <span className="text-xs text-fg">{ssShopName(r)}</span>
         : <span className="text-xs font-bold text-amber-700 dark:text-amber-400">{t("ss.card.noShopShort")}</span>,
@@ -801,10 +802,12 @@ export function ServiceRequestsPage() {
     {
       key: "priority", header: t("wo.col.priority"), sortable: true,
       sortValue: r => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>)[r.priority] ?? 9,
+      filterValue: r => t(`wo.prioShort.${r.priority}` as TranslationKey),
       render: r => <SsPriorityChip priority={r.priority} />,
     },
     {
       key: "status", header: t("ss.col.stage"), sortable: true,
+      filterValue: r => t(`ss.stage.${r.status}` as TranslationKey),
       render: r => (
         <div className="flex flex-col items-start gap-1">
           <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold whitespace-nowrap ${STATUS_COLORS[r.status] ?? STATUS_COLORS.DRAFT}`}>

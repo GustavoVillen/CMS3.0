@@ -9,7 +9,7 @@ import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { AlertDialog } from "../components/AlertDialog";
-import { VesselLabel } from "../components/EntityLabels";
+import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
@@ -1088,6 +1088,8 @@ export const DeferralsPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkCode, data, editing]);
 
+  const vesselName = useVesselName();
+
   const columns: Column<Deferral>[] = useMemo(() => [
     {
       key: "deferralCode",
@@ -1097,6 +1099,7 @@ export const DeferralsPage: React.FC = () => {
     {
       key: "sourceType",
       header: t("def2.sourceType"),
+      filterValue: row => row.sourceType,
       render: row => <SourceTypeBadge sourceType={row.sourceType} />,
     },
     {
@@ -1124,11 +1127,13 @@ export const DeferralsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
+      filterValue: row => vesselName(row.vesselCode),
       render: row => <VesselLabel code={row.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "status",
       header: t("col.status"),
+      filterValue: row => row.status,
       render: row => <StatusBadge status={row.status} />,
     },
     {
@@ -1161,7 +1166,7 @@ export const DeferralsPage: React.FC = () => {
       header: t("def2.targetDate"),
       render: row => fmtDate(row.targetDate),
     },
-  ], [t, navigate]);
+  ], [t, navigate, vesselName]);
 
   return (
     <div className="space-y-5">

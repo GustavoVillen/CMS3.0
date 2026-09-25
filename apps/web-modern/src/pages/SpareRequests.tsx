@@ -535,11 +535,11 @@ export const SpareRequestsPage: React.FC = () => {
 
   const COLUMNS: Column<SpareRequest>[] = [
     { key: "requestCode", header: t("col.code"), sortValue: r => r.requestCode, render: r => <span className="font-mono font-bold text-fg text-xs">{r.requestCode}</span> },
-    { key: "vessel", header: t("sp.forms.vessel"), sortValue: r => vesselName(r.requestedForVesselCode), render: r => <span className="text-xs">{vesselName(r.requestedForVesselCode)}</span> },
-    { key: "status", header: t("col.status"), sortValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
-    { key: "priority", header: t("col.priority"), sortValue: r => PRIORITIES.indexOf(r.priority as typeof PRIORITIES[number]), render: r => <span className={`text-xs font-semibold ${PRIORITY_COLORS[r.priority] ?? ""}`}>{t(`sp.batch.prio.${r.priority}` as TranslationKey)}</span> },
+    { key: "vessel", header: t("sp.forms.vessel"), sortValue: r => vesselName(r.requestedForVesselCode), filterValue: r => r.requestedForVesselCode ? vesselName(r.requestedForVesselCode) : "", render: r => <span className="text-xs">{vesselName(r.requestedForVesselCode)}</span> },
+    { key: "status", header: t("col.status"), sortValue: r => r.status, filterValue: r => t(`srq.status.${r.status}` as TranslationKey), render: r => <StatusBadge status={r.status} /> },
+    { key: "priority", header: t("col.priority"), sortValue: r => PRIORITIES.indexOf(r.priority as typeof PRIORITIES[number]), filterValue: r => t(`sp.batch.prio.${r.priority}` as TranslationKey), render: r => <span className={`text-xs font-semibold ${PRIORITY_COLORS[r.priority] ?? ""}`}>{t(`sp.batch.prio.${r.priority}` as TranslationKey)}</span> },
     { key: "items", header: t("srq.col.items"), sortValue: r => r.items?.length ?? 0, render: r => <span className="text-xs text-fg/60">{r.items?.length ?? 0}</span> },
-    { key: "requestedBy", header: t("srq.col.requestedBy"), sortValue: r => r.requestedByName ?? "", render: r => <span className="text-xs text-fg/70">{r.requestedByName ?? "—"}</span> },
+    { key: "requestedBy", header: t("srq.col.requestedBy"), sortValue: r => r.requestedByName ?? "", filterValue: r => r.requestedByName ?? "", render: r => <span className="text-xs text-fg/70">{r.requestedByName ?? "—"}</span> },
     { key: "sentAt", header: t("srq.col.sent"), sortValue: r => r.sentAt ?? "", render: r => <span className="text-xs text-fg/60">{r.sentAt ? fmtDate(r.sentAt) : "—"}</span> },
   ];
 

@@ -1869,8 +1869,12 @@ export const AssetsPage: React.FC = () => {
         </div>
       ),
     },
-    { key: "sfiCode", header: t("asset.v23.col.system"), sortValue: (r: Asset) => r.sfiCode ?? "", render: (row: Asset) => { const tab = sfiTabOfCode(row.sfiCode); return <span className="text-xs text-text-industrial/70 whitespace-nowrap">{tab === "NONE" ? "—" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`}</span>; } },
-    { key: "criticality", header: t("col.criticality"), sortValue: (r: Asset) => r.criticality, render: (row: Asset) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[row.criticality] ?? ASSET_CRIT_CHIP.C}`}>{row.criticality}</span> },
+    {
+      key: "sfiCode", header: t("asset.v23.col.system"), sortValue: (r: Asset) => r.sfiCode ?? "",
+      filterValue: (r: Asset) => { const tab = sfiTabOfCode(r.sfiCode); return tab === "NONE" ? "" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`; },
+      render: (row: Asset) => { const tab = sfiTabOfCode(row.sfiCode); return <span className="text-xs text-text-industrial/70 whitespace-nowrap">{tab === "NONE" ? "—" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`}</span>; },
+    },
+    { key: "criticality", header: t("col.criticality"), sortValue: (r: Asset) => r.criticality, filterValue: (r: Asset) => r.criticality, render: (row: Asset) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[row.criticality] ?? ASSET_CRIT_CHIP.C}`}>{row.criticality}</span> },
     { key: "plan", header: t("asset.plans.title"), sortValue: (r: Asset) => planStats.get(r.id)?.active ?? 0, render: planCell },
     { key: "currentHours", header: t("asset.v23.col.hours"), sortValue: (r: Asset) => r.currentHours ?? -1, render: (row: Asset) => row.currentHours != null ? <span className="text-xs whitespace-nowrap">{Number(row.currentHours).toLocaleString()} h</span> : <span className="text-text-industrial/30">—</span> },
     {
@@ -1879,7 +1883,7 @@ export const AssetsPage: React.FC = () => {
         ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold text-red-700 dark:text-red-400"><AlertOctagon className="w-3 h-3" />{t("asset.v23.openN").replace("{n}", String(openDefectCount.get(row.id)))}</span>
         : <span className="text-text-industrial/30">—</span>,
     },
-    { key: "status", header: t("col.status"), render: (row: Asset) => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${statusTone[row.status] ?? statusTone.OPERATIONAL}`}>{t(`asset.v23.st.${row.status}` as TranslationKey)}</span> },
+    { key: "status", header: t("col.status"), filterValue: (r: Asset) => t(`asset.v23.st.${r.status}` as TranslationKey), render: (row: Asset) => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${statusTone[row.status] ?? statusTone.OPERATIONAL}`}>{t(`asset.v23.st.${row.status}` as TranslationKey)}</span> },
     { key: "actions", header: "", sortable: false, render: rowAction },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, vesselName, planStats, planCell, openDefectCount, rowAction]);

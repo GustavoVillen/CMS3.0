@@ -707,9 +707,9 @@ export const PlatformTenantsPage: React.FC = () => {
   const BASE_COLS: Column<Tenant>[] = [
     { key: "slug",         header: "Slug",    render: r => <span className="font-mono font-bold text-fg text-xs">{r.slug}</span> },
     { key: "displayName",  header: "Nombre",  mobileTitle: true, render: r => <span className="font-medium text-fg">{r.displayName}</span> },
-    { key: "status",       header: "Estado",  mobileTitle: true, render: r => <StatusBadge status={r.status} /> },
-    { key: "defaultLocale",header: "Locale",  render: r => r.defaultLocale },
-    { key: "currency",     header: "Moneda",  render: r => r.currency },
+    { key: "status",       header: "Estado",  mobileTitle: true, filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
+    { key: "defaultLocale",header: "Locale",  filterValue: r => r.defaultLocale, render: r => r.defaultLocale },
+    { key: "currency",     header: "Moneda",  filterValue: r => r.currency, render: r => r.currency },
     { key: "createdAt",    header: "Creado",  render: r => fmtDate(r.createdAt) },
     {
       key: "id", header: "",

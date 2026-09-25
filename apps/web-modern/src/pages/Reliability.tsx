@@ -136,6 +136,7 @@ export const ReliabilityPage: React.FC = () => {
       header: t("rel.col.basis"),
       sortable: true,
       sortValue: row => row.hoursBasis,
+      filterValue: row => t(row.hoursBasis === "operating" ? "rel.basis.operating" : "rel.basis.calendar"),
       render: row => (
         <span className={`inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${
           row.hoursBasis === "operating"

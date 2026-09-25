@@ -168,6 +168,7 @@ const EVENT_COLS: Column<ActivityEvent>[] = [
   },
   {
     key: "type", header: "Tipo", mobileTitle: true,
+    filterValue: (r) => TYPE_BADGE[r.type].label,
     render: (r) => {
       const b = TYPE_BADGE[r.type];
       const Icon = b.icon;

@@ -4194,6 +4194,7 @@ export const MaintenancePlansPage: React.FC = () => {
       header: t("mp.col.vessel"),
       width: "110px",
       sortValue: row => `${row.vesselCode} ${row.taskCode}`,
+      filterValue: row => vesselNameMap.get(row.vesselCode) ?? row.vesselCode,
       render: row => (
         <span className="text-[11px] font-bold text-accent leading-tight whitespace-nowrap">
           {vesselNameMap.get(row.vesselCode) ?? row.vesselCode}
@@ -4485,11 +4486,30 @@ export const MaintenancePlansPage: React.FC = () => {
   return (
     <div className="space-y-4">
       <PageHeader kind="plan" icon={ClipboardList} title={t("page.maintenancePlans")} total={shownItems.length} onReload={reload}>
-        {/* Vista: Lista o Calendario (el Gantt de carga). Planilla y Matriz siguen
-            ocultas por pedido del usuario (sep 2026); su código queda montado. */}
+        {/* Vista: Lista, Planilla o Calendario (el Gantt de carga). La Planilla
+            volvió al selector (sep 2026); la Matriz sigue oculta y su código
+            queda montado más abajo. */}
         <div className="inline-flex overflow-hidden rounded-lg border border-fg/10">
-          <button type="button" className="inline-flex items-center gap-1.5 bg-fg px-3 py-1.5 text-xs font-bold text-surface">
+          <button
+            type="button"
+            onClick={() => setGridView(false)}
+            aria-pressed={!gridView}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold ${
+              gridView ? "text-text-industrial/70 hover:text-fg" : "bg-fg text-surface"
+            }`}
+          >
             <ListTree className="w-3.5 h-3.5" /> {t("mp.v27.viewList")}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setGridView(true); setShowMatrix(false); }}
+            aria-pressed={gridView}
+            title={t("mp.page.gridView")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold ${
+              gridView ? "bg-fg text-surface" : "text-text-industrial/70 hover:text-fg"
+            }`}
+          >
+            <Table2 className="w-3.5 h-3.5" /> {t("mp.v27.viewSheet")}
           </button>
           <button type="button" onClick={() => navigate("/maintenance-gantt")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-text-industrial/70 hover:text-fg">
             <CalendarDays className="w-3.5 h-3.5" /> {t("mp.v27.viewCalendar")}
@@ -4524,8 +4544,8 @@ export const MaintenancePlansPage: React.FC = () => {
         >
           <Plus className="w-3.5 h-3.5" /> {t("mp.page.newTask")}
         </button>
-        {/* ── Vista Planilla y Vista Matriz — OCULTAS por pedido del usuario (sep 2026).
-            Para recuperarlas: volver a ofrecer setGridView / setShowMatrix. */}
+        {/* ── Vista Matriz — OCULTA por pedido del usuario (sep 2026).
+            Para recuperarla: volver a ofrecer setShowMatrix. */}
       </PageHeader>
 
       {/* Filtros en UNA fila (17-sep): grupo SFI en botones, como en los tableros

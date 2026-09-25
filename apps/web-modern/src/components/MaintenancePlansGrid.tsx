@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Loader2, ScrollText } from "lucide-react";
+import { useColumnFilters, ColumnFilterEmpty, type ColumnFilterSpec } from "./ColumnFilter";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
@@ -70,6 +71,35 @@ interface Props {
 type SortKey =
   | "sfi" | "taskCode" | "equipo" | "title" | "criteriaSource" | "freqType" | "freqValue"
   | "estimatedHours" | "lastExecution" | "nextDue" | "status";
+
+// ─── Filtro por columna (embudo del encabezado, estilo Excel) ────────────────
+//
+// Las dos columnas de fecha quedan afuera a propósito: un buque tiene cientos de
+// vencimientos distintos y tildarlos de a uno no filtra nada útil. Para eso están
+// los filtros de la pantalla (sólo vencidos, semana).
+const FILTER_COLS = [
+  "sfi", "taskCode", "equipo", "title", "criteriaSource", "freqType", "freqValue",
+  "estimatedHours", "status",
+] as const;
+type FilterCol = (typeof FILTER_COLS)[number];
+const isFilterCol = (k: SortKey): k is FilterCol => (FILTER_COLS as readonly string[]).includes(k);
+
+// El texto del estado se arma con las mismas claves que el cartel de la fila, para
+// que la lista del filtro diga lo mismo que el usuario ve en la columna.
+const FILTER_LABEL_KEY: Record<FilterCol, string> = {
+  sfi: "mp.grid.sfi", taskCode: "mp.grid.taskCode", equipo: "mp.grid.equipo", title: "mp.grid.title",
+  criteriaSource: "mp.grid.criteriaSource", freqType: "mp.grid.freqType", freqValue: "mp.grid.freqValue",
+  estimatedHours: "mp.grid.estimatedHours", status: "mp.col.status",
+};
+
+const STATUS_LABEL_KEY: Record<string, string> = {
+  OUT_OF_SERVICE: "mp.statusBadge.outOfService",
+  OVERDUE: "mp.statusBadge.overdue",
+  DUE: "mp.statusBadge.due",
+  IN_WINDOW: "mp.statusBadge.inWindow",
+  NEVER_EXECUTED: "mp.statusBadge.neverExecuted",
+  UPCOMING: "mp.statusBadge.upcoming",
+};
 
 function mergeDefined<T extends object>(base: T, patch: Partial<T>): T {
   const out = { ...base };
@@ -304,10 +334,49 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
     }
   }, [statusValue]);
 
+  // ── Filtro por columna (embudo del encabezado) ────────────────────────────
+  // La mecánica vive en ColumnFilter, compartida con la tabla general.
+  // Texto con el que la fila entra en la lista del filtro: es lo mismo que se ve
+  // en la celda, no el valor interno.
+  const filterText = useCallback((row: MaintenancePlan, col: FilterCol): string => {
+    const hb = isHoursTT(row.triggerType);
+    switch (col) {
+      case "sfi": return row.sfiGroupNumber != null ? `G${row.sfiGroupNumber}` : "";
+      case "taskCode": return row.taskCode ?? "";
+      case "equipo": return row.assetName ?? row.assetId ?? "";
+      case "title": return row.title ?? "";
+      case "criteriaSource": return row.criteriaSource ? t(`mp.cs.${row.criteriaSource}` as any) : t("mp.cs.none");
+      case "freqType": return row.triggerType ?? "";
+      case "freqValue": return String((hb ? row.frequencyHours : row.frequencyMonths) ?? "");
+      case "estimatedHours": return String(row.estimatedHours ?? "");
+      case "status": {
+        const st = statusValue(row);
+        const key = STATUS_LABEL_KEY[st];
+        return key ? t(key as any) : t("mp.statusBadge.valid");
+      }
+    }
+  }, [t, statusValue]);
+
+  const filterSpecs = useMemo<ColumnFilterSpec<MaintenancePlan>[]>(
+    () => FILTER_COLS.map(col => ({
+      key: col,
+      label: t(FILTER_LABEL_KEY[col] as any),
+      value: (row: MaintenancePlan) => filterText(row, col),
+    })),
+    [t, filterText],
+  );
+
+  const colFilters = useColumnFilters(rows, filterSpecs, {
+    key: sortKey,
+    dir: sortDir,
+    onSort: (key, dir) => { setSortKey(key as SortKey); setSortDir(dir); },
+  });
+  const filteredRows = colFilters.rows;
+
   const sortedRows = useMemo(() => {
-    if (!sortKey) return rows;
+    if (!sortKey) return filteredRows;
     const dir = sortDir === "asc" ? 1 : -1;
-    return [...rows].sort((a, b) => {
+    return [...filteredRows].sort((a, b) => {
       const av = sortVal(a, sortKey);
       const bv = sortVal(b, sortKey);
       if (av == null && bv == null) return 0;
@@ -316,7 +385,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" }) * dir;
     });
-  }, [rows, sortKey, sortDir, sortVal]);
+  }, [filteredRows, sortKey, sortDir, sortVal]);
 
   // ── Opciones de los desplegables, armadas UNA vez ──────────────────────────
   // PERF-002 (auditoría 2026-09-09): cada fila editable armaba de nuevo la
@@ -386,20 +455,24 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
   const th = "px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-text-industrial/50 whitespace-nowrap";
   const renderHeader = (id: ColId, label: string, key?: SortKey) => {
     const active = key != null && sortKey === key;
+    const filterCol = key != null && isFilterCol(key) ? key : null;
     return (
       <th className={`${th} relative`}>
+        <div className="flex items-center gap-1 min-w-0">
         {key ? (
           <button
             type="button"
             onClick={() => toggleSort(key)}
-            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none max-w-full overflow-hidden"
+            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none min-w-0 flex-1 overflow-hidden"
           >
             <span className="truncate">{label}</span>
             <span className={active ? "text-accent" : "opacity-40"}>{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
           </button>
         ) : (
-          <span className="truncate block">{label}</span>
+          <span className="truncate block flex-1 min-w-0">{label}</span>
         )}
+        {filterCol && colFilters.funnel(filterCol)}
+        </div>
         {id !== "open" && id !== "bundle" && (
           <div
             onMouseDown={startResize(id)}
@@ -415,11 +488,11 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
   // La asignación masiva trabaja sobre lo que la planilla está mostrando, no
   // sobre toda la base: lo que se ve es lo que se cambia.
   const applyBulkCriteria = useCallback((updated: number, value: CriteriaSource, onlyEmpty: boolean) => {
-    const ids = new Set((onlyEmpty ? rows.filter(r => !r.criteriaSource) : rows).map(r => r.id));
+    const ids = new Set((onlyEmpty ? filteredRows.filter(r => !r.criteriaSource) : filteredRows).map(r => r.id));
     setRows(rs => rs.map(r => (ids.has(r.id) ? { ...r, criteriaSource: value } : r)));
     setBulkCsOpen(false);
     setBulkCsDone(t("mp.bulkCs.done").replace("{n}", String(updated)));
-  }, [rows, t]);
+  }, [filteredRows, t]);
 
   return (
     <div className="space-y-2">
@@ -427,7 +500,7 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
         <p className="text-[11px] text-text-industrial/50">
           {isAdmin ? t("mp.grid.editHint") : t("mp.grid.readonlyHint")}
         </p>
-        {isAdmin && rows.length > 0 && (
+        {isAdmin && filteredRows.length > 0 && (
           <button
             type="button"
             onClick={() => setBulkCsOpen(true)}
@@ -439,6 +512,11 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
           </button>
         )}
       </div>
+
+      {/* Qué columnas están filtradas. Sin esto la planilla puede quedar filtrada
+          sin que se note, y eso en un plan de mantenimiento esconde tareas. */}
+      {colFilters.bar}
+
       <div className="overflow-x-auto rounded-xl border border-fg/10">
         <table className="border-collapse text-fg table-fixed" style={{ width: tableWidth }}>
           <colgroup>
@@ -464,7 +542,13 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
           </thead>
           <tbody className="divide-y divide-fg/5">
             {sortedRows.length === 0 && (
-              <tr><td colSpan={COL_IDS.length} className="px-4 py-10 text-center text-xs text-text-industrial/40">{emptyText}</td></tr>
+              <tr>
+                <td colSpan={COL_IDS.length} className="px-4 py-10 text-center text-xs text-text-industrial/40">
+                  {colFilters.anyActive
+                    ? <ColumnFilterEmpty onClear={colFilters.clearAll} />
+                    : emptyText}
+                </td>
+              </tr>
             )}
             {sortedRows.map(row => {
               const assets = assetsByVessel[row.vesselCode] ?? [];
@@ -661,9 +745,11 @@ export const MaintenancePlansGrid: React.FC<Props> = ({
         </table>
       </div>
 
+      {colFilters.overlay}
+
       {bulkCsOpen && (
         <BulkCriteriaSourceDialog
-          rows={rows}
+          rows={filteredRows}
           onClose={() => setBulkCsOpen(false)}
           onDone={applyBulkCriteria}
         />

@@ -384,11 +384,11 @@ export const ProvidersPage: React.FC = () => {
 
   const COLUMNS: Column<Provider>[] = [
     { key: "name", header: t("prov.col.provider"), sortValue: r => r.name, render: r => <div><div className="text-xs font-bold text-fg">{r.name}</div><div className="font-mono text-[10.5px] text-text-industrial/50">{r.providerCode}</div></div> },
-    { key: "category", header: t("col.category"), sortValue: r => r.category ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.category ?? "—"}</span> },
+    { key: "category", header: t("col.category"), sortValue: r => r.category ?? "", filterValue: r => r.category ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.category ?? "—"}</span> },
     { key: "contactName", header: t("prov.contact"), render: contactCell },
     { key: "work", header: t("prov.work"), sortValue: r => st(r).ss + st(r).plans + st(r).receipts, render: workCell },
-    { key: "location", header: t("col.location"), render: r => <span className="text-xs text-text-industrial/55">{r.location ?? "—"}</span> },
-    { key: "status", header: t("col.status"), render: statusChip },
+    { key: "location", header: t("col.location"), filterValue: r => r.location ?? "", render: r => <span className="text-xs text-text-industrial/55">{r.location ?? "—"}</span> },
+    { key: "status", header: t("col.status"), filterValue: r => r.status === "ACTIVE" ? t("prov.active") : t("prov.inactive"), render: statusChip },
   ];
 
   const selCls = (on: boolean) => `rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:border-accent/50 ${on ? "border-accent bg-accent/5 font-bold text-accent" : "border-fg/10 bg-fg/5 text-fg"}`;

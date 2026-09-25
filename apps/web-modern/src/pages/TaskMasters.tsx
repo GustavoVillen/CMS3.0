@@ -265,11 +265,13 @@ export const TaskMastersPage: React.FC = () => {
     {
       key: "taskType",
       header: "Tipo",
+      filterValue: r => r.taskType,
       render: r => <span className="text-xs text-text-industrial/70">{r.taskType}</span>,
     },
     {
       key: "triggerType",
       header: "Disparo",
+      filterValue: r => TRIGGER_LABELS[r.triggerType] ?? r.triggerType,
       render: r => <span className="text-xs text-text-industrial/60">{TRIGGER_LABELS[r.triggerType] ?? r.triggerType}</span>,
     },
     {
@@ -284,6 +286,7 @@ export const TaskMastersPage: React.FC = () => {
     {
       key: "evidenceRequired",
       header: "Evidencia",
+      filterValue: r => r.evidenceRequired ? "Sí" : "No",
       render: r => r.evidenceRequired
         ? <span className="text-xs text-yellow-700 dark:text-yellow-400 font-semibold">Sí</span>
         : <span className="text-text-industrial/30 text-xs">No</span>,
@@ -291,6 +294,7 @@ export const TaskMastersPage: React.FC = () => {
     {
       key: "status",
       header: t("col.status"),
+      filterValue: r => r.status,
       render: r => <StatusBadge status={r.status} />,
     },
   ];

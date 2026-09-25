@@ -8,7 +8,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { VesselLabel } from "../components/EntityLabels";
+import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { PageHeader } from "../components/PageHeader";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
@@ -526,12 +526,14 @@ export const VoyageTankReportsPage: React.FC = () => {
     || user?.role === "FLEET_SUPERINTENDENT"
     || user?.role === "TECHNICIAN_OPERATOR";
 
+  const vesselName = useVesselName();
+
   const COLUMNS: Column<VoyageTankReport>[] = [
     { key: "voyageCode", header: "Viaje", render: r => <span className="font-mono font-bold text-fg text-xs">{r.voyageCode}</span> },
-    { key: "vesselCode", header: t("col.vessel"), render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
+    { key: "vesselCode", header: t("col.vessel"), filterValue: r => vesselName(r.vesselCode), render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
     { key: "tramo", header: "Tramo", render: r => <span className="text-xs text-text-industrial/60 line-clamp-1">{r.tramo ?? "—"}</span> },
     { key: "reportDateTime", header: t("common.date"), render: r => <span className="text-xs text-text-industrial/60">{r.reportDateTime ? fmtDate(r.reportDateTime) : "—"}</span> },
-    { key: "status", header: t("col.status"), render: r => <StatusBadge status={r.status} /> },
+    { key: "status", header: t("col.status"), filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
   ];
 
   return (

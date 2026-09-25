@@ -225,7 +225,7 @@ const ACTIVE_COLS: Column<ActiveUser>[] = [
       </div>
     ),
   },
-  { key: "tenantSlug", header: "Empresa", render: (r) => <span className="font-mono text-xs text-accent">{r.tenantSlug}</span> },
+  { key: "tenantSlug", header: "Empresa", filterValue: (r) => r.tenantSlug, render: (r) => <span className="font-mono text-xs text-accent">{r.tenantSlug}</span> },
   { key: "vesselCode", header: "Buque",   render: (r) => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
   {
     key: "location", header: "Ubicación",
@@ -256,6 +256,7 @@ const LOGIN_COLS: Column<LoginRow>[] = [
   {
     key: "success", header: "Resultado", mobileTitle: true,
     sortValue: (r) => (r.success ? 1 : 0),
+    filterValue: (r) => r.success ? "INGRESÓ" : "RECHAZADO",
     render: (r) => r.success
       ? <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-success/10 text-success border-success/25">INGRESÓ</span>
       : (
@@ -290,6 +291,7 @@ const LOGIN_COLS: Column<LoginRow>[] = [
   },
   {
     key: "tenantSlug", header: "Empresa",
+    filterValue: (r) => r.scope === "platform" ? "consola admin" : (r.tenantSlug ?? ""),
     render: (r) => r.scope === "platform"
       ? <span className="font-mono text-xs text-red-700 dark:text-red-400">consola admin</span>
       : <span className="font-mono text-xs text-accent">{r.tenantSlug ?? "—"}</span>,

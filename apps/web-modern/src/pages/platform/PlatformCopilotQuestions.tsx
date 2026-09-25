@@ -36,7 +36,7 @@ function usePlatformFetch<T>(path: string) {
 
 const COLUMNS: Column<CopilotQuestion>[] = [
   { key: "createdAt",  header: "Fecha",      render: r => <span className="font-mono text-xs text-text-industrial/60 whitespace-nowrap">{new Date(r.createdAt).toLocaleString("es-AR")}</span> },
-  { key: "tenantSlug", header: "Tenant",     render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
+  { key: "tenantSlug", header: "Tenant",     filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario",    render: r => <div className="text-xs"><div className="text-fg">{r.userEmail}</div><div className="text-text-industrial/40">{r.userRole}</div></div> },
   { key: "screen",     header: "Pantalla",   render: r => <span className="text-xs text-text-industrial/60">{r.screen ?? "—"}</span> },
   { key: "vesselCode", header: "Buque",      render: r => <span className="font-mono text-xs text-text-industrial/60">{r.vesselCode ?? "—"}</span> },

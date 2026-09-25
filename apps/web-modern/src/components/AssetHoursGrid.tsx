@@ -18,6 +18,7 @@ import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { AlertDialog } from "./AlertDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useColumnFilters, ColumnFilterEmpty, type ColumnFilterSpec } from "./ColumnFilter";
 
 export interface HoursSheetRow {
   assetId: string;
@@ -539,10 +540,30 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
       default: return null;
     }
   };
+  const sourceLabel = useCallback((source: string): string => {
+    if (source === "MANUAL") return t("assetHours.source.manual");
+    if (source === "VOYAGE_TANK_REPORT") return t("assetHours.source.voyage");
+    if (source === "DAILY_REPORT") return t("assetHours.source.daily");
+    return source;
+  }, [t]);
+
+  // ── Filtro por columna (embudo del encabezado) ────────────────────────────
+  // Sólo el grupo SFI y el origen del dato: el equipo es uno por fila y las
+  // horas y fechas son números distintos en cada una, así que ahí no filtra nada.
+  const filterSpecs = useMemo<ColumnFilterSpec<HoursSheetRow>[]>(() => [
+    { key: "sfi", label: t("assetHours.col.sfi"), value: r => r.sfiCode ?? "" },
+    { key: "source", label: t("assetHours.col.source"), value: r => r.lastReading ? sourceLabel(r.lastReading.source) : "" },
+  ], [t, sourceLabel]);
+  const colFilters = useColumnFilters(sheet.rows, filterSpecs, {
+    key: sortKey,
+    dir: sortDir,
+    onSort: (key, dir) => { setSortKey(key as SortKey); setSortDir(dir); },
+  });
+
   const sortedRows = useMemo(() => {
-    if (!sortKey) return sheet.rows;
+    if (!sortKey) return colFilters.rows;
     const dir = sortDir === "asc" ? 1 : -1;
-    return [...sheet.rows].sort((a, b) => {
+    return [...colFilters.rows].sort((a, b) => {
       const av = sortVal(a, sortKey);
       const bv = sortVal(b, sortKey);
       if (av == null && bv == null) return 0;
@@ -551,7 +572,7 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" }) * dir;
     });
-  }, [sheet.rows, sortKey, sortDir]);
+  }, [colFilters.rows, sortKey, sortDir]);
 
   // ── Ancho de columnas ajustable (drag) + persistencia ─────────────────────
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
@@ -594,20 +615,25 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
   const th = "px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-text-industrial/50 whitespace-nowrap";
   const renderHeader = (id: ColId, label: string, key?: SortKey) => {
     const active = key != null && sortKey === key;
+    // El embudo sólo en escritorio: en compacto la planilla se ve como tarjetas.
+    const filterCol = !compact && (id === "sfi" || id === "source") ? id : null;
     return (
       <th key={id} className={`${th} relative`}>
+        <div className="flex items-center gap-1 min-w-0">
         {key && !compact ? (
           <button
             type="button"
             onClick={() => toggleSort(key)}
-            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none max-w-full overflow-hidden"
+            className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg transition-colors select-none min-w-0 flex-1 overflow-hidden"
           >
             <span className="truncate">{label}</span>
             <span className={active ? "text-accent" : "opacity-40"}>{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
           </button>
         ) : (
-          <span className="truncate block">{label}</span>
+          <span className="truncate block flex-1 min-w-0">{label}</span>
         )}
+        {filterCol && colFilters.funnel(filterCol)}
+        </div>
         {!compact && (
           <div
             onMouseDown={startResize(id)}
@@ -618,13 +644,6 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
         )}
       </th>
     );
-  };
-
-  const sourceLabel = (source: string): string => {
-    if (source === "MANUAL") return t("assetHours.source.manual");
-    if (source === "VOYAGE_TANK_REPORT") return t("assetHours.source.voyage");
-    if (source === "DAILY_REPORT") return t("assetHours.source.daily");
-    return source;
   };
 
   const headerFor = (id: ColId) => {
@@ -668,6 +687,8 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
         </p>
       )}
 
+      {colFilters.bar}
+
       <div className="overflow-x-auto rounded-xl border border-fg/10">
         <table className="border-collapse text-fg table-fixed" style={{ width: compact ? "100%" : tableWidth }}>
           {!compact && (
@@ -684,7 +705,9 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
             {sortedRows.length === 0 && (
               <tr>
                 <td colSpan={visibleCols.length} className="px-4 py-8 text-center text-xs text-text-industrial/40">
-                  {t("assetHours.empty")}
+                  {colFilters.anyActive
+                    ? <ColumnFilterEmpty onClear={colFilters.clearAll} />
+                    : t("assetHours.empty")}
                 </td>
               </tr>
             )}
@@ -837,6 +860,7 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
       )}
 
       {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
+      {colFilters.overlay}
 
       {pending && (
         <ConfirmDialog

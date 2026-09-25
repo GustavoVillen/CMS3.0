@@ -15,11 +15,25 @@
  *   tienen su propio render y quieren resolver el name sin montar el helper.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api } from "../lib/api";
 
 // ─── Vessel ──────────────────────────────────────────────────────────────────
+
+/**
+ * Resuelve código → nombre del buque con el MISMO criterio que <VesselLabel>,
+ * para las tablas que necesitan el texto plano (filtro por columna, orden,
+ * exportaciones). Sin código devuelve "" (las columnas lo muestran como vacío);
+ * si el buque no está en el contexto, cae al código, igual que la etiqueta.
+ */
+export function useVesselName(): (code: string | null | undefined) => string {
+  const { vessels } = useVesselContext();
+  return useCallback(
+    (code: string | null | undefined) => (code ? vessels.find(v => v.code === code)?.name ?? code : ""),
+    [vessels],
+  );
+}
 
 interface VesselLabelProps {
   code: string | null | undefined;

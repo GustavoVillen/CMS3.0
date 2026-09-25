@@ -10,7 +10,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { VesselLabel } from "../components/EntityLabels";
+import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -1468,6 +1468,8 @@ export const DailyReportsPage: React.FC = () => {
     || user?.role === "FLEET_SUPERINTENDENT"
     || user?.role === "TECHNICIAN_OPERATOR";
 
+  const vesselName = useVesselName();
+
   const COLUMNS: Column<DailyReport>[] = [
     {
       key: "reportDate",
@@ -1477,16 +1479,19 @@ export const DailyReportsPage: React.FC = () => {
     {
       key: "vesselCode",
       header: t("col.vessel"),
+      filterValue: r => vesselName(r.vesselCode),
       render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode />,
     },
     {
       key: "status",
       header: t("col.status"),
+      filterValue: r => r.status,
       render: r => <StatusBadge status={r.status} />,
     },
     {
       key: "currentPort",
       header: "Puerto actual",
+      filterValue: r => r.currentPort ?? r.nextPort ?? "",
       render: r => <span className="text-xs text-text-industrial/60">{r.currentPort ?? r.nextPort ?? "—"}</span>,
     },
     {

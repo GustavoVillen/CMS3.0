@@ -2204,6 +2204,7 @@ export const DefectsPage: React.FC = () => {
     },
     {
       key: "assetId", header: t("def.list.col.what"), sortValue: r => getAssetName(r.assetId) ?? "",
+      filterValue: r => getAssetName(r.assetId) ?? "",
       render: row => (
         <div className="min-w-0">
           <AssetLabel id={row.assetId} className="text-xs font-bold text-fg" />
@@ -2211,14 +2212,15 @@ export const DefectsPage: React.FC = () => {
         </div>
       ),
     },
-    { key: "classification", header: t("def.origin.prefix"), render: originCell },
+    { key: "classification", header: t("def.origin.prefix"), filterValue: r => t(`def.origin.${defectOriginKey(r.classification)}` as TranslationKey), render: originCell },
     {
       key: "severity", header: t("col.severity"),
       sortValue: r => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>)[r.severity] ?? 9,
+      filterValue: r => t(SEVERITY_LABEL_KEYS[r.severity as typeof DEFECT_SEVERITIES[number]] ?? "priority.medium"),
       render: row => chip(SEV_CHIP[row.severity] ?? "bg-fg/10", t(SEVERITY_LABEL_KEYS[row.severity as typeof DEFECT_SEVERITIES[number]] ?? "priority.medium")),
     },
-    { key: "operationalState", header: t("def.guide.equipmentState"), render: row => chip(OP_CHIP[row.operationalState] ?? "bg-fg/10", t(`def.op.${row.operationalState}` as TranslationKey)) },
-    { key: "status", header: t("def.list.col.stage"), render: row => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${ST_CHIP[row.status] ?? ""}`}>{t(`def.st.${row.status}` as TranslationKey)}</span> },
+    { key: "operationalState", header: t("def.guide.equipmentState"), filterValue: r => t(`def.op.${r.operationalState}` as TranslationKey), render: row => chip(OP_CHIP[row.operationalState] ?? "bg-fg/10", t(`def.op.${row.operationalState}` as TranslationKey)) },
+    { key: "status", header: t("def.list.col.stage"), filterValue: r => t(`def.st.${r.status}` as TranslationKey), render: row => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${ST_CHIP[row.status] ?? ""}`}>{t(`def.st.${row.status}` as TranslationKey)}</span> },
     { key: "reportedAt", header: t("def.list.col.open"), sortValue: r => r.reportedAt, render: ageCell },
     {
       key: "workOrderCode", header: t("def.list.col.wo"),

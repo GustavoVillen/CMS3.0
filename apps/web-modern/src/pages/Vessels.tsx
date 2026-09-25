@@ -323,8 +323,8 @@ export const VesselsPage: React.FC = () => {
   const COLUMNS: Column<Vessel>[] = [
     { key: "code",      header: t("col.code"),      render: r => <span className="font-mono font-bold text-fg">{r.code}</span> },
     { key: "name",      header: t("col.name"),      render: r => <span className="font-medium text-fg">{r.name}</span> },
-    { key: "vesselType",header: "TIPO",            render: r => <span className="text-text-industrial/80">{r.vesselType ?? "—"}</span> },
-    { key: "status",    header: t("col.status"),    render: r => <StatusBadge status={r.status} /> },
+    { key: "vesselType",header: "TIPO",            filterValue: r => r.vesselType ?? "", render: r => <span className="text-text-industrial/80">{r.vesselType ?? "—"}</span> },
+    { key: "status",    header: t("col.status"),    filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
     {
       key: "actions", header: "",
       render: r => (

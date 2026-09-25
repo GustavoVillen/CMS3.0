@@ -816,11 +816,13 @@ export const TeamPage: React.FC = () => {
     {
       key: "role",
       header: t("team.role"),
+      filterValue: m => m.isMaintenanceDirector ? t("role.maintenanceDirector") : roleLabels[m.role] ?? m.role,
       render: m => <span className={`text-xs ${ROLE_COLORS[m.role] ?? "text-fg"}`}>{m.isMaintenanceDirector ? t("role.maintenanceDirector") : roleLabels[m.role] ?? m.role}</span>,
     },
     {
       key: "status",
       header: t("col.status"),
+      filterValue: m => m.status,
       render: m => (
         <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_COLORS[m.status] ?? "bg-fg/5 text-fg border-fg/10"}`}>
           {m.status}

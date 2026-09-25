@@ -1068,6 +1068,7 @@ export const InspectionsPage: React.FC = () => {
       key: "title",
       header: t("wo.col.equipmentTask"),
       sortValue: r => r.assetName ?? r.title ?? "",
+      filterValue: r => r.assetName?.trim() || "",
       render: r => (
         <div>
           <div className="text-xs text-fg font-medium">{r.assetName ?? "—"}</div>
@@ -1075,13 +1076,14 @@ export const InspectionsPage: React.FC = () => {
         </div>
       ),
     },
-    { key: "status", header: t("wo.col.status"), render: r => <StatusBadge status={r.status} /> },
+    { key: "status", header: t("wo.col.status"), filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
     { key: "openDate", header: t("wo.col.openDate"), render: r => <span className="text-xs text-text-industrial/60 whitespace-nowrap">{fmtDate(r.openDate)}</span> },
     { key: "completedDate", header: t("insp.col.completedDate"), render: r => <span className="text-xs text-text-industrial/60 whitespace-nowrap">{r.completedDate ? fmtDate(r.completedDate) : "—"}</span> },
-    { key: "woResult", header: t("insp.result"), render: r => <WoResultBadge result={r.woResult} /> },
+    { key: "woResult", header: t("insp.result"), filterValue: r => r.woResult === "SATISFACTORY" ? t("wo.modal.result.satisfactory") : r.woResult === "WITH_DEFICIENCIES" ? t("wo.modal.result.withDeficiencies") : (r.woResult ?? ""), render: r => <WoResultBadge result={r.woResult} /> },
     {
       key: "executedByName",
       header: t("insp.inspectorName"),
+      filterValue: r => r.executedByName?.trim() || "",
       render: r => <span className="text-xs text-text-industrial/70">{r.executedByName?.trim() || "—"}</span>,
     },
   ], [t]);

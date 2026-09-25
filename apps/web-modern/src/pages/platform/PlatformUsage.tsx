@@ -157,7 +157,7 @@ function aggregateByMinute(items: UsageEvent[]): AggregatedRow[] {
 
 const COMMON_COLS_RAW: Column<UsageEvent>[] = [
   { key: "createdAt",  header: "Fecha",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR")}</span> },
-  { key: "tenantSlug", header: "Tenant",  render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
+  { key: "tenantSlug", header: "Tenant",  filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario", mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
   { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
@@ -165,8 +165,8 @@ const COMMON_COLS_RAW: Column<UsageEvent>[] = [
 
 const AI_COLS_RAW: Column<UsageEvent>[] = [
   ...COMMON_COLS_RAW,
-  { key: "feature",      header: "Feature", render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
-  { key: "model",        header: "Modelo",  render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
+  { key: "feature",      header: "Feature", filterValue: r => r.feature ?? "", render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
+  { key: "model",        header: "Modelo",  filterValue: r => r.model ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
   { key: "inputTokens",  header: "Input",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
   { key: "outputTokens", header: "Output",  render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
   { key: "cacheReadTokens", header: "Cache↓", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.cacheReadTokens > 0 ? fmtTok(r.cacheReadTokens) : "—"}</span> },
@@ -177,7 +177,7 @@ const AI_COLS_RAW: Column<UsageEvent>[] = [
 
 const HTTP_COLS_RAW: Column<UsageEvent>[] = [
   ...COMMON_COLS_RAW,
-  { key: "method",     header: "Mét.",    render: r => <span className="font-mono text-[10px] text-text-industrial/60">{r.method ?? "—"}</span> },
+  { key: "method",     header: "Mét.",    filterValue: r => r.method ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/60">{r.method ?? "—"}</span> },
   { key: "route",      header: "Ruta",    render: r => <span className="font-mono text-[10px] text-text-industrial/60 truncate block max-w-[280px]" title={r.route ?? ""}>{r.route ?? "—"}</span> },
   { key: "statusCode", header: "Status",  render: r => <span className={`font-mono text-xs ${r.statusCode && r.statusCode >= 400 ? "text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{r.statusCode ?? "—"}</span> },
   { key: "bytesIn",    header: "↑ In",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesIn)}</span> },
@@ -187,7 +187,7 @@ const HTTP_COLS_RAW: Column<UsageEvent>[] = [
 
 const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "createdAt",  header: "Minuto",  render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
-  { key: "tenantSlug", header: "Tenant",  render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
+  { key: "tenantSlug", header: "Tenant",  filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario", mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
   { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
@@ -195,8 +195,8 @@ const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
 
 const AI_COLS_AGG: Column<AggregatedRow>[] = [
   ...COMMON_COLS_AGG,
-  { key: "feature",      header: "Feature",   render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
-  { key: "model",        header: "Modelo",    render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
+  { key: "feature",      header: "Feature",   filterValue: r => r.feature ?? "", render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
+  { key: "model",        header: "Modelo",    filterValue: r => r.model ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
   { key: "requests",     header: "Reqs",      render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
   { key: "inputTokens",  header: "Input",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
   { key: "outputTokens", header: "Output",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
@@ -211,7 +211,7 @@ const AI_COLS_AGG: Column<AggregatedRow>[] = [
 // "Sin agrupar" toggle to drill into individual endpoints.
 const HTTP_COLS_AGG: Column<AggregatedRow>[] = [
   { key: "createdAt",  header: "Minuto",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
-  { key: "tenantSlug", header: "Tenant",   render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
+  { key: "tenantSlug", header: "Tenant",   filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
   { key: "userEmail",  header: "Usuario",  mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[260px]" title={r.userEmail}>{r.userEmail}</span> },
   { key: "ipAddress",  header: "IP",       render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
   { key: "requests",   header: "Reqs",     render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },

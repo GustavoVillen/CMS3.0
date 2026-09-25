@@ -273,9 +273,9 @@ export const EquipmentClassesPage: React.FC = () => {
     { key: "code",               header: t("col.code"),        render: r => <span className="font-mono font-bold text-fg text-xs">{r.code}</span> },
     { key: "name",               header: t("col.name"),        render: r => <span className="font-medium text-fg">{r.name}</span> },
     { key: "defaultSfiCode",     header: "SFI",                render: r => <span className="font-mono text-xs text-text-industrial/60">{r.defaultSfiCode ?? "—"}</span> },
-    { key: "defaultCriticality", header: t("col.criticality"), render: r => r.defaultCriticality ? <span className={`font-bold text-xs ${r.defaultCriticality === "A" ? "text-red-700 dark:text-red-400" : r.defaultCriticality === "B" ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/60"}`}>{r.defaultCriticality}</span> : <span className="text-text-industrial/30">—</span> },
-    { key: "status",             header: t("col.status"),      render: r => <StatusBadge status={r.status} /> },
-    { key: "isGlobal",           header: "Alcance",            render: r => <span className="text-xs text-text-industrial/50">{r.isGlobal ? "Global" : "Tenant"}</span> },
+    { key: "defaultCriticality", header: t("col.criticality"), filterValue: r => r.defaultCriticality ?? "", render: r => r.defaultCriticality ? <span className={`font-bold text-xs ${r.defaultCriticality === "A" ? "text-red-700 dark:text-red-400" : r.defaultCriticality === "B" ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/60"}`}>{r.defaultCriticality}</span> : <span className="text-text-industrial/30">—</span> },
+    { key: "status",             header: t("col.status"),      filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
+    { key: "isGlobal",           header: "Alcance",            filterValue: r => r.isGlobal ? "Global" : "Tenant", render: r => <span className="text-xs text-text-industrial/50">{r.isGlobal ? "Global" : "Tenant"}</span> },
   ];
 
   return (

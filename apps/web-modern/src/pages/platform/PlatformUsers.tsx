@@ -176,8 +176,8 @@ export const PlatformUsersPage: React.FC = () => {
   const COLUMNS: Column<PlatformUser>[] = [
     { key: "email",     header: "Email",   mobileTitle: true, render: r => <span className="font-mono text-fg text-xs break-all md:break-normal">{r.email}</span> },
     { key: "firstName", header: "Nombre",  render: r => [r.firstName, r.lastName].filter(Boolean).join(" ") || "—" },
-    { key: "role",      header: "Rol",     render: r => <span className="text-xs font-bold text-red-700 dark:text-red-400">{r.role}</span> },
-    { key: "status",    header: "Estado",  mobileTitle: true, render: r => <StatusBadge status={r.status} /> },
+    { key: "role",      header: "Rol",     filterValue: r => r.role, render: r => <span className="text-xs font-bold text-red-700 dark:text-red-400">{r.role}</span> },
+    { key: "status",    header: "Estado",  mobileTitle: true, filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
     { key: "createdAt", header: "Creado",  render: r => fmtDate(r.createdAt) },
   ];
 

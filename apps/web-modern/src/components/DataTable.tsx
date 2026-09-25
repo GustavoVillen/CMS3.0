@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Loader2, AlertCircle, SearchX, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useT } from "../lib/i18n";
+import { useColumnFilters, ColumnFilterEmpty, type ColumnFilterSpec } from "./ColumnFilter";
 
 export { fmtDate } from "../lib/utils";
 
@@ -12,6 +13,14 @@ export interface Column<T> {
   className?: string;
   sortable?: boolean;
   sortValue?: (row: T) => string | number | Date | null | undefined;
+  /**
+   * Habilita el embudo de filtro (estilo Excel) en el encabezado de la columna.
+   * Devuelve el texto por el que se filtra, que tiene que ser LO QUE SE VE en la
+   * celda: la lista del panel es esa columna leída por el usuario, no el valor
+   * interno. Sin esto la columna no lleva embudo, que es lo correcto para
+   * fechas, montos y textos únicos por fila (tildar 300 valores no filtra nada).
+   */
+  filterValue?: (row: T) => string;
   // Ancho fijo de la columna (ej. "180px", "20%"). Solo tiene efecto con
   // layoutFixed (table-fixed): evita que el ancho cambie según el contenido.
   width?: string;
@@ -116,7 +125,33 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
     if (fromUrlDir !== sortDirection) setSortDirection(fromUrlDir);
   }, [searchParams, sortDirection, sortKey, validSortKeys]);
 
+  // ── Filtro por columna (embudo del encabezado) ──────────────────────────────
+  // Sólo las columnas que declaran `filterValue`. Filtra ANTES de ordenar y de
+  // agrupar, así el orden y los contadores de grupo hablan de lo que se ve.
+  const applySort = React.useCallback((key: string | null, dir: "asc" | "desc") => {
+    const params = new URLSearchParams(searchParams);
+    setSortKey(key);
+    setSortDirection(dir);
+    if (key) { params.set("sort", key); params.set("dir", dir); }
+    else { params.delete("sort"); params.delete("dir"); }
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const filterSpecs = useMemo<ColumnFilterSpec<T>[]>(
+    () => columns
+      .filter(col => !!col.filterValue)
+      .map(col => ({ key: col.key, label: col.header, value: col.filterValue! })),
+    [columns],
+  );
+  const colFilters = useColumnFilters(data ?? [], filterSpecs, {
+    key: sortKey,
+    dir: sortDirection,
+    onSort: (key, dir) => { onSortUngroup?.(); applySort(key, dir); },
+  });
+  const filteredData = data ? colFilters.rows : null;
+
   const sortedData = useMemo(() => {
+    const data = filteredData;
     if (!data) return null;
     if (!sortKey) return data;
 
@@ -160,14 +195,14 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
         return a.index - b.index;
       })
       .map(item => item.row);
-  }, [columns, data, sortDirection, sortKey]);
+  }, [columns, filteredData, sortDirection, sortKey]);
 
   // Con groupBy activo, el orden lo define la agrupación (grupos + sortRows),
   // no el orden por columna. Partimos de `data` (sin ordenar por columna).
   const groups = useMemo(() => {
-    if (!groupBy || !data) return null;
+    if (!groupBy || !filteredData) return null;
     const map = new Map<string, { key: string; label: string; rows: T[] }>();
-    for (const row of data) {
+    for (const row of filteredData) {
       const gk = groupBy.keyFn(row);
       let g = map.get(gk);
       if (!g) { g = { key: gk, label: groupBy.labelFn(row), rows: [] }; map.set(gk, g); }
@@ -181,7 +216,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
         : a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }),
     );
     return arr;
-  }, [groupBy, data]);
+  }, [groupBy, filteredData]);
 
   // sortingEnabled: si el orden por columna se APLICA (y se muestra la flecha
   // activa). Con groupBy manda la agrupación.
@@ -238,9 +273,16 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
   );
 
   if (!sortedData || sortedData.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-20 text-fg/20 gap-3">
-      <SearchX className="w-8 h-8" />
-      <p className="text-sm">{emptyText}</p>
+    <div className="space-y-2">
+      {colFilters.bar}
+      <div className="flex flex-col items-center justify-center py-20 text-fg/20 gap-3">
+        <SearchX className="w-8 h-8" />
+        {/* Vacío por el filtro de columna ≠ vacío porque no hay registros. */}
+        {colFilters.anyActive
+          ? <div className="text-sm text-fg/50"><ColumnFilterEmpty onClear={colFilters.clearAll} /></div>
+          : <p className="text-sm">{emptyText}</p>}
+      </div>
+      {colFilters.overlay}
     </div>
   );
 
@@ -253,17 +295,11 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
     const footCols  = visible.filter(col => !col.mobileTitle && !col.header.trim());
     const sortOptions = columns.filter(headerSortable);
 
-    const applySort = (key: string | null, dir: "asc" | "desc") => {
-      const params = new URLSearchParams(searchParams);
-      setSortKey(key);
-      setSortDirection(dir);
-      if (key) { params.set("sort", key); params.set("dir", dir); }
-      else { params.delete("sort"); params.delete("dir"); }
-      setSearchParams(params, { replace: true });
-    };
-
     return (
       <div className="space-y-2">
+        {/* En el celular no hay encabezados donde poner el embudo, pero si la
+            tabla viene filtrada desde el escritorio hay que poder verlo y sacarlo. */}
+        {colFilters.bar}
         {sortOptions.length > 0 && (
           <div className="flex items-center gap-2 text-xs text-fg/50">
             <span className="shrink-0">{t("common.sortBy")}</span>
@@ -315,11 +351,14 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
             ))}
           </div>
         ))}
+        {colFilters.overlay}
       </div>
     );
   }
 
   return (
+    <div className="space-y-2">
+    {colFilters.bar}
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className={`w-full text-sm ${layoutFixed ? "table-fixed" : ""}`}>
         {layoutFixed && (
@@ -343,6 +382,7 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
                   {headerSortable(col) && (!sortingEnabled || sortKey !== col.key) && <ChevronsUpDown className="w-3 h-3 opacity-50" />}
                   {headerSortable(col) && sortingEnabled && sortKey === col.key && sortDirection === "asc" && <ChevronUp className="w-3 h-3 text-accent" />}
                   {headerSortable(col) && sortingEnabled && sortKey === col.key && sortDirection === "desc" && <ChevronDown className="w-3 h-3 text-accent" />}
+                  {col.filterValue && colFilters.funnel(col.key)}
                 </span>
               </th>
             ))}
@@ -408,6 +448,8 @@ export function DataTable<T>({ columns, data, loading, error, keyFn, emptyText =
               ))}
         </tbody>
       </table>
+    </div>
+    {colFilters.overlay}
     </div>
   );
 }

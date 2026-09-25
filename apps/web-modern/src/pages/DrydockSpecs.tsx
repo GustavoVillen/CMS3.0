@@ -1120,7 +1120,7 @@ export const DrydockSpecsPage: React.FC = () => {
         </div>
       ),
     },
-    { key: "shipyardName", header: t("dds.v26.col.yard"), sortValue: r => r.shipyardName ?? "", render: r => <div><div className="text-xs text-fg">{r.shipyardName ?? "—"}</div><div className="text-[10.5px] text-text-industrial/50">{r.port ?? ""}</div></div> },
+    { key: "shipyardName", header: t("dds.v26.col.yard"), sortValue: r => r.shipyardName ?? "", filterValue: r => r.shipyardName ?? "", render: r => <div><div className="text-xs text-fg">{r.shipyardName ?? "—"}</div><div className="text-[10.5px] text-text-industrial/50">{r.port ?? ""}</div></div> },
     {
       key: "plannedStartDate", header: t("dds.v26.col.start"), sortValue: r => r.plannedStartDate ?? "",
       render: r => {
@@ -1145,7 +1145,7 @@ export const DrydockSpecsPage: React.FC = () => {
         );
       },
     },
-    { key: "status", header: t("dds.v26.col.stage"), render: r => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${STATUS_CHIP[r.status] ?? ""}`}>{t(`dds.status.${r.status}` as TranslationKey)}</span> },
+    { key: "status", header: t("dds.v26.col.stage"), filterValue: r => t(`dds.status.${r.status}` as TranslationKey), render: r => <span className={`inline-block whitespace-nowrap rounded-lg border px-2 py-0.5 text-[10.5px] font-extrabold ${STATUS_CHIP[r.status] ?? ""}`}>{t(`dds.status.${r.status}` as TranslationKey)}</span> },
     { key: "action", header: "", render: rowAction },
   ];
 

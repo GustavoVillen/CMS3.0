@@ -13,7 +13,7 @@ import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { VesselLabel } from "../components/EntityLabels";
+import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -647,11 +647,13 @@ export const MonthlyReportsPage: React.FC = () => {
   const { data, loading, reload } = useFetch<ListResponse>(url, [url]);
   const items = data?.items ?? [];
 
+  const vesselName = useVesselName();
+
   const COLUMNS: Column<MonthlyReport>[] = [
     { key: "period", header: "Período",   render: r => <span className="font-bold text-xs text-fg">{fmtMonth(r.reportYear, r.reportMonth)}</span> },
-    { key: "vesselCode", header: "Vessel", render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
-    { key: "status",     header: "Estado", render: r => <StatusBadge status={r.status} /> },
-    { key: "currentPort",header: "Puerto", render: r => <span className="text-xs">{r.currentPort ?? "—"}</span> },
+    { key: "vesselCode", header: "Vessel", filterValue: r => vesselName(r.vesselCode), render: r => <VesselLabel code={r.vesselCode} className="text-xs" showCode /> },
+    { key: "status",     header: "Estado", filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
+    { key: "currentPort",header: "Puerto", filterValue: r => r.currentPort ?? "", render: r => <span className="text-xs">{r.currentPort ?? "—"}</span> },
     { key: "submittedAt",header: "Enviado", render: r => <span className="text-[11px] text-emerald-700 dark:text-emerald-400">{fmtDate(r.submittedAt)}</span> },
     { key: "createdAt",  header: "Creado", render: r => <span className="text-[11px] text-fg/40">{fmtDate(r.createdAt)}</span> },
   ];

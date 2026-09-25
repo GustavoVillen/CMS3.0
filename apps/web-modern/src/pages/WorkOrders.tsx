@@ -294,23 +294,52 @@ function CategoryBadge({ type, short = false }: { type: string; short?: boolean 
 
 // ── WoStatusBadge ─────────────────────────────────────────────────────────────
 
-function WoStatusBadge({ status, dueDate, deferralStatus, toNextDrydock }: { status: string; dueDate: string | null; deferralStatus?: string | null; toNextDrydock?: boolean }) {
-  const t = useT();
-  const isClosed = status === "CLOSED" || status === "CANCELLED";
-  const isOpen   = !isClosed;
-  const isOverdue = isOpen && !!dueDate && parseLocalDate(dueDate) < new Date();
-  if (isClosed)          return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-fg/5 text-text-industrial/50 border-fg/10">{t("wo.status.closed")}</span>;
+// Qué estado se le muestra a la OT. Sale del status más el vencimiento y el
+// diferimiento, así que se calcula en un solo lugar: el cartel de la fila y el
+// filtro de la columna tienen que decir exactamente lo mismo.
+type WoStatusKind = "closed" | "postponedRejected" | "postponedDrydock" | "postponed" | "overdue" | "inProgress" | "planned" | "open";
+
+function woStatusKind(status: string, dueDate: string | null, deferralStatus?: string | null, toNextDrydock?: boolean): WoStatusKind {
+  if (status === "CLOSED" || status === "CANCELLED") return "closed";
   if (status === "ON_HOLD") {
-    if (deferralStatus === "REJECTED") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("wo.status.postponedRejected")}</span>;
+    if (deferralStatus === "REJECTED") return "postponedRejected";
     // Diferida a varada no es lo mismo que diferida un par de semanas: el
     // trabajo salió del alcance de a bordo.
-    if (toNextDrydock) return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20">{t("wo.status.postponedDrydock")}</span>;
-    return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20">{t("wo.status.postponed")}</span>;
+    if (toNextDrydock) return "postponedDrydock";
+    return "postponed";
   }
-  if (isOverdue)         return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{t("wo.status.overdue")}</span>;
-  if (status === "IN_PROGRESS") return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">En Progreso</span>;
-  if (status === "PLANNED")     return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">Planificada</span>;
-  return <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{t("wo.status.open")}</span>;
+  if (dueDate && parseLocalDate(dueDate) < new Date()) return "overdue";
+  if (status === "IN_PROGRESS") return "inProgress";
+  if (status === "PLANNED") return "planned";
+  return "open";
+}
+
+const WO_STATUS_CLS: Record<WoStatusKind, string> = {
+  closed:            "bg-fg/5 text-text-industrial/50 border-fg/10",
+  postponedRejected: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  postponedDrydock:  "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20",
+  postponed:         "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  overdue:           "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  inProgress:        "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  planned:           "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  open:              "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
+};
+
+const WO_STATUS_KEY: Record<WoStatusKind, TranslationKey> = {
+  closed:            "wo.status.closed",
+  postponedRejected: "wo.status.postponedRejected",
+  postponedDrydock:  "wo.status.postponedDrydock",
+  postponed:         "wo.status.postponed",
+  overdue:           "wo.status.overdue",
+  inProgress:        "wo.status.inProgress",
+  planned:           "wo.status.planned",
+  open:              "wo.status.open",
+};
+
+function WoStatusBadge({ status, dueDate, deferralStatus, toNextDrydock }: { status: string; dueDate: string | null; deferralStatus?: string | null; toNextDrydock?: boolean }) {
+  const t = useT();
+  const kind = woStatusKind(status, dueDate, deferralStatus, toNextDrydock);
+  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold ${WO_STATUS_CLS[kind]}`}>{t(WO_STATUS_KEY[kind])}</span>;
 }
 
 // ── HoldModal ─────────────────────────────────────────────────────────────────
@@ -4705,19 +4734,28 @@ function DeferralStatusBadge({ status }: { status: string }) {
 
 // Etapa de tramitación (Solicitada / Aprobada / Autorizada / Diferida) para el listado.
 // Reutiliza woStage(); las OT cerradas/canceladas (HIDDEN) no muestran etapa.
+// La etapa se dibuja en la fila y también alimenta el filtro de esa columna:
+// el texto sale de un solo lado para que digan lo mismo.
+const WO_STAGE_KEY: Record<Exclude<WoStage, "HIDDEN">, TranslationKey> = {
+  EN_PREPARACION: "wo.kanban.enPreparacion",
+  SOLICITADA:     "wo.kanban.solicitada",
+  APROBADA:       "wo.kanban.aprobada",
+  AUTORIZADA:     "wo.kanban.autorizada",
+  DIFERIDA:       "wo.kanban.onHold",
+};
+
 function WoStageBadge({ wo }: { wo: WorkOrder }) {
   const t = useT();
   const stage = woStage(wo);
   if (stage === "HIDDEN") return <span className="text-xs text-text-industrial/30">—</span>;
-  const map: Record<Exclude<WoStage, "HIDDEN">, { label: string; cls: string }> = {
-    EN_PREPARACION: { label: t("wo.kanban.enPreparacion"), cls: "bg-fg/5 text-text-industrial/60 border-fg/15" },
-    SOLICITADA: { label: t("wo.kanban.solicitada"), cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
-    APROBADA:   { label: t("wo.kanban.aprobada"),   cls: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30" },
-    AUTORIZADA: { label: t("wo.kanban.autorizada"), cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
-    DIFERIDA:   { label: t("wo.kanban.onHold"),     cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/30" },
+  const cls: Record<Exclude<WoStage, "HIDDEN">, string> = {
+    EN_PREPARACION: "bg-fg/5 text-text-industrial/60 border-fg/15",
+    SOLICITADA: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30",
+    APROBADA:   "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
+    AUTORIZADA: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+    DIFERIDA:   "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/30",
   };
-  const meta = map[stage];
-  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${meta.cls}`}>{meta.label}</span>;
+  return <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${cls[stage]}`}>{t(WO_STAGE_KEY[stage])}</span>;
 }
 
 /** SS mostrada dentro de la tarjeta de la OT (sólo lo que entra en una línea). */
@@ -5716,13 +5754,14 @@ export const WorkOrdersPage: React.FC = () => {
         );
       },
     },
-    { key: "type",   header: t("wo.col.category"),   render: r => <CategoryBadge type={r.type} /> },
+    { key: "type",   header: t("wo.col.category"),   filterValue: r => t(`wo.type.${r.type === "INSPECTION" ? "inspection" : r.type === "CORRECTIVE" ? "corrective" : "preventive"}` as TranslationKey), render: r => <CategoryBadge type={r.type} /> },
     {
       key: "priority", header: t("wo.col.priority"),
       sortValue: r => ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>)[r.priority] ?? 9,
+      filterValue: r => t(`wo.prioShort.${r.priority}` as TranslationKey),
       render: r => <WoPriorityChip priority={r.priority} />,
     },
-    { key: "assignedToUserId", header: t("wo.col.assignee"), sortValue: r => r.assignedToUserName ?? r.assignedToUserId ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? "—"}</span> },
+    { key: "assignedToUserId", header: t("wo.col.assignee"), sortValue: r => r.assignedToUserName ?? r.assignedToUserId ?? "", filterValue: r => r.assignedToUserName ?? "", render: r => <span className="text-xs text-text-industrial/70">{r.assignedToUserName ?? "—"}</span> },
     {
       key: "dueDate", header: t("wo.col.dueDate"),
       sortValue: r => r.dueDate ?? "",
@@ -5731,6 +5770,7 @@ export const WorkOrdersPage: React.FC = () => {
     {
       key: "stage", header: t("wo.col.stage"),
       sortValue: r => woStage(r),
+      filterValue: r => { const st = woStage(r); return st === "HIDDEN" ? "" : t(WO_STAGE_KEY[st]); },
       render: r => (
         <div className="flex flex-col items-start gap-1">
           <WoStageBadge wo={r} />
@@ -5742,6 +5782,10 @@ export const WorkOrdersPage: React.FC = () => {
     },
     {
       key: "status", header: t("wo.col.status"),
+      filterValue: r => {
+        const d = r.status === "ON_HOLD" ? deferralMap.get(r.id) : undefined;
+        return t(WO_STATUS_KEY[woStatusKind(r.status, r.dueDate, d?.status, d?.toNextDrydock)]);
+      },
       render: r => {
         const deferral = r.status === "ON_HOLD" ? deferralMap.get(r.id) : undefined;
         return (
