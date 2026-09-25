@@ -626,14 +626,16 @@ export function MaintenanceSheetPage() {
                           </td>
                         )}
 
-                        {/* La tarea lleva a la ficha de ESE plan (mismo deep-link
-                            que usa el Gantt). */}
+                        {/* La tarea TILDA el selector de su fila: en la planilla
+                            se marca lo que va a OT, no se navega. La ficha del
+                            plan se sigue abriendo desde la celda del equipo. */}
                         <td className={tdLast + " p-0"}>
                           <button
                             type="button"
-                            onClick={() => navigate(`/maintenance-plans?openId=${encodeURIComponent(p.id)}`)}
-                            title={`${p.taskCode} · ${t("msheet.openPlan")}`}
-                            className="w-full px-2 py-0.5 text-left hover:underline underline-offset-2 cursor-pointer"
+                            onClick={() => toggle(p.id)}
+                            disabled={!selectable}
+                            title={selectable ? `${p.taskCode} · ${t("msheet.markForWo")}` : p.taskCode}
+                            className="w-full px-2 py-0.5 text-left cursor-pointer disabled:cursor-default"
                           >
                             {p.title}
                           </button>
