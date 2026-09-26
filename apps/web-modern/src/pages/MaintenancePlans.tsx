@@ -1479,6 +1479,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [labFormOpen, setLabFormOpen] = useState(false);
   const [labPickId, setLabPickId] = useState("");
   const [labPickPurpose, setLabPickPurpose] = useState("");
+  const [highlightLab, setHighlightLab] = useState(false);
 
   // Proveedores del tenant, para cuando el área es PROVEEDOR (o se elige el laboratorio).
   useEffect(() => {
@@ -2448,7 +2449,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
               ))}
               <span className="block text-[11.5px] text-text-industrial/60">{t("mp.samp.labOkHint")}</span>
             </span>
-            <button type="button" onClick={() => goToSection("who")}
+            <button type="button" onClick={() => { goToSection("who"); setHighlightLab(true); window.setTimeout(() => setHighlightLab(false), 3000); }}
               className="ml-auto inline-flex items-center gap-1 rounded-lg border border-fg/10 px-2.5 py-1 text-xs font-bold text-fg hover:border-fg/25">
               <Pencil className="w-3 h-3" /> {t("mp.samp.labChange")}
             </button>
@@ -3064,7 +3065,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                           fila. La aclaración es obligatoria (se valida al guardar). Un mismo
                           proveedor puede repetirse (dos trabajos distintos = dos SS). */}
                       {department === "PROVEEDOR" && (
-                        <div className="space-y-2 pt-1">
+                        <div className={`space-y-2 pt-1 rounded-xl transition-all duration-500 ${highlightLab ? "border-2 border-violet-500/50 bg-violet-500/[0.06] px-3 pb-2" : ""}`}>
                           <p className="text-[11px] text-text-industrial/50">{t("mp.f.providersHint")}</p>
                           {providerRequests.map((row, i) => (
                             <div key={i} className={`flex items-start gap-2 ${row.providerId && !row.purpose.trim() && !readOnly ? "rounded-xl border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10 px-2 py-1.5" : ""}`}>
