@@ -28,7 +28,6 @@
 // Acá no hay reglas de negocio propias y no debería agregarse ninguna.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ClipboardCheck, Hammer, Handshake, Loader2, Pause, Pencil, Search } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
@@ -104,7 +103,7 @@ interface Row extends PendingItem {
 }
 
 /** La ventana abierta desde las columnas de ejecución. */
-type ExecWindow = { kind: "progress" | "spares" | "close" | "route" | "closeSr"; row: Row };
+type ExecWindow = { kind: "progress" | "spares" | "close" | "route" | "closeSr" | "record" | "recordSr"; row: Row };
 
 /** Tarjeta de arriba que filtra la planilla. */
 type CardKey = "overdue" | "mine" | "woInProgress" | "srInProgress" | "postponed";
@@ -158,7 +157,6 @@ const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
 
 export const ApprovalsPage: React.FC = () => {
   const t = useT();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending");
 
@@ -427,10 +425,10 @@ export const ApprovalsPage: React.FC = () => {
   }, [t]);
 
   /** Ir a la ficha del registro (el número de OT o SS es un enlace). */
-  const openRecord = (r: Row) => {
-    if (r.kind === "WO") navigate(`/work-orders/${encodeURIComponent(r.code)}`);
-    else navigate(`/service-requests?openId=${encodeURIComponent(r.id)}`);
-  };
+  // La ficha se abre encima de Seguimiento, sin pasar por la pantalla de OT o
+  // de SS (pedido del usuario): es la misma ventana de "Cerrar OT / SS", pero
+  // parada al principio.
+  const openRecord = (r: Row) => setExec({ kind: r.kind === "WO" ? "record" : "recordSr", row: r });
 
   // ─── Estilos de la planilla de papel ───────────────────────────────────────
   // Encabezado sólido a propósito: es sticky y con fondo translúcido las filas
@@ -903,14 +901,14 @@ export const ApprovalsPage: React.FC = () => {
             onClose={() => { setExec(null); if (progressDirty) void reload(); }}
           />
         )}
-        {exec?.kind === "close" && (
+        {(exec?.kind === "close" || exec?.kind === "record") && (
           <WorkOrderPopup
             workOrderId={exec.row.id}
-            focusClose
+            focusClose={exec.kind === "close"}
             onClose={() => { void afterRecord(exec.row); }}
           />
         )}
-        {exec?.kind === "closeSr" && (
+        {(exec?.kind === "closeSr" || exec?.kind === "recordSr") && (
           <ServiceRequestPopup
             serviceRequestId={exec.row.id}
             onClose={() => { void afterRecord(exec.row); }}
