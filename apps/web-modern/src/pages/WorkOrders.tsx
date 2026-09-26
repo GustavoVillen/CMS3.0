@@ -13,6 +13,7 @@ import { AssigneeSelect } from "../components/AssigneeSelect";
 import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate, parseLocalDate } from "../lib/utils";
+import { woStage, woViewFilter, type WoStage } from "../lib/wo-view";
 import { PageHeader } from "../components/PageHeader";
 import { BlankFormButton } from "../components/BlankFormButton";
 import { ExcelPanel } from "../components/ExcelPanel";
@@ -4706,22 +4707,8 @@ const PRIORITY_LEFT_CLS: Record<string, string> = {
   LOW:      "border-l-4 border-l-emerald-500",
 };
 
-// ── Tramitación: etapa derivada de la cadena de aprobación + estado diferido ──
-// Los identificadores internos se conservan (SOLICITADA/APROBADA/AUTORIZADA)
-// aunque las etiquetas visibles ahora digan "Pendiente de aprobación" /
-// "Pendiente de autorización" / "Autorizada y en proceso": renombrarlos
-// obligaría a tocar el arrastre, los filtros, el móvil y los badges sin ganar
-// nada. El texto sale de i18n (wo.kanban.*).
-type WoStage = "EN_PREPARACION" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "DIFERIDA" | "HIDDEN";
-function woStage(wo: WorkOrder): WoStage {
-  if (wo.status === "CLOSED" || wo.status === "CANCELLED") return "HIDDEN"; // no van al tablero
-  if (wo.status === "ON_HOLD") return "DIFERIDA";
-  if (wo.autorizadoAt) return "AUTORIZADA";
-  if (wo.aprobadoAt) return "APROBADA";
-  // Sin enviar a aprobar todavía: la está completando quien la abrió.
-  if (!wo.enviadoAprobacionAt) return "EN_PREPARACION";
-  return "SOLICITADA";
-}
+// La etapa de tramitación (woStage) vive en lib/wo-view.ts: Aprobaciones
+// cuenta con los mismos criterios.
 
 const KANBAN_COLS: Array<{ colId: WoStage; labelKey: TranslationKey; headerCls: string; borderCls: string; droppable: boolean }> = [
   { colId: "EN_PREPARACION", labelKey: "wo.kanban.enPreparacion", headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20",         droppable: true  },
@@ -5686,37 +5673,9 @@ export const WorkOrdersPage: React.FC = () => {
   const canAuthorizeList = canList("wo.authorize");
 
   /** Mismos criterios que tenían los chips de la lista (y los enlaces del Dashboard). */
-  const applyViewKey = useCallback((items: WorkOrder[], key: string): WorkOrder[] => {
-    const now = new Date();
-    const CLOSED = new Set(["CLOSED", "CANCELLED"]);
-    const overdue = (w: WorkOrder) => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < now;
-    switch (key) {
-      case "closed":            return items.filter(w => CLOSED.has(w.status));
-      case "postponed":         return items.filter(w => w.status === "ON_HOLD");
-      case "postponedRejected": return items.filter(w => w.status === "ON_HOLD" && deferralMap.get(w.id)?.status === "REJECTED");
-      case "postponedPending":  return items.filter(w => {
-        if (w.status !== "ON_HOLD") return false;
-        const s = deferralMap.get(w.id)?.status;
-        return s === "REQUESTED" || s === "UNDER_REVIEW";
-      });
-      // Pendientes de tramitación: mismas etapas que las columnas del tablero.
-      case "toApprove":         return items.filter(w => woStage(w) === "SOLICITADA");
-      case "toAuthorize":       return items.filter(w => woStage(w) === "APROBADA");
-      // "en proceso" gana sobre la etapa de firma, igual que la etiqueta de la tarjeta.
-      case "inProgress":        return items.filter(w => w.status === "IN_PROGRESS");
-      case "authorized":        return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "AUTORIZADA");
-      case "inPreparation":     return items.filter(w => w.status !== "IN_PROGRESS" && woStage(w) === "EN_PREPARACION");
-      case "overdue":           return items.filter(overdue);
-      case "open":              return items.filter(w => !CLOSED.has(w.status) && w.status !== "ON_HOLD" && !overdue(w));
-      // Tarjeta "Esperando mi firma" / "Asignadas a mí": sale de los permisos y
-      // del responsable de cada OT (el backend ya los tiene; nada nuevo).
-      case "mine":
-        return canApproveList || canAuthorizeList
-          ? items.filter(w => (canApproveList && woStage(w) === "SOLICITADA") || (canAuthorizeList && woStage(w) === "APROBADA"))
-          : items.filter(w => !CLOSED.has(w.status) && !!user && w.assignedToUserId === user.id);
-      default:                  return items;
-    }
-  }, [deferralMap, canApproveList, canAuthorizeList, user]);
+  const applyViewKey = useCallback((items: WorkOrder[], key: string): WorkOrder[] =>
+    woViewFilter(items, key, { deferralMap, canApprove: canApproveList, canAuthorize: canAuthorizeList, userId: user?.id ?? null }),
+  [deferralMap, canApproveList, canAuthorizeList, user]);
 
   const isOverdueWo = (w: WorkOrder) =>
     w.status !== "CLOSED" && w.status !== "CANCELLED" && w.status !== "ON_HOLD" && !!w.dueDate && parseLocalDate(w.dueDate) < new Date();

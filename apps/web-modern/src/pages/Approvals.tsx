@@ -29,7 +29,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, Loader2, Search } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Hammer, Loader2, Pause, Pencil, Search, Send } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -39,7 +39,8 @@ import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
 import { api, ApiError } from "../lib/api";
 import { downloadDocx } from "../lib/download-docx";
 import { useFetch } from "../lib/hooks";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
+import { woViewFilter, type WoViewItem } from "../lib/wo-view";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 
@@ -156,6 +157,26 @@ export const ApprovalsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending");
+
+  // Tarjetas de arriba: las mismas de Órdenes de Trabajo, contadas sobre la
+  // misma lista y con los mismos criterios (lib/wo-view.ts).
+  const { data: wos, reload: reloadWos } = useFetch<{ items: WoViewItem[] }>("/app/pms/work-orders");
+  const canList = useCan();
+  const canApproveWo = canList("wo.approve");
+  const canAuthorizeWo = canList("wo.authorize");
+  const woCards = useMemo(() => {
+    const items = wos?.items ?? [];
+    const ctx = { canApprove: canApproveWo, canAuthorize: canAuthorizeWo, userId: user?.id ?? null };
+    const n = (key: string) => (wos ? woViewFilter(items, key, ctx).length : null);
+    const signs = canApproveWo || canAuthorizeWo;
+    return [
+      { key: "overdue",       n: n("overdue"),       label: t("wo.sum.overdue"),    hint: t("wo.sum.overdueHint"),    icon: AlertTriangle, cls: "border-l-red-600",     num: "text-red-700 dark:text-red-400" },
+      { key: "mine",          n: n("mine"),          label: t(signs ? "wo.sum.mySign" : "wo.sum.mine"), hint: t(signs ? "wo.sum.mySignHint" : "wo.sum.mineHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
+      { key: "inPreparation", n: n("inPreparation"), label: t("wo.sum.notSent"),    hint: t("wo.sum.notSentHint"),    icon: Send,          cls: "border-l-amber-500",   num: "text-amber-700 dark:text-amber-400" },
+      { key: "inProgress",    n: n("inProgress"),    label: t("wo.sum.inProgress"), hint: t("wo.sum.inProgressHint"), icon: Hammer,        cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+      { key: "postponed",     n: n("postponed"),     label: t("wo.sum.deferred"),   hint: t("wo.sum.deferredHint"),   icon: Pause,         cls: "border-l-yellow-600",  num: "text-yellow-700 dark:text-yellow-400" },
+    ];
+  }, [wos, canApproveWo, canAuthorizeWo, user, t]);
 
   const [query, setQuery]     = useState("");
   const [alert, setAlert]     = useState<string | null>(null);
@@ -305,6 +326,7 @@ export const ApprovalsPage: React.FC = () => {
   // cambia de lugar o se va).
   const afterRecord = useCallback(async (r: Row) => {
     setExec(null);
+    void reloadWos();
     try {
       const url = r.kind === "WO" ? `/app/pms/work-orders/${r.id}` : `/app/pms/service-requests/${r.id}`;
       const rec = await api.get<{ status: string }>(url);
@@ -314,7 +336,7 @@ export const ApprovalsPage: React.FC = () => {
       }
     } catch { /* si no se pudo leer, la recarga lo resuelve */ }
     void reload();
-  }, [reload]);
+  }, [reload, reloadWos]);
 
   // ─── Enviar la SS al proveedor ─────────────────────────────────────────────
   // Mismo camino que el botón de la ficha de la SS: el backend manda el correo
@@ -560,7 +582,7 @@ export const ApprovalsPage: React.FC = () => {
         icon={ClipboardCheck}
         title={t("nav.approvals")}
         total={visible.length}
-        onReload={reload}
+        onReload={() => { void reload(); void reloadWos(); }}
       >
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-fg/30" />
@@ -573,6 +595,23 @@ export const ApprovalsPage: React.FC = () => {
         </div>
       </PageHeader>
 
+      {/* Las tarjetas de Órdenes de Trabajo en versión finita (pedido del
+          usuario). Lo que cuentan no siempre está en esta planilla (las en
+          preparación, las diferidas), así que cada una abre la lista de OT ya
+          filtrada; la explicación queda en el globito. */}
+      <div className="flex flex-wrap gap-2">
+        {woCards.map(c => (
+          <button key={c.key} type="button" title={c.hint}
+            onClick={() => navigate(`/work-orders?view=${c.key}`)}
+            className={`flex items-center gap-2 rounded-xl border-[1.5px] border-l-4 border-fg/10 bg-surface px-3 py-1 text-left transition-all hover:border-fg/25 ${c.cls}`}>
+            <span className={`min-w-[1.25rem] text-lg font-extrabold leading-tight ${c.num}`}>{c.n ?? "–"}</span>
+            <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70 whitespace-nowrap">
+              <c.icon className="w-3.5 h-3.5" />{c.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Con qué nombre se firma. Va a la vista porque es el que se imprime en
           el PDF de la OT: el usuario tiene que saberlo ANTES de tocar el botón. */}
       <p className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/8 border border-accent/25 text-xs text-fg/80">
@@ -581,7 +620,7 @@ export const ApprovalsPage: React.FC = () => {
       </p>
 
       <div className="glass rounded-2xl overflow-hidden">
-        <div className="overflow-auto max-h-[calc(100vh-18rem)] [scrollbar-gutter:stable]">
+        <div className="overflow-auto max-h-[calc(100vh-21rem)] [scrollbar-gutter:stable]">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
               <col className="w-[40px]" /><col className="w-[130px]" /><col />
