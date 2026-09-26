@@ -674,15 +674,8 @@ export const ApprovalsPage: React.FC = () => {
         })}
       </div>
 
-      {/* Con qué nombre se firma. Va a la vista porque es el que se imprime en
-          el PDF de la OT: el usuario tiene que saberlo ANTES de tocar el botón. */}
-      <p className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/8 border border-accent/25 text-xs text-fg/80">
-        <ClipboardCheck className="w-3.5 h-3.5 text-accent shrink-0" />
-        <span>{t("approvals.signsAsNotice").replace("{name}", signerName || "—")}</span>
-      </p>
-
       <div className="glass rounded-2xl overflow-hidden">
-        <div className="overflow-auto max-h-[calc(100vh-21rem)] [scrollbar-gutter:stable]">
+        <div className="overflow-auto max-h-[calc(100vh-14rem)] [scrollbar-gutter:stable]">
           {/* Tarea con un cuarto del ancho (pedido del usuario: más corta) y
               las seis columnas de botones se reparten el resto en partes
               iguales. Por debajo de 1150 px aparece la barra horizontal en vez
@@ -849,25 +842,6 @@ export const ApprovalsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Qué significa cada botón: el estado no puede depender sólo del color. */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 glass rounded-2xl text-[11px] font-semibold text-fg/50">
-        <span className="text-fg font-bold">{t("approvals.legend.title")}</span>
-        {([
-          ["bg-surface border-accent text-accent",   "approvals.action.approve",   "approvals.legend.canSign"],
-          ["bg-success/90 border-success text-white", "approvals.signed.approved", "approvals.legend.done"],
-          ["border-dashed border-fg/20 text-fg/35",  "approvals.action.authorize", "approvals.legend.waiting"],
-          ["border-fg/15 text-fg/30",                "approvals.action.authorize", "approvals.legend.noPerm"],
-        ] as const).map(([cls, sample, key]) => (
-          <span key={key} className="flex items-center gap-1.5">
-            <span className={`px-2 py-0.5 rounded-md border-[1.5px] text-[9.5px] font-extrabold ${cls}`}>
-              {t(sample as TranslationKey)}
-            </span>
-            {t(key as TranslationKey)}
-          </span>
-        ))}
-        <span className="ml-auto">{t("approvals.legend.rows")}</span>
       </div>
 
       {(alert ?? (error && !errorSeen ? t("approvals.loadError") : null)) && (
