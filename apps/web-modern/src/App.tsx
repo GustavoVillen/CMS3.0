@@ -72,6 +72,7 @@ const DrydockSpecsPage = React.lazy(() => import("./pages/DrydockSpecs").then(m 
 // const CapaPage = React.lazy(() => import("./pages/Capa").then(m => ({ default: m.CapaPage })));
 const SpareRequestsPage = React.lazy(() => import("./pages/SpareRequests").then(m => ({ default: m.SpareRequestsPage })));
 const ServiceRequestsPage = React.lazy(() => import("./pages/ServiceRequests").then(m => ({ default: m.ServiceRequestsPage })));
+const ApprovalsPage = React.lazy(() => import("./pages/Approvals").then(m => ({ default: m.ApprovalsPage })));
 const SpareReceiptsPage = React.lazy(() => import("./pages/SpareReceipts").then(m => ({ default: m.SpareReceiptsPage })));
 const MonthlyReportsPage = React.lazy(() => import("./pages/MonthlyReports").then(m => ({ default: m.MonthlyReportsPage })));
 const ProvidersPage = React.lazy(() => import("./pages/Providers").then(m => ({ default: m.ProvidersPage })));
@@ -290,6 +291,7 @@ export default function App() {
               <Route path="/spares"            element={<SparesPage />} />
               <Route path="/spare-requests"    element={<SpareRequestsPage />} />
               <Route path="/service-requests"  element={<ServiceRequestsPage />} />
+              <Route path="/approvals"         element={<ApprovalsPage />} />
               <Route path="/spare-receipts"    element={<SpareReceiptsPage />} />
               <Route path="/reports"           element={<MonthlyReportsPage />} />
               <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN"]}><TmsaPage /></RequireRole>} />

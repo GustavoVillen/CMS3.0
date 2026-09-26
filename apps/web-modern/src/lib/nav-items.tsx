@@ -85,6 +85,11 @@ export const NAV: NavSection[] = [
       // Va pegado a Órdenes de Trabajo porque cuelga de ellas: una SS sólo se
       // abre desde una OT abierta. Esta pantalla es la vista de seguimiento.
       { icon: Handshake,       labelKey: "nav.serviceRequests",  path: "/service-requests" },
+      // Bandeja de firmas de OT y SS con el formato de la Planilla a Bordo. Los
+      // roles listados son los que firman en la matriz de fábrica; el permiso
+      // real lo resuelve el backend, así que a quien no le toque le llega vacía.
+      { icon: ClipboardCheck,  labelKey: "nav.approvals",        path: "/approvals",
+        roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT", "MAINTENANCE_MANAGER"] },
       // DORMANTE — Reportes Diarios: reemplazado por "Medición de Tanques" (M2) a
       // pedido del usuario. La operación diaria (horómetros, consumos) ahora se
       // carga en el M2, y sus horómetros avanzan los planes de mantenimiento al

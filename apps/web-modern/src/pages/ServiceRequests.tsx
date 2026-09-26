@@ -267,6 +267,10 @@ const isLongInShop = (sr: ServiceRequest) => sr.status === "IN_PROGRESS" && ssAg
 /** El taller tal como se muestra: el del catálogo o el "otro taller" escrito a mano. */
 const ssShopName = (sr: ServiceRequest) => sr.providerName?.trim() || sr.tallerNotes?.trim() || "";
 
+/** "Enviar a CONDOR S.A.C.I": el botón dice a quién sale; sin taller elegido, el genérico. */
+const sendProviderLabel = (t: (k: TranslationKey) => string, provider: string | null | undefined) =>
+  provider?.trim() ? t("ss.guide.sendProviderTo").replace("{provider}", provider.trim()) : t("ss.guide.sendProvider");
+
 /** Acción visible de una tarjeta/fila: el próximo paso de la SS (si el usuario puede darlo). */
 type SsCardAction = { label: string; icon: typeof Send; tone: "accent" | "green"; run: () => void } | null;
 
@@ -292,7 +296,7 @@ function SsActionButton({ action, compact = false }: { action: SsCardAction; com
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
       }`}>
-      <Icon className="w-3 h-3" /> {action.label}
+      <Icon className="w-3 h-3 shrink-0" /> <span className="truncate" title={action.label}>{action.label}</span>
     </button>
   );
 }
@@ -752,7 +756,7 @@ export function ServiceRequestsPage() {
     if (sr.status === "DRAFT" && canManage) return { label: t("wo.guide.send"), icon: Send, tone: "accent", run: () => setListApproval({ sr, step: "SOLICITA" }) };
     if (sr.status === "SOLICITADA" && canApprove) return { label: t("wo.guide.approve"), icon: Check, tone: "green", run: () => setListApproval({ sr, step: "APRUEBA" }) };
     if (sr.status === "APROBADA" && canAuthorize) return { label: t("wo.guide.authorize"), icon: ShieldCheck, tone: "green", run: () => setListApproval({ sr, step: "AUTORIZA" }) };
-    if (sr.status === "AUTORIZADA" && canManage) return { label: t("ss.guide.sendProvider"), icon: Truck, tone: "accent", run: () => setSelected(sr) };
+    if (sr.status === "AUTORIZADA" && canManage) return { label: sendProviderLabel(t, ssShopName(sr)), icon: Truck, tone: "accent", run: () => setSelected(sr) };
     if (sr.status === "IN_PROGRESS" && canManage) return { label: t("ss.guide.received"), icon: PackageCheck, tone: "green", run: () => setSelected(sr) };
     return null;
   }, [canManage, canApprove, canAuthorize, t]);
@@ -1299,6 +1303,42 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
   );
 }
 
+// ── La ficha de la SS abierta desde otra pantalla ────────────────────────────
+//
+// Aprobaciones cierra la SS ("Cerrar SS") sin mandar al usuario a Solicitudes de
+// Servicio. Es el mismo ServiceRequestModal: una SS en el taller abre con la
+// tarjeta de recepción arriba y su bloque desplegado, y el cierre pasa por la
+// misma recepción y la misma auditoría de IA. Ninguna regla propia.
+export function ServiceRequestPopup({ serviceRequestId, onClose }: {
+  serviceRequestId: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const { user } = useAuth();
+  const { data, error } = useFetch<ServiceRequest>(`/app/pms/service-requests/${serviceRequestId}`, [serviceRequestId]);
+  // Copia local: lo guardado se mezcla sin cerrar la ficha, como en la página.
+  const [sr, setSr] = useState<ServiceRequest | null>(null);
+  React.useEffect(() => { if (data) setSr(data); }, [data]);
+
+  if (error) return <AlertDialog message={t("ss.popup.loadError")} onClose={onClose} />;
+  if (!sr) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <Loader2 className="w-6 h-6 animate-spin text-white" />
+      </div>
+    );
+  }
+  return (
+    <ServiceRequestModal
+      sr={sr}
+      role={user?.role ?? ""}
+      onClose={onClose}
+      onChanged={onClose}
+      onSaved={updated => setSr(prev => (prev ? { ...prev, ...updated } : updated))}
+    />
+  );
+}
+
 /**
  * CANCELAR una SS. El pedido se da de baja pero el registro queda con su motivo:
  * es lo contrario de Eliminar. Sirve en cualquier estado vivo —incluso ya
@@ -1447,8 +1487,9 @@ function buildProviderEmailDraft(sr: ServiceRequest, vesselName: string): { subj
 }
 
 /** Abre el cliente de correo del usuario con el mail ya armado. No adjunta el
- *  archivo (ver PROVIDER_EMAIL): eso lo hace la persona a mano. */
-function openProviderEmailDraft(sr: ServiceRequest, vesselName: string) {
+ *  archivo (ver PROVIDER_EMAIL): eso lo hace la persona a mano. Exportada para
+ *  el "Enviar al proveedor" de Aprobaciones, que cae en el mismo envío a mano. */
+export function openProviderEmailDraft(sr: ServiceRequest, vesselName: string) {
   const { subject, body } = buildProviderEmailDraft(sr, vesselName);
   window.location.href = `mailto:${PROVIDER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
@@ -2156,7 +2197,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
       </p>
       {!providerLabel && <div className="flex flex-wrap gap-1.5">{chip({ key: "provider", label: t("ss.guide.chip.provider"), ok: false })}</div>}
       <button type="button" onClick={() => { void sendToProvider({}); }} disabled={busy} className={btnPrimary}>
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} {t("ss.guide.sendProvider")}
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} {sendProviderLabel(t, providerLabel)}
       </button>
     </div>
   ) : sr.status === "IN_PROGRESS" ? (

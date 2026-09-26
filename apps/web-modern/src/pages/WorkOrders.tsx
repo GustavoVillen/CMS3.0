@@ -774,7 +774,7 @@ const ProgressNoteRow: React.FC<{
   );
 };
 
-const ProgressNotesPanel: React.FC<{
+export const ProgressNotesPanel: React.FC<{
   workOrderId: string;
   canAdd: boolean;
   canDelete: boolean;
@@ -1058,9 +1058,14 @@ interface WorkOrderModalProps {
   autoOpenNewSs?: boolean;
   /** Se envió a aprobar: la página muestra la confirmación (este modal se cierra). */
   onSentToApprove?: (workOrderCode: string) => void;
+  /**
+   * Abrir la ficha ya parada en el cierre. Lo usa el botón "Cerrar OT" de
+   * Aprobaciones: el usuario viene a cerrarla, no a recorrer la ficha entera.
+   */
+  focusClose?: boolean;
 }
 
-const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted, autoOpenNewSs, onSentToApprove }) => {
+const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, onClose, onSaved, onOpenAction, onReload, onPlanExecuted, autoOpenNewSs, onSentToApprove, focusClose }) => {
   const t = useT();
   const woTerms = useWoTerms();
   const navigate = useNavigate();
@@ -3206,6 +3211,19 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       window.setTimeout(() => setFlashKey(null), 1600);
     }, 80);
   };
+  // Abierta con focusClose: se va al cierre una sola vez, al abrir. Con el
+  // formulario guiado es el mismo salto que el botón "Ir al cierre"; en la
+  // vista de siempre, la sección RESULTADO.
+  const focusedCloseRef = useRef(false);
+  useEffect(() => {
+    if (!focusClose || focusedCloseRef.current) return;
+    focusedCloseRef.current = true;
+    if (isMercurio) { goField("taskCompleted"); return; }
+    window.setTimeout(() => {
+      document.getElementById("wo-result-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusClose]);
   const sectionPill = (keys: string[]) => (
     <GuidePill missing={keys.filter(k => missingKeys.has(k)).length} completeLabel={t("wo.guide.complete")}
       missingOne={t("wo.guide.missingOne")} missingMany={t("wo.guide.missingMany")} />
@@ -4301,7 +4319,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {/* ── RESULTADO: los datos del cierre (quién ejecutó, cuándo, horas,
                  observaciones). El "Satisfactorio / Con deficiencias" del
                  formulario controlado se marca arriba, en la sección 4. ── */}
-          <section className="space-y-4">
+          <section id="wo-result-section" className="space-y-4">
             <PhaseHeader n={isMercurio ? 6 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
@@ -5380,6 +5398,141 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/** El certificado que renueva un plan, si lo hay. Sin vínculo (o sin red): null. */
+async function findRenewableCertificate(planId: string): Promise<RenewableCertificate | null> {
+  try {
+    const r = await api.get<{ items: RenewableCertificate[] }>(`/app/certificates?maintenancePlanId=${encodeURIComponent(planId)}`);
+    return r.items?.[0] ?? null;
+  } catch { return null; }
+}
+
+// ── La ficha de la OT abierta desde otra pantalla ────────────────────────────
+//
+// Aprobaciones abre la OT sin mandar al usuario a Órdenes de Trabajo. Es el
+// mismo WorkOrderModal con lo que la página le cuelga alrededor: los modales de
+// retener / cancelar / reabrir y el ofrecimiento de renovar el certificado
+// cuando el cierre ejecuta un plan que lo renueva. Ninguna regla propia.
+//
+// `onClose` se llama recién cuando no queda nada abierto: al cerrar la OT el
+// modal se desmonta ANTES de que llegue el ofrecimiento del certificado, y si
+// el llamador desmontara todo en ese momento el ofrecimiento se perdería.
+export const WorkOrderPopup: React.FC<{
+  workOrderId: string;
+  focusClose?: boolean;
+  onClose: () => void;
+}> = ({ workOrderId, focusClose, onClose }) => {
+  const t = useT();
+  const can = useCan();
+  const { data: wo, error, reload } = useFetch<WorkOrder>(`/app/pms/work-orders/${workOrderId}`, [workOrderId]);
+  const [woOpen, setWoOpen] = useState(true);
+  const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
+  const [certPending, setCertPending] = useState(false);
+  const [certToRenew, setCertToRenew] = useState<{ cert: RenewableCertificate; planId: string; completedAt: string | null } | null>(null);
+
+  // Una sola vez: el llamador puede volver a renderizar antes de desmontarnos.
+  const closedRef = useRef(false);
+  useEffect(() => {
+    if (closedRef.current || woOpen || actionTarget || certPending || certToRenew) return;
+    closedRef.current = true;
+    onClose();
+  }, [woOpen, actionTarget, certPending, certToRenew, onClose]);
+
+  const onPlanExecuted = useCallback(async (planId: string, completedAt: string | null) => {
+    setCertPending(true);
+    const cert = await findRenewableCertificate(planId);
+    if (cert) setCertToRenew({ cert, planId, completedAt });
+    setCertPending(false);
+  }, []);
+
+  if (error) return <AlertDialog message={t("wo.popup.loadError")} onClose={onClose} />;
+
+  return (
+    <>
+      {!wo && woOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <Loader2 className="w-6 h-6 animate-spin text-white" />
+        </div>
+      )}
+      {wo && woOpen && (
+        <WorkOrderModal
+          workOrder={wo}
+          canManage={can("wo.manage")}
+          focusClose={focusClose}
+          onClose={() => setWoOpen(false)}
+          onSaved={() => setWoOpen(false)}
+          onReload={() => { void reload(); }}
+          onOpenAction={(w, type) => setActionTarget({ workOrder: w, type })}
+          onPlanExecuted={(planId, completedAt) => { void onPlanExecuted(planId, completedAt); }}
+        />
+      )}
+      {certToRenew && (
+        <CertificateRenewalDialog
+          cert={certToRenew.cert}
+          defaultIssueDate={certToRenew.completedAt}
+          maintenancePlanId={certToRenew.planId}
+          onClose={() => setCertToRenew(null)}
+          onRenewed={() => setCertToRenew(null)}
+        />
+      )}
+      {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); setWoOpen(false); }} />}
+      {actionTarget?.type === "cancel" && <CancelModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); setWoOpen(false); }} />}
+      {actionTarget?.type === "reopen" && <ReopenModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); setWoOpen(false); }} />}
+    </>
+  );
+};
+
+// ── Avances de una OT, en ventana propia ─────────────────────────────────────
+//
+// La misma lista de la ficha (ProgressNotesPanel) con su botón "Registrar
+// avance", para ver lo cargado y sumar otro sin abrir la OT entera. La hoja de
+// carga es la de siempre (ProgressNoteSheet).
+export const WorkOrderProgressModal: React.FC<{
+  workOrderId: string;
+  title: string;
+  subtitle?: string | null;
+  /** Operar la OT: registrar, corregir y borrar avances. Sin esto, sólo se ven. */
+  canOperate: boolean;
+  onClose: () => void;
+  /** Se agregó, corrigió o borró un avance. */
+  onChanged: () => void;
+}> = ({ workOrderId, title, subtitle, canOperate, onClose, onChanged }) => {
+  const [showSheet, setShowSheet] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const changed = () => { setReloadKey(k => k + 1); onChanged(); };
+  return (
+    // Sin cierre por clic afuera, como el resto de las ventanas de carga.
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-fg truncate">{title}</h2>
+            {subtitle && <p className="text-xs text-text-industrial/50 mt-0.5 truncate">{subtitle}</p>}
+          </div>
+          <ModalCloseButton onClose={onClose} />
+        </div>
+        <div className="flex-1 min-h-[min(18rem,50vh)] overflow-y-auto">
+          <ProgressNotesPanel
+            workOrderId={workOrderId}
+            canAdd={canOperate}
+            canEdit={canOperate}
+            canDelete={canOperate}
+            onAdd={() => setShowSheet(true)}
+            reloadKey={reloadKey}
+            onChanged={changed}
+          />
+        </div>
+      </div>
+      {showSheet && (
+        <ProgressNoteSheet
+          workOrderId={workOrderId}
+          onClose={() => setShowSheet(false)}
+          onSaved={changed}
+        />
+      )}
+    </div>
+  );
+};
+
 export const WorkOrdersPage: React.FC = () => {
   const t = useT();
   const woTerms = useWoTerms();
@@ -5424,11 +5577,8 @@ export const WorkOrdersPage: React.FC = () => {
   // documento del proveedor a la vista.
   const [certToRenew, setCertToRenew] = useState<{ cert: RenewableCertificate; planId: string; completedAt: string | null } | null>(null);
   const offerCertificateRenewal = useCallback(async (planId: string, completedAt: string | null) => {
-    try {
-      const r = await api.get<{ items: RenewableCertificate[] }>(`/app/certificates?maintenancePlanId=${encodeURIComponent(planId)}`);
-      const cert = r.items?.[0];
-      if (cert) setCertToRenew({ cert, planId, completedAt });
-    } catch { /* sin certificado vinculado: no molestamos */ }
+    const cert = await findRenewableCertificate(planId);
+    if (cert) setCertToRenew({ cert, planId, completedAt });
   }, []);
   const [editing, setEditing]         = useState<WorkOrder | null>(null);
   const [sentWoCode, setSentWoCode]   = useState<string | null>(null);

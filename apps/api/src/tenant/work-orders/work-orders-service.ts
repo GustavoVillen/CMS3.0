@@ -1356,6 +1356,9 @@ export async function setWorkOrderApproval(
   // Import dinámico para no crear un ciclo: service-requests-service ya importa
   // de este módulo. En try/catch como el auto-create de muestras: un problema
   // con las SS no puede tumbar la tramitación de la OT, que ya está guardada.
+  // Los ids arrastrados vuelven en la respuesta: la bandeja de Aprobaciones
+  // pinta esas SS firmadas sin recargar.
+  let cascadedServiceRequestIds: string[] = [];
   try {
     const { cascadeWorkOrderApprovalToServiceRequests } = await import("../service-requests/service-requests-service");
     const touched = await cascadeWorkOrderApprovalToServiceRequests({
@@ -1368,7 +1371,8 @@ export async function setWorkOrderApproval(
       actionAt:      payload.step === "RECHAZA" ? now : actionAt,
       actorUserId:   session.user.id,
     });
-    if (touched > 0) log.info(`[setWorkOrderApproval] ${payload.step}: ${touched} SS arrastrada(s) de ${current.workOrderCode}`);
+    cascadedServiceRequestIds = touched;
+    if (touched.length > 0) log.info(`[setWorkOrderApproval] ${payload.step}: ${touched.length} SS arrastrada(s) de ${current.workOrderCode}`);
   } catch (err) {
     log.error("[setWorkOrderApproval] cascade a Solicitudes de Servicio falló", err);
   }
@@ -1445,7 +1449,7 @@ export async function setWorkOrderApproval(
     }
   }
 
-  return { ...updated, createdFluidSamples, createdPermits };
+  return { ...updated, createdFluidSamples, createdPermits, cascadedServiceRequestIds };
 }
 
 const PERMIT_TYPE_NAME: Record<string, string> = {

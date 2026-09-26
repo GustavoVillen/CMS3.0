@@ -65,10 +65,16 @@ export function SpareConsumptionFlow({ onClose }: { onClose: () => void }) {
   return <SpareConsumptionModal woId={wo.id} onBack={() => setWo(null)} onClose={onClose} />;
 }
 
-function SpareConsumptionModal({ woId, onBack, onClose }: {
+/**
+ * La hoja del consumo sobre una OT ya elegida. Se exporta para Aprobaciones,
+ * que llega con la OT en la mano: ahí no hay "elegir otra orden" (sin `onBack`)
+ * y `onSaved` avisa cuántos repuestos distintos quedaron cargados.
+ */
+export function SpareConsumptionModal({ woId, onBack, onClose, onSaved }: {
   woId: string;
-  onBack: () => void;
+  onBack?: () => void;
   onClose: () => void;
+  onSaved?: (spareCount: number) => void;
 }) {
   const t = useT();
   const { data: wo, loading } = useFetch<WoDetail>(`/app/pms/work-orders/${woId}`, [woId]);
@@ -115,6 +121,7 @@ function SpareConsumptionModal({ woId, onBack, onClose }: {
     try {
       // Lista completa: el backend reemplaza los movimientos de esta OT.
       await api.patch(`/app/pms/work-orders/${woId}`, { spareUsages: [...merged.values()] });
+      onSaved?.(merged.size);
       onClose();
     } catch (e) {
       setAviso(e instanceof Error ? e.message : t("dashboard.spareUse.errSave"));
@@ -229,13 +236,15 @@ function SpareConsumptionModal({ woId, onBack, onClose }: {
         </div>
 
         <div className="shrink-0 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-1 text-[11px] font-bold text-text-industrial/60 hover:text-accent"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" /> {t("dashboard.spareUse.back")}
-          </button>
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-1 text-[11px] font-bold text-text-industrial/60 hover:text-accent"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" /> {t("dashboard.spareUse.back")}
+            </button>
+          ) : <span />}
           <button
             type="button"
             onClick={() => { void guardar(); }}

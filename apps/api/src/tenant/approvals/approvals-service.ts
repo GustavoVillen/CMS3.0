@@ -51,14 +51,41 @@ export interface PendingApprovalItem {
   workOrderCode: string | null;
   /** Sólo SS: NORMAL / AFECTA SEGURIDAD / AFECTA SERVICIO. */
   purchaseRequestKinds: string[];
+  /** Sólo OT y SS autorizadas (woExecute / srExecute): quién autorizó y cuándo. */
+  authorizedByName?: string | null;
+  authorizedAt?: string | null;
+  /** Sólo SS autorizadas: cuándo se mandó al proveedor (null = todavía no). */
+  sentAt?: string | null;
+  /** Sólo OT autorizadas: avances cargados y repuestos consumidos hasta ahora. */
+  progressNoteCount?: number;
+  spareUsageCount?: number;
 }
 
 export interface PendingApprovalsResult {
-  can: { woApprove: boolean; woAuthorize: boolean; srApprove: boolean; srAuthorize: boolean };
+  can: {
+    woApprove: boolean; woAuthorize: boolean; srApprove: boolean; srAuthorize: boolean;
+    /** Cargar avances y cerrar la OT (mismo gate que closeWorkOrder). */
+    woOperate: boolean;
+    /** Registrar consumo de repuestos: va por el PATCH de la OT, que pide wo.manage. */
+    woManage: boolean;
+    /** Enviar la SS al proveedor y asentar en su hoja de ruta (canManage de la SS). */
+    srManage: boolean;
+  };
   woApprove: PendingApprovalItem[];
   woAuthorize: PendingApprovalItem[];
   srApprove: PendingApprovalItem[];
   srAuthorize: PendingApprovalItem[];
+  /**
+   * OT ya autorizadas que siguen abiertas: la bandeja las conserva hasta el
+   * cierre para cargar avances, repuestos y cerrarlas sin salir de la planilla.
+   * Nadie firma nada acá; son el paso siguiente de las que ya se firmaron.
+   */
+  woExecute: PendingApprovalItem[];
+  /**
+   * SS autorizadas que todavía no se recibieron: para mandarlas al proveedor y
+   * seguir su hoja de ruta. Salen de la bandeja al recibirse (COMPLETED).
+   */
+  srExecute: PendingApprovalItem[];
 }
 
 // Espejo de los gates reales. APROBAR una OT tiene permiso propio desde sep
@@ -69,6 +96,11 @@ const canWoApprove   = (s: TenantAccessSession) => hasPermission(s, "wo.approve"
 const canWoAuthorize = (s: TenantAccessSession) => hasPermission(s, "wo.authorize");
 const canSrApprove   = (s: TenantAccessSession) => hasPermission(s, "sr.approve");
 const canSrAuthorize = (s: TenantAccessSession) => hasPermission(s, "sr.authorize");
+// Espejo de canManageWorkOrders / canOperateWorkOrders de work-orders-service.
+const canWoManage    = (s: TenantAccessSession) => hasPermission(s, "wo.manage");
+const canWoOperate   = (s: TenantAccessSession) => canWoManage(s) || hasPermission(s, "wo.operate");
+// Espejo de canManage de service-requests-service: todos menos el auditor.
+const canSrManage    = (s: TenantAccessSession) => s.user.role !== "AUDITOR_READONLY";
 
 async function resolveTenantId(session: TenantAccessSession): Promise<string> {
   const prisma = getPrismaClient();
@@ -89,6 +121,7 @@ const WO_SELECT = {
   openDate: true, dueDate: true, providerId: true, providerOther: true,
   enviadoAprobacionByName: true, enviadoAprobacionAt: true,
   aprobadoByName: true, aprobadoAt: true,
+  autorizadoByName: true, autorizadoAt: true,
 } as const;
 
 const SR_SELECT = {
@@ -97,6 +130,7 @@ const SR_SELECT = {
   status: true, openDate: true, providerId: true, tallerNotes: true,
   purchaseRequestKinds: true, solicitaByName: true, createdAt: true,
   aprobadoByName: true, aprobadoAt: true,
+  autorizadoByName: true, autorizadoAt: true, startedAt: true,
 } as const;
 
 /**
@@ -120,9 +154,12 @@ export async function listPendingApprovals(
     woAuthorize: canWoAuthorize(session),
     srApprove:   canSrApprove(session),
     srAuthorize: canSrAuthorize(session),
+    woOperate:   canWoOperate(session),
+    woManage:    canWoManage(session),
+    srManage:    canSrManage(session),
   };
 
-  const woWhere = (stage: "APROBAR" | "AUTORIZAR") => {
+  const woWhere = (stage: "APROBAR" | "AUTORIZAR" | "EJECUTAR") => {
     const where: Record<string, unknown> = {
       tenantId,
       deletedAt: null,
@@ -131,15 +168,22 @@ export async function listPendingApprovals(
         // Pendiente de aprobación: ya la mandaron a firmar y nadie la aprobó.
         // Sin enviadoAprobacionAt la OT está EN PREPARACIÓN y no es de nadie más.
         ? { enviadoAprobacionAt: { not: null }, aprobadoAt: null }
+        : stage === "AUTORIZAR"
         // Pendiente de autorización: aprobada a bordo, falta la firma de tierra.
-        : { aprobadoAt: { not: null }, autorizadoAt: null }),
+        ? { aprobadoAt: { not: null }, autorizadoAt: null }
+        // En ejecución: firmada del todo y todavía abierta.
+        : { autorizadoAt: { not: null } }),
     };
     applyAssignedVesselScope(session, where, vesselCode);
     return where;
   };
 
-  const srWhere = (status: "SOLICITADA" | "APROBADA") => {
-    const where: Record<string, unknown> = { tenantId, deletedAt: null, status };
+  // EJECUTAR = autorizada (falta mandarla al taller) o ya en el taller.
+  const srWhere = (status: "SOLICITADA" | "APROBADA" | "EJECUTAR") => {
+    const where: Record<string, unknown> = {
+      tenantId, deletedAt: null,
+      status: status === "EJECUTAR" ? { in: ["AUTORIZADA", "IN_PROGRESS"] } : status,
+    };
     applyAssignedVesselScope(session, where, vesselCode);
     return where;
   };
@@ -147,7 +191,12 @@ export async function listPendingApprovals(
   const orderWo = [{ enviadoAprobacionAt: "asc" as const }, { workOrderCode: "asc" as const }];
   const orderSr = [{ openDate: "asc" as const }, { serviceRequestCode: "asc" as const }];
 
-  const [woApproveRows, woAuthorizeRows, srApproveRows, srAuthorizeRows] = await Promise.all([
+  // Las autorizadas se listan a quien firma OT o puede operarlas: es la misma
+  // gente que llega a esta pantalla. Sin ninguno de esos permisos, vacía.
+  const seesExecute   = can.woApprove || can.woAuthorize || can.woOperate;
+  const seesSrExecute = can.srApprove || can.srAuthorize || can.srManage;
+
+  const [woApproveRows, woAuthorizeRows, srApproveRows, srAuthorizeRows, woExecuteRows, srExecuteRows] = await Promise.all([
     can.woApprove
       ? (prisma as any).workOrder.findMany({ where: woWhere("APROBAR"), select: WO_SELECT, orderBy: orderWo })
       : Promise.resolve([]),
@@ -160,12 +209,18 @@ export async function listPendingApprovals(
     can.srAuthorize
       ? (prisma as any).serviceRequest.findMany({ where: srWhere("APROBADA"), select: SR_SELECT, orderBy: orderSr })
       : Promise.resolve([]),
+    seesExecute
+      ? (prisma as any).workOrder.findMany({ where: woWhere("EJECUTAR"), select: WO_SELECT, orderBy: orderWo })
+      : Promise.resolve([]),
+    seesSrExecute
+      ? (prisma as any).serviceRequest.findMany({ where: srWhere("EJECUTAR"), select: SR_SELECT, orderBy: orderSr })
+      : Promise.resolve([]),
   ]);
 
-  const woRows = [...woApproveRows, ...woAuthorizeRows] as any[];
-  const srRows = [...srApproveRows, ...srAuthorizeRows] as any[];
+  const woRows = [...woApproveRows, ...woAuthorizeRows, ...woExecuteRows] as any[];
+  const srRows = [...srApproveRows, ...srAuthorizeRows, ...srExecuteRows] as any[];
   if (woRows.length === 0 && srRows.length === 0) {
-    return { can, woApprove: [], woAuthorize: [], srApprove: [], srAuthorize: [] };
+    return { can, woApprove: [], woAuthorize: [], srApprove: [], srAuthorize: [], woExecute: [], srExecute: [] };
   }
 
   // ── Resolución en lote de todo lo que las filas sólo tienen como id ─────────
@@ -173,10 +228,11 @@ export async function listPendingApprovals(
   // por fila. El nombre del buque se resuelve siempre (nunca se muestra el
   // código a un usuario: ver "DON CHICUETO", no "DCH").
   const woIds     = woRows.map(r => r.id);
+  const execIds   = (woExecuteRows as any[]).map(r => r.id);
   const srWoIds   = [...new Set(srRows.map(r => r.workOrderId).filter(Boolean))] as string[];
   const vesselCodes = [...new Set([...woRows, ...srRows].map(r => r.vesselCode).filter(Boolean))] as string[];
 
-  const [srOfWoRows, parentWoRows, vesselRows] = await Promise.all([
+  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows] = await Promise.all([
     // SS colgadas de las OT listadas: aportan sus talleres al contexto de la OT
     // y el aviso de "esta firma arrastra N solicitudes".
     woIds.length > 0
@@ -198,7 +254,34 @@ export async function listPendingApprovals(
           select: { code: true, name: true },
         })
       : Promise.resolve([]),
+    // Cuánto se cargó ya en las autorizadas: avances vigentes y repuestos
+    // consumidos (movimientos de stock con referencia a la OT, el mismo
+    // registro que escribe applySpareUsagesToWo).
+    execIds.length > 0
+      ? (prisma as any).workOrderProgressNote.groupBy({
+          by: ["workOrderId"],
+          where: { tenantId, deletedAt: null, workOrderId: { in: execIds } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    execIds.length > 0
+      ? (prisma as any).stockMovement.findMany({
+          where: { tenantId, referenceType: "WORK_ORDER", referenceId: { in: execIds } },
+          select: { referenceId: true, spareId: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const noteCountByWo = new Map<string, number>(
+    (noteCountRows as any[]).map(r => [r.workOrderId, Number(r._count?._all ?? 0)]),
+  );
+  // Repuestos distintos por OT, igual que la lista del consumo.
+  const sparesByWo = new Map<string, Set<string>>();
+  for (const m of usageRows as any[]) {
+    const set = sparesByWo.get(m.referenceId) ?? new Set<string>();
+    set.add(m.spareId);
+    sparesByWo.set(m.referenceId, set);
+  }
 
   const assetIds = [...new Set([
     ...woRows.map(r => r.assetId),
@@ -309,6 +392,19 @@ export async function listPendingApprovals(
     woAuthorize: (woAuthorizeRows as any[]).map(mapWo),
     srApprove:   (srApproveRows as any[]).map(mapSr),
     srAuthorize: (srAuthorizeRows as any[]).map(mapSr),
+    woExecute:   (woExecuteRows as any[]).map(r => ({
+      ...mapWo(r),
+      authorizedByName: r.autorizadoByName ?? null,
+      authorizedAt: iso(r.autorizadoAt),
+      progressNoteCount: noteCountByWo.get(r.id) ?? 0,
+      spareUsageCount: sparesByWo.get(r.id)?.size ?? 0,
+    })),
+    srExecute:   (srExecuteRows as any[]).map(r => ({
+      ...mapSr(r),
+      authorizedByName: r.autorizadoByName ?? null,
+      authorizedAt: iso(r.autorizadoAt),
+      sentAt: r.status === "IN_PROGRESS" ? iso(r.startedAt) : null,
+    })),
   };
 }
 

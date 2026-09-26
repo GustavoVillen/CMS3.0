@@ -784,8 +784,9 @@ export async function unsubmitServiceRequest(session: TenantAccessSession, id: s
  * No valida rol a propósito: quien pudo firmar la OT arrastra la SS (decisión
  * de producto). La autorización MANUAL de una SS sigue restringida a tierra.
  *
- * Devuelve cuántas SS tocó. No lanza: el que llama lo envuelve en try/catch para
- * que un problema acá nunca tumbe la tramitación de la OT.
+ * Devuelve los ids de las SS que tocó (la bandeja de Aprobaciones los usa para
+ * mostrarlas firmadas en el momento). No lanza: el que llama lo envuelve en
+ * try/catch para que un problema acá nunca tumbe la tramitación de la OT.
  */
 export async function cascadeWorkOrderApprovalToServiceRequests(params: {
   tenantId: string;
@@ -798,9 +799,9 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
   actionAt: Date;
   /** Quién operó de verdad (puede diferir del firmante si fue "en nombre de"). */
   actorUserId: string;
-}): Promise<number> {
+}): Promise<string[]> {
   const prisma = getPrismaClient();
-  if (!prisma) return 0;
+  if (!prisma) return [];
   const prismaRaw = prisma as any;
   const { tenantId, workOrderId, workOrderCode, step, signerName, signerUserId, actionAt, actorUserId } = params;
 
@@ -815,7 +816,7 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
     where: { tenantId, workOrderId, deletedAt: null, status: { in: affected } },
     select: { id: true, serviceRequestCode: true, status: true, aprobadoAt: true },
   });
-  if (targets.length === 0) return 0;
+  if (targets.length === 0) return [];
 
   for (const sr of targets) {
     let data: Record<string, unknown>;
@@ -876,7 +877,7 @@ export async function cascadeWorkOrderApprovalToServiceRequests(params: {
       },
     });
   }
-  return targets.length;
+  return targets.map((sr: { id: string }) => sr.id);
 }
 
 export interface ApprovalInput {
