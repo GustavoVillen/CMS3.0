@@ -29,7 +29,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ClipboardCheck, Hammer, Loader2, Pause, Pencil, Search, Send } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Hammer, Loader2, Pause, Pencil, Search } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -39,8 +39,7 @@ import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
 import { api, ApiError } from "../lib/api";
 import { downloadDocx } from "../lib/download-docx";
 import { useFetch } from "../lib/hooks";
-import { useAuth, useCan } from "../lib/auth";
-import { woViewFilter, type WoViewItem } from "../lib/wo-view";
+import { useAuth } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 
@@ -105,6 +104,9 @@ interface Row extends PendingItem {
 /** La ventana abierta desde las columnas de ejecución. */
 type ExecWindow = { kind: "progress" | "spares" | "close" | "route" | "closeSr"; row: Row };
 
+/** Tarjeta de arriba que filtra la planilla. */
+type CardKey = "overdue" | "mine" | "inProgress" | "postponed";
+
 /** Respuesta de POST /service-requests/:id/send-to-provider. */
 interface SendResult { sent: boolean; to: string[]; reason?: string; error?: string }
 
@@ -158,27 +160,8 @@ export const ApprovalsPage: React.FC = () => {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending");
 
-  // Tarjetas de arriba: las mismas de Órdenes de Trabajo, contadas sobre la
-  // misma lista y con los mismos criterios (lib/wo-view.ts).
-  const { data: wos, reload: reloadWos } = useFetch<{ items: WoViewItem[] }>("/app/pms/work-orders");
-  const canList = useCan();
-  const canApproveWo = canList("wo.approve");
-  const canAuthorizeWo = canList("wo.authorize");
-  const woCards = useMemo(() => {
-    const items = wos?.items ?? [];
-    const ctx = { canApprove: canApproveWo, canAuthorize: canAuthorizeWo, userId: user?.id ?? null };
-    const n = (key: string) => (wos ? woViewFilter(items, key, ctx).length : null);
-    const signs = canApproveWo || canAuthorizeWo;
-    return [
-      { key: "overdue",       n: n("overdue"),       label: t("wo.sum.overdue"),    hint: t("wo.sum.overdueHint"),    icon: AlertTriangle, cls: "border-l-red-600",     num: "text-red-700 dark:text-red-400" },
-      { key: "mine",          n: n("mine"),          label: t(signs ? "wo.sum.mySign" : "wo.sum.mine"), hint: t(signs ? "wo.sum.mySignHint" : "wo.sum.mineHint"), icon: Pencil, cls: "border-l-blue-600", num: "text-blue-700 dark:text-blue-400" },
-      { key: "inPreparation", n: n("inPreparation"), label: t("wo.sum.notSent"),    hint: t("wo.sum.notSentHint"),    icon: Send,          cls: "border-l-amber-500",   num: "text-amber-700 dark:text-amber-400" },
-      { key: "inProgress",    n: n("inProgress"),    label: t("wo.sum.inProgress"), hint: t("wo.sum.inProgressHint"), icon: Hammer,        cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
-      { key: "postponed",     n: n("postponed"),     label: t("wo.sum.deferred"),   hint: t("wo.sum.deferredHint"),   icon: Pause,         cls: "border-l-yellow-600",  num: "text-yellow-700 dark:text-yellow-400" },
-    ];
-  }, [wos, canApproveWo, canAuthorizeWo, user, t]);
-
   const [query, setQuery]     = useState("");
+  const [cardFilter, setCardFilter] = useState<CardKey | "">("");
   const [alert, setAlert]     = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   // El error de carga viene de useFetch y no se puede "apagar": sin esta marca,
@@ -246,21 +229,52 @@ export const ApprovalsPage: React.FC = () => {
   const canApprove   = (r: Row) => (r.kind === "WO" ? !!can?.woApprove   : !!can?.srApprove);
   const canAuthorize = (r: Row) => (r.kind === "WO" ? !!can?.woAuthorize : !!can?.srAuthorize);
 
+  // ─── Tarjetas de arriba: filtran las filas de ESTA planilla ────────────────
+  // Mismos nombres y colores que las de Órdenes de Trabajo, pero cuentan las
+  // filas de acá (OT y SS). "Sin enviar a aprobar" no va: lo que está en
+  // preparación no llega a esta bandeja (decisión del usuario).
+  const cardMatch = useCallback((r: Row, key: CardKey): boolean => {
+    if (closed[rowKey(r)]) return false;   // cerrada en esta tanda: ya no cuenta
+    const deferred = r.status === "ON_HOLD" || r.status === "DEFERRED";
+    switch (key) {
+      case "overdue":    return !deferred && (daysToDue(r.dueDate) ?? 0) < 0;
+      // La próxima firma de la fila es mía: aprobar si falta, si no autorizar.
+      case "mine":
+        return approvedOf(r)
+          ? !authorizedOf(r) && (r.kind === "WO" ? !!can?.woAuthorize : !!can?.srAuthorize)
+          : (r.kind === "WO" ? !!can?.woApprove : !!can?.srApprove);
+      // Trabajo iniciado: la OT en proceso, la SS ya mandada al taller.
+      case "inProgress": return r.status === "IN_PROGRESS" || !!sent[rowKey(r)];
+      case "postponed":  return deferred;
+    }
+  }, [closed, sent, approvedOf, authorizedOf, can]);
+
+  const cards = useMemo(() => {
+    const n = (key: CardKey) => (data ? rows.filter(r => cardMatch(r, key)).length : null);
+    return [
+      { key: "overdue"    as const, n: n("overdue"),    label: t("wo.sum.overdue"),    hint: t("wo.sum.overdueHint"),    icon: AlertTriangle, cls: "border-l-red-600",     num: "text-red-700 dark:text-red-400" },
+      { key: "mine"       as const, n: n("mine"),       label: t("wo.sum.mySign"),     hint: t("wo.sum.mySignHint"),     icon: Pencil,        cls: "border-l-blue-600",    num: "text-blue-700 dark:text-blue-400" },
+      { key: "inProgress" as const, n: n("inProgress"), label: t("wo.sum.inProgress"), hint: t("wo.sum.inProgressHint"), icon: Hammer,        cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+      { key: "postponed"  as const, n: n("postponed"),  label: t("wo.sum.deferred"),   hint: t("wo.sum.deferredHint"),   icon: Pause,         cls: "border-l-yellow-600",  num: "text-yellow-700 dark:text-yellow-400" },
+    ];
+  }, [data, rows, cardMatch, t]);
+
   const visible = useMemo(() => {
     const q = query.trim();
+    const byCard = cardFilter ? rows.filter(r => cardMatch(r, cardFilter)) : rows;
     const list = q
-      ? rows.filter(r => textMatches(
+      ? byCard.filter(r => textMatches(
           [r.code, r.vesselName, r.assetName, r.title, r.task, r.workOrderCode, ...r.providers].filter(Boolean).join(" "),
           q,
         ))
-      : rows;
+      : byCard;
     // Ordenadas por buque y equipo: así las celdas combinadas de la planilla
     // agrupan de verdad, y dentro de cada equipo primero lo más urgente.
     return [...list].sort((a, b) =>
       (a.vesselName ?? a.vesselCode).localeCompare(b.vesselName ?? b.vesselCode)
       || (a.assetName ?? "").localeCompare(b.assetName ?? "")
       || ((daysToDue(a.dueDate) ?? 9e9) - (daysToDue(b.dueDate) ?? 9e9)));
-  }, [rows, query]);
+  }, [rows, query, cardFilter, cardMatch]);
 
   const pendingCount = useMemo(
     () => rows.filter(r => !authorizedOf(r)).length,
@@ -326,7 +340,6 @@ export const ApprovalsPage: React.FC = () => {
   // cambia de lugar o se va).
   const afterRecord = useCallback(async (r: Row) => {
     setExec(null);
-    void reloadWos();
     try {
       const url = r.kind === "WO" ? `/app/pms/work-orders/${r.id}` : `/app/pms/service-requests/${r.id}`;
       const rec = await api.get<{ status: string }>(url);
@@ -336,7 +349,7 @@ export const ApprovalsPage: React.FC = () => {
       }
     } catch { /* si no se pudo leer, la recarga lo resuelve */ }
     void reload();
-  }, [reload, reloadWos]);
+  }, [reload]);
 
   // ─── Enviar la SS al proveedor ─────────────────────────────────────────────
   // Mismo camino que el botón de la ficha de la SS: el backend manda el correo
@@ -582,7 +595,7 @@ export const ApprovalsPage: React.FC = () => {
         icon={ClipboardCheck}
         title={t("nav.approvals")}
         total={visible.length}
-        onReload={() => { void reload(); void reloadWos(); }}
+        onReload={reload}
       >
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-fg/30" />
@@ -596,20 +609,24 @@ export const ApprovalsPage: React.FC = () => {
       </PageHeader>
 
       {/* Las tarjetas de Órdenes de Trabajo en versión finita (pedido del
-          usuario). Lo que cuentan no siempre está en esta planilla (las en
-          preparación, las diferidas), así que cada una abre la lista de OT ya
-          filtrada; la explicación queda en el globito. */}
+          usuario). Filtran las filas de la planilla; tocar la activa la saca.
+          La explicación queda en el globito. */}
       <div className="flex flex-wrap gap-2">
-        {woCards.map(c => (
-          <button key={c.key} type="button" title={c.hint}
-            onClick={() => navigate(`/work-orders?view=${c.key}`)}
-            className={`flex items-center gap-2 rounded-xl border-[1.5px] border-l-4 border-fg/10 bg-surface px-3 py-1 text-left transition-all hover:border-fg/25 ${c.cls}`}>
-            <span className={`min-w-[1.25rem] text-lg font-extrabold leading-tight ${c.num}`}>{c.n ?? "–"}</span>
-            <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70 whitespace-nowrap">
-              <c.icon className="w-3.5 h-3.5" />{c.label}
-            </span>
-          </button>
-        ))}
+        {cards.map(c => {
+          const on = cardFilter === c.key;
+          return (
+            <button key={c.key} type="button" title={c.hint} aria-pressed={on}
+              onClick={() => setCardFilter(on ? "" : c.key)}
+              className={`flex items-center gap-2 rounded-xl border-[1.5px] border-l-4 bg-surface px-3 py-1 text-left transition-all ${c.cls} ${
+                on ? "border-accent ring-2 ring-accent/20" : "border-fg/10 hover:border-fg/25"
+              }`}>
+              <span className={`min-w-[1.25rem] text-lg font-extrabold leading-tight ${c.num}`}>{c.n ?? "–"}</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-text-industrial/70 whitespace-nowrap">
+                <c.icon className="w-3.5 h-3.5" />{c.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Con qué nombre se firma. Va a la vista porque es el que se imprime en
@@ -741,6 +758,16 @@ export const ApprovalsPage: React.FC = () => {
                   <td colSpan={COLS} className="px-4 py-12 text-center">
                     {loading ? (
                       <Loader2 className="w-5 h-5 animate-spin text-accent mx-auto" />
+                    ) : rows.length > 0 ? (
+                      // Hay filas, pero el filtro o la búsqueda las esconde:
+                      // "Todo firmado" sería falso.
+                      <>
+                        <p className="text-sm font-bold text-fg">{t("approvals.filterEmpty")}</p>
+                        <button type="button" onClick={() => { setCardFilter(""); setQuery(""); }}
+                          className="mt-2 text-xs font-bold text-accent hover:underline">
+                          {t("approvals.filterClear")}
+                        </button>
+                      </>
                     ) : (
                       <>
                         <p className="text-sm font-bold text-fg">{t("approvals.allClear")}</p>

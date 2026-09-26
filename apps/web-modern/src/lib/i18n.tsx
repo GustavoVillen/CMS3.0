@@ -5268,6 +5268,8 @@ const dict = {
   "approvals.exec.manualSent":    { es: "No hay casilla de correo configurada: se bajó el formulario y se abrió tu correo ya armado. Adjuntalo y mandalo desde tu cuenta.", en: "No system mailbox is configured: the form was downloaded and your email was opened, ready to go. Attach it and send it from your account.", pt: "Não há caixa de e-mail configurada: o formulário foi baixado e seu e-mail foi aberto já pronto. Anexe-o e envie da sua conta." },
   "approvals.signed.closed":      { es: "Cerrada",                    en: "Closed",                     pt: "Fechada" },
   "approvals.col.close":          { es: "Cerrar OT / SS",             en: "Close WO / SR",              pt: "Fechar OS / SS" },
+  "approvals.filterEmpty":        { es: "Ninguna fila coincide con el filtro.", en: "No rows match the filter.", pt: "Nenhuma linha corresponde ao filtro." },
+  "approvals.filterClear":        { es: "Mostrar todas",              en: "Show all",                   pt: "Mostrar todas" },
   "approvals.exec.closeSr":       { es: "Cerrar SS",                  en: "Close SR",                   pt: "Fechar SS" },
   "approvals.exec.sendFirst":     { es: "falta enviar",               en: "not sent yet",               pt: "falta enviar" },
   "approvals.provider":           { es: "Proveedor: {name}",          en: "Provider: {name}",           pt: "Fornecedor: {name}" },
