@@ -14,6 +14,8 @@ import { useCopilotEmitter, CopilotFlowProvider, CopilotChoiceStep, createCopilo
 import { useVesselContext } from "../lib/vessel-context";
 import { ClassCycleStrip } from "../components/ClassCycleBar";
 import { useAuth, useCan } from "../lib/auth";
+import { NAV } from "../lib/nav-items";
+import { useHiddenNavPaths } from "../lib/nav-config";
 import { useTheme } from "../lib/theme";
 // import { MyDayPanel } from "../components/MyDayPanel"; // oculto — ver montaje comentado más abajo
 import { AssetHoursQuickModal } from "../components/AssetHoursQuickModal";
@@ -180,6 +182,12 @@ export const Dashboard: React.FC = () => {
   // stock, que es lo que valida el backend (requireReceivePermission en
   // goods-receipts-service.ts).
   const canReceiveSpares = can("stock.manage");
+  // Seguimiento: el mismo ítem del menú decide (roles de NAV y lo que la
+  // empresa ocultó en Configuración), así el botón y el menú no discrepan.
+  const hiddenNavPaths = useHiddenNavPaths();
+  const followUpNav = NAV.flatMap(s => s.items).find(i => i.path === "/approvals");
+  const canSeeFollowUp = !!followUpNav && !hiddenNavPaths.includes("/approvals")
+    && (!followUpNav.roles || followUpNav.roles.includes((user?.role ?? "") as never));
   const isDark       = theme === "dark";
   // Tooltip de los gráficos, theme-aware (navy+claro en dark / blanco+oscuro en light).
   const chartTooltip = {
@@ -1082,6 +1090,18 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             <Table2 className="w-6 h-6 text-orange-600 dark:text-orange-400 shrink-0" />
             <span className="font-bold text-sm text-fg">{t("nav.maintenanceSheet")}</span>
           </button>
+          {/* Seguimiento (la bandeja de firmas y ejecución de OT y SS), al lado
+              y en el mismo naranja, a pedido del usuario. Se ve para quien lo
+              ve en el menú: mismos roles y respeta lo oculto por la empresa. */}
+          {canSeeFollowUp && (
+            <button
+              onClick={() => navigate("/approvals")}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:border-orange-500/60 hover:bg-orange-500/20 transition-all text-left"
+            >
+              <ClipboardCheck className="w-6 h-6 text-orange-600 dark:text-orange-400 shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("nav.approvals")}</span>
+            </button>
+          )}
           <button
             onClick={() => { setMpChooserMode("status"); setMpGroup(null); void loadMpAssets("status"); setShowMpChooser(true); }}
             className="flex items-center gap-3 px-5 py-4 rounded-xl bg-accent/10 border border-accent/30 hover:border-accent/60 hover:bg-accent/20 transition-all text-left"

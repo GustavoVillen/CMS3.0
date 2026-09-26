@@ -5227,7 +5227,7 @@ const dict = {
   "approvals.actionError":        { es: "No se pudo registrar la firma. Probá de nuevo.", en: "Could not register the signature. Try again.", pt: "Não foi possível registrar a assinatura. Tente novamente." },
 
   // ─── Aprobaciones: la bandeja de firmas con formato de planilla (/approvals) ───
-  "nav.approvals":                { es: "Aprobaciones",               en: "Approvals",                  pt: "Aprovações" },
+  "nav.approvals":                { es: "Seguimiento",                en: "Follow-up",                  pt: "Acompanhamento" },
   "approvals.col.item":           { es: "Ítem",                       en: "Item",                       pt: "Item" },
   "approvals.col.record":         { es: "Registro",                   en: "Record",                     pt: "Registro" },
   "approvals.kind.wo":            { es: "OT",                         en: "WO",                         pt: "OS" },
