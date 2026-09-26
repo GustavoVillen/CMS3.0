@@ -433,7 +433,7 @@ export const ApprovalsPage: React.FC = () => {
   // rojas se transparentan por debajo.
   const th = "px-2 py-1.5 text-[10px] font-bold text-[#1F3864] border border-border bg-[#D9E2E3] text-center";
   const td = "px-2 py-0.5 text-[11px] leading-tight border border-border align-middle";
-  const COLS = 9;
+  const COLS = 10;
 
   /** Uno de los dos botones de firma de la fila. */
   const SignButton: React.FC<{ row: Row; step: "APRUEBA" | "AUTORIZA" }> = ({ row, step }) => {
@@ -491,11 +491,16 @@ export const ApprovalsPage: React.FC = () => {
     </span>
   );
 
-  /** Las tres celdas de la derecha: AVANCES · REPUESTOS · CERRAR OT / SS. */
+  /** Celda de una columna que a la fila no le aplica (el envío en la OT, los
+   *  repuestos en la SS): vacía y sombreada, para que no parezca pendiente. */
+  const naCell = <td className={`${td} bg-fg/[0.04]`} />;
+
+  /** Las celdas de la derecha: ENVIAR AL PROVEEDOR · AVANCES · REPUESTOS ·
+   *  CERRAR OT / SS. La OT no se manda al proveedor (lo hacen sus SS). */
   const execCells = (r: Row) => {
     const cell = `${td} p-1 bg-surface`;
-    // La SS: su avance es la HOJA DE RUTA, después se manda al proveedor (en la
-    // columna de Repuestos, que no le aplica) y al volver el trabajo se cierra.
+    // La SS: se manda al proveedor, su avance es la HOJA DE RUTA, Repuestos no
+    // le aplica y al volver el trabajo se cierra.
     if (r.kind === "SR") {
       const wRoute = t("approvals.exec.hojaRuta");
       const wSend  = t("approvals.exec.sendProvider");
@@ -507,13 +512,6 @@ export const ApprovalsPage: React.FC = () => {
       const sendLabel = r.providers[0] ? t("ss.guide.sendProviderTo").replace("{provider}", r.providers[0]) : wSend;
       return (
         <>
-          <td className={cell}>
-            {authorized ? (
-              <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "route", row: r })}>
-                <span className="uppercase">{wRoute}</span>
-              </button>
-            ) : execOff(wRoute, waitWhy, true)}
-          </td>
           <td className={cell}>
             {sentInfo ? (
               // Enviada: verde y fijo, como las firmas.
@@ -531,6 +529,14 @@ export const ApprovalsPage: React.FC = () => {
                 </button>
               )}
           </td>
+          <td className={cell}>
+            {authorized ? (
+              <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "route", row: r })}>
+                <span className="uppercase">{wRoute}</span>
+              </button>
+            ) : execOff(wRoute, waitWhy, true)}
+          </td>
+          {naCell}
           {/* Cerrar = la recepción de la ficha de la SS (quién recibe y si hay
               conformidad), con su auditoría de IA. Sólo después de enviada. */}
           <td className={cell}>
@@ -669,12 +675,15 @@ export const ApprovalsPage: React.FC = () => {
 
       <div className="glass rounded-2xl overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-21rem)] [scrollbar-gutter:stable]">
-          <table className="w-full table-fixed border-collapse">
+          {/* Tarea con un cuarto del ancho (pedido del usuario: más corta) y
+              las seis columnas de botones se reparten el resto en partes
+              iguales. Por debajo de 1150 px aparece la barra horizontal en vez
+              de aplastar los botones. */}
+          <table className="w-full min-w-[1150px] table-fixed border-collapse">
             <colgroup>
-              <col className="w-[40px]" /><col className="w-[130px]" /><col />
-              <col className="w-[120px]" />
-              <col className="w-[100px]" /><col className="w-[100px]" />
-              <col className="w-[92px]" /><col className="w-[92px]" /><col className="w-[92px]" />
+              <col className="w-[40px]" /><col className="w-[130px]" /><col className="w-[25%]" />
+              <col className="w-[110px]" />
+              <col /><col /><col /><col /><col /><col />
             </colgroup>
             <thead>
               <tr>
@@ -684,6 +693,7 @@ export const ApprovalsPage: React.FC = () => {
                 <th className={th}>{t("approvals.col.record")}</th>
                 <th className={th}>{t("approvals.action.approve")}</th>
                 <th className={th}>{t("approvals.action.authorize")}</th>
+                <th className={th}>{t("approvals.exec.sendProvider")}</th>
                 <th className={th}>{t("approvals.col.progress")}</th>
                 <th className={th}>{t("approvals.col.spares")}</th>
                 <th className={th}>{t("approvals.col.close")}</th>
@@ -797,6 +807,7 @@ export const ApprovalsPage: React.FC = () => {
                       </td>
                       <td className={`${td} p-1 bg-surface`}><SignButton row={r} step="APRUEBA" /></td>
                       <td className={`${td} p-1 bg-surface`}><SignButton row={r} step="AUTORIZA" /></td>
+                      {r.kind === "WO" && naCell}
                       {execCells(r)}
                     </tr>
                   </React.Fragment>
