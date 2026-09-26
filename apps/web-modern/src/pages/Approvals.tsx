@@ -29,7 +29,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ClipboardCheck, Hammer, Loader2, Pause, Pencil, Search } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Hammer, Handshake, Loader2, Pause, Pencil, Search } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -105,7 +105,7 @@ interface Row extends PendingItem {
 type ExecWindow = { kind: "progress" | "spares" | "close" | "route" | "closeSr"; row: Row };
 
 /** Tarjeta de arriba que filtra la planilla. */
-type CardKey = "overdue" | "mine" | "inProgress" | "postponed";
+type CardKey = "overdue" | "mine" | "woInProgress" | "srInProgress" | "postponed";
 
 /** Respuesta de POST /service-requests/:id/send-to-provider. */
 interface SendResult { sent: boolean; to: string[]; reason?: string; error?: string }
@@ -243,8 +243,9 @@ export const ApprovalsPage: React.FC = () => {
         return approvedOf(r)
           ? !authorizedOf(r) && (r.kind === "WO" ? !!can?.woAuthorize : !!can?.srAuthorize)
           : (r.kind === "WO" ? !!can?.woApprove : !!can?.srApprove);
-      // Trabajo iniciado: la OT en proceso, la SS ya mandada al taller.
-      case "inProgress": return r.status === "IN_PROGRESS" || !!sent[rowKey(r)];
+      // Trabajo iniciado: la OT en proceso; la SS, ya mandada al taller.
+      case "woInProgress": return r.kind === "WO" && r.status === "IN_PROGRESS";
+      case "srInProgress": return r.kind === "SR" && (r.status === "IN_PROGRESS" || !!sent[rowKey(r)]);
       case "postponed":  return deferred;
     }
   }, [closed, sent, approvedOf, authorizedOf, can]);
@@ -254,7 +255,8 @@ export const ApprovalsPage: React.FC = () => {
     return [
       { key: "overdue"    as const, n: n("overdue"),    label: t("wo.sum.overdue"),    hint: t("wo.sum.overdueHint"),    icon: AlertTriangle, cls: "border-l-red-600",     num: "text-red-700 dark:text-red-400" },
       { key: "mine"       as const, n: n("mine"),       label: t("wo.sum.mySign"),     hint: t("wo.sum.mySignHint"),     icon: Pencil,        cls: "border-l-blue-600",    num: "text-blue-700 dark:text-blue-400" },
-      { key: "inProgress" as const, n: n("inProgress"), label: t("wo.sum.inProgress"), hint: t("wo.sum.inProgressHint"), icon: Hammer,        cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+      { key: "woInProgress" as const, n: n("woInProgress"), label: t("approvals.card.woInProgress"), hint: t("wo.sum.inProgressHint"),         icon: Hammer,    cls: "border-l-emerald-600", num: "text-emerald-700 dark:text-emerald-400" },
+      { key: "srInProgress" as const, n: n("srInProgress"), label: t("approvals.card.srInProgress"), hint: t("approvals.card.srInProgressHint"), icon: Handshake, cls: "border-l-cyan-600",    num: "text-cyan-700 dark:text-cyan-400" },
       { key: "postponed"  as const, n: n("postponed"),  label: t("wo.sum.deferred"),   hint: t("wo.sum.deferredHint"),   icon: Pause,         cls: "border-l-yellow-600",  num: "text-yellow-700 dark:text-yellow-400" },
     ];
   }, [data, rows, cardMatch, t]);
