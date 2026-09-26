@@ -1325,6 +1325,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [closeAuditOpts, setCloseAuditOpts] = useState<{ completedDate?: string; closedByUserId?: string } | null>(null);
   // "Guardar" no cierra la ventana: feedback + reset del dirty-tracker.
   const [justSaved, setJustSaved] = useState(false);
+  // Después de "Guardar", el foco va a "Cerrar OT" si está a la vista y
+  // habilitado (pedido del usuario): lo que sigue es cerrar, con Enter alcanza.
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const focusCloseAfterSave = useCallback(() => {
+    window.setTimeout(() => {
+      const b = closeBtnRef.current;
+      if (!b || b.disabled) return;
+      b.scrollIntoView({ behavior: "smooth", block: "center" });
+      b.focus({ preventScroll: true });
+    }, 150);
+  }, []);
   const [saveResetKey, setSaveResetKey] = useState(0);
 
   // Cierre por ADMIN: pregunta quién cierra (firma CIERRA) y con qué fecha.
@@ -3480,6 +3491,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         {closeMissing.length > 0 && <div className="flex flex-wrap gap-1.5">{closeMissing.map(chipCheck)}</div>}
         {authorizeRow}
         <button
+          ref={closeBtnRef}
           type="button"
           onClick={() => {
             setCloseOnBehalfUserId(user?.id ?? "");
@@ -3488,7 +3500,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           }}
           disabled={!canClose || closing}
           title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success-sea text-white text-sm font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success-sea text-white text-sm font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all focus:outline-none focus:ring-4 focus:ring-success-sea/35">
           {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />} {t("wo.modal.closeWO")}
         </button>
       </div>
@@ -4415,7 +4427,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                     : null}
             </span>
             {isEditable && canManage && (
-              <button onClick={() => { void onSave().then(ok => { if (ok) offerPdfAfterSave(); }); }} disabled={saving}
+              <button onClick={() => { void onSave().then(ok => { if (ok) { offerPdfAfterSave(); focusCloseAfterSave(); } }); }} disabled={saving}
                 className={canSendToApprove ? btnSoft : "px-4 py-2 rounded-xl font-bold text-xs bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5"}>
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("common.save")}
               </button>
@@ -4469,7 +4481,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </button>
             )}
             {isEditable && canManage && (
-              <button onClick={() => { void onSave().then(ok => { if (ok) offerPdfAfterSave(); }); }} disabled={saving}
+              <button onClick={() => { void onSave().then(ok => { if (ok) { offerPdfAfterSave(); focusCloseAfterSave(); } }); }} disabled={saving}
                 className={`px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 flex items-center gap-1.5 ${justSaved ? "bg-green-600 text-white" : "bg-accent text-accent-fg hover:brightness-110"}`}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <><CheckCheck className="w-4 h-4" />{t("mp.modal.saved")}</> : t("common.save")}
               </button>
