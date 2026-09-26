@@ -59,6 +59,8 @@ export interface PendingApprovalItem {
   /** Sólo OT autorizadas: avances cargados y repuestos consumidos hasta ahora. */
   progressNoteCount?: number;
   spareUsageCount?: number;
+  /** Sólo SS autorizadas: novedades asentadas en su hoja de ruta. */
+  routeEntryCount?: number;
 }
 
 export interface PendingApprovalsResult {
@@ -229,10 +231,11 @@ export async function listPendingApprovals(
   // código a un usuario: ver "DON CHICUETO", no "DCH").
   const woIds     = woRows.map(r => r.id);
   const execIds   = (woExecuteRows as any[]).map(r => r.id);
+  const srExecIds = (srExecuteRows as any[]).map(r => r.id);
   const srWoIds   = [...new Set(srRows.map(r => r.workOrderId).filter(Boolean))] as string[];
   const vesselCodes = [...new Set([...woRows, ...srRows].map(r => r.vesselCode).filter(Boolean))] as string[];
 
-  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows] = await Promise.all([
+  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows, routeCountRows] = await Promise.all([
     // SS colgadas de las OT listadas: aportan sus talleres al contexto de la OT
     // y el aviso de "esta firma arrastra N solicitudes".
     woIds.length > 0
@@ -270,10 +273,22 @@ export async function listPendingApprovals(
           select: { referenceId: true, spareId: true },
         })
       : Promise.resolve([]),
+    // Novedades de la hoja de ruta de cada SS autorizada (las asentadas, no
+    // los hitos que el PDF deriva de las fechas).
+    srExecIds.length > 0
+      ? (prisma as any).serviceRequestLog.groupBy({
+          by: ["serviceRequestId"],
+          where: { tenantId, serviceRequestId: { in: srExecIds } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const noteCountByWo = new Map<string, number>(
     (noteCountRows as any[]).map(r => [r.workOrderId, Number(r._count?._all ?? 0)]),
+  );
+  const routeCountBySr = new Map<string, number>(
+    (routeCountRows as any[]).map(r => [r.serviceRequestId, Number(r._count?._all ?? 0)]),
   );
   // Repuestos distintos por OT, igual que la lista del consumo.
   const sparesByWo = new Map<string, Set<string>>();
@@ -404,6 +419,7 @@ export async function listPendingApprovals(
       authorizedByName: r.autorizadoByName ?? null,
       authorizedAt: iso(r.autorizadoAt),
       sentAt: r.status === "IN_PROGRESS" ? iso(r.startedAt) : null,
+      routeEntryCount: routeCountBySr.get(r.id) ?? 0,
     })),
   };
 }

@@ -76,6 +76,8 @@ interface PendingItem {
   spareUsageCount?: number;
   /** Sólo las SS autorizadas (srExecute): cuándo se mandó al proveedor. */
   sentAt?: string | null;
+  /** Sólo las SS autorizadas: novedades asentadas en su hoja de ruta. */
+  routeEntryCount?: number;
 }
 
 interface PendingApprovals {
@@ -148,7 +150,7 @@ function daysToDue(iso: string | null): number | null {
 }
 
 /** Molde común de todos los botones de la fila. */
-const BTN_BASE = "w-full min-h-[29px] px-1.5 py-0.5 rounded-lg border-[1.5px] text-[10.5px] font-extrabold leading-tight flex flex-col items-center justify-center transition-all";
+const BTN_BASE = "w-full min-h-[34px] px-1.5 py-0.5 rounded-lg border-[1.5px] text-[10.5px] font-extrabold leading-tight flex flex-col items-center justify-center transition-all";
 const BTN_ON   = `${BTN_BASE} bg-surface border-accent text-accent hover:bg-accent hover:text-accent-fg disabled:opacity-50`;
 const BTN_DONE = `${BTN_BASE} bg-success/90 border-success text-white`;
 const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
@@ -480,10 +482,19 @@ export const ApprovalsPage: React.FC = () => {
         title={`${word} — ${t("approvals.signsAs").replace("{name}", signerName)}`}
         className={BTN_ON}
       >
-        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : word}
+        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : btnBody(word, t("approvals.exec.yourSign"))}
       </button>
     );
   };
+
+  /** Contenido de todo botón encendido: el nombre arriba y un dato chico abajo,
+   *  el formato de "Avances" (pedido del usuario: todos iguales). */
+  const btnBody = (word: string, detail: string) => (
+    <>
+      <span className="uppercase">{word}</span>
+      <span className="text-[9px] font-semibold opacity-85 truncate max-w-full">{detail}</span>
+    </>
+  );
 
   /** Botón apagado de las columnas de ejecución, con el motivo abajo. */
   const execOff = (word: string, why: string, dashed: boolean) => (
@@ -512,6 +523,7 @@ export const ApprovalsPage: React.FC = () => {
       const closedAt = closed[rowKey(r)];
       const waitWhy = t("approvals.pendingAuthorization");
       const sendLabel = r.providers[0] ? t("ss.guide.sendProviderTo").replace("{provider}", r.providers[0]) : wSend;
+      const routeCount = r.routeEntryCount ?? 0;
       return (
         <>
           <td className={cell}>
@@ -527,14 +539,16 @@ export const ApprovalsPage: React.FC = () => {
                 <button type="button" className={BTN_ON} title={sendLabel} disabled={busyKey === rowKey(r)} onClick={() => setSendAsk(r)}>
                   {busyKey === rowKey(r)
                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <span className="uppercase line-clamp-2">{sendLabel}</span>}
+                    : btnBody(t("approvals.exec.send"), r.providers[0] ?? t("approvals.exec.noProvider"))}
                 </button>
               )}
           </td>
           <td className={cell}>
             {authorized ? (
               <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "route", row: r })}>
-                <span className="uppercase">{wRoute}</span>
+                {btnBody(wRoute, routeCount === 0 ? t("approvals.exec.noneF")
+                  : routeCount === 1 ? t("approvals.exec.routeOne")
+                  : t("approvals.exec.routeMany").replace("{n}", String(routeCount)))}
               </button>
             ) : execOff(wRoute, waitWhy, true)}
           </td>
@@ -552,7 +566,7 @@ export const ApprovalsPage: React.FC = () => {
               : !can?.srManage ? execOff(wClose, t("approvals.noPermission"), false)
               : (
                 <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "closeSr", row: r })}>
-                  <span className="uppercase">{wClose}</span>
+                  {btnBody(wClose, t("approvals.exec.needsReception"))}
                 </button>
               )}
           </td>
@@ -597,30 +611,24 @@ export const ApprovalsPage: React.FC = () => {
         {/* Avances se abre siempre: sin permiso de operar, la lista es de sólo lectura. */}
         <td className={cell}>
           <button type="button" className={BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "progress", row: r }); }}>
-            <span className="uppercase">{wProgress}</span>
-            <span className="text-[9px] font-semibold opacity-85">
-              {notes === 0 ? t("approvals.exec.none")
-                : notes === 1 ? t("approvals.exec.notesOne")
-                : t("approvals.exec.notesMany").replace("{n}", String(notes))}
-            </span>
+            {btnBody(wProgress, notes === 0 ? t("approvals.exec.none")
+              : notes === 1 ? t("approvals.exec.notesOne")
+              : t("approvals.exec.notesMany").replace("{n}", String(notes)))}
           </button>
         </td>
         <td className={cell}>
           {can?.woManage ? (
             <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "spares", row: r })}>
-              <span className="uppercase">{wSpares}</span>
-              <span className="text-[9px] font-semibold opacity-85">
-                {spares === 0 ? t("approvals.exec.none")
-                  : spares === 1 ? t("approvals.exec.sparesOne")
-                  : t("approvals.exec.sparesMany").replace("{n}", String(spares))}
-              </span>
+              {btnBody(wSpares, spares === 0 ? t("approvals.exec.none")
+                : spares === 1 ? t("approvals.exec.sparesOne")
+                : t("approvals.exec.sparesMany").replace("{n}", String(spares)))}
             </button>
           ) : execOff(wSpares, noPerm, false)}
         </td>
         <td className={cell}>
           {can?.woOperate ? (
             <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "close", row: r })}>
-              <span className="uppercase">{wClose}</span>
+              {btnBody(wClose, t("approvals.exec.needsClose"))}
             </button>
           ) : execOff(wClose, noPerm, false)}
         </td>
