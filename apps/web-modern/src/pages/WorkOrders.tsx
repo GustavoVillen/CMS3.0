@@ -3179,6 +3179,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     { key: "loto",        label: t("wo.modal.loto"),          ok: !!loto.trim() },
     // Recuadros del papel que se olvidaban (preview V9).
     { key: "location",    label: t("wo.modal.location"),      ok: !!location.trim() },
+    // Pedido del usuario: también se marcan si quedan vacíos.
+    { key: "voyageNumber", label: t("wo.modal.voyageNumber"), ok: !!regiForm.voyageNumber.trim() },
+    { key: "operatingCondition", label: t("wo.modal.operatingCondition"), ok: !!regiForm.operatingCondition },
     { key: "assignedTo",  label: t("wo.modal.assignedTo"),    ok: !!regiForm.assignedToArea },
     { key: "system",      label: t("wo.modal.system"),        ok: !!regiForm.systemArea },
   ];
@@ -3197,11 +3200,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }))),
   ];
   const closeMissing = closeChecks.filter(c => !c.ok);
-  const missingKeys = new Set(
-    (guideStep === 0 && isEditable ? prepMissing : guideStep >= 2 && isResultEditable ? closeMissing : []).map(c => c.key),
-  );
+  // Lo de preparación se sigue marcando en las etapas siguientes mientras la OT
+  // sea editable: antes dejaba de marcarse al aprobarla y el bloque decía
+  // "Completo" con campos vacíos. El cierre se suma desde la ejecución.
+  const missingKeys = new Set([
+    ...(isEditable ? prepMissing : []),
+    ...(guideStep >= 2 && isResultEditable ? closeMissing : []),
+  ].map(c => c.key));
   const FIELD_SECTION: Record<string, string> = {
     title: "what", criteria: "what", requestedBy: "form", location: "form", assignedTo: "form", system: "form",
+    voyageNumber: "form", operatingCondition: "form",
     risk: "safety", loto: "safety",
     taskCompleted: "closure", result: "closure", executedBy: "closure", executionDate: "closure",
   };
@@ -3552,20 +3560,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       </GuideSection>
 
       <GuideSection n={2} title={t("wo.guide.sec.form")} subtitle={t("wo.guide.sec.formSub")}
-        pill={sectionPill(["location", "requestedBy", "assignedTo", "system"])} open={secOpen("form")} onToggle={() => toggleSec("form")}>
+        pill={sectionPill(["location", "voyageNumber", "operatingCondition", "requestedBy", "assignedTo", "system"])} open={secOpen("form")} onToggle={() => toggleSec("form")}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
           {needWrap("location", <>
             {guideLabel(<>{t("wo.modal.location")}<RequiredMark /></>, "location")}
             <input value={location} onChange={e => handlePaperChange({ location: e.target.value })} disabled={!isEditable}
               placeholder={t("wo.modal.locationPlaceholder")} className={inputCls} />
           </>)}
-          <div className="space-y-1.5">
-            {guideLabel(t("wo.modal.voyageNumber"))}
+          {needWrap("voyageNumber", <>
+            {guideLabel(<>{t("wo.modal.voyageNumber")}<RequiredMark /></>, "voyageNumber")}
             <input value={regiForm.voyageNumber} onChange={e => handlePaperChange({ voyageNumber: e.target.value })} disabled={!isEditable}
               placeholder="Ej. V-2026-014" className={inputCls} />
-          </div>
-          <div className="space-y-1.5">
-            {guideLabel(t("wo.modal.operatingCondition"))}
+          </>)}
+          {needWrap("operatingCondition", <>
+            {guideLabel(<>{t("wo.modal.operatingCondition")}<RequiredMark /></>, "operatingCondition")}
             <select value={regiForm.operatingCondition} onChange={e => handlePaperChange({ operatingCondition: e.target.value })}
               disabled={!isEditable} className={inputCls}>
               <option value="">—</option>
@@ -3573,7 +3581,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 <option key={c} value={c}>{t(`wo.condition.${c}` as TranslationKey)}</option>
               ))}
             </select>
-          </div>
+          </>)}
         </div>
         {needWrap("requestedBy", <>
           {guideLabel(<>{t("wo.modal.requestedBy")}<RequiredMark /></>, "requestedBy")}
