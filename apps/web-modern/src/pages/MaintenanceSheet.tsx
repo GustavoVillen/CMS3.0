@@ -360,6 +360,40 @@ export function MaintenanceSheetPage() {
     return () => ro.disconnect();
   });
 
+  // Al cerrarse una ventana (la de OT o un aviso) el navegador manda el foco al
+  // principio de la página y el Jefe de Máquinas perdía la fila en la que estaba.
+  // Se recuerda la última celda tocada de la planilla y se la devuelve al cerrar.
+  const lastCellRef = useRef<HTMLElement | null>(null);
+  const lastRowIdRef = useRef<string | null>(null);
+  const rememberCell = useCallback((e: React.SyntheticEvent) => {
+    const target = e.target as HTMLElement;
+    const row = target.closest<HTMLTableRowElement>("tr[data-plan-id]");
+    if (!row) return;
+    lastRowIdRef.current = row.dataset.planId ?? null;
+    if (target.matches("input, button")) lastCellRef.current = target;
+  }, []);
+
+  const windowOpen = !!prefill || !!alert;
+  const wasWindowOpen = useRef(false);
+  useEffect(() => {
+    const closed = wasWindowOpen.current && !windowOpen;
+    wasWindowOpen.current = windowOpen;
+    if (!closed) return;
+    const box = bodyBoxRef.current;
+    if (!box || !lastRowIdRef.current) return;
+    const row = box.querySelector<HTMLTableRowElement>(`tr[data-plan-id="${CSS.escape(lastRowIdRef.current)}"]`);
+    if (!row) return;
+    // Si la celda ya no existe (la fila se redibujó), se toma la misma fila.
+    const cell = lastCellRef.current;
+    const target = cell && row.contains(cell)
+      ? cell
+      : row.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])");
+    target?.focus({ preventScroll: true });
+    // Si la fila ya se ve no se mueve nada; si quedó fuera, vuelve al centro.
+    const r = row.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (r.top < b.top || r.bottom > b.bottom) row.scrollIntoView({ block: "center" });
+  }, [windowOpen]);
+
   // Encabezado gris de la planilla de papel. Color sólido a propósito: es sticky,
   // y con un fondo translúcido las filas rojas se transparentan por debajo.
   const th = "px-2 py-1.5 text-[10px] font-bold text-[#1F3864] border border-border bg-[#D9E2E3] text-center";
@@ -522,7 +556,12 @@ export function MaintenanceSheetPage() {
               </thead>
             </table>
           </div>
-          <div ref={bodyBoxRef} className="overflow-auto max-h-[calc(100vh-16rem)]">
+          <div
+            ref={bodyBoxRef}
+            onFocus={rememberCell}
+            onPointerDown={rememberCell}
+            className="overflow-auto max-h-[calc(100vh-16rem)]"
+          >
           <table className="w-full table-fixed border-collapse">
             <SheetCols />
             <tbody>
@@ -560,7 +599,7 @@ export function MaintenanceSheetPage() {
                     const tdLast = td + (i === b.plans.length - 1 ? sep : "");
 
                     return (
-                      <tr key={p.id} className={rowCls}>
+                      <tr key={p.id} data-plan-id={p.id} className={rowCls}>
                         <td className={tdLast + " text-center"}>
                           {hasWo ? (
                             <button

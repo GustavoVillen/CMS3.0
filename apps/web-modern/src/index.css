@@ -157,6 +157,13 @@ body {
   background: var(--surface);
 }
 
+/* Fila que recuperó el foco al cerrarse una ventana (lib/focus-return.ts).
+   Sólo esas filas llevan tabindex="-1": las demás no se enfocan nunca. */
+tr[tabindex="-1"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* Native select contrast fix (notably on Windows dropdown list rendering).
    Algunos navegadores (Chrome/Edge en Windows) ignoran las reglas option:checked
    y muestran el item seleccionado con el highlight del sistema, dejando texto
