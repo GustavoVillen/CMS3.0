@@ -270,11 +270,42 @@ export const ApprovalsPage: React.FC = () => {
       : byCard;
     // Ordenadas por buque y equipo: así las celdas combinadas de la planilla
     // agrupan de verdad, y dentro de cada equipo primero lo más urgente.
-    return [...list].sort((a, b) =>
+    const sorted = [...list].sort((a, b) =>
       (a.vesselName ?? a.vesselCode).localeCompare(b.vesselName ?? b.vesselCode)
       || (a.assetName ?? "").localeCompare(b.assetName ?? "")
       || ((daysToDue(a.dueDate) ?? 9e9) - (daysToDue(b.dueDate) ?? 9e9)));
+    // Cada SS va justo debajo de la OT de la que cuelga, si esa OT está en la
+    // lista (el equipo de la SS es el de su OT, así que no rompe el grupo). Si
+    // la OT no está —cerrada, filtrada—, la SS queda suelta en su lugar.
+    const woCodes = new Set(sorted.filter(r => r.kind === "WO").map(r => r.code));
+    const childrenOf = new Map<string, Row[]>();
+    const roots: Row[] = [];
+    for (const r of sorted) {
+      if (r.kind === "SR" && r.workOrderCode && woCodes.has(r.workOrderCode)) {
+        const kids = childrenOf.get(r.workOrderCode) ?? [];
+        kids.push(r);
+        childrenOf.set(r.workOrderCode, kids);
+      } else roots.push(r);
+    }
+    return roots.flatMap(r => (r.kind === "WO" ? [r, ...(childrenOf.get(r.code) ?? [])] : [r]));
   }, [rows, query, cardFilter, cardMatch]);
+
+  /** Lugar de cada fila en el árbol OT → SS: la OT con hijas, la SS del medio
+   *  y la última (la que cierra la línea). Las sueltas no están. */
+  const treeOf = useMemo(() => {
+    const m = new Map<string, "parent" | "child" | "last">();
+    visible.forEach((r, i) => {
+      const p = visible[i - 1];
+      if (r.kind !== "SR" || !r.workOrderCode || !p) return;
+      const underParent = p.kind === "WO"
+        ? p.code === r.workOrderCode
+        : p.workOrderCode === r.workOrderCode && m.has(rowKey(p));
+      if (!underParent) return;
+      m.set(rowKey(p), p.kind === "WO" ? "parent" : "child");
+      m.set(rowKey(r), "last");
+    });
+    return m;
+  }, [visible]);
 
   const pendingCount = useMemo(
     () => rows.filter(r => !authorizedOf(r)).length,
@@ -699,6 +730,7 @@ export const ApprovalsPage: React.FC = () => {
                   : dd !== null && dd <= 7 ? "bg-yellow-300 text-yellow-950 border-yellow-900/25!"
                   : "text-fg/90";
                 const provider = r.kind === "SR" ? r.providers[0] : undefined;
+                const treePos = treeOf.get(rowKey(r));
 
                 return (
                   <React.Fragment key={rowKey(r)}>
@@ -721,8 +753,26 @@ export const ApprovalsPage: React.FC = () => {
                       {/* Sólo el título, hasta dos renglones (pedido del usuario).
                           La descripción, el vencimiento y los vínculos quedan en
                           el globito. En la SS, además, el proveedor. */}
-                      <td className={`${td} ${tone} align-top py-1`} title={tooltipOf(r)}>
+                      <td className={`${td} ${tone} align-top py-1 relative ${
+                        treePos === "parent" ? "overflow-hidden" : treePos ? "pl-8!" : ""
+                      }`} title={tooltipOf(r)}>
+                        {/* Árbol OT → SS (pedido del usuario): la línea baja
+                            desde abajo del título de la OT y entra en cada SS
+                            con un └. Toma el color del texto de la celda. */}
+                        {(treePos === "child" || treePos === "last") && (
+                          <span aria-hidden className="pointer-events-none absolute left-3.5 top-0 h-[0.7rem] w-3.5 border-l border-b border-current opacity-40" />
+                        )}
+                        {treePos === "child" && (
+                          <span aria-hidden className="pointer-events-none absolute left-3.5 top-0 bottom-0 border-l border-current opacity-40" />
+                        )}
                         <span className="font-bold line-clamp-2">{r.title ?? (cleanDetail(r.task) || "—")}</span>
+                        {/* Arranca donde termina el título (uno o dos
+                            renglones) y la celda recorta lo que sobra. */}
+                        {treePos === "parent" && (
+                          <span aria-hidden className="relative block h-0">
+                            <span className="pointer-events-none absolute left-1.5 top-0.5 h-40 border-l border-current opacity-40" />
+                          </span>
+                        )}
                         {provider && (
                           <span className="block text-[10px] font-semibold opacity-80 truncate">
                             {t("approvals.provider").replace("{name}", provider)}
