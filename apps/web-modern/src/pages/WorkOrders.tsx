@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Upload, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -5613,10 +5613,40 @@ export const WorkOrderPermitsModal: React.FC<{
   const t = useT();
   const can = useCan();
   const canCreate = can("permit.manage");
+  // Aprobar pide "Autorizar Permisos de Trabajo", igual que el backend.
+  const canApprove = can("permit.authorize");
   const { data: wo } = useFetch<WorkOrder>(`/app/pms/work-orders/${workOrderId}`, [workOrderId]);
-  const { data, loading, reload } = useFetch<{ items: LinkedPermit[] }>(`/app/permits?workOrderId=${workOrderId}`, [workOrderId]);
+  const { data, loading, reload } = useFetch<{ items: (LinkedPermit & { attachmentCount?: number })[] }>(`/app/permits?workOrderId=${workOrderId}`, [workOrderId]);
   const permits = data?.items ?? [];
   const [state, setState] = useState<PermitModalState>(null);
+  const [approveAsk, setApproveAsk] = useState<LinkedPermit | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  // Un solo selector de archivo para toda la lista: se recuerda a qué permiso va.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadForRef = useRef<string | null>(null);
+  const approve = async (pm: LinkedPermit) => {
+    setBusyId(pm.id);
+    try {
+      await api.post(`/app/permits/${pm.id}/approve`, {});
+      void reload(); onChanged();
+    } catch (e) {
+      setAlertMsg(e instanceof ApiError ? e.message : t("common.saveError"));
+    } finally { setBusyId(null); }
+  };
+  const onPickScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";   // para poder volver a elegir el mismo archivo
+    const id = uploadForRef.current;
+    if (!file || !id) return;
+    setBusyId(id);
+    try {
+      await api.upload(`/app/permits/${id}/attachments`, file);
+      void reload(); onChanged();
+    } catch (err) {
+      setAlertMsg(err instanceof ApiError ? err.message : t("pm.attachUploadError"));
+    } finally { setBusyId(null); }
+  };
   // Los que exigen los planes de la OT (el cierre los pide cerrados).
   const required = useMemo(
     () => [...new Set((wo?.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))] as PermitType[],
@@ -5711,6 +5741,7 @@ export const WorkOrderPermitsModal: React.FC<{
                     <th className="text-left font-semibold px-1 w-[150px]">{t("wo.ptw.col.type")}</th>
                     <th className="text-left font-semibold px-1 w-[100px]">{t("wo.ptw.col.status")}</th>
                     <th className="text-left font-semibold px-1">{t("wo.ptw.col.desc")}</th>
+                    <th className="w-[190px]" />
                   </tr>
                 </thead>
                 <tbody>
@@ -5727,6 +5758,34 @@ export const WorkOrderPermitsModal: React.FC<{
                         </div>
                       </td>
                       <td className="px-1"><div className={`${noteCellCls} text-fg/85`}>{pm.description}</div></td>
+                      {/* Acciones de la fila: no abren el permiso. */}
+                      <td className="px-1 whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
+                        {busyId === pm.id ? (
+                          <Loader2 className="inline w-3.5 h-3.5 animate-spin text-accent" />
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5">
+                            {pm.status === "REQUESTED" && canApprove && (
+                              <button type="button" onClick={() => setApproveAsk(pm)}
+                                className="px-2 py-0.5 rounded-md bg-success-sea text-white text-[10px] font-bold hover:brightness-110">
+                                {t("wo.ptw.approve")}
+                              </button>
+                            )}
+                            {(pm.attachmentCount ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-text-industrial/60"
+                                title={t("wo.ptw.scans").replace("{n}", String(pm.attachmentCount))}>
+                                <Paperclip className="w-3 h-3" />{pm.attachmentCount}
+                              </span>
+                            )}
+                            {canCreate && (
+                              <button type="button" title={t("wo.ptw.attachScanHint")}
+                                onClick={() => { uploadForRef.current = pm.id; fileRef.current?.click(); }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-accent/30 bg-accent/5 text-accent text-[10px] font-bold hover:bg-accent/15">
+                                <Upload className="w-3 h-3" /> {t("wo.ptw.attachScan")}
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -5735,6 +5794,17 @@ export const WorkOrderPermitsModal: React.FC<{
           )}
         </div>
       </div>
+      <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={e => { void onPickScan(e); }} />
+      {approveAsk && (
+        <ConfirmDialog
+          message={t("wo.ptw.approveConfirm").replace("{code}", approveAsk.permitCode)}
+          confirmLabel={t("wo.ptw.approve")}
+          cancelLabel={t("common.cancel")}
+          onCancel={() => setApproveAsk(null)}
+          onConfirm={() => { const pm = approveAsk; setApproveAsk(null); void approve(pm); }}
+        />
+      )}
+      {alertMsg && <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />}
       {state?.kind === "create" && (
         <PermitModal permit={null} prefill={state.prefill} onClose={() => setState(null)} onSaved={saved} />
       )}

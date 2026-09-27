@@ -179,7 +179,19 @@ export async function listPermits(session: TenantAccessSession, filters: PermitL
       participants: true,
     },
   });
-  return attachWorkOrderLabels(prisma, tenant.id, rows);
+  const labeled = await attachWorkOrderLabels(prisma, tenant.id, rows);
+  // Cuántos escaneos (papel firmado) tiene cada permiso: la lista de la OT en
+  // Seguimiento lo muestra al lado del botón de adjuntar.
+  const ids = (rows as Array<{ id: string }>).map(r => r.id);
+  const counts = ids.length > 0
+    ? await prisma.attachment.groupBy({
+        by: ["targetId"],
+        where: { tenantId: tenant.id, targetType: "WORK_PERMIT" as never, targetId: { in: ids }, deletedAt: null },
+        _count: { _all: true },
+      })
+    : [];
+  const countById = new Map(counts.map(c => [c.targetId, c._count._all]));
+  return labeled.map(r => ({ ...r, attachmentCount: countById.get((r as { id: string }).id) ?? 0 }));
 }
 
 export async function getPermit(session: TenantAccessSession, id: string) {

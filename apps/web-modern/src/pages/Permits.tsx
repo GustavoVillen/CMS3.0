@@ -482,6 +482,33 @@ interface PermitModalProps {
   onReload?: () => void;
 }
 
+/**
+ * Baja el permiso como PDF o Word vía fetch + blob: window.open no carga el
+ * header X-Tenant-Slug que el SPA usa para resolver el tenant, y devolvería
+ * TENANT_UNRESOLVED en una tab nueva. El nombre lo decide el servidor (con
+ * documento controlado lleva adelante el código del formulario).
+ */
+async function downloadPermitFile(id: string, kind: "pdf" | "doc", fallbackName: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = localStorage.getItem("gpms_token");
+  const slug  = localStorage.getItem("gpms_tenant_slug");
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (slug)  headers["X-Tenant-Slug"] = slug;
+  const res = await fetch(`/app/permits/${id}/${kind}`, { headers });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = named || fallbackName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClose, onSaved, onMocTrigger, wizard, initialDialog, onReload }) => {
   const t = useT();
   const { vessels } = useVesselContext();
@@ -617,12 +644,14 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   }, [isEditable, loadingPpe, description, location, hazards, controls, ppe, aiBaseInput, t]);
 
   /** Guardar. `requestAfter` (alta, V19): además pide la aprobación del permiso recién creado. */
-  const onSave = useCallback(async (requestAfter = false) => {
+  const onSave = useCallback(async (requestAfter = false, emitPdf = false) => {
     if (!vesselCode || !location.trim() || !description.trim() || !plannedStart || !plannedEnd) {
       setErr(t("pm.wiz.required")); return;
     }
-    // Para pedir la aprobación, el análisis de riesgo tiene que estar completo.
-    if (requestAfter && (!hazards.trim() || !controls.trim() || !ppe.trim())) {
+    // Para pedir la aprobación en el sistema, el análisis de riesgo tiene que
+    // estar completo. Con el PDF no (pedido del usuario): el papel se completa
+    // a mano y se aprueba firmado.
+    if (requestAfter && !emitPdf && (!hazards.trim() || !controls.trim() || !ppe.trim())) {
       setErr(t("pm.wiz.requestNeeds")); return;
     }
     setSaving(true); setErr(null);
@@ -642,12 +671,27 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
       // borrador). El backend valida que la OT sea del mismo tenant y buque, y
       // rechaza el cambio si el permiso ya salió de borrador.
       if (canLinkWorkOrder) payload.workOrderId = workOrder?.id ?? null;
+      let savedId: string | null = permit?.id ?? null;
+      let savedCode: string = permit?.permitCode ?? "permiso";
       if (isNew) {
-        const created = await api.post<{ id: string }>("/app/permits", payload);
+        const created = await api.post<{ id: string; permitCode?: string }>("/app/permits", payload);
+        savedId = created?.id ?? null;
+        savedCode = created?.permitCode ?? savedCode;
         if (requestAfter && created?.id) await api.post(`/app/permits/${created.id}/request`, {});
       } else {
         await api.patch(`/app/permits/${permit!.id}`, payload);
         if (requestAfter && permit!.status === "DRAFT") await api.post(`/app/permits/${permit!.id}/request`, {});
+      }
+      // "Guardar y emitir PDF": queda Solicitado y se baja para imprimir,
+      // completar a mano y firmar. Si el PDF falla, el permiso ya quedó
+      // guardado: se avisa y la ventana sigue abierta para reintentar.
+      if (emitPdf && savedId) {
+        try {
+          await downloadPermitFile(savedId, "pdf", `${savedCode}.pdf`);
+        } catch (pdfErr) {
+          setErr(t("pm.wiz.pdfFailed").replace("{error}", pdfErr instanceof Error ? pdfErr.message : ""));
+          return;
+        }
       }
 
       // Detector MOC TEMPORARY: el bypass/override de una alarma crítica
@@ -700,31 +744,9 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
    */
   const onDownload = useCallback(async (kind: "pdf" | "doc") => {
     if (!permit) return;
-    // Bajamos el archivo vía fetch + blob — window.open no carga el header
-    // X-Tenant-Slug que el SPA usa para resolver tenant, y devolvería
-    // TENANT_UNRESOLVED en una tab nueva.
     setSaving(true); setErr(null);
     try {
-      const headers: Record<string, string> = {};
-      const token = localStorage.getItem("gpms_token");
-      const slug  = localStorage.getItem("gpms_tenant_slug");
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      if (slug)  headers["X-Tenant-Slug"] = slug;
-
-      const res = await fetch(`/app/permits/${permit.id}/${kind}`, { headers });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const named = /filename="([^"]+)"/.exec(disposition)?.[1];
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = named || `${permit.permitCode}.${kind === "pdf" ? "pdf" : "doc"}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      await downloadPermitFile(permit.id, kind, `${permit.permitCode}.${kind === "pdf" ? "pdf" : "doc"}`);
     } catch (e) {
       const what = kind === "pdf" ? "el PDF" : "el documento Word";
       setErr(e instanceof Error ? `No se pudo generar ${what} (${e.message}).` : `No se pudo generar ${what}.`);
@@ -914,9 +936,9 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:border-fg/25 disabled:opacity-50">
         <Save className="w-3.5 h-3.5" /> {t("pm.wiz.saveDraft")}
       </button>
-      <button type="button" onClick={() => { void onSave(true); }} disabled={saving}
+      <button type="button" onClick={() => { void onSave(true, true); }} disabled={saving}
         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold hover:brightness-110 disabled:opacity-50">
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {t("pm.wiz.saveRequest")}
+        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} {t("pm.wiz.saveRequest")}
         {miss1 + miss2 > 0 && <span className="text-[10px] font-semibold opacity-85">{t("mp.guide.saveMissing").replace("{n}", String(miss1 + miss2))}</span>}
       </button>
     </div>
