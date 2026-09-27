@@ -682,16 +682,16 @@ export const ApprovalsPage: React.FC = () => {
               de aplastar los botones. */}
           <table className="w-full min-w-[1150px] table-fixed border-collapse">
             <colgroup>
-              <col className="w-[40px]" /><col className="w-[130px]" /><col className="w-[25%]" />
-              <col className="w-[110px]" />
+              <col className="w-[40px]" /><col className="w-[130px]" /><col className="w-[110px]" />
+              <col className="w-[25%]" />
               <col /><col /><col /><col /><col /><col />
             </colgroup>
             <thead>
               <tr>
                 <th className={th}>{t("approvals.col.item")}</th>
                 <th className={th}>{t("approvals.equipment")}</th>
-                <th className={th}>{t("approvals.task")}</th>
                 <th className={th}>{t("approvals.col.record")}</th>
+                <th className={th}>{t("approvals.task")}</th>
                 <th className={th}>{t("approvals.action.approve")}</th>
                 <th className={th}>{t("approvals.action.authorize")}</th>
                 <th className={th}>{t("approvals.exec.sendProvider")}</th>
@@ -761,6 +761,23 @@ export const ApprovalsPage: React.FC = () => {
                           {r.assetName ?? "—"}
                         </td>
                       )}
+                      {/* Registro antes que la tarea (pedido del usuario). */}
+                      <td className={`${td} ${tone} text-center align-top py-1 px-1!`}>
+                        <span className={`inline-block text-[8.5px] px-1.5 py-px rounded-full font-extrabold ${
+                          r.kind === "WO" ? "bg-accent/20 text-accent" : "bg-warning/25 text-warning"
+                        }`}>
+                          {t(r.kind === "WO" ? "approvals.kind.wo" : "approvals.kind.sr")}
+                        </span>
+                        {/* El número lleva a la ficha de la OT o de la SS. */}
+                        <button
+                          type="button"
+                          onClick={() => openRecord(r)}
+                          title={t("approvals.openRecord").replace("{code}", r.code)}
+                          className="block mx-auto mt-0.5 font-mono font-bold text-[10.5px] whitespace-nowrap underline decoration-dotted underline-offset-2 hover:decoration-solid hover:text-accent"
+                        >
+                          {r.code}
+                        </button>
+                      </td>
                       {/* Sólo el título, hasta dos renglones (pedido del usuario).
                           La descripción, el vencimiento y los vínculos quedan en
                           el globito. En la SS, además, el proveedor. */}
@@ -789,22 +806,6 @@ export const ApprovalsPage: React.FC = () => {
                             {t("approvals.provider").replace("{name}", provider)}
                           </span>
                         )}
-                      </td>
-                      <td className={`${td} ${tone} text-center align-top py-1 px-1!`}>
-                        <span className={`inline-block text-[8.5px] px-1.5 py-px rounded-full font-extrabold ${
-                          r.kind === "WO" ? "bg-accent/20 text-accent" : "bg-warning/25 text-warning"
-                        }`}>
-                          {t(r.kind === "WO" ? "approvals.kind.wo" : "approvals.kind.sr")}
-                        </span>
-                        {/* El número lleva a la ficha de la OT o de la SS. */}
-                        <button
-                          type="button"
-                          onClick={() => openRecord(r)}
-                          title={t("approvals.openRecord").replace("{code}", r.code)}
-                          className="block mx-auto mt-0.5 font-mono font-bold text-[10.5px] whitespace-nowrap underline decoration-dotted underline-offset-2 hover:decoration-solid hover:text-accent"
-                        >
-                          {r.code}
-                        </button>
                       </td>
                       <td className={`${td} p-1 bg-surface`}><SignButton row={r} step="APRUEBA" /></td>
                       <td className={`${td} p-1 bg-surface`}><SignButton row={r} step="AUTORIZA" /></td>
