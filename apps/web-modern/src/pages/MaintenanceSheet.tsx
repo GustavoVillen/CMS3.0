@@ -17,7 +17,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
+import { Check, ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
@@ -42,6 +42,8 @@ type SheetRow = SheetPlan & {
   status?: string | null;
   /** Código de la OT abierta que ya cubre esta tarea (PLANNED / IN_PROGRESS). */
   activeWorkOrderCode?: string | null;
+  /** Firma de esa OT: autorizada (tilde verde) o todavía no (advertencia amarilla). */
+  activeWorkOrderSign?: "AUTHORIZED" | "APPROVED" | "PENDING" | null;
   vesselCode?: string;
 };
 
@@ -50,13 +52,40 @@ type SheetRow = SheetPlan & {
 // correr por al lado. El precio es tener que alinear dos tablas: se hace con
 // `table-fixed` y este mismo colgroup en las dos, más el ancho de la barra sumado
 // como padding a la del encabezado (se mide en vivo: cambia según el sistema).
-const COL_WIDTHS = [112, 40, 208, null, 96, 128, 128, 160, 96] as const;
+const COL_WIDTHS = [40, 208, 128, null, 96, 128, 128, 160, 96] as const;
 
 const SheetCols: React.FC = () => (
   <colgroup>
     {COL_WIDTHS.map((w, i) => <col key={i} style={w == null ? undefined : { width: w }} />)}
   </colgroup>
 );
+
+/**
+ * Al lado del número de OT: tilde verde si ya está aprobada y autorizada, "!"
+ * en círculo amarillo si todavía le falta alguna firma (pedido del usuario).
+ * Relleno de color con borde para que se vea también sobre filas rojas o
+ * amarillas.
+ */
+const WoSignMark: React.FC<{ sign?: SheetRow["activeWorkOrderSign"] }> = ({ sign }) => {
+  const t = useT();
+  if (!sign) return null;
+  if (sign === "AUTHORIZED") {
+    const tip = t("msheet.woSign.authorized");
+    return (
+      <span title={tip} aria-label={tip}
+        className="inline-flex w-3.5 h-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white ring-1 ring-white/70">
+        <Check className="w-2.5 h-2.5" strokeWidth={3.5} />
+      </span>
+    );
+  }
+  const tip = t(sign === "APPROVED" ? "msheet.woSign.approved" : "msheet.woSign.pending");
+  return (
+    <span title={tip} aria-label={tip}
+      className="inline-flex w-3.5 h-3.5 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-yellow-950 ring-1 ring-yellow-900/40 text-[10px] font-black leading-none">
+      !
+    </span>
+  );
+};
 
 const NUM_LOCALE = "es-AR";
 const fmtHours = (n: number) => n.toLocaleString(NUM_LOCALE);
@@ -387,7 +416,8 @@ export function MaintenanceSheetPage() {
     const cell = lastCellRef.current;
     const target = cell && row.contains(cell)
       ? cell
-      : row.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])");
+      : row.querySelector<HTMLElement>("input[type=checkbox]:not([disabled])")
+        ?? row.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled])");
     target?.focus({ preventScroll: true });
     // Si la fila ya se ve no se mueve nada; si quedó fuera, vuelve al centro.
     const r = row.getBoundingClientRect(), b = box.getBoundingClientRect();
@@ -543,9 +573,9 @@ export function MaintenanceSheetPage() {
                 <tr>
                   {/* Ancha a propósito: cuando la tarea ya tiene una OT abierta,
                       acá va el número de orden entero, no una casilla. */}
-                  <th className={th}></th>
                   <th className={th}>{t("msheet.col.item")}</th>
                   <th className={th}>{t("msheet.col.description")}</th>
+                  <th className={th}></th>
                   <th className={th}>{t("msheet.col.task")}</th>
                   <th className={th}>{t("msheet.col.every")}</th>
                   <th className={th}>{t("msheet.col.lastCheck")}</th>
@@ -600,27 +630,6 @@ export function MaintenanceSheetPage() {
 
                     return (
                       <tr key={p.id} data-plan-id={p.id} className={rowCls}>
-                        <td className={tdLast + " text-center"}>
-                          {hasWo ? (
-                            <button
-                              onClick={() => navigate(`/work-orders/${encodeURIComponent(p.activeWorkOrderCode!)}`)}
-                              title={t("msheet.alreadyHasWo").replace("{code}", p.activeWorkOrderCode!)}
-                              className="text-[10px] font-mono font-bold underline underline-offset-2 whitespace-nowrap"
-                            >
-                              {p.activeWorkOrderCode}
-                            </button>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              checked={selectedSet.has(p.id)}
-                              disabled={!selectable}
-                              onChange={() => toggle(p.id)}
-                              title={t("msheet.markForWo")}
-                              className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30"
-                            />
-                          )}
-                        </td>
-
                         {/* Ítem, descripción del equipo y fuera de servicio: una
                             sola celda por bloque, como en la planilla de papel. */}
                         {i === 0 && (
@@ -664,6 +673,32 @@ export function MaintenanceSheetPage() {
                             </button>
                           </td>
                         )}
+
+                        {/* Selector / número de OT: entre la descripción del equipo y la
+                            tarea (pedido del usuario). */}
+                        <td className={tdLast + " text-center"}>
+                          {hasWo ? (
+                            <span className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => navigate(`/work-orders/${encodeURIComponent(p.activeWorkOrderCode!)}`)}
+                                title={t("msheet.alreadyHasWo").replace("{code}", p.activeWorkOrderCode!)}
+                                className="text-[10px] font-mono font-bold underline underline-offset-2 whitespace-nowrap"
+                              >
+                                {p.activeWorkOrderCode}
+                              </button>
+                              <WoSignMark sign={p.activeWorkOrderSign} />
+                            </span>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={selectedSet.has(p.id)}
+                              disabled={!selectable}
+                              onChange={() => toggle(p.id)}
+                              title={t("msheet.markForWo")}
+                              className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30"
+                            />
+                          )}
+                        </td>
 
                         {/* La tarea TILDA el selector de su fila: en la planilla
                             se marca lo que va a OT, no se navega. La ficha del

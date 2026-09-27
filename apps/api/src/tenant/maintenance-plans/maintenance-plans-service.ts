@@ -786,7 +786,7 @@ export async function listTenantMaintenancePlans(
     // maintenancePlanId de la OT: una OT de astillero cubre varios ítems del PDM
     // y los seis planes tienen que mostrar esa misma OT abierta.
     planIds.length > 0
-      ? (prismaRaw as unknown as { workOrderMaintenancePlan: { findMany: (args: unknown) => Promise<{ maintenancePlanId: string; workOrder: { workOrderCode: string; status: string } | null }[]> } }).workOrderMaintenancePlan.findMany({
+      ? (prismaRaw as unknown as { workOrderMaintenancePlan: { findMany: (args: unknown) => Promise<{ maintenancePlanId: string; workOrder: { workOrderCode: string; status: string; aprobadoAt: Date | null; autorizadoAt: Date | null } | null }[]> } }).workOrderMaintenancePlan.findMany({
           // ON_HOLD incluido: una OT diferida no es "activa" (no cuelga de activeWoMap),
           // pero su código debe seguir visible en el plan con marca de diferida.
           where: {
@@ -794,20 +794,28 @@ export async function listTenantMaintenancePlans(
             maintenancePlanId: { in: planIds },
             workOrder: { status: { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] }, deletedAt: null },
           },
-          select: { maintenancePlanId: true, workOrder: { select: { workOrderCode: true, status: true } } },
+          select: { maintenancePlanId: true, workOrder: { select: { workOrderCode: true, status: true, aprobadoAt: true, autorizadoAt: true } } },
           orderBy: { createdAt: "desc" as const },
         })
-      : Promise.resolve([] as { maintenancePlanId: string; workOrder: { workOrderCode: string; status: string } | null }[]),
+      : Promise.resolve([] as { maintenancePlanId: string; workOrder: { workOrderCode: string; status: string; aprobadoAt: Date | null; autorizadoAt: Date | null } | null }[]),
   ]);
 
   const assetNameMap = new Map(assetRows.map((a) => [a.id, a.name ?? null]));
   const activeWoMap = new Map<string, string>();   // OT PLANNED/IN_PROGRESS (activa)
   const deferredWoMap = new Map<string, string>(); // OT ON_HOLD (diferida)
+  // Firma de la OT activa, para el tilde / la advertencia de la Planilla a Bordo.
+  const activeWoSignMap = new Map<string, "AUTHORIZED" | "APPROVED" | "PENDING">();
   for (const link of activeWos) {
     const wo = link.workOrder;
     if (!wo) continue;
     const target = wo.status === "ON_HOLD" ? deferredWoMap : activeWoMap;
-    if (!target.has(link.maintenancePlanId)) target.set(link.maintenancePlanId, wo.workOrderCode);
+    if (!target.has(link.maintenancePlanId)) {
+      target.set(link.maintenancePlanId, wo.workOrderCode);
+      if (target === activeWoMap) {
+        activeWoSignMap.set(link.maintenancePlanId,
+          wo.autorizadoAt ? "AUTHORIZED" : wo.aprobadoAt ? "APPROVED" : "PENDING");
+      }
+    }
   }
 
   // Resolver nombre del proveedor para los planes con área = PROVEEDOR. Se juntan
@@ -848,6 +856,7 @@ export async function listTenantMaintenancePlans(
       assetName: assetNameMap.get(p.assetId) ?? null,
       assetCurrentHours: currentHours,
       activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
+      activeWorkOrderSign: activeWoSignMap.get(p.id) ?? null,
       deferredWorkOrderCode: deferredWoMap.get(p.id) ?? null,
       providerName: providerNameMap.get((p as unknown as { providerId?: string | null }).providerId ?? "") ?? null,
       // Lista de proveedores resuelta con nombre, para la UI. Deriva del helper
