@@ -1309,9 +1309,11 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
 // Servicio. Es el mismo ServiceRequestModal: una SS en el taller abre con la
 // tarjeta de recepción arriba y su bloque desplegado, y el cierre pasa por la
 // misma recepción y la misma auditoría de IA. Ninguna regla propia.
-export function ServiceRequestPopup({ serviceRequestId, onClose }: {
+export function ServiceRequestPopup({ serviceRequestId, onClose, focusReception }: {
   serviceRequestId: string;
   onClose: () => void;
+  /** "Cerrar SS": abrir parada en "Entrega y recepción". */
+  focusReception?: boolean;
 }) {
   const t = useT();
   const { user } = useAuth();
@@ -1335,6 +1337,7 @@ export function ServiceRequestPopup({ serviceRequestId, onClose }: {
       onClose={onClose}
       onChanged={onClose}
       onSaved={updated => setSr(prev => (prev ? { ...prev, ...updated } : updated))}
+      focusReception={focusReception}
     />
   );
 }
@@ -1498,12 +1501,14 @@ export function openProviderEmailDraft(sr: ServiceRequest, vesselName: string) {
 // Modal
 // ---------------------------------------------------------------------------
 
-function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToApprove }: {
+function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToApprove, focusReception }: {
   sr: ServiceRequest;
   role: string;
   onClose: () => void;
   /** Se envió a aprobar: la página muestra la confirmación (este modal se cierra). */
   onSentToApprove?: (serviceRequestCode: string) => void;
+  /** Abrir parada en "Entrega y recepción" (el "Cerrar SS" de Seguimiento). */
+  focusReception?: boolean;
   /** Avanzó el estado: refresca la lista y cierra el modal. */
   onChanged: () => void;
   /** Se guardaron campos: refresca la lista y el registro, SIN cerrar el modal. */
@@ -2053,6 +2058,32 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
       window.setTimeout(() => setFlashKey(null), 1600);
     }, 80);
   };
+  // Abierta desde "Cerrar SS" de Seguimiento: una sola vez, lleva a "Entrega y
+  // recepción" y deja el cursor en el primer dato que falta (o en el primero).
+  const focusedRecvRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!focusReception || focusedRecvRef.current || sr.status !== "IN_PROGRESS") return;
+    focusedRecvRef.current = true;
+    const key = recvMissing[0]?.key ?? "item";
+    goField(key);
+    window.setTimeout(() => {
+      document.getElementById(`ss-field-${key}`)
+        ?.querySelector<HTMLElement>("input:not([disabled]), textarea:not([disabled]), button:not([disabled])")
+        ?.focus({ preventScroll: true });
+    }, 200);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusReception]);
+  // Después de "Guardar", el foco va a "Cerrar SS" si está a la vista y
+  // habilitado (pedido del usuario), igual que "Cerrar OT" en la OT.
+  const recvBtnRef = React.useRef<HTMLButtonElement | null>(null);
+  const focusCloseAfterSave = () => {
+    window.setTimeout(() => {
+      const b = recvBtnRef.current;
+      if (!b || b.disabled) return;
+      b.scrollIntoView({ behavior: "smooth", block: "center" });
+      b.focus({ preventScroll: true });
+    }, 150);
+  };
   const field = (key: string, children: React.ReactNode) => (
     <GuideField id={`ss-field-${key}`} missing={missingKeys.has(key)} flash={flashKey === key}>{children}</GuideField>
   );
@@ -2210,7 +2241,8 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
         {recvMissing.length > 0 ? t("ss.guide.shop.missing").replace("{n}", String(recvMissing.length)) : t("ss.guide.shop.ready")}
       </p>
       {recvMissing.length > 0 && <div className="flex flex-wrap gap-1.5">{recvMissing.map(chip)}</div>}
-      <button type="button" onClick={() => setReceiving(true)} disabled={busy || recvMissing.length > 0} className={btnGreen}>
+      <button ref={recvBtnRef} type="button" onClick={() => setReceiving(true)} disabled={busy || recvMissing.length > 0}
+        className={`${btnGreen} focus:outline-none focus:ring-4 focus:ring-success-sea/35`}>
         <PackageCheck className="w-4 h-4" /> {t("ss.guide.received")}
       </button>
     </div>
@@ -2571,7 +2603,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
             </span>
           )}
           {editable && (
-            <button onClick={() => { void save().then(saved => { if (saved) offerPdfAfterSave(saved); }); }} disabled={saving || !dirty}
+            <button onClick={() => { void save().then(saved => { if (saved) { offerPdfAfterSave(saved); focusCloseAfterSave(); } }); }} disabled={saving || !dirty}
               className={canSendToApprove ? btnSoft : "flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110 disabled:opacity-40"}>
               <Save className="w-3.5 h-3.5" /> {saving ? t("wo.guide.saving") : t("common.save")}
             </button>

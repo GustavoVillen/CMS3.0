@@ -886,6 +886,7 @@ export const ApprovalsPage: React.FC = () => {
         {(exec?.kind === "closeSr" || exec?.kind === "recordSr") && (
           <ServiceRequestPopup
             serviceRequestId={exec.row.id}
+            focusReception={exec.kind === "closeSr"}
             onClose={() => { void afterRecord(exec.row); }}
           />
         )}
