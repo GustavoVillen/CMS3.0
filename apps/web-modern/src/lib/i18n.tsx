@@ -5722,7 +5722,6 @@ const dict = {
   "advisor.empty.title": { es: "Todavía no se analizó {scope}", en: "{scope} has not been analysed yet", pt: "{scope} ainda não foi analisado" },
   "advisor.empty.body": { es: "El sistema junta los registros reales y la IA te dice qué resolver primero. Sólo puede citar registros que existen.", en: "The system gathers the real records and the AI tells you what to solve first. It can only cite records that exist.", pt: "O sistema reúne os registros reais e a IA diz o que resolver primeiro. Só pode citar registros que existem." },
   "advisor.empty.cta": { es: "Analizar ahora", en: "Analyse now", pt: "Analisar agora" },
-  "advisor.card.today": { es: "Lo más importante hoy", en: "Most important today", pt: "O mais importante hoje" },
   "advisor.card.healthVessel": { es: "Cómo está el buque", en: "How the vessel is doing", pt: "Como está a embarcação" },
   "advisor.bucket.today": { es: "Para hoy", en: "For today", pt: "Para hoje" },
   "advisor.bucket.week": { es: "Esta semana", en: "This week", pt: "Esta semana" },

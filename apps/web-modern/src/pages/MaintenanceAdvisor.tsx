@@ -171,11 +171,6 @@ export const MaintenanceAdvisorPage: React.FC = () => {
   const evidence = useMemo(() => report?.evidence ?? [], [report]);
   const followedKeys = useMemo(() => new Set(actions.filter(a => a.reportId === report?.id && a.findingKey).map(a => a.findingKey!)), [actions, report]);
   const visibleFindings = useMemo(() => (report?.findings ?? []).filter(f => !areaFilter || findingAreas(f, evidence).has(areaFilter)), [report, areaFilter, evidence]);
-  const bucketCount = useMemo(() => {
-    const c: Record<Bucket, number> = { today: 0, week: 0, month: 0, later: 0 };
-    for (const f of report?.findings ?? []) c[BUCKET_OF[f.priority]] += 1;
-    return c;
-  }, [report]);
   const health = report ? areaHealth(report.metrics) : null;
 
   // Modo grupo: qué barcazas preocupan más (temas por buque, por "para cuándo").
@@ -298,18 +293,10 @@ export const MaintenanceAdvisorPage: React.FC = () => {
       ) : (
         <>
           {/* ═══ De un vistazo ═══ */}
-          <div className={`grid gap-3 grid-cols-1 ${group ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
-            <Card title={t("advisor.card.today")} ai>
-              <p className="text-[17px] font-extrabold text-fg leading-snug">{report.summary.whatNeedsAttentionNow || "—"}</p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {BUCKETS.filter(b => b !== "later" || bucketCount.later > 0).map(b => (
-                  <span key={b} className={`inline-flex items-center gap-2 rounded-xl border-[1.5px] px-3 py-1.5 text-[13px] font-extrabold ${BUCKET_STYLE[b].pill}`}>
-                    <span className="text-xl font-black leading-none">{bucketCount[b]}</span> {t(BUCKET_LABEL[b]).toLowerCase()}
-                  </span>
-                ))}
-              </div>
-            </Card>
-
+          {/* "Lo más importante hoy" se sacó (pedido del usuario, sep 2026): el
+              resumen y los conteos por "para cuándo" ya se repiten más abajo,
+              en las pestañas de temas. */}
+          <div className={`grid gap-3 grid-cols-1 ${group ? "lg:grid-cols-2" : ""}`}>
             <Card title={t(group ? "advisor.card.healthBarges" : "advisor.card.healthVessel")}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {health && AREAS.map(area => {
