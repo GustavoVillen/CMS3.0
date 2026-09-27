@@ -55,6 +55,8 @@ export async function handlePmsRoutes(
     const session = requireTenantAccessSession(request, slug);
     sendJson(response, 200, await listPendingApprovals(session, {
       vesselCode: url.searchParams.get("vesselCode"),
+      // Seguimiento pide todo el circuito (?all=1); el celular, sólo lo que firma.
+      followAll: url.searchParams.get("all") === "1",
     }));
     return true;
   }

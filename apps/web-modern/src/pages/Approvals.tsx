@@ -161,7 +161,7 @@ const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
 export const ApprovalsPage: React.FC = () => {
   const t = useT();
   const { user } = useAuth();
-  const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending");
+  const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending?all=1");
 
   const [query, setQuery]     = useState("");
   const [cardFilter, setCardFilter] = useState<CardKey | "">("");

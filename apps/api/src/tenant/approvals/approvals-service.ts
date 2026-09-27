@@ -143,10 +143,19 @@ const SR_SELECT = {
  * Cada bandeja se consulta SÓLO si el usuario tiene la atribución de firmarla:
  * sin permiso devuelve `[]` y el botón sale apagado. El alcance por buque lo
  * pone applyAssignedVesselScope (fail-closed: sin buques asignados no ve nada).
+ *
+ * `followAll` (Seguimiento, sep 2026): las pendientes de aprobar / autorizar se
+ * listan también a quien no las firma pero sigue el circuito (quien opera las
+ * OT o gestiona las SS). Caso real: el Jefe de Máquinas manda la OT a aprobar
+ * y no la veía en Seguimiento porque la firma es de otro. Sólo se VEN — el
+ * botón de firma sale "Sin permiso" y el backend de la firma sigue exigiendo
+ * el permiso. Son OT/SS que esa persona ya ve en sus listas, con el mismo
+ * alcance por buque. La bandeja del celular no lo pide: allí todo lo que llega
+ * se cuenta como "para firmar".
  */
 export async function listPendingApprovals(
   session: TenantAccessSession,
-  filters: { vesselCode?: string | null } = {},
+  filters: { vesselCode?: string | null; followAll?: boolean } = {},
 ): Promise<PendingApprovalsResult> {
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -199,18 +208,24 @@ export async function listPendingApprovals(
   // gente que llega a esta pantalla. Sin ninguno de esos permisos, vacía.
   const seesExecute   = can.woApprove || can.woAuthorize || can.woOperate;
   const seesSrExecute = can.srApprove || can.srAuthorize || can.srManage;
+  // Pendientes de firma: a quien firma siempre; a quien sólo sigue, con followAll.
+  const follow = filters.followAll === true;
+  const listWoApprove   = can.woApprove   || (follow && seesExecute);
+  const listWoAuthorize = can.woAuthorize || (follow && seesExecute);
+  const listSrApprove   = can.srApprove   || (follow && seesSrExecute);
+  const listSrAuthorize = can.srAuthorize || (follow && seesSrExecute);
 
   const [woApproveRows, woAuthorizeRows, srApproveRows, srAuthorizeRows, woExecuteRows, srExecuteRows] = await Promise.all([
-    can.woApprove
+    listWoApprove
       ? (prisma as any).workOrder.findMany({ where: woWhere("APROBAR"), select: WO_SELECT, orderBy: orderWo })
       : Promise.resolve([]),
-    can.woAuthorize
+    listWoAuthorize
       ? (prisma as any).workOrder.findMany({ where: woWhere("AUTORIZAR"), select: WO_SELECT, orderBy: orderWo })
       : Promise.resolve([]),
-    can.srApprove
+    listSrApprove
       ? (prisma as any).serviceRequest.findMany({ where: srWhere("SOLICITADA"), select: SR_SELECT, orderBy: orderSr })
       : Promise.resolve([]),
-    can.srAuthorize
+    listSrAuthorize
       ? (prisma as any).serviceRequest.findMany({ where: srWhere("APROBADA"), select: SR_SELECT, orderBy: orderSr })
       : Promise.resolve([]),
     seesExecute
