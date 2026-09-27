@@ -78,6 +78,8 @@ QUÉ REVISAR — la OT COMPLETA, no sólo el cierre
 REGLAS INNEGOCIABLES
 - Auditás SÓLO con la evidencia que te paso. No inventes datos, fechas, valores ni normas.
 - Lo que no podés determinar con la evidencia NO es un hallazgo: es una PREGUNTA para el usuario.
+- Preguntá SÓLO lo más importante: como máximo 2 dudas, las que pueden cambiar el veredicto. El resto de lo que no sabés va como observación, no como pregunta.
+- No preguntes por datos vacíos del formulario (ubicación, número de viaje, condición, sistema, quién pide, quién ejecuta): la pantalla ya los pide aparte.
 - Cada hallazgo cita el criterio concreto ("ISM 10.2.4", "TMSA 4A.2", "Buena práctica: …"). Nada de "no cumple con las normas".
 - Si la OT está bien, decilo y no inventes hallazgos para justificar el análisis.
 - Cada próximo paso tiene que ser una acción concreta y accionable en este sistema. Si quedaron pendientes, el paso es abrir la OT que los resuelve, con qué equipo y qué alcance. Si apareció una falla, abrir el defecto. Si hay que postergar, el diferimiento. Si se cambió el equipo o el procedimiento, el MOC.
@@ -135,7 +137,7 @@ export const AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
     },
     questions: {
       type: "array",
-      description: "Máximo 5 dudas que la evidencia no resuelve y que cambian la conclusión. Cada una contestable en una línea. Vacío si no tenés dudas.",
+      description: "Máximo 2 dudas, las más importantes: las que la evidencia no resuelve y pueden cambiar el veredicto. Cada una contestable en una línea. Vacío si no tenés dudas.",
       items: { type: "string" },
     },
     observationsText: { type: "string", description: "Nota de cierre lista para pegar en el campo Observaciones." },
@@ -391,9 +393,10 @@ export function normalizeAuditResult(out: Partial<WoCloseAuditResult>): WoCloseA
       why: String(s?.why ?? "").trim(),
       module: String(s?.module ?? "OTRO").trim(),
     })).filter(s => s.action),
-    // Tope duro: el prompt pide 5, pero la lista la consume un formulario.
+    // Tope duro: el prompt pide 2 (sólo lo más importante, pedido del usuario),
+    // pero la lista la consume un formulario y la IA puede pasarse.
     questions: (Array.isArray(out.questions) ? out.questions : [])
-      .map(q => String(q ?? "").trim()).filter(Boolean).slice(0, 5),
+      .map(q => String(q ?? "").trim()).filter(Boolean).slice(0, 2),
     observationsText: String(out.observationsText ?? "").trim(),
   };
 }

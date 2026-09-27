@@ -8,6 +8,10 @@
 // (service-request-complete-audit.ts): cambian el endpoint, lo que se manda y
 // algunos textos (prop `texts`); el informe tiene el mismo formato.
 //
+// Antes de las dudas de la IA pregunta los campos de la orden que siguen vacíos
+// (`pendingFields`, pedido del usuario): lo que se conteste vuelve al formulario
+// y se guarda con el cierre, y también viaja a la re-auditoría como respuesta.
+//
 // La auditoría NO frena el cierre (decisión de producto): muestra, pregunta y
 // recomienda; cerrar o no lo decide la persona. Si la IA falla, esta ventana lo
 // dice y deja cerrar igual — un problema de la IA no puede trabar la operación.
@@ -33,6 +37,14 @@ export interface WoCloseAuditDraft {
   pendingDetail?: string | null;
   taskCompleted?: string | null;
   spareUsages?: Array<{ name?: string | null; qty?: number | null; unit?: string | null }>;
+}
+
+/** Campo de la orden que quedó vacío y la auditoría pregunta antes de cerrar. */
+export interface AuditPendingField {
+  key: string;
+  label: string;
+  kind: "text" | "textarea" | "select";
+  options?: { value: string; label: string }[];
 }
 
 interface Finding {
@@ -81,7 +93,7 @@ const SEVERITY_CLS: Record<Finding["severity"], string> = {
 /** Textos que cambian según lo que se audita. Por defecto, los de la OT. */
 type AuditTextKey = "eyebrow" | "running" | "errorHint" | "questionsHint" | "appendAndClose" | "closeWithout" | "back";
 
-export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onConfirmClose }: {
+export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields = [], onCancel, onConfirmClose }: {
   /** POST que corre la auditoría (ej. /app/pms/work-orders/:id/close-audit). */
   endpoint: string;
   /** Código del registro auditado, para el encabezado. */
@@ -89,10 +101,12 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
   /** Lo que el usuario está cargando y todavía no guardó. */
   draft: WoCloseAuditDraft | object;
   texts?: Partial<Record<AuditTextKey, TranslationKey>>;
-  /** Volver a la OT sin cerrarla (para corregir lo que marcó la auditoría). */
-  onCancel: () => void;
+  /** Campos vacíos de la orden: se preguntan primero. */
+  pendingFields?: AuditPendingField[];
+  /** Volver a la OT sin cerrarla. `fieldValues`: lo contestado de los campos vacíos. */
+  onCancel: (fieldValues: Record<string, string>) => void;
   /** Cerrar la OT. `observationsAppend` es el informe, si el usuario lo aceptó. */
-  onConfirmClose: (observationsAppend: string | null) => void;
+  onConfirmClose: (observationsAppend: string | null, fieldValues: Record<string, string>) => void;
 }) {
   const t = useT();
   const tx = (k: AuditTextKey) => t(texts?.[k] ?? (`wo.closeAudit.${k}` as TranslationKey));
@@ -103,6 +117,20 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
   // informe. Si no, una IA insistente dejaría al usuario en un bucle de dudas.
   const [answers, setAnswers]   = useState<Record<string, string>>({});
   const [asked, setAsked]       = useState(false);
+  // Lo contestado de los campos vacíos de la orden (por clave del campo).
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const filledFields = (): Record<string, string> =>
+    Object.fromEntries(Object.entries(fieldValues).filter(([, v]) => v.trim()));
+  /** Para la IA: los campos contestados, como "Ubicación" → "Puerto de Asunción". */
+  const fieldAnswers = (): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const f of pendingFields) {
+      const v = (fieldValues[f.key] ?? "").trim();
+      if (!v) continue;
+      out[f.label] = f.kind === "select" ? (f.options?.find(o => o.value === v)?.label ?? v) : v;
+    }
+    return out;
+  };
 
   const runAudit = useCallback(async (withAnswers: Record<string, string>) => {
     setLoading(true); setError(null);
@@ -123,7 +151,9 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
     void runAudit({});
   }, []);
 
-  const showQuestions = !loading && !error && !!result && result.questions.length > 0 && !asked;
+  const aiQuestions = !error && result ? result.questions : [];
+  const showQuestions = !loading && !asked && (pendingFields.length > 0 || aiQuestions.length > 0);
+  const inputCls = "w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-lg px-2.5 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -140,7 +170,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
               <h2 className="text-sm font-bold text-fg font-mono truncate">{code}</h2>
             </div>
           </div>
-          <ModalCloseButton onClose={onCancel} />
+          <ModalCloseButton onClose={() => onCancel(filledFields())} />
         </div>
 
         {/* Body */}
@@ -154,7 +184,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
             </div>
           )}
 
-          {!loading && error && (
+          {!loading && error && !showQuestions && (
             <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-4 space-y-1">
               <p className="text-xs font-bold text-red-700 dark:text-red-300">{t("wo.closeAudit.errorTitle")}</p>
               <p className="text-xs text-red-700 dark:text-red-300/80">{error}</p>
@@ -162,8 +192,41 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
             </div>
           )}
 
+          {/* Primero, los campos de la orden que siguen vacíos. */}
+          {showQuestions && pendingFields.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2">
+                <HelpCircle className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-fg">{t("wo.closeAudit.pendingTitle")}</p>
+                  <p className="text-xs text-text-industrial/50">{t("wo.closeAudit.pendingHint")}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {pendingFields.map(f => (
+                  <div key={f.key} className={`space-y-1.5 rounded-xl border-l-4 border-orange-500 bg-orange-500/[0.06] p-3 ${f.kind === "textarea" ? "sm:col-span-2" : ""}`}>
+                    <p className="text-xs font-semibold text-fg">{f.label}</p>
+                    {f.kind === "select" ? (
+                      <select value={fieldValues[f.key] ?? ""} onChange={e => setFieldValues(v => ({ ...v, [f.key]: e.target.value }))} className={inputCls}>
+                        <option value="">—</option>
+                        {(f.options ?? []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    ) : f.kind === "textarea" ? (
+                      <AutoTextArea rows={2} value={fieldValues[f.key] ?? ""}
+                        onChange={e => setFieldValues(v => ({ ...v, [f.key]: e.target.value }))}
+                        placeholder={t("wo.closeAudit.answerPlaceholder")} className={`${inputCls} resize-y`} />
+                    ) : (
+                      <input value={fieldValues[f.key] ?? ""} onChange={e => setFieldValues(v => ({ ...v, [f.key]: e.target.value }))}
+                        placeholder={t("wo.closeAudit.answerPlaceholder")} className={inputCls} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Paso de dudas: la IA pregunta lo que la evidencia no resuelve. */}
-          {showQuestions && (
+          {showQuestions && aiQuestions.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-start gap-2">
                 <HelpCircle className="w-4 h-4 text-accent shrink-0 mt-0.5" />
@@ -172,7 +235,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
                   <p className="text-xs text-text-industrial/50">{tx("questionsHint")}</p>
                 </div>
               </div>
-              {result!.questions.map((q, i) => (
+              {aiQuestions.map((q, i) => (
                 <div key={i} className="space-y-1.5 rounded-xl border border-fg/10 bg-fg/5 p-3">
                   <p className="text-xs font-semibold text-fg">{q}</p>
                   <AutoTextArea
@@ -263,7 +326,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
         <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => onCancel(filledFields())}
             className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 transition-colors"
           >
             {tx("back")}
@@ -281,8 +344,8 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setAsked(true); void runAudit(answers); }}
-                  disabled={!Object.values(answers).some(v => v.trim())}
+                  onClick={() => { setAsked(true); void runAudit({ ...fieldAnswers(), ...answers }); }}
+                  disabled={!Object.values(answers).some(v => v.trim()) && Object.keys(filledFields()).length === 0}
                   className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
                 >
                   {t("wo.closeAudit.answerAndRerun")}
@@ -293,7 +356,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={() => onConfirmClose(null)}
+                  onClick={() => onConfirmClose(null, filledFields())}
                   className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 disabled:opacity-40 transition-colors"
                 >
                   {tx("closeWithout")}
@@ -301,7 +364,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, onCancel, onCo
                 <button
                   type="button"
                   disabled={loading || !result?.observationsText}
-                  onClick={() => onConfirmClose(result?.observationsText ?? null)}
+                  onClick={() => onConfirmClose(result?.observationsText ?? null, filledFields())}
                   className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
                 >
                   {tx("appendAndClose")}

@@ -31,7 +31,7 @@ import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansP
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
 import { paperFieldCls } from "../components/paper/PaperKit";
-import { WoCloseAuditModal } from "../components/work-orders/WoCloseAuditModal";
+import { WoCloseAuditModal, type AuditPendingField } from "../components/work-orders/WoCloseAuditModal";
 import { useTheme } from "../lib/theme";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
@@ -2367,6 +2367,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id,
       workOrder.maintenancePlanId, onPlanExecuted, hourAssets, hoursOf]);
 
+  // Lo contestado en la auditoría vuelve al formulario ANTES de cerrar: el
+  // cierre guarda con el estado del formulario, así que se espera un render
+  // para que onClose_WO vea los valores nuevos.
+  const [closeAfterApply, setCloseAfterApply] = useState<Parameters<typeof onClose_WO>[0] | null>(null);
+  useEffect(() => {
+    if (!closeAfterApply) return;
+    setCloseAfterApply(null);
+    void onClose_WO(closeAfterApply);
+  }, [closeAfterApply, onClose_WO]);
+
   const isClosed = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
   const canPostpone = workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS";
   const canCancel   = !isClosed;
@@ -3244,6 +3254,51 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }, 120);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusClose]);
+  /** Campos que siguen vacíos, para que la auditoría de cierre los pregunte
+   *  (pedido del usuario). Resultado, fecha y horas no: los exige el cierre. */
+  const auditPendingFields = (): AuditPendingField[] => {
+    const opts = (list: readonly { value: string; label: string }[]) => list.map(o => ({ value: o.value, label: o.label }));
+    return [...prepMissing, ...closeMissing].filter(c => missingKeys.has(c.key)).flatMap((c): AuditPendingField[] => {
+      const base = { key: c.key, label: c.label };
+      switch (c.key) {
+        case "title": case "location": case "voyageNumber": case "executedBy":
+          return [{ ...base, kind: "text" }];
+        case "criteria": case "loto":
+          return [{ ...base, kind: "textarea" }];
+        case "operatingCondition":
+          return [{ ...base, kind: "select", options: WO_OPERATING_CONDITIONS.map(v => ({ value: v, label: t(`wo.condition.${v}` as TranslationKey) })) }];
+        case "requestedBy": return [{ ...base, kind: "select", options: opts(WO_REQUESTED_BY) }];
+        case "assignedTo":  return [{ ...base, kind: "select", options: opts(WO_ASSIGNED_TO) }];
+        case "system":      return [{ ...base, kind: "select", options: opts(WO_SYSTEM_AREAS) }];
+        case "risk":
+          return [{ ...base, kind: "select", options: ["LOW", "MEDIUM", "HIGH", "CRITICAL"].map(v => ({ value: v, label: t(`mp.risk.${v}` as TranslationKey) })) }];
+        case "taskCompleted":
+          return [{ ...base, kind: "select", options: [{ value: "YES", label: t("common.yes") }, { value: "NO", label: t("common.no") }] }];
+        default: return [];
+      }
+    });
+  };
+  /** Vuelca al formulario lo que se contestó en la auditoría. */
+  const applyAuditFields = (values: Record<string, string>) => {
+    const paper: Parameters<typeof handlePaperChange>[0] = {};
+    for (const [k, v] of Object.entries(values)) {
+      switch (k) {
+        case "location":           paper.location = v; break;
+        case "voyageNumber":       paper.voyageNumber = v; break;
+        case "operatingCondition": paper.operatingCondition = v as typeof paper.operatingCondition; break;
+        case "requestedBy":        paper.requestedByArea = v as typeof paper.requestedByArea; break;
+        case "assignedTo":         paper.assignedToArea = v as typeof paper.assignedToArea; break;
+        case "system":             paper.systemArea = v as typeof paper.systemArea; break;
+        case "taskCompleted":      paper.taskCompleted = v as typeof paper.taskCompleted; break;
+        case "title":              setTitle(v); break;
+        case "criteria":           setAcceptanceCriteria(v); break;
+        case "loto":               setLoto(v); break;
+        case "risk":               setRiskLevel(v); break;
+        case "executedBy":         setExecutedByName(v); break;
+      }
+    }
+    if (Object.keys(paper).length > 0) handlePaperChange(paper);
+  };
   const sectionPill = (keys: string[]) => (
     <GuidePill missing={keys.filter(k => missingKeys.has(k)).length} completeLabel={t("wo.guide.complete")}
       missingOne={t("wo.guide.missingOne")} missingMany={t("wo.guide.missingMany")} />
@@ -4662,15 +4717,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           taskCompleted: regiForm.taskCompleted,
           spareUsages: spareUsages.map(u => ({ name: u.spareName ?? null, qty: u.qty, unit: u.unit })),
         }}
-        onCancel={() => setCloseAuditOpts(null)}
-        onConfirmClose={append => {
+        pendingFields={auditPendingFields()}
+        onCancel={values => { applyAuditFields(values); setCloseAuditOpts(null); }}
+        onConfirmClose={(append, values) => {
           const opts = closeAuditOpts;
           setCloseAuditOpts(null);
           const merged = append?.trim()
             ? [observations.trim(), append.trim()].filter(Boolean).join("\n\n")
             : undefined;
           if (merged) setObservations(merged);
-          void onClose_WO({ ...opts, observationsOverride: merged });
+          applyAuditFields(values);
+          setCloseAfterApply({ ...opts, observationsOverride: merged });
         }}
       />
     )}

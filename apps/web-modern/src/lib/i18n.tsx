@@ -3476,6 +3476,8 @@ const dict = {
   "msheet.markForWo":          { es: "Marcar para incluir en la orden de trabajo", en: "Mark to include in the work order", pt: "Marcar para incluir na ordem de serviço" },
   "msheet.openPlan":           { es: "Abrir esta tarea del plan", en: "Open this plan task", pt: "Abrir esta tarefa do plano" },
   "msheet.openAssetPlans":     { es: "Ver el plan de mantenimiento de este equipo", en: "See this equipment's maintenance plan", pt: "Ver o plano de manutenção deste equipamento" },
+  "wo.closeAudit.pendingTitle": { es: "Faltan estos datos de la orden", en: "These order fields are missing", pt: "Faltam estes dados da ordem" },
+  "wo.closeAudit.pendingHint":  { es: "Lo que completes acá queda cargado en la OT al cerrarla. Lo que dejes en blanco queda vacío.", en: "What you fill in here is saved to the WO when it closes. Anything left blank stays empty.", pt: "O que você preencher aqui fica registrado na OS ao fechá-la. O que ficar em branco continua vazio." },
   "msheet.woSign.authorized":  { es: "Aprobada y autorizada",     en: "Approved and authorized",   pt: "Aprovada e autorizada" },
   "msheet.woSign.approved":    { es: "Aprobada, falta autorizar", en: "Approved, awaiting authorization", pt: "Aprovada, falta autorizar" },
   "msheet.woSign.pending":     { es: "Pendiente de aprobación",   en: "Pending approval",          pt: "Pendente de aprovação" },
