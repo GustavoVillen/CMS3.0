@@ -543,7 +543,7 @@ export const ApprovalsPage: React.FC = () => {
           </td>
           <td className={cell}>
             {authorized ? (
-              <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "route", row: r })}>
+              <button type="button" className={BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "route", row: r }); }}>
                 {btnBody(wRoute, routeCount === 0 ? t("approvals.exec.noneF")
                   : routeCount === 1 ? t("approvals.exec.routeOne")
                   : t("approvals.exec.routeMany").replace("{n}", String(routeCount)))}
@@ -904,10 +904,11 @@ export const ApprovalsPage: React.FC = () => {
                   {t("approvals.exec.hojaRuta")}{exec.row.providers[0] ? ` · ${exec.row.providers[0]}` : ""}
                 </p>
               </div>
-              <ModalCloseButton onClose={() => setExec(null)} />
+              <ModalCloseButton onClose={() => { setExec(null); if (progressDirty) void reload(); }} />
             </div>
-            <div className="flex-1 overflow-y-auto">
-              <HojaRutaBox srId={exec.row.id} editable={!!can?.srManage} isAdmin={user?.role === "TENANT_ADMIN"} />
+            <div className="flex-1 min-h-[min(18rem,50vh)] overflow-y-auto">
+              <HojaRutaBox srId={exec.row.id} editable={!!can?.srManage} isAdmin={user?.role === "TENANT_ADMIN"}
+                variant="list" onChanged={() => setProgressDirty(true)} />
             </div>
           </div>
         </div>
