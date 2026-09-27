@@ -5597,6 +5597,158 @@ export const WorkOrderProgressModal: React.FC<{
   );
 };
 
+// ── Permisos de trabajo de una OT, en ventana (Seguimiento) ──────────────────
+//
+// Mismo formato que la ventana de Avances (pedido del usuario): la lista de
+// permisos vinculados y "Nuevo permiso", que abre el mismo PermitModal de la
+// ficha con la OT fija. Crear pide `permit.manage`, igual que el backend.
+export const WorkOrderPermitsModal: React.FC<{
+  workOrderId: string;
+  title: string;
+  subtitle?: string | null;
+  onClose: () => void;
+  /** Se creó o cambió un permiso. */
+  onChanged: () => void;
+}> = ({ workOrderId, title, subtitle, onClose, onChanged }) => {
+  const t = useT();
+  const can = useCan();
+  const canCreate = can("permit.manage");
+  const { data: wo } = useFetch<WorkOrder>(`/app/pms/work-orders/${workOrderId}`, [workOrderId]);
+  const { data, loading, reload } = useFetch<{ items: LinkedPermit[] }>(`/app/permits?workOrderId=${workOrderId}`, [workOrderId]);
+  const permits = data?.items ?? [];
+  const [state, setState] = useState<PermitModalState>(null);
+  // Los que exigen los planes de la OT (el cierre los pide cerrados).
+  const required = useMemo(
+    () => [...new Set((wo?.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))] as PermitType[],
+    [wo],
+  );
+  const suggested = useMemo(
+    () => (wo ? suggestPermitTypesFromText(`${wo.title ?? ""} ${wo.description ?? ""}`) : []),
+    [wo],
+  );
+  const prefill = (forced?: PermitType): PermitModalPrefill => ({
+    vesselCode: wo!.vesselCode,
+    type: forced ?? required.find(r => !permits.some(p => p.type === r)) ?? suggested[0]?.type ?? "HOT_WORK",
+    workOrderId,
+    workOrderCode: wo!.workOrderCode,
+    workOrderTitle: wo!.title ?? undefined,
+    lockWorkOrder: true,
+    location: wo!.location ?? "",
+    description: wo!.title || wo!.description || "",
+  });
+  const saved = () => { setState(null); void reload(); onChanged(); };
+  const typeLabel = (type: string) => t(`mp.ptw.type.${type}` as TranslationKey);
+
+  return (
+    // Sin cierre por clic afuera, como el resto de las ventanas de carga.
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-fg truncate">{title}</h2>
+            {subtitle && <p className="text-xs text-text-industrial/50 mt-0.5 truncate">{subtitle}</p>}
+          </div>
+          <ModalCloseButton onClose={onClose} />
+        </div>
+        <div className="flex-1 min-h-[min(18rem,50vh)] overflow-y-auto space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
+              {t("wo.ptw.listTitle")} {permits.length > 0 && `(${permits.length})`}
+            </p>
+            {canCreate && wo && (
+              <button type="button" onClick={() => setState({ kind: "create", prefill: prefill() })}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:brightness-110">
+                <Plus className="w-3.5 h-3.5" /> {t("wo.ptw.new")}
+              </button>
+            )}
+          </div>
+
+          {required.length > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-orange-500/40 bg-orange-500/[0.07] px-2.5 py-1.5 text-[11.5px] font-bold text-orange-700 dark:text-orange-300">
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>
+                {t("wo.ptw.requires")}{" "}
+                {required.map(type => {
+                  const closed = permits.some(pm => pm.type === type && pm.status === "CLOSED");
+                  return (
+                    <span key={type} className={`mr-2 whitespace-nowrap ${closed ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
+                      {closed ? "✓ " : ""}{typeLabel(type)}
+                    </span>
+                  );
+                })}
+              </span>
+            </div>
+          )}
+
+          {/* Sugerencia por el contenido del trabajo (mismas palabras clave que la ficha). */}
+          {canCreate && wo && permits.length === 0 && suggested.length > 0 && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-2 space-y-1.5">
+              <p className="flex items-start gap-1.5 text-[11px] font-semibold text-yellow-800 dark:text-yellow-200">
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>{t("wo.ptw.suggest")} {suggested.map(m => typeLabel(m.type)).join(", ")}.</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggested.map(m => (
+                  <button key={m.type} type="button" onClick={() => setState({ kind: "create", prefill: prefill(m.type) })}
+                    className="px-2 py-0.5 rounded-md border border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 text-[10px] font-bold hover:bg-yellow-500/20">
+                    {t("wo.ptw.createType").replace("{type}", typeLabel(m.type))}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {loading && permits.length === 0 ? (
+            <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
+          ) : permits.length === 0 ? (
+            <p className="text-[11px] text-text-industrial/40 italic text-center py-2">{t("wo.ptw.empty")}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] border-separate border-spacing-y-0.5">
+                <thead>
+                  <tr className="text-[9px] uppercase tracking-widest text-text-industrial/50">
+                    <th className="text-left font-semibold px-1 w-[120px]">{t("wo.ptw.col.code")}</th>
+                    <th className="text-left font-semibold px-1 w-[150px]">{t("wo.ptw.col.type")}</th>
+                    <th className="text-left font-semibold px-1 w-[100px]">{t("wo.ptw.col.status")}</th>
+                    <th className="text-left font-semibold px-1">{t("wo.ptw.col.desc")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {permits.map(pm => (
+                    <tr key={pm.id} onClick={() => setState({ kind: "edit", permit: pm })}
+                      className="align-top cursor-pointer hover:[&_div]:border-accent/40" title={t("wo.ptw.open")}>
+                      <td className="px-1"><div className={`${noteCellCls} font-mono text-text-industrial/70 whitespace-nowrap`}>{pm.permitCode}</div></td>
+                      <td className="px-1"><div className={`${noteCellCls} text-text-industrial/80`}>{typeLabel(pm.type)}</div></td>
+                      <td className="px-1">
+                        <div className={noteCellCls}>
+                          <span className={`inline-block px-1.5 py-px rounded-full border text-[9px] font-bold ${PTW_STATUS_COLOR[pm.status] ?? ""}`}>
+                            {t(`wo.ptw.status.${pm.status}` as TranslationKey)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-1"><div className={`${noteCellCls} text-fg/85`}>{pm.description}</div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+      {state?.kind === "create" && (
+        <PermitModal permit={null} prefill={state.prefill} onClose={() => setState(null)} onSaved={saved} />
+      )}
+      {state?.kind === "edit" && (
+        <PermitModal
+          permit={state.permit as unknown as Parameters<typeof PermitModal>[0]["permit"]}
+          onClose={() => setState(null)}
+          onSaved={saved}
+        />
+      )}
+    </div>
+  );
+};
+
 export const WorkOrdersPage: React.FC = () => {
   const t = useT();
   const woTerms = useWoTerms();

@@ -46,6 +46,7 @@ import { textMatches } from "../lib/text-search";
 // pesada: se bajan recién cuando se toca el botón.
 const WorkOrderPopup = React.lazy(() => import("./WorkOrders").then(m => ({ default: m.WorkOrderPopup })));
 const WorkOrderProgressModal = React.lazy(() => import("./WorkOrders").then(m => ({ default: m.WorkOrderProgressModal })));
+const WorkOrderPermitsModal = React.lazy(() => import("./WorkOrders").then(m => ({ default: m.WorkOrderPermitsModal })));
 const ServiceRequestPopup = React.lazy(() => import("./ServiceRequests").then(m => ({ default: m.ServiceRequestPopup })));
 
 // ─── Espejo de approvals-service.ts ──────────────────────────────────────────
@@ -77,6 +78,8 @@ interface PendingItem {
   sentAt?: string | null;
   /** Sólo las SS autorizadas: novedades asentadas en su hoja de ruta. */
   routeEntryCount?: number;
+  /** Sólo las OT autorizadas: permisos de trabajo vinculados. */
+  permitCount?: number;
 }
 
 interface PendingApprovals {
@@ -103,7 +106,7 @@ interface Row extends PendingItem {
 }
 
 /** La ventana abierta desde las columnas de ejecución. */
-type ExecWindow = { kind: "progress" | "spares" | "close" | "route" | "closeSr" | "record" | "recordSr"; row: Row };
+type ExecWindow = { kind: "progress" | "permits" | "spares" | "close" | "route" | "closeSr" | "record" | "recordSr"; row: Row };
 
 /** Tarjeta de arriba que filtra la planilla. */
 type CardKey = "overdue" | "mine" | "woInProgress" | "srInProgress" | "postponed";
@@ -435,7 +438,7 @@ export const ApprovalsPage: React.FC = () => {
   // rojas se transparentan por debajo.
   const th = "px-2 py-1.5 text-[10px] font-bold text-[#1F3864] border border-border bg-[#D9E2E3] text-center";
   const td = "px-2 py-0.5 text-[11px] leading-tight border border-border align-middle";
-  const COLS = 10;
+  const COLS = 11;
 
   /** Uno de los dos botones de firma de la fila. */
   const SignButton: React.FC<{ row: Row; step: "APRUEBA" | "AUTORIZA" }> = ({ row, step }) => {
@@ -551,6 +554,7 @@ export const ApprovalsPage: React.FC = () => {
             ) : execOff(wRoute, waitWhy, true)}
           </td>
           {naCell}
+          {naCell}
           {/* Cerrar = la recepción de la ficha de la SS (quién recibe y si hay
               conformidad), con su auditoría de IA. Sólo después de enviada. */}
           <td className={cell}>
@@ -572,6 +576,7 @@ export const ApprovalsPage: React.FC = () => {
       );
     }
     const wProgress = t("approvals.col.progress");
+    const wPermits  = t("approvals.col.permits");
     const wSpares   = t("approvals.col.spares");
     const wClose    = t("wo.modal.closeWO");
     const closedAt  = closed[rowKey(r)];
@@ -580,6 +585,7 @@ export const ApprovalsPage: React.FC = () => {
       return (
         <>
           <td className={cell}>{execOff(wProgress, why, true)}</td>
+          <td className={cell}>{execOff(wPermits, why, true)}</td>
           <td className={cell}>{execOff(wSpares, why, true)}</td>
           <td className={cell}>
             <span className={BTN_DONE} title={`${t("approvals.signed.closed")} · ${closedAt}`}>
@@ -596,6 +602,7 @@ export const ApprovalsPage: React.FC = () => {
       return (
         <>
           <td className={cell}>{execOff(wProgress, why, true)}</td>
+          <td className={cell}>{execOff(wPermits, why, true)}</td>
           <td className={cell}>{execOff(wSpares, why, true)}</td>
           <td className={cell}>{execOff(wClose, why, true)}</td>
         </>
@@ -603,6 +610,7 @@ export const ApprovalsPage: React.FC = () => {
     }
     const notes  = r.progressNoteCount ?? 0;
     const spares = r.spareUsageCount ?? 0;
+    const permits = r.permitCount ?? 0;
     const noPerm = t("approvals.noPermission");
     return (
       <>
@@ -612,6 +620,14 @@ export const ApprovalsPage: React.FC = () => {
             {btnBody(wProgress, notes === 0 ? t("approvals.exec.none")
               : notes === 1 ? t("approvals.exec.notesOne")
               : t("approvals.exec.notesMany").replace("{n}", String(notes)))}
+          </button>
+        </td>
+        {/* Permisos se abre siempre: crear uno pide permit.manage (lo resuelve la ventana). */}
+        <td className={cell}>
+          <button type="button" className={BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "permits", row: r }); }}>
+            {btnBody(wPermits, permits === 0 ? t("approvals.exec.none")
+              : permits === 1 ? t("approvals.exec.permitsOne")
+              : t("approvals.exec.permitsMany").replace("{n}", String(permits)))}
           </button>
         </td>
         <td className={cell}>
@@ -677,14 +693,14 @@ export const ApprovalsPage: React.FC = () => {
       <div className="glass rounded-2xl overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-14rem)] [scrollbar-gutter:stable]">
           {/* Tarea con un cuarto del ancho (pedido del usuario: más corta) y
-              las seis columnas de botones se reparten el resto en partes
-              iguales. Por debajo de 1150 px aparece la barra horizontal en vez
+              las siete columnas de botones se reparten el resto en partes
+              iguales. Por debajo de 1250 px aparece la barra horizontal en vez
               de aplastar los botones. */}
-          <table className="w-full min-w-[1150px] table-fixed border-collapse">
+          <table className="w-full min-w-[1250px] table-fixed border-collapse">
             <colgroup>
               <col className="w-[40px]" /><col className="w-[130px]" /><col className="w-[110px]" />
               <col className="w-[25%]" />
-              <col /><col /><col /><col /><col /><col />
+              <col /><col /><col /><col /><col /><col /><col />
             </colgroup>
             <thead>
               <tr>
@@ -696,6 +712,7 @@ export const ApprovalsPage: React.FC = () => {
                 <th className={th}>{t("approvals.action.authorize")}</th>
                 <th className={th}>{t("approvals.exec.sendProvider")}</th>
                 <th className={th}>{t("approvals.col.progress")}</th>
+                <th className={th}>{t("approvals.col.permits")}</th>
                 <th className={th}>{t("approvals.col.spares")}</th>
                 <th className={th}>{t("approvals.col.close")}</th>
               </tr>
@@ -872,6 +889,15 @@ export const ApprovalsPage: React.FC = () => {
             title={`${exec.row.code} — ${exec.row.title ?? ""}`}
             subtitle={exec.row.assetName}
             canOperate={!!can?.woOperate}
+            onChanged={() => setProgressDirty(true)}
+            onClose={() => { setExec(null); if (progressDirty) void reload(); }}
+          />
+        )}
+        {exec?.kind === "permits" && (
+          <WorkOrderPermitsModal
+            workOrderId={exec.row.id}
+            title={`${exec.row.code} — ${exec.row.title ?? ""}`}
+            subtitle={exec.row.assetName}
             onChanged={() => setProgressDirty(true)}
             onClose={() => { setExec(null); if (progressDirty) void reload(); }}
           />

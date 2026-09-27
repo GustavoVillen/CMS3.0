@@ -61,6 +61,8 @@ export interface PendingApprovalItem {
   spareUsageCount?: number;
   /** Sólo SS autorizadas: novedades asentadas en su hoja de ruta. */
   routeEntryCount?: number;
+  /** Sólo OT autorizadas: permisos de trabajo vinculados (sin los cancelados). */
+  permitCount?: number;
 }
 
 export interface PendingApprovalsResult {
@@ -235,7 +237,7 @@ export async function listPendingApprovals(
   const srWoIds   = [...new Set(srRows.map(r => r.workOrderId).filter(Boolean))] as string[];
   const vesselCodes = [...new Set([...woRows, ...srRows].map(r => r.vesselCode).filter(Boolean))] as string[];
 
-  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows, routeCountRows] = await Promise.all([
+  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows, routeCountRows, permitCountRows] = await Promise.all([
     // SS colgadas de las OT listadas: aportan sus talleres al contexto de la OT
     // y el aviso de "esta firma arrastra N solicitudes".
     woIds.length > 0
@@ -282,6 +284,14 @@ export async function listPendingApprovals(
           _count: { _all: true },
         })
       : Promise.resolve([]),
+    // Permisos de trabajo de cada OT autorizada (los cancelados no cuentan).
+    execIds.length > 0
+      ? (prisma as any).permitToWork.groupBy({
+          by: ["workOrderId"],
+          where: { tenantId, workOrderId: { in: execIds }, status: { not: "CANCELLED" } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const noteCountByWo = new Map<string, number>(
@@ -289,6 +299,9 @@ export async function listPendingApprovals(
   );
   const routeCountBySr = new Map<string, number>(
     (routeCountRows as any[]).map(r => [r.serviceRequestId, Number(r._count?._all ?? 0)]),
+  );
+  const permitCountByWo = new Map<string, number>(
+    (permitCountRows as any[]).map(r => [r.workOrderId, Number(r._count?._all ?? 0)]),
   );
   // Repuestos distintos por OT, igual que la lista del consumo.
   const sparesByWo = new Map<string, Set<string>>();
@@ -413,6 +426,7 @@ export async function listPendingApprovals(
       authorizedAt: iso(r.autorizadoAt),
       progressNoteCount: noteCountByWo.get(r.id) ?? 0,
       spareUsageCount: sparesByWo.get(r.id)?.size ?? 0,
+      permitCount: permitCountByWo.get(r.id) ?? 0,
     })),
     srExecute:   (srExecuteRows as any[]).map(r => ({
       ...mapSr(r),
