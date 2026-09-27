@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical, NotebookPen } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
@@ -24,12 +24,10 @@ import { NewWorkOrderWizard } from "../components/NewWorkOrderWizard";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
 import { EquipmentMaintenanceStatusModal } from "../components/EquipmentMaintenanceStatusModal";
 import { NewServiceRequestWizard } from "../components/NewServiceRequestWizard";
-import { ProgressFlow } from "../components/ProgressFlow";
 import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumptionFlow";
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
 import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
 import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
-import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
@@ -163,9 +161,6 @@ export const Dashboard: React.FC = () => {
   const { theme }    = useTheme();
   const { user }     = useAuth();
   const can          = useCan();
-  // El backend exige `permit.manage` para crear un PTW: si el rol no lo tiene,
-  // el acceso grande no se muestra (mismo criterio que el botón de TMSA).
-  const canManagePermits = can("permit.manage");
   // Mismos roles que protegen /tmsa en App.tsx (RequireRole) — se oculta acá
   // para no mostrar un botón que termina en pantalla bloqueada.
   const canSeeTmsaAudit = user?.role === "TENANT_ADMIN";
@@ -212,10 +207,6 @@ export const Dashboard: React.FC = () => {
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
   // "Nueva Solicitud de Servicio": asistente para qué → buque → OT/equipo → proveedor.
   const [showSsWizard, setShowSsWizard] = React.useState(false);
-  const [showNewPermit, setShowNewPermit] = React.useState(false);
-  // Registro de Avance: una sola puerta para asentar lo que se hizo, sobre una
-  // OT abierta o sobre una SS que está en el taller (ver ProgressFlow).
-  const [showProgress, setShowProgress] = React.useState(false);
   // Consumo de repuestos sobre una OT abierta: descuenta stock del buque.
   const [showSpareUse, setShowSpareUse] = React.useState(false);
   // Completar un checklist: se elige el template y el alta sigue en /checklists.
@@ -577,13 +568,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         />
       )}
 
-      {showNewPermit && (
-        <NewPermitFlow
-          onClose={() => setShowNewPermit(false)}
-          onSaved={() => navigate("/permits")}
-        />
-      )}
-
       {showSsWizard && (
         <NewServiceRequestWizard
           onClose={() => setShowSsWizard(false)}
@@ -778,7 +762,6 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
         </div>
       )}
 
-      {showProgress && <ProgressFlow onClose={() => setShowProgress(false)} />}
 
       {showSpareUse && <SpareConsumptionFlow onClose={() => setShowSpareUse(false)} />}
 
@@ -993,29 +976,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <LayoutGrid className="w-7 h-7" />
             </button>
           </div>
-          {canManagePermits && (
-            <button
-              onClick={() => setShowNewPermit(true)}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-            >
-              <ShieldAlert className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.newPermit")}</span>
-            </button>
-          )}
-          {/* Asentar lo que se hizo, sin abrir el formulario entero: la ventana
-              muestra las OT abiertas y las SS que están en el taller, y según lo
-              elegido abre el avance de la OT o la hoja de ruta del pedido. Se
-              oculta al rol de sólo lectura: el backend rechaza el registro (ver
-              canManage en service-requests-service.ts). */}
-          {canLogSsProgress && (
-            <button
-              onClick={() => setShowProgress(true)}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
-            >
-              <NotebookPen className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.progress.button")}</span>
-            </button>
-          )}
+          {/* "Nuevo Permiso de Trabajo" y "Registro de Avance" se sacaron del
+              Inicio a pedido del usuario (sep 2026): los permisos y los avances
+              se cargan desde Seguimiento o desde la propia OT. ProgressFlow y
+              el alta de permisos siguen existiendo en esas pantallas. */}
           {/* Registrar lo que se consumió en una OT. Descuenta stock, así que
               pide el mismo permiso que editar la orden. */}
           {canLogSpareUse && (
