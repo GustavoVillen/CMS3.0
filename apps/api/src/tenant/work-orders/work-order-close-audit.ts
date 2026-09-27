@@ -51,6 +51,13 @@ export const TMSA_ELEMENTS = `4.1 — Cobertura del PMS y uso del sistema de def
 7 — Gestión del cambio (MOC) cuando la intervención modifica el equipo o el procedimiento.
 8 — Análisis de falla / RCA cuando hubo falla.`;
 
+// Qué tan estricta es la auditoría con LOTO y Permisos de Trabajo, del 1 al 10.
+// La empresa definió 3 (sep 2026): la flota son remolcadores y barcazas de río
+// donde el LOTO formal y el PTW recién se están implantando, y un cierre no
+// puede caer en NO CONFORME sólo porque no hay un permiso vinculado. Si se
+// sube el número, revisar también el texto de la regla en el prompt.
+export const LOTO_STRICTNESS = 3;
+
 const AUDIT_PROMPT = `Sos auditor senior de Sistemas de Gestión de Mantenimiento de una naviera. Tenés experiencia en auditorías TMSA (OCIMF), verificaciones ISM de bandera y sociedad de clasificación, y en las buenas prácticas de mantenimiento de maquinaria naval.
 
 Te paso una Orden de Trabajo que se está por CERRAR, con toda su evidencia. Tu trabajo es auditarla como si estuvieras parado frente al Jefe de Máquinas antes de firmar el cierre: revisar que el trabajo se haya hecho como corresponde, que la evidencia alcance para defender el cierre en una auditoría, y que no queden cabos sueltos.
@@ -68,7 +75,8 @@ Además: las buenas prácticas de mantenimiento propias del TIPO DE EQUIPO de es
 QUÉ REVISAR — la OT COMPLETA, no sólo el cierre
 - Coherencia: ¿lo declarado en RESULTADO se sostiene con lo que dicen la tarea, el detalle, los avances y las observaciones? Un "satisfactorio" con un detalle que habla de una fuga es un hallazgo.
 - Criterios de aceptación: ¿estaban definidos y hay evidencia de que se verificaron con valores medidos?
-- Seguridad: ¿el trabajo requería Permiso de Trabajo, LOTO o análisis de riesgo? ¿Están y están cerrados? Si el equipo es crítico (ISM 10.3), el estándar es más exigente.
+- Seguridad: ¿el trabajo requería análisis de riesgo? ¿Hay algo en la evidencia que muestre un trabajo inseguro (se trabajó sobre un equipo energizado o presurizado, hubo un incidente)?
+- LOTO y Permisos de Trabajo — exigencia NIVEL ${LOTO_STRICTNESS} DE 10 (baja, definida por la empresa). Que falte un LOTO o un Permiso de Trabajo vinculado NO es hallazgo MAYOR ni MENOR y NO cambia el veredicto: como mucho va UNA observación (severidad OBSERVACION) recomendando registrarlo la próxima vez. Sólo sube a MENOR si la propia OT cuenta que se trabajó sin aislar un equipo energizado o presurizado, o si hubo un incidente. No preguntes por números de permiso ni certificados LOTO.
 - Registro (ISM 10.2.4): ¿quedó quién lo hizo, cuándo, con qué horas de máquina, qué repuestos se usaron?
 - Repuestos: ¿lo planificado coincide con lo consumido? Una diferencia sin explicar es un hallazgo.
 - Pendientes: si quedó algo pendiente, o si la tarea NO se concluyó, eso NO se cierra y se olvida: tiene que quedar planificado en algún lado.
@@ -79,6 +87,7 @@ REGLAS INNEGOCIABLES
 - Auditás SÓLO con la evidencia que te paso. No inventes datos, fechas, valores ni normas.
 - Lo que no podés determinar con la evidencia NO es un hallazgo: es una PREGUNTA para el usuario.
 - Preguntá SÓLO lo más importante: como máximo 2 dudas, las que pueden cambiar el veredicto. El resto de lo que no sabés va como observación, no como pregunta.
+- Reportá SÓLO lo más importante: como máximo 3 hallazgos (los más graves) y 2 próximos pasos. Los detalles de forma o menores no van.
 - No preguntes por datos vacíos del formulario (ubicación, número de viaje, condición, sistema, quién pide, quién ejecuta): la pantalla ya los pide aparte.
 - Cada hallazgo cita el criterio concreto ("ISM 10.2.4", "TMSA 4A.2", "Buena práctica: …"). Nada de "no cumple con las normas".
 - Si la OT está bien, decilo y no inventes hallazgos para justificar el análisis.
@@ -99,12 +108,12 @@ export const AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
     verdict: {
       type: "string",
       enum: ["CONFORME", "CON_OBSERVACIONES", "NO_CONFORME"],
-      description: "CONFORME: la evidencia sostiene el cierre. CON_OBSERVACIONES: se puede cerrar pero hay que dejar registro. NO_CONFORME: falta evidencia esencial o hay un desvío de seguridad.",
+      description: "CONFORME: la evidencia sostiene el cierre. CON_OBSERVACIONES: se puede cerrar pero hay que dejar registro. NO_CONFORME: falta evidencia esencial o hay un desvío de seguridad (la sola falta de LOTO o Permiso de Trabajo vinculado NO alcanza para NO_CONFORME).",
     },
     summary: { type: "string", description: "2 o 3 líneas: qué se auditó y a qué conclusión llegaste." },
     findings: {
       type: "array",
-      description: "Hallazgos de la auditoría. Vacío si no hay ninguno.",
+      description: "Como máximo 3 hallazgos, los más graves primero. Sólo lo importante: nada de detalles de forma. Vacío si no hay ninguno.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -119,7 +128,7 @@ export const AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
     },
     nextSteps: {
       type: "array",
-      description: "Próximos pasos concretos tras el cierre (abrir OT por los pendientes, registrar el defecto, abrir MOC, programar la inspección…). Vacío si no hace falta ninguno.",
+      description: "Como máximo 2 próximos pasos concretos tras el cierre, los más importantes (abrir OT por los pendientes, registrar el defecto, abrir MOC, programar la inspección…). Vacío si no hace falta ninguno.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -374,6 +383,9 @@ export async function auditWorkOrderClose(
 }
 
 /** Sanea la salida del modelo: la consume una ventana, no puede venir rota. */
+/** Orden de gravedad para quedarse con lo más importante. */
+const SEVERITY_RANK: Record<WoCloseAuditFinding["severity"], number> = { MAYOR: 0, MENOR: 1, OBSERVACION: 2 };
+
 export function normalizeAuditResult(out: Partial<WoCloseAuditResult>): WoCloseAuditResult {
   const verdict = out.verdict === "CONFORME" || out.verdict === "NO_CONFORME" || out.verdict === "CON_OBSERVACIONES"
     ? out.verdict
@@ -387,12 +399,16 @@ export function normalizeAuditResult(out: Partial<WoCloseAuditResult>): WoCloseA
       evidence: String(f?.evidence ?? "").trim(),
       recommendedAction: String(f?.recommendedAction ?? "").trim(),
       severity: (f?.severity === "MAYOR" || f?.severity === "MENOR" ? f.severity : "OBSERVACION") as WoCloseAuditFinding["severity"],
-    })).filter(f => f.criterion || f.evidence),
+    })).filter(f => f.criterion || f.evidence)
+      // Sólo lo más importante (pedido del usuario): los 3 más graves. El
+      // prompt ya lo pide; esto es el tope duro por si la IA se pasa.
+      .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+      .slice(0, 3),
     nextSteps: (Array.isArray(out.nextSteps) ? out.nextSteps : []).map(s => ({
       action: String(s?.action ?? "").trim(),
       why: String(s?.why ?? "").trim(),
       module: String(s?.module ?? "OTRO").trim(),
-    })).filter(s => s.action),
+    })).filter(s => s.action).slice(0, 2),
     // Tope duro: el prompt pide 2 (sólo lo más importante, pedido del usuario),
     // pero la lista la consume un formulario y la IA puede pasarse.
     questions: (Array.isArray(out.questions) ? out.questions : [])
