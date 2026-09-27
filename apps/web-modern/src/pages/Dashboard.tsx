@@ -938,44 +938,22 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             registro de avance de una SS que ya está en el taller. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           onClickCapture={() => setCopilotFlow(createCopilotFlowKey("dashboard"))}>
-          {/* Mismo par que "Cargar análisis de laboratorio": el cuerpo abre el
-              asistente y la cuadrícula va al listado. */}
-          <div className="flex items-center rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all">
-            <button
-              onClick={() => setShowNewWoWizard(true)}
-              className="flex-1 min-w-0 flex items-center gap-3 pl-5 pr-2 py-4 text-left"
-            >
-              <Wrench className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/work-orders")}
-              title={t("dashboard.newWorkOrder.listLink")}
-              aria-label={t("dashboard.newWorkOrder.listLink")}
-              className="mr-3 p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors shrink-0"
-            >
-              <LayoutGrid className="w-7 h-7" />
-            </button>
-          </div>
-          <div className="flex items-center rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all">
-            <button
-              onClick={() => setShowSsWizard(true)}
-              className="flex-1 min-w-0 flex items-center gap-3 pl-5 pr-2 py-4 text-left"
-            >
-              <Handshake className="w-6 h-6 text-success-sea shrink-0" />
-              <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/service-requests")}
-              title={t("dashboard.newServiceRequest.listLink")}
-              aria-label={t("dashboard.newServiceRequest.listLink")}
-              className="mr-3 p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors shrink-0"
-            >
-              <LayoutGrid className="w-7 h-7" />
-            </button>
-          </div>
+          {/* Sin la cuadrícula que iba al listado (pedido del usuario, sep
+              2026): las listas de OT y SS se abren desde el menú. */}
+          <button
+            onClick={() => setShowNewWoWizard(true)}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+          >
+            <Wrench className="w-6 h-6 text-success-sea shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.newWorkOrder")}</span>
+          </button>
+          <button
+            onClick={() => setShowSsWizard(true)}
+            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+          >
+            <Handshake className="w-6 h-6 text-success-sea shrink-0" />
+            <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
+          </button>
           {/* "Nuevo Permiso de Trabajo" y "Registro de Avance" se sacaron del
               Inicio a pedido del usuario (sep 2026): los permisos y los avances
               se cargan desde Seguimiento o desde la propia OT. ProgressFlow y
