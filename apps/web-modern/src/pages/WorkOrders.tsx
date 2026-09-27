@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Mic, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Type, Upload, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -655,16 +655,11 @@ interface ProgressNote {
   createdByName?: string | null;
 }
 
-const KIND_ICON: Record<string, React.FC<{ className?: string }>> = {
-  TEXT: Type, PHOTO: Camera, VIDEO: VideoIcon, AUDIO: Mic, DOCUMENT: FileText,
-};
-const KIND_LABEL: Record<string, string> = {
-  TEXT: "Texto", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio", DOCUMENT: "Documento",
-};
-
 /**
- * Un avance como FILA de grilla, igual que Programación de trabajo: fecha, tipo,
- * detalle y acciones. Antes cada avance era una tarjeta con la foto o el video a
+ * Un avance como FILA de grilla, igual que Programación de trabajo: fecha,
+ * detalle y acciones. Sin columna "Tipo" (pedido del usuario, sep 2026): la
+ * miniatura, el reproductor o el documento ya dicen qué es.
+ * Antes cada avance era una tarjeta con la foto o el video a
  * ancho completo: diez avances ocupaban pantallas enteras y no se podía leer la
  * secuencia del trabajo de un vistazo. La foto/video queda como miniatura y se
  * amplía al hacer click (el mismo visor del mosaico).
@@ -678,7 +673,6 @@ const ProgressNoteRow: React.FC<{
   onSave?: (text: string) => Promise<void>;
   onOpenMedia?: () => void;
 }> = ({ note, onDelete, onSave, onOpenMedia }) => {
-  const Icon = KIND_ICON[note.kind] ?? Type;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text ?? "");
   const [saving, setSaving] = useState(false);
@@ -702,11 +696,6 @@ const ProgressNoteRow: React.FC<{
         <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
           {fmtTime(note.createdAt)}
           {note.createdByName && <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={note.createdByName}>{note.createdByName}</span>}
-        </div>
-      </td>
-      <td className="px-1">
-        <div className={`${noteCellCls} flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-text-industrial/60`}>
-          <Icon className="w-3 h-3 shrink-0" />{KIND_LABEL[note.kind] ?? note.kind}
         </div>
       </td>
       <td className="px-1">
@@ -910,7 +899,6 @@ export const ProgressNotesPanel: React.FC<{
             <thead>
               <tr className="text-[9px] uppercase tracking-widest text-text-industrial/50">
                 <th className="text-left font-semibold px-1 w-[104px]">Fecha</th>
-                <th className="text-left font-semibold px-1 w-[70px]">Tipo</th>
                 <th className="text-left font-semibold px-1">Detalle</th>
                 <th className="w-[56px]" />
               </tr>
