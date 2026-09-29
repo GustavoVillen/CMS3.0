@@ -86,14 +86,16 @@ export const Sidebar: React.FC = () => {
   // Paths ocultos por configuración del tenant (definidos por el admin en /configuration).
   const hiddenNavPaths = useHiddenNavPaths();
   const { width, startResize } = useResizable("gpms_sidebar_width", 240, 160, 360);
+  // Arranca cerrado cada vez que se abre el CMS (pestaña nueva); dentro de la misma
+  // pestaña recuerda lo que el usuario eligió, aunque recargue.
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem("gpms_sidebar_collapsed") === "true",
+    () => sessionStorage.getItem("gpms_sidebar_collapsed") !== "false",
   );
 
   const toggle = () =>
     setCollapsed(v => {
       const next = !v;
-      localStorage.setItem("gpms_sidebar_collapsed", String(next));
+      sessionStorage.setItem("gpms_sidebar_collapsed", String(next));
       return next;
     });
 
