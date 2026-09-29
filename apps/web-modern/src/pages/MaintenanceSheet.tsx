@@ -7,7 +7,8 @@
 // pueden además:
 //
 //   · marcar varias tareas y abrir UNA sola OT con todas adentro — el backend
-//     crea una SS por taller (no una por tarea) cuando alguna es tercerizada;
+//     crea una SS por taller (no una por tarea) cuando alguna es tercerizada.
+//     La OT se crea directo, sin ventana intermedia, y se completa en la orden;
 //   · ver "Última verificación" y "Próximo recorrido" de cada tarea; corregirlas
 //     a mano en la celda es sólo del administrador (ver canEditMilestones).
 //
@@ -23,6 +24,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
 import { CreateWorkOrderModal, buildWoPrefillFromPlan, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { api, ApiError } from "../lib/api";
+import { markJustCreated } from "../lib/just-created";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
@@ -40,6 +42,8 @@ import { textMatches } from "../lib/text-search";
 /** Lo que agrega la lista de planes por encima de lo que usa la planilla. */
 type SheetRow = SheetPlan & {
   status?: string | null;
+  /** "Tarea" del plan: sin ninguna en lo marcado, la OT pasa por el formulario. */
+  description?: string | null;
   /** Código de la OT abierta que ya cubre esta tarea (PLANNED / IN_PROGRESS). */
   activeWorkOrderCode?: string | null;
   /** Firma de esa OT: autorizada (tilde verde) o todavía no (advertencia amarilla). */
@@ -259,49 +263,99 @@ export function MaintenanceSheetPage() {
    * Tanda de órdenes a crear: un grupo de tareas por cada OT, en orden.
    *
    * Con "una sola OT" es un único grupo con todo lo marcado (lo de siempre).
-   * Con "una OT por equipo" son los grupos de `selectedByAsset`: el formulario
-   * se abre una vez por grupo, y al guardar cada uno se pasa al siguiente.
+   * Con "una OT por equipo" son los grupos de `selectedByAsset`, uno tras otro.
    */
   const [queue, setQueue] = useState<SheetRow[][]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
 
-  const openGroup = useCallback(async (groups: SheetRow[][], index: number) => {
-    const group = groups[index];
-    if (!group?.[0]) return;
+  /** Fin de la tanda: una sola orden se abre (con el aviso "¡Orden de trabajo
+   *  abierta!"); con varias no hay "la" orden y se va al listado. */
+  const finishQueue = useCallback((total: number, lastCode?: string) => {
+    setQueue([]);
+    setQueueIndex(0);
+    setSelectedIds([]);
+    void reload();
+    if (total > 1) navigate("/work-orders");
+    else if (lastCode) {
+      markJustCreated("wo", lastCode);
+      navigate(`/work-orders/${encodeURIComponent(lastCode)}`);
+    }
+  }, [navigate, reload]);
+
+  /**
+   * Crea las órdenes DIRECTO, sin la ventana de "Nueva OT" (pedido de Gustavo,
+   * sep 2026): la OT nace con lo que trae el plan y se completa en la propia
+   * orden. Mismo camino que el asistente de "Nueva OT" al elegir un ítem.
+   *
+   * Excepción: si ninguna tarea del grupo tiene descripción, la OT quedaría sin
+   * "Tarea" (y no se crea sin título ni tarea) → para ese grupo se abre el
+   * formulario como antes y, al guardarlo, la tanda sigue sola.
+   */
+  const runQueue = useCallback(async (groups: SheetRow[][], start: number) => {
     setCreating(true);
+    let index = start;
+    let lastCode: string | undefined;
     try {
-      // El modal necesita el plan COMPLETO (criterios, LOTO, riesgo): la lista
-      // los omite para aligerar el payload.
-      const primary = await api.get<Parameters<typeof buildWoPrefillFromPlan>[0]>(
-        `/app/pms/maintenance-plans/${group[0].id}`,
-      );
-      setQueue(groups);
-      setQueueIndex(index);
-      setPrefill(buildWoPrefillFromPlan(
-        primary,
-        t("mp.modal.maintenancePlanLabel"),
-        group.slice(1).map(p => ({
-          id: p.id, taskCode: p.taskCode, title: p.title, assetName: p.assetName ?? null,
-        })),
-      ));
+      for (; index < groups.length; index++) {
+        const group = groups[index]!;
+        // La lista omite los campos pesados: se pide el plan completo.
+        const primary = await api.get<Parameters<typeof buildWoPrefillFromPlan>[0]>(
+          `/app/pms/maintenance-plans/${group[0]!.id}`,
+        );
+        const extras = group.slice(1);
+        const hasTask = !!primary.description?.trim() || extras.some(p => !!p.description?.trim());
+        if (!hasTask) {
+          setQueue(groups);
+          setQueueIndex(index);
+          setPrefill(buildWoPrefillFromPlan(
+            primary,
+            t("mp.modal.maintenancePlanLabel"),
+            extras.map(p => ({ id: p.id, taskCode: p.taskCode, title: p.title, assetName: p.assetName ?? null })),
+          ));
+          return;
+        }
+        const created = await api.post<{ id: string; workOrderCode: string }>(
+          `/app/pms/maintenance-plans/${primary.id}/open-work-order`,
+          {
+            additionalPlanIds: extras.map(p => p.id),
+            // Lo que la ventana precargaba del plan y el backend no hereda solo;
+            // el resto (textos, criterios, LOTO, riesgo, talleres) lo hereda él.
+            dueDate: primary.nextDueDate ? primary.nextDueDate.slice(0, 10) : null,
+            assignedToUserId: primary.responsible?.trim() || undefined,
+          },
+        );
+        lastCode = created.workOrderCode;
+      }
+      finishQueue(groups.length, lastCode);
     } catch (err) {
-      setAlert(err instanceof ApiError ? err.message : t("msheet.createFailed"));
+      const msg = err instanceof ApiError ? err.message : t("msheet.createFailed");
+      setQueue([]);
+      setQueueIndex(0);
+      // Las anteriores ya quedaron creadas: se dice cuántas.
+      if (groups.length > 1 && index > 0) {
+        void reload();
+        setAlert(`${msg}\n${t("msheet.queueCancelled")
+          .replace("{n}", String(index))
+          .replace("{total}", String(groups.length))}`);
+      } else {
+        setAlert(msg);
+      }
     } finally {
       setCreating(false);
     }
-  }, [t]);
+  }, [t, finishQueue, reload]);
 
   /** Todo lo marcado en UNA sola orden (parada de astillero). */
   const createWorkOrder = useCallback(() => {
     if (selectedPlans.length === 0 || creating) return;
-    void openGroup([selectedPlans], 0);
-  }, [selectedPlans, creating, openGroup]);
+    void runQueue([selectedPlans], 0);
+  }, [selectedPlans, creating, runQueue]);
 
   /** Una orden por equipo marcado. */
   const createWorkOrderPerAsset = useCallback(() => {
     if (selectedByAsset.length === 0 || creating) return;
-    void openGroup(selectedByAsset, 0);
-  }, [selectedByAsset, creating, openGroup]);
+    void runQueue(selectedByAsset, 0);
+  }, [selectedByAsset, creating, runQueue]);
 
   // ── Edición de las dos fechas ──────────────────────────────────────────────
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -807,21 +861,12 @@ export function MaintenanceSheetPage() {
           }}
           onSaved={(_woId, workOrderCode) => {
             setPrefill(null);
-            // Quedan equipos por delante: se abre el formulario del siguiente.
+            // Quedan equipos por delante: la tanda sigue con el siguiente.
             if (queueIndex + 1 < queue.length) {
-              void reload();
-              void openGroup(queue, queueIndex + 1);
+              void runQueue(queue, queueIndex + 1);
               return;
             }
-            const wasBatch = queue.length > 1;
-            setQueue([]);
-            setQueueIndex(0);
-            setSelectedIds([]);
-            void reload();
-            // Con una sola orden se abre la orden creada, como siempre. Con una
-            // tanda no hay "la" orden: se va al listado, donde están todas.
-            if (wasBatch) navigate("/work-orders");
-            else if (workOrderCode) navigate(`/work-orders/${encodeURIComponent(workOrderCode)}`);
+            finishQueue(queue.length, workOrderCode);
           }}
         />
       )}

@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-09-29] Planilla a Bordo: "Crear OT y SS" crea la OT directo, sin la ventana "Nueva OT"
+Agent: Claude Opus 5.5
+- Pedido de Gustavo: de marcar la tarea y tocar el boton, pasar directo a la OT con el aviso
+  "Orden de trabajo abierta" (sin el formulario intermedio). Mismo camino que el asistente de "Nueva OT"
+  al elegir un item del plan: POST open-work-order y el backend hereda textos, criterios, LOTO, riesgo y
+  talleres (abre las SS igual que antes). Se mandan ademas fecha limite = vencimiento del plan y el
+  responsable del plan, que antes precargaba la ventana.
+- Una OT por equipo: se crean todas seguidas y se va al listado (como antes).
+- Excepcion: si ninguna tarea marcada tiene descripcion, ese grupo abre la ventana como antes (la OT no
+  se crea sin tarea) y la tanda sigue al guardarla.
+- Solo frontend (MaintenanceSheet.tsx): deploy = pull + build web.
+
 [2026-09-29] Nueva OT: "Tercerizado" pide la empresa tambien al abrirla desde un plan o un defecto
 Agent: Claude Opus 5.5
 - Reporte de Gustavo: al marcar Tercerizado no dejaba registrar la empresa. El selector de proveedor solo
