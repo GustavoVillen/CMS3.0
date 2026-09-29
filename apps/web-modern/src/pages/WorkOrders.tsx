@@ -6079,19 +6079,32 @@ export const WorkOrdersPage: React.FC = () => {
   // A se pidió B, la respuesta de A llega tarde y se descarta (mismo patrón
   // openTokenRef que MaintenancePlans).
   const openTokenRef = useRef(0);
-  const openDetail = useCallback(async (row: WorkOrder) => {
+  // Código que no se pudo abrir: deja de mostrarse "abriendo…" para ese código.
+  const [failedCode, setFailedCode] = useState<string | null>(null);
+  // La OT se pide directo por su código (el backend lo acepta en lugar del id).
+  // Antes había que esperar el listado entero para averiguar el id: mientras
+  // tanto se veía el tablero, y con una OT recién creada se recargaba entero.
+  const openByCode = useCallback(async (code: string) => {
     const token = ++openTokenRef.current;
-    setDetailLoadingId(row.id);
+    setDetailLoadingId(code);
     setTableActionError(null);
     try {
-      const detailed = await api.get<WorkOrder>(`/app/pms/work-orders/${row.id}`);
+      const detailed = await api.get<WorkOrder>(`/app/pms/work-orders/${encodeURIComponent(code)}`);
       if (openTokenRef.current !== token) return;
       setEditing(detailed);
     } catch {
-      if (openTokenRef.current === token) setEditing(row);
+      // No existe o no es de un buque propio: se queda en el tablero y se dice.
+      if (openTokenRef.current === token) {
+        setFailedCode(code);
+        setTableActionError(t("wo.openError").replace("{code}", code));
+      }
     }
     finally { if (openTokenRef.current === token) setDetailLoadingId(null); }
-  }, []);
+  }, [t]);
+  // OT de la URL todavía sin abrir: se calcula en el render (no en el efecto)
+  // para que la capa de "abriendo…" esté desde el primer cuadro y no se alcance
+  // a ver el tablero antes.
+  const openingCode = linkCode && !editing && failedCode !== linkCode ? linkCode : null;
 
   // Compatibilidad: `?autoCode=` (badges de plan) → redirige a la ruta deep-link.
   // `replace`: el `?autoCode=` es un puente, no un destino. Si quedara en el
@@ -6101,23 +6114,13 @@ export const WorkOrdersPage: React.FC = () => {
   }, [autoCode, openLink]);
 
   // Deep-link: la URL `/work-orders/:code` es la fuente de verdad del detalle.
-  //
-  // Si el código no está en el listado ya cargado, se recarga UNA sola vez por
-  // código. Es el caso de una OT recién creada: el copiloto la abre apenas la
-  // crea y el listado en memoria es anterior a ella, así que sin esto la
-  // pantalla se quedaba en la grilla sin abrir nada y sin decir por qué. El
-  // candado por código evita el bucle cuando la OT de verdad no está (por
-  // ejemplo, filtrada por estado).
-  const reloadedForCodeRef = useRef<string | null>(null);
+  // No depende del listado: una OT recién creada (que el listado en memoria
+  // todavía no tiene) o filtrada por estado abre igual.
   useEffect(() => {
-    if (!linkCode) { setEditing(null); return; }
+    if (!linkCode) { setEditing(null); setFailedCode(null); return; }
     if (editing?.workOrderCode === linkCode) return;
-    const match = data?.items?.find(w => w.workOrderCode === linkCode);
-    if (match) { void openDetail(match); return; }
-    if (!data || reloadedForCodeRef.current === linkCode) return;
-    reloadedForCodeRef.current = linkCode;
-    void reload();
-  }, [linkCode, data, editing, openDetail, reload]);
+    void openByCode(linkCode);
+  }, [linkCode, editing, openByCode]);
 
   const openActionModal = useCallback((wo: WorkOrder, type: ActionType) => {
     setActionTarget({ workOrder: wo, type });
@@ -6302,7 +6305,16 @@ export const WorkOrdersPage: React.FC = () => {
         )}
       </PageHeader>
 
-      {detailLoadingId && <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" />{t("common.loadingDetail")}</div>}
+      {/* Abriendo una OT: la misma capa oscura de la ficha, así no se ve el
+          tablero de por medio (antes parecía que iba primero a la lista). */}
+      {openingCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5 rounded-xl border border-fg/10 bg-surface dark:bg-[#0D1B2A] px-4 py-3 text-sm text-fg shadow-2xl">
+            <Loader2 className="w-4 h-4 animate-spin text-accent" />
+            <span className="font-mono font-bold text-accent">{openingCode}</span> {t("common.loadingDetail")}
+          </div>
+        </div>
+      )}
 
       {/* Resumen: lo que necesita atención. Tocar una tarjeta filtra. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">

@@ -1,5 +1,16 @@
 HISTORY.txt
 
+[2026-09-29] La OT se abre directo por su codigo (ya no pasa por el tablero de OT)
+Agent: Claude Opus 5.5
+- Reporte de Gustavo: desde la Planilla, al abrir una OT se veia primero /work-orders y despues la OT.
+  Causa: la ficha (/work-orders/:code) esperaba el listado ENTERO para averiguar el id por el codigo, y
+  con una OT recien creada lo recargaba una vez mas.
+- Backend: GET /app/pms/work-orders/:id acepta tambien el codigo (OR id / workOrderCode), mismo filtro
+  de tenant y de buque.
+- Frontend: la ficha pide la OT directo por el codigo; mientras carga, capa oscura "OT-... Cargando
+  detalle" desde el primer cuadro. Si no existe o no es de un buque propio: aviso "No se pudo abrir".
+- Deploy: pull + build web + pm2 restart (toca backend). Sin schema, sin permisos nuevos.
+
 [2026-09-29] OT y SS recien creadas: "Completar" deja el cursor en el primer dato que falta
 Agent: Claude Opus 5.5
 - Pedido de Gustavo: al tocar "Completar la OT" / "Completar la SS" del aviso de recien creada, la pantalla

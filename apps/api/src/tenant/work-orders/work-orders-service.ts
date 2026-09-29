@@ -555,13 +555,16 @@ export async function requireWorkOrderScope(session: TenantAccessSession, id: st
   return record;
 }
 
+/** `id` = id de la OT o su código (OT-M02-26-0467): la ficha se abre por la
+ *  URL /work-orders/:code y así no tiene que bajar el listado entero para
+ *  averiguar el id. Mismo filtro de tenant y de buque en los dos casos. */
 export async function getTenantWorkOrder(session: TenantAccessSession, id: string) {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const prisma = workOrdersClient(prismaRaw);
 
   const tenantId = await getTenantIdOrThrow(session);
-  const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
+  const where: Record<string, unknown> = { OR: [{ id }, { workOrderCode: id }], tenantId, deletedAt: null };
   applyVesselScope(session, where);
 
   const record = await prisma.workOrder.findFirst({
