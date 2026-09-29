@@ -32,7 +32,7 @@ import {
 import { downloadDocx } from "../lib/download-docx";
 import { BlankFormButton } from "../components/BlankFormButton";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark, firstMissingOnScreen, focusGuideField } from "../components/GuideKit";
 import { WizardStepper } from "../components/NewWorkOrderWizard";
 import { NewServiceRequestWizard } from "../components/NewServiceRequestWizard";
 import { isJustCreated, clearJustCreated } from "../lib/just-created";
@@ -2066,13 +2066,19 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
     focusedRecvRef.current = true;
     const key = recvMissing[0]?.key ?? "item";
     goField(key);
-    window.setTimeout(() => {
-      document.getElementById(`ss-field-${key}`)
-        ?.querySelector<HTMLElement>("input:not([disabled]), textarea:not([disabled]), button:not([disabled])")
-        ?.focus({ preventScroll: true });
-    }, 200);
+    window.setTimeout(() => focusGuideField(`ss-field-${key}`), 200);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusReception]);
+  /** "Completar la SS" del aviso de recién creada: lleva al primer dato que
+   *  falta, en el orden de la pantalla, y deja el cursor ahí (pedido de
+   *  Gustavo, sep 2026). Los demás pendientes siguen marcados en naranja. */
+  const startCompleting = () => {
+    setShowCreatedIntro(false);
+    const key = firstMissingOnScreen("ss-field-", missingKeys) ?? [...missingKeys][0];
+    if (!key) return;
+    goField(key);
+    window.setTimeout(() => focusGuideField(`ss-field-${key}`), 200);
+  };
   // Después de "Guardar", el foco va a "Cerrar SS" si está a la vista y
   // habilitado (pedido del usuario), igual que "Cerrar OT" en la OT.
   const recvBtnRef = React.useRef<HTMLButtonElement | null>(null);
@@ -2653,7 +2659,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
               </li>
             </ol>
             <div className="flex justify-end">
-              <button type="button" autoFocus onClick={() => setShowCreatedIntro(false)} className={btnPrimary}>
+              <button type="button" autoFocus onClick={startCompleting} className={btnPrimary}>
                 {t("ss.guide.created.go")} <ArrowRight className="w-4 h-4" />
               </button>
             </div>

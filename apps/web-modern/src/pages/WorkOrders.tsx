@@ -20,7 +20,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { NewWorkOrderWizard, WizardStepper } from "../components/NewWorkOrderWizard";
 import { isJustCreated, clearJustCreated, markJustCreated } from "../lib/just-created";
-import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark } from "../components/GuideKit";
+import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark, firstMissingOnScreen, focusGuideField } from "../components/GuideKit";
 import { hourAssetsOf, hourReadingIssue } from "../lib/wo-hours";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 // WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
@@ -3229,6 +3229,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       window.setTimeout(() => setFlashKey(null), 1600);
     }, 80);
   };
+  /** "Completar la OT" del aviso de recién creada: lleva al primer dato que
+   *  falta, en el orden de la pantalla, y deja el cursor ahí (pedido de
+   *  Gustavo, sep 2026). Los demás pendientes siguen marcados en naranja. */
+  const startCompleting = () => {
+    setShowCreatedIntro(false);
+    const key = firstMissingOnScreen("wo-field-", missingKeys) ?? [...missingKeys][0];
+    if (!key) return;
+    goField(key);
+    window.setTimeout(() => focusGuideField(`wo-field-${key}`), 200);
+  };
   // Abierta con focusClose: se va al cierre una sola vez, al abrir. Con el
   // formulario guiado es el mismo salto que el botón "Ir al cierre"; en la
   // vista de siempre, la sección RESULTADO.
@@ -4578,7 +4588,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             </li>
           </ol>
           <div className="flex justify-end">
-            <button type="button" autoFocus onClick={() => setShowCreatedIntro(false)} className={btnPrimary}>
+            <button type="button" autoFocus onClick={startCompleting} className={btnPrimary}>
               {t("wo.guide.created.go")} <ArrowRight className="w-4 h-4" />
             </button>
           </div>

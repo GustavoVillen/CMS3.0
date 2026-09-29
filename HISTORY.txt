@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-09-29] OT y SS recien creadas: "Completar" deja el cursor en el primer dato que falta
+Agent: Claude Opus 5.5
+- Pedido de Gustavo: al tocar "Completar la OT" / "Completar la SS" del aviso de recien creada, la pantalla
+  va al primer campo pendiente (en el orden de la pantalla) y deja el cursor ahi; el resto sigue en naranja.
+- GuideKit: firstMissingOnScreen + focusGuideField (saltea el boton "Sugerir" del rotulo). La SS reusa el
+  mismo helper en "Cerrar SS" desde Seguimiento.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-29] Planilla a Bordo: "Crear OT y SS" crea la OT directo, sin la ventana "Nueva OT"
 Agent: Claude Opus 5.5
 - Pedido de Gustavo: de marcar la tarea y tocar el boton, pasar directo a la OT con el aviso

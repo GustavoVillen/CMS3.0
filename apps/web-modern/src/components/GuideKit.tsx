@@ -71,6 +71,31 @@ export const GuideField: React.FC<{
   </div>
 );
 
+/**
+ * Primer campo pendiente EN EL ORDEN DE LA PANTALLA (no el de la lista de
+ * chequeo), entre los `GuideField` con id `<prefix><clave>`. Sólo ve los
+ * bloques abiertos: si no hay ninguno a la vista, devuelve undefined.
+ */
+export function firstMissingOnScreen(prefix: string, missing: Set<string>): string | undefined {
+  return [...document.querySelectorAll<HTMLElement>(`[id^='${prefix}']`)]
+    .map(el => el.id.slice(prefix.length))
+    .find(k => missing.has(k));
+}
+
+/**
+ * Deja el cursor en el `GuideField` `id`: en su primer control, salteando el
+ * "✨ Sugerir" que va en la fila del rótulo (se escribe el dato, no se llama a
+ * la IA). Sin scroll: quien llama ya lo centró.
+ */
+export function focusGuideField(id: string): void {
+  const box = document.getElementById(id);
+  if (!box) return;
+  const controls = [...box.querySelectorAll<HTMLElement>("input, textarea, select, button")]
+    .filter(c => !(c as HTMLInputElement).disabled);
+  const inLabelRow = (c: HTMLElement) => !!c.closest("label") || !!c.parentElement?.querySelector(":scope > label");
+  (controls.find(c => !inLabelRow(c)) ?? controls[0])?.focus({ preventScroll: true });
+}
+
 /** Etiqueta "✎ Completar" al lado del rótulo de un campo pendiente. */
 export const GuideNeedTag: React.FC<{ label: string }> = ({ label }) => (
   <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-600 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white align-middle">
