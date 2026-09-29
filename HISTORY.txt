@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-09-29] Planilla a Bordo: boton "Seguimiento" y el filtro incluye las tareas con OT abierta
+Agent: Claude Opus 5.5
+- Boton "Seguimiento" en la barra de la Planilla (entre "Planilla Excel" y "Crear OT y SS"). Se ve con el
+  mismo criterio que el item del menu y el boton del Dashboard (roles de NAV + lo oculto por la empresa).
+- El filtro "Solo vencidas y por vencer" ahora tambien muestra las tareas con OT abierta (aunque no esten
+  vencidas o el equipo este fuera de servicio). Rotulo: "Vencidas, por vencer y con OT abierta".
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-29] Seguimiento: el resaltado busca en la lista fresca y el aviso solo sale si la OT no se envio
 Agent: Claude Opus 5.5
 - Reporte de Gustavo: salio "OT-DCH-26-0310 todavia no aparece en Seguimiento" con la OT ya enviada.

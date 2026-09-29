@@ -3454,7 +3454,7 @@ const dict = {
   "msheet.title":              { es: "Planilla a Bordo",       en: "Onboard Sheet",         pt: "Planilha de Bordo" },
   "msheet.noVessel":           { es: "Elegí un buque para ver su planilla.", en: "Select a vessel to see its sheet.", pt: "Selecione uma embarcação para ver sua planilha." },
   "msheet.empty":              { es: "No hay tareas para mostrar.", en: "No tasks to show.", pt: "Sem tarefas para mostrar." },
-  "msheet.onlyDue":            { es: "Sólo vencidas y por vencer", en: "Overdue and due only", pt: "Só vencidas e a vencer" },
+  "msheet.onlyDue":            { es: "Vencidas, por vencer y con OT abierta", en: "Overdue, due and with open WO", pt: "Vencidas, a vencer e com OS aberta" },
   "msheet.create":             { es: "Crear OT y SS cuando corresponda", en: "Create WO and SR when applicable", pt: "Criar OS e SS quando corresponder" },
   "msheet.createHint":         { es: "Abre una sola orden de trabajo con todas las tareas marcadas, y una solicitud de servicio por cada taller externo.", en: "Opens a single work order with every marked task, and one service request per external workshop.", pt: "Abre uma única ordem de serviço com todas as tarefas marcadas e uma solicitação de serviço por oficina externa." },
   "msheet.createHintEmpty":    { es: "Marcá al menos una tarea.", en: "Mark at least one task.", pt: "Marque ao menos uma tarefa." },

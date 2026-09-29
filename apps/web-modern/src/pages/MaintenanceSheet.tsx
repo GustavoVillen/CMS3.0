@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
+import { Check, ClipboardCheck, ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
@@ -30,6 +30,8 @@ import { useFetch } from "../lib/hooks";
 import { useAuth } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
+import { NAV } from "../lib/nav-items";
+import { useHiddenNavPaths } from "../lib/nav-config";
 import { useCopilotEmitter, useCopilotDataRefresh } from "../lib/copilot-context";
 import {
   type AssetInfo, type SheetPlan, type SheetGroup,
@@ -116,6 +118,12 @@ export function MaintenanceSheetPage() {
   // por acá: eso lo mueve solo el cierre de la OT. El backend valida lo mismo,
   // así que la celda se muestra editable sólo a quien va a poder guardarla.
   const { user, tenant } = useAuth();
+  // Botón a Seguimiento: lo decide el mismo ítem del menú (roles y lo que la
+  // empresa ocultó en Configuración), igual que el del Dashboard.
+  const hiddenNavPaths = useHiddenNavPaths();
+  const followUpNav = NAV.flatMap(s => s.items).find(i => i.path === "/approvals");
+  const canSeeFollowUp = !!followUpNav && !hiddenNavPaths.includes("/approvals")
+    && (!followUpNav.roles || followUpNav.roles.includes((user?.role ?? "") as never));
   const canEditMilestones = user?.role === "TENANT_ADMIN";
 
   const plansPath = selectedVesselCode ? "/app/pms/maintenance-plans?limit=2000" : null;
@@ -155,7 +163,10 @@ export function MaintenanceSheetPage() {
               // sus tareas vencen igual, pero no se pueden ejecutar hasta que la
               // máquina vuelva. Mismo criterio con el que van en rosa y con el que
               // el Dashboard las cuenta aparte.
-              if (onlyDue && (b.outOfService || severityOf(p) === "none")) return false;
+              // Con OT abierta entra siempre (pedido de Gustavo, sep 2026): es
+              // trabajo en curso y hay que poder seguirlo desde acá.
+              const hasOpenWo = !!(p as SheetRow).activeWorkOrderCode;
+              if (onlyDue && !hasOpenWo && (b.outOfService || severityOf(p) === "none")) return false;
               if (!q) return true;
               return textMatches(`${b.name} ${p.title} ${p.taskCode}`, q);
             }),
@@ -532,6 +543,15 @@ export function MaintenanceSheetPage() {
             : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />}
           {exportingSheet ? t("mp.page.exportSheetBusy") : t("mp.page.exportSheet")}
         </button>
+        {canSeeFollowUp && (
+          <button
+            onClick={() => navigate("/approvals")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
+          >
+            <ClipboardCheck className="w-3.5 h-3.5 text-accent" />
+            {t("nav.approvals")}
+          </button>
+        )}
         {/* Lo marcado abarca varios equipos: el camino normal es una OT por
             equipo. Juntarlos en una sola es la parada de astillero, y queda
             como segundo botón para que sea una decisión y no un accidente. */}
