@@ -5316,6 +5316,7 @@ const dict = {
   "approvals.card.srInProgressHint": { es: "Ya mandadas al proveedor", en: "Already sent to the provider", pt: "Já enviadas ao fornecedor" },
   "approvals.filterEmpty":        { es: "Ninguna fila coincide con el filtro.", en: "No rows match the filter.", pt: "Nenhuma linha corresponde ao filtro." },
   "approvals.filterClear":        { es: "Mostrar todas",              en: "Show all",                   pt: "Mostrar todas" },
+  "approvals.justOpened.notListed": { es: "{code} todavía no aparece en Seguimiento: se muestra acá cuando se envía a aprobar.", en: "{code} is not in Follow-up yet: it shows here once it is sent for approval.", pt: "{code} ainda não aparece no Acompanhamento: aparece aqui quando é enviada para aprovação." },
   "approvals.exec.closeSr":       { es: "Cerrar SS",                  en: "Close SR",                   pt: "Fechar SS" },
   "approvals.exec.sendFirst":     { es: "falta enviar",               en: "not sent yet",               pt: "falta enviar" },
   "approvals.provider":           { es: "Proveedor: {name}",          en: "Provider: {name}",           pt: "Fornecedor: {name}" },

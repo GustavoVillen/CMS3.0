@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-29] Seguimiento: la OT recien abierta desde la Planilla se resalta una sola vez
+Agent: Claude Opus 5.5
+- Pedido de Gustavo: al llegar a Seguimiento despues de cerrar la OT creada en la Planilla, su fila se marca
+  con un recuadro de color de acento y se centra. La Planilla manda /approvals?highlight=<codigo>; Seguimiento
+  lo usa y lo borra de la URL (atras o recargar no la vuelven a marcar).
+- Si la OT no esta en la lista (en preparacion, sin enviar a aprobar): aviso "todavia no aparece en
+  Seguimiento: se muestra cuando se envia a aprobar". Clave i18n approvals.justOpened.notListed.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-29] Planilla a Bordo: la OT creada con "Crear OT y SS", al cerrarse, va a Seguimiento
 Agent: Claude Opus 5.5
 - Pedido de Gustavo (opcion "al cerrar la OT"): X, Guardar o "Salir sin enviar" llevan a /approvals en vez de

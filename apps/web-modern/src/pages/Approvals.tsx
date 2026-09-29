@@ -28,6 +28,7 @@
 // Acá no hay reglas de negocio propias y no debería agregarse ninguna.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, ClipboardCheck, Hammer, Handshake, Loader2, Pause, Pencil, Search } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
@@ -316,6 +317,29 @@ export const ApprovalsPage: React.FC = () => {
     () => rows.filter(r => !authorizedOf(r)).length,
     [rows, authorizedOf],
   );
+
+  // ─── OT recién abierta (?highlight=<código>) ───────────────────────────────
+  // Se llega acá al cerrar la OT creada desde la Planilla a Bordo: su fila se
+  // marca y se centra UNA sola vez (pedido de Gustavo, sep 2026). El parámetro
+  // se borra de la URL al usarlo, así "atrás" o recargar no la vuelven a marcar.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightCode, setHighlightCode] = useState<string | null>(null);
+  useEffect(() => {
+    const code = searchParams.get("highlight");
+    if (!code || !data) return;
+    setSearchParams(p => { p.delete("highlight"); return p; }, { replace: true });
+    const row = rows.find(r => r.kind === "WO" && r.code === code);
+    if (!row) {
+      // En preparación (sin enviar a aprobar) no llega a esta bandeja.
+      setAlert(t("approvals.justOpened.notListed").replace("{code}", code));
+      return;
+    }
+    setHighlightCode(code);
+    window.setTimeout(() => {
+      document.querySelector(`[data-row-code="${CSS.escape(code)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  }, [searchParams, setSearchParams, data, rows, t]);
 
   // ─── Firmar ────────────────────────────────────────────────────────────────
   const sign = useCallback(async (r: Row, step: "APRUEBA" | "AUTORIZA") => {
@@ -769,7 +793,11 @@ export const ApprovalsPage: React.FC = () => {
                         </td>
                       </tr>
                     )}
-                    <tr className="hover:brightness-[0.98]">
+                    <tr className="hover:brightness-[0.98]" data-row-code={r.kind === "WO" ? r.code : undefined}
+                      // La OT recién abierta: recuadro de color de acento (sobre
+                      // el semáforo de la fila, que sigue a la vista).
+                      style={r.kind === "WO" && r.code === highlightCode
+                        ? { outline: "3px solid var(--color-accent)", outlineOffset: "-2px" } : undefined}>
                       {firstOfAsset && (
                         <td rowSpan={span} className={`${td} text-center font-bold bg-surface text-fg`}>{itemNumber}</td>
                       )}

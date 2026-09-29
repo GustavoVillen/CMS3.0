@@ -279,7 +279,10 @@ export function MaintenanceSheetPage() {
     if (total > 1) navigate("/work-orders");
     else if (lastCode) {
       markJustCreated("wo", lastCode);
-      navigate(`/work-orders/${encodeURIComponent(lastCode)}`, { state: { closeTo: "/approvals" } });
+      // En Seguimiento, esa OT se marca una sola vez (?highlight).
+      navigate(`/work-orders/${encodeURIComponent(lastCode)}`, {
+        state: { closeTo: `/approvals?highlight=${encodeURIComponent(lastCode)}` },
+      });
     }
   }, [navigate, reload]);
 
