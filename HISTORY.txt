@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-29] Seguimiento: el resaltado busca en la lista fresca y el aviso solo sale si la OT no se envio
+Agent: Claude Opus 5.5
+- Reporte de Gustavo: salio "OT-DCH-26-0310 todavia no aparece en Seguimiento" con la OT ya enviada.
+  Causa: useFetch muestra la lista del cache de la visita anterior (de antes de crear/enviar la OT) y el
+  resaltado buscaba ahi. Ahora con ?highlight se pide la lista fresca (reload) y recien ahi se busca.
+- El aviso sale solo si la OT de verdad no se envio a aprobar (se consulta la OT por codigo); si falta por
+  otro motivo (otro buque elegido arriba) no se muestra nada.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-29] Seguimiento: la OT recien abierta desde la Planilla se resalta una sola vez
 Agent: Claude Opus 5.5
 - Pedido de Gustavo: al llegar a Seguimiento despues de cerrar la OT creada en la Planilla, su fila se marca

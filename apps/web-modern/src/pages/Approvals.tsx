@@ -324,14 +324,29 @@ export const ApprovalsPage: React.FC = () => {
   // se borra de la URL al usarlo, así "atrás" o recargar no la vuelven a marcar.
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightCode, setHighlightCode] = useState<string | null>(null);
+  // Código a buscar, recién cuando llegó la lista fresca.
+  const [lookFor, setLookFor] = useState<string | null>(null);
   useEffect(() => {
     const code = searchParams.get("highlight");
-    if (!code || !data) return;
+    if (!code) return;
     setSearchParams(p => { p.delete("highlight"); return p; }, { replace: true });
+    // La lista que se ve al entrar sale del cache de la visita anterior, de
+    // antes de crear o enviar esta OT: buscarla ahí daba "no aparece" aunque ya
+    // estuviera enviada. Se pide fresca y recién ahí se busca.
+    void reload().then(() => setLookFor(code));
+  }, [searchParams, setSearchParams, reload]);
+  useEffect(() => {
+    if (!lookFor || !data) return;
+    const code = lookFor;
+    setLookFor(null);
     const row = rows.find(r => r.kind === "WO" && r.code === code);
     if (!row) {
-      // En preparación (sin enviar a aprobar) no llega a esta bandeja.
-      setAlert(t("approvals.justOpened.notListed").replace("{code}", code));
+      // En preparación (sin enviar a aprobar) no llega a esta bandeja: sólo
+      // en ese caso se avisa. Si no está por otro motivo (otro buque elegido
+      // arriba, por ejemplo) el aviso diría algo falso: no se muestra nada.
+      void api.get<{ enviadoAprobacionAt?: string | null }>(`/app/pms/work-orders/${encodeURIComponent(code)}`)
+        .then(wo => { if (!wo.enviadoAprobacionAt) setAlert(t("approvals.justOpened.notListed").replace("{code}", code)); })
+        .catch(() => { /* sin aviso */ });
       return;
     }
     setHighlightCode(code);
@@ -339,7 +354,7 @@ export const ApprovalsPage: React.FC = () => {
       document.querySelector(`[data-row-code="${CSS.escape(code)}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 80);
-  }, [searchParams, setSearchParams, data, rows, t]);
+  }, [lookFor, data, rows, t]);
 
   // ─── Firmar ────────────────────────────────────────────────────────────────
   const sign = useCallback(async (r: Row, step: "APRUEBA" | "AUTORIZA") => {
