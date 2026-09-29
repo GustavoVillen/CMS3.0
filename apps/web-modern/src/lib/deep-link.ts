@@ -33,12 +33,20 @@ export interface DeepLink {
   open: (code: string, opts?: { replace?: boolean }) => void;
   /** Cierra el detalle volviendo a la pantalla anterior (o a `/base`). */
   close: () => void;
+  /**
+   * Pantalla a la que va `close()` en vez de volver atrás, si quien abrió el
+   * detalle la pidió con `navigate(path, { state: { closeTo } })`. Ej.: la OT
+   * recién creada desde la Planilla a Bordo se cierra yendo a Seguimiento.
+   */
+  closeTo: string | null;
 }
 
 export function useDeepLink(basePath: string): DeepLink {
   const { code } = useParams<{ code?: string }>();
   const navigate = useNavigate();
-  const { search, key } = useLocation();
+  const { search, key, state } = useLocation();
+  const rawCloseTo = (state as { closeTo?: unknown } | null)?.closeTo;
+  const closeTo = typeof rawCloseTo === "string" && rawCloseTo.startsWith("/") ? rawCloseTo : null;
 
   // Se preservan los query params (filtros de la lista, autoCode se descarta).
   const keepSearch = () => {
@@ -77,14 +85,18 @@ export function useDeepLink(basePath: string): DeepLink {
    * `navigate(-1)` sacaría al usuario de la aplicación. En ese caso se cae a la
    * lista, que es el comportamiento de siempre. React Router marca esa primera
    * entrada con `key === "default"`.
+   *
+   * Con `closeTo` (ver arriba) va a esa pantalla, reemplazando la del detalle:
+   * "atrás" desde ahí vuelve a donde se abrió.
    */
   const close = useCallback(
     () => {
-      if (key !== "default") navigate(-1);
+      if (closeTo) navigate(closeTo, { replace: true });
+      else if (key !== "default") navigate(-1);
       else navigate(`${basePath}${keepSearch()}`);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [navigate, basePath, search, key],
+    [navigate, basePath, search, key, closeTo],
   );
 
   // React Router ya decodifica el param; este decode extra es por compatibilidad
@@ -95,5 +107,5 @@ export function useDeepLink(basePath: string): DeepLink {
   if (code) {
     try { decoded = decodeURIComponent(code); } catch { decoded = code; }
   }
-  return { code: decoded, open, close };
+  return { code: decoded, open, close, closeTo };
 }

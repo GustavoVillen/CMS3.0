@@ -269,7 +269,8 @@ export function MaintenanceSheetPage() {
   const [queueIndex, setQueueIndex] = useState(0);
 
   /** Fin de la tanda: una sola orden se abre (con el aviso "¡Orden de trabajo
-   *  abierta!"); con varias no hay "la" orden y se va al listado. */
+   *  abierta!") y, al cerrarla, se va a Seguimiento (pedido de Gustavo, sep
+   *  2026); con varias no hay "la" orden y se va al listado. */
   const finishQueue = useCallback((total: number, lastCode?: string) => {
     setQueue([]);
     setQueueIndex(0);
@@ -278,7 +279,7 @@ export function MaintenanceSheetPage() {
     if (total > 1) navigate("/work-orders");
     else if (lastCode) {
       markJustCreated("wo", lastCode);
-      navigate(`/work-orders/${encodeURIComponent(lastCode)}`);
+      navigate(`/work-orders/${encodeURIComponent(lastCode)}`, { state: { closeTo: "/approvals" } });
     }
   }, [navigate, reload]);
 

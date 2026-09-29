@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-09-29] Planilla a Bordo: la OT creada con "Crear OT y SS", al cerrarse, va a Seguimiento
+Agent: Claude Opus 5.5
+- Pedido de Gustavo (opcion "al cerrar la OT"): X, Guardar o "Salir sin enviar" llevan a /approvals en vez de
+  volver a la Planilla. "Atras" desde Seguimiento vuelve a la Planilla.
+- Enviar a aprobar: se muestra el aviso "OT enviada a aprobar" y al tocar OK va a Seguimiento.
+- useDeepLink: close() respeta location.state.closeTo (quien abre el detalle puede fijar a donde se cierra).
+  Solo lo usa la Planilla; el resto de las pantallas sigue igual.
+- Ojo: Seguimiento no lista las OT EN PREPARACION (sin enviar); cerrar sin enviar lleva igual a Seguimiento.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-29] La OT se abre directo por su codigo (ya no pasa por el tablero de OT)
 Agent: Claude Opus 5.5
 - Reporte de Gustavo: desde la Planilla, al abrir una OT se veia primero /work-orders y despues la OT.

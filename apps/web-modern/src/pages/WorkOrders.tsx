@@ -5836,7 +5836,15 @@ export const WorkOrdersPage: React.FC = () => {
   const canCreate = !!user && user.role !== "AUDITOR_READONLY";
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/work-orders");
+  const { code: linkCode, open: openLink, close: closeLink, closeTo } = useDeepLink("/work-orders");
+  // Enviada a aprobar desde la ficha. Si la ficha se cierra yendo a OTRA
+  // pantalla (closeTo, ej. Planilla → Seguimiento), se espera el OK del aviso
+  // "enviada": si no, el aviso se pierde con esta pantalla.
+  const sentPendingRef = useRef(false);
+  const closeDetail = useCallback(() => {
+    if (closeTo && sentPendingRef.current) return;
+    closeLink();
+  }, [closeTo, closeLink]);
 
   // Puente del Dashboard: "Nueva Solicitud de Servicio" → "de una OT ya abierta"
   // llega con `?newSs=1` y la OT tiene que abrirse con el formulario de la SS
@@ -6476,12 +6484,12 @@ export const WorkOrdersPage: React.FC = () => {
             workOrder={editing}
             canManage={canManage}
             autoOpenNewSs={autoNewSs}
-            onClose={() => { setAutoNewSs(false); closeLink(); }}
-            onSaved={() => { closeLink(); void reload(); }}
+            onClose={() => { setAutoNewSs(false); closeDetail(); }}
+            onSaved={() => { closeDetail(); void reload(); }}
             onReload={() => { void reload(); }}
             onOpenAction={openActionModal}
             onPlanExecuted={(planId, completedAt) => { void offerCertificateRenewal(planId, completedAt); }}
-            onSentToApprove={setSentWoCode}
+            onSentToApprove={code => { sentPendingRef.current = true; setSentWoCode(code); }}
           />
         </MaybeCopilotFlow>
       )}
@@ -6495,7 +6503,13 @@ export const WorkOrdersPage: React.FC = () => {
             </h2>
             <p className="text-sm text-text-industrial/80">{t("wo.guide.sent.body").replace("{code}", sentWoCode)}</p>
             <div className="flex justify-end">
-              <button type="button" autoFocus onClick={() => setSentWoCode(null)}
+              <button type="button" autoFocus onClick={() => {
+                  setSentWoCode(null);
+                  // La ficha esperaba este OK para irse a su pantalla (closeTo).
+                  const wasPending = sentPendingRef.current;
+                  sentPendingRef.current = false;
+                  if (wasPending && closeTo) closeLink();
+                }}
                 className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110">OK</button>
             </div>
           </div>
