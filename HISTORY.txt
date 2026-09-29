@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-29] Nueva OT: "Tercerizado" pide la empresa tambien al abrirla desde un plan o un defecto
+Agent: Claude Opus 5.5
+- Reporte de Gustavo: al marcar Tercerizado no dejaba registrar la empresa. El selector de proveedor solo
+  aparecia en el alta libre; desde Planilla/Plan/Defecto estaba oculto y la OT quedaba tercerizada sin SS.
+- Desde un plan sin taller: un solo proveedor; se manda providerId a open-work-order y el backend abre la SS
+  (misma via que la App a bordo). Desde un defecto: igual que el alta libre (varios, con "para que").
+- Si se desmarca Tercerizado, el proveedor elegido no se manda.
+- Solo frontend (CreateWorkOrderModal.tsx): deploy = pull + build web. Sin schema, sin permisos nuevos.
+
 [2026-09-20] Asesor tecnico: radiografia de equipos (salud) + comparacion con el analisis anterior
 Agent: Claude Opus 5
 - Pedido de Gustavo: el plan al dia no alcanza; un equipo puede estar DELICADO aunque se lo este reparando.

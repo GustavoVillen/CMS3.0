@@ -390,12 +390,13 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   useEffect(() => {
     // Además de los talleres que trae un plan, en modo standalone se puede
     // elegir proveedores libres (ver `standaloneProviderRequests`) — ahí
-    // también hace falta la lista.
-    if ((planProviders.length === 0 && prefill) || availableProviders.length > 0) return;
+    // también hace falta la lista, igual que al marcar "Tercerizado" en una OT
+    // que nace de un plan o defecto sin taller.
+    if ((planProviders.length === 0 && prefill && assignedToArea !== "TERCERIZADO") || availableProviders.length > 0) return;
     api.get<{ items: Array<{ id: string; name: string; providerCode?: string }> }>("/app/providers?status=ACTIVE")
       .then(res => setAvailableProviders(res.items ?? []))
       .catch(() => setAvailableProviders([]));
-  }, [planProviders.length, availableProviders.length, prefill]);
+  }, [planProviders.length, availableProviders.length, prefill, assignedToArea]);
   // Proveedores elegidos a mano en modo standalone (sin plan, o para completar
   // uno): mismo formato {providerId, purpose} que usa el editor del Plan de
   // Mantenimiento. Al guardar, la OT se manda a esos talleres y se abre una SS
@@ -953,7 +954,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // Plan de Mantenimiento). Si ya se confirmó un vínculo a un plan (que trae
   // sus propios proveedores), no hace falta elegir uno más acá: sería pedir
   // el mismo dato dos veces.
-  const cleanStandaloneProviders = standaloneProviderRequests.filter(r => r.providerId);
+  // Taller elegido a mano: en alta libre y también al abrir desde un plan o un
+  // defecto que no trae taller y quien abre marca "Tercerizado" (antes ahí no
+  // aparecía el campo y la OT quedaba tercerizada sin empresa ni SS).
+  const showsStandaloneProviders = planProviders.length === 0
+    && (isMercurio ? assignedToArea === "TERCERIZADO" : (!prefill && !!requireProvider));
+  // Desde un plan el backend abre UNA SS con los ítems del plan: un solo
+  // taller, sin "para qué" (el servicio sale del plan).
+  const singleProvider = prefill?.source === "plan";
+  // Con OT desde plan/defecto, el taller sólo cuenta mientras siga "Tercerizado".
+  const cleanStandaloneProviders = prefill && !showsStandaloneProviders
+    ? []
+    : standaloneProviderRequests.filter(r => r.providerId).slice(0, singleProvider ? 1 : undefined);
   const hasAnyProvider = cleanStandaloneProviders.length > 0 || confirmedPlanIds.length > 0;
 
   // Campos que hoy bloquean el guardado: se resaltan como guía (preview V24).
@@ -1020,6 +1032,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           // Otros ítems del PDM que cubre la misma OT.
           additionalPlanIds:  prefill.additionalPlans?.map(p => p.id),
           providerOverride:   Object.keys(providerOverride).length > 0 ? providerOverride : undefined,
+          // Plan sin taller marcado "Tercerizado": el backend abre la SS a este
+          // taller junto con la OT (misma vía que la App a bordo).
+          ...(cleanStandaloneProviders.length > 0 ? { providerId: cleanStandaloneProviders[0]!.providerId } : {}),
           // Recuadros del papel que el plan no define, más "Asignado a" (trae un
           // valor por defecto del plan, pero acá se puede pisar).
           ...(isMercurio ? {
@@ -1096,7 +1111,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       // Servicio por cada uno (mismo criterio "una SS por taller" que el plan).
       // No bloqueante: si una falla, la OT ya quedó guardada y se puede abrir
       // a mano después.
-      if (!prefill && cleanStandaloneProviders.length > 0 && woId) {
+      // Desde un plan la SS ya la abrió el backend (providerId de arriba).
+      if (prefill?.source !== "plan" && cleanStandaloneProviders.length > 0 && woId) {
         for (const r of cleanStandaloneProviders) {
           const servicio = r.purpose.trim() || title.trim() || undefined;
           try {
@@ -1135,7 +1151,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
-      checklistDocFile, confirmedPlanIds, providerOverride, isAdmin, onBehalfUserId, onSaved, t,
+      checklistDocFile, confirmedPlanIds, providerOverride, planProviders, isAdmin, onBehalfUserId, onSaved, t,
       standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio, serviceRequestMode,
       requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location]);
 
@@ -1152,7 +1168,6 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
   // ── Copiloto: el formulario completo, en el mismo orden que la pantalla ──
   const { data: directory } = useFetch<Array<{ userId: string; name: string }>>("/app/team/directory");
-  const showsStandaloneProviders = !prefill && planProviders.length === 0 && (isMercurio ? assignedToArea === "TERCERIZADO" : requireProvider);
   // Al marcar "Tercerizado" la sección del taller aparecía vacía, sólo con
   // "+ Agregar": quien cargaba a mano tenía un clic de más, y el copiloto no
   // tenía dónde poner el taller (lo "registraba" en la charla y la OT se
@@ -1222,8 +1237,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           hint: "Outside workshop that does the job. When the OT is saved, a Service Request (SS) is opened to it automatically — without it no SS is created. If the name the user gives is not in the list, say so and ask; do not skip this field.",
           options: availableProviders.map(p => ({ value: p.id, label: p.name, aliases: p.providerCode ? [p.providerCode] : undefined })),
           set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: v } : r)) },
-        { key: `line.${i}.purpose`, label: `${t("mp.providerRequests.purposePlaceholder")} (${i + 1})`, value: row.purpose,
-          set: v => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: v } : r)) },
+        ...(singleProvider ? [] : [
+          { key: `line.${i}.purpose`, label: `${t("mp.providerRequests.purposePlaceholder")} (${i + 1})`, value: row.purpose,
+            set: (v: string) => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: v } : r)) },
+        ]),
       );
     });
   }
@@ -1270,7 +1287,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       loto:               { label: t("wo.modal.loto"),                run: handleLotoClick },
       risk:               { label: t("wo.modal.riskLevel"),           run: handleRiskClick },
       consequence:        { label: t("wo.modal.consequenceCategory"), run: handleConsequenceClick },
-      ...(showsStandaloneProviders ? {
+      ...(showsStandaloneProviders && !singleProvider ? {
         addLine: { label: t("mp.providerRequests.add"), run: () => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }]) },
       } : {}),
     },
@@ -1360,9 +1377,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           </p>
         </div>
       )}
-      {/* Sólo en alta libre: en modo prefill (desde un plan) el proveedor ya lo
-          maneja el plan (caja de arriba) y el backend lo deriva solo al abrir
-          la OT — un editor acá se ignoraría en silencio. */}
+      {/* Alta libre, o plan/defecto SIN taller marcado "Tercerizado". Si el plan
+          trae taller, lo maneja la caja de arriba y este editor no aparece. */}
       {/* Asistente de "Nueva SS": los talleres ya se eligieron en su paso; acá
           sólo se escribe qué servicio se le pide a cada uno. */}
       {showsStandaloneProviders && providersPreselected && (
@@ -1394,9 +1410,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       {showsStandaloneProviders && !providersPreselected && (
         <div className={`rounded-xl border p-3 space-y-2 ${missReq.provider ? "border-amber-500/60 border-l-4 bg-amber-50 dark:bg-amber-500/10" : "border-accent/25 bg-accent/5"}`}>
           <label className={labelCls}>{t("wo.modal.provider")}{requireProvider && <RequiredMark />}{missReq.provider && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-          {standaloneProviderRequests.map((row, i) => (
+          {standaloneProviderRequests.slice(0, singleProvider ? 1 : undefined).map((row, i) => (
             <div key={i} className="flex items-start gap-2">
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+              <div className={`flex-1 grid grid-cols-1 gap-2 min-w-0 ${singleProvider ? "" : "sm:grid-cols-2"}`}>
                 <select
                   value={row.providerId}
                   onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, providerId: e.target.value } : r))}
@@ -1407,30 +1423,36 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     <option key={p.id} value={p.id}>{p.name}{p.providerCode ? ` (${p.providerCode})` : ""}</option>
                   ))}
                 </select>
-                <input
-                  value={row.purpose}
-                  onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
-                  placeholder={t("mp.providerRequests.purposePlaceholder")}
-                  className={inputCls}
-                />
+                {!singleProvider && (
+                  <input
+                    value={row.purpose}
+                    onChange={e => setStandaloneProviderRequests(prev => prev.map((r, j) => j === i ? { ...r, purpose: e.target.value } : r))}
+                    placeholder={t("mp.providerRequests.purposePlaceholder")}
+                    className={inputCls}
+                  />
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => setStandaloneProviderRequests(prev => prev.filter((_, j) => j !== i))}
-                title={t("mp.providerRequests.remove")}
-                className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {!singleProvider && (
+                <button
+                  type="button"
+                  onClick={() => setStandaloneProviderRequests(prev => prev.filter((_, j) => j !== i))}
+                  title={t("mp.providerRequests.remove")}
+                  className="shrink-0 mt-1 w-7 h-7 flex items-center justify-center rounded-lg text-text-industrial/40 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
-          </button>
+          {!singleProvider && (
+            <button
+              type="button"
+              onClick={() => setStandaloneProviderRequests(prev => [...prev, { providerId: "", purpose: "" }])}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial/70 hover:border-accent/40 hover:text-fg transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
+            </button>
+          )}
           {cleanStandaloneProviders.length > 0 && (
             <p className="text-[10px] text-text-industrial/50">{t("wo.modal.providerHint")}</p>
           )}
