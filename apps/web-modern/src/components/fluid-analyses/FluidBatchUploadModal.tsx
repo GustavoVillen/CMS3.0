@@ -17,6 +17,7 @@ import {
 import { api, ApiError } from "../../lib/api";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { AlertDialog } from "../AlertDialog";
+import { AssetSearchDropdown } from "../AssetSearchDropdown";
 import {
   ModalShell, VerdictBadge, inputCls, labelCls, FLUID_TYPES, FLUID_LABELS,
   type Verdict, type FluidType, type AssetItem,
@@ -489,28 +490,28 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           </select>
                         </Td>
                         <Td>
-                          <select
-                            value={r.assetId ?? ""}
-                            disabled={isDup || !r.vesselCode || lockedByNumber}
-                            onChange={e => {
-                              const id = e.target.value;
-                              const a = assets.find(x => x.id === id);
-                              patchRow(i, {
-                                assetId: id || null,
-                                assetName: a?.name ?? a?.assetCode ?? null,
-                                assetConfidence: id ? "high" : null,
-                                assetReason: null,
-                              });
-                            }}
-                            className={`bg-fg/5 border rounded-lg px-2 py-1 text-[11px] text-fg max-w-[220px] disabled:opacity-60 ${
-                              needsAsset ? "border-amber-500/60" : "border-fg/10"
-                            }`}
-                          >
-                            <option value="">{t("fa.batch.pickAsset")}</option>
-                            {assets.map(a => (
-                              <option key={a.id} value={a.id}>{a.name ?? a.assetCode ?? a.id}</option>
-                            ))}
-                          </select>
+                          {/* Con buscador: un buque tiene decenas de equipos y el
+                              nombre del informe casi nunca es el del maestro. */}
+                          <div className="w-[220px]">
+                            <AssetSearchDropdown
+                              compact
+                              floating
+                              invalid={needsAsset}
+                              assets={assets.map(a => ({ id: a.id, assetCode: a.assetCode ?? "", name: a.name }))}
+                              value={r.assetId ?? ""}
+                              disabled={isDup || !r.vesselCode || lockedByNumber}
+                              placeholder={t("fa.batch.pickAsset")}
+                              onChange={id => {
+                                const a = assets.find(x => x.id === id);
+                                patchRow(i, {
+                                  assetId: id || null,
+                                  assetName: a?.name ?? a?.assetCode ?? null,
+                                  assetConfidence: id ? "high" : null,
+                                  assetReason: null,
+                                });
+                              }}
+                            />
+                          </div>
                           {r.assetReferenceText && !showReportName && (
                             <span className="block mt-0.5 text-[10px] leading-snug text-text-industrial/50 max-w-[220px]">
                               {fill(t("fa.batch.reportSays"), { text: r.assetReferenceText })}

@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-30] Carga de analisis: el equipo de cada fila se elige con buscador
+Agent: Claude Opus 5.5
+- La lista "Elegir equipo..." de la revision es ahora el buscador de equipos (AssetSearchDropdown):
+  escribir filtra por nombre o codigo. La lista flota sobre la tabla (portal), no la recorta.
+- AssetSearchDropdown suma dos opciones apagadas por defecto (compact, floating): las demas pantallas
+  que lo usan (plan, OT nueva, certificados, muestras de la SS) no cambian, salvo que Escape dentro
+  del buscador ya no cierra la ventana entera.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-30] Carga de analisis: el nombre del equipo segun el informe, resaltado y completo
 Agent: Claude Opus 5.5
 - Fila con equipo no identificado o dudoso: "El reporte dice: <equipo>" va bajo el aviso, en negrita y
