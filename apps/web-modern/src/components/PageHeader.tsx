@@ -22,6 +22,8 @@ interface PageHeaderProps {
    * tienen el encabezado idéntico y sólo cambia el ícono.
    */
   kind?: RecordKind;
+  /** Algo que va pegado a la derecha del título (ej. el acceso a Seguimiento de la Planilla). */
+  titleAside?: React.ReactNode;
 }
 
 /**
@@ -52,7 +54,7 @@ const BackButton: React.FC = () => {
 };
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
-  icon: Icon, title, total, onReload, children, hideBack, kind,
+  icon: Icon, title, total, onReload, children, hideBack, kind, titleAside,
 }) => (
   <div className="flex items-center justify-between gap-4 flex-wrap">
     <div className="flex items-center gap-3">
@@ -66,6 +68,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           <p className="text-xs text-fg/40">{total} registro{total !== 1 ? "s" : ""}</p>
         )}
       </div>
+      {titleAside}
     </div>
     <div className="flex items-center gap-2">
       {children}

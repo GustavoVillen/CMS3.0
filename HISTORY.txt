@@ -1,5 +1,11 @@
 HISTORY.txt
 
+[2026-09-30] Planilla a Bordo: boton Seguimiento verde, mas grande y al lado del nombre del buque
+Agent: Claude Opus 5.5
+- Sale de la barra de botones y va pegado al titulo "Planilla a Bordo — <buque>". PageHeader suma la
+  opcion titleAside (las demas pantallas no la usan y no cambian).
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-30] OT: la programacion del trabajo en su propia seccion y sin "Documento checklist"
 Agent: Claude Opus 5.5
 - Formulario guiado: la seccion 4 es "Repuestos y materiales"; fechas de inicio/fin y jornadas pasan a

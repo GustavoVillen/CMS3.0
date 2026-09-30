@@ -509,6 +509,17 @@ export function MaintenanceSheetPage() {
         title={selectedVessel?.name ? `${t("msheet.title")} — ${selectedVessel.name}` : t("msheet.title")}
         total={totalTasks}
         onReload={reload}
+        // Seguimiento es el paso siguiente a crear la OT: verde y al lado del
+        // nombre del buque, no perdido entre los botones de la barra.
+        titleAside={canSeeFollowUp && (
+          <button
+            onClick={() => navigate("/approvals")}
+            className="ml-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold shadow-sm hover:brightness-110 transition-all"
+          >
+            <ClipboardCheck className="w-4 h-4" />
+            {t("nav.approvals")}
+          </button>
+        )}
       >
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-fg/30" />
@@ -543,15 +554,6 @@ export function MaintenanceSheetPage() {
             : <FileSpreadsheet className="w-3.5 h-3.5 text-accent" />}
           {exportingSheet ? t("mp.page.exportSheetBusy") : t("mp.page.exportSheet")}
         </button>
-        {canSeeFollowUp && (
-          <button
-            onClick={() => navigate("/approvals")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all"
-          >
-            <ClipboardCheck className="w-3.5 h-3.5 text-accent" />
-            {t("nav.approvals")}
-          </button>
-        )}
         {/* Lo marcado abarca varios equipos: el camino normal es una OT por
             equipo. Juntarlos en una sola es la parada de astillero, y queda
             como segundo botón para que sea una decisión y no un accidente. */}
