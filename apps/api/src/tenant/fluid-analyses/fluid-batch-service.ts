@@ -94,6 +94,13 @@ export interface BatchScanRow {
    * palabra del analista. La fila de un tablero junta todos sus circuitos.
    */
   points: Array<{ label: string; level: ElectricalTestLevel; resultText: string | null }> | null;
+  /**
+   * Cómo nombra el informe a lo que quedó en esta fila ("Pescante de bote
+   * estribor"; varios unidos con " / "). Se guarda con el resultado y es la
+   * clave para reconocer la misma fila del mismo informe aunque en otra carga
+   * se le haya elegido otro equipo.
+   */
+  reportItemLabel: string | null;
 
   sampleNumber: string | null;
   vesselCode: string | null;
@@ -156,6 +163,7 @@ export interface BatchCommitRow {
   summary: string | null;
   parameters: Record<string, { value: number | string; unit?: string }>;
   attachToSampleId: string | null;
+  reportItemLabel?: string | null;
 }
 
 export interface BatchCommitResult {
@@ -343,6 +351,7 @@ export async function scanFluidReportForBatch(
     labReference: null,
     vibration: null,
     points: null,
+    reportItemLabel: null,
     sampleNumber,
     vesselCode,
     vesselReferenceText: extracted.vesselReferenceText.value,
@@ -417,9 +426,11 @@ async function scanVibrationReport(
     if (!sampledAt) warnings.push("SAMPLED_AT_MISSING");
     if (Object.keys(parameters).length === 0) warnings.push("NO_PARAMETERS");
 
-    const duplicateOf = (vesselCode && match && sampledAt)
-      ? await findLoadedOnDay(prisma, tenantId, vesselCode, match.id, sampledAt, "VIBRATION", report.reportNumber)
-      : null;
+    const itemLabels = group.items.map(i => i.assetReferenceText);
+    const duplicateOf = await findLoadedReportItem(prisma, tenantId, vesselCode, sampledAt, "VIBRATION", report.reportNumber, itemLabels)
+      ?? ((vesselCode && match && sampledAt)
+        ? await findLoadedOnDay(prisma, tenantId, vesselCode, match.id, sampledAt, "VIBRATION", report.reportNumber)
+        : null);
     const pending = (!duplicateOf && vesselCode && match && sampledAt)
       ? await findPendingSample(prisma, tenantId, vesselCode, match.id, sampledAt, "VIBRATION", null)
       : null;
@@ -431,6 +442,7 @@ async function scanVibrationReport(
       labReference: report.reportNumber,
       vibration: { severity, priority, finding, recommendation },
       points: null,
+      reportItemLabel: itemLabels.join(" / "),
       sampleNumber: null,
       vesselCode,
       vesselReferenceText: report.vesselReferenceText,
@@ -519,9 +531,11 @@ async function scanElectricalTestReport(
       warnings.push("NO_PARAMETERS");
     }
 
-    const duplicateOf = (vesselCode && match && sampledAt)
-      ? await findLoadedOnDay(prisma, tenantId, vesselCode, match.id, sampledAt, kind, report.reportNumber)
-      : null;
+    const itemLabels = group.items.map(i => i.equipmentText);
+    const duplicateOf = await findLoadedReportItem(prisma, tenantId, vesselCode, sampledAt, kind, report.reportNumber, itemLabels)
+      ?? ((vesselCode && match && sampledAt)
+        ? await findLoadedOnDay(prisma, tenantId, vesselCode, match.id, sampledAt, kind, report.reportNumber)
+        : null);
     const pending = (!duplicateOf && vesselCode && match && sampledAt)
       ? await findPendingSample(prisma, tenantId, vesselCode, match.id, sampledAt, kind, null)
       : null;
@@ -533,6 +547,7 @@ async function scanElectricalTestReport(
       labReference: report.reportNumber,
       vibration: null,
       points: group.items.map(i => ({ label: i.equipmentText, level: i.level, resultText: i.resultText })),
+      reportItemLabel: itemLabels.join(" / "),
       sampleNumber: null,
       vesselCode,
       vesselReferenceText: report.vesselReferenceText,
@@ -617,12 +632,19 @@ export async function commitFluidBatch(
       // informe, en el lote y contra la base.
       if (kind !== "FLUID") {
         const reportNo = normText(row?.labReference);
-        const key = `${kind}|${vesselCode}|${assetId}|${sampledAt}|${reportNo ?? ""}`;
-        if (seenNumbers.has(key)) {
+        const labels = splitItemLabels(row?.reportItemLabel);
+        // Además del equipo, cada fila del informe cuenta una sola vez: la misma
+        // fila guardada antes con otro equipo también es un repetido.
+        const keys = [
+          `${kind}|${vesselCode}|${assetId}|${sampledAt}|${reportNo ?? ""}`,
+          ...(reportNo ? labels.map(l => `${kind}|${vesselCode}|${sampledAt}|${reportNo}|item:${l}`) : []),
+        ];
+        if (keys.some(k => seenNumbers.has(k))) {
           items.push({ ...base, status: "skipped", reason: "DUPLICATE" });
           continue;
         }
-        const existing = await findLoadedOnDay(prisma, tenantId, vesselCode, assetId, sampledAt, kind, reportNo);
+        const existing = await findLoadedReportItem(prisma, tenantId, vesselCode, sampledAt, kind, reportNo, labels)
+          ?? await findLoadedOnDay(prisma, tenantId, vesselCode, assetId, sampledAt, kind, reportNo);
         if (existing) {
           items.push({
             ...base, status: "skipped", reason: "DUPLICATE",
@@ -630,7 +652,7 @@ export async function commitFluidBatch(
           });
           continue;
         }
-        seenNumbers.add(key);
+        keys.forEach(k => seenNumbers.add(k));
       }
 
       const sampleNumber = kind === "FLUID" ? baseSampleNumber(row?.sampleNumber) : null;
@@ -710,6 +732,8 @@ export async function commitFluidBatch(
         summary: normText(row?.summary),
         parameters: sanitizeParameters(row?.parameters),
         reportUrl: row?.file?.url ?? null,
+        // Qué fila del informe es: la clave anti-duplicado de findLoadedReportItem.
+        reportSourceText: kind !== "FLUID" ? normText(row?.reportItemLabel) : null,
         reportMime: row?.file?.mime ?? null,
         runningHours,
       });
@@ -1123,6 +1147,46 @@ async function findPendingSample(
     Math.abs(a.sampledAt.getTime() - target.getTime()) - Math.abs(b.sampledAt.getTime() - target.getTime()));
   const best = rows[0]!;
   return { id: best.id, sampleCode: best.sampleCode, sampledAt: best.sampledAt.toISOString().slice(0, 10) };
+}
+
+/** "A / B" → ["a", "b"]: los nombres de fila del informe, comparables. */
+function splitItemLabels(v: unknown): string[] {
+  if (typeof v !== "string") return [];
+  return [...new Set(v.split(" / ").map(x => x.trim().toLowerCase()).filter(Boolean))];
+}
+
+/**
+ * Análisis YA CARGADO de la misma fila del mismo informe (mismo tipo, buque,
+ * fecha y Nº de informe, y algún nombre de fila en común), sea cual sea el
+ * equipo al que se le asignó. Sin esto, subir de nuevo un informe y elegirle a
+ * una fila otro equipo la guardaba dos veces (pasó con el pescante de MAO 01).
+ * Los análisis cargados antes de guardar el nombre de la fila no lo tienen: a
+ * esos sólo los cubre la clave por equipo.
+ */
+async function findLoadedReportItem(
+  prisma: unknown,
+  tenantId: string,
+  vesselCode: string | null,
+  sampledAt: string | null,
+  kind: Exclude<BatchKind, "FLUID">,
+  labReference: string | null,
+  labels: string[],
+): Promise<{ id: string; sampleCode: string; vesselCode: string } | null> {
+  const wanted = new Set(labels.map(l => l.trim().toLowerCase()).filter(Boolean));
+  if (!vesselCode || !sampledAt || !labReference || wanted.size === 0) return null;
+  const day = new Date(`${sampledAt}T00:00:00.000Z`);
+  if (isNaN(day.getTime())) return null;
+  const rows: Array<{ id: string; sampleCode: string; vesselCode: string; result: { reportSourceText: string | null } | null }> =
+    await (prisma as any).fluidSample.findMany({
+      where: {
+        tenantId, vesselCode, kind, labReference, deletedAt: null,
+        result: { is: { reportSourceText: { not: null } } },
+        sampledAt: { gte: day, lt: new Date(day.getTime() + 24 * 60 * 60 * 1000) },
+      },
+      select: { id: true, sampleCode: true, vesselCode: true, result: { select: { reportSourceText: true } } },
+    });
+  const hit = rows.find(r => splitItemLabels(r.result?.reportSourceText).some(l => wanted.has(l)));
+  return hit ? { id: hit.id, sampleCode: hit.sampleCode, vesselCode: hit.vesselCode } : null;
 }
 
 /**

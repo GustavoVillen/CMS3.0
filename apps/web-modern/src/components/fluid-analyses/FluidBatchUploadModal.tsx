@@ -56,6 +56,8 @@ interface ScanRow {
   } | null;
   /** Megado y termografía: los puntos del informe que quedaron en esta fila, con la palabra del analista. */
   points: Array<{ label: string; level: ElectricalLevel; resultText: string | null }> | null;
+  /** Nombre de la fila en el informe: el servidor lo usa para reconocer la misma fila en otra carga. */
+  reportItemLabel: string | null;
   sampleNumber: string | null;
   vesselCode: string | null;
   vesselReferenceText: string | null;
@@ -295,6 +297,7 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
           summary: r.summary,
           parameters: r.parameters,
           attachToSampleId: r.attachTo?.id ?? null,
+          reportItemLabel: r.reportItemLabel,
         })),
       });
       setResults(res.items ?? []);

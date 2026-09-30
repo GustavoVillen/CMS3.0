@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-09-30] Carga de analisis: la misma fila del informe no se guarda dos veces aunque cambie el equipo
+Agent: Claude Opus 5.5
+- Informes de campana (vibraciones, megado, termografia): el nombre de la fila en el informe se guarda en
+  FluidAnalysisResult.reportSourceText (campo que no usaba nadie; 0 de 152 con dato en produccion).
+- Repetido = misma fila (tipo + buque + fecha + No de informe + nombre de fila) aunque se le haya elegido
+  otro equipo, ademas de la clave por equipo de siempre. En la revision sale "Ya cargado (FA-...)".
+- Los analisis cargados antes de este cambio no tienen el nombre de fila: a esos solo los cubre la clave
+  por equipo.
+- Solo backend + frontend: deploy = pull + build web + restart. Sin cambio de base.
+
 [2026-09-30] OT del lote de analisis: elegir la tarea del plan a mano
 Agent: Claude Opus 5.5
 - Si ningun analisis del lote tiene rutina de muestreo propia (aviso "Ninguno de los analisis corresponde
