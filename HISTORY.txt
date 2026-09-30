@@ -1,5 +1,11 @@
 HISTORY.txt
 
+[2026-09-30] Equipos: el nombre del equipo se ve entero
+Agent: Claude Opus 5.5
+- Inventario de Activos: el nombre ya no se corta en un renglon (line-clamp); la columna Equipo tiene
+  ancho minimo y la de Sistema (SFI) puede partir en dos renglones. Igual en las tarjetas del celular.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-30] Planilla a Bordo: boton Seguimiento verde, mas grande y al lado del nombre del buque
 Agent: Claude Opus 5.5
 - Sale de la barra de botones y va pegado al titulo "Planilla a Bordo — <buque>". PageHeader suma la

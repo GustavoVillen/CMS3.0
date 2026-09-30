@@ -1858,10 +1858,13 @@ export const AssetsPage: React.FC = () => {
   const columns: Column<Asset>[] = useMemo(() => [
     {
       key: "name", header: t("asset.v23.col.asset"), sortValue: (r: Asset) => r.name,
+      // El nombre entra entero (en dos renglones si hace falta): cortado con
+      // puntitos no se distinguían "Inspecciones y Pruebas SEMANALES…" entre sí.
+      className: "min-w-[280px]",
       render: (row: Asset) => (
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-fg line-clamp-1">{row.name}</span>
+            <span className="min-w-0 text-xs font-bold text-fg leading-snug">{row.name}</span>
             {row.isSafetyCritical && <span title={`${t("asset.safetyCritical")} (ISM 10.3)`} className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/15 px-1.5 text-[9.5px] font-extrabold text-violet-700 dark:text-violet-300"><ShieldAlert className="w-2.5 h-2.5" />ISM</span>}
           </div>
           {/* Nombre del buque, no el código. */}
@@ -1872,7 +1875,8 @@ export const AssetsPage: React.FC = () => {
     {
       key: "sfiCode", header: t("asset.v23.col.system"), sortValue: (r: Asset) => r.sfiCode ?? "",
       filterValue: (r: Asset) => { const tab = sfiTabOfCode(r.sfiCode); return tab === "NONE" ? "" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`; },
-      render: (row: Asset) => { const tab = sfiTabOfCode(row.sfiCode); return <span className="text-xs text-text-industrial/70 whitespace-nowrap">{tab === "NONE" ? "—" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`}</span>; },
+      className: "min-w-[150px]",
+      render: (row: Asset) => { const tab = sfiTabOfCode(row.sfiCode); return <span className="text-xs text-text-industrial/70 leading-snug">{tab === "NONE" ? "—" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`}</span>; },
     },
     { key: "criticality", header: t("col.criticality"), sortValue: (r: Asset) => r.criticality, filterValue: (r: Asset) => r.criticality, render: (row: Asset) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[row.criticality] ?? ASSET_CRIT_CHIP.C}`}>{row.criticality}</span> },
     { key: "plan", header: t("asset.plans.title"), sortValue: (r: Asset) => planStats.get(r.id)?.active ?? 0, render: planCell },
@@ -2017,7 +2021,7 @@ export const AssetsPage: React.FC = () => {
                 className={`rounded-xl border border-fg/10 border-l-4 px-3 py-2.5 space-y-1.5 cursor-pointer bg-surface ${a.status === "OUT_OF_SERVICE" ? "border-l-red-600" : a.status === "DEGRADED" ? "border-l-amber-500" : "border-l-fg/10"}`}>
                 <div className="flex items-center gap-1.5">
                   <span className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[a.criticality] ?? ASSET_CRIT_CHIP.C}`}>{a.criticality}</span>
-                  <b className="text-[13px] text-fg truncate">{a.name}</b>
+                  <b className="min-w-0 text-[13px] text-fg leading-snug">{a.name}</b>
                   {a.isSafetyCritical && <ShieldAlert className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
                 </div>
                 <p className="text-[11px] text-text-industrial/55"><span className="font-mono">{a.assetCode}</span> · {sfiGroupLabel(sfiTabOfCode(a.sfiCode))}</p>
