@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-30] OT del lote de analisis: elegir la tarea del plan a mano
+Agent: Claude Opus 5.5
+- Si ningun analisis del lote tiene rutina de muestreo propia (aviso "Ninguno de los analisis corresponde
+  a una rutina de muestreo..."), en vez del aviso sale un buscador de tareas activas del buque; la OT se
+  abre con la tarea elegida (ej. M01-8-001 "Toma de aislacion electrica equipos" para el megado).
+- Los analisis sin rutina propia se vinculan a esa tarea aunque sea de otro equipo (mismo buque):
+  linkFluidSampleToWorkOrder acepta anyAssetOfVessel, que solo se pasa desde el servidor.
+- Backend + frontend: deploy = pull + build web + restart. Sin cambio de base.
+
 [2026-09-30] Carga de analisis: el equipo de cada fila se elige con buscador
 Agent: Claude Opus 5.5
 - La lista "Elegir equipo..." de la revision es ahora el buscador de equipos (AssetSearchDropdown):

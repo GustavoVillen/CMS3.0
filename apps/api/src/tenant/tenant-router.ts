@@ -1322,9 +1322,10 @@ export async function handleTenantRoutes(
   // compromete gasto.
   if (method === "POST" && url.pathname === "/app/fluid-analyses/batch-open-work-order") {
     const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
-    const body = await readJsonBody(request) as { sampleIds?: unknown };
+    const body = await readJsonBody(request) as { sampleIds?: unknown; planId?: unknown };
     sendJson(response, 201, await openWorkOrderForFluidBatch(session, {
       sampleIds: Array.isArray(body?.sampleIds) ? (body.sampleIds as string[]) : [],
+      planId: typeof body?.planId === "string" ? body.planId : null,
     }));
     return true;
   }

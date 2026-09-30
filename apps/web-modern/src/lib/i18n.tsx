@@ -1885,6 +1885,9 @@ const dict = {
   "fa.batch.wo.autoAuthorized":{ es: "Nace autorizada: no hay trabajo subcontratado.", en: "Born authorized: no subcontracted work.", pt: "Nasce autorizada: não há trabalho subcontratado." },
   "fa.batch.wo.skipped":       { es: "{n} análisis quedaron afuera: no tienen una rutina de muestreo en el plan.", en: "{n} analyses were left out: they have no sampling routine in the plan.", pt: "{n} análises ficaram de fora: não têm rotina de coleta no plano." },
   "fa.batch.wo.failed":        { es: "No se pudo abrir la orden de trabajo.", en: "The work order could not be opened.", pt: "Não foi possível abrir a ordem de serviço." },
+  "fa.batch.wo.pickPlanHelp": { es: "Ninguno de estos análisis tiene una rutina de muestreo propia en el plan. Elegí la tarea del plan de mantenimiento que ejecutan y la OT se abre con esa tarea.", en: "None of these analyses has its own sampling routine in the plan. Pick the maintenance plan task they execute and the WO opens with that task.", pt: "Nenhuma destas análises tem uma rotina de amostragem própria no plano. Escolha a tarefa do plano de manutenção que elas executam e a OS abre com essa tarefa." },
+  "fa.batch.wo.pickPlan": { es: "Elegir tarea del plan…", en: "Pick a plan task…", pt: "Escolher tarefa do plano…" },
+  "fa.batch.wo.openWithPlan": { es: "Abrir la OT con esta tarea", en: "Open the WO with this task", pt: "Abrir a OS com esta tarefa" },
 
   "fa.batch.warn.vessel":         { es: "No se pudo identificar el buque", en: "Vessel could not be identified", pt: "Não foi possível identificar a embarcação" },
   "fa.batch.warn.asset":          { es: "No se pudo identificar el equipo", en: "Equipment could not be identified", pt: "Não foi possível identificar o equipamento" },

@@ -764,10 +764,15 @@ export interface BatchWorkOrderResult {
  * Las muestras quedan vinculadas a la OT: eso las saca del "sin OT" y, además,
  * evita que el gancho que crea muestras al autorizar la orden genere un duplicado
  * (deduplica por OT + plan).
+ *
+ * `planId`: la tarea del plan que el usuario eligió a mano para los análisis que
+ * no tienen rutina de muestreo propia. Pasa con el megado: el plan lo ejecuta
+ * una sola tarea ("Toma de aislación eléctrica equipos") cargada en un equipo
+ * general, no una rutina por motor.
  */
 export async function openWorkOrderForFluidBatch(
   session: TenantAccessSession,
-  input: { sampleIds: string[] },
+  input: { sampleIds: string[]; planId?: string | null },
 ): Promise<BatchWorkOrderResult> {
   ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
@@ -809,7 +814,18 @@ export async function openWorkOrderForFluidBatch(
       orderBy: { taskCode: "asc" },
     });
 
-  const pairs: Array<{ sampleId: string; planId: string }> = [];
+  // Tarea elegida a mano: tiene que ser del mismo buque y estar activa.
+  const manualPlanId = String(input?.planId ?? "").trim() || null;
+  if (manualPlanId) {
+    const manual = await (prisma as any).maintenancePlan.findFirst({
+      where: { id: manualPlanId, tenantId, vesselCode, deletedAt: null, status: "ACTIVE" },
+      select: { id: true, taskCode: true, title: true, assetId: true, samplingKind: true, samplingFluidType: true },
+    });
+    if (!manual) throw new RouteError(404, "PLAN_NOT_FOUND", "La tarea elegida no es un plan activo de este buque.");
+    if (!plans.some(p => p.id === manual.id)) plans.push(manual);
+  }
+
+  const pairs: Array<{ sampleId: string; planId: string; manual: boolean }> = [];
   const planOrder: string[] = [];
   const planById = new Map(plans.map(p => [p.id, p]));
 
@@ -826,10 +842,12 @@ export async function openWorkOrderForFluidBatch(
       : ofAsset.find(p => p.samplingFluidType === sample.fluidType)
         ?? ofAsset.find(p => !p.samplingFluidType)
         ?? null;
-    if (!plan) { skipped.push({ sampleCode: sample.sampleCode, reason: "NO_PLAN" }); continue; }
+    // Sin rutina propia: va a la tarea elegida a mano, si la hay.
+    const target = plan ?? (manualPlanId ? planById.get(manualPlanId) ?? null : null);
+    if (!target) { skipped.push({ sampleCode: sample.sampleCode, reason: "NO_PLAN" }); continue; }
 
-    pairs.push({ sampleId: sample.id, planId: plan.id });
-    if (!planOrder.includes(plan.id)) planOrder.push(plan.id);
+    pairs.push({ sampleId: sample.id, planId: target.id, manual: !plan });
+    if (!planOrder.includes(target.id)) planOrder.push(target.id);
   }
 
   if (planOrder.length === 0) {
@@ -843,7 +861,8 @@ export async function openWorkOrderForFluidBatch(
   let linkedSamples = 0;
   for (const pair of pairs) {
     try {
-      await linkFluidSampleToWorkOrder(session, pair.sampleId, { workOrderId: wo.id, planId: pair.planId });
+      await linkFluidSampleToWorkOrder(session, pair.sampleId, { workOrderId: wo.id, planId: pair.planId },
+        { anyAssetOfVessel: pair.manual });
       linkedSamples++;
     } catch {
       // La OT ya existe y es lo que el usuario pidió: un vínculo que falla se

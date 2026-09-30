@@ -17,7 +17,7 @@ import {
 import { api, ApiError } from "../../lib/api";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { AlertDialog } from "../AlertDialog";
-import { AssetSearchDropdown } from "../AssetSearchDropdown";
+import { AssetSearchDropdown, type AssetOption } from "../AssetSearchDropdown";
 import {
   ModalShell, VerdictBadge, inputCls, labelCls, FLUID_TYPES, FLUID_LABELS,
   type Verdict, type FluidType, type AssetItem,
@@ -315,19 +315,56 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
     [results],
   );
 
-  const openWorkOrder = useCallback(async () => {
+  // Buque de la OT: el del primer análisis sin orden (el mismo criterio del servidor).
+  const woVesselCode = useMemo(() => {
+    const i = results.findIndex(r => samplesWithoutWo.includes(r));
+    return i >= 0 ? committed[i]?.vesselCode ?? null : null;
+  }, [results, samplesWithoutWo, committed]);
+
+  // Si ningún análisis tiene rutina de muestreo propia (el megado lo ejecuta
+  // una sola tarea del plan cargada en un equipo general), el usuario elige la
+  // tarea a mano en vez de quedarse con el aviso.
+  const [woPickPlan, setWoPickPlan] = useState(false);
+  const [planOptions, setPlanOptions] = useState<AssetOption[] | null>(null);
+  const [pickedPlanId, setPickedPlanId] = useState("");
+
+  const loadPlanOptions = useCallback(async () => {
+    if (!woVesselCode) { setPlanOptions([]); return; }
+    try {
+      const res = await api.get<{ items: Array<{ id: string; taskCode: string; title: string; assetName?: string | null }> }>(
+        `/app/pms/maintenance-plans?vesselCode=${encodeURIComponent(woVesselCode)}&status=ACTIVE&limit=2000`,
+      );
+      // El buscador filtra por "código" y "nombre": código de la tarea, y título + equipo.
+      setPlanOptions((res.items ?? []).map(p => ({
+        id: p.id,
+        assetCode: p.taskCode,
+        name: p.assetName ? `${p.title} — ${p.assetName}` : p.title,
+      })));
+    } catch {
+      setPlanOptions([]);
+    }
+  }, [woVesselCode]);
+
+  const openWorkOrder = useCallback(async (planId?: string) => {
     setWoOpening(true);
     try {
       const res = await api.post<BatchWoResult>("/app/fluid-analyses/batch-open-work-order", {
         sampleIds: samplesWithoutWo.map(r => r.sampleId),
+        ...(planId ? { planId } : {}),
       });
       setWoResult(res);
+      setWoPickPlan(false);
     } catch (e) {
-      setAlert(e instanceof ApiError ? e.message : t("fa.batch.wo.failed"));
+      if (!planId && e instanceof ApiError && e.code === "NO_SAMPLING_PLAN") {
+        setWoPickPlan(true);
+        void loadPlanOptions();
+      } else {
+        setAlert(e instanceof ApiError ? e.message : t("fa.batch.wo.failed"));
+      }
     } finally {
       setWoOpening(false);
     }
-  }, [samplesWithoutWo, t]);
+  }, [samplesWithoutWo, loadPlanOptions, t]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -716,6 +753,39 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                     {fill(t("fa.batch.wo.skipped"), { n: woResult.skipped.length })}
                   </p>
                 )}
+              </div>
+            ) : woPickPlan && !woDismissed ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3 space-y-2">
+                <p className="flex items-start gap-2 text-[11px] text-fg leading-relaxed">
+                  <Wrench className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  {t("fa.batch.wo.pickPlanHelp")}
+                </p>
+                <AssetSearchDropdown
+                  floating
+                  assets={planOptions ?? []}
+                  value={pickedPlanId}
+                  onChange={setPickedPlanId}
+                  disabled={planOptions === null}
+                  placeholder={planOptions === null ? t("common.loading") : t("fa.batch.wo.pickPlan")}
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setWoPickPlan(false); setWoDismissed(true); }}
+                    className="px-3 py-1.5 rounded-lg text-[11px] text-text-industrial hover:text-fg"
+                  >
+                    {t("fa.batch.wo.no")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={woOpening || !pickedPlanId}
+                    onClick={() => void openWorkOrder(pickedPlanId)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 disabled:opacity-50"
+                  >
+                    {woOpening && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {t("fa.batch.wo.openWithPlan")}
+                  </button>
+                </div>
               </div>
             ) : samplesWithoutWo.length > 0 && !woDismissed ? (
               <div className="rounded-xl border border-accent/25 bg-accent/[0.05] p-3 flex items-center gap-3 flex-wrap">

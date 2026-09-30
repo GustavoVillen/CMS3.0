@@ -469,6 +469,13 @@ export async function linkFluidSampleToWorkOrder(
   session: TenantAccessSession,
   sampleId: string,
   input: { workOrderId: string; planId: string },
+  /**
+   * `anyAssetOfVessel`: la tarea la eligió el usuario a mano para un lote (ej.
+   * "Toma de aislación eléctrica equipos", cargada en un equipo general, que
+   * ejecuta el megado de todos los motores). Alcanza con que sea del mismo buque.
+   * Sólo se usa desde el servidor: no llega desde el cuerpo de un pedido.
+   */
+  opts: { anyAssetOfVessel?: boolean } = {},
 ) {
   ensureCanManageFluidAnalyses(session);
   const prisma = getPrismaClient();
@@ -492,7 +499,11 @@ export async function linkFluidSampleToWorkOrder(
   // distintos (parada de astillero, o el muestreo de toda la sala de máquinas
   // mandado junto al laboratorio). Comparar sólo contra workOrder.assetId
   // rechazaba todas las muestras menos la del ítem principal.
-  if (workOrder.assetId !== sample.assetId) {
+  if (opts.anyAssetOfVessel) {
+    if (workOrder.vesselCode !== sample.vesselCode) {
+      throw new RouteError(409, "VESSEL_MISMATCH", "La orden de trabajo es de otro buque que la muestra.");
+    }
+  } else if (workOrder.assetId !== sample.assetId) {
     const linkedAssets: Array<{ maintenancePlan: { assetId: string | null } | null }> =
       await (prisma as any).workOrderMaintenancePlan.findMany({
         where: { tenantId, workOrderId },
