@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-09-30] Analisis de laboratorio: megado y termografia en la carga masiva
+Agent: Claude Opus 5.5
+- Tipo de muestreo nuevo INSULATION, en pantalla "Megado" (planes de muestreo, filtros, ficha, PDF,
+  respaldo semanal). Enum SampleKind: se AGREGA un valor, no se toca ningun dato.
+- "Cargar analisis de laboratorio" lee informes de megado (motores y conductores) y de termografia
+  (ELECTROPATCO, MAO 01): una fila por equipo; la termografia de guardamotores va al tablero.
+- Escalas: termografia Posible -> Precaucion, Probable -> Critico (abre defecto), Deficiencia/Mayor ->
+  Accion requerida; megado No apto -> Critico. Anti-duplicado: tipo + equipo + fecha + No de informe.
+- Adaptador Gemini: reintenta los pedidos que se cuelgan hasta el timeout (respeta maxRetries).
+- Deploy = pull + build web + db push + prisma generate + restart. En la demo ademas rehacer la
+  plantilla (si no, el reseteo de las 04:20 vuelve al enum viejo y el megado no se puede guardar).
+
 [2026-09-29] Planilla a Bordo: boton "Seguimiento" y el filtro incluye las tareas con OT abierta
 Agent: Claude Opus 5.5
 - Boton "Seguimiento" en la barra de la Planilla (entre "Planilla Excel" y "Crear OT y SS"). Se ve con el
