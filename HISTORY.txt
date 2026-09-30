@@ -1,5 +1,11 @@
 HISTORY.txt
 
+[2026-09-30] Carga de analisis: el nombre del equipo segun el informe, resaltado y completo
+Agent: Claude Opus 5.5
+- Fila con equipo no identificado o dudoso: "El reporte dice: <equipo>" va bajo el aviso, en negrita y
+  con fondo, para elegir el equipo a mano. En las demas filas sigue en gris bajo la lista, sin cortar.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-30] Analisis de laboratorio: megado y termografia en la carga masiva
 Agent: Claude Opus 5.5
 - Tipo de muestreo nuevo INSULATION, en pantalla "Megado" (planes de muestreo, filtros, ficha, PDF,

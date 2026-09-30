@@ -263,6 +263,8 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
     const label = t(tk);
     return label === `[${tk}]` ? key : label;
   };
+  // "El reporte dice: {text}" partido en dos, para poner el nombre en negrita.
+  const reportSays = t("fa.batch.reportSays").split("{text}");
   const blocked = useMemo(
     () => rows.filter(r => !r.duplicateOf && !(r.vesselCode && r.assetId && r.sampledAt && r.verdict)),
     [rows],
@@ -455,6 +457,11 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                     // el número, así que quedan fijos. Para corregirlos hay que
                     // corregir el número en la SS.
                     const lockedByNumber = r.attachTo?.matchedBy === "SAMPLE_NUMBER";
+                    // Equipo no identificado o dudoso: el nombre que usa el informe es
+                    // lo que hace falta para elegirlo a mano, así que va resaltado bajo
+                    // el aviso y no en gris bajo la lista.
+                    const showReportName = !isDup && !!r.assetReferenceText
+                      && (r.warnings.includes("ASSET_NOT_RESOLVED") || r.warnings.includes("ASSET_LOW_CONFIDENCE"));
                     return (
                       <tr key={r.fileName + i} className={isDup ? "opacity-45" : blockedRow ? "bg-amber-500/5 shadow-[inset_4px_0_0_rgb(245,158,11)]" : ""}>
                         <Td>
@@ -462,6 +469,11 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           {r.warnings.length > 0 && (
                             <span className="block mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
                               {r.warnings.map(w => t(WARNING_KEYS[w])).join(" · ")}
+                            </span>
+                          )}
+                          {showReportName && (
+                            <span className="block mt-1 max-w-[220px] rounded-md bg-amber-500/10 px-1.5 py-1 text-[11px] leading-snug text-fg">
+                              {reportSays[0]}<strong className="font-extrabold">{r.assetReferenceText}</strong>{reportSays[1]}
                             </span>
                           )}
                         </Td>
@@ -499,8 +511,8 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                               <option key={a.id} value={a.id}>{a.name ?? a.assetCode ?? a.id}</option>
                             ))}
                           </select>
-                          {r.assetReferenceText && (
-                            <span className="block mt-0.5 text-[10px] text-text-industrial/40 truncate max-w-[220px]">
+                          {r.assetReferenceText && !showReportName && (
+                            <span className="block mt-0.5 text-[10px] leading-snug text-text-industrial/50 max-w-[220px]">
                               {fill(t("fa.batch.reportSays"), { text: r.assetReferenceText })}
                             </span>
                           )}
