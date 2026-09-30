@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-09-30] Ficha de equipo (PDF) nueva, alineada a los procedimientos PROC-MAN (preview V2, PROCEDER)
+Agent: Claude Opus 5.5
+- asset-pdf-service.ts reescrito: avisos arriba con la regla que aplica (PROC-MAN-03 equipo critico fuera
+  de servicio / mantenimiento vencido / falla abierta; PROC-MAN-04 repuesto bajo el minimo), identidad con
+  estado / equipo critico / criticidad A-B-C, resumen (horas, % cumplimiento, averias 12 meses, ultimo
+  analisis, OT abiertas) y secciones: datos tecnicos, fundamento (renderLabeledTextBox), plan por urgencia,
+  repuestos con stock vs minimo, averias e incidencias, analisis de condicion e historial de OT.
+  Cada seccion cita el punto del procedimiento. Pie y numero de pagina en todas las hojas.
+- "Equipo critico" de PROC-MAN-03 = asset.isSafetyCritical (ISM 10.3). No es documento controlado (no hay REGI).
+- Seguridad: la ficha ahora valida el buque del equipo (canAccessVessel). getTenantAsset sigue sin validar
+  buque: el detalle GET /app/pms/assets/:id tiene el mismo hueco (pendiente, no se toco).
+- Respaldo del archivo anterior: claude/mockups/ficha-equipo-pdf/backup/. Solo backend: pull + restart.
+
 [2026-09-30] Planilla a Bordo: icono "Ficha" en cada equipo
 Agent: Claude Opus 5.5
 - En el angulo superior derecho de la celda del equipo, boton "Ficha" que abre la ventana del equipo
