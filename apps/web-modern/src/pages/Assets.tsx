@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertOctagon, AlertTriangle, CalendarCheck, CalendarPlus, CalendarX, ChevronRight, Clock, FileDown, FileMinus, FileSpreadsheet, FlaskConical, Gauge, LayoutGrid, List, ListTree,
   Loader2, Package, Plus, PowerOff, Save, Search, Settings, ShieldAlert, Ship, Sparkles, Trash2, X,
@@ -1738,9 +1738,22 @@ export const AssetsPage: React.FC = () => {
     }
   }, []);
 
+  // Abierta desde otra pantalla con "volver a" (ej. el ícono Ficha de la Planilla
+  // a Bordo): al cerrar la ventana se vuelve ahí en vez de quedar en Equipos.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const returnToRef = useRef<string | null>(null);
+  const closeEditing = useCallback(() => {
+    setEditing(undefined);
+    const back = returnToRef.current;
+    if (back) { returnToRef.current = null; navigate(back, { replace: true }); }
+  }, [navigate]);
+
   // Auto-open asset modal when arriving from an "ACTIVO" click (e.g. plan modal)
   useEffect(() => {
     if (!openAssetId) return;
+    const rawCloseTo = (location.state as { closeTo?: unknown } | null)?.closeTo;
+    if (typeof rawCloseTo === "string" && rawCloseTo.startsWith("/")) returnToRef.current = rawCloseTo;
     setDetailLoadingId(openAssetId);
     api.get<Asset>(`/app/pms/assets/${openAssetId}`)
       .then(detailed => setEditing(detailed))
@@ -1905,9 +1918,9 @@ export const AssetsPage: React.FC = () => {
           vessels={contextVessels}
           tenantAssets={tenantAssetsData?.items ?? []}
           isAdmin={isAdmin}
-          onClose={() => { setEditing(undefined); void defectsFetch.reload(); void plansFetch.reload(); }}
+          onClose={() => { closeEditing(); void defectsFetch.reload(); void plansFetch.reload(); }}
           onSaved={() => {
-            setEditing(undefined);
+            closeEditing();
             void reload();
             void reloadTenantAssets();
             void plansFetch.reload();

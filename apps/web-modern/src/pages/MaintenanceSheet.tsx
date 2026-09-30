@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ClipboardCheck, ClipboardList, FileSpreadsheet, Loader2, Search, Wrench, X } from "lucide-react";
+import { Check, ClipboardCheck, ClipboardList, FileSpreadsheet, IdCard, Loader2, Search, Wrench, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
@@ -124,6 +124,10 @@ export function MaintenanceSheetPage() {
   const followUpNav = NAV.flatMap(s => s.items).find(i => i.path === "/approvals");
   const canSeeFollowUp = !!followUpNav && !hiddenNavPaths.includes("/approvals")
     && (!followUpNav.roles || followUpNav.roles.includes((user?.role ?? "") as never));
+  // Ícono "Ficha" de cada equipo: mismo criterio que el ítem Equipos del menú.
+  const equipmentNav = NAV.flatMap(s => s.items).find(i => i.path === "/equipment");
+  const canSeeEquipment = !!equipmentNav && !hiddenNavPaths.includes("/equipment")
+    && (!equipmentNav.roles || equipmentNav.roles.includes((user?.role ?? "") as never));
   const canEditMilestones = user?.role === "TENANT_ADMIN";
 
   const plansPath = selectedVesselCode ? "/app/pms/maintenance-plans?limit=2000" : null;
@@ -419,6 +423,12 @@ export function MaintenanceSheetPage() {
     if (!vessel || !asset) return;
     navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(vessel)}&assetId=${encodeURIComponent(asset)}`);
   }, [navigate, selectedVesselCode]);
+
+  /** La ficha del equipo (la ventana de Equipos); al cerrarla se vuelve a la planilla. */
+  const openAssetSheet = useCallback((p: SheetRow) => {
+    if (!p.assetId) return;
+    navigate(`/equipment?open=${encodeURIComponent(p.assetId)}`, { state: { closeTo: "/maintenance-sheet" } });
+  }, [navigate]);
 
   const groupTitle = useCallback((g: number): string => {
     if (g === NO_GROUP) return t("msheet.noGroup");
@@ -720,12 +730,25 @@ export function MaintenanceSheetPage() {
                         {/* El equipo lleva a SU plan de mantenimiento: la lista ya
                             filtrada por ese equipo, que es donde se lo administra. */}
                         {i === 0 && (
-                          <td rowSpan={b.plans.length} className={td + sep + " text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
+                          <td rowSpan={b.plans.length} className={td + sep + " relative text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
+                            {/* Ficha del equipo, en el ángulo superior derecho (pedido de
+                                Gustavo, sep 2026). El resto de la celda sigue llevando al plan. */}
+                            {canSeeEquipment && b.plans[0]?.assetId && (
+                              <button
+                                type="button"
+                                onClick={() => openAssetSheet(b.plans[0]!)}
+                                title={t("msheet.assetSheetHint")}
+                                aria-label={t("msheet.assetSheetHint")}
+                                className="absolute top-1 right-1 z-10 inline-flex items-center gap-1 rounded-md border border-[#1F3864]/30 bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#1F3864] hover:bg-white"
+                              >
+                                <IdCard className="w-3 h-3" />{t("msheet.assetSheet")}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => openAssetPlans(b.plans[0]!)}
                               title={t("msheet.openAssetPlans")}
-                              className="w-full h-full px-2 py-1 text-center hover:underline underline-offset-2 cursor-pointer"
+                              className={`w-full h-full px-2 py-1 text-center hover:underline underline-offset-2 cursor-pointer ${canSeeEquipment ? "pt-6" : ""}`}
                             >
                               <div>{b.name}</div>
                               {b.subtitle && <div className="text-[10px] font-normal opacity-80">{b.subtitle}</div>}

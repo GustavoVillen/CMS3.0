@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-09-30] Planilla a Bordo: icono "Ficha" en cada equipo
+Agent: Claude Opus 5.5
+- En el angulo superior derecho de la celda del equipo, boton "Ficha" que abre la ventana del equipo
+  (/equipment?open=<id>). El resto de la celda sigue llevando a su plan. Se ve con el mismo criterio que
+  el item Equipos del menu.
+- Assets: si la ventana se abrio con state.closeTo (desde la planilla), al cerrarla o guardarla vuelve a
+  esa pantalla. Abierta desde Equipos o desde los otros links (?open) se comporta igual que antes.
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-30] Equipos: el nombre del equipo se ve entero
 Agent: Claude Opus 5.5
 - Inventario de Activos: el nombre ya no se corta en un renglon (line-clamp); la columna Equipo tiene

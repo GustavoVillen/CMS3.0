@@ -3496,6 +3496,8 @@ const dict = {
   "msheet.markForWo":          { es: "Marcar para incluir en la orden de trabajo", en: "Mark to include in the work order", pt: "Marcar para incluir na ordem de serviço" },
   "msheet.openPlan":           { es: "Abrir esta tarea del plan", en: "Open this plan task", pt: "Abrir esta tarefa do plano" },
   "msheet.openAssetPlans":     { es: "Ver el plan de mantenimiento de este equipo", en: "See this equipment's maintenance plan", pt: "Ver o plano de manutenção deste equipamento" },
+  "msheet.assetSheet": { es: "Ficha", en: "Record", pt: "Ficha" },
+  "msheet.assetSheetHint": { es: "Abrir la ficha del equipo", en: "Open the equipment record", pt: "Abrir a ficha do equipamento" },
   "approvals.col.permits":     { es: "Permisos de trabajo",      en: "Work permits",              pt: "Permissões de trabalho" },
   "approvals.exec.permitsOne": { es: "1 permiso",                en: "1 permit",                  pt: "1 permissão" },
   "approvals.exec.permitsMany": { es: "{n} permisos",            en: "{n} permits",               pt: "{n} permissões" },
