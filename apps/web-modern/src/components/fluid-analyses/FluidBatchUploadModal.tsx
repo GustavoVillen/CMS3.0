@@ -12,6 +12,7 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   FlaskConical, Loader2, CheckCircle2, AlertTriangle, XCircle, FileText, Upload, Link2, Wrench, Activity,
+  Thermometer, Zap,
 } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -27,17 +28,24 @@ type BatchWarning =
   | "VESSEL_NOT_RESOLVED" | "ASSET_NOT_RESOLVED" | "ASSET_LOW_CONFIDENCE"
   | "SAMPLE_NUMBER_MISSING" | "SAMPLE_NUMBER_MISMATCH" | "SAMPLED_AT_MISSING"
   | "VERDICT_MISSING" | "VERDICT_MISMATCH" | "FLUID_TYPE_ASSUMED" | "NO_PARAMETERS"
-  | "SAMPLE_NUMBER_OTHER_VESSEL";
+  | "SAMPLE_NUMBER_OTHER_VESSEL" | "NOT_MEASURED";
 
 type VibrationSeverity = "NONE" | "NORMAL" | "ALERT" | "ALARM";
 type VibrationPriority = "NONE" | "SCHEDULED" | "NORMAL" | "URGENT";
+/** Escala del analista en megado y termografía (electrical-test-report-ai-extractor.ts). */
+type ElectricalLevel =
+  | "OK" | "OBSERVED" | "FAIL" | "POSSIBLE" | "PROBABLE" | "DEFICIENCY" | "MAJOR" | "NOT_MEASURED" | "NONE";
+/** Informes de campaña: un PDF, varios equipos, una fila por equipo. */
+type MultiKind = "VIBRATION" | "INSULATION" | "THERMAL";
+
+const KIND_ICON: Record<MultiKind, typeof Activity> = { VIBRATION: Activity, INSULATION: Zap, THERMAL: Thermometer };
 
 interface ScanRow {
   fileName: string;
   file: { url: string; name: string; mime: string };
-  /** VIBRATION: el informe trae varios equipos y el mismo archivo vuelve como varias filas. */
-  kind: "FLUID" | "VIBRATION";
-  /** Nº de informe del analista de vibraciones. */
+  /** VIBRATION, INSULATION, THERMAL: el informe trae varios equipos y el mismo archivo vuelve como varias filas. */
+  kind: "FLUID" | MultiKind;
+  /** Nº de informe del analista. */
   labReference: string | null;
   vibration: {
     severity: VibrationSeverity;
@@ -45,6 +53,8 @@ interface ScanRow {
     finding: string | null;
     recommendation: string | null;
   } | null;
+  /** Megado y termografía: los puntos del informe que quedaron en esta fila, con la palabra del analista. */
+  points: Array<{ label: string; level: ElectricalLevel; resultText: string | null }> | null;
   sampleNumber: string | null;
   vesselCode: string | null;
   vesselReferenceText: string | null;
@@ -115,6 +125,7 @@ const WARNING_KEYS: Record<BatchWarning, TranslationKey> = {
   FLUID_TYPE_ASSUMED:     "fa.batch.warn.fluidType",
   NO_PARAMETERS:          "fa.batch.warn.noParams",
   SAMPLE_NUMBER_OTHER_VESSEL: "fa.batch.warn.numberOtherVessel",
+  NOT_MEASURED:           "fa.batch.warn.notMeasured",
 };
 
 const SKIP_REASON_KEYS: Record<NonNullable<CommitResult["reason"]>, TranslationKey> = {
@@ -234,6 +245,18 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
     const counts = new Map<string, number>();
     for (const r of rows) if (r.kind === "VIBRATION") counts.set(r.fileName, (counts.get(r.fileName) ?? 0) + 1);
     return Array.from(counts, ([file, n]) => ({ file, n }));
+  }, [rows]);
+  // Informes de megado y termografía: cuántos puntos trajo cada uno y en cuántas filas quedaron.
+  const electricalFiles = useMemo(() => {
+    const byFile = new Map<string, { kind: MultiKind; n: number; points: number }>();
+    for (const r of rows) {
+      if (r.kind !== "INSULATION" && r.kind !== "THERMAL") continue;
+      const cur = byFile.get(r.fileName) ?? { kind: r.kind, n: 0, points: 0 };
+      cur.n += 1;
+      cur.points += r.points?.length ?? 0;
+      byFile.set(r.fileName, cur);
+    }
+    return Array.from(byFile, ([file, v]) => ({ file, ...v }));
   }, [rows]);
   const paramLabel = (key: string) => {
     const tk = `fa.param.${key.toLowerCase()}` as TranslationKey;
@@ -391,6 +414,18 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                 <span>{fill(t("fa.batch.vib.banner"), { file: v.file, n: v.n })}</span>
               </div>
             ))}
+            {electricalFiles.map(v => {
+              const Icon = KIND_ICON[v.kind];
+              return (
+                <div key={v.file} className="flex items-start gap-2 rounded-xl border border-violet-500/30 bg-violet-500/5 px-3 py-2 text-[11px] text-fg leading-relaxed">
+                  <Icon className="w-4 h-4 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+                  <span>{fill(t("fa.batch.elec.banner"), {
+                    file: v.file, n: v.n, points: v.points,
+                    kind: t(`mp.samp.purpose.${v.kind}` as TranslationKey).toLowerCase(),
+                  })}</span>
+                </div>
+              );
+            })}
 
             <div className="overflow-x-auto rounded-xl border border-fg/10">
               <table className="w-full text-[11px]">
@@ -471,12 +506,20 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           )}
                         </Td>
                         <Td>
-                          {r.kind === "VIBRATION" ? (
+                          {r.kind !== "FLUID" ? (
                             <>
                               <span className="inline-flex items-center gap-1 font-semibold text-fg whitespace-nowrap">
-                                <Activity className="w-3.5 h-3.5" />{t("mp.samp.kind.VIBRATION")}
+                                {React.createElement(KIND_ICON[r.kind], { className: "w-3.5 h-3.5" })}
+                                {t(`mp.samp.kind.${r.kind}` as TranslationKey)}
                               </span>
-                              {Object.entries(r.parameters).map(([k, p]) => (
+                              {/* La fila que junta varios puntos (un tablero) no lista sus
+                                  mediciones acá: son decenas. Se ven en el análisis guardado. */}
+                              {r.points && r.points.length > 1 && (
+                                <span className="block text-[10px] text-text-industrial/60 whitespace-nowrap">
+                                  {fill(t("fa.batch.elec.points"), { n: r.points.length })}
+                                </span>
+                              )}
+                              {(!r.points || r.points.length <= 1) && Object.entries(r.parameters).map(([k, p]) => (
                                 <span key={k} className="block text-[10px] text-text-industrial/60 whitespace-nowrap">
                                   {paramLabel(k)} {String(p.value).replace(".", ",")}{p.unit ? ` ${p.unit}` : ""}
                                 </span>
@@ -494,7 +537,7 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                           )}
                         </Td>
                         <Td>
-                          {r.kind === "VIBRATION"
+                          {r.kind !== "FLUID"
                             ? (r.labReference ? fill(t("fa.batch.vib.reportNo"), { no: r.labReference }) : "—")
                             : (r.sampleNumber ?? "—")}
                         </Td>
@@ -519,6 +562,13 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                               )}
                             </>
                           )}
+                          {/* Megado / termografía: los puntos que no salieron bien, con
+                              la palabra del analista. Lo satisfactorio no se lista. */}
+                          {r.points?.filter(p => p.level !== "OK").map((p, j) => (
+                            <span key={j} title={p.resultText ?? undefined} className="block mt-0.5 text-[10px] text-text-industrial/60 min-w-[200px] max-w-[240px] leading-snug">
+                              {p.label} — {t(`fa.batch.elec.level.${p.level}` as TranslationKey)}
+                            </span>
+                          ))}
                         </Td>
                         <Td>
                           {isDup ? (
@@ -610,8 +660,8 @@ export const FluidBatchUploadModal: React.FC<Props> = ({ vessels, onClose, onSav
                       ? <AlertTriangle className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
                       : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
                   <span className="text-[11px] text-text-industrial/70 truncate flex-1" title={r.fileName}>
-                    {committed[i]?.kind === "VIBRATION"
-                      ? `${committed[i]!.assetName ?? r.fileName} · ${t("mp.samp.kind.VIBRATION")}`
+                    {committed[i] && committed[i]!.kind !== "FLUID"
+                      ? `${committed[i]!.assetName ?? r.fileName} · ${t(`mp.samp.kind.${committed[i]!.kind}` as TranslationKey)}`
                       : r.fileName}
                   </span>
                   <span className="text-[10px] font-semibold shrink-0 text-right">

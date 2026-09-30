@@ -1415,7 +1415,7 @@ export async function setWorkOrderApproval(
           // El equipo es el DEL PLAN: con varios ítems del PDM cada muestra
           // corresponde a su propio equipo, no al principal de la OT.
           assetId:         plan.assetId ?? current.assetId,
-          kind:            (planKind || "FLUID") as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER",
+          kind:            (planKind || "FLUID") as "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER",
           fluidType:       planFluidType as FluidTypeEnum | null,
           workOrderId:     current.id,
           workOrderCode:   current.workOrderCode,

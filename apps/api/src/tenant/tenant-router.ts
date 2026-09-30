@@ -1284,10 +1284,14 @@ export async function handleTenantRoutes(
     // file-access-service.ts).
     claimUploadedFile(session.tenantSlug, session.user.id, saved.url);
     const extracted = await extractFluidReport(session, { buffer, mime: saved.mime, vesselCode, referenceDate, sampleNumber });
-    // Un informe de vibraciones trae varios equipos: no entra en la carga de una
-    // sola muestra. La carga masiva lo separa en una fila por equipo.
+    // Los informes de vibraciones, megado y termografía traen varios equipos: no
+    // entran en la carga de una sola muestra. La carga masiva los separa.
     if (extracted.documentKind === "VIBRATION") {
       throw new RouteError(422, "VIBRATION_REPORT_USE_BATCH", "Este informe es de análisis de vibraciones y trae varios equipos. Cargalo desde \"Subir reportes\", que arma un análisis por equipo.");
+    }
+    if (extracted.documentKind === "INSULATION" || extracted.documentKind === "THERMAL") {
+      const what = extracted.documentKind === "INSULATION" ? "resistencia de aislación (megado)" : "termografía";
+      throw new RouteError(422, "MULTI_ASSET_REPORT_USE_BATCH", `Este informe es de ${what} y trae varios equipos. Cargalo desde "Subir reportes", que lo separa por equipo.`);
     }
     sendJson(response, 200, { extracted, file: { url: saved.url, name: saved.name, mime: saved.mime } });
     return true;

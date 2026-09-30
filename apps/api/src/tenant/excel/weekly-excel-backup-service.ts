@@ -121,7 +121,7 @@ const CRITERIA_SOURCE: Record<string, string> = {
   ENGINEERING_CRITERION: "Criterio de ingeniería",
 };
 const SAMPLE_KIND: Record<string, string> = {
-  FLUID: "Fluido", VIBRATION: "Vibraciones", THERMAL: "Termografía", ULTRASOUND: "Ultrasonido", OTHER: "Otro",
+  FLUID: "Fluido", VIBRATION: "Vibraciones", THERMAL: "Termografía", ULTRASOUND: "Ultrasonido", INSULATION: "Megado", OTHER: "Otro",
 };
 
 function label(map: Record<string, string>, v: unknown): string | null {

@@ -4,7 +4,7 @@ import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
   Trash2, FileText, TrendingUp,
   ArrowUpDown, ChevronUp, ChevronDown, Clipboard,
-  Activity, AlertOctagon, AlertTriangle, AudioLines, Clock, Droplets, Files, Hourglass, Pencil, ScanLine, Search, TestTube, Thermometer,
+  Activity, AlertOctagon, AlertTriangle, AudioLines, Clock, Droplets, Files, Hourglass, Pencil, ScanLine, Search, TestTube, Thermometer, Zap,
   Check, CheckCircle2, ClipboardList, List, Ship, Wrench, ListChecks, ArrowRight,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
@@ -70,7 +70,7 @@ const FA_DRAFT_LATE_DAYS = 7;
 const FA_SENT_LATE_DAYS = 14;
 
 const KIND_ICON: Record<string, typeof FlaskConical> = {
-  FLUID: Droplets, VIBRATION: Activity, THERMAL: Thermometer, ULTRASOUND: AudioLines, OTHER: FlaskConical,
+  FLUID: Droplets, VIBRATION: Activity, THERMAL: Thermometer, ULTRASOUND: AudioLines, INSULATION: Zap, OTHER: FlaskConical,
 };
 const FA_STATUS_CLS: Record<string, string> = {
   DRAFT: "bg-amber-500/15 text-amber-800 dark:text-amber-300",

@@ -49,7 +49,7 @@ export function countUnnumbered(data: LabSamplesData | null | undefined): number
   return data.items.filter(s => !s.hasResult && !s.labReference).length;
 }
 
-const SAMPLE_KINDS = ["FLUID", "VIBRATION", "THERMAL", "ULTRASOUND", "OTHER"] as const;
+const SAMPLE_KINDS = ["FLUID", "VIBRATION", "THERMAL", "ULTRASOUND", "INSULATION", "OTHER"] as const;
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[12px] text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-50";
 

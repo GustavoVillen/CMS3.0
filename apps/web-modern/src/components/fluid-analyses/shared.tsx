@@ -63,13 +63,14 @@ export interface FluidResult {
 // Tipos de muestreo. FLUID es el caso histórico. Al ampliar el módulo a CBM,
 // la misma tabla almacena también vibración, termografía, etc. `fluidType`
 // queda null cuando kind !== "FLUID".
-export type SampleKind = "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER";
+export type SampleKind = "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER";
 
 export const SAMPLE_KIND_LABELS: Record<SampleKind, string> = {
   FLUID:      "Fluido",
   VIBRATION:  "Vibración",
   THERMAL:    "Termografía",
   ULTRASOUND: "Ultrasonido",
+  INSULATION: "Megado",
   OTHER:      "Otro",
 };
 

@@ -19,11 +19,12 @@ export interface ExtractedField<T> {
 
 export interface ExtractedReport {
   /**
-   * Qué clase de documento es. Un informe de VIBRACIONES cubre varios equipos y
-   * no entra en este esquema de una muestra: quien llama lo deriva al lector de
-   * vibraciones (vibration-report-ai-extractor.ts).
+   * Qué clase de documento es. Los informes de VIBRACIONES, de RESISTENCIA DE
+   * AISLACIÓN (megado) y de TERMOGRAFÍA cubren varios equipos y no entran en este
+   * esquema de una muestra: quien llama los deriva a su lector
+   * (vibration-report-ai-extractor.ts, electrical-test-report-ai-extractor.ts).
    */
-  documentKind: "FLUID" | "VIBRATION" | "OTHER";
+  documentKind: DocumentKind;
   fluidType: ExtractedField<FluidType>;
   sampledAt: ExtractedField<string>;          // ISO date
   receivedAt: ExtractedField<string>;
@@ -40,11 +41,21 @@ export interface ExtractedReport {
   notes?: string;
 }
 
+export type DocumentKind = "FLUID" | "VIBRATION" | "INSULATION" | "THERMAL" | "OTHER";
+/** Informes de campaña: un documento, varios equipos. */
+export const MULTI_ASSET_KINDS = ["VIBRATION", "INSULATION", "THERMAL"] as const;
+
 const SYSTEM_PROMPT = `Sos un experto en interpretar reportes de laboratorio de análisis de fluidos marítimos (lubricantes, combustibles, agua, refrigerante).
 
 Tu tarea: extraer del documento (PDF o imagen) los siguientes campos en JSON estricto. Si un campo no está presente o no podés determinarlo, devolvé null.
 
-Primero, "documentKind" (string plano, no objeto): "FLUID" si es un análisis de fluidos; "VIBRATION" si es un informe de análisis de vibraciones (mm/s, m/s², espectros, severidad por equipo); "OTHER" si no es ninguno. Si es "VIBRATION", devolvé sólo { "documentKind": "VIBRATION" } y nada más.
+Primero, "documentKind" (string plano, no objeto):
+  "FLUID" si es un análisis de fluidos;
+  "VIBRATION" si es un informe de análisis de vibraciones (mm/s, m/s², espectros, severidad por equipo);
+  "INSULATION" si es un informe de resistencia de aislación / megado (megóhmetro, valores en MΩ entre fases o contra masa: R-S, RST-M, L-M);
+  "THERMAL" si es un informe de inspección termográfica (cámara termográfica, temperaturas en °C, diferencias ΔT entre fases, puntos calientes);
+  "OTHER" si no es ninguno.
+Si es "VIBRATION", "INSULATION" o "THERMAL", devolvé sólo { "documentKind": "<ese valor>" } y nada más.
 
 Para cada campo top-level (excepto "documentKind", "parameters", "notes" y "assetIdSuggestion"), devolvés un objeto con esta forma:
   { "value": ..., "confidence": "high" | "medium" | "low" }
@@ -54,7 +65,7 @@ Para "parameters", devolvés un objeto donde cada clave es el código del parám
 
 CAMPOS A EXTRAER (esquema exacto):
 {
-  "documentKind":      "FLUID"|"VIBRATION"|"OTHER",
+  "documentKind":      "FLUID"|"VIBRATION"|"INSULATION"|"THERMAL"|"OTHER",
   "fluidType":         { value: "ENGINE_OIL"|"HYDRAULIC_OIL"|"GEARBOX_OIL"|"TRANSMISSION_OIL"|"FUEL_DIESEL"|"FUEL_GASOIL"|"COOLING_WATER"|"BOILER_WATER"|"POTABLE_WATER"|"REFRIGERANT"|"OTHER"|null, confidence },
   "sampledAt":         { value: "YYYY-MM-DD"|null, confidence },        // fecha de toma de muestra
   "receivedAt":        { value: "YYYY-MM-DD"|null, confidence },        // fecha de recepción/análisis del lab
@@ -204,7 +215,7 @@ export async function extractFluidReport(
 
   // Sanitize and shape
   const result: ExtractedReport = {
-    documentKind:       parsed.documentKind === "VIBRATION" ? "VIBRATION" : parsed.documentKind === "OTHER" ? "OTHER" : "FLUID",
+    documentKind:       [...MULTI_ASSET_KINDS, "OTHER"].includes(parsed.documentKind) ? parsed.documentKind : "FLUID",
     fluidType:         shapeField(parsed.fluidType, (v) => FLUID_TYPES.includes(v as FluidType) ? (v as FluidType) : null),
     sampledAt:          shapeField(parsed.sampledAt,  (v) => normDate(v)),
     receivedAt:         shapeField(parsed.receivedAt, (v) => normDate(v)),

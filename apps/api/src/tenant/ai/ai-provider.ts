@@ -75,7 +75,7 @@ export function createAiClient(opts: CreateAiClientOptions = {}): AiClient {
   if (!apiKey) throw new Error(`${aiApiKeyName()} no está configurada.`);
 
   if (getAiProvider() === "gemini") {
-    return createGeminiClient({ apiKey, timeout: opts.timeout });
+    return createGeminiClient({ apiKey, timeout: opts.timeout, maxRetries: opts.maxRetries });
   }
 
   const client = new Anthropic({

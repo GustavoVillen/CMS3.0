@@ -25,7 +25,7 @@ const VERDICT_ES: Record<string, string> = {
 };
 
 const KIND_ES: Record<string, string> = {
-  FLUID: "fluido", VIBRATION: "vibraciones", THERMAL: "termografía", ULTRASOUND: "ultrasonido", OTHER: "laboratorio",
+  FLUID: "fluido", VIBRATION: "vibraciones", THERMAL: "termografía", ULTRASOUND: "ultrasonido", INSULATION: "megado", OTHER: "laboratorio",
 };
 
 /** Resumen de vibraciones = "hallazgo. Recomendación: a · b. Prioridad: X" (vibrationSummary en fluid-batch-service). */

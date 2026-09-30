@@ -565,11 +565,12 @@ const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-
 const fLabelCls = "flex items-center text-xs font-semibold text-text-industrial/70";
 const PLAN_SECTIONS = ["what", "when", "who", "safety", "docs"] as const;
 /** Qué analiza un plan de muestreo (V17b): sólo el tipo, sin detalle de fluido. */
-const SAMPLING_KINDS: { kind: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER"; icon: typeof Wrench }[] = [
+const SAMPLING_KINDS: { kind: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER"; icon: typeof Wrench }[] = [
   { kind: "FLUID", icon: Droplets },
   { kind: "VIBRATION", icon: Activity },
   { kind: "THERMAL", icon: Thermometer },
   { kind: "ULTRASOUND", icon: AudioLines },
+  { kind: "INSULATION", icon: Zap },
   { kind: "OTHER", icon: FlaskConical },
 ];
 type PlanSectionKey = (typeof PLAN_SECTIONS)[number];
@@ -1370,7 +1371,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
   const [checklistTemplate, setChecklistTemplate] = useState(plan?.checklistTemplate ?? "");
-  // samplingKind = "" (no sampling) | "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER"
+  // samplingKind = "" (no sampling) | "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER"
   // Para retrocompatibilidad: si el plan tenía samplingFluidType pero no samplingKind, asumimos FLUID.
   const [samplingKind, setSamplingKind] = useState<string>(
     plan?.samplingKind ?? (plan?.samplingFluidType ? "FLUID" : "")
@@ -2414,7 +2415,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
       <div>
         <p className={`${fLabelCls} mb-1.5`}>{t("mp.samp.what")}</p>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {SAMPLING_KINDS.map(({ kind, icon: Icon }) => {
             const on = samplingKind === kind;
             return (

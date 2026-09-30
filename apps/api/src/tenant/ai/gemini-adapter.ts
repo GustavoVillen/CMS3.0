@@ -335,27 +335,44 @@ function collectChunk(
   };
 }
 
+/** El corte por `httpOptions.timeout` llega como AbortError ("This operation was aborted"). */
+function isTimeoutError(e: unknown): boolean {
+  const err = e as { name?: unknown; message?: unknown } | null;
+  return err?.name === "AbortError" || /aborted|timed? ?out/i.test(String(err?.message ?? ""));
+}
+
 // ── Cliente ──────────────────────────────────────────────────────────────────
 
-export function createGeminiClient(opts: { apiKey: string; timeout?: number }): AiClient {
+export function createGeminiClient(opts: { apiKey: string; timeout?: number; maxRetries?: number }): AiClient {
   const genai = new GoogleGenAI({ apiKey: opts.apiKey });
 
   return {
     messages: {
       async create(body, options) {
-        const response = await genai.models.generateContent({
-          model: body.model,
-          contents: toContents(body.messages),
-          config: toConfig(body, options, opts.timeout),
-        });
+        // Como el SDK de Anthropic: el pedido que se cuelga hasta el timeout se
+        // reintenta hasta `maxRetries` veces. Gemini a veces deja colgado un
+        // pedido con un PDF pesado (megado, termografía) que al reintentarlo
+        // responde en segundos. Sólo el timeout: si el usuario cortó, se corta.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const response = await genai.models.generateContent({
+              model: body.model,
+              contents: toContents(body.messages),
+              config: toConfig(body, options, opts.timeout),
+            });
 
-        const parts = response.candidates?.[0]?.content?.parts ?? [];
-        return toAnthropicMessage(
-          parts,
-          response.usageMetadata,
-          response.candidates?.[0]?.finishReason,
-          body.model,
-        );
+            const parts = response.candidates?.[0]?.content?.parts ?? [];
+            return toAnthropicMessage(
+              parts,
+              response.usageMetadata,
+              response.candidates?.[0]?.finishReason,
+              body.model,
+            );
+          } catch (e) {
+            const retry = !options?.signal?.aborted && isTimeoutError(e) && attempt < (opts.maxRetries ?? 0);
+            if (!retry) throw e;
+          }
+        }
       },
 
       stream(body, options) {

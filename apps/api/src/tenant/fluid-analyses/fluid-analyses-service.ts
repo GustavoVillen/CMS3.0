@@ -843,7 +843,7 @@ async function createDefectFromResult(
 // runningHours/sampledAt are backfilled when the WO closes (closeWorkOrder), and
 // the user finishes filling lab data afterwards from the FluidAnalyses page.
 
-export const SAMPLE_KINDS = ["FLUID", "VIBRATION", "THERMAL", "ULTRASOUND", "OTHER"] as const;
+export const SAMPLE_KINDS = ["FLUID", "VIBRATION", "THERMAL", "ULTRASOUND", "INSULATION", "OTHER"] as const;
 export type SampleKindInput = typeof SAMPLE_KINDS[number];
 
 export interface CreateSampleFromWoInput {

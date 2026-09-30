@@ -290,6 +290,7 @@ enum SampleKind {
   VIBRATION
   THERMAL
   ULTRASOUND
+  INSULATION  // resistencia de aislación (megado) de motores, conductores y tableros
   OTHER
 }
 

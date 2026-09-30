@@ -68,7 +68,7 @@ export interface CreateMaintenancePlanInput {
   status?: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   taskMasterId?: string | null;
   /** Tipo de muestreo: si está set, al cerrar la OT se crea automáticamente un Sample DRAFT (kind correspondiente). */
-  samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
+  samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
   /** Permisos de trabajo que exige la tarea (se crean al autorizar la OT y se exigen al cerrarla). */
@@ -136,7 +136,7 @@ export interface UpdateMaintenancePlanInput {
   status?: "ACTIVE" | "DUE_SOON" | "OVERDUE" | "INACTIVE";
   taskMasterId?: string | null;
   /** Tipo de muestreo: si está set, al cerrar la OT se crea automáticamente un Sample DRAFT (kind correspondiente). */
-  samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "OTHER" | null;
+  samplingKind?: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER" | null;
   /** Sub-tipo de fluido — solo relevante cuando samplingKind === "FLUID". */
   samplingFluidType?: "ENGINE_OIL" | "HYDRAULIC_OIL" | "GEARBOX_OIL" | "TRANSMISSION_OIL" | "FUEL_DIESEL" | "FUEL_GASOIL" | "COOLING_WATER" | "BOILER_WATER" | "POTABLE_WATER" | "REFRIGERANT" | "OTHER" | null;
   /** Permisos de trabajo que exige la tarea (se crean al autorizar la OT y se exigen al cerrarla). */

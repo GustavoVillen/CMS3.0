@@ -23,7 +23,7 @@ const FLUID_LABELS: Record<string, string> = {
 };
 
 const SAMPLE_KIND_LABELS: Record<string, string> = {
-  FLUID: "Fluido", VIBRATION: "Vibraciones", THERMAL: "Termografía", ULTRASOUND: "Ultrasonido", OTHER: "Otro",
+  FLUID: "Fluido", VIBRATION: "Vibraciones", THERMAL: "Termografía", ULTRASOUND: "Ultrasonido", INSULATION: "Megado", OTHER: "Otro",
 };
 
 // El informe no es siempre de aceite: el título sigue al tipo de muestra (preview V44).
@@ -32,6 +32,7 @@ const REPORT_TITLE: Record<string, string> = {
   VIBRATION: "INFORME DE ANÁLISIS DE VIBRACIONES",
   THERMAL: "INFORME DE TERMOGRAFÍA",
   ULTRASOUND: "INFORME DE ANÁLISIS POR ULTRASONIDO",
+  INSULATION: "INFORME DE RESISTENCIA DE AISLACIÓN",
   OTHER: "INFORME DE ANÁLISIS",
 };
 

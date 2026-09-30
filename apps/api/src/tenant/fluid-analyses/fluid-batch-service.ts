@@ -28,7 +28,11 @@ import {
   extractVibrationReport, verdictForVibrationSeverity, worseSeverity, worsePriority,
   type VibrationReportItem, type VibrationSeverity, type VibrationPriority,
 } from "./vibration-report-ai-extractor";
-import { matchAssetByAi, loadVesselAssets, type AssetCandidate } from "../ai/asset-ai-match";
+import {
+  extractElectricalTestReport, verdictForElectricalLevel, isFlaggedLevel,
+  type ElectricalTestKind, type ElectricalTestItem, type ElectricalTestLevel,
+} from "./electrical-test-report-ai-extractor";
+import { matchAssetByAi, loadVesselAssets, type AssetCandidate, type AssetAiMatch } from "../ai/asset-ai-match";
 import {
   ensureCanManageFluidAnalyses, createFluidSample, updateFluidSample, upsertFluidResult,
   linkFluidSampleToWorkOrder, baseSampleNumber,
@@ -53,7 +57,8 @@ export type BatchWarning =
   | "VERDICT_MISMATCH"        // el veredicto del nombre del archivo no es el que leyó la IA
   | "FLUID_TYPE_ASSUMED"
   | "NO_PARAMETERS"            // la IA no pudo leer ningún parámetro del reporte
-  | "SAMPLE_NUMBER_OTHER_VESSEL"; // el nº de muestra es de otro buque que el del reporte
+  | "SAMPLE_NUMBER_OTHER_VESSEL" // el nº de muestra es de otro buque que el del reporte
+  | "NOT_MEASURED";            // el informe dice que ese equipo no se midió (no conectado, sin acceso)
 
 /** Cómo se encontró la muestra pendiente que espera este resultado. */
 export type AttachMatch =
@@ -61,7 +66,8 @@ export type AttachMatch =
   | "ASSET_AND_DATE";  // equipo + fecha dentro de 45 días: inferencia
 
 /** Tipos de análisis que sabe leer la carga masiva. */
-export type BatchKind = "FLUID" | "VIBRATION";
+export type BatchKind = "FLUID" | "VIBRATION" | ElectricalTestKind;
+const BATCH_KINDS: readonly BatchKind[] = ["FLUID", "VIBRATION", "INSULATION", "THERMAL"];
 
 export interface BatchScanRow {
   fileName: string;
@@ -69,11 +75,12 @@ export interface BatchScanRow {
 
   /**
    * FLUID: un reporte = una muestra = un equipo.
-   * VIBRATION: un informe cubre varios equipos, así que el mismo archivo vuelve
-   * como varias filas (una por equipo), todas con el mismo `file`.
+   * VIBRATION, INSULATION (megado), THERMAL (termografía): un informe cubre
+   * varios equipos, así que el mismo archivo vuelve como varias filas (una por
+   * equipo), todas con el mismo `file`.
    */
   kind: BatchKind;
-  /** Nº de informe del analista (vibraciones). No es clave anti-duplicado: lo comparten todas las filas del informe. */
+  /** Nº de informe del analista. No es clave anti-duplicado: lo comparten todas las filas del informe. */
   labReference: string | null;
   /** Lo que escribió el analista de vibraciones, tal cual, para mostrarlo junto al veredicto traducido. */
   vibration: {
@@ -82,6 +89,11 @@ export interface BatchScanRow {
     finding: string | null;
     recommendation: string | null;
   } | null;
+  /**
+   * Megado y termografía: cada punto del informe que quedó en esta fila, con la
+   * palabra del analista. La fila de un tablero junta todos sus circuitos.
+   */
+  points: Array<{ label: string; level: ElectricalTestLevel; resultText: string | null }> | null;
 
   sampleNumber: string | null;
   vesselCode: string | null;
@@ -197,10 +209,15 @@ export async function scanFluidReportForBatch(
     sampleNumber: hints.sampleNumber,
   });
 
-  // Informe de vibraciones: varios equipos en un documento, otro lector.
+  // Informes de campaña: varios equipos en un documento, cada tipo con su lector.
   if (extracted.documentKind === "VIBRATION") {
     return scanVibrationReport(session, prisma, tenantId, {
       buffer: input.buffer, fileName, saved, vessels, preVessel,
+    });
+  }
+  if (extracted.documentKind === "INSULATION" || extracted.documentKind === "THERMAL") {
+    return scanElectricalTestReport(session, prisma, tenantId, {
+      kind: extracted.documentKind, buffer: input.buffer, fileName, saved, vessels, preVessel,
     });
   }
 
@@ -325,6 +342,7 @@ export async function scanFluidReportForBatch(
     kind: "FLUID",
     labReference: null,
     vibration: null,
+    points: null,
     sampleNumber,
     vesselCode,
     vesselReferenceText: extracted.vesselReferenceText.value,
@@ -379,32 +397,7 @@ async function scanVibrationReport(
 
   const vesselCode = input.preVessel
     ?? pickVessel(vessels, null, [report.vesselReferenceText ?? "", fileName]);
-  const candidates: AssetCandidate[] = vesselCode ? await loadVesselAssets(session, vesselCode) : [];
-
-  // Equipo de cada fila del informe. De a 4 en paralelo: un informe trae una
-  // docena de equipos y en serie la lectura se hace larga.
-  const matches: Array<{ id: string; name: string; confidence: "high" | "medium" | "low"; reason: string | null } | null> = [];
-  for (let i = 0; i < report.items.length; i += 4) {
-    const chunk = report.items.slice(i, i + 4);
-    matches.push(...await Promise.all(chunk.map(item => vesselCode
-      ? matchAssetByAi(session, vesselCode, item.assetReferenceText, { candidates, feature: "fluid_analyses" })
-      : Promise.resolve(null))));
-  }
-
-  // Agrupar por equipo resuelto. Lo no resuelto queda en su propia fila, para
-  // que el usuario elija el equipo a mano.
-  const groups: Array<{ items: VibrationReportItem[]; match: (typeof matches)[number] }> = [];
-  report.items.forEach((item, i) => {
-    const match = matches[i] ?? null;
-    const same = match ? groups.find(g => g.match?.id === match.id) : undefined;
-    if (same) {
-      same.items.push(item);
-      // Se queda con la confianza más baja: la fila junta vale lo que su parte más dudosa.
-      if (same.match && rankConfidence(match!.confidence) < rankConfidence(same.match.confidence)) same.match = match;
-    } else {
-      groups.push({ items: [item], match });
-    }
-  });
+  const groups = await matchAndGroup<VibrationReportItem>(session, vesselCode, report.items, item => item.assetReferenceText);
 
   const sampledAt = report.sampledAt ?? parseFileNameHints(fileName).date;
   const rows: BatchScanRow[] = [];
@@ -425,7 +418,7 @@ async function scanVibrationReport(
     if (Object.keys(parameters).length === 0) warnings.push("NO_PARAMETERS");
 
     const duplicateOf = (vesselCode && match && sampledAt)
-      ? await findLoadedVibration(prisma, tenantId, vesselCode, match.id, sampledAt)
+      ? await findLoadedOnDay(prisma, tenantId, vesselCode, match.id, sampledAt, "VIBRATION", report.reportNumber)
       : null;
     const pending = (!duplicateOf && vesselCode && match && sampledAt)
       ? await findPendingSample(prisma, tenantId, vesselCode, match.id, sampledAt, "VIBRATION", null)
@@ -437,6 +430,7 @@ async function scanVibrationReport(
       kind: "VIBRATION",
       labReference: report.reportNumber,
       vibration: { severity, priority, finding, recommendation },
+      points: null,
       sampleNumber: null,
       vesselCode,
       vesselReferenceText: report.vesselReferenceText,
@@ -453,6 +447,110 @@ async function scanVibrationReport(
       labName: report.labName,
       verdict: verdictForVibrationSeverity(severity),
       summary: vibrationSummary(finding, recommendation, priority),
+      parameters,
+      duplicateOf,
+      attachTo: pending ? await describeAttachTarget(prisma, tenantId, pending, "ASSET_AND_DATE") : null,
+      aiNotes: report.notes,
+      warnings,
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * Informe de megado o de termografía → una fila por equipo.
+ *
+ * Megado (de motores o de conductores): cada punto va a su equipo, y los que
+ * caen en el mismo se juntan: los extractores y forzadores del buque suelen ser
+ * un solo "Ventiladores y Extractores" en el maestro.
+ * Termografía de guardamotores: todo va al tablero donde se midió, un análisis
+ * por tablero con sus puntos adentro.
+ */
+async function scanElectricalTestReport(
+  session: TenantAccessSession,
+  prisma: unknown,
+  tenantId: string,
+  input: {
+    kind: ElectricalTestKind;
+    buffer: Buffer;
+    fileName: string;
+    saved: { url: string; name: string; mime: string };
+    vessels: Array<{ code: string; name: string | null }>;
+    preVessel: string | null;
+  },
+): Promise<BatchScanRow[]> {
+  const { kind, fileName, saved, vessels } = input;
+  const report = await extractElectricalTestReport(session, {
+    buffer: input.buffer, mime: saved.mime, kind, vesselCode: input.preVessel,
+  });
+  if (report.items.length === 0) {
+    throw new RouteError(422, "ELECTRICAL_TEST_NO_ITEMS", "No se pudo leer ningún equipo del informe.");
+  }
+
+  const vesselCode = input.preVessel
+    ?? pickVessel(vessels, null, [report.vesselReferenceText ?? "", fileName]);
+  const byPanel = report.scope === "PANEL";
+  const groups = await matchAndGroup<ElectricalTestItem>(session, vesselCode, report.items,
+    item => byPanel ? (item.panelText ?? "Tablero eléctrico principal") : item.equipmentText);
+
+  const sampledAt = report.testedAt ?? parseFileNameHints(fileName).date;
+  const rows: BatchScanRow[] = [];
+
+  for (const group of groups) {
+    const verdicts = group.items
+      .map(i => verdictForElectricalLevel(i.level))
+      .filter((v): v is Verdict => v !== null);
+    const verdict = verdicts.length > 0 ? verdicts.reduce(worseVerdict) : null;
+    // La fila de un tablero, o la que junta varios equipos, nombra cada medición
+    // con su equipo: "R-S" suelto no dice de qué motor es.
+    const named = byPanel || group.items.length > 1;
+    const parameters = mergeParameters(group.items.map(i => named ? prefixKeys(i.equipmentText, i.parameters) : i.parameters));
+
+    const warnings: BatchWarning[] = [];
+    if (!vesselCode) warnings.push("VESSEL_NOT_RESOLVED");
+    const match = group.match;
+    if (!match) warnings.push("ASSET_NOT_RESOLVED");
+    else if (match.confidence === "low") warnings.push("ASSET_LOW_CONFIDENCE");
+    if (!sampledAt) warnings.push("SAMPLED_AT_MISSING");
+    if (!verdict) {
+      warnings.push(group.items.every(i => i.level === "NOT_MEASURED") ? "NOT_MEASURED" : "VERDICT_MISSING");
+    } else if (Object.keys(parameters).length === 0) {
+      warnings.push("NO_PARAMETERS");
+    }
+
+    const duplicateOf = (vesselCode && match && sampledAt)
+      ? await findLoadedOnDay(prisma, tenantId, vesselCode, match.id, sampledAt, kind, report.reportNumber)
+      : null;
+    const pending = (!duplicateOf && vesselCode && match && sampledAt)
+      ? await findPendingSample(prisma, tenantId, vesselCode, match.id, sampledAt, kind, null)
+      : null;
+
+    rows.push({
+      fileName,
+      file: { url: saved.url, name: saved.name, mime: saved.mime },
+      kind,
+      labReference: report.reportNumber,
+      vibration: null,
+      points: group.items.map(i => ({ label: i.equipmentText, level: i.level, resultText: i.resultText })),
+      sampleNumber: null,
+      vesselCode,
+      vesselReferenceText: report.vesselReferenceText,
+      assetId: match?.id ?? null,
+      assetName: match?.name ?? null,
+      assetReferenceText: byPanel
+        ? [...new Set(group.items.map(i => i.panelText ?? ""))].filter(Boolean).join(" / ") || null
+        : group.items.map(i => i.equipmentText).join(" / "),
+      assetConfidence: match?.confidence ?? null,
+      assetReason: match?.reason ?? null,
+      fluidType: null,
+      fluidProduct: null,
+      sampledAt,
+      receivedAt: sampledAt,
+      runningHours: null,
+      labName: report.labName,
+      verdict,
+      summary: electricalTestSummary(group.items, byPanel ? report.conclusion : null),
       parameters,
       duplicateOf,
       attachTo: pending ? await describeAttachTarget(prisma, tenantId, pending, "ASSET_AND_DATE") : null,
@@ -512,17 +610,19 @@ export async function commitFluidBatch(
         continue;
       }
 
-      const kind: BatchKind = row?.kind === "VIBRATION" ? "VIBRATION" : "FLUID";
+      const kind: BatchKind = BATCH_KINDS.includes(row?.kind as BatchKind) ? row.kind! : "FLUID";
 
-      // Vibraciones: no hay número de muestra por equipo. La clave es equipo +
-      // fecha de medición, en el lote y contra la base.
-      if (kind === "VIBRATION") {
-        const key = `V|${vesselCode}|${assetId}|${sampledAt}`;
+      // Informes de campaña (vibraciones, megado, termografía): no hay número de
+      // muestra por equipo. La clave es tipo + equipo + fecha de medición + Nº de
+      // informe, en el lote y contra la base.
+      if (kind !== "FLUID") {
+        const reportNo = normText(row?.labReference);
+        const key = `${kind}|${vesselCode}|${assetId}|${sampledAt}|${reportNo ?? ""}`;
         if (seenNumbers.has(key)) {
           items.push({ ...base, status: "skipped", reason: "DUPLICATE" });
           continue;
         }
-        const existing = await findLoadedVibration(prisma, tenantId, vesselCode, assetId, sampledAt);
+        const existing = await findLoadedOnDay(prisma, tenantId, vesselCode, assetId, sampledAt, kind, reportNo);
         if (existing) {
           items.push({
             ...base, status: "skipped", reason: "DUPLICATE",
@@ -1007,32 +1107,121 @@ async function findPendingSample(
 }
 
 /**
- * Análisis de vibraciones YA CARGADO del mismo equipo y la misma fecha de
- * medición. Es la clave anti-duplicado de vibraciones: el informe no trae número
- * de muestra por equipo, y el Nº de informe lo comparten todos los equipos.
+ * Análisis YA CARGADO del mismo tipo, del mismo equipo y de la misma fecha de
+ * medición. Es la clave anti-duplicado de los informes de campaña (vibraciones,
+ * megado, termografía): no traen número de muestra por equipo, y el Nº de
+ * informe lo comparten todos los equipos.
+ *
+ * El Nº de informe sí separa dos informes distintos del mismo día: el megado de
+ * los motores y el de sus conductores miden el mismo equipo la misma mañana, y
+ * no son el mismo análisis. Un análisis viejo sin número cuenta como duplicado.
  */
-async function findLoadedVibration(
+async function findLoadedOnDay(
   prisma: unknown,
   tenantId: string,
   vesselCode: string,
   assetId: string,
   sampledAt: string,
+  kind: Exclude<BatchKind, "FLUID">,
+  labReference: string | null,
 ): Promise<{ id: string; sampleCode: string; vesselCode: string } | null> {
   const day = new Date(`${sampledAt}T00:00:00.000Z`);
   if (isNaN(day.getTime())) return null;
   return (prisma as any).fluidSample.findFirst({
     where: {
       tenantId, vesselCode, assetId, deletedAt: null,
-      kind: "VIBRATION",
+      kind,
       result: { isNot: null },
       sampledAt: { gte: day, lt: new Date(day.getTime() + 24 * 60 * 60 * 1000) },
+      ...(labReference ? { OR: [{ labReference }, { labReference: null }] } : {}),
     },
     select: { id: true, sampleCode: true, vesselCode: true },
   });
 }
 
+/**
+ * Resuelve el equipo de cada ítem de un informe de campaña y junta los que caen
+ * en el mismo equipo. Cada texto distinto se consulta una vez (un informe de
+ * tablero repite el nombre del tablero en todos sus puntos), de a 4 en
+ * paralelo: un informe trae una docena de equipos y en serie se hace largo.
+ * Lo no resuelto se junta por texto y queda en su fila, para elegirlo a mano.
+ */
+async function matchAndGroup<T>(
+  session: TenantAccessSession,
+  vesselCode: string | null,
+  items: T[],
+  textOf: (item: T) => string,
+): Promise<Array<{ items: T[]; match: AssetAiMatch | null }>> {
+  const candidates: AssetCandidate[] = vesselCode ? await loadVesselAssets(session, vesselCode) : [];
+  const texts = [...new Set(items.map(textOf))];
+  const byText = new Map<string, AssetAiMatch | null>();
+  for (let i = 0; i < texts.length; i += 4) {
+    const chunk = texts.slice(i, i + 4);
+    const found = await Promise.all(chunk.map(text => vesselCode
+      ? matchAssetByAi(session, vesselCode, text, { candidates, feature: "fluid_analyses" })
+      : Promise.resolve(null)));
+    chunk.forEach((text, j) => byText.set(text, found[j] ?? null));
+  }
+
+  const groups: Array<{ key: string; items: T[]; match: AssetAiMatch | null }> = [];
+  for (const item of items) {
+    const match = byText.get(textOf(item)) ?? null;
+    const key = match ? `asset:${match.id}` : `text:${textOf(item)}`;
+    const same = groups.find(g => g.key === key);
+    if (!same) { groups.push({ key, items: [item], match }); continue; }
+    same.items.push(item);
+    // Se queda con la confianza más baja: la fila junta vale lo que su parte más dudosa.
+    if (match && same.match && rankConfidence(match.confidence) < rankConfidence(same.match.confidence)) same.match = match;
+  }
+  return groups.map(({ items: groupItems, match }) => ({ items: groupItems, match }));
+}
+
 function rankConfidence(c: "high" | "medium" | "low"): number {
   return c === "high" ? 2 : c === "medium" ? 1 : 0;
+}
+
+const VERDICT_RANK: Record<Verdict, number> = { NORMAL: 0, CAUTION: 1, CRITICAL: 2, ACTION_REQUIRED: 3 };
+
+function worseVerdict(a: Verdict, b: Verdict): Verdict {
+  return VERDICT_RANK[b] > VERDICT_RANK[a] ? b : a;
+}
+
+/** "R-S" → "Bomba trasvase de combustible · R-S". */
+function prefixKeys(
+  label: string,
+  params: Record<string, { value: number | string; unit?: string }>,
+): Record<string, { value: number | string; unit?: string }> {
+  return Object.fromEntries(Object.entries(params).map(([k, v]) => [`${label} · ${k}`, v]));
+}
+
+/**
+ * Resumen que queda guardado en el resultado de megado o termografía: primero lo
+ * que el analista marcó, con su palabra y su observación; después qué estuvo
+ * bien y qué no se midió. Es texto del informe (como el resumen del laboratorio
+ * en los de aceite), no de la interfaz.
+ */
+function electricalTestSummary(items: ElectricalTestItem[], conclusion: string | null): string | null {
+  // Por si el informe no escribió la palabra y sólo quedó el nivel leído.
+  const LEVEL_WORDS: Partial<Record<ElectricalTestLevel, string>> = {
+    OBSERVED: "Observado", FAIL: "No apto", POSSIBLE: "Posible deficiencia",
+    PROBABLE: "Probable deficiencia", DEFICIENCY: "Deficiencia", MAJOR: "Deficiencia mayor",
+  };
+  const parts: string[] = [];
+  for (const i of items.filter(x => isFlaggedLevel(x.level))) {
+    parts.push(`${i.equipmentText}: ${i.resultText ?? LEVEL_WORDS[i.level] ?? i.level}${i.finding ? ` — ${i.finding.replace(/\.+$/, "")}` : ""}`);
+  }
+  const ok = items.filter(x => x.level === "OK");
+  if (ok.length > 0) {
+    parts.push(items.length === 1
+      ? `Resultado: ${ok[0]!.resultText ?? "OK"}`
+      : `Satisfactorios (${ok.length}): ${ok.map(x => x.equipmentText).join(", ")}`);
+  }
+  const notMeasured = items.filter(x => x.level === "NOT_MEASURED");
+  if (notMeasured.length > 0) {
+    parts.push(`Sin medir: ${notMeasured.map(x => `${x.equipmentText}${x.resultText ? ` (${x.resultText})` : ""}`).join(", ")}`);
+  }
+  if (conclusion) parts.push(`Conclusión del informe: ${conclusion.replace(/\.+$/, "")}`);
+  return parts.length > 0 ? `${parts.join(". ")}.` : null;
 }
 
 function joinTexts(texts: Array<string | null>): string | null {
