@@ -1222,7 +1222,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(workOrder.riskAnalysisResult ?? "");
   const [consequenceCategory, setConsequenceCategory]   = useState<string>(workOrder.consequenceCategory ?? "");
   const [consequenceRationale, setConsequenceRationale] = useState<string>(workOrder.consequenceRationale ?? "");
-  const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
+  // El Documento checklist ya no se carga desde la OT (sep 2026): queda en null.
+  const [checklistDocFile] = useState<File | null>(null);
   const [checklistDocUrl] = useState(workOrder.checklistDocUrl ?? "");
 
   // ── Result fields ──
@@ -2441,17 +2442,19 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             />
     </>
   );
-  const checklistEl = (
-    <>
-            <div className="space-y-1.5 mt-3">
-              {checklistDocUrl && !checklistDocFile && (
-                <a href={checklistDocUrl} target="_blank" rel="noreferrer" className="block text-xs text-accent underline mb-1 truncate">{checklistDocUrl}</a>
-              )}
-              <input type="file" disabled={!isEditable} onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-xs text-text-industrial/60 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20 disabled:opacity-50 cursor-pointer" />
-            </div>
-    </>
-  );
+  // "Documento checklist" ya no se carga desde la OT (sep 2026, no lo usan). El
+  // dato lo sigue completando el sistema (código del checklist del plan, foto
+  // del checklist) y lo mira la auditoría de cierre; si la OT ya tiene un
+  // archivo adjunto, queda el enlace para verlo.
+  const hasChecklistFile = !!checklistDocUrl?.startsWith("/uploads/");
+  // Sin esa sección, las que vienen después en la vista de hoja corren su número.
+  const ckGap = hasChecklistFile ? 0 : 1;
+  const checklistEl = hasChecklistFile ? (
+    <p className="text-[11px] text-text-industrial/60">
+      {t("wo.modal.checklistDoc")}:{" "}
+      <a href={checklistDocUrl ?? undefined} target="_blank" rel="noreferrer" className="text-accent underline">{t("common.view")}</a>
+    </p>
+  ) : null;
   const newSrModalEl = (
     <>
             {newSrOpen && (
@@ -3213,7 +3216,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   };
   // Abiertos por defecto sólo los bloques de la etapa en curso.
   const secOpen = (id: string) => openSecs[id] ?? (
-    ["what", "form", "safety", "prev"].includes(id) ? guideStep < 2
+    ["what", "form", "safety", "prev", "schedule"].includes(id) ? guideStep < 2
     : ["progress", "used"].includes(id) ? guideStep >= 2
     : guideStep >= 2
   );
@@ -3610,6 +3613,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             disabled={!isEditable || loadingCriteria} className={`${inputCls} resize-y`} placeholder={t("wo.guide.field.criteriaPh")} />
         </>)}
         {plansPanelEl}
+        {checklistEl}
       </GuideSection>
 
       <GuideSection n={2} title={t("wo.guide.sec.form")} subtitle={t("wo.guide.sec.formSub")}
@@ -3726,16 +3730,16 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             disabled={!isEditable}
           />
         </div>
+      </GuideSection>
+
+      <GuideSection n={5} title={t("wo.guide.sec.schedule")} subtitle={t("wo.guide.sec.scheduleSub")}
+        open={secOpen("schedule")} onToggle={() => toggleSec("schedule")}>
         {scheduleEl}
-        <div className="space-y-1.5">
-          {guideLabel(t("wo.modal.checklistDoc"))}
-          {checklistEl}
-        </div>
       </GuideSection>
 
       {stageLabel(t("wo.guide.step.execution"), !isApproved)}
 
-      <GuideSection n={5} title="Avances" subtitle={t("wo.guide.sec.progressSub")}
+      <GuideSection n={6} title="Avances" subtitle={t("wo.guide.sec.progressSub")}
         open={secOpen("progress")} onToggle={() => toggleSec("progress")} {...lockedProps}>
         <ProgressNotesPanel
           workOrderId={workOrder.id}
@@ -3748,14 +3752,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         />
       </GuideSection>
 
-      <GuideSection n={6} title={t("wo.spares.section")} subtitle={t("wo.guide.sec.usedSub")}
+      <GuideSection n={7} title={t("wo.spares.section")} subtitle={t("wo.guide.sec.usedSub")}
         open={secOpen("used")} onToggle={() => toggleSec("used")} {...lockedProps}>
         {spareUsagesBox}
       </GuideSection>
 
       {stageLabel(t("wo.guide.step.closure"), !isApproved)}
 
-      <GuideSection n={7} title={t("wo.guide.sec.closure")} subtitle={t("wo.guide.sec.closureSub")}
+      <GuideSection n={8} title={t("wo.guide.sec.closure")} subtitle={t("wo.guide.sec.closureSub")}
         pill={isResultEditable ? sectionPill(["taskCompleted", "result", "executedBy", "executionDate", ...hourAssets.map(a => `hours:${a.assetId}`)]) : undefined}
         open={secOpen("closure")} onToggle={() => toggleSec("closure")} {...lockedProps}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
@@ -4168,11 +4172,13 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
           </section>
 
-          {/* ── 3. DOCUMENTO CHECKLIST ── */}
-          <section className="space-y-3">
-            <PhaseHeader n={isMercurio ? 2 : 3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
-            {checklistEl}
-          </section>
+          {/* ── 3. DOCUMENTO CHECKLIST: sólo si la OT ya tiene uno adjunto ── */}
+          {hasChecklistFile && (
+            <section className="space-y-3">
+              <PhaseHeader n={isMercurio ? 2 : 3} label={t("wo.modal.checklistDoc")} dotCls="bg-teal-500/15 text-teal-700 dark:text-teal-400" borderCls="border-teal-500/25" />
+              {checklistEl}
+            </section>
+          )}
 
           {/* ── SOLICITUDES DE SERVICIO (SS) ── */}
           {/* Una SS es el pedido de un servicio externo (un taller). No se abre
@@ -4180,7 +4186,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               estado de la OT. Una OT diferida sí admite SS. */}
           <section className="space-y-3">
             <PhaseHeader
-              n={isMercurio ? 3 : 5}
+              n={(isMercurio ? 3 : 5) - ckGap}
               label="Solicitudes de Servicio"
               dotCls="bg-cyan-500/15 text-cyan-700 dark:text-cyan-400"
               borderCls="border-cyan-500/25"
@@ -4284,7 +4290,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {!isMercurio && isApproved && (
           <section className="space-y-3">
             <PhaseHeader
-              n={4}
+              n={4 - ckGap}
               label="Permisos de trabajo"
               dotCls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
               borderCls="border-yellow-500/25"
@@ -4374,7 +4380,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               se recuperó tal cual estaba. */}
           {(workOrder.status === "PLANNED" || workOrder.status === "IN_PROGRESS" || workOrder.status === "ON_HOLD" || workOrder.status === "CLOSED") && (
             <section className="space-y-3">
-              <PhaseHeader n={isMercurio ? 4 : 6} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
+              <PhaseHeader n={(isMercurio ? 4 : 6) - ckGap} label="Avances" dotCls="bg-violet-500/15 text-violet-700 dark:text-violet-400" borderCls="border-violet-500/25" />
               <ProgressNotesPanel
                 workOrderId={workOrder.id}
                 canAdd={isResultEditable}
@@ -4394,7 +4400,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                  observaciones). El "Satisfactorio / Con deficiencias" del
                  formulario controlado se marca arriba, en la sección 4. ── */}
           <section id="wo-result-section" className="space-y-4">
-            <PhaseHeader n={isMercurio ? 6 : 7} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
+            <PhaseHeader n={(isMercurio ? 6 : 7) - ckGap} label={t("wo.modal.resultSection")} dotCls="bg-blue-500/20 text-blue-700 dark:text-blue-400" borderCls="border-blue-500/30" />
             <div className="space-y-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
 
             {/* Con el formulario controlado, RESULTADO se marca en la hoja. */}

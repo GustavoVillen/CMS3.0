@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-09-30] OT: la programacion del trabajo en su propia seccion y sin "Documento checklist"
+Agent: Claude Opus 5.5
+- Formulario guiado: la seccion 4 es "Repuestos y materiales"; fechas de inicio/fin y jornadas pasan a
+  la nueva seccion 5 "Programacion del trabajo" (Avances 6, Repuestos usados 7, Cierre 8).
+- "Documento checklist" se saca de la OT (guiada y hoja) y de Nueva OT (seccion Adjuntos): no lo usan.
+  El campo checklistDocUrl sigue en la base: lo completa el alta desde el plan (codigo del checklist) y
+  lo mira la auditoria de cierre. Si la OT ya tiene un archivo adjunto (9 en produccion), queda un
+  enlace "Ver" en la seccion 1 (y la seccion en la vista de hoja).
+- Solo frontend: deploy = pull + build web.
+
 [2026-09-30] Carga de analisis: la misma fila del informe no se guarda dos veces aunque cambie el equipo
 Agent: Claude Opus 5.5
 - Informes de campana (vibraciones, megado, termografia): el nombre de la fila en el informe se guarda en

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Upload, Wrench, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
@@ -416,7 +416,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [consequenceCategory, setConsequenceCategory] = useState<string>(prefill?.consequenceCategory ?? "");
   const [consequenceRationale, setConsequenceRationale] = useState(prefill?.consequenceRationale ?? "");
   const [estimatedHours, setEstimatedHours] = useState(prefill?.estimatedHours != null ? String(prefill.estimatedHours) : "");
-  const [checklistDocFile, setChecklistDocFile] = useState<File | null>(null);
+  // Ya no se elige desde el formulario (sep 2026): queda en null y el alta no sube nada.
+  const [checklistDocFile] = useState<File | null>(null);
 
   /**
    * Textos heredados de los planes, tal como van a quedar guardados.
@@ -1878,30 +1879,9 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             )}
           </FormSection>
 
-          {/* 5 · Adjuntos */}
-          <FormSection n={++sectionNo} title={t("wo.modal.sec.attach")} subtitle={t("wo.modal.sec.attachSub")}>
-            <div className="space-y-1.5">
-              <label className={labelCls}>{t("wo.modal.checklistDoc")}</label>
-              {prefill?.checklistDocUrl ? (
-                <a href={prefill.checklistDocUrl} target="_blank" rel="noreferrer"
-                  className="block text-xs text-accent underline truncate">{prefill.checklistDocUrl}</a>
-              ) : !prefill ? (
-                <label
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) setChecklistDocFile(f); }}
-                  className="flex flex-col items-center gap-1 rounded-xl border-[1.5px] border-dashed border-fg/25 px-4 py-3.5 text-center text-xs text-text-industrial/60 hover:border-accent/50 cursor-pointer transition-colors"
-                >
-                  <input type="file" className="hidden" onChange={e => setChecklistDocFile(e.target.files?.[0] ?? null)} />
-                  <Upload className="w-4 h-4" />
-                  {checklistDocFile
-                    ? <span className="font-semibold text-fg">{checklistDocFile.name}</span>
-                    : <span>{t("wo.modal.dropChecklist")}</span>}
-                </label>
-              ) : (
-                <p className="text-xs text-text-industrial/40 italic">{t("wo.modal.noChecklistDoc")}</p>
-              )}
-            </div>
-          </FormSection>
+          {/* "Adjuntos" (sólo traía el Documento checklist) se sacó en sep 2026:
+              no lo usan. El código del checklist del plan sigue viajando en
+              prefill.checklistDocUrl al crear la OT. */}
 
           {prefill?.samplingFluidType && (
             <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">
