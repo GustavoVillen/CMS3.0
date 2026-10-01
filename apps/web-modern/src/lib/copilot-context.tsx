@@ -314,6 +314,41 @@ export function useCopilotFormActions(actions: Record<string, CopilotFormAction>
  */
 const DATA_CHANGED_EVENT = "cms3:copilot-data-changed";
 
+// ── Formulario completándose solo ────────────────────────────────────────────
+// La OT que abre el Asesor técnico corre sola los generadores (LOTO, riesgo,
+// consecuencia) y esos campos van cambiando durante varios segundos. Esos
+// cambios no son respuestas del usuario: si el copiloto los tomaba como tales
+// contestaba "Entendido, Nº de viaje 1221" sin que nadie hubiera dicho nada.
+// Mientras dure, el panel no reacciona a la pantalla ni arranca a preguntar;
+// al terminar avisa con un evento para que pregunte lo que de verdad falta.
+const SELF_FILL_END_EVENT = "cms3:form-self-fill-end";
+let selfFillDepth = 0;
+let selfFillEndedAt = 0;
+
+/** Lo llama el formulario al empezar a completarse solo; devuelve con qué avisar que terminó. */
+export function beginFormSelfFill(): () => void {
+  selfFillDepth++;
+  let ended = false;
+  return () => {
+    if (ended) return;
+    ended = true;
+    selfFillDepth = Math.max(0, selfFillDepth - 1);
+    selfFillEndedAt = Date.now();
+    if (selfFillDepth === 0) window.dispatchEvent(new CustomEvent(SELF_FILL_END_EVENT));
+  };
+}
+
+/** Si algún formulario se está completando solo (o acaba de terminar). */
+export function isFormSelfFilling(graceMs = 2500): boolean {
+  return selfFillDepth > 0 || Date.now() - selfFillEndedAt < graceMs;
+}
+
+/** Escucha el fin del completado automático. */
+export function onFormSelfFillEnd(handler: () => void): () => void {
+  window.addEventListener(SELF_FILL_END_EVENT, handler);
+  return () => window.removeEventListener(SELF_FILL_END_EVENT, handler);
+}
+
 /** La dispara el panel del copiloto después de que el servidor confirmó la escritura. */
 export function notifyCopilotDataChanged(): void {
   window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT));

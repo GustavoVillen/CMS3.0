@@ -93,6 +93,57 @@ export function currentPlan(f: AdvisorFinding, messages: AdvisorMessage[]): Advi
   return { action: f.recommendedAction, who: f.responsibleRole, when: f.target, targetDays: f.targetDays, verify: f.verify, adjusted: false, appliedId: null };
 }
 
+// ── "Crear la OT" desde un tema (01/10/2026) ─────────────────────────────────
+// La OT se abre completa con lo que ya dice el tema: equipo, tarea, plazo y con
+// qué se cierra. Lo de seguridad (LOTO, riesgo, consecuencia) lo completan los
+// generadores del formulario. Todo sale del tema y de los registros citados.
+
+/** Área del REGI-MAN-02.3 ("Asignado a") según quién tiene que hacerlo. */
+function assignedAreaFor(who: string): string | undefined {
+  const w = who.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (/taller|proveedor|tercer|buzo|astillero|contratist/.test(w)) return "TERCERIZADO";
+  if (/capitan|jefe de maquinas|maquinista|tripul|marinero|motorista/.test(w)) return "TRIPULACION";
+  if (/ssma|seguridad|operacion/.test(w)) return "OPS_SSMA";
+  if (/superintend|tecnic|director|gerent|ingenier/.test(w)) return "TECNICA";
+  return undefined;
+}
+
+/** yyyy-mm-dd local de hoy + n días. */
+function inDays(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function woValuesFromFinding(
+  f: AdvisorFinding,
+  plan: AdvisorProposal,
+  evidence: EvidenceItem[],
+  vesselCode: string | null,
+  labels: { reason: string; background: string },
+) {
+  const cited = evidence.filter(e => !vesselCode || !e.vesselCode || e.vesselCode === vesselCode);
+  // El equipo: el que más aparece en los registros que cita el tema.
+  const byAsset = new Map<string, number>();
+  for (const e of cited) if (e.assetName) byAsset.set(e.assetName, (byAsset.get(e.assetName) ?? 0) + 1);
+  const assetName = [...byAsset.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const codes = [...new Set(cited.map(e => e.code).filter((c): c is string => !!c))];
+  return {
+    description: [
+      plan.action,
+      f.whyItMatters && `${labels.reason}: ${f.whyItMatters}`,
+      codes.length > 0 && `${labels.background}: ${codes.join(", ")}`,
+    ].filter(Boolean).join("\n\n"),
+    dueDate: plan.targetDays != null ? inDays(plan.targetDays) : undefined,
+    acceptanceCriteria: plan.verify || undefined,
+    assetName,
+    // Lo pide la oficina técnica: el asesor es del Director de Mantenimiento.
+    requestedByArea: "TECNICA",
+    assignedToArea: plan.who ? assignedAreaFor(plan.who) : undefined,
+    autoFill: true,
+  };
+}
+
 // ── Radiografía de equipos (20/09/2026) ──────────────────────────────────────
 
 export type AssetHealthState = "FRAGILE" | "WATCH" | "OK";

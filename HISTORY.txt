@@ -1,5 +1,22 @@
 HISTORY.txt
 
+[2026-10-01] Asesor tecnico: "Crear la OT" abre la OT completa
+Agent: Claude Opus 5.5
+- Antes cargaba solo buque, titulo y prioridad. Ahora, desde el tema (advisor-types woValuesFromFinding):
+  equipo (el mas citado en los registros del tema), tarea (que hacer + motivo + antecedentes), vencimiento
+  (hoy + plazo), criterio de cierre ("se cierra con"), Solicitado por Tecnica, Asignado a segun quien,
+  tipo Correctivo programado.
+- CreateWorkOrderModal: prop initialValues (modo standalone). El equipo se busca por nombre entre los del
+  buque (si no coincide, lo elige la IA con /suggest-asset). Con autoFill corren solos los generadores de
+  la chispita (criterios si faltan, LOTO, riesgo despues del LOTO, consecuencia), la criticidad sale del
+  equipo y el Sistema del sector de sus planes. Nada se guarda sin "Crear OT".
+- Quedan para la persona: N de viaje, ubicacion, condicion del buque, tecnico y horas estimadas.
+- copilot-context: beginFormSelfFill / isFormSelfFilling / onFormSelfFillEnd. Mientras la OT se completa
+  sola el copiloto no toma esos cambios como respuestas (antes contesto "Entendido, N de viaje 1221"
+  inventado) y recien al terminar arranca a preguntar lo que falta. Prompt: nunca nombrar un valor que
+  no este en fieldValues.
+- Frontend + backend (prompt): pull + build web + restart.
+
 [2026-10-01] Copiloto: los campos que manda siempre entran al formulario abierto
 Agent: Claude Opus 5.5
 - Seguia fallando "a veces": el arreglo anterior adivinaba si la respuesta era un si ("1" solo valia si

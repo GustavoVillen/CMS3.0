@@ -139,7 +139,7 @@ function getSpanishVoice(): SpeechSynthesisVoice | null {
   return null;
 }
 import { api, ApiError } from "../lib/api";
-import { useCopilotScreenContext, notifyCopilotDataChanged, type CopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotScreenContext, notifyCopilotDataChanged, isFormSelfFilling, onFormSelfFillEnd, type CopilotScreenContext } from "../lib/copilot-context";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
@@ -1452,6 +1452,8 @@ export const CopilotoPanel: React.FC = () => {
     if (!assist || !prev || prev.flow !== assist.flow || !offeredFlows.has(assist.flow)) return;
     // Lo acaba de cargar el copiloto: no es el usuario (el paso siguiente lo maneja pendingStepRef).
     if (Date.now() - lastApplyAtRef.current < 2500) return;
+    // El formulario se está completando solo (OT del Asesor técnico): tampoco es el usuario.
+    if (isFormSelfFilling()) return;
     // El copiloto ya pidió seguir en este cambio de paso: no preguntar dos veces.
     if (pendingStepRef.current || Date.now() - lastNextStepAtRef.current < 3000) return;
 
@@ -1475,7 +1477,7 @@ export const CopilotoPanel: React.FC = () => {
       const ctx = screenContextRef.current;
       const still = awaitingRef.current;
       if (!ctx?.assist || !still || still.key !== aw.key || ctx.screen !== aw.screen) return;
-      if (!(ctx.fieldValues?.[aw.key])) return;
+      if (!(ctx.fieldValues?.[aw.key]) || isFormSelfFilling()) return;
       continueFromScreen(aw.flow, SCREEN_CHANGE_MESSAGE);
     }, 1500);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1490,10 +1492,14 @@ export const CopilotoPanel: React.FC = () => {
     if (!pending || streaming) return;
     if (!expandedRef.current) { pendingSystemMsgRef.current = null; return; }
     if (screenContext?.assist?.flow !== pending.flow) return;
+    // Mientras el formulario se completa solo, se espera: al terminar (evento
+    // de abajo) el copiloto ve la pantalla completa y pregunta sólo lo que falta.
+    if (isFormSelfFilling(0)) return;
     pendingSystemMsgRef.current = null;
     void sendMessageRef.current(pending.text, { hidden: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [systemMsgTick, streaming, screenContext]);
+  useEffect(() => onFormSelfFillEnd(() => setSystemMsgTick(n => n + 1)), []);
   useEffect(() => {
     if (!requestMessage) return;
     if (!expanded) setExpanded(true);

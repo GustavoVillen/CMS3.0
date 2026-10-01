@@ -20,14 +20,14 @@ import { useT } from "../lib/i18n";
 import { fmtDate } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
-import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
+import { CreateWorkOrderModal, type StandaloneInitialValues } from "../components/CreateWorkOrderModal";
 import { useCopilotEmitter } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { EvidenceList, DraftPanel, FollowPanel, TalkBox } from "../components/maintenance-advisor/AdvisorParts";
 import {
   AREAS, AREA_ICON, AREA_LABEL, ASSET_STATE_STYLE, BUCKETS, BUCKET_ICON, BUCKET_LABEL, BUCKET_OF, BUCKET_STYLE,
   HEALTH_LABEL, HEALTH_STYLE, SIGNAL_LABEL, SIGNAL_STRONG,
-  areaHealth, currentPlan, dueBadge, findingAreas, findingEvidence, findingVesselCodes, trendOf,
+  areaHealth, currentPlan, dueBadge, findingAreas, findingEvidence, findingVesselCodes, trendOf, woValuesFromFinding,
   type AdvisorAction, type AdvisorFinding, type AdvisorMessage, type AdvisorMetrics, type AdvisorTrend, type Area, type Bucket,
   type AssetHealthResult, type AssetHealthRow, type EvidenceItem,
 } from "../components/maintenance-advisor/advisor-types";
@@ -91,7 +91,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [actions, setActions] = useState<AdvisorAction[]>([]);
-  const [woFor, setWoFor] = useState<{ vesselCode?: string; title: string; priority: string } | null>(null);
+  const [woFor, setWoFor] = useState<{ vesselCode?: string; title: string; priority: string; values: StandaloneInitialValues } | null>(null);
   const [xrayOpen, setXrayOpen] = useState(false);
   // Conversación del Director con el asesor, de todos los temas del informe abierto.
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
@@ -422,7 +422,7 @@ export const MaintenanceAdvisorPage: React.FC = () => {
                           onMessages={mergeMessages}
                           open={openKey === f.key}
                           onToggle={() => setOpenKey(k => (k === f.key ? null : f.key))}
-                          onCreateWo={(vesselCode) => setWoFor({ vesselCode: vesselCode ?? undefined, title: f.title.slice(0, 180), priority: f.priority })}
+                          onCreateWo={(vesselCode, values) => setWoFor({ vesselCode: vesselCode ?? undefined, title: f.title.slice(0, 180), priority: f.priority, values })}
                           onFollowed={() => { void loadActions(); }}
                         />
                       ))}
@@ -452,6 +452,8 @@ export const MaintenanceAdvisorPage: React.FC = () => {
           initialVesselCode={woFor.vesselCode}
           initialTitle={woFor.title}
           initialPriority={woFor.priority}
+          initialMaintKind="CORRECTIVO_PROGRAMADO"
+          initialValues={woFor.values}
           onClose={() => setWoFor(null)}
           onSaved={() => { setWoFor(null); }}
         />
@@ -591,7 +593,7 @@ const Topic: React.FC<{
   following: boolean;
   open: boolean;
   onToggle: () => void;
-  onCreateWo: (vesselCode: string | null) => void;
+  onCreateWo: (vesselCode: string | null, values: StandaloneInitialValues) => void;
   onFollowed: () => void;
   messages: AdvisorMessage[];
   onMessages: (items: AdvisorMessage[]) => void;
@@ -674,7 +676,7 @@ const Topic: React.FC<{
               </button>
               {/* Sin evidencia verificable no se abre una OT: primero se confirma el hecho. */}
               {!f.noEvidence && (
-                <button className={`${actBtn} border-fg/10`} onClick={() => onCreateWo(singleVessel)}>
+                <button className={`${actBtn} border-fg/10`} onClick={() => onCreateWo(singleVessel, woValuesFromFinding(f, plan, evidence, singleVessel, { reason: t("advisor.wo.reason"), background: t("advisor.wo.background") }))}>
                   <span className="text-xl" aria-hidden>🛠️</span>
                   <span><b className="block text-[13.5px] text-fg">{t("advisor.act.wo")}</b><small className="block text-[11.5px] text-text-industrial/70">{t("advisor.act.woHint")}</small></span>
                 </button>

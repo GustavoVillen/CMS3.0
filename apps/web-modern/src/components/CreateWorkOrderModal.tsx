@@ -13,7 +13,7 @@ import { AssigneeSelect } from "./AssigneeSelect";
 import { PlanLinkSuggestionDialog, type PlanLinkCandidate } from "./PlanLinkSuggestionDialog";
 import { AutoTextArea } from "./AutoTextArea";
 import { findClassInspectionAsset } from "../lib/class-inspection-asset";
-import { useCopilotAssist, type CopilotAssistField } from "../lib/copilot-context";
+import { useCopilotAssist, beginFormSelfFill, type CopilotAssistField } from "../lib/copilot-context";
 import { useFetch } from "../lib/hooks";
 import { PersonSelect } from "./PersonSelect";
 import { GuideField, GuideNeedTag, RequiredMark } from "./GuideKit";
@@ -152,7 +152,7 @@ function autoRows(text: string, min: number, max = 12): number {
 /** Taller configurado en los planes de la OT (con para qué se lo contrata). */
 interface PlanProviderPreview { id: string; name: string; purposes: string[]; taskCodes: string[] }
 
-interface Asset { id: string; assetCode: string; name: string; }
+interface Asset { id: string; assetCode: string; name: string; criticality?: string | null }
 interface Vessel { code: string; name: string; }
 interface PlanCandidateApi {
   id: string; taskCode: string; title: string; triggerType: string;
@@ -168,6 +168,22 @@ interface ExtractedWorkOrderApi {
   assetReferenceText: ExtractedFieldApi<string>;
   assetIdSuggestion: { id: string; name: string; score: number } | null;
 }
+
+export interface StandaloneInitialValues {
+  description?: string;
+  /** yyyy-mm-dd */
+  dueDate?: string;
+  acceptanceCriteria?: string;
+  assetName?: string;
+  requestedByArea?: string;
+  assignedToArea?: string;
+  autoFill?: boolean;
+}
+
+/** Sector del plan → "Sistema" del formulario REGI-MAN-02.3. */
+const SYSTEM_AREA_BY_DEPARTMENT: Record<string, string> = {
+  MAQUINAS: "MAQUINAS", CUBIERTA: "RE_CUBIERTA", BARCAZA: "BARCAZAS",
+};
 
 interface CreateWorkOrderModalProps {
   prefill?: WoPrefill;
@@ -203,6 +219,14 @@ interface CreateWorkOrderModalProps {
   serviceRequestMode?: boolean;
   /** Talleres elegidos de antemano: se abre una SS por cada uno al guardar. */
   initialProviderIds?: string[];
+  /**
+   * Modo standalone: la OT ya viene definida (p. ej. una recomendación del
+   * Asesor técnico) y se abre completa. `assetName` se busca entre los equipos
+   * del buque. Con `autoFill`, al tener equipo y tarea corren solos los mismos
+   * generadores de la chispita (LOTO, riesgo, consecuencia) y se toman del
+   * equipo su criticidad y del plan su sistema. Nada se guarda sin Guardar.
+   */
+  initialValues?: StandaloneInitialValues;
   onClose: () => void;
   onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
 }
@@ -312,7 +336,7 @@ function AiSuggestButton({ label, onClick, loading, dim, title }: {
   );
 }
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onChangeContext, serviceRequestMode, initialProviderIds, onClose, onSaved }) => {
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onChangeContext, serviceRequestMode, initialProviderIds, initialValues, onClose, onSaved }) => {
   const t = useT();
   const { user, tenant } = useAuth();
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
@@ -331,6 +355,12 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [assets, setAssets]           = useState<Asset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [resolvedAssetName, setResolvedAssetName] = useState(prefill?.assetName ?? null);
+  /** Equipo que trae la OT ya definida, por nombre: se busca al cargar los equipos del buque. */
+  const wantedAssetName = initialValues?.assetName?.trim() || null;
+  /** Mientras la OT se completa sola, el copiloto no toma esos cambios como respuestas. */
+  const endSelfFillRef = useRef<(() => void) | null>(null);
+  const autoPendingRef = useRef<Promise<unknown>[]>([]);
+  useEffect(() => () => { endSelfFillRef.current?.(); }, []);
   const [type, setType]               = useState(prefill?.type ?? "PREVENTIVE");
   // Mercurio elige el tipo FINO del REGI-MAN-02.3 (5 opciones) en vez del grueso
   // (Preventivo/Correctivo/Inspección): es el que dice su formulario. El backend
@@ -343,8 +373,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // Recuadros del formulario REGI-MAN-02.3 (Mercurio), modo standalone.
   // assignedToArea arranca en TERCERIZADO cuando el flujo ya exige proveedor
   // (ej. "Nueva Solicitud de Servicio"), para no pedir un clic de más.
-  const [requestedByArea, setRequestedByArea] = useState("");
-  const [assignedToArea, setAssignedToArea]   = useState(requireProvider ? "TERCERIZADO" : "");
+  const [requestedByArea, setRequestedByArea] = useState(initialValues?.requestedByArea ?? "");
+  const [assignedToArea, setAssignedToArea]   = useState(requireProvider ? "TERCERIZADO" : (initialValues?.assignedToArea ?? ""));
   // En modo prefill el valor por defecto lo trae el plan (Proveedor→Tercerizado,
   // Cubierta/Máquinas/Barcaza→Tripulación); una vez que el usuario lo toca a
   // mano, ese valor gana y el efecto de abajo deja de pisarlo.
@@ -406,10 +436,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       ? initialProviderIds.map(providerId => ({ providerId, purpose: "" }))
       : requireProvider ? [{ providerId: "", purpose: "" }] : [],
   );
-  const [description, setDescription]           = useState(prefill?.description ?? "");
+  const [description, setDescription]           = useState(prefill?.description ?? initialValues?.description ?? "");
   const [assignedTo, setAssignedTo]             = useState(prefill?.responsible ?? "");
-  const [dueDate, setDueDate]                   = useState(prefill?.dueDate ? prefill.dueDate.slice(0, 10) : "");
-  const [acceptanceCriteria, setAcceptanceCriteria] = useState(prefill?.acceptanceCriteria ?? "");
+  const [dueDate, setDueDate]                   = useState(prefill?.dueDate ? prefill.dueDate.slice(0, 10) : (initialValues?.dueDate ?? ""));
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState(prefill?.acceptanceCriteria ?? initialValues?.acceptanceCriteria ?? "");
   const [loto, setLoto]                         = useState(prefill?.loto ?? "");
   const [riskLevel, setRiskLevel]               = useState(prefill?.riskLevel ?? "");
   const [riskAnalysisResult, setRiskAnalysisResult] = useState(prefill?.riskAnalysisResult ?? "");
@@ -923,12 +953,70 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               }
             } catch { /* sin sugerencias automáticas; el usuario puede vincular a mano */ }
           }
+        } else if (wantedAssetName && !initialAssetId) {
+          // OT que ya viene definida (Asesor técnico): el equipo llega por
+          // nombre. Primero igual al de la lista; si no, lo elige la IA entre
+          // los equipos de este buque (mismo endpoint que en los hallazgos).
+          if (initialValues?.autoFill && !endSelfFillRef.current) endSelfFillRef.current = beginFormSelfFill();
+          const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+          const exact = items.find(a => norm(a.name) === norm(wantedAssetName));
+          let found = !!exact;
+          if (exact) setAssetId(exact.id);
+          else if (items.length > 0) {
+            try {
+              const r = await api.post<{ assetId: string | null }>("/app/pms/work-orders/suggest-asset", {
+                taskDesc: [wantedAssetName, initialTitle, initialValues?.description].filter(Boolean).join(". "),
+                assets: items.map(a => ({ id: a.id, code: a.assetCode, name: a.name })),
+              });
+              if (r.assetId && items.some(a => a.id === r.assetId)) { setAssetId(r.assetId); found = true; }
+            } catch { /* queda para elegir a mano */ }
+          }
+          // Sin equipo no se completa el resto solo: el copiloto vuelve a escuchar.
+          if (!found) { endSelfFillRef.current?.(); endSelfFillRef.current = null; }
         }
       } catch { setAssets([]); }
       finally { setLoadingAssets(false); }
     }, 400);
     return () => clearTimeout(debounceRef.current);
-  }, [vesselCode, prefill, autoSelectClassInspectionAsset, initialAssetId]);
+    // initialTitle / initialValues sólo se leen al buscar el equipo de este buque.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vesselCode, prefill, autoSelectClassInspectionAsset, initialAssetId, wantedAssetName]);
+
+  // ── OT que ya viene definida: completar el resto sola ──
+  // Con equipo y tarea cargados corren los mismos generadores de la chispita.
+  // El riesgo va después del LOTO porque lo usa. Corre una sola vez.
+  const autoFillStageRef = useRef<"idle" | "running" | "done">(initialValues?.autoFill && !prefill ? "idle" : "done");
+  const [autoLotoDone, setAutoLotoDone] = useState(false);
+  useEffect(() => {
+    if (autoFillStageRef.current !== "idle" || !assetId || !aiAssetLabel || !description.trim()) return;
+    autoFillStageRef.current = "running";
+    if (!endSelfFillRef.current) endSelfFillRef.current = beginFormSelfFill();
+    const asset = assets.find(a => a.id === assetId);
+    if (asset?.criticality && ["A", "B", "C"].includes(asset.criticality)) setCriticality(asset.criticality);
+    // Sistema: el sector de los planes del equipo (Máquinas, Cubierta, Barcaza).
+    const systemP = systemArea ? Promise.resolve() : api
+      .get<{ items: Array<{ department?: string | null }> }>(`/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=100`)
+      .then(res => {
+        const counts = new Map<string, number>();
+        for (const p of res.items ?? []) {
+          const area = p.department ? SYSTEM_AREA_BY_DEPARTMENT[p.department] : undefined;
+          if (area) counts.set(area, (counts.get(area) ?? 0) + 1);
+        }
+        const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+        if (top) setSystemArea(prev => prev || top);
+      })
+      .catch(() => { /* queda para elegir a mano */ });
+    autoPendingRef.current = [systemP, handleConsequenceClick()];
+    void (acceptanceCriteria.trim() ? Promise.resolve() : handleCriteriaClick())
+      .then(() => handleLotoClick())
+      .finally(() => setAutoLotoDone(true));
+  }, [assetId, aiAssetLabel, description, assets, systemArea, acceptanceCriteria, handleCriteriaClick, handleLotoClick, handleConsequenceClick]);
+  useEffect(() => {
+    if (!autoLotoDone || autoFillStageRef.current !== "running") return;
+    autoFillStageRef.current = "done";
+    void Promise.allSettled([handleRiskClick(), ...autoPendingRef.current])
+      .then(() => { endSelfFillRef.current?.(); endSelfFillRef.current = null; });
+  }, [autoLotoDone, handleRiskClick]);
 
   // Asset list for prefill mode when the source has no asset (audit findings): user picks one.
   useEffect(() => {
