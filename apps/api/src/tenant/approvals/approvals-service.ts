@@ -30,6 +30,8 @@ export interface PendingApprovalItem {
   vesselName: string | null;
   /** Equipo. En la SS sale de la OT de origen (la SS no guarda assetId propio). */
   assetName: string | null;
+  /** Id del equipo (mismo origen que assetName): el nombre lleva a sus planes. */
+  assetId: string | null;
   title: string | null;
   /** LA TAREA: descripción del trabajo (OT) o del servicio pedido (SS). */
   task: string | null;
@@ -431,6 +433,7 @@ export async function listPendingApprovals(
       vesselCode: r.vesselCode,
       vesselName: vesselNameById.get(r.vesselCode) ?? null,
       assetName: r.assetId ? (assetNameById.get(r.assetId) ?? null) : null,
+      assetId: r.assetId ?? null,
       title: r.title ?? null,
       task: r.description ?? null,
       causes: null,
@@ -460,6 +463,7 @@ export async function listPendingApprovals(
       vesselCode: r.vesselCode,
       vesselName: vesselNameById.get(r.vesselCode) ?? null,
       assetName: wo?.assetId ? (assetNameById.get(wo.assetId) ?? null) : null,
+      assetId: wo?.assetId ?? null,
       title: r.title ?? null,
       task: r.description ?? null,
       causes: r.causes ?? null,

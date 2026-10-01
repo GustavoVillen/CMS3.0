@@ -28,7 +28,7 @@
 // Acá no hay reglas de negocio propias y no debería agregarse ninguna.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardCheck, Hammer, Handshake, ListTree, Loader2, Pause, Pencil, Search, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
@@ -59,6 +59,7 @@ interface PendingItem {
   vesselCode: string;
   vesselName: string | null;
   assetName: string | null;
+  assetId?: string | null;
   title: string | null;
   task: string | null;
   priority: string | null;
@@ -175,8 +176,15 @@ const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
 
 export const ApprovalsPage: React.FC = () => {
   const t = useT();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending?all=1");
+
+  /** El nombre del equipo lleva a Planes, ya filtrado por ese equipo (igual que la Planilla). */
+  const openAssetPlans = (r: { vesselCode: string; assetId?: string | null }) => {
+    if (!r.assetId) return;
+    navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(r.vesselCode)}&assetId=${encodeURIComponent(r.assetId)}`);
+  };
 
   const [query, setQuery]     = useState("");
   const [cardFilter, setCardFilter] = useState<CardKey | "">("");
@@ -875,16 +883,26 @@ export const ApprovalsPage: React.FC = () => {
                   </tr>
                 );
                 // El nombre del equipo pliega y despliega sus filas.
-                const assetCell = groupByAsset ? (
-                  <button type="button" onClick={() => toggleAsset(key)}
-                    title={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
-                    className="inline-flex w-full items-center justify-center gap-1 font-bold hover:underline">
-                    {isCollapsed
-                      ? <ChevronRight className="w-3 h-3 shrink-0 opacity-60" />
-                      : <ChevronDown className="w-3 h-3 shrink-0 opacity-60" />}
-                    <span>{r.assetName ?? "—"}</span>
+                // El nombre lleva a los planes del equipo; la flecha pliega sus filas.
+                const assetName = r.assetId ? (
+                  <button type="button" onClick={() => openAssetPlans(r)} title={t("msheet.openAssetPlans")}
+                    className="font-bold hover:underline">
+                    {r.assetName ?? "—"}
                   </button>
                 ) : (r.assetName ?? "—");
+                const assetCell = groupByAsset ? (
+                  <span className="inline-flex w-full items-center justify-center gap-1">
+                    <button type="button" onClick={() => toggleAsset(key)}
+                      title={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
+                      aria-label={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
+                      className="shrink-0 rounded p-0.5 hover:bg-black/10">
+                      {isCollapsed
+                        ? <ChevronRight className="w-3 h-3 opacity-60" />
+                        : <ChevronDown className="w-3 h-3 opacity-60" />}
+                    </button>
+                    <span className="font-bold">{assetName}</span>
+                  </span>
+                ) : assetName;
 
                 // Equipo plegado: una sola línea con cuántos registros tiene y
                 // cuántos están vencidos (mismo criterio que la tarjeta).
