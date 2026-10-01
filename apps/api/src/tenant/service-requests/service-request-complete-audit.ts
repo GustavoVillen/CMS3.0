@@ -25,8 +25,10 @@ import { loadServiceRequestPdfContext } from "../pms/service-request-pdf/data-lo
 import { listHojaRuta, listServiceRequestLabSamples } from "./service-requests-service";
 import {
   ISM_CLAUSES, TMSA_ELEMENTS, AUDIT_RESULT_SCHEMA, normalizeAuditResult,
+  CONDITION_ANALYSES_RULE, loadConditionAnalyses,
   type WoCloseAuditResult,
 } from "../work-orders/work-order-close-audit";
+import { getPrismaClient } from "../../platform/data/prisma-client";
 
 const FEATURE = "sr_complete_audit";
 
@@ -51,6 +53,7 @@ QUÉ REVISAR — la SS COMPLETA, no sólo la recepción
 - Recepción: ¿quedó quién recibió y si hubo conformidad? Una recepción NO CONFORME no se completa y se olvida: tiene que tener un próximo paso (reclamo al taller, defecto, nueva SS o nueva OT).
 - Coherencia: ¿la conformidad declarada se sostiene con lo que dicen la hoja de ruta, las observaciones y los comentarios? Un "conforme" con una novedad que habla de una falla es un hallazgo.
 - Muestras de laboratorio: si viajaron muestras, ¿estaban numeradas? Si el resultado todavía no está cargado, el paso es cargarlo en Muestreos cuando llegue el informe.
+${CONDITION_ANALYSES_RULE}
 - OT madre: la SS no cierra la OT. Si la OT sigue abierta, indicá qué evidencia de este servicio tiene que quedar en la OT para cerrarla.
 - Seguridad: si el equipo es crítico (ISM 10.3) o el pedido marca "AFECTA SEGURIDAD", el estándar es más exigente.
 
@@ -106,6 +109,7 @@ function buildAuditPayload(
   draft: SrCompleteAuditDraft,
   answers: Record<string, string>,
   sobreElBuque: string | null,
+  analisisDeCondicion: Array<Record<string, unknown>> = [],
 ) {
   const sr = ctx.sr ?? {};
   const wo = ctx.wo ?? {};
@@ -153,6 +157,7 @@ function buildAuditPayload(
     },
     hojaDeRuta: hojaRuta.map(r => ({ fecha: iso(r.fecha), novedad: txt(r.novedad), asienta: txt(r.asienta) })),
     // Sólo frascos: megado, vibraciones y termografía no despachan nada.
+    analisisDeCondicion,
     muestrasDeLaboratorio: samples.carriesSamples
       ? samples.items.filter(s => s.kind === "FLUID").map(s => ({
           equipo: s.assetName ?? null,
@@ -195,9 +200,11 @@ export async function auditServiceRequestComplete(
     listServiceRequestLabSamples(session, serviceRequestId),
   ]);
   const vesselCode: string | null = (ctx.sr as any)?.vesselCode ?? null;
+  const srRow = ctx.sr as { tenantId: string; workOrderId: string };
   const payload = buildAuditPayload(
     ctx, hojaRuta, samples, body.draft ?? {}, body.answers ?? {},
     await getVesselAiContext(session.tenantSlug, vesselCode),
+    await loadConditionAnalyses(getPrismaClient(), srRow.tenantId, srRow.workOrderId),
   );
 
   // Razonamiento extendido DESACTIVADO: Sonnet 5 lo trae activo y consume todo

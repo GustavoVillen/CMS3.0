@@ -25,6 +25,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { loadWorkOrderPdfContext } from "../pms/work-order-pdf/data-loader";
+import { getPrismaClient } from "../../platform/data/prisma-client";
 
 const FEATURE = "wo_close_audit";
 
@@ -58,6 +59,9 @@ export const TMSA_ELEMENTS = `4.1 — Cobertura del PMS y uso del sistema de def
 // sube el número, revisar también el texto de la regla en el prompt.
 export const LOTO_STRICTNESS = 3;
 
+/** Regla del prompt para los análisis de condición (OT y SS la comparten). */
+export const CONDITION_ANALYSES_RULE = `- Análisis de condición ("analisisDeCondicion"): son los registros FA del sistema (aceite, megado, vibraciones, termografía), cada uno con el informe del laboratorio o del taller. Un análisis con resultadoCargado = true y veredicto ya está EVALUADO: es la evidencia de las mediciones y del informe. No lo pidas, no preguntes por las mediciones, los valores, el instrumento ni el informe del taller, y no lo cuentes como hallazgo. Sólo si un análisis tiene veredicto distinto de NORMAL, fijate que la OT diga qué se hizo con eso (defecto, OT de reparación). Si un equipo del trabajo quedó sin análisis cargado, eso sí puede ser un hallazgo.`;
+
 const AUDIT_PROMPT = `Sos auditor senior de Sistemas de Gestión de Mantenimiento de una naviera. Tenés experiencia en auditorías TMSA (OCIMF), verificaciones ISM de bandera y sociedad de clasificación, y en las buenas prácticas de mantenimiento de maquinaria naval.
 
 Te paso una Orden de Trabajo que se está por CERRAR, con toda su evidencia. Tu trabajo es auditarla como si estuvieras parado frente al Jefe de Máquinas antes de firmar el cierre: revisar que el trabajo se haya hecho como corresponde, que la evidencia alcance para defender el cierre en una auditoría, y que no queden cabos sueltos.
@@ -82,6 +86,7 @@ QUÉ REVISAR — la OT COMPLETA, no sólo el cierre
 - Pendientes: si quedó algo pendiente, o si la tarea NO se concluyó, eso NO se cierra y se olvida: tiene que quedar planificado en algún lado.
 - Trazabilidad: ¿hay defecto, diferimiento, MOC, RCA o SS que debería haberse abierto y no se abrió?
 - Plan de mantenimiento: si la OT viene de un plan, ¿el cierre alcanza para acreditar la ejecución del plan?
+${CONDITION_ANALYSES_RULE}
 
 REGLAS INNEGOCIABLES
 - Auditás SÓLO con la evidencia que te paso. No inventes datos, fechas, valores ni normas.
@@ -210,11 +215,57 @@ const txt = (v: unknown): string | null => {
 };
 
 /**
+ * Análisis de condición de la OT (los FA: aceite, megado, vibraciones,
+ * termografía), con su resultado y si el informe del laboratorio o del taller
+ * quedó adjunto. Son la evidencia de las mediciones: sin esto la auditoría
+ * pedía "el informe de mediciones del taller" cuando ya estaba cargado.
+ */
+export async function loadConditionAnalyses(
+  prisma: any,
+  tenantId: string,
+  workOrderId: string,
+): Promise<Array<Record<string, unknown>>> {
+  if (!prisma || !workOrderId) return [];
+  const rows: any[] = await prisma.fluidSample.findMany({
+    where: { tenantId, sourceWorkOrderId: workOrderId, deletedAt: null },
+    select: {
+      sampleCode: true, assetId: true, kind: true, fluidType: true, labName: true, labReference: true, sampledAt: true,
+      result: { select: { verdict: true, summary: true, reportUrl: true } },
+    },
+    orderBy: { sampleCode: "asc" },
+  });
+  if (rows.length === 0) return [];
+  const assets: Array<{ id: string; name: string | null }> = await prisma.asset.findMany({
+    where: { tenantId, id: { in: [...new Set(rows.map(r => r.assetId))] } },
+    select: { id: true, name: true },
+  });
+  const nameOf = new Map(assets.map(a => [a.id, a.name]));
+  return rows.map(r => ({
+    codigo: r.sampleCode,
+    equipo: nameOf.get(r.assetId) ?? null,
+    tipo: r.kind === "FLUID" ? `FLUID ${r.fluidType ?? ""}`.trim() : r.kind,
+    laboratorioOTaller: txt(r.labName),
+    numeroDeInforme: txt(r.labReference),
+    fechaDeMedicion: iso(r.sampledAt),
+    resultadoCargado: !!r.result,
+    veredicto: r.result?.verdict ?? null,
+    resumenDelResultado: txt(r.result?.summary)?.slice(0, 300) ?? null,
+    informeAdjunto: !!r.result?.reportUrl,
+  }));
+}
+
+/**
  * Arma el JSON que ve la IA. Sale del mismo contexto que imprime el formulario
  * controlado, así que auditar y firmar miran EXACTAMENTE lo mismo. Se dejan
  * afuera los Buffers (logos, firmas, fotos): del adjunto sólo importa que exista.
  */
-function buildAuditPayload(ctx: any, draft: WoCloseAuditDraft, answers: Record<string, string>, sobreElBuque?: string | null) {
+function buildAuditPayload(
+  ctx: any,
+  draft: WoCloseAuditDraft,
+  answers: Record<string, string>,
+  sobreElBuque?: string | null,
+  analisisDeCondicion: Array<Record<string, unknown>> = [],
+) {
   const wo = ctx.wo ?? {};
   return {
     orden: {
@@ -288,6 +339,7 @@ function buildAuditPayload(ctx: any, draft: WoCloseAuditDraft, answers: Record<s
     })),
     fotosDeAvance: (ctx.progressPhotos ?? []).length,
     solicitudesDeServicio: ctx.serviceRequestCodes ?? [],
+    analisisDeCondicion,
     documentos: {
       checklistCargado: !!txt(wo.checklistDocUrl),
       respaldoCargado: !!txt(wo.supportingDocUrl),
@@ -322,9 +374,11 @@ export async function auditWorkOrderClose(
   // Misma lectura que el PDF del formulario: auditar y firmar miran lo mismo.
   // Ya filtra por tenant y vessel scope (getTenantWorkOrder).
   const ctx = await loadWorkOrderPdfContext(session, workOrderId);
+  const wo = ctx.wo as { id: string; tenantId: string; vesselCode?: string };
   const payload = buildAuditPayload(
     ctx, body.draft ?? {}, body.answers ?? {},
-    await getVesselAiContext(session.tenantSlug, ctx.wo?.vesselCode),
+    await getVesselAiContext(session.tenantSlug, wo?.vesselCode),
+    await loadConditionAnalyses(getPrismaClient(), wo.tenantId, wo.id),
   );
 
   // Razonamiento extendido DESACTIVADO: Sonnet 5 lo trae activo y en tareas
