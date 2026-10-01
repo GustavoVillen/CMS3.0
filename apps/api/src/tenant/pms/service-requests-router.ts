@@ -24,6 +24,7 @@ import {
   approveServiceRequest,
   authorizeServiceRequest,
   cancelServiceRequest,
+  closeServiceRequestWithWorkOrder,
   completeServiceRequest,
   deleteHojaRutaEntry,
   deleteServiceRequest,
@@ -239,6 +240,14 @@ export async function handleServiceRequestsRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof completeServiceRequest>[2];
     sendJson(response, 200, await completeServiceRequest(session, id, body ?? {}));
+    return true;
+  }
+
+  // Cerrar la SS junto con su OT (la OT ya tiene que estar cerrada).
+  if (method === "POST" && /^\/app\/pms\/service-requests\/[^/]+\/close-with-work-order$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof closeServiceRequestWithWorkOrder>[2];
+    sendJson(response, 200, await closeServiceRequestWithWorkOrder(session, id, body ?? {}));
     return true;
   }
 

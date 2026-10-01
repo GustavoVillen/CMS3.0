@@ -50,6 +50,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
 import { ProgressNoteSheet, toLocalInput } from "../mobile/ProgressNoteSheet";
+import { askCloseServiceRequests, closeServiceRequestsWithWo } from "../lib/wo-ss-close";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -2348,6 +2349,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         return;
       }
     }
+    // SS de la OT todavía abiertas: se avisa y se pregunta si se cierran también.
+    const ssPlan = await askCloseServiceRequests(workOrder.id, user?.name ?? "");
+    if (ssPlan === null) return;
     setClosing(true); setErr(null);
     try {
       const [chkUrl, supUrl] = await Promise.all([
@@ -2371,6 +2375,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         spareUsages: spareUsages.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
         closedByUserId: opts?.closedByUserId || undefined,
       });
+      // 2b. Con la OT cerrada, las SS que el usuario eligió cerrar también.
+      if (ssPlan.ids.length > 0) await closeServiceRequestsWithWo(ssPlan);
       // 3. Generar PDF y finalizar (finishClose imprime el PDF). Si hubo repuestos
       // sin stock, se muestra el aviso y el PDF se genera al "Aceptar y cerrar".
       if (res.failedMovements && res.failedMovements.length > 0) {
@@ -2388,7 +2394,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [woResult, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder,
       executedByName, executionDate, observations,
       runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id,
-      workOrder.maintenancePlanId, onPlanExecuted, hourAssets, hoursOf]);
+      workOrder.maintenancePlanId, onPlanExecuted, hourAssets, hoursOf, user?.name]);
 
   // Lo contestado en la auditoría vuelve al formulario ANTES de cerrar: el
   // cierre guarda con el estado del formulario, así que se espera un render

@@ -1738,6 +1738,98 @@ export async function completeServiceRequest(
   return completed;
 }
 
+const SR_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Borrador", SOLICITADA: "Solicitada", APROBADA: "Aprobada", AUTORIZADA: "Autorizada", IN_PROGRESS: "En ejecución",
+};
+
+/**
+ * Cierra la SS junto con su OT: al cerrar la OT, la pantalla avisa que tiene SS
+ * abiertas y pregunta si se cierran también. Queda COMPLETADA con la recepción
+ * (quién recibe y conformidad) que el usuario cargó en ese aviso.
+ *
+ * Sirve también para la SS que nunca se mandó al taller desde el sistema
+ * (pendiente de firma o autorizada sin enviar): decisión de Gustavo (01-oct-2026),
+ * se da por recibida porque el trabajo se hizo por fuera (correo, papel). Eso
+ * queda asentado en la hoja de ruta con el estado en que estaba.
+ *
+ * Sólo con la OT ya CERRADA: no es un atajo para completar una SS salteando la
+ * tramitación mientras el trabajo sigue abierto.
+ */
+export async function closeServiceRequestWithWorkOrder(
+  session: TenantAccessSession,
+  id: string,
+  payload: { receivedByName?: string | null; receptionConform?: boolean | null } = {},
+) {
+  ensureCanManage(session);
+  const prisma = getPrismaClient()!;
+  const current = await getRequestOrThrow(session, id);
+  if (!(current.status in SR_STATUS_LABEL)) {
+    throw new RouteError(409, "INVALID_STATUS", "La solicitud ya está cerrada.");
+  }
+  const wo = await (prisma as any).workOrder.findFirst({
+    where: { id: current.workOrderId, tenantId: current.tenantId, deletedAt: null },
+    select: { workOrderCode: true, status: true },
+  });
+  if (!wo || wo.status !== "CLOSED") {
+    throw new RouteError(409, "WORK_ORDER_NOT_CLOSED", "La SS se cierra junto con su OT: primero hay que cerrar la OT.");
+  }
+  const recibe = normalizeOptionalText(payload.receivedByName);
+  if (!recibe) {
+    throw new RouteError(400, "VALIDATION_ERROR", "Indicá quién recibe el servicio (Entrega / Recepción).");
+  }
+  if (payload.receptionConform !== true && payload.receptionConform !== false) {
+    throw new RouteError(400, "VALIDATION_ERROR", "Indicá si hay conformidad con el trabajo realizado.");
+  }
+
+  const wasSent = current.status === "IN_PROGRESS";
+  const note = `Cerrada junto con la OT ${wo.workOrderCode}.`;
+  const completed = await (prisma as any).serviceRequest.update({
+    where: { id },
+    data: {
+      status: "COMPLETED",
+      receivedByName: recibe,
+      receptionConform: payload.receptionConform,
+      receivedAt: new Date(),
+      closeNotes: normalizeOptionalText(current.closeNotes) ?? note,
+      updatedByUserId: session.user.id,
+    },
+  });
+
+  // La que no pasó por el taller desde el sistema: queda dicho en la hoja de ruta.
+  if (!wasSent) {
+    const asientaByName = `${session.user.firstName ?? ""} ${session.user.lastName ?? ""}`.trim() || session.user.email;
+    try {
+      await (prisma as any).serviceRequestLog.create({
+        data: {
+          tenantId: current.tenantId,
+          serviceRequestId: current.id,
+          entryDate: new Date(),
+          novedad: `Dada por recibida al cerrar la OT ${wo.workOrderCode}. No se había enviado al taller desde el sistema (estado: ${SR_STATUS_LABEL[current.status]}).`,
+          asientaByName,
+          asientaByUserId: session.user.id,
+          createdByUserId: session.user.id,
+        },
+      });
+    } catch { /* la SS ya quedó completada: no se cae por no poder asentar la novedad */ }
+  }
+
+  void publishAudit(prisma as any, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "SERVICE_REQUEST_CLOSED_WITH_WORK_ORDER",
+    entityType: "ServiceRequest",
+    entityId: id,
+    metadata: {
+      serviceRequestCode: current.serviceRequestCode,
+      workOrderCode: wo.workOrderCode,
+      previousStatus: current.status,
+      receptionConform: payload.receptionConform,
+    },
+  });
+  void archivePdf(session, { kind: "SS", id: completed.id });
+  return completed;
+}
+
 /**
  * Rechazo de tramitación. Lo puede hacer quien aprueba y quien autoriza — el
  * rechazo de la autorización queda restringido igual que la autorización.

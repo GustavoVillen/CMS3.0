@@ -9,6 +9,7 @@ import { GuideSection, GuideField, GuideNeedTag, RequiredMark } from "../compone
 import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { askCloseServiceRequests, closeServiceRequestsWithWo } from "../lib/wo-ss-close";
 import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel, AssetLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
@@ -1186,6 +1187,9 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   const closeDefectAndWo = useCallback(async (noteOverride?: string) => {
     const note = noteOverride ?? closeCheckText;
     if (!note) { setActionError(t("def.verify.required")); return; }
+    // SS de la OT todavía abiertas: se avisa y se pregunta si se cierran también.
+    const ssPlan = defect.workOrderId ? await askCloseServiceRequests(defect.workOrderId, user?.name ?? "") : null;
+    if (defect.workOrderId && ssPlan === null) return;
     setClosing(true);
     try {
       // Backend requires RESOLVED before CLOSED
@@ -1197,6 +1201,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           woResult: "SATISFACTORY",
           observations: `Reparación permanente registrada en defecto ${defect.defectCode}`,
         }).catch(() => {}); // WO might already be closed — ignore
+        if (ssPlan && ssPlan.ids.length > 0) await closeServiceRequestsWithWo(ssPlan);
       }
       await api.post(`/app/pms/defects/${defect.id}/close`, { closeNotes: note });
       onSaved();
@@ -1205,7 +1210,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     } finally {
       setClosing(false);
     }
-  }, [closeCheckText, defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved, t]);
+  }, [closeCheckText, defect.defectCode, defect.id, defect.status, defect.workOrderId, onSaved, t, user?.name]);
 
   // ESC guard: dirty si algun campo editable difiere del valor original del defect
   const isDirty = !isClosed && (

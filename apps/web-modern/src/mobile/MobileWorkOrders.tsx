@@ -7,6 +7,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePendingProgress } from "../lib/progress-outbox";
 import { api, ApiError } from "../lib/api";
+import { askCloseServiceRequests, closeServiceRequestsWithWo } from "../lib/wo-ss-close";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
@@ -642,6 +643,9 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
         return;
       }
     }
+    // SS de la OT todavía abiertas: se avisa y se pregunta si se cierran también.
+    const ssPlan = await askCloseServiceRequests(selected.id, user?.name ?? "");
+    if (ssPlan === null) return;
     setSaving(true); setErr(null);
     try {
       await api.post(`/app/pms/work-orders/${selected.id}/close`, {
@@ -655,6 +659,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
           ? hourAssets.map(a => ({ assetId: a.assetId, hours: Number(hoursOf(a.assetId)) }))
           : undefined,
       });
+      if (ssPlan.ids.length > 0) await closeServiceRequestsWithWo(ssPlan);
       // Subir foto si fue capturada (no bloquea el cierre si la subida falla)
       if (photoFile) {
         try {
@@ -670,7 +675,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       setSaving(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, extraHours, hourAssets, photoFile, reload, t]);
+  }, [selected, woResult, observations, executionDate, executedByName, actualHours, runningHours, extraHours, hourAssets, photoFile, reload, t, user?.name]);
 
   const onChecklistSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
