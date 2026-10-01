@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ClipboardCheck, ClipboardList, FileSpreadsheet, IdCard, Loader2, Search, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardCheck, ClipboardList, FileSpreadsheet, IdCard, ListTree, Loader2, Search, Wrench, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
@@ -34,7 +34,7 @@ import { NAV } from "../lib/nav-items";
 import { useHiddenNavPaths } from "../lib/nav-config";
 import { useCopilotEmitter, useCopilotDataRefresh } from "../lib/copilot-context";
 import {
-  type AssetInfo, type SheetPlan, type SheetGroup,
+  type AssetInfo, type SheetPlan, type SheetGroup, type EquipBlock, type Severity,
   ICON_PROVIDER,
   NO_GROUP, buildSheetGroups, isHours, isMonths,
   providerIdsOf, providerNamesOf, severityOf, severityOfRow, fmtDate,
@@ -92,6 +92,12 @@ const WoSignMark: React.FC<{ sign?: SheetRow["activeWorkOrderSign"] }> = ({ sign
     </span>
   );
 };
+
+/** Sin agrupar por equipo, dentro de cada grupo va primero lo más urgente. */
+const SEV_RANK: Record<Severity, number> = { overdue: 0, soon: 1, none: 2, outOfService: 3 };
+
+/** Botones G0…G9 de la barra de filtros (los mismos de Planes y Seguimiento). */
+const SFI_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 const NUM_LOCALE = "es-AR";
 const fmtHours = (n: number) => n.toLocaleString(NUM_LOCALE);
@@ -153,7 +159,13 @@ export function MaintenanceSheetPage() {
   // ── Filtros de pantalla (el papel no los tiene, la pantalla sí los necesita) ─
   const [query, setQuery] = useState("");
   const [onlyDue, setOnlyDue] = useState(false);
-  const visible: SheetGroup[] = useMemo(() => {
+  // Barra de filtros (Preview V1, oct 2026): la misma de Seguimiento.
+  const [sfiGroup, setSfiGroup] = useState<number | "ALL">("ALL");
+  // Encendido = la planilla del papel, y cada equipo se puede plegar. Apagado =
+  // dentro de cada grupo, primero lo más urgente, con el equipo en cada fila.
+  const [groupByAsset, setGroupByAsset] = useState(true);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const preGroup: SheetGroup[] = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q && !onlyDue) return sheet;
     return sheet
@@ -179,6 +191,25 @@ export function MaintenanceSheetPage() {
       }))
       .filter(g => g.blocks.length > 0);
   }, [sheet, query, onlyDue]);
+  // Qué botones G0…G9 tienen tareas con los otros filtros puestos (los vacíos
+  // salen apagados). Las tareas sin grupo se ven sólo con "Sin filtro".
+  const groupsWithRows = useMemo(() => new Set(preGroup.map(g => g.group)), [preGroup]);
+  const visible: SheetGroup[] = useMemo(
+    () => (sfiGroup === "ALL" ? preGroup : preGroup.filter(g => g.group === sfiGroup)),
+    [preGroup, sfiGroup],
+  );
+
+  // ── Plegar equipos (sólo agrupado por equipo) ──────────────────────────────
+  const visibleBlockKeys = useMemo(() => visible.flatMap(g => g.blocks.map(b => b.key)), [visible]);
+  const allCollapsed = visibleBlockKeys.length > 0 && visibleBlockKeys.every(k => collapsed.has(k));
+  const toggleBlock = (key: string) => setCollapsed(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const toggleAllBlocks = () => setCollapsed(allCollapsed ? new Set() : new Set(visibleBlockKeys));
+  const anyFilter = sfiGroup !== "ALL" || !!query || onlyDue;
+  const clearFilters = () => { setSfiGroup("ALL"); setQuery(""); setOnlyDue(false); };
 
   const totalTasks = useMemo(
     () => visible.reduce((n, g) => n + g.blocks.reduce((m, b) => m + b.plans.length, 0), 0),
@@ -260,6 +291,7 @@ export function MaintenanceSheetPage() {
       vesselName:        selectedVessel?.name ?? null,
       search:            query.trim() || null,
       onlyDue:           onlyDue ? "true" : "false",
+      sfiGroup:          sfiGroup === "ALL" ? null : `G${sfiGroup}`,
       visibleTasks:      String(totalTasks),
       // Lo tildado es lo que el usuario quiere hacer ahora: con esto el copiloto
       // puede hablar de "estas tareas" sin pedirle que las vuelva a nombrar.
@@ -511,6 +543,225 @@ export function MaintenanceSheetPage() {
   // el alto de la fila lo termina fijando el input y no el texto.
   const td = "px-2 py-0.5 text-[11px] leading-tight border border-border align-middle [&_input]:py-0";
 
+  // Semáforo de la planilla de papel: rojo vencida, amarillo por vencer, rosa el
+  // equipo fuera de servicio (no es un atraso: no hay nada que ejecutar hasta que
+  // la máquina vuelva). En las filas de color, las celdas editables tienen que
+  // tomar el color de la fila: con su color normal, la fecha sobre rojo no se lee.
+  const rowClsOf = (sev: Severity) =>
+    sev === "outOfService" ? "bg-[#FFE0E0] text-[#C00000] [&_input]:text-inherit"
+    : sev === "overdue" ? "bg-red-600 text-white [&_input]:text-inherit"
+    : sev === "soon" ? "bg-yellow-300 text-yellow-950 [&_input]:text-inherit"
+    : "text-fg/90 hover:bg-fg/5";
+
+  // Línea azul de cierre del bloque: separa un equipo del siguiente. Va en la
+  // última fila del equipo y, además, en las celdas combinadas (ítem /
+  // descripción / fuera de servicio), que viven en la PRIMERA fila pero llegan
+  // hasta el final del bloque — sin esto el separador quedaba cortado a la izquierda.
+  const sep = " border-b-2 border-b-[#1F3864]";
+
+  /** La celda del equipo (agrupado por equipo): lleva a SU plan de mantenimiento,
+   *  la lista ya filtrada por ese equipo, que es donde se lo administra. */
+  const equipCell = (b: EquipBlock, rowSpan: number, cls: string) => {
+    const isCollapsed = collapsed.has(b.key);
+    const foldTip = t(isCollapsed ? "msheet.fold.expand" : "msheet.fold.collapse");
+    return (
+      <td rowSpan={rowSpan} className={cls + " relative text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
+        {/* Plegar las tareas del equipo, en el ángulo superior izquierdo: el
+            nombre ya lleva al plan y "Ficha" a la ficha. */}
+        <button
+          type="button"
+          onClick={() => toggleBlock(b.key)}
+          title={foldTip}
+          aria-label={foldTip}
+          aria-expanded={!isCollapsed}
+          className="absolute top-1 left-1 z-10 inline-flex items-center rounded-md border border-[#1F3864]/30 bg-white/80 px-1 py-0.5 text-[#1F3864] hover:bg-white"
+        >
+          {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+        {/* Ficha del equipo, en el ángulo superior derecho (pedido de Gustavo,
+            sep 2026). El resto de la celda sigue llevando al plan. */}
+        {canSeeEquipment && b.plans[0]?.assetId && (
+          <button
+            type="button"
+            onClick={() => openAssetSheet(b.plans[0]!)}
+            title={t("msheet.assetSheetHint")}
+            aria-label={t("msheet.assetSheetHint")}
+            className="absolute top-1 right-1 z-10 inline-flex items-center gap-1 rounded-md border border-[#1F3864]/30 bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#1F3864] hover:bg-white"
+          >
+            <IdCard className="w-3 h-3" />{t("msheet.assetSheet")}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => openAssetPlans(b.plans[0]!)}
+          title={t("msheet.openAssetPlans")}
+          className="w-full h-full px-2 py-1 pt-6 text-center hover:underline underline-offset-2 cursor-pointer"
+        >
+          <div>{b.name}</div>
+          {b.subtitle && <div className="text-[10px] font-normal opacity-80">{b.subtitle}</div>}
+          {/* Horómetro: el mismo número que "Horas de Equipos". Va acá porque
+              las tareas por horas se leen contra él ("Realizar cada 500 h" no
+              dice nada sin saber en cuántas está la máquina).
+              Se muestra si hay lectura, y también —como "Sin lecturas"— cuando
+              el equipo TIENE tareas por horas pero nadie cargó el horómetro: ese
+              es justamente el motivo de que esas tareas no venzan nunca, y hay
+              que verlo. Los equipos sin horómetro ni tareas por horas no
+              muestran nada, para no ensuciar la planilla. */}
+          {(() => {
+            const conHoras = b.currentHours != null;
+            if (!conHoras && !b.plans.some(p => isHours(p.triggerType))) return null;
+            return (
+              <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                {conHoras
+                  ? `${fmtHours(b.currentHours!)} h${b.currentHoursDate ? ` · ${fmtDate(b.currentHoursDate)}` : ""}`
+                  : t("assetHours.never")}
+              </div>
+            );
+          })()}
+        </button>
+      </td>
+    );
+  };
+
+  /** Las celdas de la tarea, de la casilla (o la OT) al proveedor: iguales en
+   *  la vista por equipo y en la vista por urgencia. */
+  const planCells = (p: SheetRow, cls: string) => {
+    const hasWo = !!p.activeWorkOrderCode;
+    const selectable = p.status === "ACTIVE" && !hasWo;
+    const hb = isHours(p.triggerType);
+    return (
+      <>
+        {/* Selector / número de OT: entre la descripción del equipo y la
+            tarea (pedido del usuario). */}
+        <td className={cls + " text-center"}>
+          {hasWo ? (
+            <span className="inline-flex items-center gap-1">
+              <button
+                onClick={() => navigate(`/work-orders/${encodeURIComponent(p.activeWorkOrderCode!)}`)}
+                title={t("msheet.alreadyHasWo").replace("{code}", p.activeWorkOrderCode!)}
+                className="text-[10px] font-mono font-bold underline underline-offset-2 whitespace-nowrap"
+              >
+                {p.activeWorkOrderCode}
+              </button>
+              <WoSignMark sign={p.activeWorkOrderSign} />
+            </span>
+          ) : (
+            <input
+              type="checkbox"
+              checked={selectedSet.has(p.id)}
+              disabled={!selectable}
+              onChange={() => toggle(p.id)}
+              title={t("msheet.markForWo")}
+              className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30"
+            />
+          )}
+        </td>
+
+        {/* La tarea TILDA el selector de su fila: en la planilla se marca lo
+            que va a OT, no se navega. La ficha del plan se sigue abriendo
+            desde la celda del equipo. */}
+        <td className={cls + " p-0"}>
+          <button
+            type="button"
+            onClick={() => toggle(p.id)}
+            disabled={!selectable}
+            title={selectable ? `${p.taskCode} · ${t("msheet.markForWo")}` : p.taskCode}
+            className="w-full px-2 py-0.5 text-left cursor-pointer disabled:cursor-default"
+          >
+            {p.title}
+          </button>
+        </td>
+        <td className={cls + " text-center font-mono"}>{everyText(p)}</td>
+
+        <td className={cls + " text-center font-mono"}>
+          {canEditMilestones ? (
+            hb
+              ? <NumberCell value={p.lastExecutionHours ?? null} resetKey={resetTick}
+                  onCommit={v => void patchPlan(p, { lastExecutionHours: v })} />
+              : <DateCell value={p.lastExecutionDate} resetKey={resetTick}
+                  onCommit={v => void patchPlan(p, { lastExecutionDate: v })} />
+          ) : milestoneText(p, "last")}
+        </td>
+        <td className={cls + " text-center font-mono"}>
+          {canEditMilestones ? (
+            hb
+              ? <NumberCell value={p.nextDueHours ?? null} resetKey={resetTick}
+                  onCommit={v => void patchPlan(p, { nextDueHours: v })} />
+              : <DateCell value={p.nextDueDate} resetKey={resetTick}
+                  onCommit={v => void patchPlan(p, { nextDueDate: v })} />
+          ) : milestoneText(p, "next")}
+          {savingId === p.id && <Loader2 className="w-3 h-3 animate-spin inline ml-1" />}
+        </td>
+
+        <td className={cls}>
+          {p.department === "PROVEEDOR" && (
+            <span className="text-[10px]">
+              {ICON_PROVIDER} {providerNamesOf(p).join(", ")}
+            </span>
+          )}
+        </td>
+      </>
+    );
+  };
+
+  const oosCell = (b: EquipBlock, rowSpan: number, cls: string) => (
+    <td
+      rowSpan={rowSpan}
+      className={cls + " text-center text-[9px] font-bold " +
+        (b.outOfService ? "bg-[#FFE0E0] text-[#C00000]" : "bg-surface")}
+    >
+      {b.outOfService ? t("msheet.outOfService") : ""}
+    </td>
+  );
+
+  /** Equipo plegado: una sola línea con cuántas tareas tiene, cuántas vencidas
+   *  y cuántas por vencer (mismo semáforo que las filas). */
+  const foldedRow = (b: EquipBlock) => {
+    const sevs = b.plans.map(p => severityOfRow(p, b.outOfService));
+    const late = sevs.filter(s => s === "overdue").length;
+    const soon = sevs.filter(s => s === "soon").length;
+    return (
+      <tr key={`fold:${b.key}`} className="text-fg/90">
+        <td className={td + sep + " text-center font-bold text-fg bg-surface"}>{b.itemNumber}</td>
+        {equipCell(b, 1, td + sep)}
+        <td colSpan={6} className={td + sep + " py-1.5 font-semibold text-text-industrial/70 bg-fg/[0.03]"}>
+          {b.plans.length === 1 ? t("msheet.fold.taskOne") : t("msheet.fold.tasks").replace("{n}", String(b.plans.length))}
+          {late > 0 && (
+            <> · <span className="font-extrabold text-red-700 dark:text-red-400">
+              {late === 1 ? t("msheet.fold.overdueOne") : t("msheet.fold.overdue").replace("{n}", String(late))}
+            </span></>
+          )}
+          {soon > 0 && (
+            <> · <span className="font-extrabold text-yellow-700 dark:text-yellow-400">
+              {t("msheet.fold.soon").replace("{n}", String(soon))}
+            </span></>
+          )}
+        </td>
+        {oosCell(b, 1, td + sep)}
+      </tr>
+    );
+  };
+
+  /** Sin agrupar por equipo: las tareas del grupo, primero lo más urgente (el
+   *  orden de la planilla se mantiene dentro de cada color), con el equipo y su
+   *  número de ítem en cada fila. */
+  const flatRows = (g: SheetGroup) => g.blocks
+    .flatMap(b => b.plans.map(plan => ({ b, p: plan as SheetRow, sev: severityOfRow(plan, b.outOfService) })))
+    .sort((x, y) => SEV_RANK[x.sev] - SEV_RANK[y.sev])
+    .map(({ b, p, sev }) => (
+      <tr key={p.id} data-plan-id={p.id} className={rowClsOf(sev)}>
+        <td className={td + " text-center font-bold text-fg bg-surface"}>{b.itemNumber}</td>
+        <td className={td + " text-center font-semibold bg-[#F8CBAD] text-[#1F3864] p-0"}>
+          <button type="button" onClick={() => openAssetPlans(p)} title={t("msheet.openAssetPlans")}
+            className="w-full px-2 py-0.5 text-center hover:underline underline-offset-2 cursor-pointer">
+            {b.name}
+          </button>
+        </td>
+        {planCells(p, td)}
+        {oosCell(b, 1, td)}
+      </tr>
+    ));
+
   return (
     <div className="space-y-4">
       <div className="pb-1">
@@ -531,26 +782,6 @@ export function MaintenanceSheetPage() {
           </button>
         )}
       >
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-fg/30" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={t("common.search")}
-            className="pl-8 pr-2 py-1.5 w-48 rounded-lg bg-fg/5 border border-fg/10 text-xs text-fg focus:border-accent/40 focus:outline-none"
-          />
-        </div>
-        <button
-          onClick={() => setOnlyDue(v => !v)}
-          aria-pressed={onlyDue}
-          className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-            onlyDue
-              ? "bg-accent/20 border-accent/40 text-accent"
-              : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
-          }`}
-        >
-          {t("msheet.onlyDue")}
-        </button>
         <button
           onClick={() => { void exportSheet(); }}
           disabled={exportingSheet || !selectedVesselCode}
@@ -594,6 +825,63 @@ export function MaintenanceSheetPage() {
         </button>
       </PageHeader>
       </div>
+
+      {/* Filtros en UNA fila, el molde de Seguimiento y Planes: grupo SFI, lo
+          pendiente, agrupar por equipo, plegar todo y el buscador a la derecha.
+          Arriba quedan sólo las acciones (Excel y Crear OT). */}
+      {selectedVesselCode && (
+        <div className="rounded-2xl border border-fg/10 bg-surface px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">{t("wo.fl.group")}</span>
+            <button type="button" aria-pressed={sfiGroup === "ALL"} onClick={() => setSfiGroup("ALL")}
+              className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+                sfiGroup === "ALL" ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+              }`}>
+              {t("wo.fl.groupAll")}
+            </button>
+            {SFI_DIGITS.map(g => {
+              const on = sfiGroup === g;
+              const has = groupsWithRows.has(g);
+              const name = `G${g} · ${t(`sfi.g.${g}` as TranslationKey)}`;
+              return (
+                <button key={g} type="button" title={name} aria-label={name} aria-pressed={on}
+                  disabled={!has && !on}
+                  onClick={() => setSfiGroup(on ? "ALL" : g)}
+                  className={`min-w-[2.4rem] rounded-full border-[1.5px] px-2.5 py-1 text-xs font-bold transition-colors ${
+                    on ? "border-accent bg-accent text-accent-fg"
+                      : has ? "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                      : "border-fg/10 bg-surface text-text-industrial/60 opacity-35 cursor-default"
+                  }`}>
+                  G{g}
+                </button>
+              );
+            })}
+            <button type="button" onClick={() => setOnlyDue(v => !v)} aria-pressed={onlyDue}
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${onlyDue ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
+              {t("msheet.onlyDue")}
+            </button>
+            <button type="button" onClick={() => setGroupByAsset(v => !v)} aria-pressed={groupByAsset}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${groupByAsset ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
+              <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
+            </button>
+            {groupByAsset && (
+              <button type="button" onClick={toggleAllBlocks} title={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
+                className="flex items-center justify-center p-1.5 rounded-lg border bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30 transition-all">
+                {allCollapsed ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+              </button>
+            )}
+            {anyFilter && (
+              <button type="button" onClick={clearFilters} className="rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 text-xs text-text-industrial/80 hover:text-fg">{t("common.clear")}</button>
+            )}
+            <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+              <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("msheet.searchPlaceholder")}
+                className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label={t("common.clear")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Barra de selección: qué se marcó y qué va a pasar al crear. */}
       {selectedPlans.length > 0 && (
@@ -651,6 +939,11 @@ export function MaintenanceSheetPage() {
       ) : visible.length === 0 ? (
         <div className="p-8 text-center text-sm text-text-industrial/60 rounded-xl border border-border bg-surface">
           {t("msheet.empty")}
+          {anyFilter && (
+            <button type="button" onClick={clearFilters} className="block mx-auto mt-2 text-xs font-bold text-accent hover:underline">
+              {t("common.clear")}
+            </button>
+          )}
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-surface overflow-hidden">
@@ -680,7 +973,7 @@ export function MaintenanceSheetPage() {
             ref={bodyBoxRef}
             onFocus={rememberCell}
             onPointerDown={rememberCell}
-            className="overflow-auto max-h-[calc(100vh-16rem)]"
+            className="overflow-auto max-h-[calc(100vh-19rem)]"
           >
           <table className="w-full table-fixed border-collapse">
             <SheetCols />
@@ -692,34 +985,12 @@ export function MaintenanceSheetPage() {
                       {groupTitle(g.group)}
                     </td>
                   </tr>
-                  {g.blocks.map(b => b.plans.map((plan, i) => {
+                  {!groupByAsset ? flatRows(g) : g.blocks.map(b => collapsed.has(b.key) ? foldedRow(b) : b.plans.map((plan, i) => {
                     const p = plan as SheetRow;
-                    const sev = severityOfRow(p, b.outOfService);
-                    // Semáforo de la planilla de papel: rojo vencida, amarillo por
-                    // vencer, rosa el equipo fuera de servicio (no es un atraso: no
-                    // hay nada que ejecutar hasta que la máquina vuelva).
-                    // En las filas de color, las celdas editables tienen que tomar el
-                    // color de la fila: con su color normal, la fecha sobre rojo no se lee.
-                    const rowCls =
-                      sev === "outOfService" ? "bg-[#FFE0E0] text-[#C00000] [&_input]:text-inherit"
-                      : sev === "overdue" ? "bg-red-600 text-white [&_input]:text-inherit"
-                      : sev === "soon" ? "bg-yellow-300 text-yellow-950 [&_input]:text-inherit"
-                      : "text-fg/90 hover:bg-fg/5";
-                    const hasWo = !!p.activeWorkOrderCode;
-                    const selectable = p.status === "ACTIVE" && !hasWo;
-                    const hb = isHours(p.triggerType);
-                    const providers = providerNamesOf(p);
-                    const isProvider = p.department === "PROVEEDOR";
-                    // Línea azul de cierre del bloque: separa un equipo del
-                    // siguiente. Va en la última fila del equipo y, además, en las
-                    // celdas combinadas (ítem / descripción / fuera de servicio),
-                    // que viven en la PRIMERA fila pero llegan hasta el final del
-                    // bloque — sin esto el separador quedaba cortado a la izquierda.
-                    const sep = " border-b-2 border-b-[#1F3864]";
                     const tdLast = td + (i === b.plans.length - 1 ? sep : "");
 
                     return (
-                      <tr key={p.id} data-plan-id={p.id} className={rowCls}>
+                      <tr key={p.id} data-plan-id={p.id} className={rowClsOf(severityOfRow(p, b.outOfService))}>
                         {/* Ítem, descripción del equipo y fuera de servicio: una
                             sola celda por bloque, como en la planilla de papel. */}
                         {i === 0 && (
@@ -727,135 +998,11 @@ export function MaintenanceSheetPage() {
                             {b.itemNumber}
                           </td>
                         )}
-                        {/* El equipo lleva a SU plan de mantenimiento: la lista ya
-                            filtrada por ese equipo, que es donde se lo administra. */}
-                        {i === 0 && (
-                          <td rowSpan={b.plans.length} className={td + sep + " relative text-center font-bold bg-[#F8CBAD] text-[#1F3864] p-0"}>
-                            {/* Ficha del equipo, en el ángulo superior derecho (pedido de
-                                Gustavo, sep 2026). El resto de la celda sigue llevando al plan. */}
-                            {canSeeEquipment && b.plans[0]?.assetId && (
-                              <button
-                                type="button"
-                                onClick={() => openAssetSheet(b.plans[0]!)}
-                                title={t("msheet.assetSheetHint")}
-                                aria-label={t("msheet.assetSheetHint")}
-                                className="absolute top-1 right-1 z-10 inline-flex items-center gap-1 rounded-md border border-[#1F3864]/30 bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-[#1F3864] hover:bg-white"
-                              >
-                                <IdCard className="w-3 h-3" />{t("msheet.assetSheet")}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => openAssetPlans(b.plans[0]!)}
-                              title={t("msheet.openAssetPlans")}
-                              className={`w-full h-full px-2 py-1 text-center hover:underline underline-offset-2 cursor-pointer ${canSeeEquipment ? "pt-6" : ""}`}
-                            >
-                              <div>{b.name}</div>
-                              {b.subtitle && <div className="text-[10px] font-normal opacity-80">{b.subtitle}</div>}
-                              {/* Horómetro: el mismo número que "Horas de Equipos".
-                                  Va acá porque las tareas por horas se leen contra
-                                  él ("Realizar cada 500 h" no dice nada sin saber en
-                                  cuántas está la máquina).
-                                  Se muestra si hay lectura, y también —como "Sin
-                                  lecturas"— cuando el equipo TIENE tareas por horas
-                                  pero nadie cargó el horómetro: ese es justamente el
-                                  motivo de que esas tareas no venzan nunca, y hay que
-                                  verlo. Los equipos sin horómetro ni tareas por horas
-                                  no muestran nada, para no ensuciar la planilla. */}
-                              {(() => {
-                                const conHoras = b.currentHours != null;
-                                if (!conHoras && !b.plans.some(p => isHours(p.triggerType))) return null;
-                                return (
-                                  <div className="text-[10px] font-normal opacity-80 mt-0.5">
-                                    {conHoras
-                                      ? `${fmtHours(b.currentHours!)} h${b.currentHoursDate ? ` · ${fmtDate(b.currentHoursDate)}` : ""}`
-                                      : t("assetHours.never")}
-                                  </div>
-                                );
-                              })()}
-                            </button>
-                          </td>
-                        )}
+                        {i === 0 && equipCell(b, b.plans.length, td + sep)}
 
-                        {/* Selector / número de OT: entre la descripción del equipo y la
-                            tarea (pedido del usuario). */}
-                        <td className={tdLast + " text-center"}>
-                          {hasWo ? (
-                            <span className="inline-flex items-center gap-1">
-                              <button
-                                onClick={() => navigate(`/work-orders/${encodeURIComponent(p.activeWorkOrderCode!)}`)}
-                                title={t("msheet.alreadyHasWo").replace("{code}", p.activeWorkOrderCode!)}
-                                className="text-[10px] font-mono font-bold underline underline-offset-2 whitespace-nowrap"
-                              >
-                                {p.activeWorkOrderCode}
-                              </button>
-                              <WoSignMark sign={p.activeWorkOrderSign} />
-                            </span>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              checked={selectedSet.has(p.id)}
-                              disabled={!selectable}
-                              onChange={() => toggle(p.id)}
-                              title={t("msheet.markForWo")}
-                              className="w-3.5 h-3.5 accent-accent cursor-pointer disabled:opacity-30"
-                            />
-                          )}
-                        </td>
+                        {planCells(p, tdLast)}
 
-                        {/* La tarea TILDA el selector de su fila: en la planilla
-                            se marca lo que va a OT, no se navega. La ficha del
-                            plan se sigue abriendo desde la celda del equipo. */}
-                        <td className={tdLast + " p-0"}>
-                          <button
-                            type="button"
-                            onClick={() => toggle(p.id)}
-                            disabled={!selectable}
-                            title={selectable ? `${p.taskCode} · ${t("msheet.markForWo")}` : p.taskCode}
-                            className="w-full px-2 py-0.5 text-left cursor-pointer disabled:cursor-default"
-                          >
-                            {p.title}
-                          </button>
-                        </td>
-                        <td className={tdLast + " text-center font-mono"}>{everyText(p)}</td>
-
-                        <td className={tdLast + " text-center font-mono"}>
-                          {canEditMilestones ? (
-                            hb
-                              ? <NumberCell value={p.lastExecutionHours ?? null} resetKey={resetTick}
-                                  onCommit={v => void patchPlan(p, { lastExecutionHours: v })} />
-                              : <DateCell value={p.lastExecutionDate} resetKey={resetTick}
-                                  onCommit={v => void patchPlan(p, { lastExecutionDate: v })} />
-                          ) : milestoneText(p, "last")}
-                        </td>
-                        <td className={tdLast + " text-center font-mono"}>
-                          {canEditMilestones ? (
-                            hb
-                              ? <NumberCell value={p.nextDueHours ?? null} resetKey={resetTick}
-                                  onCommit={v => void patchPlan(p, { nextDueHours: v })} />
-                              : <DateCell value={p.nextDueDate} resetKey={resetTick}
-                                  onCommit={v => void patchPlan(p, { nextDueDate: v })} />
-                          ) : milestoneText(p, "next")}
-                          {savingId === p.id && <Loader2 className="w-3 h-3 animate-spin inline ml-1" />}
-                        </td>
-
-                        <td className={tdLast}>
-                          {isProvider && (
-                            <span className="text-[10px]">
-                              {ICON_PROVIDER} {providers.join(", ")}
-                            </span>
-                          )}
-                        </td>
-
-                        {i === 0 && (
-                          <td
-                            rowSpan={b.plans.length}
-                            className={td + sep + " text-center text-[9px] font-bold " +
-                              (b.outOfService ? "bg-[#FFE0E0] text-[#C00000]" : "bg-surface")}
-                          >
-                            {b.outOfService ? t("msheet.outOfService") : ""}
-                          </td>
-                        )}
+                        {i === 0 && oosCell(b, b.plans.length, td + sep)}
                       </tr>
                     );
                   }))}
