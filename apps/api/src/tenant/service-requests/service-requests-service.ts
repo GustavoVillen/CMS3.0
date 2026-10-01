@@ -1133,14 +1133,26 @@ async function requestCarriesSamples(
   const planIds = [...new Set(pending.map(p => p.sourcePlanId).filter((v): v is string => !!v))];
   if (planIds.length === 0) return true; // muestras agregadas a mano: sin plan que consultar
 
-  const plans: Array<{ providerId: string | null; providerRequests: unknown }> =
-    await (prisma as any).maintenancePlan.findMany({
-      where: { id: { in: planIds }, tenantId: sr.tenantId },
-      select: { providerId: true, providerRequests: true },
-    });
+  const providers = new Set([...(await planProviders(prisma, sr.tenantId, planIds)).values()].flatMap(s => [...s]));
+  if (providers.size === 0) return true;
+  return providers.has(sr.providerId);
+}
 
-  const providers = new Set<string>();
+/** A quién le manda cada rutina de muestreo (área PROVEEDOR → providerId / providerRequests). */
+async function planProviders(
+  prisma: unknown,
+  tenantId: string,
+  planIds: string[],
+): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  if (planIds.length === 0) return out;
+  const plans: Array<{ id: string; providerId: string | null; providerRequests: unknown }> =
+    await (prisma as any).maintenancePlan.findMany({
+      where: { id: { in: planIds }, tenantId },
+      select: { id: true, providerId: true, providerRequests: true },
+    });
   for (const plan of plans) {
+    const providers = new Set<string>();
     if (plan.providerId) providers.add(plan.providerId);
     if (Array.isArray(plan.providerRequests)) {
       for (const entry of plan.providerRequests as Array<{ providerId?: unknown }>) {
@@ -1148,9 +1160,58 @@ async function requestCarriesSamples(
         if (pid) providers.add(pid);
       }
     }
+    out.set(plan.id, providers);
   }
-  if (providers.size === 0) return true;
-  return providers.has(sr.providerId);
+  return out;
+}
+
+export interface ServiceRequestLabReport {
+  /** URL guardada del informe (/uploads/fluid-reports/<slug>/<archivo>). */
+  storedUrl: string;
+  mime: string | null;
+}
+
+/**
+ * Informes del laboratorio que ya volvieron para las muestras de la OT de esta
+ * SS, para anexarlos al final de su PDF. Uno por archivo: una campaña de megado
+ * trae un solo informe para todos los equipos.
+ *
+ * Mismo criterio de proveedor que `requestCarriesSamples`: si la rutina declara
+ * a quién se le manda y no es el taller de esta SS, el informe no va (la SS del
+ * taller mecánico de la misma OT no se lleva el del laboratorio).
+ */
+export async function listServiceRequestLabReports(
+  sr: { tenantId: string; workOrderId: string; providerId: string | null },
+): Promise<ServiceRequestLabReport[]> {
+  const prisma = getPrismaClient();
+  if (!prisma || !sr.workOrderId) return [];
+  const results: Array<{ reportUrl: string | null; reportMime: string | null; sample: { sourcePlanId: string | null } }> =
+    await (prisma as any).fluidAnalysisResult.findMany({
+      where: {
+        tenantId: sr.tenantId,
+        reportUrl: { not: null },
+        sample: { is: { tenantId: sr.tenantId, sourceWorkOrderId: sr.workOrderId, deletedAt: null } },
+      },
+      select: { reportUrl: true, reportMime: true, sample: { select: { sourcePlanId: true, sampleCode: true } } },
+      orderBy: { sample: { sampleCode: "asc" } },
+    });
+  if (results.length === 0) return [];
+
+  const planIds = [...new Set(results.map(r => r.sample.sourcePlanId).filter((v): v is string => !!v))];
+  const providersByPlan = sr.providerId ? await planProviders(prisma, sr.tenantId, planIds) : new Map<string, Set<string>>();
+
+  const { toStoredUrl } = await import("../files/file-access-service");
+  const seen = new Set<string>();
+  const out: ServiceRequestLabReport[] = [];
+  for (const r of results) {
+    const declared = r.sample.sourcePlanId ? providersByPlan.get(r.sample.sourcePlanId) : undefined;
+    if (sr.providerId && declared && declared.size > 0 && !declared.has(sr.providerId)) continue;
+    const storedUrl = toStoredUrl(r.reportUrl!);
+    if (seen.has(storedUrl)) continue;
+    seen.add(storedUrl);
+    out.push({ storedUrl, mime: r.reportMime });
+  }
+  return out;
 }
 
 export interface SaveLabSamplesInput {
