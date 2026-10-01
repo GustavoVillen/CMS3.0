@@ -3670,17 +3670,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {segBtns(WO_ASSIGNED_TO, regiForm.assignedToArea,
             v => handlePaperChange({ assignedToArea: regiForm.assignedToArea === v ? "" : v }), !isEditable)}
         </>)}
-        {(regiForm.assignedToArea === "TERCERIZADO" || linkedServiceRequests.length > 0) && (
-          <div className="space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-            {guideLabel(t("wo.guide.field.ss"), undefined, canOpenServiceRequest ? (
-              <button type="button" onClick={() => setNewSrOpen(true)} disabled={creatingSr}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50">
-                {creatingSr ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Nueva SS
-              </button>
-            ) : undefined)}
-            {ssListEl}
-          </div>
-        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             {guideLabel(t("wo.guide.field.tecnico"))}
@@ -3711,6 +3700,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             v => handlePaperChange({ systemArea: regiForm.systemArea === v ? "" : v }), !isEditable)}
         </>)}
       </GuideSection>
+
+      {/* Solicitudes de servicio: fuera de la sección 2 a propósito, para que se
+          vean siempre aunque "Datos del formulario" esté cerrada. */}
+      {(regiForm.assignedToArea === "TERCERIZADO" || linkedServiceRequests.length > 0) && (
+        <div className="space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+          {guideLabel(t("wo.guide.field.ss"), undefined, canOpenServiceRequest ? (
+            <button type="button" onClick={() => setNewSrOpen(true)} disabled={creatingSr}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent text-[10px] font-bold uppercase tracking-wider hover:bg-accent/20 disabled:opacity-50">
+              {creatingSr ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Nueva SS
+            </button>
+          ) : undefined)}
+          {ssListEl}
+        </div>
+      )}
 
       <GuideSection n={3} title={t("wo.guide.sec.safety")} subtitle={t("wo.guide.sec.safetySub")}
         pill={sectionPill(["risk", "loto"])} open={secOpen("safety")} onToggle={() => toggleSec("safety")}>
