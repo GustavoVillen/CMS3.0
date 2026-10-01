@@ -20,8 +20,6 @@ import { listDefects } from "./defects-service";
 import { listFluidSamples } from "../fluid-analyses/fluid-analyses-service";
 import { getOnHandMap } from "./stock-calc-service";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { RouteError } from "../../http/route-error";
-import { canAccessVessel } from "../files/file-access-service";
 import { renderLabeledTextBox, resolveTenantLogo, sanitizePdfText } from "./pdf-helpers";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 
@@ -117,12 +115,8 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
   const now = new Date();
   const yearAgo = new Date(now.getTime() - 365 * DAY_MS);
 
+  // getTenantAsset valida empresa y buque.
   const asset = (await getTenantAsset(session, id)) as unknown as AssetForPdf;
-  // getTenantAsset sólo filtra por empresa: el buque se valida acá. Fuera de sus
-  // buques el equipo "no existe" para el usuario, igual que en los listados.
-  if (!canAccessVessel(session, asset.vesselCode)) {
-    throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
-  }
   const [wos, plans, defects, samplesRes] = await Promise.all([
     listTenantWorkOrders(session, { assetId: asset.id }) as unknown as Promise<WoRow[]>,
     listTenantMaintenancePlans(session, { assetId: asset.id }) as unknown as Promise<PlanRow[]>,

@@ -6,6 +6,7 @@ import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 import { loadCurrentHoursByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
+import { canAccessVessel } from "../files/file-access-service";
 
 export interface AssetListFilters {
   vesselCode?: string | null;
@@ -283,6 +284,9 @@ export async function getTenantAsset(session: TenantAccessSession, id: string): 
     id, tenantId,
   );
   if (!rows.length) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
+  // Fuera de sus buques el equipo "no existe" para el usuario, igual que en el
+  // listado. Lo usan también la edición, el borrado y los PDF del equipo.
+  if (!canAccessVessel(session, rows[0]!.vesselCode)) throw new RouteError(404, "NOT_FOUND", "Asset no encontrado.");
 
   const current = await loadCurrentHoursForAsset(prisma, tenantId, id);
   return {
@@ -374,7 +378,11 @@ export async function updateTenantAsset(
     updatedByUserId: session.user.id,
     updatedAt: new Date(),
   };
-  if (payload.vesselCode !== undefined) data.vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
+  if (payload.vesselCode !== undefined) {
+    data.vesselCode = normalizeRequiredText(payload.vesselCode, "vesselCode").toUpperCase();
+    // Tampoco se puede pasar un equipo a un buque que el usuario no tiene asignado.
+    applyVesselScope(session, {}, data.vesselCode as string, true);
+  }
   if (payload.assetCode !== undefined) data.assetCode = normalizeRequiredText(payload.assetCode, "assetCode").toUpperCase();
   if (payload.name !== undefined) data.name = normalizeRequiredText(payload.name, "name");
   if (payload.sfiCode !== undefined) data.sfiCode = normalizeOptionalText(payload.sfiCode);

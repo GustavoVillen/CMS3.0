@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-10-01] Equipos: el detalle valida el buque del usuario
+Agent: Claude Opus 5.5
+- getTenantAsset (assets-service.ts) ahora rechaza con 404 un equipo de un buque que el usuario no tiene
+  asignado (canAccessVessel; TENANT_ADMIN ve todos). Cubre el detalle GET /app/pms/assets/:id, la edicion,
+  el borrado, la ficha PDF y el PDF de estado de mantenimiento. Cierra el hueco anotado el 30-09.
+- updateTenantAsset: no deja pasar un equipo a un buque fuera del alcance del usuario (403).
+- asset-pdf-service.ts: se saca el control propio, que ahora hace getTenantAsset.
+- Solo backend: pull + restart.
+
 [2026-10-01] Informe del laboratorio en el defecto y en los Avances de su OT
 Agent: Claude Opus 5.5
 - Nuevo fluid-analyses/lab-report-links.ts (linkLabReportToDefect): cuando un analisis con veredicto
