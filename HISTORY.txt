@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-10-01] Copiloto: el "si" en el chat carga los campos propuestos
+Agent: Claude Opus 5.5
+- Problema: fuera del modo guiado, los campos que proponia el copiloto quedaban esperando el boton
+  "Aplicar campos sugeridos"; si el usuario contestaba "1. Si" en el chat no se cargaba nada y la IA
+  respondia "He cargado las correcciones" (caso DEF-M01-0013).
+- CopilotoPanel.tsx: si el usuario contesta que si a la propuesta (si, dale, cargalos, o "1" cuando la
+  opcion 1 era un si), se cargan los campos pendientes y lo que traiga esa respuesta entra solo al
+  formulario, como en el modo guiado. Nada se guarda: sigue haciendo falta Guardar.
+- YES_RE: "si" con tilde no se reconocia en las preguntas Si/No (limite de palabra con acentos).
+- copiloto-service.ts: regla nueva, cargar campos es solo el bloque [CAMPOS]; prohibido decir
+  "cargue/corregi" sin el bloque.
+- Backend + frontend: pull + build web + restart.
+
 [2026-10-01] Equipos: el detalle valida el buque del usuario
 Agent: Claude Opus 5.5
 - getTenantAsset (assets-service.ts) ahora rechaza con 404 un equipo de un buque que el usuario no tiene
