@@ -5,6 +5,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { api, ApiError } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useAuth } from "../lib/auth";
 import { DataTable, type Column } from "../components/DataTable";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -172,10 +173,14 @@ export const DueItemsPage: React.FC = () => {
     useFetch<DueItemsSummary>("/app/pms/due-items/summary", []);
 
   const handleOpenWorkOrder = useCallback(async (item: DueItem) => {
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([item.id]);
+    if (allowDuplicate === null) return;
     setOpenWoLoadingId(item.id);
     setInlineActionError(null);
     try {
       await api.post(`/app/pms/maintenance-plans/${item.id}/open-work-order`, {
+        allowDuplicate,
         title: item.title,
         priority: "HIGH",
       });

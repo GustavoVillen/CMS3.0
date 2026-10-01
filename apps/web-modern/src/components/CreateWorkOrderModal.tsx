@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -187,6 +188,11 @@ const SYSTEM_AREA_BY_DEPARTMENT: Record<string, string> = {
 
 interface CreateWorkOrderModalProps {
   prefill?: WoPrefill;
+  /**
+   * OT desde el plan: quien abrió el formulario ya preguntó si el ítem tenía una
+   * OT abierta (ver lib/plan-wo-guard). Sin este dato, se pregunta al guardar.
+   */
+  allowDuplicate?: boolean;
   initialVesselCode?: string;
   /** Preset del tipo de mantenimiento (modo standalone) — accesos rápidos del Dashboard. */
   initialMaintKind?: string;
@@ -336,7 +342,7 @@ function AiSuggestButton({ label, onClick, loading, dim, title }: {
   );
 }
 
-export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onChangeContext, serviceRequestMode, initialProviderIds, initialValues, onClose, onSaved }) => {
+export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ prefill, allowDuplicate: allowDuplicateProp, initialVesselCode, initialMaintKind, initialTitle, autoSelectClassInspectionAsset, initialAssetId, initialPriority, requireProvider, stepLabel, onChangeContext, serviceRequestMode, initialProviderIds, initialValues, onClose, onSaved }) => {
   const t = useT();
   const { user, tenant } = useAuth();
   const isMercurio = !!tenant?.workOrderPdfTemplate?.startsWith("MERCURIO");
@@ -1092,6 +1098,13 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       setErr(`${t("wo.modal.completeBeforeCreate")}\n${[!title.trim() && t("wo.modal.titleField"), !description.trim() && t("wo.modal.task")].filter(Boolean).map(x => `• ${x}`).join("\n")}`);
       return;
     }
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    let allowDuplicate = allowDuplicateProp ?? false;
+    if (prefill?.source === "plan" && allowDuplicateProp === undefined) {
+      const ok = await confirmPlanWoDuplicate([prefill.sourceId, ...(prefill.additionalPlans?.map(p => p.id) ?? [])]);
+      if (ok === null) return;
+      allowDuplicate = ok;
+    }
     setSaving(true);
     try {
       let woId: string;
@@ -1099,6 +1112,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
 
       if (prefill?.source === "plan") {
         const created = await api.post<{ id: string; workOrderCode: string }>(`/app/pms/maintenance-plans/${prefill.sourceId}/open-work-order`, {
+          allowDuplicate,
           title:              title.trim()              || undefined,
           description:        description.trim()        || undefined,
           assignedToUserId:   assignedTo.trim()         || undefined,
@@ -1237,7 +1251,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       await onSaved(woId, woCode);
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
-  }, [prefill, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
+  }, [prefill, allowDuplicateProp, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
       checklistDocFile, confirmedPlanIds, providerOverride, planProviders, isAdmin, onBehalfUserId, onSaved, t,

@@ -236,6 +236,13 @@ export interface OpenFormalWorkOrderInput {
    */
   additionalPlanIds?: string[] | null;
   /**
+   * El usuario ya vio que el ítem tiene una OT abierta y eligió abrir otra igual.
+   * Sin esto, la ruta HTTP corta con 409 PLAN_WO_ALREADY_OPEN (ver
+   * listOpenWorkOrdersForPlans). Los llamados internos (copiloto, carga de
+   * análisis) no pasan por ese control.
+   */
+  allowDuplicate?: boolean;
+  /**
    * Taller elegido por el usuario en vez del que traen configurado los
    * planes (ad hoc, sólo para esta OT — no toca la configuración del plan).
    * Clave = providerId original del plan, valor = providerId elegido.
@@ -2043,6 +2050,56 @@ export async function previewMergedPlanText(session: TenantAccessSession, planId
   }
 
   return { ...mergePlanTexts(plans), providers };
+}
+
+export interface OpenPlanWorkOrder {
+  planId: string;
+  taskCode: string;
+  workOrderId: string;
+  workOrderCode: string;
+  status: string;
+}
+
+/**
+ * OT abiertas que ya ejecutan alguno de estos ítems del PDM. Antes de abrir otra
+ * OT del mismo ítem se le avisa al usuario y se le ofrece ir a la abierta.
+ *
+ * "Abierta" = PLANNED, IN_PROGRESS u ON_HOLD (una OT diferida sigue sin cerrar).
+ * Se busca por los vínculos (WorkOrderMaintenancePlan), igual que la columna de
+ * OT activa del plan: una OT de astillero cubre varios ítems.
+ */
+export async function listOpenWorkOrdersForPlans(
+  session: TenantAccessSession,
+  planIds: string[],
+): Promise<OpenPlanWorkOrder[]> {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const ids = [...new Set(planIds.map((v) => normalizeOptionalText(v)).filter((v): v is string => !!v))].slice(0, 50);
+  if (ids.length === 0) return [];
+  // Scope tenant + buque: getTenantMaintenancePlan tira 404 si el plan no se ve.
+  const plans = await Promise.all(ids.map((id) => getTenantMaintenancePlan(session, id)));
+  const taskCodeById = new Map(plans.map((p) => [p.id, p.taskCode]));
+
+  const links: Array<{ maintenancePlanId: string; workOrder: { id: string; workOrderCode: string; status: string } | null }> =
+    await (prismaRaw as any).workOrderMaintenancePlan.findMany({
+      where: {
+        tenantId: plans[0]!.tenantId,
+        maintenancePlanId: { in: ids },
+        workOrder: { status: { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] }, deletedAt: null },
+      },
+      select: { maintenancePlanId: true, workOrder: { select: { id: true, workOrderCode: true, status: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+
+  return links
+    .filter((l) => !!l.workOrder)
+    .map((l) => ({
+      planId: l.maintenancePlanId,
+      taskCode: taskCodeById.get(l.maintenancePlanId) ?? "",
+      workOrderId: l.workOrder!.id,
+      workOrderCode: l.workOrder!.workOrderCode,
+      status: l.workOrder!.status,
+    }));
 }
 
 export async function openFormalWorkOrder(

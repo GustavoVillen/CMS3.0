@@ -19,6 +19,7 @@ import {
   listPlanExecutions,
   bulkSetPlanCriteriaSource,
   listTenantMaintenancePlans,
+  listOpenWorkOrdersForPlans,
   openFormalWorkOrder,
   postponePlan,
   previewMergedPlanText,
@@ -304,6 +305,16 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && /^\/app\/pms\/maintenance-plans\/[^/]+\/open-work-order$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof openFormalWorkOrder>[2];
+    // Otra OT del mismo ítem del plan sólo si el usuario ya vio la abierta y
+    // eligió seguir (la pantalla pregunta antes y manda allowDuplicate).
+    if (body?.allowDuplicate !== true) {
+      const open = await listOpenWorkOrdersForPlans(session, [id, ...(body?.additionalPlanIds ?? [])]);
+      if (open.length > 0) {
+        const o = open[0]!;
+        throw new RouteError(409, "PLAN_WO_ALREADY_OPEN",
+          `El ítem ${o.taskCode} del plan ya tiene abierta la OT ${o.workOrderCode}. Revisala antes de abrir otra.`);
+      }
+    }
     sendJson(response, 201, await openFormalWorkOrder(session, id, body));
     return true;
   }
@@ -336,6 +347,14 @@ export async function handleMaintenanceRoutes(
       return true;
     }
     sendJson(response, 200, await previewMergedPlanText(session, ids));
+    return true;
+  }
+
+  // También ANTES del GET por id. OT abiertas de estos ítems: la pantalla avisa
+  // antes de abrir otra OT del mismo ítem.
+  if (method === "GET" && url.pathname === "/app/pms/maintenance-plans/open-work-orders") {
+    const ids = (url.searchParams.get("ids") ?? "").split(",").map(s => s.trim()).filter(Boolean);
+    sendJson(response, 200, { items: await listOpenWorkOrdersForPlans(session, ids) });
     return true;
   }
 

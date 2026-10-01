@@ -3,6 +3,7 @@ import { ChevronLeft, Loader2, Zap, AlertTriangle, Clock } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useWoTerms } from "../lib/i18n";
 import { api, ApiError } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 
 interface Plan {
   id: string;
@@ -97,9 +98,12 @@ export const MobilePlans: React.FC<MobilePlansProps> = ({ initialFilter }) => {
 
   const handleExecute = useCallback(async () => {
     if (!selected) return;
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([selected.id]);
+    if (allowDuplicate === null) return;
     setSaving(true); setErr(null);
     try {
-      await api.post(`/app/pms/maintenance-plans/${selected.id}/open-work-order`, {});
+      await api.post(`/app/pms/maintenance-plans/${selected.id}/open-work-order`, { allowDuplicate });
       await reload();
       setView("list");
       setSelected(null);

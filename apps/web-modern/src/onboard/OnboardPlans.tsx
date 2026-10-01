@@ -18,6 +18,7 @@ import { useT, useWoTerms, useLocale } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { AlertDialog } from "../components/AlertDialog";
 import { WO_REQUESTED_BY, WO_ASSIGNED_TO, WO_SYSTEM_AREAS } from "../lib/wo-form-catalog";
@@ -387,12 +388,16 @@ function PlanOpenForm({ plan, siblings, onBack, onExit }: {
   };
 
   const send = async () => {
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([plan.id, ...extra]);
+    if (allowDuplicate === null) return;
     setBusy(true);
     let created: { id: string; workOrderCode: string } | null = null;
     const warnings: string[] = [];
     let srCount = 0;
     try {
       created = await api.post<{ id: string; workOrderCode: string }>(`/app/pms/maintenance-plans/${plan.id}/open-work-order`, {
+        allowDuplicate,
         requestedByArea: requestedBy,
         assignedToArea: assignedTo,
         systemArea: system,

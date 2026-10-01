@@ -24,6 +24,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
 import { CreateWorkOrderModal, buildWoPrefillFromPlan, type WoPrefill } from "../components/CreateWorkOrderModal";
 import { api, ApiError } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { markJustCreated } from "../lib/just-created";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { useFetch } from "../lib/hooks";
@@ -365,9 +366,20 @@ export function MaintenanceSheetPage() {
           ));
           return;
         }
+        // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra. Si el
+        // usuario no sigue (o se fue a ver la abierta) la tanda se corta acá; las
+        // que ya se abrieron quedan.
+        const allowDuplicate = await confirmPlanWoDuplicate([primary.id, ...extras.map(p => p.id)]);
+        if (allowDuplicate === null) {
+          setQueue([]);
+          setQueueIndex(0);
+          if (index > start) void reload();
+          return;
+        }
         const created = await api.post<{ id: string; workOrderCode: string }>(
           `/app/pms/maintenance-plans/${primary.id}/open-work-order`,
           {
+            allowDuplicate,
             additionalPlanIds: extras.map(p => p.id),
             // Lo que la ventana precargaba del plan y el backend no hereda solo;
             // el resto (textos, criterios, LOTO, riesgo, talleres) lo hereda él.

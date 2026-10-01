@@ -2889,6 +2889,12 @@ const dict = {
   "wo.status.planned":             { es: "Planificada",               en: "Planned",                 pt: "Planejada" },
   "wo.status.inProgress":          { es: "En progreso",               en: "In progress",             pt: "Em andamento" },
   "wo.status.onHold":              { es: "En espera",                 en: "On hold",                 pt: "Em espera" },
+  "planWoDup.title":       { es: "Este ítem del plan ya tiene una OT abierta", en: "This plan item already has an open WO", pt: "Este item do plano já tem uma OS aberta" },
+  "planWoDup.body":        { es: "Ya se abrió una OT para este ítem del plan y todavía no está cerrada.", en: "A WO was already opened for this plan item and it is not closed yet.", pt: "Já foi aberta uma OS para este item do plano e ainda não está fechada." },
+  "planWoDup.item":        { es: "Ítem {code}", en: "Item {code}", pt: "Item {code}" },
+  "planWoDup.goTo":        { es: "Ver la OT", en: "Open the WO", pt: "Ver a OS" },
+  "planWoDup.question":    { es: "¿Seguro que querés abrir otra OT del mismo ítem?", en: "Are you sure you want to open another WO for the same item?", pt: "Tem certeza de que deseja abrir outra OS do mesmo item?" },
+  "planWoDup.openAnother": { es: "Abrir otra OT igual", en: "Open another WO anyway", pt: "Abrir outra OS mesmo assim" },
 
   // Deferral badges (vinculados a WO ON_HOLD)
   "wo.deferral.requested":     { es: "Solicitada",             en: "Requested",            pt: "Solicitada" },

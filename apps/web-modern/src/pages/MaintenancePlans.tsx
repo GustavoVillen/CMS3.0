@@ -68,6 +68,7 @@ import {
 import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -1406,7 +1407,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [showExecution, setShowExecution] = useState(false);
   const [expanded,    setExpanded]    = useState(true);
   const [showPostpone, setShowPostpone] = useState(false);
-  const [confirmDuplicateWO, setConfirmDuplicateWO] = useState(false);
+  // Resultado del aviso "el ítem ya tiene una OT abierta" (lib/plan-wo-guard),
+  // para que el formulario de la OT no vuelva a preguntar al guardar.
+  const [woDupOk, setWoDupOk] = useState<boolean | undefined>(undefined);
   const [showHistory, setShowHistory] = useState(false);
   const [showMoc, setShowMoc] = useState(false);
   // Popup interceptor: aparece al tocar Guardar cuando hay cambio de
@@ -1964,12 +1967,15 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [openingExpress, setOpeningExpress] = useState(false);
 
   const openExpressWorkOrder = async () => {
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([plan.id]);
+    if (allowDuplicate === null) return;
     setOpeningExpress(true);
     setActionError(null);
     try {
       const wo = await api.post<{ workOrderCode: string }>(
         `/app/pms/maintenance-plans/${plan.id}/open-work-order`,
-        { express: true, signerName: userName || null },
+        { express: true, signerName: userName || null, allowDuplicate },
       );
       onSaved();
       // Se va derecho a la OT recién creada: el usuario la abrió para trabajar
@@ -1993,7 +1999,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   }, `${saveResetKey}:${planSyncKey}`);
   planDirtyRef.current = planDirty;
   const requestClose = useEscapeGuard({
-    enabled: !readOnly && !showExecution && !showPostpone && !confirmDuplicateWO,
+    enabled: !readOnly && !showExecution && !showPostpone,
     isDirty: planDirty,
     onSave,
     onClose,
@@ -2728,7 +2734,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                   )}
                   {canExecute && needsWO && !(plan.activeWorkOrderCode && plan.executionStatus === "IN_WINDOW") && (
                     <button
-                      onClick={() => plan.activeWorkOrderCode ? setConfirmDuplicateWO(true) : setShowExecution(true)}
+                      onClick={() => { void (async () => { const ok = await confirmPlanWoDuplicate([plan.id]); if (ok === null) return; setWoDupOk(ok); setShowExecution(true); })(); }}
                       className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${plan.activeWorkOrderCode
                         ? "bg-accent/10 border border-accent/20 text-accent hover:bg-accent/15"
                         : "bg-accent text-accent-fg hover:brightness-110"}`}
@@ -3379,42 +3385,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         </div>
       </div>
 
-      {confirmDuplicateWO && plan.activeWorkOrderCode && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface dark:bg-[#0D1B2A] border border-yellow-500/30 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center shrink-0">
-                <Zap className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-fg">{t("mp.modal.duplicateWoTitle")}</p>
-                <p className="text-xs text-text-industrial/70 mt-1">
-                  {t("mp.modal.duplicateWoText")}{" "}
-                  <span className="font-mono font-bold text-yellow-700 dark:text-yellow-400">#{plan.activeWorkOrderCode}</span>.
-                  <br />{t("mp.modal.duplicateWoConfirm")}
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setConfirmDuplicateWO(false)}
-                className="px-4 py-2 rounded-xl text-xs text-text-industrial hover:text-fg transition-colors"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={() => { setConfirmDuplicateWO(false); setShowExecution(true); }}
-                className="px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 font-bold text-xs hover:bg-yellow-500/25 transition-all"
-              >
-                {t("mp.modal.openWoAnyway")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {!isNew && showExecution && needsWO && (
         <CreateWorkOrderModal
+          allowDuplicate={woDupOk}
           // Con overrides de lo que el admin ya haya tipeado en este modal sin
           // guardar todavía — buildWoPrefillFromPlan hereda del plan, pero acá
           // lo que hay en pantalla manda por sobre lo guardado.
@@ -4097,7 +4070,15 @@ export const MaintenancePlansPage: React.FC = () => {
    * perder campos es peor que no poder abrir la orden, pero no al revés.
    */
   const [openingWoId, setOpeningWoId] = useState<string | null>(null);
+  // Resultado del aviso "el ítem ya tiene una OT abierta", para no repetirlo al guardar.
+  const [executingDupOk, setExecutingDupOk] = useState<boolean | undefined>(undefined);
   const openWoForPlan = useCallback(async (row: MaintenancePlan) => {
+    // Antes de abrir el formulario: si el ítem (o los otros marcados que van a la
+    // misma OT) ya tiene una OT abierta, se avisa y se ofrece ir a ella.
+    const ids = bundlePlans[0]?.id === row.id ? bundlePlans.map(p => p.id) : [row.id];
+    const ok = await confirmPlanWoDuplicate(ids);
+    if (ok === null) return;
+    setExecutingDupOk(ok);
     setOpeningWoId(row.id);
     try {
       const full = await api.get<MaintenancePlan>(`/app/pms/maintenance-plans/${row.id}`);
@@ -4107,16 +4088,19 @@ export const MaintenancePlansPage: React.FC = () => {
     } finally {
       setOpeningWoId(null);
     }
-  }, []);
+  }, [bundlePlans]);
 
   const [expressRowId, setExpressRowId] = useState<string | null>(null);
   const openExpressFromRow = useCallback(async (row: MaintenancePlan) => {
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([row.id]);
+    if (allowDuplicate === null) return;
     setExpressRowId(row.id);
     setPageError(null);
     try {
       const wo = await api.post<{ workOrderCode: string }>(
         `/app/pms/maintenance-plans/${row.id}/open-work-order`,
-        { express: true, signerName: userName || null },
+        { express: true, signerName: userName || null, allowDuplicate },
       );
       reload();
       navigate(`/work-orders?autoCode=${encodeURIComponent(wo.workOrderCode)}`);
@@ -4789,6 +4773,7 @@ export const MaintenancePlansPage: React.FC = () => {
 
       {executing && (
         <CreateWorkOrderModal
+          allowDuplicate={executingDupOk}
           prefill={buildWoPrefillFromPlan(
             executing,
             t("mp.modal.maintenancePlanLabel"),

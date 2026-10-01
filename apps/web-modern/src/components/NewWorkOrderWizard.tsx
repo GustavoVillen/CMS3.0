@@ -7,6 +7,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, ChevronRight, ClipboardList, Cog, Container, FilePlus, Loader2, Search, ShieldAlert, Ship, Sparkles, Wrench, Zap } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
@@ -257,11 +258,14 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
   // onSaved, que la abre ya hecha en el editor real — ahí sí se puede tocar
   // todo (título, asignado a, checklist, etc.).
   const choosePlanItem = useCallback(async (item: PlanItemCandidate) => {
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([item.id]);
+    if (allowDuplicate === null) return;
     setCreating(true);
     setCreateError(null);
     try {
       const created = await api.post<{ id: string; workOrderCode: string }>(
-        `/app/pms/maintenance-plans/${item.id}/open-work-order`, {},
+        `/app/pms/maintenance-plans/${item.id}/open-work-order`, { allowDuplicate },
       );
       markJustCreated("wo", created.workOrderCode);
       await onSaved(created.id, created.workOrderCode);

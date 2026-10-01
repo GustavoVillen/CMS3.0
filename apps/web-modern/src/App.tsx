@@ -7,6 +7,7 @@ import { VesselProvider } from "./lib/vessel-context";
 import { EscapeGuardProvider } from "./lib/escape-guard";
 import { NotificationsProvider } from "./lib/notifications";
 import { UndoToastHost } from "./components/UndoToastHost";
+import { PlanWoDuplicateHost } from "./components/PlanWoDuplicateHost";
 // Marco y entrada — EAGER (se necesitan de inmediato, no ganan nada lazy).
 import { Layout } from "./components/Layout";
 import { PlatformLayout } from "./components/PlatformLayout";
@@ -344,6 +345,7 @@ function TenantI18nWrapper({ children }: { children: React.ReactNode }) {
             <DemoBanner />
             {children}
             <UndoToastHost />
+            <PlanWoDuplicateHost />
           </EscapeGuardProvider>
         </NotificationsProvider>
       </VesselProvider>

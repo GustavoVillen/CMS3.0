@@ -6,6 +6,7 @@ import {
 import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
+import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useNavigate } from "react-router-dom";
 import { useT, useLocale, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -494,12 +495,15 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
   // Abre la OT de inspección de ese ítem del PDM y va a la orden. La OT nace
   // autorizada (las inspecciones no requieren aprobación ni autorización).
   const openInspectionWo = async (plan: InspectionPlanOption) => {
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate([plan.id]);
+    if (allowDuplicate === null) return;
     setInspOpeningId(plan.id);
     setInspError(null);
     try {
       const wo = await api.post<{ workOrderCode: string }>(
         `/app/pms/maintenance-plans/${plan.id}/open-work-order`,
-        {},
+        { allowDuplicate },
       );
       setInspKind("none");
       navigate(`/work-orders/${encodeURIComponent(wo.workOrderCode)}`, copilotFlow ? { state: { copilotFlow } } : undefined);

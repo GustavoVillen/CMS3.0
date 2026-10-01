@@ -10,6 +10,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Camera, Loader2, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
+import { confirmPlanWoDuplicate } from "../../lib/plan-wo-guard";
 import { useT } from "../../lib/i18n";
 import {
   ModalShell, ConfidenceBadge, inputCls, labelCls, assetLabel,
@@ -203,10 +204,13 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
     setPlanCandidates(null);
     setPlanMode(null);
     if (!sampleId || planIds.length === 0) { setStep("result"); return; }
+    // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
+    const allowDuplicate = await confirmPlanWoDuplicate(planIds);
+    if (allowDuplicate === null) { setStep("result"); return; }
     try {
       const wo = await api.post<{ id: string; workOrderCode: string }>(
         `/app/pms/maintenance-plans/${planIds[0]}/open-work-order`,
-        { additionalPlanIds: planIds.slice(1) },
+        { additionalPlanIds: planIds.slice(1), allowDuplicate },
       );
       try {
         await api.post(`/app/fluid-analyses/${sampleId}/link-work-order`, { workOrderId: wo.id, planId: planIds[0] });
