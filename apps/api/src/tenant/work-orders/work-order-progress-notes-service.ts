@@ -11,6 +11,7 @@ import { detectSparesFromText, processNoteAndRegenerate, regenerateObservationsF
 import { hasPermission } from "../auth/role-permissions";
 import { log } from "../../common/logger";
 import { assertNotLocked } from "../../common/record-lock";
+import { publishAudit } from "../../platform/audit/audit-publisher";
 
 export interface CreateProgressNoteInput {
   kind: "TEXT" | "PHOTO" | "VIDEO" | "AUDIO" | "DOCUMENT";
@@ -284,7 +285,7 @@ export async function updateProgressNote(
   session: TenantAccessSession,
   workOrderId: string,
   noteId: string,
-  input: { text: string | null },
+  input: { text: string | null; occurredAt?: string | null },
 ): Promise<ProgressNoteRow> {
   const wo = await getWorkOrderOrThrow(session, workOrderId);
   // Lockdown vetting: no se puede editar notas de una OT cerrada/cancelada.
@@ -309,10 +310,41 @@ export async function updateProgressNote(
     data.processedText = text || null;
   }
 
+  // Fecha del avance: misma regla que al cargarlo (createdAt es la fecha que se
+  // muestra y por la que se ordena). No puede ser futura; un minuto de margen
+  // por la diferencia de reloj del teléfono.
+  let movedFrom: Date | null = null;
+  if (input.occurredAt) {
+    const d = new Date(input.occurredAt);
+    if (Number.isNaN(d.getTime())) {
+      throw new RouteError(400, "VALIDATION_ERROR", "La fecha del avance no es válida.");
+    }
+    if (d.getTime() > Date.now() + 60_000) {
+      throw new RouteError(400, "VALIDATION_ERROR", "La fecha del avance no puede ser futura.");
+    }
+    if (d.getTime() !== new Date(note.createdAt).getTime()) {
+      data.createdAt = d;
+      movedFrom = new Date(note.createdAt);
+    }
+  }
+
   const updated = await (prismaRaw as any).workOrderProgressNote.update({
     where: { id: noteId },
     data,
   });
+
+  // Cambiar la fecha de un avance es reescribir la secuencia del trabajo: queda
+  // asentado quién la movió y desde qué fecha.
+  if (movedFrom) {
+    void publishAudit(prismaRaw as any, {
+      tenantId: wo.tenantId,
+      actorUserId: session.user.id,
+      action: "WorkOrder.progressNoteDateChanged",
+      entityType: "WorkOrder",
+      entityId: wo.id,
+      metadata: { noteId, from: movedFrom.toISOString(), to: (data.createdAt as Date).toISOString() },
+    });
+  }
 
   // Re-generar observations con el texto editado (fire-and-forget).
   void regenerateObservationsForWorkOrder(wo.id, {

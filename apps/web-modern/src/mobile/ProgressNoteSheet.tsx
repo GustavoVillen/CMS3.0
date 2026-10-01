@@ -45,7 +45,7 @@ async function compressImage(f: File): Promise<File> {
 }
 
 /** `YYYY-MM-DDThh:mm` en hora local, para <input type="datetime-local">. */
-function toLocalInput(d: Date): string {
+export function toLocalInput(d: Date): string {
   const x = new Date(d);
   x.setMinutes(x.getMinutes() - x.getTimezoneOffset());
   return x.toISOString().slice(0, 16);

@@ -49,7 +49,7 @@ import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCop
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
-import { ProgressNoteSheet } from "../mobile/ProgressNoteSheet";
+import { ProgressNoteSheet, toLocalInput } from "../mobile/ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -670,11 +670,15 @@ const noteCellCls = "w-full bg-transparent border border-fg/10 rounded-md px-1.5
 const ProgressNoteRow: React.FC<{
   note: ProgressNote;
   onDelete?: () => void;
-  onSave?: (text: string) => Promise<void>;
+  onSave?: (text: string, occurredAt: string | null) => Promise<void>;
   onOpenMedia?: () => void;
 }> = ({ note, onDelete, onSave, onOpenMedia }) => {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text ?? "");
+  // Fecha del avance, editable junto con el texto (misma regla que al cargarlo: no futura).
+  const [draftWhen, setDraftWhen] = useState(toLocalInput(new Date(note.createdAt)));
+  const [dateErr, setDateErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
@@ -683,8 +687,13 @@ const ProgressNoteRow: React.FC<{
   };
   const doSave = async () => {
     if (!onSave) return;
+    // Sólo se manda la fecha si se tocó: el campo no tiene segundos y, si no, cada
+    // edición de texto movería el avance unos segundos.
+    const dateChanged = draftWhen !== toLocalInput(new Date(note.createdAt));
+    const when = new Date(draftWhen);
+    if (dateChanged && (Number.isNaN(when.getTime()) || when.getTime() > Date.now())) { setDateErr(t("pn.futureDate")); return; }
     setSaving(true);
-    try { await onSave(draft); setEditing(false); }
+    try { await onSave(draft, dateChanged ? when.toISOString() : null); setEditing(false); }
     catch { /* el caller muestra el error */ }
     finally { setSaving(false); }
   };
@@ -694,9 +703,14 @@ const ProgressNoteRow: React.FC<{
     <tr className="align-top">
       <td className="px-1">
         <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
-          {fmtTime(note.createdAt)}
+          {editing ? (
+            <input type="datetime-local" value={draftWhen} max={toLocalInput(new Date())} disabled={saving}
+              onChange={e => setDraftWhen(e.target.value)} aria-label={t("pn.when")}
+              className="w-[150px] bg-fg/5 border-0 rounded-md px-1 py-0.5 text-[11px] text-fg focus:outline-none disabled:opacity-60" />
+          ) : fmtTime(note.createdAt)}
           {note.createdByName && <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={note.createdByName}>{note.createdByName}</span>}
         </div>
+        {dateErr && <AlertDialog message={dateErr} onClose={() => setDateErr(null)} />}
       </td>
       <td className="px-1">
         <div className={`${noteCellCls} flex items-start gap-2 min-w-0`}>
@@ -748,7 +762,7 @@ const ProgressNoteRow: React.FC<{
       </td>
       <td className="px-1 whitespace-nowrap text-right">
         {onSave && !editing && (
-          <button type="button" onClick={() => { setDraft(note.text ?? ""); setEditing(true); }}
+          <button type="button" onClick={() => { setDraft(note.text ?? ""); setDraftWhen(toLocalInput(new Date(note.createdAt))); setEditing(true); }}
             className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors" title="Editar avance">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -811,9 +825,9 @@ export const ProgressNotesPanel: React.FC<{
     }
   };
 
-  const handleSave = async (noteId: string, text: string) => {
+  const handleSave = async (noteId: string, text: string, occurredAt: string | null) => {
     try {
-      await api.patch(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`, { text });
+      await api.patch(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`, { text, occurredAt });
       await reload();
       onChanged?.();
     } catch (e) {
@@ -909,7 +923,7 @@ export const ProgressNotesPanel: React.FC<{
                   key={n.id}
                   note={n}
                   onDelete={canDelete ? () => setConfirmDelId(n.id) : undefined}
-                  onSave={canEdit ? (text) => handleSave(n.id, text) : undefined}
+                  onSave={canEdit ? (text, occurredAt) => handleSave(n.id, text, occurredAt) : undefined}
                   onOpenMedia={() => setLightbox(n)}
                 />
               ))}
