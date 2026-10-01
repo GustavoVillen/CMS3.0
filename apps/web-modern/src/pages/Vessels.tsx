@@ -11,7 +11,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 
 interface Vessel {
@@ -100,6 +100,46 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
   const [status, setStatus] = useState(initial?.status ?? "ACTIVE");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Lo que el copiloto ve es lo que está escrito ahora en la ficha (antes veía
+  // el registro guardado y no podía cargar nada).
+  const vesselCopilotOptions = {
+    isCrewed: [{ value: "true", label: t("vessel.crewed.yes") }, { value: "false", label: t("vessel.crewed.no") }],
+    status: [
+      { value: "ACTIVE", label: t("status.active") }, { value: "INACTIVE", label: t("status.inactive") },
+      { value: "DECOMMISSIONED", label: t("status.decommissioned") },
+    ],
+  };
+  useCopilotEmitter({
+    module: "VESSELS",
+    screen: initial ? "VESSEL_EDIT" : "VESSEL_CREATE",
+    entityId: initial?.id,
+    entityCode: initial?.code,
+    canEdit: true,
+    fieldValues: {
+      code: code || null, name: name || null, owner: owner || null, vesselType: vesselType || null,
+      isCrewed: isCrewed || null, imo: imo || null, registration: registration || null,
+      powerHp: powerHp || null, dwtTons: dwtTons || null, lengthM: lengthM || null, beamM: beamM || null,
+      depthM: depthM || null, buildYear: buildYear || null, buildCountry: buildCountry || null, status: status || null,
+    },
+    fieldOptions: vesselCopilotOptions,
+  });
+  useCopilotApplyFields((fields) => {
+    const { pick, result } = copilotOptionPicker(vesselCopilotOptions, { isCrewed: t("vessel.crewed"), status: t("col.status") });
+    const text: Array<[string, (v: string) => void]> = [
+      ["name", setName], ["owner", setOwner], ["vesselType", setVesselType], ["imo", setImo],
+      ["registration", setRegistration], ["powerHp", setPowerHp], ["dwtTons", setDwtTons], ["lengthM", setLengthM],
+      ["beamM", setBeamM], ["depthM", setDepthM], ["buildYear", setBuildYear], ["buildCountry", setBuildCountry],
+    ];
+    for (const [key, set] of text) if (fields[key] !== undefined) set(fields[key]!);
+    // El código no se cambia en un buque ya creado.
+    if (!initial && fields.code !== undefined) setCode(fields.code);
+    const crewed = pick("isCrewed", fields.isCrewed);
+    if (crewed) setIsCrewed(crewed);
+    const st = pick("status", fields.status);
+    if (st) setStatus(st);
+    return result();
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setError(null);
@@ -293,20 +333,8 @@ export const VesselsPage: React.FC = () => {
   const [formVessel, setFormVessel] = useState<Vessel | null | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Vessel | null>(null);
 
-  useCopilotEmitter(formVessel === undefined ? { module: "VESSELS", screen: "VESSEL_LIST" } : {
-    module: "VESSELS",
-    screen: formVessel ? "VESSEL_EDIT" : "VESSEL_CREATE",
-    entityId: formVessel?.id,
-    entityCode: formVessel?.code,
-    canEdit: true,
-    fieldValues: {
-      name:       formVessel?.name        ?? null,
-      vesselType: formVessel?.vesselType  ?? null,
-      isCrewed:   formVessel?.isCrewed == null ? "" : (formVessel.isCrewed ? "Sí" : "No tripulada"),
-      status:     formVessel?.status      ?? null,
-      imo:        formVessel?.imo         ?? null,
-    },
-  });
+  // Con la ficha abierta, el contexto lo emite la propia ficha (VesselForm).
+  useCopilotEmitter(formVessel === undefined ? { module: "VESSELS", screen: "VESSEL_LIST" } : null);
 
   const path = `/app/vessels${statusFilter ? `?status=${statusFilter}` : ""}`;
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [statusFilter]);

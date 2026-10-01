@@ -1,5 +1,27 @@
 HISTORY.txt
 
+[2026-10-01] Copiloto: interactua de verdad con los formularios (tanda 1)
+Agent: Claude Opus 5.5
+- Caso que lo disparo: en "Nuevo plan" el copiloto dijo "pedi recalcular riesgo, criterios y LOTO" y no
+  paso nada: el plan no registraba sus generadores. Relevamiento de todos los formularios (subagente).
+- Plan (MP_EDIT): generadores registrados (criterios, LOTO, riesgo+consecuencia con el LOTO recien hecho),
+  listas cerradas triggerType y riskLevel con aviso si no entran.
+- OT (WO_EDIT): se suman titulo, tarea y consecuencia a los generadores; el copiloto ve y puede cargar la
+  consecuencia RCM; avisa lo que no entra en una lista.
+- Defecto alta (DEFECT_CREATE): ahora puede escribir (buque, equipo, gravedad, estado, textos) con listas
+  cerradas; generadores clasificacion, accion inmediata y analisis de fotos. Detalle (DEFECT_EDIT):
+  generadores accion inmediata, RCA y fotos; aviso de rechazados.
+- SS (SR_EDIT): aviso de rechazados en listas y casillas multiples.
+- Equipo, certificado, simulacro, buque y diferimiento: el copiloto ahora puede escribir (antes solo veia);
+  criticidad sugerida (equipo), escenario (simulacro), medidas compensatorias y riesgo (diferimiento).
+  Buque y diferimiento mostraban al copiloto el valor guardado y no lo que se edita: corregido.
+- copilot-context: copilotOptionPicker (listas cerradas con aviso, mismo criterio que useCopilotAssist).
+- Panel + servidor: cada pedido le dice al copiloto si la pantalla acepta campos y que generadores tiene;
+  si no estan, no puede decir que los uso.
+- Pendiente (tanda 2): formularios sin ninguna conexion (permisos, repuestos, inspecciones, MOC, auditorias,
+  casi cuasi accidentes, proveedores, celular y a bordo).
+- Frontend + backend (prompt): pull + build web + restart.
+
 [2026-10-01] Asesor tecnico: "Crear la OT" abre la OT completa
 Agent: Claude Opus 5.5
 - Antes cargaba solo buque, titulo y prioridad. Ahora, desde el tema (advisor-types woValuesFromFinding):

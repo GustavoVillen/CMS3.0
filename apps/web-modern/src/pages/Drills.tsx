@@ -10,7 +10,7 @@ import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel } from "../components/EntityLabels";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, copilotOptionPicker } from "../lib/copilot-context";
 import { printDrill } from "../lib/print-drill";
 import { useT } from "../lib/i18n";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -170,6 +170,7 @@ const DrillModal: React.FC<{
       lessonsLearned: lessonsLearned.trim() || null,
       participantCount: String(participants.length),
     },
+    fieldOptions: { requirementId: availableRequirements.map(r => ({ value: r.id, label: r.title })) },
   });
 
   const handleScenarioClick = useCallback(async () => {
@@ -189,6 +190,23 @@ const DrillModal: React.FC<{
       setErr(e instanceof ApiError ? e.message : "No se pudo generar el escenario.");
     } finally { setLoadingScenario(false); }
   }, [isLocked, loadingScenario, requirementId, vesselCode, vessels]);
+
+  // El copiloto puede completar el simulacro y pedir el escenario sugerido
+  // (antes sólo veía los datos). Los participantes los tilda la persona.
+  useCopilotApplyFields(!isLocked ? (fields) => {
+    const { pick, result } = copilotOptionPicker(
+      { requirementId: availableRequirements.map(r => ({ value: r.id, label: r.title })) },
+      { requirementId: t("drill.type") },
+    );
+    const req = pick("requirementId", fields.requirementId);
+    if (req) setRequirementId(req);
+    if (fields.scheduledDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.scheduledDate)) setScheduled(fields.scheduledDate.slice(0, 10));
+    if (fields.scenario       !== undefined) setScenario(fields.scenario);
+    if (fields.observations   !== undefined) setObservations(fields.observations);
+    if (fields.lessonsLearned !== undefined) setLessons(fields.lessonsLearned);
+    return result();
+  } : null);
+  useCopilotFormActions(!isLocked ? { scenario: handleScenarioClick } : null);
 
   const { data: crewData } = useFetch<{ items: CrewItem[] }>(`/app/crew?status=ONBOARD${vesselCode ? `&vesselCode=${vesselCode}` : ""}`, [vesselCode]);
   const availableCrew = crewData?.items ?? [];

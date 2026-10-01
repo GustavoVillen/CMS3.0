@@ -1627,13 +1627,23 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
   });
 
   useCopilotApplyFields(editable ? (fields) => {
+    // Lo que no entra en una lista cerrada vuelve como "rejected" y el copiloto
+    // lo avisa en el chat (antes se descartaba sin decir nada).
+    const rejected: string[] = [];
+    const norm = (v: string) => v.trim().toLowerCase();
     /** Lista cerrada de una sola opción: sólo entra un valor que exista. */
-    const pickOne = (options: string[], value: string | undefined): string | null =>
-      value !== undefined && options.includes(value) ? value : null;
+    const pickOne = (options: string[], value: string | undefined, label: string): string | null => {
+      if (value === undefined || !value.trim()) return null;
+      const hit = options.find(o => o === value || norm(o) === norm(value)) ?? null;
+      if (!hit) rejected.push(label);
+      return hit;
+    };
     /** Recuadros de tildar varios: se acepta "A, B" y se descartan los inventados. */
-    const pickMany = (options: string[], value: string | undefined): string[] | null => {
-      if (value === undefined) return null;
-      const picked = value.split(",").map(v => v.trim()).filter(v => options.includes(v));
+    const pickMany = (options: string[], value: string | undefined, label: string): string[] | null => {
+      if (value === undefined || !value.trim()) return null;
+      const asked = value.split(",").map(v => v.trim()).filter(Boolean);
+      const picked = asked.map(v => options.find(o => o === v || norm(o) === norm(v))).filter((o): o is string => !!o);
+      if (picked.length < asked.length) rejected.push(label);
       return picked.length > 0 ? picked : null;
     };
 
@@ -1645,16 +1655,17 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
     if (fields.capitan      !== undefined) patch.capitan      = fields.capitan;
     if (fields.jefeMaq      !== undefined) patch.jefeMaq      = fields.jefeMaq;
 
-    const dept = pickOne(doc.config.departments, fields.department);
+    const dept = pickOne(doc.config.departments, fields.department, t("ss.guide.field.dept"));
     if (dept) patch.department = dept;
-    const compras = pickMany(doc.config.purchaseRequest, fields.purchaseKinds);
+    const compras = pickMany(doc.config.purchaseRequest, fields.purchaseKinds, t("ss.guide.field.purchase"));
     if (compras) patch.compras = compras;
-    const comunicacion = pickMany(doc.config.communicationMethods, fields.communication);
+    const comunicacion = pickMany(doc.config.communicationMethods, fields.communication, t("ss.guide.field.comm"));
     if (comunicacion) patch.comunicacion = comunicacion;
-    const distribucion = pickMany(doc.config.distribution, fields.distribution);
+    const distribucion = pickMany(doc.config.distribution, fields.distribution, t("ss.guide.field.distribution"));
     if (distribucion) patch.distribucion = distribucion;
 
     if (Object.keys(patch).length > 0) patchForm(patch);
+    return { rejected };
   } : null);
   // Logo de la cabecera: el propio del formulario (el que estampa el PDF) y, si
   // no hay, el del tenant. En modo oscuro gana el logo claro del tenant — el del

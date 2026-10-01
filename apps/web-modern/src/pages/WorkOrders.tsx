@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, User, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -45,7 +45,7 @@ import { useRoleHasPermission } from "../lib/role-permissions";
 import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext, copilotOptionPicker } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
@@ -1517,6 +1517,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     loto:               loto               || null,
     riskLevel:          riskLevel          || null,
     riskAnalysisResult: riskAnalysisResult || null,
+    // Antes el copiloto no veía la consecuencia RCM: la llenaba el generador
+    // pero no la podía leer ni corregir.
+    consequenceCategory:  consequenceCategory  || null,
+    consequenceRationale: consequenceRationale || null,
     priority:           priority           || null,
     location:           location           || null,
     assignedToUserId:   assignedTo         || null,
@@ -1549,6 +1553,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         { value: "CRITICAL", label: "Crítico" },
       ],
       assignedToUserId: people.map(person => ({ value: person.userId, label: person.name })),
+      consequenceCategory: [
+        { value: "SAFETY",          label: t("wo.modal.consequence.safety") },
+        { value: "ENVIRONMENTAL",   label: t("wo.modal.consequence.environmental") },
+        { value: "OPERATIONAL",     label: t("wo.modal.consequence.operational") },
+        { value: "NON_OPERATIONAL", label: t("wo.modal.consequence.nonOperational") },
+      ],
     };
     if (isMercurio) {
       opts.operatingCondition = WO_OPERATING_CONDITIONS.map(c => ({
@@ -1568,13 +1578,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
 
   useCopilotApplyFields(isEditable ? (fields) => {
-    /** Lista cerrada: sólo entra un valor que exista de verdad en el recuadro. */
-    const pick = (key: string, value: string | undefined): string | null => {
-      if (value === undefined) return null;
-      const opts = copilotFieldOptions[key];
-      if (!opts) return null;
-      return opts.some(o => o.value === value) ? value : null;
-    };
+    // Lista cerrada: sólo entra un valor que exista de verdad en el recuadro.
+    // Lo que no entra vuelve como "rejected" y el copiloto lo avisa.
+    const { pick, result } = copilotOptionPicker(copilotFieldOptions, {
+      priority: t("wo.modal.priority"), riskLevel: t("wo.modal.riskLevel"), assignedToUserId: t("wo.modal.assignee"),
+      operatingCondition: t("wo.modal.operatingCondition"), requestedByArea: t("wo.modal.requestedBy"),
+      assignedToArea: t("wo.modal.assignedTo"), systemArea: t("wo.modal.system"), maintenanceKind: t("wo.modal.type"),
+      department: t("wo.modal.department"), consequenceCategory: t("wo.modal.consequenceCategory"),
+    });
 
     // -- Texto libre y campos sueltos de la OT (se persisten con "Guardar") --
     if (fields.title              !== undefined) setTitle(fields.title);
@@ -1582,6 +1593,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     if (fields.acceptanceCriteria !== undefined) setAcceptanceCriteria(fields.acceptanceCriteria);
     if (fields.loto               !== undefined) setLoto(fields.loto);
     if (fields.riskAnalysisResult !== undefined) setRiskAnalysisResult(fields.riskAnalysisResult);
+    const cons = pick("consequenceCategory", fields.consequenceCategory);
+    if (cons) setConsequenceCategory(cons);
+    if (fields.consequenceRationale !== undefined) setConsequenceRationale(fields.consequenceRationale);
     const risk = pick("riskLevel", fields.riskLevel);
     if (risk) setRiskLevel(risk);
     const assignee = pick("assignedToUserId", fields.assignedToUserId);
@@ -1620,6 +1634,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       touchRegi();
       setRegiForm(prev => ({ ...prev, ...regiPatch }));
     }
+    return result();
   } : null);
 
   // Clic en el rótulo TAREA: la IA arma la lista de tareas desde el equipo y el
@@ -1720,12 +1735,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
    * texto sale igual venga del rótulo o del chat, con la misma calibración
    * (alcance de la tarea, nivel tripulación, formato de LOTO).
    */
-  useCopilotFormActions(isEditable ? {
-    acceptanceCriteria: handleAcceptanceCriteriaClick,
-    loto: handleLotoClick,
-    risk: handleRiskClick,
-  } : null);
-
   const handleConsequenceClick = useCallback(async () => {
     if (!isEditable || loadingConsequence) return;
     setLoadingConsequence(true);
@@ -1748,6 +1757,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     } catch { /* noop */ }
     finally { setLoadingConsequence(false); }
   }, [isEditable, loadingConsequence, workOrder.assetName, workOrder.assetId, workOrder.vesselCode, aiTaskType, title, description]);
+
+  // Todos los "Sugerir con IA" de la OT, para que el copiloto los dispare
+  // ([RECALCULAR]). Antes faltaban título, tarea y consecuencia.
+  useCopilotFormActions(isEditable ? {
+    title: handleTitleClick,
+    task: handleTaskClick,
+    acceptanceCriteria: handleAcceptanceCriteriaClick,
+    loto: handleLotoClick,
+    risk: handleRiskClick,
+    consequence: handleConsequenceClick,
+  } : null);
 
   const handleRewriteDeficiencies = useCallback(async () => {
     if (!isEditable || loadingRewrite) return;
@@ -3903,6 +3923,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <span className="inline-flex items-center gap-1.5 mt-2.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg">
               <Ship className="w-3 h-3" /><b className="font-bold">{paperVesselName}</b>
             </span>
+            {/* Quién abrió la OT (createdByUserId), mismo nombre que el GENERADO POR del papel. */}
+            {workOrder.createdByName && (
+              <span className="inline-flex items-center gap-1.5 mt-2.5 rounded-full border border-fg/10 bg-fg/5 px-2.5 py-1 text-[11px] text-fg" title={t("wo.guide.openedBy")}>
+                <User className="w-3 h-3" />
+                <span className="text-text-industrial/60">{t("wo.guide.openedBy")}</span>
+                <b className="font-bold">{workOrder.createdByName}</b>
+              </span>
+            )}
             <WizardStepper
               labels={[t("wo.guide.step.prepare"), t("wo.guide.step.approval"), t("wo.guide.step.execution"), t("wo.guide.step.closure")]}
               current={guideStep}

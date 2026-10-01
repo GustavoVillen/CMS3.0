@@ -18,7 +18,7 @@ import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { RiskMatrix } from "../components/RiskMatrix";
 import { deriveRiskLevelFromMatrix, toUiRiskLevel, toUiRiskProbability, toUiRiskConsequence, type RiskLevel, type RiskProbability, type RiskConsequence } from "../lib/risk";
-import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotScreenContext, useCopilotApplyFields, useCopilotFormActions } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -647,14 +647,24 @@ const DeferralModal: React.FC<DeferralModalProps> = ({ deferral, onClose, onSucc
     vesselCode: deferral.vesselCode,
     workflowStage: deferral.status,
     canEdit: !isTerminal,
+    // Lo que está escrito ahora (antes veía lo guardado y no lo que se edita).
     fieldValues: {
       justification: deferral.justification ?? null,
-      compensatoryMeasures: deferral.compensatoryMeasures ?? null,
+      compensatoryMeasures: compensatoryMeasures || null,
+      riskLevel: riskLevel || null,
+      riskAnalysisResult: riskAnalysisResult || null,
       sourceType: deferral.sourceType ?? null,
       targetDate: deferral.targetDate ? new Date(deferral.targetDate).toISOString().split("T")[0] : null,
     },
     relatedEntities: { sourceId: deferral.sourceId },
   });
+  // Escribe medidas y análisis; el nivel sale de la matriz (lo arma el
+  // generador "risk", no se carga suelto). Justificación y fecha son del pedido.
+  useCopilotApplyFields(!isTerminal ? (fields) => {
+    if (fields.compensatoryMeasures !== undefined) setCompensatoryMeasures(fields.compensatoryMeasures);
+    if (fields.riskAnalysisResult   !== undefined) setRiskAnalysisResult(fields.riskAnalysisResult);
+  } : null);
+  useCopilotFormActions(!isTerminal ? { compensatoryMeasures: handleCompensatoryClick, risk: handleDeferralRiskClick } : null);
 
   return (
     <>

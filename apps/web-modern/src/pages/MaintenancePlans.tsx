@@ -81,11 +81,11 @@ import { MaintenancePlansGrid } from "../components/MaintenancePlansGrid";
 import { PersonSelect } from "../components/PersonSelect";
 import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
 import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
-import { useT, useWoTerms } from "../lib/i18n";
+import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal, buildWoPrefillFromPlan } from "../components/CreateWorkOrderModal";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
@@ -1607,20 +1607,37 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       frequencyMonths:    frequencyMonths    || null,
       frequencyHours:     frequencyHours     || null,
     },
+    // Lista cerrada: el copiloto tiene que mandar uno de estos valores exactos.
+    fieldOptions: {
+      triggerType: TRIGGER_TYPES.map(tt => ({ value: tt, label: t(`mp.tt.${tt}` as TranslationKey) })),
+      riskLevel: [
+        { value: "LOW", label: t("priority.low") }, { value: "MEDIUM", label: t("priority.medium") },
+        { value: "HIGH", label: t("priority.high") }, { value: "CRITICAL", label: t("priority.critical") },
+      ],
+    },
   });
 
   useCopilotApplyFields((fields) => {
+    // Lo que no entra en una lista cerrada se avisa en el chat en vez de quedar vacío sin decir nada.
+    const rejected: string[] = [];
     if (fields.title              !== undefined) setTitle(fields.title);
     if (fields.description        !== undefined) setDescription(fields.description);
     if (fields.responsible        !== undefined) setResponsible(fields.responsible);
     if (fields.acceptanceCriteria !== undefined) setAcceptanceCriteria(fields.acceptanceCriteria);
     if (fields.loto               !== undefined) setLoto(fields.loto);
     if (fields.riskAnalysisResult !== undefined) setRiskAnalysisResult(fields.riskAnalysisResult);
-    if (fields.riskLevel          !== undefined) setRiskLevel(toUiRiskLevel(fields.riskLevel));
-    if (fields.triggerType        !== undefined && TRIGGER_TYPES.includes(fields.triggerType as TriggerType))
-      setTriggerType(fields.triggerType as TriggerType);
+    if (fields.riskLevel !== undefined && fields.riskLevel !== null && String(fields.riskLevel).trim()) {
+      const level = toUiRiskLevel(fields.riskLevel);
+      if (level) setRiskLevel(level);
+      else rejected.push(t("mp.riskLevel"));
+    }
+    if (fields.triggerType !== undefined) {
+      if (TRIGGER_TYPES.includes(fields.triggerType as TriggerType)) setTriggerType(fields.triggerType as TriggerType);
+      else rejected.push(t("mp.f.scheduleBy"));
+    }
     if (fields.frequencyMonths    !== undefined) setFrequencyMonths(fields.frequencyMonths);
     if (fields.frequencyHours     !== undefined) setFrequencyHours(fields.frequencyHours);
+    return { rejected };
   });
 
   // Asset label resolver: works for both new and existing plans.
@@ -1760,6 +1777,21 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     await Promise.all([handleRiskClick(nuevoLoto), handleConsequenceClick()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly, handleLotoClick, handleRiskClick, handleConsequenceClick]);
+
+  // El copiloto corre los mismos generadores que "Sugerir con IA" ([RECALCULAR]).
+  // Antes el plan no los registraba: el copiloto decía "pedí recalcular el riesgo,
+  // los criterios y el LOTO" y no pasaba nada. El riesgo usa el LOTO recién
+  // generado (los pasos corren uno tras otro, antes de que la pantalla se redibuje).
+  const copilotLotoRef = useRef<string | null>(null);
+  useCopilotFormActions(readOnly ? null : {
+    acceptanceCriteria: () => handleAcceptanceCriteriaClick(),
+    loto: async () => { copilotLotoRef.current = await handleLotoClick(); },
+    risk: async () => {
+      const recienGenerado = copilotLotoRef.current;
+      copilotLotoRef.current = null;
+      await Promise.all([handleRiskClick(recienGenerado ?? undefined), handleConsequenceClick()]);
+    },
+  });
 
 
   const onSave = async () => {

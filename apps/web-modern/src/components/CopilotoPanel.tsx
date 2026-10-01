@@ -1139,7 +1139,11 @@ export const CopilotoPanel: React.FC = () => {
         capability,
         locale: navigator.language?.split("-")[0] ?? "es",
         messages: buildApiMessages(nextMessages),
-        screenContext: screenContext ?? undefined,
+        // Lo que el formulario abierto le deja hacer de verdad al copiloto: si
+        // acepta campos y qué generadores de IA registró ([RECALCULAR]).
+        screenContext: screenContext
+          ? { ...screenContext, canWriteFields: hasApplyFieldsCallback, formActions: formActionNames }
+          : undefined,
         fileAttachment: fileSnapshot ?? undefined,
         // Buque activo del header — contexto de trabajo por defecto del copiloto.
         vesselCode: selectedVessel?.code ?? undefined,

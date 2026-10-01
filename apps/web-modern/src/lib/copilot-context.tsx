@@ -515,6 +515,29 @@ function matchOption<T extends { value: string; label: string; aliases?: string[
 }
 
 /**
+ * Para los `useCopilotApplyFields` escritos a mano: en una lista cerrada sólo
+ * entra un valor que exista de verdad (el valor exacto, la etiqueta que se ve o
+ * una coincidencia única, igual que en `useCopilotAssist`). Lo que no entra se
+ * anota en `rejected` con la etiqueta del campo; el callback lo devuelve y el
+ * panel lo avisa en el chat. Antes se descartaba sin decir nada y el copiloto
+ * anunciaba "cargado" con la casilla vacía.
+ */
+export function copilotOptionPicker(
+  options: Record<string, Array<{ value: string; label: string; aliases?: string[] }>>,
+  labels: Record<string, string> = {},
+) {
+  const rejected: string[] = [];
+  const pick = (key: string, value: string | null | undefined): string | null => {
+    if (value === undefined || value === null || String(value).trim() === "") return null;
+    const opts = options[key];
+    const hit = opts ? matchOption(opts, String(value)) : null;
+    if (!hit) rejected.push(labels[key] ?? key);
+    return hit?.value ?? null;
+  };
+  return { pick, result: (): ApplyFieldsResult => ({ rejected }) };
+}
+
+/**
  * Conecta un formulario (o un paso de un flujo) con el copiloto en una sola
  * llamada: le cuenta qué campos hay, con su etiqueta visible y sus listas
  * cerradas; le deja cargar valores (validando las listas); le expone los

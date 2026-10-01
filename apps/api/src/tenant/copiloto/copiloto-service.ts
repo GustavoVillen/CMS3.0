@@ -1818,6 +1818,28 @@ export async function streamCopilotoChat(
         wrapUntrusted(JSON.stringify(ctx)),
     });
 
+    // Qué puede hacer el copiloto en el formulario abierto. Lo arma el panel con
+    // lo que el formulario registró de verdad (canWriteFields / formActions):
+    // antes el copiloto "pedía recalcular" generadores que esa pantalla no tenía
+    // o decía "cargué" en pantallas que no aceptan campos, y no pasaba nada.
+    if (ctx.fieldValues && typeof ctx.fieldValues === "object") {
+      const formActions = Array.isArray(ctx.formActions)
+        ? (ctx.formActions as unknown[]).filter((a): a is string => typeof a === "string" && /^[\w.-]{1,40}$/.test(a))
+        : [];
+      const canWrite = ctx.canWriteFields === true;
+      volatileSystemBlocks.push({
+        type: "text",
+        text:
+          `## WHAT YOU CAN DO ON THIS FORM (set by the system, not by the user)\n` +
+          (canWrite
+            ? `- Write fields: YES, with a [CAMPOS] block (keys from fieldValues; closed lists only with the exact "value" from fieldOptions). It goes into the form immediately; nothing is saved until the user presses the save button.\n`
+            : `- Write fields: NO. This screen does not accept [CAMPOS]. Never say you loaded, corrected or changed a field here: tell the user what to type and where.\n`) +
+          (formActions.length > 0
+            ? `- Run the form's own AI generators (the "Sugerir con IA" buttons) with [RECALCULAR][...] using ONLY these names: ${formActions.map(a => `"${a}"`).join(", ")}. Ask first; run them only after the user says yes.\n`
+            : `- AI generators: NONE available on this screen. Never emit [RECALCULAR] and never say you asked to recalculate anything here.\n`),
+      });
+    }
+
     // OT tercerizada sin SS: el taller nunca se pidió. Recordatorio puntual —
     // la regla general sola no alcanzó (el modelo "anotaba" el taller en la
     // charla, seguía con otro campo y la OT quedaba sin SS).

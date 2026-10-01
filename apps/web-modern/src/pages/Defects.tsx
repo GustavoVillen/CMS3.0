@@ -21,7 +21,7 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { useDeepLink } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
-import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, copilotOptionPicker } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
 import { useAuth } from "../lib/auth";
 import { RichTextArea } from "../components/RichTextArea";
@@ -438,6 +438,14 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
     } finally { setLoadingImmediate(false); }
   }, [loadingImmediate, description, severity, operationalState, selectedAsset, vesselCode]);
 
+  // Lo que el copiloto ve, puede escribir y puede disparar en el alta. Antes
+  // sólo veía: no tenía con qué cargar nada y decía "cargado" igual.
+  const createFieldOptions = useMemo(() => ({
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    assetId: assets.map(a => ({ value: a.id, label: a.name ? `${a.name} (${a.assetCode})` : a.assetCode })),
+    severity: DEFECT_SEVERITIES.map(v => ({ value: v, label: t(SEVERITY_LABEL_KEYS[v]) })),
+    operationalState: DEFECT_OPERATIONAL_STATES.map(v => ({ value: v, label: t(OPERATIONAL_STATE_LABEL_KEYS[v]) })),
+  }), [vessels, assets, t]);
   useCopilotEmitter({
     module: "DEFECTS",
     screen: "DEFECT_CREATE",
@@ -445,7 +453,7 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
     canEdit: true,
     fieldValues: {
       vesselCode: vesselCode || null,
-      assetCode: selectedAsset?.assetCode ?? null,
+      assetId: assetId || null,
       assetName: selectedAsset?.name ?? null,
       classification: classification || null,
       description: description || null,
@@ -453,7 +461,31 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
       operationalState,
       immediateAction: immediateAction || null,
     },
+    fieldOptions: createFieldOptions,
     relatedEntities: { assetId: assetId || null },
+  });
+  useCopilotApplyFields((fields) => {
+    const { pick, result } = copilotOptionPicker(createFieldOptions, {
+      vesselCode: t("form.vessel"), assetId: t("form.equipment").replace(/\s*\*$/, ""),
+      severity: t("form.severity"), operationalState: t("form.operationalState"),
+    });
+    const vessel = pick("vesselCode", fields.vesselCode);
+    if (vessel) setVesselCode(vessel);
+    const asset = pick("assetId", fields.assetId);
+    if (asset) setAssetId(asset);
+    if (fields.classification  !== undefined) setClassification(fields.classification);
+    if (fields.description     !== undefined) setDescription(fields.description);
+    const sev = pick("severity", fields.severity);
+    if (sev) setSeverity(sev);
+    const op = pick("operationalState", fields.operationalState);
+    if (op) setOperationalState(op);
+    if (fields.immediateAction !== undefined) setImmediateAction(fields.immediateAction);
+    return result();
+  });
+  useCopilotFormActions({
+    classification: handleSuggestClassification,
+    immediateAction: handleImmediateActionClick,
+    photos: handleAnalyzePhotos,
   });
 
   useEffect(() => {
@@ -1072,17 +1104,34 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   }, [defect.id, defect.description, description, severity, operationalState, immediateAction, correctiveAction, rcaAnalyzing]);
 
   useCopilotApplyFields(!isClosed ? (fields) => {
+    // Listas cerradas: lo que no entra vuelve como "rejected" y el copiloto lo avisa.
+    const { pick, result } = copilotOptionPicker({
+      severity:         DEFECT_SEVERITIES.map(v => ({ value: v, label: t(SEVERITY_LABEL_KEYS[v]) })),
+      operationalState: DEFECT_OPERATIONAL_STATES.map(v => ({ value: v, label: t(OPERATIONAL_STATE_LABEL_KEYS[v]) })),
+      rcaMethodology:   RCA_METHODOLOGY_OPTIONS.map(o => ({ value: o.value, label: t(o.labelKey) })),
+    }, { severity: t("form.severity"), operationalState: t("form.operationalState"), rcaMethodology: t("def.rcaMethodology") });
     if (fields.description          !== undefined) setDescription(fields.description);
     if (fields.classification       !== undefined) setClassification(fields.classification);
-    if (fields.severity             !== undefined && (DEFECT_SEVERITIES as readonly string[]).includes(fields.severity)) setSeverity(fields.severity);
-    if (fields.operationalState     !== undefined && (DEFECT_OPERATIONAL_STATES as readonly string[]).includes(fields.operationalState)) setOperationalState(fields.operationalState);
+    const sev = pick("severity", fields.severity);
+    if (sev) setSeverity(sev);
+    const op = pick("operationalState", fields.operationalState);
+    if (op) setOperationalState(op);
     if (fields.immediateAction      !== undefined) setImmediateAction(fields.immediateAction);
     if (fields.rcaAnalysis          !== undefined) setRcaAnalysis(fields.rcaAnalysis);
-    if (fields.rcaMethodology       !== undefined && (["", ...RCA_METHODOLOGY_OPTIONS.map(o => o.value)] as string[]).includes(fields.rcaMethodology)) setRcaMethodology(fields.rcaMethodology as RcaMethodology | "");
+    const method = pick("rcaMethodology", fields.rcaMethodology);
+    if (method) setRcaMethodology(method as RcaMethodology);
     if (fields.rcaImmediateCause    !== undefined) setRcaImmediateCause(fields.rcaImmediateCause);
     if (fields.rcaContributingCause !== undefined) setRcaContributingCause(fields.rcaContributingCause);
     if (fields.rcaRootCause         !== undefined) setRcaRootCause(fields.rcaRootCause);
     if (fields.rcaPreventiveActions !== undefined) setRcaPreventiveActions(fields.rcaPreventiveActions);
+    return result();
+  } : null);
+  // Los "Analizar con IA" / "Sugerir con IA" del defecto, para que el copiloto
+  // los dispare ([RECALCULAR]): antes no los tenía y decía que los había pedido.
+  useCopilotFormActions(!isClosed ? {
+    immediateAction: handleImmediateActionClick,
+    rca: analyzeRca,
+    photos: handleAnalyzeStoredPhotos,
   } : null);
 
   const patchDefect = useCallback(async (extra?: Record<string, unknown>) => {

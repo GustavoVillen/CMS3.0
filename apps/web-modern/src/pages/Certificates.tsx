@@ -15,7 +15,7 @@ import { ExcelPanel } from "../components/ExcelPanel";
 import { useAuth, useCan } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { AlertDialog } from "../components/AlertDialog";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -252,7 +252,28 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
       authority:    authority    || null,
       expiryDate:   expiryDate   || null,
       issueDate:    issueDate    || null,
+      lastInspectionDate: lastInsp || null,
+      notes:        notes        || null,
     },
+  });
+  // El copiloto puede completar la ficha (fechas en YYYY-MM-DD); antes sólo la
+  // veía. El archivo, el equipo y el plan los elige la persona.
+  useCopilotApplyFields((fields) => {
+    const asDate = (v: string) => (/^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+    const rejected: string[] = [];
+    const date = (v: string | undefined, set: (x: string) => void, label: string) => {
+      if (v === undefined || !String(v).trim()) return;
+      const d = asDate(String(v));
+      if (d) set(d); else rejected.push(label);
+    };
+    if (fields.name      !== undefined) setName(fields.name);
+    if (fields.certCode  !== undefined) setCertCode(fields.certCode);
+    if (fields.authority !== undefined) setAuthority(fields.authority);
+    date(fields.issueDate, setIssueDate, t("col.issued"));
+    date(fields.expiryDate, setExpiry, t("cert.survey.renewal"));
+    date(fields.lastInspectionDate, setLastInsp, t("cert.survey.last"));
+    if (fields.notes     !== undefined) setNotes(fields.notes);
+    return { rejected };
   });
 
   const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";

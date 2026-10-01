@@ -12,7 +12,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { ExcelPanel } from "../components/ExcelPanel";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, copilotOptionPicker } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
@@ -874,6 +874,13 @@ const AssetModal: React.FC<AssetModalProps> = ({
     [standbyPlansFetch.data],
   );
 
+  // Listas cerradas del equipo: el copiloto sólo puede cargar estos valores.
+  const assetCopilotOptions = useMemo(() => ({
+    criticality: [
+      { value: "A", label: t("asset.v23.critA") }, { value: "B", label: t("asset.v23.critB") }, { value: "C", label: t("asset.v23.critC") },
+    ],
+    status: (["OPERATIONAL", "DEGRADED", "OUT_OF_SERVICE"] as const).map(s => ({ value: s, label: t(`asset.v23.st.${s}` as TranslationKey) })),
+  }), [t]);
   useCopilotEmitter({
     module: "ASSETS",
     screen: isEdit ? "ASSET_EDIT" : "ASSET_CREATE",
@@ -885,11 +892,13 @@ const AssetModal: React.FC<AssetModalProps> = ({
       assetCode:    assetCode    || null,
       name:         name         || null,
       criticality:  criticality  || null,
+      criticalityRationale: criticalityRationale || null,
       status:       status       || null,
       manufacturer: manufacturer || null,
       model:        model        || null,
       serialNumber: serialNumber || null,
     },
+    fieldOptions: assetCopilotOptions,
   });
 
   const nameOptions = useMemo<AssetNameOption[]>(() => {
@@ -1166,6 +1175,24 @@ const AssetModal: React.FC<AssetModalProps> = ({
       setSuggestingCriticality(false);
     }
   }, [name, vesselCode, selectedGroup, manufacturer, model, serialNumber, suggestingCriticality, t]);
+
+  // El copiloto puede escribir en la ficha y pedir la criticidad sugerida
+  // (antes sólo veía los datos). Nada se guarda sin "Guardar".
+  useCopilotApplyFields((fields) => {
+    const { pick, result } = copilotOptionPicker(assetCopilotOptions, { criticality: t("col.criticality"), status: t("col.status") });
+    if (fields.assetCode !== undefined) { setAssetCode(fields.assetCode); setAssetCodeTouched(true); }
+    if (fields.name !== undefined) setName(fields.name);
+    const crit = pick("criticality", fields.criticality);
+    if (crit) setCriticality(crit);
+    if (fields.criticalityRationale !== undefined) setCriticalityRationale(fields.criticalityRationale);
+    const st = pick("status", fields.status);
+    if (st) setStatus(st);
+    if (fields.manufacturer !== undefined) setManufacturer(fields.manufacturer);
+    if (fields.model !== undefined) setModel(fields.model);
+    if (fields.serialNumber !== undefined) setSerialNumber(fields.serialNumber);
+    return result();
+  });
+  useCopilotFormActions({ criticality: requestCriticalitySuggestion });
 
   // ESC guard
   const isDirty = useDirtyTracker({
