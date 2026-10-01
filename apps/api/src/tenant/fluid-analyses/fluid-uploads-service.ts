@@ -65,6 +65,17 @@ export function readFluidReportFile(tenantSlug: string, savedName: string): Buff
   }
 }
 
+/** Tamaño en bytes del informe guardado; 0 si no está en el disco. */
+export function fluidReportSize(tenantSlug: string, savedName: string): number {
+  if (savedName.includes("..") || savedName.includes("/") || savedName.includes("\\")) return 0;
+  if (tenantSlug.includes("..") || tenantSlug.includes("/") || tenantSlug.includes("\\")) return 0;
+  try {
+    return statSync(join(UPLOADS_ROOT, tenantSlug, savedName)).size;
+  } catch {
+    return 0;
+  }
+}
+
 export function serveFluidReportUpload(
   response: ServerResponse,
   tenantSlug: string,

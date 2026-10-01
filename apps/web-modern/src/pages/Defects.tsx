@@ -14,7 +14,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel, AssetLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
 import { analyzePhotoForDefect, uploadDefectPhoto, listDefectPhotos, deleteDefectPhoto, type DefectPhotoRecord } from "../lib/defect-photos";
 import { MicButton } from "../components/MicButton";
-import { AuthedImage } from "../lib/authed-media";
+import { AuthedImage, AuthedDocLink } from "../lib/authed-media";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
@@ -811,6 +811,9 @@ function woTaskFromDefect(description: string, preventiveActions: string, defect
   return `${description.trim()}\n\n${t("def.woTask.preventiveHeader").replace("{code}", defectCode)}\n${actions.join("\n")}`;
 }
 
+/** Adjunto que no es foto (p. ej. el informe del laboratorio en PDF). */
+const isDocFile = (p: DefectPhotoRecord) => !!p.mimeType && !p.mimeType.startsWith("image/") && p.mimeType !== "application/octet-stream";
+
 const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onReload, initialAction, onRecurrence }) => {
   const t = useT();
   const woTerms = useWoTerms();
@@ -889,6 +892,11 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
 
   useEffect(() => { void reloadPhotos(); }, [reloadPhotos]);
 
+  // Los adjuntos del defecto son fotos y, si nació de un análisis, el informe
+  // del laboratorio (PDF): éste va aparte, como documento.
+  const imagePhotos = useMemo(() => photos.filter(p => !isDocFile(p)), [photos]);
+  const docFiles = useMemo(() => photos.filter(isDocFile), [photos]);
+
   const onPhotosSelectedEdit = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
@@ -914,13 +922,13 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
    */
   const handleAnalyzeStoredPhotos = useCallback(async () => {
     if (analyzingPhotos || isClosed) return;
-    if (photos.length === 0) { setActionError("No hay fotos para analizar."); return; }
+    if (imagePhotos.length === 0) { setActionError("No hay fotos para analizar."); return; }
     setAnalyzingPhotos(true);
     setActionError(null);
     try {
       const assetLabel = getAssetName(defect.assetId);
       const additions: string[] = [];
-      for (const p of photos) {
+      for (const p of imagePhotos) {
         const url = p.description; // backend guarda la URL en description
         if (!url) continue;
         try {
@@ -944,7 +952,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       setActionError(e instanceof ApiError ? e.message : "Error al analizar las fotos.");
     } finally { setAnalyzingPhotos(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyzingPhotos, photos, description, defect.assetId]);
+  }, [analyzingPhotos, imagePhotos, description, defect.assetId]);
 
   const handleImmediateActionClick = useCallback(async () => {
     if (loadingImmediate || isClosed) return;
@@ -1581,15 +1589,15 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                   {/* Fotos del defecto */}
                   <div>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <p className={`${fl} mb-0`}>{t("def.guide.photos")} {photos.length > 0 && `(${photos.length})`}</p>
-                      {photos.length > 0 && aiPill(() => { void handleAnalyzeStoredPhotos(); }, analyzingPhotos, t("def.guide.describeAi"))}
+                      <p className={`${fl} mb-0`}>{t("def.guide.photos")} {imagePhotos.length > 0 && `(${imagePhotos.length})`}</p>
+                      {imagePhotos.length > 0 && aiPill(() => { void handleAnalyzeStoredPhotos(); }, analyzingPhotos, t("def.guide.describeAi"))}
                       <input ref={photoInputRef} type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={(e) => { void onPhotosSelectedEdit(e); }} />
                     </div>
                     {photosLoading ? (
                       <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
                     ) : (
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                        {photos.map(p => (
+                        {imagePhotos.map(p => (
                           <div key={p.id} className="relative aspect-square bg-fg/5 border border-fg/10 rounded-xl overflow-hidden group">
                             {p.description && (
                               <button type="button" onClick={() => setLightboxPhoto(p)} className="w-full h-full">
@@ -1610,10 +1618,21 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                             {uploadingPhotos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} {t("def.guide.addPhotos")}
                           </button>
                         )}
-                        {isClosed && photos.length === 0 && <p className="col-span-full text-xs text-text-industrial/40 italic">{t("def.noPhotosShort")}</p>}
+                        {isClosed && imagePhotos.length === 0 && <p className="col-span-full text-xs text-text-industrial/40 italic">{t("def.noPhotosShort")}</p>}
                       </div>
                     )}
                   </div>
+
+                  {docFiles.length > 0 && (
+                    <div>
+                      <p className={fl}>{t("def.guide.docs")} ({docFiles.length})</p>
+                      <div className="flex flex-wrap gap-2">
+                        {docFiles.map(d => d.description && (
+                          <AuthedDocLink key={d.id} src={d.description} label={d.filename} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <GuideField id="def-e-immediate" missing={!isClosed && needImmediate}>
                     <div className="flex items-center gap-1.5 mb-1.5">

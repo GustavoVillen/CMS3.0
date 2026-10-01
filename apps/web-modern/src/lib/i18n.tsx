@@ -1578,6 +1578,7 @@ const dict = {
   "def.guide.found":        { es: "Qué se encontró",        en: "What was found",         pt: "O que foi encontrado" },
   "def.guide.equipmentState": { es: "¿Cómo quedó el equipo?", en: "How is the equipment?", pt: "Como ficou o equipamento?" },
   "def.guide.photos":       { es: "Fotos",                  en: "Photos",                 pt: "Fotos" },
+  "def.guide.docs":         { es: "Documentos",             en: "Documents",              pt: "Documentos" },
   "def.guide.describeAi":   { es: "Describir con IA",       en: "Describe with AI",       pt: "Descrever com IA" },
   "def.guide.addPhotos":    { es: "Agregar",                en: "Add",                    pt: "Adicionar" },
   "def.guide.immediate":    { es: "Qué se hizo en el momento", en: "What was done right away", pt: "O que se fez na hora" },

@@ -28,6 +28,24 @@ const KIND_ES: Record<string, string> = {
   FLUID: "fluido", VIBRATION: "vibraciones", THERMAL: "termografía", ULTRASOUND: "ultrasonido", INSULATION: "megado", OTHER: "laboratorio",
 };
 
+/**
+ * Leyenda del informe del laboratorio cuando se adjunta al defecto que generó
+ * y a los avances de la OT que lo repara.
+ */
+export function buildLabReportCaption(input: {
+  kind: string;
+  sampleCode: string;
+  labReference: string | null;
+  labName: string | null;
+  sampledAtText: string | null;
+  verdict: string;
+  defectCode: string;
+}): string {
+  const source = [input.labReference ? `Informe ${input.labReference}` : null, input.labName, input.sampledAtText].filter(Boolean).join(" · ");
+  return `Informe del laboratorio del análisis de ${KIND_ES[input.kind] ?? KIND_ES.OTHER} ${input.sampleCode}${source ? ` (${source})` : ""}. `
+    + `Veredicto: ${VERDICT_ES[input.verdict] ?? input.verdict}. Dio origen al defecto ${input.defectCode}.`;
+}
+
 /** Resumen de vibraciones = "hallazgo. Recomendación: a · b. Prioridad: X" (vibrationSummary en fluid-batch-service). */
 export function splitVibrationSummary(summary: string | null | undefined) {
   let rest = (summary ?? "").trim();

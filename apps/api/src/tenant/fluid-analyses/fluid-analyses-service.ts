@@ -9,6 +9,8 @@ import { buildResultDefectDescription } from "./analysis-text";
 import { generateFluidAiAnalysis } from "./fluid-analyses-ai-insights";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { ensurePermission } from "../auth/role-permissions";
+import { linkLabReportToDefect } from "./lab-report-links";
+import { log } from "../../common/logger";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -720,6 +722,17 @@ export async function upsertFluidResult(session: TenantAccessSession, sampleId: 
       } catch {
         // Non-fatal: surfaced via the criticalAlert audit event regardless
       }
+    }
+  }
+
+  // El informe del laboratorio queda adjunto al defecto que generó (y en los
+  // avances de su OT si ya tiene una). Cubre también el informe que llega
+  // después de cargado el resultado.
+  if (result.defectId && result.reportUrl) {
+    try {
+      await linkLabReportToDefect(prisma, { tenantId, defectId: result.defectId, actorUserId: session.user.id });
+    } catch (err) {
+      log.error("[upsertFluidResult] no se pudo adjuntar el informe al defecto:", err);
     }
   }
 

@@ -1,5 +1,20 @@
 HISTORY.txt
 
+[2026-10-01] Informe del laboratorio en el defecto y en los Avances de su OT
+Agent: Claude Opus 5.5
+- Nuevo fluid-analyses/lab-report-links.ts (linkLabReportToDefect): cuando un analisis con veredicto
+  critico / accion requerida genera un defecto, el informe del laboratorio queda adjunto al defecto
+  (Attachment DEFECT) y, al vincularse la OT de reparacion, se agrega a sus Avances como DOCUMENT con la
+  leyenda del analisis. Apunta al mismo archivo (no se copia); la descarga la autoriza la muestra.
+  Idempotente; si alguien borro el adjunto o el avance no se vuelve a crear. OT cerrada/cancelada: sin avance.
+- Se llama desde upsertFluidResult (al crear el defecto o si el informe llega despues) y desde updateDefect
+  cuando cambia workOrderId (el flujo "Crear OT correctiva" del defecto).
+- Defects.tsx: los adjuntos que no son foto se muestran aparte, en "Documentos", como enlace; el analisis
+  IA de fotos usa solo las imagenes. Clave i18n def.guide.docs (es/en/pt).
+- Correccion de lo ya abierto: defectos de analisis abiertos o con OT abierta (script temporal, ya borrado).
+- La seccion Avances de la OT se habilita al aprobarla: el informe se ve desde ese momento.
+- Backend + frontend: pull + build web + restart.
+
 [2026-09-30] Ficha de equipo (PDF) nueva, alineada a los procedimientos PROC-MAN (preview V2, PROCEDER)
 Agent: Claude Opus 5.5
 - asset-pdf-service.ts reescrito: avisos arriba con la regla que aplica (PROC-MAN-03 equipo critico fuera

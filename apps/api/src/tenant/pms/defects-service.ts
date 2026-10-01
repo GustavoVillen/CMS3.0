@@ -9,6 +9,7 @@ import { createCapaInternal } from "./capa-service";
 import { log } from "../../common/logger";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { enqueueNotificationForRoles } from "../notifications/notifications-service";
+import { linkLabReportToDefect } from "../fluid-analyses/lab-report-links";
 
 export interface DefectListFilters {
   vesselCode?: string | null;
@@ -584,6 +585,16 @@ export async function updateDefect(session: TenantAccessSession, id: string, pay
     entityId: current.id,
     metadata: { defectCode: current.defectCode, vesselCode: current.vesselCode },
   });
+
+  // Defecto nacido de un análisis de laboratorio al que se le vincula la OT de
+  // reparación: el informe del laboratorio pasa a los avances de esa OT.
+  if (data.workOrderId && data.workOrderId !== current.workOrderId) {
+    try {
+      await linkLabReportToDefect(prismaRaw, { tenantId: current.tenantId, defectId: current.id, actorUserId: session.user.id });
+    } catch (err) {
+      log.error("[updateDefect] no se pudo pasar el informe del laboratorio a la OT:", err);
+    }
+  }
 
   // Cascade: si el defecto pasó a RESOLVED/CLOSED, cerrar el finding de auditoría de origen.
   if (payload.status === "RESOLVED" || payload.status === "CLOSED") {
