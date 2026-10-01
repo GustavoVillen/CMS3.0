@@ -29,7 +29,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, ClipboardCheck, Hammer, Handshake, Loader2, Pause, Pencil, Search } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardCheck, Hammer, Handshake, ListTree, Loader2, Pause, Pencil, Search, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -81,6 +81,8 @@ interface PendingItem {
   routeEntryCount?: number;
   /** Sólo las OT autorizadas: permisos de trabajo vinculados. */
   permitCount?: number;
+  /** Grupo SFI (filtro G0…G9). La SS trae el de su OT. */
+  sfiGroupNumber?: number | null;
 }
 
 interface PendingApprovals {
@@ -116,6 +118,18 @@ type CardKey = "overdue" | "mine" | "woInProgress" | "srInProgress" | "postponed
 interface SendResult { sent: boolean; to: string[]; reason?: string; error?: string }
 
 const rowKey = (r: { kind: string; id: string }) => `${r.kind}:${r.id}`;
+
+/** Clave del grupo de equipo (buque + equipo) para plegarlo. */
+const assetKey = (r: { vesselName: string | null; vesselCode: string; assetName: string | null }) =>
+  `${r.vesselName ?? r.vesselCode}|${r.assetName ?? ""}`;
+
+/** Botones G0…G9: primer dígito del grupo SFI (G6 = 6 o 600-699), como en Planes. */
+const SFI_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+function sfiDigit(n: number | null | undefined): number | null {
+  if (n == null) return null;
+  const d = n < 10 ? n : Math.floor(n / 100);
+  return d >= 0 && d <= 9 ? d : null;
+}
 
 const fmtDate = (iso: string | null | undefined): string => {
   if (!iso) return "—";
@@ -166,6 +180,12 @@ export const ApprovalsPage: React.FC = () => {
 
   const [query, setQuery]     = useState("");
   const [cardFilter, setCardFilter] = useState<CardKey | "">("");
+  // Barra de filtros (Preview V1, oct 2026): la misma de Planes de Mantenimiento.
+  const [sfiGroup, setSfiGroup] = useState<number | "ALL">("ALL");
+  // Encendido = la planilla de siempre (por equipo, con celda combinada) y cada
+  // equipo se puede plegar. Apagado = dentro del buque, por vencimiento.
+  const [groupByAsset, setGroupByAsset] = useState(true);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [alert, setAlert]     = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   // El error de carga viene de useFetch y no se puede "apagar": sin esta marca,
@@ -265,20 +285,28 @@ export const ApprovalsPage: React.FC = () => {
     ];
   }, [data, rows, cardMatch, t]);
 
-  const visible = useMemo(() => {
+  // Tarjeta + búsqueda. El grupo SFI se aplica aparte para saber qué botones
+  // G0…G9 tienen filas con los otros filtros puestos (los vacíos salen apagados).
+  const preGroup = useMemo(() => {
     const q = query.trim();
     const byCard = cardFilter ? rows.filter(r => cardMatch(r, cardFilter)) : rows;
-    const list = q
+    return q
       ? byCard.filter(r => textMatches(
           [r.code, r.vesselName, r.assetName, r.title, r.task, r.workOrderCode, ...r.providers].filter(Boolean).join(" "),
           q,
         ))
       : byCard;
+  }, [rows, query, cardFilter, cardMatch]);
+  const groupsWithRows = useMemo(() => new Set(preGroup.map(r => sfiDigit(r.sfiGroupNumber))), [preGroup]);
+
+  const visible = useMemo(() => {
+    const list = sfiGroup === "ALL" ? preGroup : preGroup.filter(r => sfiDigit(r.sfiGroupNumber) === sfiGroup);
     // Ordenadas por buque y equipo: así las celdas combinadas de la planilla
-    // agrupan de verdad, y dentro de cada equipo primero lo más urgente.
+    // agrupan de verdad, y dentro de cada equipo primero lo más urgente. Sin
+    // agrupar por equipo, dentro del buque va primero lo más urgente.
     const sorted = [...list].sort((a, b) =>
       (a.vesselName ?? a.vesselCode).localeCompare(b.vesselName ?? b.vesselCode)
-      || (a.assetName ?? "").localeCompare(b.assetName ?? "")
+      || (groupByAsset ? (a.assetName ?? "").localeCompare(b.assetName ?? "") : 0)
       || ((daysToDue(a.dueDate) ?? 9e9) - (daysToDue(b.dueDate) ?? 9e9)));
     // Cada SS va justo debajo de la OT de la que cuelga, si esa OT está en la
     // lista (el equipo de la SS es el de su OT, así que no rompe el grupo). Si
@@ -294,7 +322,18 @@ export const ApprovalsPage: React.FC = () => {
       } else roots.push(r);
     }
     return roots.flatMap(r => (r.kind === "WO" ? [r, ...(childrenOf.get(r.code) ?? [])] : [r]));
-  }, [rows, query, cardFilter, cardMatch]);
+  }, [preGroup, sfiGroup, groupByAsset]);
+
+  // ─── Plegar equipos (sólo agrupado por equipo) ─────────────────────────────
+  const visibleAssetKeys = useMemo(() => [...new Set(visible.map(assetKey))], [visible]);
+  const allCollapsed = visibleAssetKeys.length > 0 && visibleAssetKeys.every(k => collapsed.has(k));
+  const toggleAsset = (key: string) => setCollapsed(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const toggleAllAssets = () => setCollapsed(allCollapsed ? new Set() : new Set(visibleAssetKeys));
+  const clearBarFilters = () => { setSfiGroup("ALL"); setQuery(""); };
 
   /** Lugar de cada fila en el árbol OT → SS: la OT con hijas, la SS del medio
    *  y la última (la que cierra la línea). Las sueltas no están. */
@@ -696,17 +735,7 @@ export const ApprovalsPage: React.FC = () => {
         title={t("nav.approvals")}
         total={visible.length}
         onReload={reload}
-      >
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-fg/30" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={t("common.search")}
-            className="pl-8 pr-2 py-1.5 w-48 rounded-lg bg-fg/5 border border-fg/10 text-xs text-fg focus:border-accent/40 focus:outline-none"
-          />
-        </div>
-      </PageHeader>
+      />
 
       {/* Las tarjetas de Órdenes de Trabajo en versión finita (pedido del
           usuario). Filtran las filas de la planilla; tocar la activa la saca.
@@ -729,8 +758,59 @@ export const ApprovalsPage: React.FC = () => {
         })}
       </div>
 
+      {/* Filtros en UNA fila, el molde de Planes de Mantenimiento: grupo SFI,
+          agrupar por equipo, plegar todo y el buscador a la derecha. Se suman
+          a la tarjeta elegida arriba. */}
+      <div className="rounded-2xl border border-fg/10 bg-surface px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/50">{t("wo.fl.group")}</span>
+          <button type="button" aria-pressed={sfiGroup === "ALL"} onClick={() => setSfiGroup("ALL")}
+            className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              sfiGroup === "ALL" ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {t("wo.fl.groupAll")}
+          </button>
+          {SFI_DIGITS.map(g => {
+            const on = sfiGroup === g;
+            const has = groupsWithRows.has(g);
+            const name = `G${g} · ${t(`sfi.g.${g}` as TranslationKey)}`;
+            return (
+              <button key={g} type="button" title={name} aria-label={name} aria-pressed={on}
+                disabled={!has && !on}
+                onClick={() => setSfiGroup(on ? "ALL" : g)}
+                className={`min-w-[2.4rem] rounded-full border-[1.5px] px-2.5 py-1 text-xs font-bold transition-colors ${
+                  on ? "border-accent bg-accent text-accent-fg"
+                    : has ? "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+                    : "border-fg/10 bg-surface text-text-industrial/60 opacity-35 cursor-default"
+                }`}>
+                G{g}
+              </button>
+            );
+          })}
+          <button type="button" onClick={() => setGroupByAsset(v => !v)} aria-pressed={groupByAsset}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${groupByAsset ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
+            <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
+          </button>
+          {groupByAsset && (
+            <button type="button" onClick={toggleAllAssets} title={allCollapsed ? t("mp.page.expandAll") : t("mp.page.collapseAll")}
+              className="flex items-center justify-center p-1.5 rounded-lg border bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/30 transition-all">
+              {allCollapsed ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+            </button>
+          )}
+          {(sfiGroup !== "ALL" || query) && (
+            <button type="button" onClick={clearBarFilters} className="rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 text-xs text-text-industrial/80 hover:text-fg">{t("common.clear")}</button>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
+            <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("approvals.searchPlaceholder")}
+              className="w-full sm:w-64 bg-transparent text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+            {query && <button type="button" onClick={() => setQuery("")} aria-label={t("common.clear")} className="text-text-industrial/40 hover:text-fg"><X className="w-3 h-3" /></button>}
+          </div>
+        </div>
+      </div>
+
       <div className="glass rounded-2xl overflow-hidden">
-        <div className="overflow-auto max-h-[calc(100vh-14rem)] [scrollbar-gutter:stable]">
+        <div className="overflow-auto max-h-[calc(100vh-17rem)] [scrollbar-gutter:stable]">
           {/* Tarea con un cuarto del ancho (pedido del usuario: más corta) y
               las siete columnas de botones se reparten el resto en partes
               iguales. Por debajo de 1250 px aparece la barra horizontal en vez
@@ -761,24 +841,74 @@ export const ApprovalsPage: React.FC = () => {
                 const prev = visible[n - 1];
                 const vesselLabel = r.vesselName ?? r.vesselCode;
                 const newVessel = !prev || (prev.vesselName ?? prev.vesselCode) !== vesselLabel;
-                // Celda del equipo combinada entre sus tareas, como en el papel.
-                const firstOfAsset = newVessel || prev!.assetName !== r.assetName;
+                // Agrupado: celda del equipo combinada entre sus tareas, como en
+                // el papel. Sin agrupar: cada fila lleva su equipo y el ítem es el
+                // número de fila dentro del buque.
+                const key = assetKey(r);
+                const firstOfAsset = !groupByAsset || newVessel || prev!.assetName !== r.assetName;
+                const isCollapsed = groupByAsset && collapsed.has(key);
+                if (isCollapsed && !firstOfAsset) return null;
                 let span = 0;
                 let itemNumber = 0;
                 if (firstOfAsset) {
                   span = 1;
-                  for (let m = n + 1; m < visible.length; m++) {
-                    const x = visible[m]!;
-                    if ((x.vesselName ?? x.vesselCode) !== vesselLabel || x.assetName !== r.assetName) break;
-                    span++;
+                  if (groupByAsset) {
+                    for (let m = n + 1; m < visible.length; m++) {
+                      const x = visible[m]!;
+                      if ((x.vesselName ?? x.vesselCode) !== vesselLabel || x.assetName !== r.assetName) break;
+                      span++;
+                    }
                   }
-                  // Número de ítem: cuántos equipos van en este buque.
+                  // Número de ítem: cuántos equipos (o filas, sin agrupar) van en este buque.
                   for (let m = 0; m <= n; m++) {
                     const x = visible[m]!;
                     if ((x.vesselName ?? x.vesselCode) !== vesselLabel) continue;
                     const p = visible[m - 1];
-                    if (!p || (p.vesselName ?? p.vesselCode) !== vesselLabel || p.assetName !== x.assetName) itemNumber++;
+                    if (!groupByAsset || !p || (p.vesselName ?? p.vesselCode) !== vesselLabel || p.assetName !== x.assetName) itemNumber++;
                   }
+                }
+                const vesselRow = newVessel && (
+                  <tr>
+                    <td colSpan={COLS} className="px-3 py-1 text-[11px] font-bold text-white bg-[#1F3864] border border-[#1F3864]">
+                      {vesselLabel}
+                    </td>
+                  </tr>
+                );
+                // El nombre del equipo pliega y despliega sus filas.
+                const assetCell = groupByAsset ? (
+                  <button type="button" onClick={() => toggleAsset(key)}
+                    title={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
+                    className="inline-flex w-full items-center justify-center gap-1 font-bold hover:underline">
+                    {isCollapsed
+                      ? <ChevronRight className="w-3 h-3 shrink-0 opacity-60" />
+                      : <ChevronDown className="w-3 h-3 shrink-0 opacity-60" />}
+                    <span>{r.assetName ?? "—"}</span>
+                  </button>
+                ) : (r.assetName ?? "—");
+
+                // Equipo plegado: una sola línea con cuántos registros tiene y
+                // cuántos están vencidos (mismo criterio que la tarjeta).
+                if (isCollapsed) {
+                  const group = visible.slice(n, n + span);
+                  const late = group.filter(x => cardMatch(x, "overdue")).length;
+                  return (
+                    <React.Fragment key={`fold:${key}`}>
+                      {vesselRow}
+                      <tr>
+                        <td className={`${td} text-center font-bold bg-surface text-fg`}>{itemNumber}</td>
+                        <td className={`${td} text-center font-bold bg-[#F8CBAD] text-[#1F3864]`}>{assetCell}</td>
+                        <td colSpan={COLS - 2} className={`${td} py-1.5 font-semibold text-text-industrial/70 bg-fg/[0.03]`}>
+                          {group.length === 1 ? t("approvals.fold.recordOne") : t("approvals.fold.records").replace("{n}", String(group.length))}
+                          {late > 0 && (
+                            <> · <span className="font-extrabold text-red-700 dark:text-red-400">
+                              {late === 1 ? t("approvals.fold.overdueOne") : t("approvals.fold.overdue").replace("{n}", String(late))}
+                            </span></>
+                          )}
+                          <span className="opacity-60"> · {t("approvals.fold.hint")}</span>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  );
                 }
                 const dd = daysToDue(r.dueDate);
                 const isClosed = !!closed[rowKey(r)];
@@ -801,13 +931,7 @@ export const ApprovalsPage: React.FC = () => {
 
                 return (
                   <React.Fragment key={rowKey(r)}>
-                    {newVessel && (
-                      <tr>
-                        <td colSpan={COLS} className="px-3 py-1 text-[11px] font-bold text-white bg-[#1F3864] border border-[#1F3864]">
-                          {vesselLabel}
-                        </td>
-                      </tr>
-                    )}
+                    {vesselRow}
                     <tr className="hover:brightness-[0.98]" data-row-code={r.kind === "WO" ? r.code : undefined}
                       // La OT recién abierta: recuadro de color de acento (sobre
                       // el semáforo de la fila, que sigue a la vista).
@@ -818,7 +942,7 @@ export const ApprovalsPage: React.FC = () => {
                       )}
                       {firstOfAsset && (
                         <td rowSpan={span} className={`${td} text-center font-bold bg-[#F8CBAD] text-[#1F3864]`}>
-                          {r.assetName ?? "—"}
+                          {assetCell}
                         </td>
                       )}
                       {/* Registro antes que la tarea (pedido del usuario). */}
@@ -886,7 +1010,7 @@ export const ApprovalsPage: React.FC = () => {
                       // "Todo firmado" sería falso.
                       <>
                         <p className="text-sm font-bold text-fg">{t("approvals.filterEmpty")}</p>
-                        <button type="button" onClick={() => { setCardFilter(""); setQuery(""); }}
+                        <button type="button" onClick={() => { setCardFilter(""); clearBarFilters(); }}
                           className="mt-2 text-xs font-bold text-accent hover:underline">
                           {t("approvals.filterClear")}
                         </button>

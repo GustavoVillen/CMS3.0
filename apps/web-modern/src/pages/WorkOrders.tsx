@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, Layers, LayoutGrid, List, ListChecks, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, User, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { DataTable, type Column } from "../components/DataTable";
@@ -3923,6 +3923,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <span className="inline-flex items-center gap-1.5 mt-2.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg">
               <Ship className="w-3 h-3" /><b className="font-bold">{paperVesselName}</b>
             </span>
+            {/* Quién abrió la OT (createdByUserId), mismo nombre que el GENERADO POR del papel. */}
+            {workOrder.createdByName && (
+              <span className="inline-flex items-center gap-1.5 mt-2.5 rounded-full border border-fg/10 bg-fg/5 px-2.5 py-1 text-[11px] text-fg" title={t("wo.guide.openedBy")}>
+                <User className="w-3 h-3" />
+                <span className="text-text-industrial/60">{t("wo.guide.openedBy")}</span>
+                <b className="font-bold">{workOrder.createdByName}</b>
+              </span>
+            )}
             <WizardStepper
               labels={[t("wo.guide.step.prepare"), t("wo.guide.step.approval"), t("wo.guide.step.execution"), t("wo.guide.step.closure")]}
               current={guideStep}

@@ -63,6 +63,13 @@ export interface PendingApprovalItem {
   routeEntryCount?: number;
   /** Sólo OT autorizadas: permisos de trabajo vinculados (sin los cancelados). */
   permitCount?: number;
+  /**
+   * Grupo SFI para el filtro G0…G9 de Seguimiento. Mismo criterio que los
+   * tableros de OT y SS: el del plan (principal o el primero de sus ítems que lo
+   * tenga) y, sin plan, el primer dígito del código SFI del equipo. La SS lleva
+   * el de su OT.
+   */
+  sfiGroupNumber: number | null;
 }
 
 export interface PendingApprovalsResult {
@@ -120,7 +127,7 @@ const iso = (d: unknown): string | null => (d instanceof Date ? d.toISOString() 
 const OPEN_WO_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD", "DEFERRED"];
 
 const WO_SELECT = {
-  id: true, workOrderCode: true, vesselCode: true, assetId: true,
+  id: true, workOrderCode: true, vesselCode: true, assetId: true, maintenancePlanId: true,
   title: true, description: true, priority: true, department: true, status: true,
   openDate: true, dueDate: true, providerId: true, providerOther: true,
   enviadoAprobacionByName: true, enviadoAprobacionAt: true,
@@ -265,7 +272,7 @@ export async function listPendingApprovals(
     srWoIds.length > 0
       ? (prisma as any).workOrder.findMany({
           where: { id: { in: srWoIds }, tenantId },
-          select: { id: true, workOrderCode: true, assetId: true },
+          select: { id: true, workOrderCode: true, assetId: true, maintenancePlanId: true },
         })
       : Promise.resolve([]),
     vesselCodes.length > 0
@@ -336,19 +343,59 @@ export async function listPendingApprovals(
     ...(srOfWoRows as any[]).map(s => s.providerId),
   ].filter(Boolean))] as string[];
 
-  const [assetRows, providerRows] = await Promise.all([
+  // OT cuyo grupo SFI hace falta: las listadas y las OT de origen de las SS.
+  const groupWoIds = [...new Set([...woIds, ...srWoIds])];
+
+  const [assetRows, providerRows, planLinkRows] = await Promise.all([
     assetIds.length > 0
-      ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true } })
+      ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true, sfiCode: true } })
       : Promise.resolve([]),
     providerIds.length > 0
       ? (prisma as any).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
       : Promise.resolve([]),
+    // Ítems del PDM de cada OT, en el orden del papel (de ahí sale el grupo SFI).
+    groupWoIds.length > 0
+      ? (prisma as any).workOrderMaintenancePlan.findMany({
+          where: { tenantId, workOrderId: { in: groupWoIds } },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { workOrderId: true, maintenancePlanId: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const planIds = [...new Set([
+    ...woRows.map(r => r.maintenancePlanId),
+    ...(parentWoRows as any[]).map(w => w.maintenancePlanId),
+    ...(planLinkRows as any[]).map(l => l.maintenancePlanId),
+  ].filter(Boolean))] as string[];
+  const planRows = planIds.length > 0
+    ? await (prisma as any).maintenancePlan.findMany({
+        where: { id: { in: planIds }, tenantId },
+        select: { id: true, sfiGroupNumber: true },
+      }) as any[]
+    : [];
 
   const vesselNameById   = new Map<string, string | null>((vesselRows as any[]).map(v => [v.code, v.name ?? null]));
   const assetNameById    = new Map<string, string | null>((assetRows as any[]).map(a => [a.id, a.name ?? null]));
+  const assetSfiById     = new Map<string, string | null>((assetRows as any[]).map(a => [a.id, a.sfiCode ?? null]));
   const providerNameById = new Map<string, string | null>((providerRows as any[]).map(p => [p.id, p.name ?? null]));
   const parentWoById     = new Map<string, any>((parentWoRows as any[]).map(w => [w.id, w]));
+  const planGroupById    = new Map<string, number | null>(planRows.map(p => [p.id, p.sfiGroupNumber ?? null]));
+  const linkedPlansByWo  = new Map<string, string[]>();
+  for (const l of planLinkRows as any[]) {
+    linkedPlansByWo.set(l.workOrderId, [...(linkedPlansByWo.get(l.workOrderId) ?? []), l.maintenancePlanId]);
+  }
+
+  /** Grupo SFI de una OT: mismo criterio que woSfiGroup de work-orders-service. */
+  const woSfiGroup = (wo: { id: string; assetId: string | null; maintenancePlanId: string | null } | null | undefined): number | null => {
+    if (!wo) return null;
+    const fromPlan = [wo.maintenancePlanId, ...(linkedPlansByWo.get(wo.id) ?? [])]
+      .map(id => (id ? planGroupById.get(id) : null))
+      .find((g): g is number => typeof g === "number");
+    if (fromPlan !== undefined) return fromPlan;
+    const digit = /^\s*(\d)/.exec((wo.assetId ? assetSfiById.get(wo.assetId) : null) ?? "");
+    return digit ? Number(digit[1]) : null;
+  };
 
   /** Taller de una fila: el del catálogo si lo eligió de la lista, si no el texto libre. */
   const providerOf = (providerId: unknown, freeText: unknown): string | null => {
@@ -399,6 +446,7 @@ export async function listPendingApprovals(
       serviceRequestCount: srCountByWo.get(r.id) ?? 0,
       workOrderCode: null,
       purchaseRequestKinds: [],
+      sfiGroupNumber: woSfiGroup(r),
     };
   };
 
@@ -426,6 +474,7 @@ export async function listPendingApprovals(
       serviceRequestCount: 0,
       workOrderCode: wo?.workOrderCode ?? null,
       purchaseRequestKinds: Array.isArray(r.purchaseRequestKinds) ? r.purchaseRequestKinds : [],
+      sfiGroupNumber: woSfiGroup(wo),
     };
   };
 
