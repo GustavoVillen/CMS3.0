@@ -11,9 +11,14 @@
 //
 // El número se guarda al salir del campo (edición en línea, sin botón Guardar):
 // el envío se numera frasco por frasco, con la caja al lado.
+//
+// Megado, vibraciones y termografía van en un recuadro aparte, "Equipos que mide
+// el proveedor": se miden a bordo, no viaja ningún frasco y no hay número que
+// anotar. El Nº de informe lo completa la carga del PDF; acá sólo se ve qué
+// equipo ya tiene su informe.
 
 import React, { useState } from "react";
-import { Plus, Trash2, Loader2, Beaker } from "lucide-react";
+import { Plus, Trash2, Loader2, Beaker, Gauge } from "lucide-react";
 import { api } from "../../lib/api";
 import { AlertDialog } from "../AlertDialog";
 import { AssetSearchDropdown, type AssetOption } from "../AssetSearchDropdown";
@@ -43,13 +48,11 @@ export interface LabSamplesData {
   carriesSamples: boolean;
 }
 
-/** Muestras del envío que todavía no tienen número. */
+/** Frascos del envío que todavía no tienen número (megado y similares no cuentan). */
 export function countUnnumbered(data: LabSamplesData | null | undefined): number {
   if (!data?.carriesSamples) return 0;
-  return data.items.filter(s => !s.hasResult && !s.labReference).length;
+  return data.items.filter(s => s.kind === "FLUID" && !s.hasResult && !s.labReference).length;
 }
-
-const SAMPLE_KINDS = ["FLUID", "VIBRATION", "THERMAL", "ULTRASOUND", "INSULATION", "OTHER"] as const;
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[12px] text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-50";
 
@@ -72,11 +75,13 @@ export function LabSamplesPanel({ srId, data, editable, onChanged, vesselCode }:
   const [adding, setAdding] = useState(false);
   const [assets, setAssets] = useState<AssetOption[] | null>(null);
   const [newAssetId, setNewAssetId] = useState("");
-  const [newKind, setNewKind] = useState<SampleKind>("FLUID");
   const [newFluidType, setNewFluidType] = useState<FluidType>("ENGINE_OIL");
   const [newNumber, setNewNumber] = useState("");
 
+  const fluid = data.items.filter(s => s.kind === "FLUID");
+  const measured = data.items.filter(s => s.kind !== "FLUID");
   const missing = countUnnumbered(data);
+  const measuredPending = measured.filter(s => !s.hasResult).length;
 
   const save = async (body: unknown) => {
     setSaving(true);
@@ -126,13 +131,13 @@ export function LabSamplesPanel({ srId, data, editable, onChanged, vesselCode }:
     const ok = await save({
       extras: [{
         assetId: newAssetId,
-        kind: newKind,
-        fluidType: newKind === "FLUID" ? newFluidType : null,
+        kind: "FLUID",
+        fluidType: newFluidType,
         labReference: newNumber.trim() || null,
       }],
     });
     if (ok) {
-      setNewAssetId(""); setNewNumber(""); setNewKind("FLUID"); setNewFluidType("ENGINE_OIL");
+      setNewAssetId(""); setNewNumber(""); setNewFluidType("ENGINE_OIL");
       setAdding(false);
     }
   };
@@ -149,119 +154,179 @@ export function LabSamplesPanel({ srId, data, editable, onChanged, vesselCode }:
     return SAMPLE_KIND_LABELS[s.kind as SampleKind] ?? s.kind;
   };
 
+  const assetCell = (s: LabSample) => (
+    <td className="px-1 py-1 text-fg">
+      {s.assetName ?? s.assetId}
+      <span className="block text-[10px] text-text-industrial/40 font-mono">{s.sampleCode}</span>
+    </td>
+  );
+
+  /* Sólo las agregadas a mano se quitan: la que sale de una rutina del plan es
+     evidencia de que ese ítem se ejecutó. */
+  const removeCell = (s: LabSample) => (
+    <td className="px-1 py-1">
+      {editable && s.isExtra && !s.hasResult && (
+        <button type="button" onClick={() => removeSample(s)} disabled={saving}
+          className="text-text-industrial/30 hover:text-red-500 disabled:opacity-40"
+          title={t("ss.labSamples.remove")}>
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </td>
+  );
+
   return (
-    <div className="rounded-xl border border-accent/30 bg-accent/[0.05] p-3 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Beaker className="w-4 h-4 text-accent shrink-0" />
-        <p className="text-xs font-bold text-fg">{t("ss.labSamples.title")}</p>
-        {missing > 0 ? (
-          <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-700 dark:text-amber-400">
-            {t("ss.labSamples.missing").replace("{n}", String(missing))}
-          </span>
-        ) : (
-          <span className="px-2 py-0.5 rounded-full bg-success-sea/15 border border-success-sea/30 text-[10px] font-bold text-success-sea">
-            {t("ss.labSamples.allNumbered")}
-          </span>
-        )}
-        {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />}
-      </div>
-
-      <p className="text-[11px] text-text-industrial/60">{t("ss.labSamples.hint")}</p>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-[11px]">
-          <thead className="text-text-industrial/50">
-            <tr className="text-left">
-              <th className="font-semibold px-1 py-1">{t("ss.labSamples.colAsset")}</th>
-              <th className="font-semibold px-1 py-1">{t("ss.labSamples.colKind")}</th>
-              <th className="font-semibold px-1 py-1 w-44">{t("ss.labSamples.colNumber")}</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-fg/5">
-            {data.items.map(s => (
-              <tr key={s.id}>
-                <td className="px-1 py-1 text-fg">
-                  {s.assetName ?? s.assetId}
-                  <span className="block text-[10px] text-text-industrial/40 font-mono">{s.sampleCode}</span>
-                </td>
-                <td className="px-1 py-1 text-text-industrial/70">{kindLabel(s)}</td>
-                <td className="px-1 py-1">
-                  {s.hasResult ? (
-                    <span className="font-mono text-fg">
-                      {s.labReference ?? "—"}
-                      <span className="block text-[10px] text-success-sea font-sans">{t("ss.labSamples.hasResult")}</span>
-                    </span>
-                  ) : (
-                    <input
-                      className={`${inputCls} font-mono`}
-                      value={draft[s.id] ?? s.labReference ?? ""}
-                      disabled={!editable || saving}
-                      placeholder={t("ss.labSamples.numberPh")}
-                      onChange={e => setDraft(d => ({ ...d, [s.id]: e.target.value }))}
-                      onBlur={() => { void commitNumber(s); }}
-                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
-                    />
-                  )}
-                </td>
-                <td className="px-1 py-1">
-                  {/* Sólo las agregadas a mano se quitan: la que sale de una rutina
-                      del plan es evidencia de que ese ítem se ejecutó. */}
-                  {editable && s.isExtra && !s.hasResult && (
-                    <button type="button" onClick={() => removeSample(s)} disabled={saving}
-                      className="text-text-industrial/30 hover:text-red-500 disabled:opacity-40"
-                      title={t("ss.labSamples.remove")}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {editable && (adding ? (
-        <div className="rounded-lg border border-fg/10 bg-bg/50 p-2 space-y-2">
-          <AssetSearchDropdown
-            assets={assets ?? []}
-            value={newAssetId}
-            onChange={setNewAssetId}
-            disabled={assets === null}
-            placeholder={assets === null ? t("common.loading") : t("ss.labSamples.pickAsset")}
-          />
-          <div className="flex flex-wrap gap-2">
-            <select value={newKind} onChange={e => setNewKind(e.target.value as SampleKind)}
-              className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[12px] text-fg">
-              {SAMPLE_KINDS.map(k => <option key={k} value={k}>{SAMPLE_KIND_LABELS[k]}</option>)}
-            </select>
-            {newKind === "FLUID" && (
-              <select value={newFluidType} onChange={e => setNewFluidType(e.target.value as FluidType)}
-                className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[12px] text-fg">
-                {FLUID_TYPES.map(ft => <option key={ft} value={ft}>{FLUID_LABELS[ft]}</option>)}
-              </select>
+    <div className="space-y-2">
+      {fluid.length > 0 && (
+        <div className="rounded-xl border border-accent/30 bg-accent/[0.05] p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Beaker className="w-4 h-4 text-accent shrink-0" />
+            <p className="text-xs font-bold text-fg">{t("ss.labSamples.title")}</p>
+            {missing > 0 ? (
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                {t("ss.labSamples.missing").replace("{n}", String(missing))}
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-success-sea/15 border border-success-sea/30 text-[10px] font-bold text-success-sea">
+                {t("ss.labSamples.allNumbered")}
+              </span>
             )}
-            <input className={`${inputCls} font-mono max-w-[180px]`} value={newNumber}
-              placeholder={t("ss.labSamples.numberPh")}
-              onChange={e => setNewNumber(e.target.value)} />
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />}
           </div>
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => { setAdding(false); setNewAssetId(""); setNewNumber(""); }}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-text-industrial/60 hover:bg-fg/5">
-              {t("common.cancel")}
+
+          <p className="text-[11px] text-text-industrial/60">{t("ss.labSamples.hint")}</p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-text-industrial/50">
+                <tr className="text-left">
+                  <th className="font-semibold px-1 py-1">{t("ss.labSamples.colAsset")}</th>
+                  <th className="font-semibold px-1 py-1">{t("ss.labSamples.colKind")}</th>
+                  <th className="font-semibold px-1 py-1 w-44">{t("ss.labSamples.colNumber")}</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-fg/5">
+                {fluid.map(s => (
+                  <tr key={s.id}>
+                    {assetCell(s)}
+                    <td className="px-1 py-1 text-text-industrial/70">{kindLabel(s)}</td>
+                    <td className="px-1 py-1">
+                      {s.hasResult ? (
+                        <span className="font-mono text-fg">
+                          {s.labReference ?? "—"}
+                          <span className="block text-[10px] text-success-sea font-sans">{t("ss.labSamples.hasResult")}</span>
+                        </span>
+                      ) : (
+                        <input
+                          className={`${inputCls} font-mono`}
+                          value={draft[s.id] ?? s.labReference ?? ""}
+                          disabled={!editable || saving}
+                          placeholder={t("ss.labSamples.numberPh")}
+                          onChange={e => setDraft(d => ({ ...d, [s.id]: e.target.value }))}
+                          onBlur={() => { void commitNumber(s); }}
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+                        />
+                      )}
+                    </td>
+                    {removeCell(s)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {editable && (adding ? (
+            <div className="rounded-lg border border-fg/10 bg-bg/50 p-2 space-y-2">
+              <AssetSearchDropdown
+                assets={assets ?? []}
+                value={newAssetId}
+                onChange={setNewAssetId}
+                disabled={assets === null}
+                placeholder={assets === null ? t("common.loading") : t("ss.labSamples.pickAsset")}
+              />
+              <div className="flex flex-wrap gap-2">
+                <select value={newFluidType} onChange={e => setNewFluidType(e.target.value as FluidType)}
+                  className="bg-fg/5 border border-fg/10 rounded-lg px-2 py-1 text-[12px] text-fg">
+                  {FLUID_TYPES.map(ft => <option key={ft} value={ft}>{FLUID_LABELS[ft]}</option>)}
+                </select>
+                <input className={`${inputCls} font-mono max-w-[180px]`} value={newNumber}
+                  placeholder={t("ss.labSamples.numberPh")}
+                  onChange={e => setNewNumber(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => { setAdding(false); setNewAssetId(""); setNewNumber(""); }}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-text-industrial/60 hover:bg-fg/5">
+                  {t("common.cancel")}
+                </button>
+                <button type="button" onClick={() => { void addSample(); }} disabled={saving || !newAssetId}
+                  className="px-3 py-1.5 rounded-lg bg-accent/15 border border-accent/30 text-[11px] font-bold text-accent hover:bg-accent/25 disabled:opacity-40">
+                  {t("ss.labSamples.addConfirm")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => { void openAdd(); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10">
+              <Plus className="w-3.5 h-3.5" /> {t("ss.labSamples.add")}
             </button>
-            <button type="button" onClick={() => { void addSample(); }} disabled={saving || !newAssetId}
-              className="px-3 py-1.5 rounded-lg bg-accent/15 border border-accent/30 text-[11px] font-bold text-accent hover:bg-accent/25 disabled:opacity-40">
-              {t("ss.labSamples.addConfirm")}
-            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Megado, vibraciones, termografía: sin frasco ni número que anotar. */}
+      {measured.length > 0 && (
+        <div className="rounded-xl border border-accent/30 bg-accent/[0.05] p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Gauge className="w-4 h-4 text-accent shrink-0" />
+            <p className="text-xs font-bold text-fg">{t("ss.labSamples.measuredTitle")}</p>
+            {measuredPending > 0 ? (
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                {t("ss.labSamples.measuredPending").replace("{n}", String(measuredPending))}
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-success-sea/15 border border-success-sea/30 text-[10px] font-bold text-success-sea">
+                {t("ss.labSamples.measuredAll")}
+              </span>
+            )}
+            {saving && fluid.length === 0 && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />}
+          </div>
+
+          <p className="text-[11px] text-text-industrial/60">{t("ss.labSamples.measuredHint")}</p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-text-industrial/50">
+                <tr className="text-left">
+                  <th className="font-semibold px-1 py-1">{t("ss.labSamples.colAsset")}</th>
+                  <th className="font-semibold px-1 py-1">{t("ss.labSamples.colKind")}</th>
+                  <th className="font-semibold px-1 py-1 w-44">{t("ss.labSamples.colReport")}</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-fg/5">
+                {measured.map(s => (
+                  <tr key={s.id}>
+                    {assetCell(s)}
+                    <td className="px-1 py-1 text-text-industrial/70">{kindLabel(s)}</td>
+                    <td className="px-1 py-1">
+                      <span className="font-mono text-fg">
+                        {s.labReference ?? "—"}
+                        {s.hasResult ? (
+                          <span className="block text-[10px] text-success-sea font-sans">{t("ss.labSamples.reportReceived")}</span>
+                        ) : (
+                          <span className="block text-[10px] text-amber-700 dark:text-amber-400 font-sans">{t("ss.labSamples.reportPending")}</span>
+                        )}
+                      </span>
+                    </td>
+                    {removeCell(s)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      ) : (
-        <button type="button" onClick={() => { void openAdd(); }}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10">
-          <Plus className="w-3.5 h-3.5" /> {t("ss.labSamples.add")}
-        </button>
-      ))}
+      )}
 
       {error && <AlertDialog message={error} onClose={() => setError(null)} />}
     </div>

@@ -1110,6 +1110,10 @@ async function labSamplesPayload(
  * un taller fuera del catálogo — se responde que sí: es mejor preguntar de más
  * (y el usuario tiene la salida de "todavía no tengo los números") que dejar
  * salir el envío sin numerar y volver a cotejar a mano.
+ *
+ * Sólo cuentan los frascos (kind FLUID). Megado, vibraciones y termografía se
+ * miden a bordo: no se despacha nada y el informe se reconoce por equipo + fecha
+ * + Nº de informe (ver fluid-batch-service), no por un número de muestra.
  */
 async function requestCarriesSamples(
   prisma: unknown,
@@ -1118,6 +1122,7 @@ async function requestCarriesSamples(
   const pending: Array<{ sourcePlanId: string | null }> = await (prisma as any).fluidSample.findMany({
     where: {
       tenantId: sr.tenantId, sourceWorkOrderId: sr.workOrderId, deletedAt: null,
+      kind: "FLUID",
       result: { is: null },
     },
     select: { sourcePlanId: true },
@@ -1192,11 +1197,11 @@ export async function saveServiceRequestLabSamples(
   });
   if (!wo) throw new RouteError(404, "WORK_ORDER_NOT_FOUND", "Orden de trabajo no encontrada.");
 
-  const existing: Array<{ id: string; sampleCode: string; sourcePlanId: string | null; resultId: string | null }> =
+  const existing: Array<{ id: string; sampleCode: string; kind: string; sourcePlanId: string | null; resultId: string | null }> =
     (await (prisma as any).fluidSample.findMany({
       where: { tenantId: sr.tenantId, sourceWorkOrderId: wo.id, deletedAt: null },
-      select: { id: true, sampleCode: true, sourcePlanId: true, result: { select: { id: true } } },
-    })).map((s: any) => ({ id: s.id, sampleCode: s.sampleCode, sourcePlanId: s.sourcePlanId, resultId: s.result?.id ?? null }));
+      select: { id: true, sampleCode: true, kind: true, sourcePlanId: true, result: { select: { id: true } } },
+    })).map((s: any) => ({ id: s.id, sampleCode: s.sampleCode, kind: s.kind, sourcePlanId: s.sourcePlanId, resultId: s.result?.id ?? null }));
   const byId = new Map(existing.map(s => [s.id, s]));
 
   // ── Números: se validan TODOS antes de escribir ninguno ──
@@ -1210,6 +1215,10 @@ export async function saveServiceRequestLabSamples(
     const sample = byId.get(sampleId);
     if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Una de las muestras no pertenece a la orden de esta solicitud.");
     if (sample.resultId) continue; // el análisis ya llegó: su número no se toca
+    // Megado, vibraciones, termografía: no hay frasco que numerar. El Nº de
+    // informe lo escribe la carga del PDF y es el mismo para todos los equipos
+    // de la campaña, así que el control de repetidos de acá lo rechazaría.
+    if (sample.kind !== "FLUID") continue;
     const labReference = baseSampleNumber(raw?.labReference);
     if (labReference) {
       const clash = seen.get(labReference);
@@ -1366,8 +1375,8 @@ async function loadLabSamples(
 }
 
 /**
- * Muestras del envío que todavía no tienen número. Son las que, si el reporte
- * llega antes de que alguien las numere, hay que cotejar a mano.
+ * Frascos del envío que todavía no tienen número. Son los que, si el reporte
+ * llega antes de que alguien los numere, hay que cotejar a mano.
  */
 async function countUnnumberedLabSamples(
   prisma: unknown,
@@ -1377,6 +1386,7 @@ async function countUnnumberedLabSamples(
   return (prisma as any).fluidSample.count({
     where: {
       tenantId, sourceWorkOrderId: workOrderId, deletedAt: null,
+      kind: "FLUID",
       labReference: null,
       result: { is: null },
     },
@@ -1560,7 +1570,7 @@ export async function sendServiceRequestToProvider(
   // lo que se despachó y le sirve al laboratorio para identificar cada frasco.
   const muestras = samples.carries
     ? (await loadLabSamples(prisma, current.tenantId, current.workOrderId))
-        .filter(s => !s.hasResult)
+        .filter(s => s.kind === "FLUID" && !s.hasResult)
         .map(s => `  · ${s.labReference ?? "(sin número)"} — ${s.assetName ?? s.assetId} (${s.sampleCode})`)
     : [];
 

@@ -152,8 +152,9 @@ function buildAuditPayload(
       firmanElPie: { capitan: txt(sr.capitanName), jefeDeMaquinas: txt(sr.jefeMaquinasName) },
     },
     hojaDeRuta: hojaRuta.map(r => ({ fecha: iso(r.fecha), novedad: txt(r.novedad), asienta: txt(r.asienta) })),
+    // Sólo frascos: megado, vibraciones y termografía no despachan nada.
     muestrasDeLaboratorio: samples.carriesSamples
-      ? samples.items.map(s => ({
+      ? samples.items.filter(s => s.kind === "FLUID").map(s => ({
           equipo: s.assetName ?? null,
           codigo: s.sampleCode,
           numeroDeFrasco: txt(s.labReference),
