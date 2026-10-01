@@ -15,7 +15,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Bot,
   Send,
@@ -184,17 +184,6 @@ interface ChatMessage {
 /** Respuestas escritas que valen como "sí" / "no" a una pregunta con botones. */
 const YES_RE = /^\s*(s[ií](?![\wáéíóúñ])|(dale|ok(ay)?|bueno|claro|de una|imprim|gener|por favor)\b)/i;
 const NO_RE = /^\s*(no|nop|despu[eé]s|luego|m[aá]s tarde|ahora no)\b/i;
-
-/**
- * "Sí" a una propuesta de campos ("¿Lo cargo así?", "¿Cargamos estos cambios?").
- * Un "1" sólo cuenta si la opción 1 de la pregunta era un sí ("1. Sí, cargalo así").
- */
-const FIELDS_YES_RE = /^\s*(s[ií]|dale|ok(ay)?|bueno|claro|de una|perfecto|de acuerdo|correcto|carg[\wáéíóúñ]*|aplic[\wáéíóúñ]*|confirm[\wáéíóúñ]*)(?![\wáéíóúñ])/i;
-function confirmsProposedFields(answer: string, question: string): boolean {
-  if (NO_RE.test(answer)) return false;
-  if (FIELDS_YES_RE.test(answer)) return true;
-  return /^\s*(opci[oó]n\s*)?1\s*[.)]?\s*$/i.test(answer) && /^\s*\**\s*1\s*[.)]\s*\**\s*s[ií](?![\wáéíóúñ])/im.test(question);
-}
 
 /**
  * Lo que el panel le manda a la IA, sin mostrarlo, cuando un paso de un flujo
@@ -701,7 +690,6 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 
 export const CopilotoPanel: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const woTerms = useWoTerms();
   const {
     screenContext, requestMessage, setRequestMessage,
@@ -733,31 +721,13 @@ export const CopilotoPanel: React.FC = () => {
   const [capability, setCapability] = useState("knowledge_assistant");
   const [streaming, setStreaming] = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  // Pending field values proposed by the AI — shown as "Aplicar campos" button
+  // Campos que propuso la IA cuando todavía no había formulario donde cargarlos
+  // (la pantalla se abrió en ese mismo turno): esperan en el botón "Aplicar".
+  // Con el formulario abierto, los campos entran solos (ver sendMessage).
   const [pendingFields, setPendingFields] = useState<Record<string, string> | null>(null);
-  /** Índice del mensaje del copiloto que propuso los campos pendientes. */
-  const pendingFieldsIdxRef = useRef<number | null>(null);
-  /**
-   * Modo "completémoslo juntos": la RUTA que el copiloto abrió en la pantalla
-   * central. Mientras el usuario siga ahí, los campos que propone la IA entran
-   * solos al formulario en vez de esperar el botón "Aplicar" — ya dijo que sí,
-   * no tiene sentido pedirle un click más por cada respuesta. Igual no se
-   * guarda nada: los revisa en pantalla y guarda él.
-   *
-   * Se guarda la ruta y no el código del registro porque esto vale para
-   * CUALQUIER pantalla que el copiloto abra (una OT, una SS, la planilla de
-   * horas), no sólo para las que tienen un código.
-   */
-  const [guidedPath, setGuidedPath] = useState<string | null>(null);
   const [recalcRunning, setRecalcRunning] = useState(false);
-  /** Aviso momentáneo de "ya lo cargué en el formulario" (modo guiado). */
+  /** Aviso momentáneo de "ya lo cargué en el formulario". */
   const [fieldsLoadedFlash, setFieldsLoadedFlash] = useState(false);
-  /**
-   * Sólo mientras el usuario siga parado en la pantalla que abrió el copiloto.
-   * Si se va a otro lado —o cierra la ventana del registro, que devuelve la URL
-   * al listado— el modo guiado se apaga solo y vuelve el botón "Aplicar".
-   */
-  const guidedActive = !!guidedPath && location.pathname.startsWith(guidedPath);
 
   // ── Asistente de formularios (useCopilotAssist) ──
   const { user } = useAuth();
@@ -765,12 +735,7 @@ export const CopilotoPanel: React.FC = () => {
   useEffect(() => {
     try { setAssistOptOut(localStorage.getItem(assistOptOutKey(user?.id)) === "1"); } catch { setAssistOptOut(false); }
   }, [user?.id]);
-  /**
-   * Flujos a los que el copiloto ya les ofreció ayuda. Mientras el usuario esté
-   * en un paso de uno de ellos, los campos que propone la IA entran solos al
-   * formulario, igual que cuando el copiloto abrió la pantalla: el usuario ya
-   * está conversando para completarlo, no tiene sentido un clic más por dato.
-   */
+  /** Flujos a los que el copiloto ya les ofreció ayuda. */
   const [offeredFlows, setOfferedFlows] = useState<Set<string>>(() => new Set());
   /** Paso de elección recién cargado por la IA, esperando que aparezca la pantalla siguiente. */
   const pendingStepRef = useRef<{ flow: string; screen: string; at: number } | null>(null);
@@ -784,8 +749,6 @@ export const CopilotoPanel: React.FC = () => {
   const streamingRef = useRef(false);
   streamingRef.current = streaming;
   const [systemMsgTick, setSystemMsgTick] = useState(0);
-  const assistFlow = screenContext?.assist?.flow ?? null;
-  const guidedNow = guidedActive || (!!assistFlow && offeredFlows.has(assistFlow));
 
   // File attachment state
   const [pendingFile, setPendingFile]   = useState<FileContent | null>(null);
@@ -1152,27 +1115,6 @@ export const CopilotoPanel: React.FC = () => {
       }
     }
 
-    // ¿Contesta "sí" a la propuesta de campos del copiloto? Entonces se cargan
-    // ya en el formulario, sin el botón "Aplicar": el usuario lo dijo en el chat.
-    // Antes el copiloto respondía "cargué los cambios" y quedaban sin cargar.
-    // Lo que proponga la IA en esta misma respuesta también entra solo.
-    let confirmedFields = false;
-    if (!opts?.hidden && hasApplyFieldsCallback) {
-      const lastVisible = [...messages].map((m, i) => ({ m, i })).reverse().find(x => !x.m.hidden);
-      if (lastVisible?.m.role === "assistant" && confirmsProposedFields(text, lastVisible.m.content)) {
-        confirmedFields = true;
-        if (pendingFields && pendingFieldsIdxRef.current === lastVisible.i) {
-          lastApplyAtRef.current = Date.now();
-          applyFields(pendingFields);
-          setPendingFields(null);
-          pendingFieldsIdxRef.current = null;
-          setFieldsLoadedFlash(true);
-          window.setTimeout(() => setFieldsLoadedFlash(false), 4000);
-        }
-      }
-    }
-    const autoApply = guidedNow || confirmedFields;
-
     const userMsg: ChatMessage = { role: "user", content: text, hidden: opts?.hidden };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
@@ -1223,11 +1165,7 @@ export const CopilotoPanel: React.FC = () => {
             if (parsed.error) { setError(parsed.error); break; }
             if (parsed.text) {
               assistantContent += parsed.text;
-              // Extract [CAMPOS] block if present (may arrive mid-stream)
-              // En modo guiado no se ofrece el botón: los campos entran solos
-              // al cerrar el stream (ver más abajo), sin que parpadee el botón.
-              const campos = autoApply ? null : extractCamposBlock(assistantContent);
-              if (campos) { setPendingFields(campos); pendingFieldsIdxRef.current = assistantIdx; }
+              // El bloque [CAMPOS] se carga al cerrar el stream (ver más abajo).
               // Strip the block from what's shown in the chat bubble
               const displayContent = stripAiBlocks(assistantContent);
               feedStreamSpeech(displayContent, false);
@@ -1279,18 +1217,25 @@ export const CopilotoPanel: React.FC = () => {
       const openPath = extractOpenScreenBlock(assistantContent);
       if (openPath) {
         navigate(openPath);
-        setGuidedPath(openPath);
       }
 
-      // ── Modo guiado: se aplica al final, no de a pedazos ──
+      // ── Campos: se aplican al final, no de a pedazos ──
       // El bloque [CAMPOS] recién está completo cuando cerró el stream; hacerlo
       // adentro del loop lo aplicaría una vez por chunk.
+      // Con un registro abierto, lo que manda la IA entra directo al formulario
+      // (nada se guarda hasta que la persona toca Guardar). Antes, fuera del
+      // modo guiado, quedaba esperando el botón "Aplicar" mientras el copiloto
+      // decía "cargué": a veces se cargaba y a veces no.
       // Si la pantalla se abrió recién EN ESTE turno, el formulario todavía no
       // montó y no hay dónde escribir: los campos quedan en el botón "Aplicar",
-      // que aparece solo apenas el formulario se registra. Desde el turno
-      // siguiente ya entran solos.
-      if (autoApply) {
+      // que aparece solo apenas el formulario se registra.
+      {
         const finalFields = extractCamposBlock(assistantContent);
+        if (finalFields && !hasApplyFieldsCallback) setPendingFields(finalFields);
+        // Bloque ilegible o cortado: se avisa en vez de callarlo.
+        if (!finalFields && assistantContent.includes("[CAMPOS]") && hasApplyFieldsCallback) {
+          setMessages(prev => [...prev, { role: "assistant", content: t("copilot.fieldsUnreadable") }]);
+        }
         if (finalFields && hasApplyFieldsCallback) {
           // Paso de elección: la pantalla va a cambiar. Cuando llegue el paso
           // nuevo, el panel le pide a la IA que siga (ver efecto más abajo).
@@ -1340,7 +1285,7 @@ export const CopilotoPanel: React.FC = () => {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [buildApiMessages, capability, input, messages, screenContext, streaming, selectedVessel, pendingFile,
-      guidedNow, hasApplyFieldsCallback, applyFields, pendingFields, formActionNames, runFormActions, navigate, feedStreamSpeech]);
+      hasApplyFieldsCallback, applyFields, formActionNames, runFormActions, navigate, feedStreamSpeech]);
 
   // Aplica una acción sugerida por la IA. Muta el state del action a
   // applying → applied/failed. POST /app/copiloto/apply-action.
@@ -1379,7 +1324,6 @@ export const CopilotoPanel: React.FC = () => {
       if (createdCode && CREATES_WORK_ORDER.has(action.type)) {
         const path = `/work-orders/${encodeURIComponent(createdCode)}`;
         navigate(path);
-        setGuidedPath(path);
         setMessages(prev => [...prev, {
           role: "assistant",
           content: `${t("copilot.woOpened")} **${createdCode}**\n\n${t("copilot.woFillOffer")}`,
@@ -1627,7 +1571,6 @@ export const CopilotoPanel: React.FC = () => {
     stopSpeaking();
     lastSpokenRef.current = -1;
     setMessages([]); setError(null); setPendingFields(null); setPendingFile(null);
-    setGuidedPath(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -1827,7 +1770,6 @@ export const CopilotoPanel: React.FC = () => {
             onClick={() => {
               applyFields(pendingFields);
               setPendingFields(null);
-              pendingFieldsIdxRef.current = null;
             }}
             className="w-full text-[10px] px-2.5 py-2 rounded-lg bg-success-sea/10 border border-success-sea/20 text-success-sea font-semibold hover:bg-success-sea/20 transition-all flex items-center justify-center gap-1.5"
           >

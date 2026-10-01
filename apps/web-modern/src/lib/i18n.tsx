@@ -5372,6 +5372,7 @@ const dict = {
   "copilot.assist.reEnable":      { es: "Volver a ayudar automáticamente en los formularios", en: "Help automatically on forms again", pt: "Voltar a ajudar automaticamente nos formulários" },
   "copilot.recalculating":        { es: "Recalculando con IA…", en: "Recalculating with AI…", pt: "Recalculando com IA…" },
   "copilot.fieldsLoaded":         { es: "Campos cargados en el formulario. Revisalos y guardá.", en: "Fields loaded into the form. Review them and save.", pt: "Campos carregados no formulário. Revise e salve." },
+  "copilot.fieldsUnreadable":     { es: "No pude cargar los campos en el formulario: la respuesta llegó incompleta. Pedime que los vuelva a mandar.", en: "I couldn't load the fields into the form: the reply arrived incomplete. Ask me to send them again.", pt: "Não consegui preencher os campos no formulário: a resposta chegou incompleta. Peça para eu enviá-los de novo." },
 
   // ── App a bordo (Capitán / Jefe de Máquinas, Preview V30) ──
   "ob.back": { es: "Volver", en: "Back", pt: "Voltar" },

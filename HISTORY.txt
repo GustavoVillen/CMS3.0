@@ -1,5 +1,19 @@
 HISTORY.txt
 
+[2026-10-01] Copiloto: los campos que manda siempre entran al formulario abierto
+Agent: Claude Opus 5.5
+- Seguia fallando "a veces": el arreglo anterior adivinaba si la respuesta era un si ("1" solo valia si
+  la opcion 1 decia "Si"); cuando no coincidia, los campos quedaban en el boton "Aplicar" y el copiloto
+  decia "registrada". Reproducido con la misma charla de Gustavo sobre DEF-M01-0013.
+- CopilotoPanel.tsx: con un registro abierto, el bloque [CAMPOS] entra siempre al formulario al
+  terminar la respuesta (sin guardar). El boton "Aplicar" queda solo para cuando el formulario todavia
+  no estaba abierto. Se saca el modo guiado (guidedPath/guidedNow) y la heuristica del si.
+- copilot-blocks.ts: el lector de [CAMPOS] tolera JSON entre ```, saltos de linea crudos dentro de
+  un texto y listas (un renglon por item). Si el bloque llega ilegible o cortado se avisa en el chat
+  (copilot.fieldsUnreadable, es/en/pt) en vez de descartarlo callado.
+- copiloto-service.ts: [CAMPOS] solo despues de que el usuario acepta, nunca junto con la pregunta.
+- Frontend + backend: pull + build web + restart.
+
 [2026-10-01] Copiloto: el "si" en el chat carga los campos propuestos
 Agent: Claude Opus 5.5
 - Problema: fuera del modo guiado, los campos que proponia el copiloto quedaban esperando el boton

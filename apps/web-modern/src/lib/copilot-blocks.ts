@@ -22,17 +22,56 @@ export function extractNumberedOptions(text: string): NumberedOption[] {
   return out.length >= 2 ? out.slice(0, 30) : [];
 }
 
-/** Extract the JSON payload from a [CAMPOS]{...}[/CAMPOS] block, or null if absent/invalid. */
+/**
+ * Extract the JSON payload from a [CAMPOS]{...}[/CAMPOS] block, or null if absent/invalid.
+ *
+ * Tolera lo que el modelo a veces manda mal: el JSON entre ``` , saltos de
+ * línea reales dentro de un texto (un análisis de varios renglones) y valores
+ * que no son texto (una lista de acciones se carga un renglón por ítem). Antes
+ * cualquiera de esas cosas hacía que el bloque se descartara sin aviso.
+ */
 export function extractCamposBlock(text: string): Record<string, string> | null {
   const match = text.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
   if (!match) return null;
-  try {
-    const parsed: unknown = JSON.parse(match[1]!.trim());
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, string>;
-    }
-  } catch { /* invalid JSON */ }
+  const raw = match[1]!.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  for (const candidate of [raw, escapeLineBreaksInStrings(raw)]) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const out: Record<string, string> = {};
+        for (const [key, value] of Object.entries(parsed)) {
+          if (value == null) continue;
+          out[key] = Array.isArray(value) ? value.map(String).join("\n")
+            : typeof value === "object" ? JSON.stringify(value)
+            : String(value);
+        }
+        return out;
+      }
+    } catch { /* se prueba la siguiente forma */ }
+  }
   return null;
+}
+
+/** Escapa los saltos de línea y tabs que quedaron crudos dentro de los textos del JSON. */
+function escapeLineBreaksInStrings(json: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (const ch of json) {
+    if (!inString) {
+      if (ch === "\"") inString = true;
+      out += ch;
+      continue;
+    }
+    if (escaped) { escaped = false; out += ch; continue; }
+    if (ch === "\\") { escaped = true; out += ch; continue; }
+    if (ch === "\"") { inString = false; out += ch; continue; }
+    if (ch === "\n") { out += "\\n"; continue; }
+    if (ch === "\r") continue;
+    if (ch === "\t") { out += "\\t"; continue; }
+    out += ch;
+  }
+  return out;
 }
 
 /**
