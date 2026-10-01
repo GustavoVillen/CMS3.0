@@ -6,9 +6,9 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, renderLabeledTextBox } from "./pdf-helpers";
 import { hasMarkdownTable, renderMarkdownBlocks } from "./pdf-markdown";
 import { resolveTenantForm } from "./tenant-forms-service";
-import { drawControlledDocHeader, drawControlledDocFooter, FOOTER_H } from "./pdf-form-chrome";
 import { renderRiskMatrixPdf } from "./risk-matrix-pdf";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
+import { renderMercurioDeferralPdf, type MercurioDeferralSigner } from "./deferral-pdf-mercurio";
 
 
 
@@ -45,6 +45,45 @@ const PAGE_H        = 841.89;
 const CM            = 72 / 2.54;
 const MARGIN_V      = Math.round(1.5 * CM);
 const FOOTER_SIZE   = 40;
+
+/**
+ * Recuadro de firma del papel Mercurio. `nameOverride` es el nombre escrito a
+ * mano al aprobar (approverName/rejectorName): si es otra persona que el
+ * usuario que registró la decisión, la firma y el cargo cargados de ese usuario
+ * no se imprimen, sólo el nombre.
+ */
+async function loadSigner(
+  prismaRaw: unknown,
+  tenantId: string | null,
+  userId: string | null | undefined,
+  knownName: string | null,
+  nameOverride: string | null | undefined,
+): Promise<MercurioDeferralSigner> {
+  const override = nameOverride?.trim() || null;
+  const signer: MercurioDeferralSigner = { name: override ?? knownName, qualification: null, signature: null };
+  if (!prismaRaw || !tenantId || !userId) return signer;
+  try {
+    const u = await (prismaRaw as any).user.findFirst({
+      where: { id: userId, memberships: { some: { tenantId, status: "ACTIVE" } } },
+      select: { formName: true, signatureUrl: true },
+    });
+    if (!u) return signer;
+    const ownName = u.formName?.trim() || knownName;
+    if (!override) signer.name = ownName;
+    if (override && override.toLowerCase() !== (ownName ?? "").toLowerCase()) return signer;
+
+    const m = typeof u.signatureUrl === "string" ? u.signatureUrl.match(/^data:image\/[a-z+]+;base64,(.+)$/i) : null;
+    if (m) signer.signature = Buffer.from(m[1], "base64");
+    const ms = await (prismaRaw as any).tenantMembership.findFirst({
+      where: { userId, tenantId },
+      select: { jobTitle: true, licenseNumber: true },
+    });
+    const qual = [ms?.jobTitle?.trim() || null, ms?.licenseNumber?.trim() ? `Mat. ${ms.licenseNumber.trim()}` : null]
+      .filter(Boolean).join(" · ");
+    signer.qualification = qual || null;
+  } catch { /* non-blocking */ }
+  return signer;
+}
 
 export async function buildDeferralPdf(session: TenantAccessSession, id: string): Promise<Buffer> {
   // Fechas y horas del documento en la hora de la EMPRESA: el servidor
@@ -109,7 +148,7 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
           select: { id: true, firstName: true, lastName: true, email: true },
         });
         const nameById = new Map<string, string>(users.map((u: any) => {
-          const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+          const fullName = [u.firstName?.trim(), u.lastName?.trim()].filter(Boolean).join(" ");
           return [u.id, fullName || u.email || u.id];
         }));
         requestedByName = nameById.get(deferral.requestedByUserId) ?? null;
@@ -135,12 +174,45 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
   }
 
   // Documento controlado por tenant (INFORME DE DIFERIMIENTO). Mercurio recibe
-  // header + footer controlado; el resto mantiene el estilo simple.
+  // el formulario de papel (deferral-pdf-mercurio); el resto mantiene el estilo simple.
   const form = await resolveTenantForm(session.tenantSlug, "DEFERRAL");
-  const controlled = form.meta.style === "MERCURIO";
-  const headerLogo = form.logoBuffer ?? tenantLogoBuffer;
   const tenantName = tenant?.name ?? session.tenantSlug.toUpperCase();
-  const isMercurio = session.tenantSlug === "mercurio";
+
+  if (form.meta.style === "MERCURIO") {
+    // Equipo crítico (ISM 10.3 / PROC-MAN-03): el papel lo marca y cita la regla.
+    let assetIsSafetyCritical = false;
+    if (prismaRaw && tenantId) {
+      try {
+        const a = await (prismaRaw as any).asset.findFirst({
+          where: { id: deferral.assetId, tenantId }, select: { isSafetyCritical: true },
+        });
+        assetIsSafetyCritical = a?.isSafetyCritical === true;
+      } catch { /* non-blocking */ }
+    }
+
+    const rejected = deferral.status === "REJECTED";
+    const [requester, decider] = await Promise.all([
+      loadSigner(prismaRaw, tenantId, deferral.requestedByUserId, requestedByName, null),
+      loadSigner(prismaRaw, tenantId, deferral.decidedByUserId, decidedByName,
+        rejected ? deferral.rejectorName : deferral.approverName),
+    ]);
+
+    return renderMercurioDeferralPdf({
+      meta: form.meta,
+      logoBuffer: form.logoBuffer ?? tenantLogoBuffer,
+      tenantName,
+      deferral,
+      // El buque va por NOMBRE, no por código (regla del proyecto).
+      vesselName: vesselName ?? deferral.vesselCode,
+      assetName: deferral.assetName ?? null,
+      assetIsSafetyCritical,
+      source: {
+        typeLabel: SOURCE_TYPE_LABEL[deferral.sourceType] ?? deferral.sourceType,
+        code: sourceCode, title: sourceTitle, description: sourceTask,
+      },
+      requester, decider, tz, locale,
+    });
+  }
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, info: { Title: deferral.deferralCode } });
@@ -161,8 +233,7 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     const bgBox    = "#f8fafc";
     const accentBg = "#eff6ff";
 
-    const footerH      = controlled ? FOOTER_H : FOOTER_SIZE;
-    const contentBottom = PAGE_H - footerH - MARGIN_V;
+    const contentBottom = PAGE_H - FOOTER_SIZE - MARGIN_V;
 
     let y = MARGIN_V;
     doc.on("pageAdded", () => { (doc as any).y = MARGIN_V; y = MARGIN_V; });
@@ -172,25 +243,18 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     }
 
     // ── Header ────────────────────────────────────────────────────────────────
-    if (controlled) {
-      const hdrH = drawControlledDocHeader(doc, {
-        meta: form.meta, logoBuffer: headerLogo, tenantName, x: ML, y, w: W, page: 1,
-      });
-      y += hdrH + 12;
-    } else {
-      const HEADER_H = 64;
-      const LOGO_MAX_W = 90;
-      if (tenantLogoBuffer) {
-        try { doc.image(tenantLogoBuffer, ML + W - LOGO_MAX_W, y, { fit: [LOGO_MAX_W, HEADER_H], align: "right", valign: "center" }); } catch {}
-      }
-      const titleW = W - LOGO_MAX_W - 16;
-      doc.fontSize(22).font("Helvetica-Bold").fillColor(navy).text("INFORME DE DIFERIMIENTO", ML, y + 2, { width: titleW });
-      doc.fontSize(13).font("Helvetica-Bold").fillColor(navy).text(deferral.deferralCode, ML, y + 34, { width: titleW });
-      doc.fontSize(8).font("Helvetica").fillColor(gray).text(`Generado: ${fmtDateTime(new Date())}`, ML, y + 52, { width: titleW });
-      y += HEADER_H + 12;
-      doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(navy).lineWidth(2).stroke();
-      y += 14;
+    const HEADER_H = 64;
+    const LOGO_MAX_W = 90;
+    if (tenantLogoBuffer) {
+      try { doc.image(tenantLogoBuffer, ML + W - LOGO_MAX_W, y, { fit: [LOGO_MAX_W, HEADER_H], align: "right", valign: "center" }); } catch {}
     }
+    const titleW = W - LOGO_MAX_W - 16;
+    doc.fontSize(22).font("Helvetica-Bold").fillColor(navy).text("INFORME DE DIFERIMIENTO", ML, y + 2, { width: titleW });
+    doc.fontSize(13).font("Helvetica-Bold").fillColor(navy).text(deferral.deferralCode, ML, y + 34, { width: titleW });
+    doc.fontSize(8).font("Helvetica").fillColor(gray).text(`Generado: ${fmtDateTime(new Date())}`, ML, y + 52, { width: titleW });
+    y += HEADER_H + 12;
+    doc.moveTo(ML, y).lineTo(ML + W, y).strokeColor(navy).lineWidth(2).stroke();
+    y += 14;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     function labeledBox(x: number, yy: number, w: number, h: number, label: string, content: string, color = black, bg = bgBox) {
@@ -246,9 +310,7 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     // ── Datos del diferimiento ────────────────────────────────────────────────
     sectionTitle("Datos del diferimiento");
 
-    const srcTypeLabel = deferral.sourceType === "WORK_ORDER"
-      ? (isMercurio ? "Solicitud de Servicio" : "Orden de trabajo")
-      : (SOURCE_TYPE_LABEL[deferral.sourceType] ?? deferral.sourceType);
+    const srcTypeLabel = SOURCE_TYPE_LABEL[deferral.sourceType] ?? deferral.sourceType;
 
     ensureSpace(58);
     labeledBox(ML,           y, W / 2 - 6, 48, "Activo",         val(deferral.assetName));
@@ -345,20 +407,15 @@ export async function buildDeferralPdf(session: TenantAccessSession, id: string)
     const range = doc.bufferedPageRange();
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(range.start + i);
-      if (controlled) {
-        const rightInfo = [form.meta.formCode, deferral.deferralCode, deferral.vesselCode, `Pagina ${i + 1}`, fmt(new Date())].filter(Boolean).join(" — ");
-        drawControlledDocFooter(doc, { meta: form.meta, rightInfo, x: ML, w: W });
-      } else {
-        const footerY = PAGE_H - FOOTER_SIZE;
-        doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();
-        if (existsSync(LOGO_PATH)) {
-          try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch {}
-        }
-        doc.fontSize(8).font("Helvetica").fillColor(gray)
-          .text("Copilot Management System — Documento generado automáticamente.", ML + 18, footerY, { width: W / 2 - 18 });
-        doc.fontSize(8).font("Helvetica").fillColor(gray)
-          .text(`${deferral.deferralCode} · ${deferral.vesselCode} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
+      const footerY = PAGE_H - FOOTER_SIZE;
+      doc.moveTo(ML, footerY - 8).lineTo(ML + W, footerY - 8).strokeColor(border).lineWidth(1).stroke();
+      if (existsSync(LOGO_PATH)) {
+        try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch {}
       }
+      doc.fontSize(8).font("Helvetica").fillColor(gray)
+        .text("Copilot Management System — Documento generado automáticamente.", ML + 18, footerY, { width: W / 2 - 18 });
+      doc.fontSize(8).font("Helvetica").fillColor(gray)
+        .text(`${deferral.deferralCode} · ${deferral.vesselCode} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
     }
     doc.flushPages();
     doc.end();

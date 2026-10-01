@@ -439,8 +439,10 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
         const colW = cw / nCols;
         const PAD = 3;
         const FS = 8;
-        const measure = (cells: string[]) => {
-          doc.fontSize(FS).font("Helvetica");
+        // El encabezado se mide en negrita, que es como se dibuja: medido en
+        // regular, un título de dos líneas se montaba sobre la primera fila.
+        const measure = (cells: string[], bold = false) => {
+          doc.fontSize(FS).font(bold ? "Helvetica-Bold" : "Helvetica");
           let maxH = 0;
           for (let c = 0; c < nCols; c++) {
             const h = doc.heightOfString(sanitizePdfText(cells[c] ?? "") || " ", { width: colW - PAD * 2 });
@@ -449,7 +451,7 @@ export function createFormCanvas(doc: PDFKit.PDFDocument, opts: CreateFormCanvas
           return maxH + PAD * 2;
         };
         const drawRow = (cells: string[], header: boolean) => {
-          const rowH = measure(cells);
+          const rowH = measure(cells, header);
           ensure(rowH);
           for (let c = 0; c < nCols; c++) {
             const x = cx + c * colW;
