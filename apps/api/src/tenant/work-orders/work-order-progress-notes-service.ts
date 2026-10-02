@@ -194,6 +194,18 @@ export async function listProgressNotes(
   return (rows as ProgressNoteRow[]).map(r => ({ ...r, createdByName: nameById.get(r.createdByUserId) ?? null }));
 }
 
+/**
+ * La hoja de ruta de las SS de la OT, para mostrarla junto a los avances. Se
+ * deriva de la SS (no se copia): lo que se agrega o se borra allá se ve acá.
+ */
+export async function listWorkOrderServiceRequestLog(session: TenantAccessSession, workOrderId: string) {
+  const wo = await getWorkOrderOrThrow(session, workOrderId); // tenant + vessel scope
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const { loadWorkOrderHojaRuta } = await import("../service-requests/service-requests-service");
+  return loadWorkOrderHojaRuta(prismaRaw, wo.tenantId, wo.id);
+}
+
 // ─── Repuestos mencionados en un avance (preview V29) ────────────────────────
 // Antes la IA los descontaba del stock sola. Ahora la pantalla pregunta: primero
 // se detectan (sin tocar nada) y se descuenta sólo lo que el usuario confirma.

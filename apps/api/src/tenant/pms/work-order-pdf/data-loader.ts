@@ -250,6 +250,13 @@ export async function loadWorkOrderPdfContext(
         select: { kind: true, text: true, createdAt: true },
       });
       for (const n of all) progressNotes.push({ kind: n.kind, text: n.text ?? null, createdAt: n.createdAt });
+      // La hoja de ruta de las SS de la OT también es parte de sus avances
+      // (derivada de la SS, mismo armado que la pantalla).
+      const { loadWorkOrderHojaRuta } = await import("../../service-requests/service-requests-service");
+      for (const r of await loadWorkOrderHojaRuta(prismaRaw, (wo as any).tenantId, wo.id)) {
+        progressNotes.push({ kind: "SS_LOG", text: `${r.serviceRequestCode} · ${r.novedad} (${r.asienta})`, createdAt: r.fecha });
+      }
+      progressNotes.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     } catch { /* non-blocking */ }
   }
 

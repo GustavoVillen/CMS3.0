@@ -65,7 +65,7 @@ import {
 } from "../work-orders/work-order-schedule-service";
 import {
   createProgressNote,
-  listProgressNotes, detectProgressSpares, confirmProgressSpares,
+  listProgressNotes, listWorkOrderServiceRequestLog, detectProgressSpares, confirmProgressSpares,
   updateProgressNote,
   deleteProgressNote,
 } from "../work-orders/work-order-progress-notes-service";
@@ -658,8 +658,13 @@ export async function handleMaintenanceRoutes(
   // ── Progress notes (avances de trabajo): TEXT, PHOTO, VIDEO, AUDIO ──────────
   if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/progress-notes$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    const notes = await listProgressNotes(session, id);
-    sendJson(response, 200, { items: notes });
+    // `serviceRequestLog`: la hoja de ruta de las SS de la OT, que la pantalla
+    // muestra entre los avances (de sólo lectura: se edita en la SS).
+    const [notes, serviceRequestLog] = await Promise.all([
+      listProgressNotes(session, id),
+      listWorkOrderServiceRequestLog(session, id),
+    ]);
+    sendJson(response, 200, { items: notes, serviceRequestLog });
     return true;
   }
 

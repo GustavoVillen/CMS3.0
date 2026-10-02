@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth, useCan } from "../lib/auth";
@@ -179,11 +179,28 @@ const ProgressNotesPanel: React.FC<{
   const t = useT();
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null);
   const [notesErr, setNotesErr] = useState<string | null>(null);
-  const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
+  const { data, loading, reload } = useFetch<{
+    items: ProgressNote[];
+    serviceRequestLog?: Array<{ fecha: string; novedad: string; asienta: string; serviceRequestId: string; serviceRequestCode: string }>;
+  }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
     [workOrderId, reloadKey],
   );
   const notes = data?.items ?? [];
+  // Hoja de ruta de las SS de la OT, entre los avances (se carga en la SS).
+  // La hoja de ruta de las SS se edita en la SS: al abrir la OT se pide fresca,
+  // sin esperar a que venza el cache de 30 s.
+  const freshFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (freshFor.current === workOrderId) return;
+    freshFor.current = workOrderId;
+    void reload();
+  }, [workOrderId, reload]);
+  const ssLog = data?.serviceRequestLog ?? [];
+  const rows = [
+    ...notes.map(n => ({ at: new Date(n.createdAt).getTime(), note: n, ss: null as (typeof ssLog)[number] | null })),
+    ...ssLog.map(e => ({ at: new Date(e.fecha).getTime(), note: null as ProgressNote | null, ss: e })),
+  ].sort((a, b) => b.at - a.at);
 
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
@@ -208,7 +225,7 @@ const ProgressNotesPanel: React.FC<{
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
-          Avances {notes.length > 0 && `(${notes.length})`}
+          Avances {rows.length > 0 && `(${rows.length})`}
         </p>
         {canAdd && (
           <button
@@ -229,18 +246,29 @@ const ProgressNotesPanel: React.FC<{
         <div className="flex justify-center py-3">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />
         </div>
-      ) : notes.length === 0 ? (
+      ) : rows.length === 0 ? (
         <p className="text-[11px] text-text-industrial/40 italic text-center py-2">Aún sin avances registrados.</p>
       ) : (
         <div className="space-y-2">
-          {notes.map(n => (
+          {rows.map(({ note: n, ss }, i) => n ? (
             <NoteCard
               key={n.id}
               note={n}
               fmtTime={fmtTime}
               onDelete={canDelete ? () => setConfirmDelId(n.id) : undefined}
             />
-          ))}
+          ) : ss ? (
+            <div key={`ss-${ss.serviceRequestId}-${i}`} className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] px-3 py-2">
+              <div className="flex items-center gap-2 text-[10px] text-text-industrial/60">
+                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-px font-mono font-bold text-cyan-700 dark:text-cyan-300" title={t("wo.ssLog.hint")}>
+                  {ss.serviceRequestCode}
+                </span>
+                <span>{fmtTime(ss.fecha)}</span>
+                {ss.asienta && ss.asienta !== "—" && <span className="truncate">· {ss.asienta}</span>}
+              </div>
+              <p className="mt-1 text-[12px] text-fg/85 whitespace-pre-line">{ss.novedad}</p>
+            </div>
+          ) : null)}
         </div>
       )}
       {confirmDelId && (

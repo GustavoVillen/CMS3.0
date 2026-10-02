@@ -1922,6 +1922,56 @@ export async function listHojaRuta(session: TenantAccessSession, id: string) {
   return buildHojaRuta({ ...sr, hojaRuta }, provider?.name ?? null, creadorName);
 }
 
+export interface WorkOrderHojaRutaRow {
+  fecha: Date;
+  novedad: string;
+  asienta: string;
+  serviceRequestId: string;
+  serviceRequestCode: string;
+}
+
+/**
+ * La hoja de ruta de TODAS las SS de una OT, para mostrarla en los Avances de
+ * la OT (pedido de Gustavo, 02-oct-2026). Se deriva, no se copia: es el mismo
+ * armado que la hoja de ruta de la SS (buildHojaRuta), así que una novedad que
+ * se agrega o se borra en la SS se ve igual en la OT, sin duplicar filas.
+ *
+ * Sin chequeo de sesión: lo llaman quienes ya validaron que la OT es visible
+ * (listado de avances, PDF y auditoría de cierre de la OT).
+ */
+export async function loadWorkOrderHojaRuta(
+  prisma: unknown,
+  tenantId: string,
+  workOrderId: string,
+): Promise<WorkOrderHojaRutaRow[]> {
+  const srs: any[] = await (prisma as any).serviceRequest.findMany({
+    where: { tenantId, workOrderId, deletedAt: null },
+    include: { hojaRuta: { orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }] } },
+  });
+  if (srs.length === 0) return [];
+  const providerIds = [...new Set(srs.map(s => s.providerId).filter(Boolean))] as string[];
+  const creatorIds = [...new Set(srs.map(s => s.createdByUserId).filter(Boolean))] as string[];
+  const [providers, creators] = await Promise.all([
+    providerIds.length
+      ? (prisma as any).provider.findMany({ where: { id: { in: providerIds }, tenantId }, select: { id: true, name: true } })
+      : [],
+    creatorIds.length
+      ? (prisma as any).user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, firstName: true, lastName: true, formName: true } })
+      : [],
+  ]);
+  const providerName = new Map<string, string>((providers as any[]).map(p => [p.id, p.name]));
+  const creatorName = new Map<string, string | null>((creators as any[]).map(u => [
+    u.id, u.formName?.trim() || `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || null,
+  ]));
+  return srs.flatMap(sr =>
+    buildHojaRuta(sr, sr.providerId ? providerName.get(sr.providerId) ?? null : null, creatorName.get(sr.createdByUserId) ?? null)
+      .map(r => ({
+        fecha: r.fecha, novedad: r.novedad, asienta: r.asienta,
+        serviceRequestId: sr.id, serviceRequestCode: sr.serviceRequestCode,
+      })),
+  );
+}
+
 export async function addHojaRutaEntry(session: TenantAccessSession, id: string, payload: HojaRutaEntryInput) {
   ensureCanManage(session);
   const prisma = getPrismaClient()!;

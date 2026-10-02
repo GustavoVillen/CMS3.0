@@ -212,7 +212,7 @@ export async function renderMercurioWorkOrderPdf(ctx: WorkOrderPdfContext): Prom
     // ── REGISTRO DE AVANCES ──────────────────────────────────────────────────
     if (ctx.progressNotes && ctx.progressNotes.length > 0) {
       section("REGISTRO DE AVANCES");
-      const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio" };
+      const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio", DOCUMENT: "Documento", SS_LOG: "Hoja de ruta SS" };
       for (const n of ctx.progressNotes) {
         const ts = fmtDateTime(n.createdAt);
         const head = `${ts}  ·  ${KIND_LBL[n.kind] ?? n.kind}`;

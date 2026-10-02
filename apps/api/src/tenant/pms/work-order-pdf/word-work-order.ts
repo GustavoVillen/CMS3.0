@@ -97,7 +97,7 @@ export function renderWorkOrderDoc(ctx: WorkOrderPdfContext): Buffer {
   if (ctx.progressNotes && ctx.progressNotes.length > 0) {
     parts.push(docSpacer());
     parts.push(docSection("REGISTRO DE AVANCES"));
-    const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio" };
+    const KIND_LBL: Record<string, string> = { TEXT: "Nota", PHOTO: "Foto", VIDEO: "Video", AUDIO: "Audio", DOCUMENT: "Documento", SS_LOG: "Hoja de ruta SS" };
     const rows = ctx.progressNotes.map(n => {
       const ts = fmtDateTime(n.createdAt);
       const body = n.text && n.text.trim() ? n.text.trim()

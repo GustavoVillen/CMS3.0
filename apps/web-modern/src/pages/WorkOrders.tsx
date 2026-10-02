@@ -780,6 +780,44 @@ const ProgressNoteRow: React.FC<{
   );
 };
 
+/** Una fila de la hoja de ruta de una SS de la OT (viene de la SS, no se edita acá). */
+interface SsLogEntry {
+  fecha: string;
+  novedad: string;
+  asienta: string;
+  serviceRequestId: string;
+  serviceRequestCode: string;
+}
+
+const SsLogRow: React.FC<{ entry: SsLogEntry }> = ({ entry }) => {
+  const t = useT();
+  const d = new Date(entry.fecha);
+  const when = Number.isNaN(d.getTime()) ? entry.fecha
+    : d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return (
+    <tr className="align-top">
+      <td className="px-1">
+        <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
+          {when}
+          {entry.asienta && entry.asienta !== "—" && (
+            <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={entry.asienta}>{entry.asienta}</span>
+          )}
+        </div>
+      </td>
+      <td className="px-1">
+        <div className={`${noteCellCls} flex items-start gap-2 min-w-0 bg-cyan-500/[0.04]`}>
+          <span className="shrink-0 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-px font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300"
+            title={t("wo.ssLog.hint")}>
+            {entry.serviceRequestCode}
+          </span>
+          <p className="flex-1 min-w-0 text-[11px] text-fg/85 whitespace-pre-line leading-tight">{entry.novedad}</p>
+        </div>
+      </td>
+      <td className="px-1" />
+    </tr>
+  );
+};
+
 export const ProgressNotesPanel: React.FC<{
   workOrderId: string;
   canAdd: boolean;
@@ -790,11 +828,26 @@ export const ProgressNotesPanel: React.FC<{
   onChanged?: () => void;
 }> = ({ workOrderId, canAdd, canDelete, canEdit, onAdd, reloadKey, onChanged }) => {
   const t = useT();
-  const { data, loading, reload } = useFetch<{ items: ProgressNote[] }>(
+  const { data, loading, reload } = useFetch<{ items: ProgressNote[]; serviceRequestLog?: SsLogEntry[] }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
     [workOrderId, reloadKey],
   );
   const notes = data?.items ?? [];
+  // Hoja de ruta de las SS de esta OT: va entre los avances, ordenada por fecha.
+  // Es de sólo lectura acá (se carga y se borra en la SS).
+  // La hoja de ruta de las SS se edita en la SS: al abrir la OT se pide fresca,
+  // sin esperar a que venza el cache de 30 s.
+  const freshFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (freshFor.current === workOrderId) return;
+    freshFor.current = workOrderId;
+    void reload();
+  }, [workOrderId, reload]);
+  const ssLog = data?.serviceRequestLog ?? [];
+  const rows = useMemo(() => [
+    ...notes.map(n => ({ at: new Date(n.createdAt).getTime(), note: n as ProgressNote | null, ss: null as SsLogEntry | null })),
+    ...ssLog.map(e => ({ at: new Date(e.fecha).getTime(), note: null as ProgressNote | null, ss: e as SsLogEntry | null })),
+  ].sort((a, b) => b.at - a.at), [notes, ssLog]);
 
   // El padre bumpea `reloadKey` tras agregar/editar/borrar un avance. El refetch
   // por deps respeta el cache SWR (30s) y devolvería la lista vieja; por eso acá
@@ -842,7 +895,7 @@ export const ProgressNotesPanel: React.FC<{
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
-          Avances {notes.length > 0 && `(${notes.length})`}
+          Avances {rows.length > 0 && `(${rows.length})`}
         </p>
         <div className="flex items-center gap-2">
           {visualNotes.length > 0 && (
@@ -881,7 +934,7 @@ export const ProgressNotesPanel: React.FC<{
         <div className="flex justify-center py-3">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />
         </div>
-      ) : notes.length === 0 ? (
+      ) : rows.length === 0 ? (
         <p className="text-[11px] text-text-industrial/40 italic text-center py-2">Aún sin avances registrados.</p>
       ) : viewMode === "grid" && visualNotes.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
@@ -920,7 +973,7 @@ export const ProgressNotesPanel: React.FC<{
               </tr>
             </thead>
             <tbody>
-              {notes.map(n => (
+              {rows.map(({ note: n, ss }, i) => n ? (
                 <ProgressNoteRow
                   key={n.id}
                   note={n}
@@ -928,7 +981,9 @@ export const ProgressNotesPanel: React.FC<{
                   onSave={canEdit ? (text, occurredAt) => handleSave(n.id, text, occurredAt) : undefined}
                   onOpenMedia={() => setLightbox(n)}
                 />
-              ))}
+              ) : ss ? (
+                <SsLogRow key={`ss-${ss.serviceRequestId}-${i}`} entry={ss} />
+              ) : null)}
             </tbody>
           </table>
         </div>
