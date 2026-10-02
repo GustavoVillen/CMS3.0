@@ -37,6 +37,7 @@ export const METRIC_LABEL: Record<string, string> = {
   assetsTotal: "Activos totales",
   assetsWithPlan: "Con plan activo",
   assetsWithoutPlan: "Sin plan",
+  assetsPlanNotRequired: "No requieren plan",
   coverage: "Cobertura",
   criticalAssets: "Activos criticidad A",
   safetyCritical: "Safety-critical (ISM 10.3)",
@@ -84,8 +85,11 @@ export const METRIC_LABEL: Record<string, string> = {
  *
  * Los pasos van en un solo texto separados por saltos de línea; se numeran al
  * imprimirlos.
+ *
+ * Exportado: el PDF de vetting imprime con este mismo texto los hallazgos de los
+ * grupos que hereda de TMSA.
  */
-const FIX_TEXT: Record<string, { title: string; what: string; how: string }> = {
+export const FIX_TEXT: Record<string, { title: string; what: string; how: string }> = {
   analysesOutOfRange: {
     title: "Análisis de laboratorio fuera de rango",
     what: "Hay análisis con valores fuera del rango aceptable. El monitoreo sirve si la alarma dispara una acción: un resultado fuera de rango sin nada hecho es peor que no medir.",

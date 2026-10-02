@@ -54,6 +54,8 @@ const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth()
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const monthsBetween = (a: Date, b: Date) => Math.max(0, Math.round((b.getTime() - a.getTime()) / (86_400_000 * 30.44)));
 
+// Gemela en el backend: certificates/class-cycle.ts · classCycleLevel (la usa el
+// panel de vetting). Si cambia la regla acá, cambia allá.
 export function computeClassCycle(cert: ClassCycleDates, info: ClassCycleInfo, today = new Date()): ClassCycleModel {
   const now = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const end = toDay(cert.expiryDate);

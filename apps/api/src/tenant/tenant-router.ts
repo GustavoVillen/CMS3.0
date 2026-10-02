@@ -67,6 +67,9 @@ import {
 import { getIsmChapter10Evidence, getIsmMetricDetail } from "./ism/ism-service";
 import { suggestIsmAssessment } from "./ism/ism-ai-suggestions";
 import { buildIsmChapter10Pdf } from "./ism/ism-pdf-service";
+import { getVettingBiqEvidence, getVettingMetricDetail } from "./vetting/vetting-service";
+import { suggestVettingAssessment } from "./vetting/vetting-ai-suggestions";
+import { buildVettingBiqPdf } from "./vetting/vetting-pdf-service";
 import { listTenantAiInsights, updateTenantAiInsightStatus } from "./ai-insights/ai-insights-service";
 import {
   listMyNotifications,
@@ -2524,6 +2527,47 @@ export async function handleTenantRoutes(
     const filename = vesselCode
       ? `ism-cap10-${vesselCode}-${dateStr}.pdf`
       : `ism-cap10-flota-${dateStr}.pdf`;
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": buffer.length,
+    });
+    response.end(buffer);
+    return true;
+  }
+
+  // ── Vetting · BIQ5 (OCIMF, barcazas y remolcadores) ───────────────────────
+  // Tercer panel de evidencia, misma forma que TMSA e ISM: agrupado por
+  // capítulo del cuestionario.
+  if (method === "GET" && url.pathname === "/app/vetting/biq") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode");
+    sendJson(response, 200, await getVettingBiqEvidence(session, vesselCode));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/vetting/biq/detail") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const vesselCode = url.searchParams.get("vesselCode") ?? "";
+    const metric = url.searchParams.get("metric") ?? "";
+    sendJson(response, 200, await getVettingMetricDetail(session, vesselCode, metric));
+    return true;
+  }
+  if (method === "POST" && url.pathname === "/app/vetting/biq/assessment") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `ai-vetting:${session.user.id}`, { maxRequests: 20, windowMs: 60_000 });
+    const body = await readJsonBody(request) as Parameters<typeof suggestVettingAssessment>[1];
+    sendJson(response, 200, await suggestVettingAssessment(session, body));
+    return true;
+  }
+  if (method === "GET" && url.pathname === "/app/vetting/biq/pdf") {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const vesselCode = url.searchParams.get("vesselCode");
+    const buffer = await buildVettingBiqPdf(session, vesselCode);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = vesselCode
+      ? `vetting-biq5-${vesselCode}-${dateStr}.pdf`
+      : `vetting-biq5-flota-${dateStr}.pdf`;
     response.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,

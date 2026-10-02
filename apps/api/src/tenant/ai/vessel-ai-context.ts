@@ -33,8 +33,10 @@ const TTL_MS = 5 * 60 * 1000;
 const cache = new Map<string, Entry>();
 
 /** ¿Lleva gente a bordo? El campo declarado manda; si no está, se deduce del
- *  tipo (texto libre). Una barcaza no lleva dotación permanente. */
-function crewed(v: VesselFacts): boolean | null {
+ *  tipo (texto libre). Una barcaza no lleva dotación permanente.
+ *  Exportada: el panel de vetting decide con ella qué capítulos aplican
+ *  (tripulación, simulacros), con el mismo criterio que la IA. */
+export function isVesselCrewed(v: { vesselType: string | null; isCrewed: boolean | null }): boolean | null {
   if (v.isCrewed !== null) return v.isCrewed;
   const t = (v.vesselType ?? "").toLowerCase();
   if (t.includes("barcaza") || t.includes("barge")) return false;
@@ -58,7 +60,7 @@ function describe(v: VesselFacts): string {
     partes.push(`${v.name}${tipo ? ` — tipo: ${tipo}` : ""}.`);
   }
 
-  const c = crewed(v);
+  const c = isVesselCrewed(v);
   if (c === false) {
     partes.push(
       `NO es tripulada: no hay dotación permanente a bordo, el trabajo se hace en visitas programadas.` +

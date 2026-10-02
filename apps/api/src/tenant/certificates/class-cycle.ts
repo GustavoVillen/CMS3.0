@@ -46,6 +46,73 @@ export async function loadClassCycles(prisma: Prisma, tenantId: string, vesselCo
   return out;
 }
 
+/** ¿Es el certificado de clase? El módulo no tiene campo de tipo: se lee el nombre. */
+export function isClassCertificateName(name: string): boolean {
+  return /clasific|\bclase\b/.test(norm(name));
+}
+
+/**
+ * Situación del ciclo de clase de un certificado, con la misma regla que dibuja
+ * la barra de la pantalla Certificados (web: components/ClassCycleBar.tsx ·
+ * computeClassCycle). Si se cambia una, se cambia la otra: el panel de vetting
+ * y la barra no pueden contradecirse sobre el mismo buque.
+ *
+ *   4 vencido · 3 inspección sin registrar · 2 ventana abierta
+ *   1 ventana abre en ≤ 6 meses · 0 al día
+ */
+export type ClassCycleLevel = 0 | 1 | 2 | 3 | 4;
+
+export function classCycleLevel(
+  cert: {
+    expiryDate: Date;
+    intermediateSurveyDate: Date | null;
+    intermediateSurveyDueDate: Date | null;
+    periodicSurveyDate: Date | null;
+    periodicSurveyDueDate: Date | null;
+  },
+  info: ClassCycleInfo,
+  today = new Date(),
+): ClassCycleLevel {
+  const WINDOW_MONTHS = 6;
+  const RENEWAL_WINDOW_MONTHS = 12;
+  // Las fechas llegan a medianoche UTC: se toma el día calendario, igual que la
+  // barra hace con el ISO que le manda la API.
+  const day = (d: Date | null) => (d ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : null);
+  const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
+  const monthsBetween = (a: Date, b: Date) => Math.max(0, Math.round((b.getTime() - a.getTime()) / (86_400_000 * 30.44)));
+
+  const now = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const end = day(cert.expiryDate)!;
+  const start = addMonths(end, -12 * info.cycleYears);
+  const marks: { kind: "int" | "per"; at: number }[] = info.vesselKind === "TUG"
+    ? [{ kind: "int", at: 36 }]
+    : [{ kind: "per", at: 24 }, { kind: "int", at: 48 }, { kind: "per", at: 72 }];
+  const done = { int: day(cert.intermediateSurveyDate), per: day(cert.periodicSurveyDate) };
+  const due = { int: day(cert.intermediateSurveyDueDate), per: day(cert.periodicSurveyDueDate) };
+  const margin = info.cycleYears * 3;
+  const near = (d: Date | null, target: Date) => !!d && d >= addMonths(target, -margin) && d <= addMonths(target, margin);
+  type CycleWindow = { kind: "int" | "per" | "ren"; from: Date; to: Date; doneAt: Date | null };
+  const windows: CycleWindow[] = marks.map(m => {
+    const rule = addMonths(start, m.at);
+    const target = near(due[m.kind], rule) ? due[m.kind]! : rule;
+    const doneAt = near(done[m.kind], rule) ? done[m.kind] : null;
+    return { kind: m.kind, from: addMonths(target, -WINDOW_MONTHS), to: addMonths(target, WINDOW_MONTHS), doneAt };
+  });
+  windows.push({ kind: "ren", from: addMonths(end, -RENEWAL_WINDOW_MONTHS), to: end, doneAt: null });
+
+  if (now > end) return 4;
+  const open = windows.find(w => now >= w.from && now <= w.to && !w.doneAt) ?? null;
+  const closed = windows.filter(w => w.kind !== "ren" && w.to < now);
+  const lastClosed = closed[closed.length - 1];
+  const reported = lastClosed && (lastClosed.kind === "per"
+    ? !!(done.per || due.per)
+    : !!(done.int || due.int || done.per || due.per));
+  if (lastClosed && !lastClosed.doneAt && reported && !(open && open.kind === lastClosed.kind)) return 3;
+  if (open) return 2;
+  const next = windows.find(w => w.from > now && !w.doneAt) ?? null;
+  return next && monthsBetween(now, next.from) <= 6 ? 1 : 0;
+}
+
 export type ClassSurveyKind = "RENEWAL" | "INTERMEDIATE" | "PERIODIC" | "DRYDOCK" | "TAILSHAFT";
 
 /**
@@ -98,7 +165,7 @@ export async function applyClassSurveyToCertificate(
     select: { id: true, name: true, certificateCode: true },
     orderBy: { expiryDate: "desc" },
   });
-  const cert = certs.find(c => /clasific|\bclase\b/.test(norm(c.name)));
+  const cert = certs.find(c => isClassCertificateName(c.name));
   if (!cert) return;
 
   const f = FIELDS[kind];

@@ -96,6 +96,7 @@ const MocPage = React.lazy(() => import("./pages/Moc").then(m => ({ default: m.M
 const TmsaPage = React.lazy(() => import("./pages/Tmsa").then(m => ({ default: m.TmsaPage })));
 const MaintenanceAdvisorPage = React.lazy(() => import("./pages/MaintenanceAdvisor").then(m => ({ default: m.MaintenanceAdvisorPage })));
 const IsmPage = React.lazy(() => import("./pages/Ism").then(m => ({ default: m.IsmPage })));
+const VettingPage = React.lazy(() => import("./pages/Vetting").then(m => ({ default: m.VettingPage })));
 
 // Platform (sólo SUPERADMIN — un tenant normal nunca descarga estos chunks)
 const PlatformLogin = React.lazy(() => import("./pages/platform/PlatformLogin").then(m => ({ default: m.PlatformLogin })));
@@ -300,6 +301,7 @@ export default function App() {
               <Route path="/tmsa"              element={<RequireRole roles={["TENANT_ADMIN"]}><TmsaPage /></RequireRole>} />
               <Route path="/maintenance-director" element={<RequireMaintenanceDirector><MaintenanceAdvisorPage /></RequireMaintenanceDirector>} />
               <Route path="/ism"               element={<RequireRole roles={["TENANT_ADMIN"]}><IsmPage /></RequireRole>} />
+              <Route path="/vetting"           element={<RequireRole roles={["TENANT_ADMIN"]}><VettingPage /></RequireRole>} />
               <Route path="/providers"         element={<ProvidersPage />} />
               <Route path="/ai-insights"       element={<AiInsightsPage />} />
               <Route path="/ai-documents"      element={<AiDocumentsPage />} />

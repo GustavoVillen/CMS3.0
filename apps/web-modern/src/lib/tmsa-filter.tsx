@@ -1,6 +1,6 @@
 // Filtro "vengo de un panel de cumplimiento" para los listados de módulo.
 //
-// En /tmsa y en /ism cada tarjeta muestra números del buque (ej. "Sin plan: 11").
+// En /tmsa, /ism y /vetting cada tarjeta muestra números del buque (ej. "Sin plan: 11").
 // Al clickear el badge, se navega al módulo con
 // `?tmsaMetric=<clave>&vesselCode=<buque>` y la planilla queda mostrando SÓLO
 // esos registros.
@@ -27,8 +27,9 @@ const DETAIL_CAP = 1000;
  * `?tmsaMetric=<clave>&vesselCode=<buque>` y filtra por los MISMOS registros que
  * contó la tarjeta (ver `useTmsaFilter` abajo).
  *
- * Cubre las métricas del panel TMSA (Elemento 4) y las del panel ISM Cap. 10
- * (prefijo `ism`), que comparten el mismo contrato de detalle.
+ * Cubre las métricas del panel TMSA (Elemento 4), las del panel ISM Cap. 10
+ * (prefijo `ism`) y las del panel de vetting BIQ5 (prefijo `vet`), que
+ * comparten el mismo contrato de detalle.
  *
  * Las métricas que NO están acá se quedan con la ventanita de detalle porque no
  * existe una planilla cuyas filas sean esa entidad:
@@ -69,7 +70,40 @@ const MODULE_BY_METRIC: Record<string, string> = {
   ismSafetyCriticalTotal: "/equipment", ismSafetyCriticalWithPlan: "/equipment", ismSafetyCriticalWithoutPlan: "/equipment",
   ismStandbyTotal: "/equipment", ismStandbyWithTest: "/equipment", ismStandbyWithoutTest: "/equipment",
   ismPreDepartureChecks30d: "/checklists",
+  // ── Vetting · BIQ5 ── (los temas de equipo `vetEq_*` se resuelven abajo)
+  // Los demás números del panel (buques, tripulantes, simulacros, inspecciones
+  // externas) no tienen una planilla que filtre por esos ids: abren la ventanita.
+  vetClassUpToDate: "/certificates", vetClassWindowOpen: "/certificates",
+  vetClassUnrecorded: "/certificates", vetClassExpired: "/certificates",
+  vetDockShaftOverdue: "/certificates", vetDockShaftDueSoon: "/certificates",
 };
+
+/** Temas de equipo del panel de vetting: `vetEq_<tema>_<medida>`. */
+const VET_TOPIC_METRIC = /^vetEq_[A-Za-z]+_([A-Za-z]+)$/;
+const ROUTE_BY_TOPIC_MEASURE: Record<string, string> = {
+  assets: "/equipment", withPlan: "/equipment", withoutPlan: "/equipment",
+  overduePlans: "/maintenance-plans", openDefects: "/defects",
+};
+
+/** Endpoint de detalle de cada panel, según el prefijo de la clave. */
+function detailPathFor(metricKey: string): string {
+  if (metricKey.startsWith("vet")) return "/app/vetting/biq/detail";
+  if (metricKey.startsWith("ism")) return "/app/ism/chapter10/detail";
+  return "/app/tmsa/maintenance/detail";
+}
+
+/**
+ * Rótulo de una métrica de cualquiera de los tres paneles. Las heredadas de
+ * TMSA conservan su clave `tmsa.metric.*`; los temas de equipo del vetting
+ * comparten un rótulo por medida ("Sin plan", "Defectos abiertos"…).
+ */
+export function auditMetricLabelKey(metricKey: string): TranslationKey {
+  const eq = VET_TOPIC_METRIC.exec(metricKey);
+  if (eq) return `vet.metric.eq.${eq[1]}` as TranslationKey;
+  if (metricKey.startsWith("vet")) return `vet.metric.${metricKey}` as TranslationKey;
+  if (metricKey.startsWith("ism")) return `ism.metric.${metricKey}` as TranslationKey;
+  return `tmsa.metric.${metricKey}` as TranslationKey;
+}
 
 /**
  * Link a la planilla del módulo con el filtro de esta métrica puesto.
@@ -78,7 +112,8 @@ const MODULE_BY_METRIC: Record<string, string> = {
  * la planilla muestra los registros de todos los buques del alcance.
  */
 export function moduleListLink(metricKey: string, vesselCode: string): string | null {
-  const route = MODULE_BY_METRIC[metricKey];
+  const eq = VET_TOPIC_METRIC.exec(metricKey);
+  const route = eq ? ROUTE_BY_TOPIC_MEASURE[eq[1]!] : MODULE_BY_METRIC[metricKey];
   if (!route) return null;
   const vessel = vesselCode ? `&vesselCode=${encodeURIComponent(vesselCode)}` : "";
   return `${route}?tmsaMetric=${encodeURIComponent(metricKey)}${vessel}`;
@@ -122,12 +157,10 @@ export function useTmsaFilter(): TmsaFilterState | null {
     if (!metricKey) return;
     let cancelled = false;
     setState({ ids: new Set(), codes: new Set(), loading: true, error: false });
-    // Las métricas del panel ISM Cap. 10 se piden a su propio endpoint (que
+    // Las métricas de ISM y de vetting se piden a su propio endpoint (que
     // además delega en el de TMSA para las que comparte). Se distingue por el
     // prefijo de la clave, así el link no necesita un parámetro extra.
-    const detailPath = metricKey.startsWith("ism")
-      ? "/app/ism/chapter10/detail"
-      : "/app/tmsa/maintenance/detail";
+    const detailPath = detailPathFor(metricKey);
     // Sin vesselCode el backend devuelve el detalle de toda la flota, que es lo
     // que cuenta la tarjeta consolidada.
     api.get<{ items: TmsaDetailItem[] }>(
@@ -198,9 +231,12 @@ export const TmsaFilterBanner: React.FC<{
   return (
     <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-accent/10 border border-accent/25 text-xs">
       <Filter className="w-3.5 h-3.5 text-accent shrink-0" />
-      <span className="text-text-industrial/70">{t("tmsa.filter.label")}:</span>
+      {/* De qué panel se vino: antes decía "TMSA" también al llegar desde ISM. */}
+      <span className="text-text-industrial/70">
+        {t(filter.metricKey.startsWith("vet") ? "vet.filter.label" : filter.metricKey.startsWith("ism") ? "ism.filter.label" : "tmsa.filter.label")}:
+      </span>
       <span className="font-bold text-fg">
-        {t(`${filter.metricKey.startsWith("ism") ? "ism" : "tmsa"}.metric.${filter.metricKey}` as TranslationKey)}
+        {t(auditMetricLabelKey(filter.metricKey))}
       </span>
       {filter.loading ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />

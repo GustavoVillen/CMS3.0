@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical } from "lucide-react";
+import { Ship, Sparkles, AlertCircle, Loader2, AlertTriangle, FileCheck, Clock, Droplets, FileText, ShieldAlert, CalendarClock, Zap, Handshake, Gauge, Wrench, ClipboardList, ClipboardCheck, Timer, LifeBuoy, Binoculars, LayoutGrid, Table2, PackageMinus, PackagePlus, ListChecks, FlaskConical } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
@@ -1057,9 +1057,10 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
           </button>
         </div>
 
-        {/* Fila 4 — auditorías. Checklist OCIMF Elemento 4/4A y las siete
-            cláusulas del Capítulo 10 del Código ISM, ambas con datos en vivo del
-            buque. Mismos roles que protegen /tmsa e /ism. */}
+        {/* Fila 4 — auditorías. Checklist OCIMF Elemento 4/4A, las siete
+            cláusulas del Capítulo 10 del Código ISM y los capítulos del BIQ5 de
+            vetting, con datos en vivo del buque. Mismos roles que protegen
+            /tmsa, /ism y /vetting. */}
         {canSeeTmsaAudit && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <button
@@ -1075,6 +1076,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             >
               <LifeBuoy className="w-6 h-6 text-violet-600 dark:text-violet-400 shrink-0" />
               <span className="font-bold text-sm text-fg">{t("dashboard.ismAudit")}</span>
+            </button>
+            <button
+              onClick={() => navigate("/vetting?tab=checklist")}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-violet-500/10 border border-violet-500/30 hover:border-violet-500/60 hover:bg-violet-500/20 transition-all text-left"
+            >
+              <Binoculars className="w-6 h-6 text-violet-600 dark:text-violet-400 shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.vettingAudit")}</span>
             </button>
           </div>
         )}

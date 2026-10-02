@@ -11,6 +11,7 @@ import {
   Timer,
   Anchor,
   LifeBuoy,
+  Binoculars,
   Compass,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
@@ -59,12 +60,16 @@ export const NAV: NavSection[] = [
     titleKey: "nav.section.operation",
     items: [
       { icon: LayoutDashboard, labelKey: "nav.dashboard",        path: "/",                   end: true },
-      // Paneles de auditoría (TMSA e ISM): sólo el administrador del tenant.
+      // Paneles de auditoría (TMSA, ISM y vetting): sólo el administrador del tenant.
       { icon: BadgeCheck,      labelKey: "nav.tmsa",             path: "/tmsa",
         roles: ["TENANT_ADMIN"] },
       // Hermano del panel TMSA: misma evidencia de mantenimiento, leída contra
       // el Capítulo 10 del Código ISM en vez del Elemento 4 de OCIMF.
       { icon: LifeBuoy,        labelKey: "nav.ism",              path: "/ism",
+        roles: ["TENANT_ADMIN"] },
+      // Tercer panel: la misma evidencia leída contra el cuestionario de vetting
+      // de OCIMF para barcazas y remolcadores (BIQ5).
+      { icon: Binoculars,      labelKey: "nav.vetting",          path: "/vetting",
         roles: ["TENANT_ADMIN"] },
       { icon: ClipboardList,   labelKey: "nav.maintenancePlans", path: "/maintenance-plans" },
       // La planilla de papel del armador, en pantalla: se marcan varias tareas y

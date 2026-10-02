@@ -26,6 +26,7 @@ import type { TenantAccessSession } from "../auth/session-store";
 import { getComplianceScores, getSmartAlerts } from "../compliance/compliance-service";
 import { getTmsaMaintenanceEvidence } from "../tmsa/tmsa-service";
 import { getIsmChapter10Evidence } from "../ism/ism-service";
+import { getVettingBiqEvidence } from "../vetting/vetting-service";
 import {
   applyVesselWhereScope,
   applyVesselWhereScopeOn,
@@ -264,6 +265,18 @@ export const EXTENDED_COPILOT_TOOLS: Anthropic.Tool[] = [
     name: "query_ism_chapter10",
     description:
       "ISM Code Chapter 10 (Maintenance of the ship and equipment) evidence panel: same read-only idea as query_tmsa_evidence, but grouped by ISM clause (10.1, 10.2.1, 10.2.2, 10.2.3, 10.3…), each group with its status and the findings that are missing. Use it to prepare an internal or external SMS audit, or when the user asks what is missing to back up a clause of Chapter 10. It does NOT declare ISM conformity — that is certified by the Administration or the Recognised Organisation. ADMIN ONLY: for any other role the tool answers that the panel is restricted.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Vessel code. Omit for the consolidated fleet figure." },
+        mode: { type: "string", description: "\"fleet\" (default) or \"perVessel\"." },
+      },
+    },
+  },
+  {
+    name: "query_vetting_biq",
+    description:
+      "Vetting readiness panel for the OCIMF BIQ5 questionnaire (barge & tug inspection, South/Central America): same read-only idea as query_tmsa_evidence, grouped by BIQ chapter (1 particulars, 2 certification & class, 3 crew, 4 navigation, 5 safety, 7 structure, 8 cargo, 9 mooring, 10 towing, 11 machinery). Each group has its status, metrics and the findings that are missing. Equipment topics (fire-fighting, life-saving, cargo system, towing…) use metric keys vetEq_<topic>_<measure> (assets, withPlan, withoutPlan, overduePlans, openDefects). Use it when the user prepares a vetting / BIQ / oil-major or charterer inspection of a barge or tug. It does NOT predict the inspection result, and most physical checks (equipment working on the day, cleanliness, documents on board) cannot be seen from the system. ADMIN ONLY: for any other role the tool answers that the panel is restricted.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -1400,10 +1413,11 @@ export async function executeExtendedCopilotTool(
     }
 
     // ── Cumplimiento consolidado y paneles de auditoría ────────────────────
-    // Estas cuatro delegan en su service: el número tiene que ser el MISMO que
+    // Estas cinco delegan en su service: el número tiene que ser el MISMO que
     // muestra la pantalla, y el service ya trae su propio control de acceso.
     if (name === "query_compliance_score" || name === "query_smart_alerts"
-        || name === "query_tmsa_evidence" || name === "query_ism_chapter10") {
+        || name === "query_tmsa_evidence" || name === "query_ism_chapter10"
+        || name === "query_vetting_biq") {
       if (!session) {
         return JSON.stringify({
           error: "This tool is not available in the current context (no user session).",
@@ -1426,6 +1440,10 @@ export async function executeExtendedCopilotTool(
         if (name === "query_tmsa_evidence") {
           const { items } = await getTmsaMaintenanceEvidence(session, vesselCode, mode);
           return toolResult(items, "No TMSA evidence available for the requested scope.");
+        }
+        if (name === "query_vetting_biq") {
+          const { items } = await getVettingBiqEvidence(session, vesselCode, mode);
+          return toolResult(items, "No vetting (BIQ5) evidence available for the requested scope.");
         }
         const { items } = await getIsmChapter10Evidence(session, vesselCode, mode);
         return toolResult(items, "No ISM Chapter 10 evidence available for the requested scope.");
