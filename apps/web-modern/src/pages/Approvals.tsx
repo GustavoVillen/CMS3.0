@@ -487,6 +487,22 @@ export const ApprovalsPage: React.FC = () => {
       const rec = await api.get<{ status: string }>(url);
       if (rec.status === (r.kind === "WO" ? "CLOSED" : "COMPLETED")) {
         setClosed(c => ({ ...c, [rowKey(r)]: fmtDate(new Date().toISOString()) }));
+        // Al cerrar la OT se pudieron cerrar también sus SS (aviso del cierre):
+        // sin esto la SS seguía con "Cerrar SS" hasta recargar la página.
+        if (r.kind === "WO") {
+          try {
+            const srs = await api.get<{ items: Array<{ id: string; status: string; receivedAt?: string | null }> }>(
+              `/app/pms/work-orders/${r.id}/service-requests`,
+            );
+            const done = (srs.items ?? []).filter(s => s.status === "COMPLETED");
+            if (done.length > 0) {
+              setClosed(c => ({
+                ...c,
+                ...Object.fromEntries(done.map(s => [rowKey({ kind: "SR", id: s.id }), fmtDate(s.receivedAt ?? new Date().toISOString())])),
+              }));
+            }
+          } catch { /* la fila de la SS se corrige al recargar */ }
+        }
         return;
       }
     } catch { /* si no se pudo leer, la recarga lo resuelve */ }
