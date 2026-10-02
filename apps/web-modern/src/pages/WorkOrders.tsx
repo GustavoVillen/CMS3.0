@@ -654,6 +654,7 @@ interface ProgressNote {
   text: string | null;
   fileUrl: string | null;
   createdAt: string;
+  createdByUserId?: string | null;
   createdByName?: string | null;
 }
 
@@ -672,12 +673,15 @@ const noteCellCls = "w-full bg-transparent border border-fg/10 rounded-md px-1.5
 const ProgressNoteRow: React.FC<{
   note: ProgressNote;
   onDelete?: () => void;
-  onSave?: (text: string, occurredAt: string | null) => Promise<void>;
+  onSave?: (text: string, occurredAt: string | null, authorId: string | null) => Promise<void>;
   onOpenMedia?: () => void;
-}> = ({ note, onDelete, onSave, onOpenMedia }) => {
+  /** Sólo el administrador corrige quién registró el avance. */
+  canEditAuthor?: boolean;
+}> = ({ note, onDelete, onSave, onOpenMedia, canEditAuthor }) => {
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text ?? "");
+  const [draftAuthor, setDraftAuthor] = useState(note.createdByUserId ?? "");
   // Fecha del avance, editable junto con el texto (misma regla que al cargarlo: no futura).
   const [draftWhen, setDraftWhen] = useState(toLocalInput(new Date(note.createdAt)));
   const [dateErr, setDateErr] = useState<string | null>(null);
@@ -695,7 +699,8 @@ const ProgressNoteRow: React.FC<{
     const when = new Date(draftWhen);
     if (dateChanged && (Number.isNaN(when.getTime()) || when.getTime() > Date.now())) { setDateErr(t("pn.futureDate")); return; }
     setSaving(true);
-    try { await onSave(draft, dateChanged ? when.toISOString() : null); setEditing(false); }
+    const authorChanged = !!canEditAuthor && !!draftAuthor && draftAuthor !== (note.createdByUserId ?? "");
+    try { await onSave(draft, dateChanged ? when.toISOString() : null, authorChanged ? draftAuthor : null); setEditing(false); }
     catch { /* el caller muestra el error */ }
     finally { setSaving(false); }
   };
@@ -710,7 +715,10 @@ const ProgressNoteRow: React.FC<{
               onChange={e => setDraftWhen(e.target.value)} aria-label={t("pn.when")}
               className="w-[150px] bg-fg/5 border-0 rounded-md px-1 py-0.5 text-[11px] text-fg focus:outline-none disabled:opacity-60" />
           ) : fmtTime(note.createdAt)}
-          {note.createdByName && <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={note.createdByName}>{note.createdByName}</span>}
+          {editing && canEditAuthor ? (
+            <AssigneeSelect value={draftAuthor} onChange={setDraftAuthor} disabled={saving}
+              className="mt-1 w-[150px] bg-fg/5 border-0 rounded-md px-1 py-0.5 text-[11px] text-fg focus:outline-none" />
+          ) : note.createdByName && <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={note.createdByName}>{note.createdByName}</span>}
         </div>
         {dateErr && <AlertDialog message={dateErr} onClose={() => setDateErr(null)} />}
       </td>
@@ -764,7 +772,7 @@ const ProgressNoteRow: React.FC<{
       </td>
       <td className="px-1 whitespace-nowrap text-right">
         {onSave && !editing && (
-          <button type="button" onClick={() => { setDraft(note.text ?? ""); setDraftWhen(toLocalInput(new Date(note.createdAt))); setEditing(true); }}
+          <button type="button" onClick={() => { setDraft(note.text ?? ""); setDraftWhen(toLocalInput(new Date(note.createdAt))); setDraftAuthor(note.createdByUserId ?? ""); setEditing(true); }}
             className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors" title="Editar avance">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -780,29 +788,74 @@ const ProgressNoteRow: React.FC<{
   );
 };
 
-/** Una fila de la hoja de ruta de una SS de la OT (viene de la SS, no se edita acá). */
+/**
+ * Una fila de la hoja de ruta de una SS de la OT. Viene de la SS: lo que se
+ * corrige acá se corrige en la SS. Sólo el admin, y sólo las novedades a mano
+ * (`logId`); los hitos salen de las fechas de la SS.
+ */
 interface SsLogEntry {
   fecha: string;
   novedad: string;
   asienta: string;
+  logId?: string;
   serviceRequestId: string;
   serviceRequestCode: string;
 }
 
-const SsLogRow: React.FC<{ entry: SsLogEntry }> = ({ entry }) => {
+const SsLogRow: React.FC<{ entry: SsLogEntry; canEdit?: boolean; onSaved?: () => void | Promise<void> }> = ({ entry, canEdit, onSaved }) => {
   const t = useT();
   const d = new Date(entry.fecha);
   const when = Number.isNaN(d.getTime()) ? entry.fecha
     : d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const editable = !!canEdit && !!entry.logId;
+  const [editing, setEditing] = useState(false);
+  const [fecha, setFecha] = useState("");
+  const [asienta, setAsienta] = useState("");
+  const [novedad, setNovedad] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const start = () => {
+    setFecha(Number.isNaN(d.getTime()) ? "" : toLocalInput(d).slice(0, 10));
+    setAsienta(entry.asienta === "—" ? "" : entry.asienta);
+    setNovedad(entry.novedad);
+    setEditing(true);
+  };
+  const save = async () => {
+    if (!novedad.trim() || !asienta.trim() || !fecha) { setErr(t("wo.ssLog.required")); return; }
+    setSaving(true);
+    try {
+      await api.patch(`/app/pms/service-requests/${entry.serviceRequestId}/hoja-ruta/${entry.logId}`, {
+        entryDate: fecha, asientaByName: asienta.trim(), novedad: novedad.trim(),
+      });
+      setEditing(false);
+      await onSaved?.();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("pn.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const inCls = "w-full bg-fg/5 border-0 rounded-md px-1 py-0.5 text-[11px] text-fg focus:outline-none disabled:opacity-60";
   return (
     <tr className="align-top">
       <td className="px-1">
         <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
-          {when}
-          {entry.asienta && entry.asienta !== "—" && (
-            <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={entry.asienta}>{entry.asienta}</span>
+          {editing ? (
+            <>
+              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} disabled={saving} aria-label={t("hr.col.date")} className={`${inCls} w-[150px]`} />
+              <input value={asienta} onChange={e => setAsienta(e.target.value)} disabled={saving} aria-label={t("hr.col.by")}
+                placeholder={t("hr.col.by")} className={`${inCls} mt-1 w-[150px]`} />
+            </>
+          ) : (
+            <>
+              {when}
+              {entry.asienta && entry.asienta !== "—" && (
+                <span className="block max-w-[96px] truncate text-[10px] text-text-industrial/50" title={entry.asienta}>{entry.asienta}</span>
+              )}
+            </>
           )}
         </div>
+        {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
       </td>
       <td className="px-1">
         <div className={`${noteCellCls} flex items-start gap-2 min-w-0 bg-cyan-500/[0.04]`}>
@@ -810,10 +863,34 @@ const SsLogRow: React.FC<{ entry: SsLogEntry }> = ({ entry }) => {
             title={t("wo.ssLog.hint")}>
             {entry.serviceRequestCode}
           </span>
-          <p className="flex-1 min-w-0 text-[11px] text-fg/85 whitespace-pre-line leading-tight">{entry.novedad}</p>
+          {editing ? (
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <AutoTextArea rows={autoRows(novedad, 2, 8)} value={novedad} onChange={e => setNovedad(e.target.value)} disabled={saving}
+                className="w-full bg-fg/5 border-0 rounded-md px-1.5 py-1 text-[11px] text-fg leading-relaxed focus:outline-none disabled:opacity-60" />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditing(false)} disabled={saving}
+                  className="px-2 py-1 rounded-lg text-[10px] text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">
+                  {t("common.cancel")}
+                </button>
+                <button type="button" onClick={() => { void save(); }} disabled={saving}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-accent text-accent-fg hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} {t("common.save")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="flex-1 min-w-0 text-[11px] text-fg/85 whitespace-pre-line leading-tight">{entry.novedad}</p>
+          )}
         </div>
       </td>
-      <td className="px-1" />
+      <td className="px-1 whitespace-nowrap text-right">
+        {editable && !editing && (
+          <button type="button" onClick={start} title={t("wo.ssLog.edit")}
+            className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </td>
     </tr>
   );
 };
@@ -828,6 +905,10 @@ export const ProgressNotesPanel: React.FC<{
   onChanged?: () => void;
 }> = ({ workOrderId, canAdd, canDelete, canEdit, onAdd, reloadKey, onChanged }) => {
   const t = useT();
+  const { user } = useAuth();
+  // El admin corrige fecha, quién lo registró y detalle de cualquier avance,
+  // también de las novedades de la hoja de ruta de las SS.
+  const isAdmin = user?.role === "TENANT_ADMIN";
   const { data, loading, reload } = useFetch<{ items: ProgressNote[]; serviceRequestLog?: SsLogEntry[] }>(
     `/app/pms/work-orders/${workOrderId}/progress-notes`,
     [workOrderId, reloadKey],
@@ -880,9 +961,9 @@ export const ProgressNotesPanel: React.FC<{
     }
   };
 
-  const handleSave = async (noteId: string, text: string, occurredAt: string | null) => {
+  const handleSave = async (noteId: string, text: string, occurredAt: string | null, authorId: string | null) => {
     try {
-      await api.patch(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`, { text, occurredAt });
+      await api.patch(`/app/pms/work-orders/${workOrderId}/progress-notes/${noteId}`, { text, occurredAt, createdByUserId: authorId });
       await reload();
       onChanged?.();
     } catch (e) {
@@ -978,11 +1059,13 @@ export const ProgressNotesPanel: React.FC<{
                   key={n.id}
                   note={n}
                   onDelete={canDelete ? () => setConfirmDelId(n.id) : undefined}
-                  onSave={canEdit ? (text, occurredAt) => handleSave(n.id, text, occurredAt) : undefined}
+                  onSave={canEdit || isAdmin ? (text, occurredAt, authorId) => handleSave(n.id, text, occurredAt, authorId) : undefined}
                   onOpenMedia={() => setLightbox(n)}
+                  canEditAuthor={isAdmin}
                 />
               ) : ss ? (
-                <SsLogRow key={`ss-${ss.serviceRequestId}-${i}`} entry={ss} />
+                <SsLogRow key={`ss-${ss.serviceRequestId}-${ss.logId ?? i}`} entry={ss} canEdit={isAdmin}
+                  onSaved={async () => { await reload(); onChanged?.(); }} />
               ) : null)}
             </tbody>
           </table>

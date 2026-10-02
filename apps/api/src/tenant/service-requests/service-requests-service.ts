@@ -1926,6 +1926,8 @@ export interface WorkOrderHojaRutaRow {
   fecha: Date;
   novedad: string;
   asienta: string;
+  /** Sólo en las novedades a mano (las únicas que se corrigen o borran). */
+  logId?: string;
   serviceRequestId: string;
   serviceRequestCode: string;
 }
@@ -1966,7 +1968,7 @@ export async function loadWorkOrderHojaRuta(
   return srs.flatMap(sr =>
     buildHojaRuta(sr, sr.providerId ? providerName.get(sr.providerId) ?? null : null, creatorName.get(sr.createdByUserId) ?? null)
       .map(r => ({
-        fecha: r.fecha, novedad: r.novedad, asienta: r.asienta,
+        fecha: r.fecha, novedad: r.novedad, asienta: r.asienta, ...(r.logId ? { logId: r.logId } : {}),
         serviceRequestId: sr.id, serviceRequestCode: sr.serviceRequestCode,
       })),
   );
@@ -1998,6 +2000,61 @@ export async function addHojaRutaEntry(session: TenantAccessSession, id: string,
       createdByUserId: session.user.id,
     },
   });
+}
+
+/**
+ * Corregir una novedad (fecha, quién asienta, texto). Mismo criterio que borrar:
+ * sólo el admin y auditado con el antes y el después. Los hitos que el sistema
+ * deriva de la SS (aprobada, enviada…) no son filas y no se corrigen acá.
+ */
+export async function updateHojaRutaEntry(
+  session: TenantAccessSession,
+  id: string,
+  logId: string,
+  payload: HojaRutaEntryInput,
+) {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Sólo un administrador puede corregir una novedad de la hoja de ruta.");
+  }
+  const prisma = getPrismaClient()!;
+  const current = await getRequestOrThrow(session, id);
+  const entry = await (prisma as any).serviceRequestLog.findFirst({
+    where: { id: logId, serviceRequestId: id },
+  });
+  if (!entry) throw new RouteError(404, "NOT_FOUND", "Novedad no encontrada.");
+
+  const data: Record<string, unknown> = {};
+  if (payload.novedad !== undefined) {
+    const novedad = normalizeOptionalText(payload.novedad);
+    if (!novedad) throw new RouteError(400, "VALIDATION_ERROR", "Escribí la novedad.");
+    data.novedad = novedad;
+  }
+  if (payload.entryDate !== undefined) {
+    const d = parseOptionalDate(payload.entryDate, "entryDate");
+    if (!d) throw new RouteError(400, "VALIDATION_ERROR", "Indicá la fecha de la novedad.");
+    data.entryDate = d;
+  }
+  if (payload.asientaByName !== undefined) {
+    const quien = normalizeOptionalText(payload.asientaByName);
+    if (!quien) throw new RouteError(400, "VALIDATION_ERROR", "Indicá quién asienta la novedad.");
+    data.asientaByName = quien;
+  }
+  if (Object.keys(data).length === 0) return entry;
+
+  const updated = await (prisma as any).serviceRequestLog.update({ where: { id: logId }, data });
+  void publishAudit(prisma as any, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "SERVICE_REQUEST_HOJA_RUTA_UPDATED",
+    entityType: "ServiceRequest",
+    entityId: id,
+    metadata: {
+      serviceRequestCode: current.serviceRequestCode,
+      before: { novedad: entry.novedad, entryDate: entry.entryDate, asientaByName: entry.asientaByName },
+      after: { novedad: updated.novedad, entryDate: updated.entryDate, asientaByName: updated.asientaByName },
+    },
+  });
+  return updated;
 }
 
 /**

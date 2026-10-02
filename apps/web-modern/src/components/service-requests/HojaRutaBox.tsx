@@ -10,7 +10,7 @@
 // siendo la réplica del papel.
 
 import { useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFetch } from "../../lib/hooks";
 import { api } from "../../lib/api";
 import { fmtDate } from "../../lib/utils";
@@ -71,6 +71,66 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
   const [confirmando, setConfirmando] = useState<string | null>(null);
   // Ventanita de "Registrar novedad" (variante lista).
   const [adding, setAdding] = useState(false);
+  // Corrección de una novedad a mano (sólo admin): fecha, quién asienta y texto.
+  const [editRow, setEditRow] = useState<HojaRutaRow | null>(null);
+  const [eFecha, setEFecha] = useState("");
+  const [eAsienta, setEAsienta] = useState("");
+  const [eNovedad, setENovedad] = useState("");
+  const abrirEdicion = (f: HojaRutaRow) => {
+    setEditRow(f);
+    setEFecha(f.fecha ? String(f.fecha).slice(0, 10) : "");
+    setEAsienta(f.asienta === "—" ? "" : f.asienta);
+    setENovedad(f.novedad);
+  };
+  const guardarEdicion = async () => {
+    if (!editRow?.logId) return;
+    if (!eFecha || !eAsienta.trim() || !eNovedad.trim()) { setError(t("wo.ssLog.required")); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/app/pms/service-requests/${srId}/hoja-ruta/${editRow.logId}`, {
+        entryDate: eFecha, asientaByName: eAsienta.trim(), novedad: eNovedad.trim(),
+      });
+      setEditRow(null);
+      await reload();
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("pn.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const editModal = editRow && (
+    <FormModal title={t("hr.edit")} onClose={() => setEditRow(null)}
+      footer={<>
+        <button type="button" onClick={() => setEditRow(null)}
+          className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30">
+          {t("common.cancel")}
+        </button>
+        <button type="button" onClick={() => { void guardarEdicion(); }} disabled={saving}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110 disabled:opacity-50">
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {t("common.save")}
+        </button>
+      </>}>
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.date")}<RequiredMark /></label>
+          <input type="date" value={eFecha} onChange={e => setEFecha(e.target.value)}
+            className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.by")}<RequiredMark /></label>
+          <input value={eAsienta} onChange={e => setEAsienta(e.target.value)}
+            className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.entry")}<RequiredMark /></label>
+          <AutoTextArea rows={3} value={eNovedad} onChange={e => setENovedad(e.target.value)}
+            className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 resize-y" />
+        </div>
+      </div>
+    </FormModal>
+  );
 
   const agregar = async (): Promise<boolean> => {
     if (!novedad.trim()) return false;
@@ -160,6 +220,12 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
                     </td>
                     <td className="px-1 whitespace-nowrap text-right">
                       {f.logId && isAdmin && (
+                        <button type="button" onClick={() => abrirEdicion(f)} title={t("hr.edit")}
+                          className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {f.logId && isAdmin && (
                         <button type="button" onClick={() => setConfirmando(f.logId!)} title={t("hr.delete")}
                           className="p-0.5 text-text-industrial/40 hover:text-red-700 dark:hover:text-red-400 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
@@ -210,6 +276,7 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
             onConfirm={() => { void borrar(confirmando); }}
           />
         )}
+        {editModal}
         {error && <AlertDialog message={error} onClose={() => setError(null)} />}
       </div>
     );
@@ -249,10 +316,16 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
                     className="text-text-industrial/50 hover:underline">No</button>
                 </span>
               ) : (
-                <button type="button" onClick={() => setConfirmando(f.logId!)}
-                  className="shrink-0 text-text-industrial/30 hover:text-red-500" title="Borrar novedad">
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                <>
+                  <button type="button" onClick={() => abrirEdicion(f)}
+                    className="shrink-0 text-text-industrial/30 hover:text-accent" title={t("hr.edit")}>
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                  <button type="button" onClick={() => setConfirmando(f.logId!)}
+                    className="shrink-0 text-text-industrial/30 hover:text-red-500" title="Borrar novedad">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </>
               )
             )}
           </div>
@@ -286,6 +359,7 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
       {error && (
         <p className="px-2 py-1.5 border-b border-fg/25 text-[10px] text-red-700 dark:text-red-400">{error}</p>
       )}
+      {editModal}
     </>
   );
 }

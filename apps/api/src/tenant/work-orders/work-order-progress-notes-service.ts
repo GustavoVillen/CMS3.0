@@ -297,7 +297,7 @@ export async function updateProgressNote(
   session: TenantAccessSession,
   workOrderId: string,
   noteId: string,
-  input: { text: string | null; occurredAt?: string | null },
+  input: { text: string | null; occurredAt?: string | null; createdByUserId?: string | null },
 ): Promise<ProgressNoteRow> {
   const wo = await getWorkOrderOrThrow(session, workOrderId);
   // Lockdown vetting: no se puede editar notas de una OT cerrada/cancelada.
@@ -340,10 +340,38 @@ export async function updateProgressNote(
     }
   }
 
+  // Quién registró el avance: sólo el admin lo corrige (p. ej. lo cargó él por
+  // otra persona). Tiene que ser alguien de la empresa.
+  let authorFrom: string | null = null;
+  const newAuthor = (input.createdByUserId ?? "").trim();
+  if (newAuthor && newAuthor !== note.createdByUserId) {
+    if (session.user.role !== "TENANT_ADMIN") {
+      throw new RouteError(403, "FORBIDDEN", "Sólo un administrador puede cambiar quién registró el avance.");
+    }
+    const member = await (prismaRaw as any).tenantMembership.findFirst({
+      where: { tenantId: wo.tenantId, userId: newAuthor },
+      select: { userId: true },
+    });
+    if (!member) throw new RouteError(400, "USER_NOT_IN_TENANT", "El usuario indicado no pertenece a esta empresa.");
+    data.createdByUserId = newAuthor;
+    authorFrom = note.createdByUserId;
+  }
+
   const updated = await (prismaRaw as any).workOrderProgressNote.update({
     where: { id: noteId },
     data,
   });
+
+  if (authorFrom) {
+    void publishAudit(prismaRaw as any, {
+      tenantId: wo.tenantId,
+      actorUserId: session.user.id,
+      action: "WorkOrder.progressNoteAuthorChanged",
+      entityType: "WorkOrder",
+      entityId: wo.id,
+      metadata: { noteId, from: authorFrom, to: newAuthor },
+    });
+  }
 
   // Cambiar la fecha de un avance es reescribir la secuencia del trabajo: queda
   // asentado quién la movió y desde qué fecha.

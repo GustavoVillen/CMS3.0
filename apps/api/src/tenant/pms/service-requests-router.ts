@@ -40,6 +40,7 @@ import {
   submitServiceRequest,
   unsubmitServiceRequest,
   updateServiceRequest,
+  updateHojaRutaEntry,
 } from "../service-requests/service-requests-service";
 import { auditServiceRequestComplete } from "../service-requests/service-request-complete-audit";
 
@@ -152,6 +153,14 @@ export async function handleServiceRequestsRoutes(
       sendJson(response, 201, await addHojaRutaEntry(session, id, body ?? {}));
       return true;
     }
+  }
+
+  // Corregir una novedad (fecha, quién asienta, texto). Sólo TENANT_ADMIN, auditado.
+  if (method === "PATCH" && /^\/app\/pms\/service-requests\/[^/]+\/hoja-ruta\/[^/]+$/.test(url.pathname)) {
+    const [, , , , id, , logId] = url.pathname.split("/");
+    const body = await readJsonBody(request) as Parameters<typeof updateHojaRutaEntry>[3];
+    sendJson(response, 200, await updateHojaRutaEntry(session, id!, logId!, body ?? {}));
+    return true;
   }
 
   // Borrar una novedad = corregir un error de carga. Sólo TENANT_ADMIN, auditado.

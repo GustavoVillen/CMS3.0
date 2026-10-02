@@ -716,8 +716,10 @@ export async function handleMaintenanceRoutes(
     const parts = url.pathname.split("/");
     const woId = parts[4]!;
     const noteId = parts[6]!;
-    const body = await readJsonBody(request) as { text?: string | null; occurredAt?: string | null };
-    const note = await updateProgressNote(session, woId, noteId, { text: body.text ?? null, occurredAt: body.occurredAt ?? null });
+    const body = await readJsonBody(request) as { text?: string | null; occurredAt?: string | null; createdByUserId?: string | null };
+    const note = await updateProgressNote(session, woId, noteId, {
+      text: body.text ?? null, occurredAt: body.occurredAt ?? null, createdByUserId: body.createdByUserId ?? null,
+    });
     sendJson(response, 200, note);
     return true;
   }
