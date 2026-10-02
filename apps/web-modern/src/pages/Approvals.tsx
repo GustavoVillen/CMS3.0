@@ -185,6 +185,8 @@ function daysToDue(iso: string | null): number | null {
 const BTN_BASE = "w-full min-h-[34px] px-1.5 py-0.5 rounded-lg border-[1.5px] text-[10.5px] font-extrabold leading-tight flex flex-col items-center justify-center transition-all";
 const BTN_ON   = `${BTN_BASE} bg-surface border-accent text-accent hover:bg-accent hover:text-accent-fg disabled:opacity-50`;
 const BTN_DONE = `${BTN_BASE} bg-success/90 border-success text-white`;
+/** Paso firmado de una OT / SS ya cerrada: gris, se ve pero ya no se toca. */
+const BTN_LOCKED = `${BTN_BASE} bg-fg/10 border-fg/20 text-fg/55`;
 const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
 const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
 
@@ -571,9 +573,12 @@ export const ApprovalsPage: React.FC = () => {
     const past   = t(isAuth ? "approvals.signed.authorized" : "approvals.signed.approved");
 
     // Firmado: verde y FIJO. No existe des-aprobar (se revierte rechazando).
+    // Con la OT / SS ya cerrada, en gris: el registro no se puede actualizar.
     if (done) {
+      const locked = !!closedAtOf(row);
       return (
-        <span className={BTN_DONE} title={`${past} — ${done.by} · ${done.at}`}>
+        <span className={locked ? BTN_LOCKED : BTN_DONE}
+          title={`${past} — ${done.by} · ${done.at}${locked ? ` · ${t("approvals.signed.closed")}` : ""}`}>
           ✓ {past}
           <span className="text-[9px] font-semibold opacity-90 truncate max-w-full">{done.by}</span>
         </span>
@@ -651,8 +656,8 @@ export const ApprovalsPage: React.FC = () => {
         <>
           <td className={cell}>
             {sentInfo ? (
-              // Enviada: verde y fijo, como las firmas.
-              <span className={BTN_DONE} title={sentInfo.to ? t("approvals.exec.sentTo").replace("{to}", sentInfo.to) : undefined}>
+              // Enviada: verde y fijo, como las firmas; en gris con la SS cerrada.
+              <span className={closedAt ? BTN_LOCKED : BTN_DONE} title={sentInfo.to ? t("approvals.exec.sentTo").replace("{to}", sentInfo.to) : undefined}>
                 <span className="uppercase">✓ {t("approvals.signed.sent")}</span>
                 <span className="text-[9px] font-semibold opacity-90">{sentInfo.at}</span>
               </span>
@@ -668,7 +673,8 @@ export const ApprovalsPage: React.FC = () => {
           </td>
           <td className={cell}>
             {authorized ? (
-              <button type="button" className={BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "route", row: r }); }}>
+              // Con la SS cerrada, en gris: se abre para consultar pero no se le agregan novedades.
+              <button type="button" className={closedAt ? `${BTN_LOCKED} hover:bg-fg/15` : BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "route", row: r }); }}>
                 {btnBody(wRoute, routeCount === 0 ? t("approvals.exec.noneF")
                   : routeCount === 1 ? t("approvals.exec.routeOne")
                   : t("approvals.exec.routeMany").replace("{n}", String(routeCount)))}
@@ -1169,7 +1175,7 @@ export const ApprovalsPage: React.FC = () => {
               <ModalCloseButton onClose={() => { setExec(null); if (progressDirty) void reload(); }} />
             </div>
             <div className="flex-1 min-h-[min(18rem,50vh)] overflow-y-auto">
-              <HojaRutaBox srId={exec.row.id} editable={!!can?.srManage} isAdmin={user?.role === "TENANT_ADMIN"}
+              <HojaRutaBox srId={exec.row.id} editable={!!can?.srManage && !closedAtOf(exec.row)} isAdmin={user?.role === "TENANT_ADMIN"}
                 variant="list" onChanged={() => setProgressDirty(true)} />
             </div>
           </div>
