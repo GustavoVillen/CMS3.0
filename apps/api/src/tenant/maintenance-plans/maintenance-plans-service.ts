@@ -7,6 +7,7 @@ import { listDevMaintenancePlansForTenant } from "../../platform/data/dev-domain
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { mergePlanTexts, type PlanTextSource } from "../work-orders/wo-plan-text";
+import { summarizeMultiPlanFields, type SummaryPlan } from "../work-orders/wo-plan-summary-ai";
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
 import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
@@ -2313,6 +2314,20 @@ export async function openFormalWorkOrder(
       }
     : {};
 
+  // Con varios ítems, Tarea y Solicitud nacen en una frase escrita por la IA en
+  // vez de la lista por ítem (wo-plan-summary-ai.ts); si alguien las editó, o
+  // la IA falla, quedan como vinieron. Va ANTES de la transacción: la IA no
+  // puede alargarla ni repetirse en cada reintento del código.
+  const woText = await summarizeMultiPlanFields(prismaRaw, session, {
+    tenantId: plan.tenantId,
+    vesselCode: plan.vesselCode,
+    plans: allPlans as unknown as SummaryPlan[],
+    title: inheritMerged(payload.title, plan.title, merged.title) ?? plan.title,
+    description: inheritMerged(payload.description, planAny.description, merged.description),
+    mergedTitle: merged.title,
+    mergedDescription: merged.description,
+  });
+
   // El código se regenera en CADA intento con `attempt` como offset: si dos
   // requests simultáneos calculan el mismo correlativo, el reintento avanza la
   // secuencia en vez de chocar de nuevo con el mismo código (P2002).
@@ -2342,8 +2357,8 @@ export async function openFormalWorkOrder(
         // FECHA y la fecha de la firma de SOLICITA (que se toma de createdAt).
         createdAt: woOpenDate,
         dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
-        title: inheritMerged(payload.title, plan.title, merged.title) ?? plan.title,
-        description: inheritMerged(payload.description, planAny.description, merged.description),
+        title: woText.title ?? plan.title,
+        description: woText.description,
         assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
         estimatedHours: payload.estimatedHours !== undefined
           ? normalizeOptionalNumber(payload.estimatedHours, "estimatedHours")

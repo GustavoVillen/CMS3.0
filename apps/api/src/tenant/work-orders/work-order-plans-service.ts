@@ -15,6 +15,7 @@ import { assertNotLocked } from "../../common/record-lock";
 import { requireWorkOrderScope } from "./work-orders-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { mergePlanTexts, type PlanTextSource } from "./wo-plan-text";
+import { summarizeMultiPlanFields } from "./wo-plan-summary-ai";
 import { hasPermission } from "../auth/role-permissions";
 import { resolvePlanProviderRequests } from "../maintenance-plans/maintenance-plans-service";
 import { withUniqueRetry } from "../../common/unique-retry";
@@ -143,7 +144,7 @@ const MERGED_FIELDS = [
 ] as const;
 
 const PLAN_TEXT_SELECT = {
-  id: true, taskCode: true, title: true, description: true,
+  id: true, taskCode: true, title: true, description: true, assetId: true,
   acceptanceCriteria: true, loto: true, riskLevel: true, riskAnalysisResult: true,
   consequenceCategory: true, consequenceRationale: true,
 };
@@ -157,7 +158,8 @@ const PLAN_TEXT_SELECT = {
  */
 async function recomposeWorkOrderText(
   prismaRaw: AnyPrisma,
-  args: { workOrderId: string; tenantId: string; beforePlanIds: string[]; afterPlanIds: string[]; actorUserId: string },
+  session: TenantAccessSession,
+  args: { workOrderId: string; tenantId: string; beforePlanIds: string[]; afterPlanIds: string[] },
 ) {
   const ids = [...new Set([...args.beforePlanIds, ...args.afterPlanIds])];
   if (ids.length === 0) return;
@@ -165,7 +167,7 @@ async function recomposeWorkOrderText(
   const [wo, plans] = await Promise.all([
     (prismaRaw as any).workOrder.findFirst({
       where: { id: args.workOrderId },
-      select: Object.fromEntries(MERGED_FIELDS.map((f) => [f, true])),
+      select: { vesselCode: true, ...Object.fromEntries(MERGED_FIELDS.map((f) => [f, true])) },
     }),
     (prismaRaw as any).maintenancePlan.findMany({
       where: { id: { in: ids }, tenantId: args.tenantId, deletedAt: null },
@@ -188,11 +190,31 @@ async function recomposeWorkOrderText(
     if (current === next) continue;       // sin cambios
     data[field] = next;
   }
+
+  // Con varios ítems, Tarea y Solicitud van en una frase de la IA en vez de la
+  // lista, igual que al abrir la OT desde el plan. Cubre también la OT libre que
+  // ya trae la lista completa de la pantalla y recién después se vincula.
+  const afterPlans = order(args.afterPlanIds);
+  if (afterPlans.length > 1) {
+    const title = (data.title !== undefined ? data.title : wo.title) as string | null;
+    const description = (data.description !== undefined ? data.description : wo.description) as string | null;
+    const summary = await summarizeMultiPlanFields(prismaRaw, session, {
+      tenantId: args.tenantId,
+      vesselCode: wo.vesselCode,
+      plans: afterPlans,
+      title,
+      description,
+      mergedTitle: after.title,
+      mergedDescription: after.description,
+    });
+    if (summary.title !== title) data.title = summary.title;
+    if (summary.description !== description) data.description = summary.description;
+  }
   if (Object.keys(data).length === 0) return;
 
   await (prismaRaw as any).workOrder.update({
     where: { id: args.workOrderId },
-    data: { ...data, updatedByUserId: args.actorUserId },
+    data: { ...data, updatedByUserId: session.user.id },
   });
 }
 
@@ -342,12 +364,11 @@ export async function addPlanToWorkOrder(
   });
 
   // Título, tarea, criterios, LOTO, riesgo y RCM pasan a incluir el ítem nuevo.
-  await recomposeWorkOrderText(prismaRaw, {
+  await recomposeWorkOrderText(prismaRaw, session, {
     workOrderId: wo.id,
     tenantId: wo.tenantId,
     beforePlanIds,
     afterPlanIds: [...beforePlanIds, planId],
-    actorUserId: session.user.id,
   });
 
   // El plan pasa a "en ventana": ya tiene una OT abierta que lo va a ejecutar,
@@ -447,12 +468,11 @@ export async function removePlanFromWorkOrder(session: TenantAccessSession, work
   await (prismaRaw as any).workOrderMaintenancePlan.delete({ where: { id: link.id } });
 
   // Los textos vuelven a describir sólo los ítems que quedan.
-  await recomposeWorkOrderText(prismaRaw, {
+  await recomposeWorkOrderText(prismaRaw, session, {
     workOrderId: wo.id,
     tenantId: wo.tenantId,
     beforePlanIds,
     afterPlanIds: beforePlanIds.filter((id) => id !== planId),
-    actorUserId: session.user.id,
   });
 
   // El plan vuelve al estado que le corresponde por vencimiento: ya no tiene
