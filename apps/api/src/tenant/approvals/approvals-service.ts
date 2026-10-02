@@ -87,6 +87,12 @@ export interface PendingApprovalsResult {
     /** Enviar la SS al proveedor y asentar en su hoja de ruta (canManage de la SS). */
     srManage: boolean;
   };
+  /**
+   * OT abiertas que todavía no se enviaron a aprobar (en preparación). Sólo en
+   * Seguimiento (`followAll`): se ven en su lugar de la planilla con "EN
+   * PREPARACIÓN" en vez del botón de aprobar (pedido del usuario, oct 2026).
+   */
+  woPrepare: PendingApprovalItem[];
   woApprove: PendingApprovalItem[];
   woAuthorize: PendingApprovalItem[];
   srApprove: PendingApprovalItem[];
@@ -187,12 +193,17 @@ export async function listPendingApprovals(
     srManage:    canSrManage(session),
   };
 
-  const woWhere = (stage: "APROBAR" | "AUTORIZAR" | "EJECUTAR") => {
+  const woWhere = (stage: "PREPARAR" | "APROBAR" | "AUTORIZAR" | "EJECUTAR") => {
     const where: Record<string, unknown> = {
       tenantId,
       deletedAt: null,
       status: { in: OPEN_WO_STATUSES },
-      ...(stage === "APROBAR"
+      ...(stage === "PREPARAR"
+        // En preparación: nadie la mandó a firmar todavía (o se la rechazaron y
+        // volvió a preparación). La inspección propia y la OT Express nacen
+        // autorizadas, así que no caen acá.
+        ? { enviadoAprobacionAt: null, aprobadoAt: null, autorizadoAt: null }
+        : stage === "APROBAR"
         // Pendiente de aprobación: ya la mandaron a firmar y nadie la aprobó.
         // Sin enviadoAprobacionAt la OT está EN PREPARACIÓN y no es de nadie más.
         ? { enviadoAprobacionAt: { not: null }, aprobadoAt: null }
@@ -235,8 +246,13 @@ export async function listPendingApprovals(
   const listWoAuthorize = can.woAuthorize || (follow && seesExecute);
   const listSrApprove   = can.srApprove   || (follow && seesSrExecute);
   const listSrAuthorize = can.srAuthorize || (follow && seesSrExecute);
+  // Las que están en preparación sólo se siguen: nadie las firma todavía.
+  const listWoPrepare   = follow && seesExecute;
 
-  const [woApproveRows, woAuthorizeRows, srApproveRows, srAuthorizeRows, woExecuteRows, srExecuteRows] = await Promise.all([
+  const [woPrepareRows, woApproveRows, woAuthorizeRows, srApproveRows, srAuthorizeRows, woExecuteRows, srExecuteRows] = await Promise.all([
+    listWoPrepare
+      ? (prisma as any).workOrder.findMany({ where: woWhere("PREPARAR"), select: WO_SELECT, orderBy: [{ workOrderCode: "asc" as const }] })
+      : Promise.resolve([]),
     listWoApprove
       ? (prisma as any).workOrder.findMany({ where: woWhere("APROBAR"), select: WO_SELECT, orderBy: orderWo })
       : Promise.resolve([]),
@@ -257,10 +273,10 @@ export async function listPendingApprovals(
       : Promise.resolve([]),
   ]);
 
-  const woRows = [...woApproveRows, ...woAuthorizeRows, ...woExecuteRows] as any[];
+  const woRows = [...woPrepareRows, ...woApproveRows, ...woAuthorizeRows, ...woExecuteRows] as any[];
   const srRows = [...srApproveRows, ...srAuthorizeRows, ...srExecuteRows] as any[];
   if (woRows.length === 0 && srRows.length === 0) {
-    return { can, woApprove: [], woAuthorize: [], srApprove: [], srAuthorize: [], woExecute: [], srExecute: [] };
+    return { can, woPrepare: [], woApprove: [], woAuthorize: [], srApprove: [], srAuthorize: [], woExecute: [], srExecute: [] };
   }
 
   // ── Resolución en lote de todo lo que las filas sólo tienen como id ─────────
@@ -496,6 +512,7 @@ export async function listPendingApprovals(
 
   return {
     can,
+    woPrepare:   (woPrepareRows as any[]).map(mapWo),
     woApprove:   (woApproveRows as any[]).map(mapWo),
     woAuthorize: (woAuthorizeRows as any[]).map(mapWo),
     srApprove:   (srApproveRows as any[]).map(mapSr),

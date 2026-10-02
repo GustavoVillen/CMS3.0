@@ -94,6 +94,8 @@ interface PendingApprovals {
     woApprove: boolean; woAuthorize: boolean; srApprove: boolean; srAuthorize: boolean;
     woOperate: boolean; woManage: boolean; srManage: boolean;
   };
+  /** OT en preparación (sin enviar a aprobar). */
+  woPrepare?: PendingItem[];
   woApprove: PendingItem[];
   woAuthorize: PendingItem[];
   srApprove: PendingItem[];
@@ -107,9 +109,10 @@ interface Signed { by: string; at: string }
 
 /** Una fila de la planilla: el registro + en qué paso está. */
 interface Row extends PendingItem {
-  /** De qué bandeja vino: `approve` = falta aprobar, `authorize` = ya aprobada,
+  /** De qué bandeja vino: `prepare` = OT todavía sin enviar a aprobar,
+   *  `approve` = falta aprobar, `authorize` = ya aprobada,
    *  `execute` = autorizada y todavía abierta (OT) o sin recibir (SS). */
-  stage: "approve" | "authorize" | "execute";
+  stage: "prepare" | "approve" | "authorize" | "execute";
 }
 
 /** La ventana abierta desde las columnas de ejecución. */
@@ -188,6 +191,8 @@ const BTN_DONE = `${BTN_BASE} bg-success/90 border-success text-white`;
 /** Paso firmado de una OT / SS ya cerrada: gris, se ve pero ya no se toca. */
 const BTN_LOCKED = `${BTN_BASE} bg-fg/10 border-fg/20 text-fg/55`;
 const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
+/** OT en preparación: todavía nadie la mandó a aprobar. Ámbar, como su columna del tablero. */
+const BTN_PREP = `${BTN_BASE} bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25`;
 const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
 
 export const ApprovalsPage: React.FC = () => {
@@ -239,6 +244,7 @@ export const ApprovalsPage: React.FC = () => {
   const rows = useMemo<Row[]>(() => {
     if (!data) return [];
     return [
+      ...(data.woPrepare ?? []).map(i => ({ ...i, stage: "prepare" as const })),
       ...data.woApprove.map(i => ({ ...i, stage: "approve" as const })),
       ...data.srApprove.map(i => ({ ...i, stage: "approve" as const })),
       ...data.woAuthorize.map(i => ({ ...i, stage: "authorize" as const })),
@@ -258,7 +264,7 @@ export const ApprovalsPage: React.FC = () => {
   const approvedOf = useCallback((r: Row): Signed | null => {
     const local = signed[rowKey(r)]?.approved;
     if (local) return local;
-    if (r.stage !== "approve") return { by: r.requestedByName ?? "—", at: fmtDate(r.requestedAt) };
+    if (r.stage === "authorize" || r.stage === "execute") return { by: r.requestedByName ?? "—", at: fmtDate(r.requestedAt) };
     return null;
   }, [signed]);
   const authorizedOf = useCallback((r: Row): Signed | null => {
@@ -285,8 +291,8 @@ export const ApprovalsPage: React.FC = () => {
 
   // ─── Tarjetas de arriba: filtran las filas de ESTA planilla ────────────────
   // Mismos nombres y colores que las de Órdenes de Trabajo, pero cuentan las
-  // filas de acá (OT y SS). "Sin enviar a aprobar" no va: lo que está en
-  // preparación no llega a esta bandeja (decisión del usuario).
+  // filas de acá (OT y SS). Las OT en preparación se listan (oct 2026) pero no
+  // esperan la firma de nadie: no cuentan en "Esperando mi firma".
   const cardMatch = useCallback((r: Row, key: CardKey): boolean => {
     if (closedAtOf(r)) return false;   // cerrada (en esta tanda o ya recibida): ya no cuenta
     const deferred = r.status === "ON_HOLD" || r.status === "DEFERRED";
@@ -294,6 +300,7 @@ export const ApprovalsPage: React.FC = () => {
       case "overdue":    return !deferred && (daysToDue(r.dueDate) ?? 0) < 0;
       // La próxima firma de la fila es mía: aprobar si falta, si no autorizar.
       case "mine":
+        if (r.stage === "prepare") return false;
         return approvedOf(r)
           ? !authorizedOf(r) && (r.kind === "WO" ? !!can?.woAuthorize : !!can?.srAuthorize)
           : (r.kind === "WO" ? !!can?.woApprove : !!can?.srApprove);
@@ -383,7 +390,8 @@ export const ApprovalsPage: React.FC = () => {
   }, [visible]);
 
   const pendingCount = useMemo(
-    () => rows.filter(r => !authorizedOf(r)).length,
+    // Firmas que faltan: la OT en preparación todavía no espera ninguna.
+    () => rows.filter(r => r.stage !== "prepare" && !authorizedOf(r)).length,
     [rows, authorizedOf],
   );
 
@@ -409,15 +417,9 @@ export const ApprovalsPage: React.FC = () => {
     const code = lookFor;
     setLookFor(null);
     const row = rows.find(r => r.kind === "WO" && r.code === code);
-    if (!row) {
-      // En preparación (sin enviar a aprobar) no llega a esta bandeja: sólo
-      // en ese caso se avisa. Si no está por otro motivo (otro buque elegido
-      // arriba, por ejemplo) el aviso diría algo falso: no se muestra nada.
-      void api.get<{ enviadoAprobacionAt?: string | null }>(`/app/pms/work-orders/${encodeURIComponent(code)}`)
-        .then(wo => { if (!wo.enviadoAprobacionAt) setAlert(t("approvals.justOpened.notListed").replace("{code}", code)); })
-        .catch(() => { /* sin aviso */ });
-      return;
-    }
+    // Desde oct 2026 la OT en preparación también se lista: si no está es por
+    // otro motivo (otro buque elegido arriba, por ejemplo) y no se avisa nada.
+    if (!row) return;
     setHighlightCode(code);
     window.setTimeout(() => {
       document.querySelector(`[data-row-code="${CSS.escape(code)}"]`)
@@ -582,6 +584,16 @@ export const ApprovalsPage: React.FC = () => {
           ✓ {past}
           <span className="text-[9px] font-semibold opacity-90 truncate max-w-full">{done.by}</span>
         </span>
+      );
+    }
+    // En preparación: en vez de "Aprobar", el estado (pedido del usuario). Abre
+    // la OT, que es donde se completa y se envía a aprobar; una vez enviada,
+    // la fila queda en el mismo lugar con "Aprobar — para tu firma".
+    if (!isAuth && row.stage === "prepare") {
+      return (
+        <button type="button" onClick={() => openRecord(row)} title={t("approvals.prep.tooltip")} className={BTN_PREP}>
+          {btnBody(t("approvals.prep.label"), t("approvals.prep.detail"))}
+        </button>
       );
     }
     // Autorizar antes de aprobar: el backend lo rechaza, así que se avisa antes.
