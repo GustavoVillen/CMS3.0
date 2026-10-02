@@ -1162,7 +1162,8 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                 ? { type: "INSPECTION" }
                 : { maintenanceKind: maintKind })
             : { type: prefill?.type ?? type }),
-          priority:           prefill?.priority ?? priority,
+          // Arranca con la del defecto/hallazgo (estado inicial) pero se puede cambiar.
+          priority,
           criticality:        prefill?.criticality ?? criticality,
           openDate,
           dueDate:            dueDate || null,
@@ -1223,7 +1224,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               providerId:  r.providerId,
               title:       servicio,
               description: servicio,
-              priority:    prefill?.priority ?? priority,
+              priority,
             });
           } catch (e) { console.error("[create-sr] failed:", e); }
         }
@@ -1305,25 +1306,28 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       { key: "assignedToArea", label: t("wo.modal.assignedTo"), value: assignedToArea, options: WO_ASSIGNED_TO,
         set: v => { assignedToAreaTouchedRef.current = true; setAssignedToArea(v); } },
     );
+    // La prioridad sólo la fija el plan; desde un defecto o hallazgo se puede cambiar.
+    if (prefill?.source !== "plan") {
+      assistFields.push({ key: "priority", label: t("wo.modal.priority"), value: priority, options: WO_PRIORITY_OPTIONS, set: setPriority });
+    }
     if (!prefill) {
-      assistFields.push(
-        { key: "priority", label: t("wo.modal.priority"), value: priority, options: WO_PRIORITY_OPTIONS, set: setPriority },
-        { key: "maintKind", label: t("wo.modal.type"), value: maintKind, options: WO_MAINTENANCE_KINDS_OR_INSPECTION, set: setMaintKind },
-      );
+      assistFields.push({ key: "maintKind", label: t("wo.modal.type"), value: maintKind, options: WO_MAINTENANCE_KINDS_OR_INSPECTION, set: setMaintKind });
     }
     assistFields.push({ key: "systemArea", label: t("wo.modal.system"), value: systemArea, options: WO_SYSTEM_AREAS, set: setSystemArea });
-  } else if (!prefill) {
-    assistFields.push(
-      { key: "type", label: t("wo.modal.type"), value: type, set: setType, options: [
+  } else {
+    if (!prefill) {
+      assistFields.push({ key: "type", label: t("wo.modal.type"), value: type, set: setType, options: [
         { value: "PREVENTIVE", label: t("wo.type.preventive") },
         { value: "CORRECTIVE", label: t("wo.type.corrective") },
         { value: "INSPECTION", label: t("wo.type.inspection") },
-      ] },
-      { key: "priority", label: t("wo.modal.priority"), value: priority, set: setPriority, options: [
+      ] });
+    }
+    if (prefill?.source !== "plan") {
+      assistFields.push({ key: "priority", label: t("wo.modal.priority"), value: priority, set: setPriority, options: [
         { value: "LOW", label: t("priority.low") }, { value: "MEDIUM", label: t("priority.medium") },
         { value: "HIGH", label: t("priority.high") }, { value: "CRITICAL", label: t("priority.critical") },
-      ] },
-    );
+      ] });
+    }
   }
   if (!prefill) {
     assistFields.push({ key: "criticality", label: t("wo.modal.criticality"), value: criticality, set: setCriticality,
@@ -1779,8 +1783,10 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           <FormSection n={++sectionNo} title={t("wo.modal.sec.when")} subtitle={t("wo.modal.sec.whenSub")}>
             <div className="space-y-1.5">
               <label className={labelCls} title={t("priority.hint")}>{t("wo.modal.priority")}</label>
-              {/* Desde un plan la prioridad viene fijada por el plan: se muestra, no se cambia. */}
-              <SegButtons options={priorityOptions} value={priority} disabled={!!prefill} allowClear={false}
+              {/* Desde un plan la prioridad viene fijada por el plan: se muestra, no se cambia.
+                  Desde un defecto o un hallazgo arranca con la del origen y cualquiera
+                  la puede cambiar (pedido del usuario, oct 2026). */}
+              <SegButtons options={priorityOptions} value={priority} disabled={prefill?.source === "plan"} allowClear={false}
                 onChange={v => { if (v) setPriority(v); }} activeCls={v => PRIORITY_ACTIVE_CLS[v]} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
