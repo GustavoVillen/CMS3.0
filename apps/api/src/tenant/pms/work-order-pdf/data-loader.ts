@@ -241,20 +241,31 @@ export async function loadWorkOrderPdfContext(
   }
 
   // ── Todos los avances (para el listado del PDF) ──
-  const progressNotes: { kind: string; text: string | null; createdAt: Date }[] = [];
+  const progressNotes: { kind: string; text: string | null; createdAt: Date; author?: string | null }[] = [];
   if (prismaRaw) {
     try {
       const all = await (prismaRaw as any).workOrderProgressNote.findMany({
         where: { workOrderId: wo.id, tenantId: (wo as any).tenantId, deletedAt: null },
         orderBy: { createdAt: "asc" },
-        select: { kind: true, text: true, createdAt: true },
+        select: { kind: true, text: true, createdAt: true, createdByUserId: true },
       });
-      for (const n of all) progressNotes.push({ kind: n.kind, text: n.text ?? null, createdAt: n.createdAt });
+      // Quién registró cada avance: el formulario dice "Oscar Duarte", no un id.
+      const authorIds = [...new Set((all as any[]).map(n => n.createdByUserId).filter(Boolean))] as string[];
+      const authors: any[] = authorIds.length
+        ? await (prismaRaw as any).user.findMany({ where: { id: { in: authorIds } }, select: { id: true, firstName: true, lastName: true, formName: true, email: true } })
+        : [];
+      const authorOf = new Map<string, string>(authors.map(u => [u.id, u.formName?.trim() || [u.firstName?.trim(), u.lastName?.trim()].filter(Boolean).join(" ") || u.email]));
+      for (const n of all) {
+        progressNotes.push({ kind: n.kind, text: n.text ?? null, createdAt: n.createdAt, author: authorOf.get(n.createdByUserId) ?? null });
+      }
       // La hoja de ruta de las SS de la OT también es parte de sus avances
       // (derivada de la SS, mismo armado que la pantalla).
       const { loadWorkOrderHojaRuta } = await import("../../service-requests/service-requests-service");
       for (const r of await loadWorkOrderHojaRuta(prismaRaw, (wo as any).tenantId, wo.id)) {
-        progressNotes.push({ kind: "SS_LOG", text: `${r.serviceRequestCode} · ${r.novedad} (${r.asienta})`, createdAt: r.fecha });
+        progressNotes.push({
+          kind: "SS_LOG", text: `${r.serviceRequestCode} · ${r.novedad}`, createdAt: r.fecha,
+          author: r.asienta && r.asienta !== "—" ? r.asienta : null,
+        });
       }
       progressNotes.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     } catch { /* non-blocking */ }

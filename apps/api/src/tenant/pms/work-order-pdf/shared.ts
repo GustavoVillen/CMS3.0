@@ -195,7 +195,8 @@ export interface WorkOrderPdfContext {
   /** Fotos de avances de trabajo (progress notes con kind=PHOTO). */
   progressPhotos: WorkOrderProgressPhoto[];
   /** Todos los avances (TEXT/PHOTO/VIDEO/AUDIO) para el listado del PDF. */
-  progressNotes: { kind: string; text: string | null; createdAt: Date }[];
+  /** Avances de la OT + hoja de ruta de sus SS (kind SS_LOG), por fecha. `author` = quién lo registró. */
+  progressNotes: { kind: string; text: string | null; createdAt: Date; author?: string | null }[];
   /** Ejes de la matriz de riesgo, tomados del plan de mantenimiento vinculado. */
   riskProbability: string | null;
   riskConsequence: string | null;

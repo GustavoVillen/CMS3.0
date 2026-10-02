@@ -435,6 +435,35 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
           cols.forEach((c, j) => { cell(cx, canvas.y, c.w, rowH, texts[j] ?? "", { fontSize: 7.5, wrap: true }); cx += c.w; });
           canvas.y += rowH;
         }
+
+        // AVANCES (pedido de Gustavo, 02-oct-2026): lo que se fue registrando del
+        // trabajo, más la hoja de ruta de las SS de la OT, en orden de fecha.
+        // Va en esta sección porque es la secuencia del trabajo; las jornadas
+        // de arriba no tienen columna para el detalle.
+        const notes = ctx.progressNotes ?? [];
+        if (notes.length > 0) {
+          const pCols = [{ l: "FECHA", w: 70 }, { l: "DETALLE", w: W - 70 - 120 }, { l: "REGISTRO", w: 120 }];
+          const pWidths = pCols.map(c => c.w);
+          // Título + encabezado + primera fila juntos: no se parten entre páginas.
+          ensureSpace(H * 3);
+          cell(ML, canvas.y, W, H, label("progress", "AVANCES"), { bold: true, fontSize: 7, bg: LIGHT, color: GRAY });
+          canvas.y += H;
+          cx = ML;
+          pCols.forEach(c => { cell(cx, canvas.y, c.w, H, c.l, { bold: true, fontSize: 6.5, bg: LIGHT, color: GRAY, align: "center" }); cx += c.w; });
+          canvas.y += H;
+          const ATTACHED: Record<string, string> = {
+            PHOTO: "[Foto adjunta]", VIDEO: "[Video adjunto]", AUDIO: "[Audio adjunto]", DOCUMENT: "[Documento adjunto]",
+          };
+          for (const n of notes) {
+            const detail = (n.text ?? "").trim() || ATTACHED[n.kind] || "";
+            const texts = [fmt(n.createdAt), detail, n.author ?? ""].map(v => sanitizePdfText(v));
+            const rowH = canvas.measureCellHeight(texts, pWidths, { fontSize: 7.5, minHeight: H });
+            ensureSpace(rowH);
+            cx = ML;
+            pCols.forEach((c, j) => { cell(cx, canvas.y, c.w, rowH, texts[j] ?? "", { fontSize: 7.5, wrap: true }); cx += c.w; });
+            canvas.y += rowH;
+          }
+        }
       },
 
       // TAREA CONCLUIDA? SI / NO
