@@ -1488,6 +1488,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [closeOnBehalfUserId, setCloseOnBehalfUserId] = useState(user?.id ?? "");
   const [closeDate, setCloseDate] = useState("");
   const [closeTeamUsers, setCloseTeamUsers] = useState<{ userId: string; firstName: string | null; lastName: string | null; formName: string | null; hasSignature: boolean; role?: string; jobTitle?: string | null }[]>([]);
+  // Sin avance no hay cierre (el servidor también lo rechaza). Se avisa al tocar
+  // "Cerrar OT", antes del diálogo y de la auditoría de IA: avisarlo después de
+  // auditar haría esperar al usuario para nada. Cuentan los avances de la OT; la
+  // hoja de ruta de las SS no (son cambios de estado, no trabajo).
+  const [closeBlockMsg, setCloseBlockMsg] = useState<string | null>(null);
+  const startClose = useCallback(async () => {
+    try {
+      const res = await api.get<{ items?: unknown[] }>(`/app/pms/work-orders/${workOrder.id}/progress-notes`);
+      if ((res.items ?? []).length === 0) { setCloseBlockMsg(t("wo.modal.closeNeedsProgress")); return; }
+    } catch { /* si no se pudo leer, decide el servidor al cerrar */ }
+    setCloseOnBehalfUserId(user?.id ?? "");
+    setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
+    setShowCloseDialog(true);
+  }, [workOrder.id, user?.id, executionDate, t]);
   useEffect(() => {
     if (!isAdmin) return;
     api.get<typeof closeTeamUsers>("/app/team/members")
@@ -3799,11 +3813,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         <button
           ref={closeBtnRef}
           type="button"
-          onClick={() => {
-            setCloseOnBehalfUserId(user?.id ?? "");
-            setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
-            setShowCloseDialog(true);
-          }}
+          onClick={() => { void startClose(); }}
           disabled={!canClose || closing}
           title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success-sea text-white text-sm font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all focus:outline-none focus:ring-4 focus:ring-success-sea/35">
@@ -4774,11 +4784,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </button>
             )}
             <button
-              onClick={() => {
-                setCloseOnBehalfUserId(user?.id ?? "");
-                setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
-                setShowCloseDialog(true);
-              }}
+              onClick={() => { void startClose(); }}
               disabled={!canClose || closing}
               title={!woResult.trim() ? t("wo.modal.closeBeforeError") : undefined}
               className="px-4 py-2 rounded-xl bg-success-sea/10 border border-success-sea/20 text-success-sea font-bold text-xs hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed">
@@ -4814,6 +4820,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
     {/* ── Vista guiada: avisos ── */}
     {isMercurio && err && <AlertDialog message={err} onClose={() => setErr(null)} />}
+    {closeBlockMsg && <AlertDialog message={closeBlockMsg} onClose={() => setCloseBlockMsg(null)} />}
 
     {showCreatedIntro && (
       <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

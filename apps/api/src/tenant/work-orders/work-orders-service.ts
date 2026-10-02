@@ -1591,6 +1591,21 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
 
   if (!payload.woResult) throw new RouteError(400, "VALIDATION_ERROR", "El resultado de la OT es requerido.");
 
+  // Sin avance no hay cierre (pedido del usuario, oct 2026): el avance es la
+  // evidencia de lo que se hizo. Cuenta cualquiera (texto, foto, audio, video);
+  // la hoja de ruta de las SS no, son cambios de estado y no trabajo. Sin
+  // excepción, tampoco para TENANT_ADMIN. La pantalla avisa antes de la auditoría.
+  const progressNoteCount = await (prismaRaw as any).workOrderProgressNote.count({
+    where: { workOrderId: current.id, tenantId: current.tenantId, deletedAt: null },
+  });
+  if (progressNoteCount === 0) {
+    throw new RouteError(
+      409,
+      "PROGRESS_NOTE_REQUIRED",
+      "No se puede cerrar la OT sin al menos un avance cargado. Registrá el avance del trabajo y volvé a intentarlo.",
+    );
+  }
+
   // Si algún plan de la OT exige permisos de trabajo, cada tipo tiene que tener
   // su permiso CERRADO. Sin excepción, tampoco para TENANT_ADMIN (Preview V41).
   const requiredPermits = await requiredPermitTypesForWorkOrder(prismaRaw, current);

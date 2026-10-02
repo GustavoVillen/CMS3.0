@@ -672,6 +672,12 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
         return;
       }
     }
+    // Sin avance no hay cierre (el servidor también lo rechaza). Se avisa antes
+    // de preguntar por permisos y SS: si no, se cerrarían ellos y la OT no.
+    try {
+      const notes = await api.get<{ items?: unknown[] }>(`/app/pms/work-orders/${selected.id}/progress-notes`);
+      if ((notes.items ?? []).length === 0) { setHoursAlert(t("wo.modal.closeNeedsProgress")); return; }
+    } catch { /* si no se pudo leer, decide el servidor al cerrar */ }
     // Permisos de trabajo y SS de la OT todavía abiertos: se avisa y se pregunta
     // si se cierran también.
     const permitPlan = await askClosePermits(selected.id, [...new Set((selected.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))],
