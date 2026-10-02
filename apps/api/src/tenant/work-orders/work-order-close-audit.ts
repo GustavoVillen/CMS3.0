@@ -26,6 +26,9 @@ import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
 import { loadWorkOrderPdfContext } from "../pms/work-order-pdf/data-loader";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { loadVesselCatalog } from "../spares/goods-receipts-service";
+import { matchSpare, normalizeText, type SpareCandidate } from "../spares/spare-match";
+import { matchSparesByAi, type AiLineInput } from "../spares/spare-ai-match";
 
 const FEATURE = "wo_close_audit";
 
@@ -83,6 +86,7 @@ QUÉ REVISAR — la OT COMPLETA, no sólo el cierre
 - LOTO y Permisos de Trabajo — exigencia NIVEL ${LOTO_STRICTNESS} DE 10 (baja, definida por la empresa). Que falte un LOTO o un Permiso de Trabajo vinculado NO es hallazgo MAYOR ni MENOR y NO cambia el veredicto: como mucho va UNA observación (severidad OBSERVACION) recomendando registrarlo la próxima vez. Sólo sube a MENOR si la propia OT cuenta que se trabajó sin aislar un equipo energizado o presurizado, o si hubo un incidente. No preguntes por números de permiso ni certificados LOTO.
 - Registro (ISM 10.2.4): ¿quedó quién lo hizo, cuándo, con qué horas de máquina, qué repuestos se usaron?
 - Repuestos: ¿lo planificado coincide con lo consumido? Una diferencia sin explicar es un hallazgo.
+- Consumo sin registrar: si la evidencia (avances, observaciones, respuestas del usuario, detalle) dice que se USÓ, CAMBIÓ o REPUSO un repuesto o un material con una cantidad conocida, y eso no figura en materiales.consumidosRegistrados, ni en materiales.aConsumirEnEsteCierre, ni como MATERIAL en materiales.planificados, va en "consumoSinRegistrar" además del hallazgo. La cantidad tiene que estar dicha o ser inequívoca ("se cambió el filtro" = 1). Si no se sabe cuánto se usó, no lo pongas ahí: preguntalo. Inspeccionar, medir o verificar no consume nada.
 - Pendientes: si quedó algo pendiente, o si la tarea NO se concluyó, eso NO se cierra y se olvida: tiene que quedar planificado en algún lado.
 - Trazabilidad: ¿hay defecto, diferimiento, MOC, RCA o SS que debería haberse abierto y no se abrió?
 - Plan de mantenimiento: si la OT viene de un plan, ¿el cierre alcanza para acreditar la ejecución del plan?
@@ -159,10 +163,34 @@ export const AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
   required: ["verdict", "summary", "findings", "nextSteps", "questions", "observationsText"],
 };
 
+// La OT suma al informe común el consumo que la evidencia cuenta y no quedó
+// registrado: con eso la ventana ofrece registrarlo por el usuario.
+const WO_AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
+  ...AUDIT_RESULT_SCHEMA,
+  properties: {
+    ...(AUDIT_RESULT_SCHEMA.properties as Record<string, unknown>),
+    consumoSinRegistrar: {
+      type: "array",
+      description: "Repuestos o materiales que la evidencia dice que se usaron, con cantidad conocida, y que la OT no tiene registrados. Vacío si no hay ninguno.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          descripcion: { type: "string", description: 'Qué se usó, como lo dice la evidencia ("Aceite SAE 80W-90", "Filtro de combustible").' },
+          cantidad: { type: "number", description: "Cuánto se usó." },
+          unidad: { type: "string", description: "Unidad de la cantidad: l, ud, kg, m…" },
+        },
+        required: ["descripcion", "cantidad", "unidad"],
+      },
+    },
+  },
+  required: [...(AUDIT_RESULT_SCHEMA.required as string[]), "consumoSinRegistrar"],
+};
+
 const AUDIT_TOOL: Anthropic.Tool = {
   name: "wo_close_audit",
   description: "Registra la auditoría de cierre de la orden de trabajo.",
-  input_schema: AUDIT_RESULT_SCHEMA,
+  input_schema: WO_AUDIT_RESULT_SCHEMA,
 };
 
 export interface WoCloseAuditDraft {
@@ -181,7 +209,20 @@ export interface WoCloseAuditDraft {
   /** TAREA CONCLUIDA? del formulario: "YES" | "NO" | "". */
   taskCompleted?: string | null;
   /** Repuestos que se van a descontar del stock al cerrar. */
-  spareUsages?: Array<{ name?: string | null; qty?: number | null; unit?: string | null }>;
+  spareUsages?: Array<{ spareId?: string | null; name?: string | null; qty?: number | null; unit?: string | null }>;
+}
+
+/**
+ * Consumo que la evidencia cuenta y la OT no registró, ya ubicado en el
+ * catálogo del buque. La ventana pregunta si se registra por el usuario.
+ */
+export interface WoConsumptionOfferItem {
+  /** Qué se usó, como lo dice la evidencia. */
+  description: string;
+  quantity: number;
+  unit: string;
+  /** Ficha del buque a la que se descuenta. null: no está en el catálogo. */
+  spare: { id: string; sku: string; name: string; unit: string; onHand: number } | null;
 }
 
 export interface WoCloseAuditFinding {
@@ -204,9 +245,11 @@ export interface WoCloseAuditResult {
   nextSteps: WoCloseAuditNextStep[];
   questions: string[];
   observationsText: string;
+  /** Sólo la OT: consumo sin registrar que se ofrece registrar. */
+  consumptionOffer?: WoConsumptionOfferItem[];
 }
 
-const iso = (d: unknown): string | null =>
+const iso =(d: unknown): string | null =>
   d instanceof Date ? d.toISOString().slice(0, 10) : (typeof d === "string" && d ? d.slice(0, 10) : null);
 
 const txt = (v: unknown): string | null => {
@@ -252,6 +295,140 @@ export async function loadConditionAnalyses(
     resumenDelResultado: txt(r.result?.summary)?.slice(0, 300) ?? null,
     informeAdjunto: !!r.result?.reportUrl,
   }));
+}
+
+/** Tope de ítems que se ofrecen registrar: una OT real no olvida más. */
+const MAX_CONSUMPTION_OFFER = 5;
+
+/** Palabras con números de dos o más caracteres: grados SAE, medidas, part numbers. */
+const specTokens = (text: string) =>
+  normalizeText(text).split(" ").filter(t => t.length >= 2 && /\d/.test(t));
+
+/**
+ * La ficha tiene que nombrar la especificación de lo que se usó. Si el avance
+ * dice "aceite SAE 80W-90" y la ficha es "Aceite lubricante para Volvo Penta",
+ * NO es esa ficha aunque la IA diga que sí (pasó en las pruebas, con certeza
+ * alta). Un match equivocado descuenta stock de otro repuesto.
+ */
+function specsMatch(description: string, spare: SpareCandidate): boolean {
+  const wanted = specTokens(description);
+  if (wanted.length === 0) return true;
+  // Se compara sin espacios ni guiones: "15W-40" y "15W40" son lo mismo.
+  const have = normalizeText([
+    spare.name, spare.sku, spare.longDescription, spare.model,
+    spare.manufacturerPartNumber, spare.internalPartNumber,
+  ].filter(Boolean).join(" ")).replace(/ /g, "");
+  return wanted.every(t => have.includes(t));
+}
+
+/**
+ * Ubica en el catálogo del buque lo que la IA vio consumido y sin registrar.
+ *
+ * Mismo emparejador que la recepción de remitos (spare-match + desempate por
+ * IA): la descripción de un avance ("aceite de la pata") casi nunca coincide
+ * letra por letra con la ficha. Lo que no aparece en el catálogo vuelve con
+ * `spare: null` y la pantalla lo anota como material, sin mover stock.
+ *
+ * No se ofrece lo que la OT ya tiene (el mismo repuesto descontado o el mismo
+ * material anotado): registrar dos veces es peor que no registrar.
+ *
+ * Nunca rompe la auditoría: si algo falla, simplemente no hay oferta.
+ */
+async function resolveUnregisteredConsumption(
+  session: TenantAccessSession,
+  wo: { id: string; tenantId: string; vesselCode?: string },
+  raw: unknown,
+  ctx: any,
+  draft: WoCloseAuditDraft,
+): Promise<WoConsumptionOfferItem[]> {
+  const items = (Array.isArray(raw) ? raw : [])
+    .map((r: any) => ({
+      description: String(r?.descripcion ?? "").trim(),
+      quantity: Number(r?.cantidad),
+      unit: String(r?.unidad ?? "").trim() || "ud",
+    }))
+    .filter(i => i.description && Number.isFinite(i.quantity) && i.quantity > 0 && i.quantity <= 1000)
+    .slice(0, MAX_CONSUMPTION_OFFER);
+  const prisma = getPrismaClient();
+  if (items.length === 0 || !prisma || !wo.vesselCode) return [];
+
+  try {
+    const movements: Array<{ spareId: string }> = await (prisma as any).stockMovement.findMany({
+      where: { tenantId: wo.tenantId, referenceType: "WORK_ORDER", referenceId: wo.id },
+      select: { spareId: true },
+    });
+    const usedSpareIds = new Set<string>([
+      ...movements.map(m => m.spareId),
+      ...(draft.spareUsages ?? []).map(u => u.spareId ?? "").filter(Boolean),
+    ]);
+    const materials: string[] = (ctx.plannedItems ?? [])
+      .filter((i: any) => i.kind === "MATERIAL")
+      .map((i: any) => normalizeText(String(i.description ?? "")))
+      .filter(Boolean);
+    const alreadyMaterial = (d: string) => {
+      const n = normalizeText(d);
+      return materials.some(m => m === n || m.includes(n) || n.includes(m));
+    };
+
+    const catalog = await loadVesselCatalog(prisma, wo.tenantId, wo.vesselCode);
+    const byId = new Map(catalog.map(c => [c.id, c]));
+    // Primero por texto; la IA decide entre los parecidos sabiendo en qué
+    // equipo se usó (el mismo filtro existe para varios motores).
+    const chosen: Array<SpareCandidate | null> = items.map(() => null);
+    const textMatch: Array<SpareCandidate | null> = items.map(() => null);
+    const pending: AiLineInput[] = [];
+    items.forEach((it, idx) => {
+      const r = matchSpare({ description: it.description }, catalog);
+      if (r.status === "matched" && r.best) textMatch[idx] = r.best.candidate;
+      if (r.candidates.length > 0) {
+        pending.push({
+          line: idx + 1,
+          description: `${it.description} (usado en: ${ctx.assetLabel ?? "—"})`,
+          candidates: r.candidates.map(c => c.candidate),
+        });
+      }
+    });
+    // La certeza de la IA sola no alcanza (el aceite equivocado vino con
+    // certeza alta y los aciertos del generador con media): lo que protege es
+    // que la ficha nombre la especificación (specsMatch), y el usuario ve la
+    // ficha propuesta y puede destildarla. "low" es conjetura: no se usa.
+    const decided = new Set<number>();
+    if (pending.length > 0) {
+      for (const d of await matchSparesByAi(session, wo.vesselCode, pending, "wo_close_audit_spares")) {
+        decided.add(d.line);
+        const spare = d.spareId && d.confidence !== "low" ? byId.get(d.spareId) : undefined;
+        if (spare) chosen[d.line - 1] = spare;
+      }
+    }
+    // Sin respuesta de la IA vale el emparejamiento por texto, si fue claro.
+    items.forEach((it, idx) => {
+      if (!decided.has(idx + 1)) chosen[idx] = textMatch[idx];
+      const s = chosen[idx];
+      if (s && !specsMatch(it.description, s)) chosen[idx] = null;
+    });
+
+    const out: WoConsumptionOfferItem[] = [];
+    items.forEach((it, idx) => {
+      const s = chosen[idx];
+      if (!s) {
+        if (!alreadyMaterial(it.description)) out.push({ ...it, spare: null });
+        return;
+      }
+      if (usedSpareIds.has(s.id)) return;
+      // Dos líneas que caen en la misma ficha: un solo consumo con la suma.
+      const prev = out.find(o => o.spare?.id === s.id);
+      if (prev) { prev.quantity += it.quantity; return; }
+      out.push({
+        ...it,
+        unit: s.unit,
+        spare: { id: s.id, sku: s.sku, name: s.name, unit: s.unit, onHand: s.onHand },
+      });
+    });
+    return out;
+  } catch (err) {
+    log.error(`[${FEATURE}] consumption lookup failed:`, err);
+    return [];
+  }
 }
 
 /**
@@ -433,7 +610,9 @@ export async function auditWorkOrderClose(
 
   const toolBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   if (!toolBlock) throw new RouteError(502, "AI_CALL_FAILED", "La IA no devolvio una auditoria estructurada.");
-  return normalizeAuditResult(toolBlock.input as Partial<WoCloseAuditResult>);
+  const out = toolBlock.input as Partial<WoCloseAuditResult> & { consumoSinRegistrar?: unknown };
+  const consumptionOffer = await resolveUnregisteredConsumption(session, wo, out.consumoSinRegistrar, ctx, body.draft ?? {});
+  return { ...normalizeAuditResult(out), consumptionOffer };
 }
 
 /** Sanea la salida del modelo: la consume una ventana, no puede venir rota. */

@@ -52,6 +52,8 @@ export async function matchSparesByAi(
   session: TenantAccessSession,
   vesselCode: string,
   lines: AiLineInput[],
+  /** Rubro del consumo de IA: la recepción de remitos o la auditoría de cierre de la OT. */
+  feature = "goods_receipt",
 ): Promise<AiLineDecision[]> {
   const usable = lines.filter(l => l.candidates.length > 0 && l.description.trim());
   if (usable.length === 0) return [];
@@ -84,7 +86,7 @@ export async function matchSparesByAi(
     return [];
   }
 
-  void recordUsage(session, vesselCode, model, response, started);
+  void recordUsage(session, vesselCode, model, response, started, feature);
 
   const raw = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -132,6 +134,7 @@ async function recordUsage(
   model: string,
   response: Anthropic.Message,
   started: number,
+  feature: string,
 ): Promise<void> {
   try {
     const tenant = await getCachedTenantBySlug(session.tenantSlug);
@@ -142,7 +145,7 @@ async function recordUsage(
       userId:              session.user.id,
       userEmail:           session.user.email,
       vesselCode,
-      feature:             "goods_receipt",
+      feature,
       model,
       inputTokens:         response.usage.input_tokens,
       outputTokens:        response.usage.output_tokens,

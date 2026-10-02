@@ -163,8 +163,11 @@ function parseDate(value: unknown): Date {
   return d;
 }
 
-/** Catálogo del buque con su stock actual, que es lo que se compara y se muestra. */
-async function loadVesselCatalog(
+/**
+ * Catálogo del buque con su stock actual, que es lo que se compara y se muestra.
+ * También lo usa la auditoría de cierre de la OT para ubicar el consumo sin registrar.
+ */
+export async function loadVesselCatalog(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
   tenantId: string,
   vesselCode: string,

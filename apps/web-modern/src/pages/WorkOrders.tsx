@@ -31,7 +31,9 @@ import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansP
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
 import { paperFieldCls } from "../components/paper/PaperKit";
-import { WoCloseAuditModal, type AuditPendingField } from "../components/work-orders/WoCloseAuditModal";
+import {
+  WoCloseAuditModal, type AuditPendingField, type ConsumptionOfferItem, type ConsumptionRegisterResult,
+} from "../components/work-orders/WoCloseAuditModal";
 import { useTheme } from "../lib/theme";
 import { useDeepLink } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
@@ -1532,6 +1534,51 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     const qty = raw === "" ? 0 : parseFloat(raw);
     setSpareUsages(prev => prev.map((u, i) => (i === idx ? { ...u, qty: Number.isFinite(qty) ? qty : 0 } : u)));
   };
+
+  /**
+   * Registra el consumo que la auditoría de cierre encontró sin registrar y el
+   * usuario aceptó. Mismos caminos que la carga a mano:
+   *  - Repuesto del catálogo → lista de Repuestos utilizados. Se guarda en el
+   *    momento (igual que "Guardar"), así el stock queda descontado aunque
+   *    después se vuelva a la orden sin cerrarla.
+   *  - Sin ficha en el catálogo → fila de Materiales del formulario, sin stock.
+   */
+  const registerAuditConsumption = useCallback(async (items: ConsumptionOfferItem[]): Promise<ConsumptionRegisterResult> => {
+    const result: ConsumptionRegisterResult = { done: [], failed: [] };
+    const spareItems = items.filter(i => i.spare);
+    if (spareItems.length > 0) {
+      const next: SpareUsage[] = [...spareUsages, ...spareItems.map(i => ({
+        spareId: i.spare!.id,
+        spareName: `${i.spare!.sku} — ${i.spare!.name}`,
+        unit: i.spare!.unit,
+        qty: i.quantity,
+        criticality: woSpares.find(s => s.id === i.spare!.id)?.criticality ?? "C",
+        available: i.spare!.onHand,
+      }))];
+      try {
+        await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
+          spareUsages: next.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
+        });
+        setSpareUsages(next);
+        result.done.push(...spareItems.map(item => ({ item, kind: "SPARE" as const })));
+      } catch {
+        result.failed.push(...spareItems);
+      }
+    }
+    const materialItems = isMercurio ? items.filter(i => !i.spare) : [];
+    for (const item of materialItems) {
+      try {
+        await api.post(`/app/pms/work-orders/${workOrder.id}/items`, {
+          kind: "MATERIAL", spareId: null, description: item.description, quantity: item.quantity, unit: item.unit,
+        });
+        result.done.push({ item, kind: "MATERIAL" });
+      } catch {
+        result.failed.push(item);
+      }
+    }
+    if (materialItems.length > 0) reloadPlannedItems();
+    return result;
+  }, [spareUsages, woSpares, isMercurio, workOrder.id, reloadPlannedItems]);
 
   // ── Defect registration prompt ──
   type DefectPrompt = "idle" | "ask" | "creating" | "created" | "declined";
@@ -4893,9 +4940,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           deficiencias: deficienciasText,
           pendingDetail: regiForm.pendingDetail,
           taskCompleted: regiForm.taskCompleted,
-          spareUsages: spareUsages.map(u => ({ name: u.spareName ?? null, qty: u.qty, unit: u.unit })),
+          spareUsages: spareUsages.map(u => ({ spareId: u.spareId, name: u.spareName ?? null, qty: u.qty, unit: u.unit })),
         }}
         pendingFields={auditPendingFields()}
+        onRegisterConsumption={registerAuditConsumption}
+        canRegisterMaterials={isMercurio}
         onCancel={values => { applyAuditFields(values); setCloseAuditOpts(null); }}
         onConfirmClose={(append, values) => {
           const opts = closeAuditOpts;

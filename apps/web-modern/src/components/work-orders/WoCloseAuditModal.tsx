@@ -15,16 +15,22 @@
 // La auditoría NO frena el cierre (decisión de producto): muestra, pregunta y
 // recomienda; cerrar o no lo decide la persona. Si la IA falla, esta ventana lo
 // dice y deja cerrar igual — un problema de la IA no puede trabar la operación.
+//
+// Si la auditoría encuentra consumo que la evidencia cuenta y la OT no registró
+// (`consumptionOffer`), pregunta si se registra por el usuario. Si dice que sí,
+// lo registra el padre (`onRegisterConsumption`), se informa lo que se hizo y
+// la auditoría se repite con el consumo ya cargado. Cerrar sigue siendo del usuario.
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Loader2, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2,
-  HelpCircle, ArrowRight, Sparkles,
+  HelpCircle, ArrowRight, Sparkles, PackagePlus,
 } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { ModalCloseButton } from "../ModalCloseButton";
 import { AutoTextArea } from "../AutoTextArea";
+import { AlertDialog } from "../AlertDialog";
 
 export interface WoCloseAuditDraft {
   woResult?: string | null;
@@ -36,7 +42,23 @@ export interface WoCloseAuditDraft {
   deficiencias?: string | null;
   pendingDetail?: string | null;
   taskCompleted?: string | null;
-  spareUsages?: Array<{ name?: string | null; qty?: number | null; unit?: string | null }>;
+  spareUsages?: Array<{ spareId?: string | null; name?: string | null; qty?: number | null; unit?: string | null }>;
+}
+
+/** Consumo sin registrar que encontró la auditoría (work-order-close-audit.ts). */
+export interface ConsumptionOfferItem {
+  description: string;
+  quantity: number;
+  unit: string;
+  /** Ficha del buque a la que se descuenta. null: no está en el catálogo. */
+  spare: { id: string; sku: string; name: string; unit: string; onHand: number } | null;
+}
+
+/** Lo que el padre pudo registrar y lo que no. */
+export interface ConsumptionRegisterResult {
+  /** SPARE: Repuestos de la OT + stock. MATERIAL: Materiales de la OT, sin stock. */
+  done: Array<{ item: ConsumptionOfferItem; kind: "SPARE" | "MATERIAL" }>;
+  failed: ConsumptionOfferItem[];
 }
 
 /** Campo de la orden que quedó vacío y la auditoría pregunta antes de cerrar. */
@@ -67,7 +89,10 @@ interface AuditResult {
   nextSteps: NextStep[];
   questions: string[];
   observationsText: string;
+  consumptionOffer?: ConsumptionOfferItem[];
 }
+
+const fmtQty = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 const VERDICT_STYLE: Record<AuditResult["verdict"], { cls: string; icon: React.ReactNode }> = {
   CONFORME: {
@@ -93,7 +118,10 @@ const SEVERITY_CLS: Record<Finding["severity"], string> = {
 /** Textos que cambian según lo que se audita. Por defecto, los de la OT. */
 type AuditTextKey = "eyebrow" | "running" | "errorHint" | "questionsHint" | "appendAndClose" | "closeWithout" | "back";
 
-export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields = [], onCancel, onConfirmClose }: {
+export function WoCloseAuditModal({
+  endpoint, code, draft, texts, pendingFields = [], onCancel, onConfirmClose,
+  onRegisterConsumption, canRegisterMaterials = false,
+}: {
   /** POST que corre la auditoría (ej. /app/pms/work-orders/:id/close-audit). */
   endpoint: string;
   /** Código del registro auditado, para el encabezado. */
@@ -107,12 +135,30 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
   onCancel: (fieldValues: Record<string, string>) => void;
   /** Cerrar la OT. `observationsAppend` es el informe, si el usuario lo aceptó. */
   onConfirmClose: (observationsAppend: string | null, fieldValues: Record<string, string>) => void;
+  /** Registra el consumo sin registrar que el usuario aceptó. Sin esto no se ofrece. */
+  onRegisterConsumption?: (items: ConsumptionOfferItem[]) => Promise<ConsumptionRegisterResult>;
+  /** La OT tiene tabla de Materiales: lo que no está en el catálogo se anota ahí. */
+  canRegisterMaterials?: boolean;
 }) {
   const t = useT();
   const tx = (k: AuditTextKey) => t(texts?.[k] ?? (`wo.closeAudit.${k}` as TranslationKey));
   const [result, setResult]   = useState<AuditResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  // La re-auditoría tras registrar el consumo tiene que ver el borrador NUEVO
+  // (el padre ya sumó los repuestos) y las respuestas que se dieron antes.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const lastAnswersRef = useRef<Record<string, string>>({});
+  // Consumo sin registrar: se ofrece una sola vez. Registrado o rechazado, no
+  // se vuelve a preguntar aunque la re-auditoría lo siga mencionando.
+  const [consumption, setConsumption] = useState<"offer" | "registering" | "done" | "declined">("offer");
+  const [consumptionDone, setConsumptionDone] = useState<ConsumptionRegisterResult["done"]>([]);
+  // Ítems destildados: el usuario descarta lo que no corresponde (por ejemplo,
+  // una ficha propuesta que no es la que se usó). Por defecto van todos.
+  const [unselected, setUnselected] = useState<Set<number>>(new Set());
+  const [rerunKey, setRerunKey] = useState(0);
+  const [alert, setAlert] = useState<string | null>(null);
   // Las preguntas se muestran una sola vez: contestadas o salteadas, se pasa al
   // informe. Si no, una IA insistente dejaría al usuario en un bucle de dudas.
   const [answers, setAnswers]   = useState<Record<string, string>>({});
@@ -133,26 +179,62 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
   };
 
   const runAudit = useCallback(async (withAnswers: Record<string, string>) => {
+    lastAnswersRef.current = withAnswers;
     setLoading(true); setError(null);
     try {
-      const res = await api.post<AuditResult>(endpoint, { draft, answers: withAnswers });
+      const res = await api.post<AuditResult>(endpoint, { draft: draftRef.current, answers: withAnswers });
       setResult(res);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("wo.closeAudit.error"));
     } finally {
       setLoading(false);
     }
-  }, [endpoint, draft, t]);
+  }, [endpoint, t]);
 
   // Una sola corrida al abrir. `runAudit` queda fuera de las dependencias a
-  // propósito: cambia con cada render del padre y re-dispararía la auditoría
-  // (que es cara y lenta) sin que nadie la haya pedido.
+  // propósito: si cambiara, re-dispararía la auditoría (que es cara y lenta)
+  // sin que nadie la haya pedido.
   useEffect(() => {
     void runAudit({});
   }, []);
 
+  // Re-auditoría después de registrar el consumo. Corre en un efecto y no en el
+  // click: así ya se renderizó el borrador nuevo del padre.
+  useEffect(() => {
+    if (rerunKey > 0) void runAudit(lastAnswersRef.current);
+  }, [rerunKey]);
+
   const aiQuestions = !error && result ? result.questions : [];
   const showQuestions = !loading && !asked && (pendingFields.length > 0 || aiQuestions.length > 0);
+
+  // Sólo se ofrece lo que se puede registrar: un repuesto del catálogo, o un
+  // material si la OT tiene dónde anotarlo.
+  const offerItems = (result?.consumptionOffer ?? []).filter(i => i.spare || canRegisterMaterials);
+  const showOffer = !!onRegisterConsumption && !loading && !error && !!result && !showQuestions
+    && consumption !== "done" && consumption !== "declined" && offerItems.length > 0;
+  const selectedItems = offerItems.filter((_, i) => !unselected.has(i));
+  useEffect(() => { setUnselected(new Set()); }, [result]);
+
+  const registerConsumption = async () => {
+    if (!onRegisterConsumption || selectedItems.length === 0) return;
+    setConsumption("registering");
+    try {
+      const res = await onRegisterConsumption(selectedItems);
+      if (res.failed.length > 0) {
+        setAlert(t("wo.closeAudit.consumption.failed")
+          .replace("{items}", res.failed.map(i => `${fmtQty(i.quantity)} ${i.unit} ${i.description}`).join(", ")));
+      }
+      if (res.done.length === 0) { setConsumption("offer"); return; }
+      setConsumptionDone(res.done);
+      setConsumption("done");
+      // Lo ya contestado no se vuelve a preguntar en la re-auditoría.
+      setAsked(true);
+      setRerunKey(k => k + 1);
+    } catch (e) {
+      setAlert(e instanceof ApiError ? e.message : t("wo.closeAudit.consumption.error"));
+      setConsumption("offer");
+    }
+  };
   const inputCls = "w-full bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-lg px-2.5 py-1.5 text-xs text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 
   return (
@@ -175,6 +257,32 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+          {/* Lo que se registró por el usuario. Queda a la vista mientras se
+              re-audita y junto al informe nuevo. */}
+          {consumption === "done" && consumptionDone.length > 0 && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5 text-emerald-700 dark:text-emerald-300">
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                {t("wo.closeAudit.consumption.doneTitle")}
+              </p>
+              {consumptionDone.map(({ item, kind }, i) => (
+                <p key={i} className="text-xs leading-snug">
+                  {kind === "SPARE" && item.spare
+                    // Si el stock no alcanzaba se dice: "quedan -1" no se entiende.
+                    ? t(item.spare.onHand >= item.quantity ? "wo.closeAudit.consumption.doneSpare" : "wo.closeAudit.consumption.doneSpareShort")
+                        .replace("{qty}", fmtQty(item.quantity)).replace(/\{unit\}/g, item.unit)
+                        .replace("{spare}", `${item.spare.sku} — ${item.spare.name}`)
+                        .replace("{left}", fmtQty(item.spare.onHand - item.quantity))
+                        .replace("{onHand}", fmtQty(item.spare.onHand))
+                    : t("wo.closeAudit.consumption.doneMaterial")
+                        .replace("{qty}", fmtQty(item.quantity)).replace("{unit}", item.unit)
+                        .replace("{item}", item.description)}
+                </p>
+              ))}
+              <p className="text-[11px] opacity-80">{t("wo.closeAudit.consumption.doneHint")}</p>
+            </div>
+          )}
 
           {loading && (
             <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
@@ -263,6 +371,69 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
                 </div>
               </div>
 
+              {/* Consumo sin registrar: se ofrece registrarlo por el usuario. */}
+              {showOffer && (
+                <div className="rounded-xl border-l-4 border-accent bg-accent/5 p-3 space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <PackagePlus className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-fg">{t("wo.closeAudit.consumption.title")}</p>
+                      <p className="text-xs text-text-industrial/60">{t("wo.closeAudit.consumption.ask")}</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-1.5 pl-6">
+                    {offerItems.map((item, i) => (
+                      <li key={i}>
+                        <label className="flex items-start gap-2 text-xs leading-snug cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!unselected.has(i)}
+                            disabled={consumption === "registering"}
+                            onChange={() => setUnselected(prev => {
+                              const next = new Set(prev);
+                              if (next.has(i)) next.delete(i); else next.add(i);
+                              return next;
+                            })}
+                            className="mt-0.5 accent-accent"
+                          />
+                          <span className="min-w-0">
+                            <span className="font-semibold text-fg">
+                              {fmtQty(item.quantity)} {item.unit} — {item.description}
+                            </span>
+                            <span className="block text-text-industrial/60">
+                              {item.spare
+                                ? t("wo.closeAudit.consumption.toSpare")
+                                    .replace("{spare}", `${item.spare.sku} — ${item.spare.name}`)
+                                    .replace("{onHand}", fmtQty(item.spare.onHand)).replace("{unit}", item.spare.unit)
+                                : t("wo.closeAudit.consumption.toMaterial")}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={consumption === "registering"}
+                      onClick={() => setConsumption("declined")}
+                      className="px-3 py-1.5 rounded-lg border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 disabled:opacity-40 transition-colors"
+                    >
+                      {t("wo.closeAudit.consumption.no")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={consumption === "registering" || selectedItems.length === 0}
+                      onClick={() => void registerConsumption()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-60 transition-opacity"
+                    >
+                      {consumption === "registering" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {consumption === "registering" ? t("wo.closeAudit.consumption.registering") : t("wo.closeAudit.consumption.yes")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {result.findings.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40">
@@ -326,8 +497,9 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
         <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-t border-fg/10 shrink-0">
           <button
             type="button"
+            disabled={consumption === "registering"}
             onClick={() => onCancel(filledFields())}
-            className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 transition-colors"
+            className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 disabled:opacity-40 transition-colors"
           >
             {tx("back")}
           </button>
@@ -355,7 +527,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
               <>
                 <button
                   type="button"
-                  disabled={loading}
+                  disabled={loading || consumption === "registering"}
                   onClick={() => onConfirmClose(null, filledFields())}
                   className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30 disabled:opacity-40 transition-colors"
                 >
@@ -363,7 +535,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
                 </button>
                 <button
                   type="button"
-                  disabled={loading || !result?.observationsText}
+                  disabled={loading || consumption === "registering" || !result?.observationsText}
                   onClick={() => onConfirmClose(result?.observationsText ?? null, filledFields())}
                   className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
                 >
@@ -374,6 +546,7 @@ export function WoCloseAuditModal({ endpoint, code, draft, texts, pendingFields 
           </div>
         </div>
       </div>
+      {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}
     </div>
   );
 }
