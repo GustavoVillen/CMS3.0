@@ -674,7 +674,8 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
     }
     // Permisos de trabajo y SS de la OT todavía abiertos: se avisa y se pregunta
     // si se cierran también.
-    const permitPlan = await askClosePermits(selected.id, [...new Set((selected.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))]);
+    const permitPlan = await askClosePermits(selected.id, [...new Set((selected.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))],
+      { vesselCode: selected.vesselCode, title: selected.title });
     if (permitPlan === null) return;
     const ssPlan = await askCloseServiceRequests(selected.id, user?.name ?? "");
     if (ssPlan === null) return;

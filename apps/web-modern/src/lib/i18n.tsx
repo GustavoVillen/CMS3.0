@@ -2893,6 +2893,8 @@ const dict = {
   "wo.ssLog.required":   { es: "Completá la fecha, quién asienta y la novedad.", en: "Fill in the date, who records it and the entry.", pt: "Preencha a data, quem registra e a novidade." },
   "hr.edit":             { es: "Corregir novedad", en: "Correct entry", pt: "Corrigir novidade" },
   "wo.ssLog.hint":      { es: "Hoja de ruta de la SS. Se carga y se borra en la SS.", en: "Service request route sheet. It is added and removed in the SR.", pt: "Folha de rota da SS. É registrada e removida na SS." },
+  "woPtw.newPermit":     { es: "Permiso nuevo", en: "New permit", pt: "Permissão nova" },
+  "woPtw.missingStatus": { es: "No existe: se crea y se cierra junto con la OT", en: "Missing: it is created and closed with the WO", pt: "Não existe: é criada e fechada junto com a OS" },
   "woPtw.titleOne":     { es: "Esta OT tiene un permiso de trabajo abierto", en: "This WO has an open permit to work", pt: "Esta OS tem uma permissão de trabalho aberta" },
   "woPtw.titleMany":     { es: "Esta OT tiene permisos de trabajo abiertos", en: "This WO has open permits to work", pt: "Esta OS tem permissões de trabalho abertas" },
   "woPtw.bodyOne":       { es: "El permiso de esta OT todavía no está cerrado. ¿Querés cerrarlo? Se completan los pasos que falten y queda cerrado antes que la OT.", en: "This WO's permit is not closed yet. Do you want to close it? Pending steps are completed and it is closed before the WO.", pt: "A permissão desta OS ainda não está fechada. Deseja fechá-la? Os passos pendentes são completados e ela fica fechada antes da OS." },

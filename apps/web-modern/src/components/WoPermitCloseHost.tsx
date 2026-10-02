@@ -22,6 +22,7 @@ const STATUS_KEY: Record<string, TranslationKey> = {
   REQUESTED: "pm.status.requested",
   APPROVED: "pm.status.approved",
   ACTIVE: "pm.status.active",
+  MISSING: "woPtw.missingStatus",
 };
 
 type Field = "hazardsIdentified" | "controlMeasures" | "ppeRequired";
@@ -100,14 +101,14 @@ export const WoPermitCloseHost: React.FC = () => {
     for (const p of chosen) {
       const gaps = missingOf(p).filter(k => !valueOf(p, k).trim());
       if (gaps.length > 0) {
-        setErr(t("woPtw.needFields").replace("{code}", p.permitCode)
+        setErr(t("woPtw.needFields").replace("{code}", p.missing ? t("woPtw.newPermit") : p.permitCode)
           .replace("{fields}", gaps.map(k => t(FIELDS.find(f => f.key === k)!.label)).join(", ")));
         return;
       }
     }
     done({
       items: chosen.map(p => ({
-        id: p.id, permitCode: p.permitCode,
+        id: p.id, permitCode: p.permitCode, ...(p.missing ? { missingType: p.type } : {}),
         ...Object.fromEntries(missingOf(p).map(k => [k, valueOf(p, k).trim()])),
       })),
       closeNotes: closeNotes.trim(),
@@ -131,13 +132,13 @@ export const WoPermitCloseHost: React.FC = () => {
           {req.items.map(p => {
             const on = picked.has(p.id);
             const gaps = missingOf(p);
-            const unapproved = p.status === "DRAFT" || p.status === "REQUESTED";
+            const unapproved = p.status === "DRAFT" || p.status === "REQUESTED" || !!p.missing;
             return (
               <div key={p.id} className="space-y-2 rounded-xl border border-fg/10 bg-fg/[0.03] p-3">
                 <label className={`flex items-start gap-2.5 ${p.required ? "" : "cursor-pointer"}`}>
                   <input type="checkbox" checked={on} disabled={p.required} onChange={() => toggle(p)} className="mt-1" />
                   <span className="min-w-0 flex-1">
-                    <span className="block font-mono text-[13px] font-bold text-fg">{p.permitCode}</span>
+                    <span className="block font-mono text-[13px] font-bold text-fg">{p.missing ? t("woPtw.newPermit") : p.permitCode}</span>
                     <span className="block text-[11px] text-text-industrial/60">
                       {[TYPE_KEY[p.type] ? t(TYPE_KEY[p.type]!) : p.type, STATUS_KEY[p.status] ? t(STATUS_KEY[p.status]!) : p.status].join(" · ")}
                     </span>

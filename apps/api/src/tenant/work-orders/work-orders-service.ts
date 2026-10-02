@@ -1467,6 +1467,40 @@ const PERMIT_STATUS_NAME: Record<string, string> = {
   DRAFT: "Borrador", REQUESTED: "Solicitado", APPROVED: "Aprobado", ACTIVE: "Activo",
 };
 
+/**
+ * Crea los permisos que el plan exige y la OT no tiene (ninguno de ese tipo, o
+ * sólo cancelados / rechazados), para que el aviso del cierre los complete y
+ * los cierre. Pasa cuando el plan empezó a exigir el permiso después de
+ * autorizada la OT, o cuando se canceló el que había. Mismo armado que la
+ * creación automática al autorizar; acá lo pide una persona, así que exige
+ * "Gestionar permisos".
+ */
+export async function createMissingRequiredPermits(session: TenantAccessSession, workOrderId: string) {
+  if (!hasPermission(session, "permit.manage")) {
+    throw new RouteError(403, "FORBIDDEN", "No autorizado para gestionar permisos.");
+  }
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const current = await getTenantWorkOrder(session, workOrderId); // tenant + vessel scope
+  if (!["PLANNED", "IN_PROGRESS", "ON_HOLD"].includes(current.status)) {
+    throw new RouteError(409, "WORK_ORDER_NOT_OPEN", "La OT no está abierta.");
+  }
+  const required = await requiredPermitTypesForWorkOrder(prismaRaw, current);
+  if (required.length === 0) return [];
+  const { listMissingRequiredPermits, createRequiredPermitsForWorkOrder } = await import("../permits/permits-service");
+  const missing = (await listMissingRequiredPermits(current.tenantId, current.id, required))
+    .filter(m => !m.openPermitCode)
+    .map(m => m.type);
+  if (missing.length === 0) return [];
+  return createRequiredPermitsForWorkOrder({
+    tenantId: current.tenantId,
+    // El registro trae título, lugar y fechas aunque el tipo del getter no los declare.
+    workOrder: current as unknown as Parameters<typeof createRequiredPermitsForWorkOrder>[0]["workOrder"],
+    types: missing,
+    actorUserId: session.user.id,
+  });
+}
+
 /** Unión de los permisos exigidos por TODOS los planes de la OT (una OT puede cubrir varios ítems del PDM). */
 async function requiredPermitTypesForWorkOrder(
   prismaRaw: NonNullable<ReturnType<typeof getPrismaClient>>,

@@ -31,6 +31,7 @@ import {
 import {
   cancelWorkOrder,
   closeWorkOrder,
+  createMissingRequiredPermits,
   createTenantWorkOrder,
   getTenantWorkOrder,
   holdWorkOrder,
@@ -520,6 +521,14 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof setWorkOrderType>[2];
     sendJson(response, 200, await setWorkOrderType(session, id, body));
+    return true;
+  }
+
+  // Permisos que el plan exige y la OT no tiene: se crean para cerrarlos en el
+  // aviso del cierre (ver createMissingRequiredPermits).
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/required-permits$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    sendJson(response, 200, { items: await createMissingRequiredPermits(session, id) });
     return true;
   }
 

@@ -2560,7 +2560,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     }
     // Permisos de trabajo y SS de la OT todavía abiertos: se avisa y se pregunta
     // si se cierran también.
-    const permitPlan = await askClosePermits(workOrder.id, requiredPermitTypes);
+    const permitPlan = await askClosePermits(workOrder.id, requiredPermitTypes, { vesselCode: workOrder.vesselCode, title: workOrder.title });
     if (permitPlan === null) return;
     const ssPlan = await askCloseServiceRequests(workOrder.id, user?.name ?? "");
     if (ssPlan === null) return;

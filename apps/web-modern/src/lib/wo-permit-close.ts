@@ -24,11 +24,15 @@ export interface OpenWoPermit {
   ppeRequired: string | null;
   /** El plan de la OT exige este tipo de permiso cerrado para cerrar la OT. */
   required: boolean;
+  /** El plan lo exige y la OT no tiene ninguno: se crea al confirmar y se cierra. */
+  missing?: boolean;
 }
 
 export interface PermitCloseItem {
   id: string;
   permitCode: string;
+  /** Permiso que todavía no existe: se crea primero (POST /required-permits). */
+  missingType?: string;
   hazardsIdentified?: string;
   controlMeasures?: string;
   ppeRequired?: string;
@@ -38,6 +42,7 @@ export interface PermitCloseItem {
 export interface PermitClosePlan {
   items: PermitCloseItem[];
   closeNotes: string;
+  workOrderId?: string;
 }
 
 export interface WoPermitCloseRequest {
@@ -60,20 +65,38 @@ export function subscribeWoPermitClose(fn: (req: WoPermitCloseRequest) => void):
  * - `null`: el usuario canceló, la OT no se cierra.
  * - plan con `items` vacío: no hay permisos abiertos, o eligió cerrar sólo la OT.
  */
-export async function askClosePermits(workOrderId: string, requiredTypes: string[]): Promise<PermitClosePlan | null> {
+export async function askClosePermits(
+  workOrderId: string,
+  requiredTypes: string[],
+  wo?: { vesselCode?: string | null; title?: string | null },
+): Promise<PermitClosePlan | null> {
   let items: OpenWoPermit[];
   try {
     const res = await api.get<{ items: Omit<OpenWoPermit, "required">[] }>(`/app/permits?workOrderId=${encodeURIComponent(workOrderId)}`);
+    const all = res.items ?? [];
     const required = new Set(requiredTypes);
-    items = (res.items ?? [])
+    items = all
       .filter(p => !CLOSED_PERMIT.has(p.status))
       .map(p => ({ ...p, required: required.has(p.type) }));
+    // Exigidos por el plan sin ningún permiso (ni cerrado ni abierto): sin esto
+    // el cierre de la OT se frenaba con "sin permiso" y el aviso no ofrecía nada.
+    for (const type of required) {
+      const has = all.some(p => p.type === type && (p.status === "CLOSED" || !CLOSED_PERMIT.has(p.status)));
+      if (has) continue;
+      items.push({
+        id: `new:${type}`, permitCode: "", type, status: "MISSING",
+        vesselCode: wo?.vesselCode ?? "", location: null, description: wo?.title ?? null,
+        hazardsIdentified: null, controlMeasures: null, ppeRequired: null,
+        required: true, missing: true,
+      });
+    }
   } catch {
     return ONLY_WO; // sin la lista decide el servidor al cerrar la OT
   }
   if (items.length === 0 || !listener) return ONLY_WO;
   const show = listener;
-  return new Promise<PermitClosePlan | null>(resolve => show({ items, resolve }));
+  const plan = await new Promise<PermitClosePlan | null>(resolve => show({ items, resolve }));
+  return plan ? { ...plan, workOrderId } : null;
 }
 
 /**
@@ -81,9 +104,23 @@ export async function askClosePermits(workOrderId: string, requiredTypes: string
  * mensaje: la OT no se cierra hasta que se resuelva.
  */
 export async function closePermitsWithWo(plan: PermitClosePlan): Promise<string | null> {
-  for (const it of plan.items) {
+  // Primero se crean los que faltan (uno por tipo) y se cierran como los demás.
+  let created = new Map<string, string>();
+  if (plan.items.some(i => i.missingType) && plan.workOrderId) {
     try {
-      await api.post(`/app/permits/${it.id}/close-with-work-order`, {
+      const res = await api.post<{ items: Array<{ id: string; type: string }> }>(
+        `/app/pms/work-orders/${plan.workOrderId}/required-permits`, {},
+      );
+      created = new Map((res.items ?? []).map(p => [p.type, p.id]));
+    } catch (e) {
+      return e instanceof ApiError ? e.message : String(e);
+    }
+  }
+  for (const it of plan.items) {
+    const id = it.missingType ? created.get(it.missingType) : it.id;
+    if (!id) continue; // ya existía cuando se creó la lista: lo cierra el resto
+    try {
+      await api.post(`/app/permits/${id}/close-with-work-order`, {
         hazardsIdentified: it.hazardsIdentified ?? null,
         controlMeasures: it.controlMeasures ?? null,
         ppeRequired: it.ppeRequired ?? null,
