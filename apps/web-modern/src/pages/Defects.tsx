@@ -10,6 +10,7 @@ import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { askCloseServiceRequests, closeServiceRequestsWithWo } from "../lib/wo-ss-close";
+import { askClosePermits, closePermitsWithWo } from "../lib/wo-permit-close";
 import { DataTable, type Column } from "../components/DataTable";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { VesselLabel, AssetLabel, getAssetName, useAssetsCache } from "../components/EntityLabels";
@@ -1187,11 +1188,19 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
   const closeDefectAndWo = useCallback(async (noteOverride?: string) => {
     const note = noteOverride ?? closeCheckText;
     if (!note) { setActionError(t("def.verify.required")); return; }
-    // SS de la OT todavía abiertas: se avisa y se pregunta si se cierran también.
+    // Permisos de trabajo y SS de la OT todavía abiertos: se avisa y se pregunta
+    // si se cierran también.
+    const permitPlan = defect.workOrderId ? await askClosePermits(defect.workOrderId, []) : null;
+    if (defect.workOrderId && permitPlan === null) return;
     const ssPlan = defect.workOrderId ? await askCloseServiceRequests(defect.workOrderId, user?.name ?? "") : null;
     if (defect.workOrderId && ssPlan === null) return;
     setClosing(true);
     try {
+      // Los permisos se cierran ANTES que la OT.
+      if (permitPlan && permitPlan.items.length > 0) {
+        const permitErr = await closePermitsWithWo(permitPlan);
+        if (permitErr) { setActionError(permitErr); return; }
+      }
       // Backend requires RESOLVED before CLOSED
       if (defect.status !== "RESOLVED") {
         await api.patch(`/app/pms/defects/${defect.id}`, { status: "RESOLVED" });

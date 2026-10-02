@@ -139,7 +139,7 @@ import { buildDrillPdf } from "./drills/drills-pdf-service";
 import { getCrewSummary } from "./crew/crew-summary-service";
 import {
   listPermits, getPermit, createPermit, updatePermit,
-  requestPermit, approvePermit, rejectPermit, activatePermit, closePermit, cancelPermit, reopenPermit, deletePermit,
+  requestPermit, approvePermit, rejectPermit, activatePermit, closePermit, closePermitWithWorkOrder, cancelPermit, reopenPermit, deletePermit,
 } from "./permits/permits-service";
 import { listGasTests, createGasTest, deleteGasTest } from "./permits/gas-tests-service";
 import { listParticipants, createParticipant, deleteParticipant } from "./permits/participants-service";
@@ -2652,6 +2652,14 @@ export async function handleTenantRoutes(
     const id = url.pathname.split("/")[3]!;
     const body = await readJsonBody(request) as Parameters<typeof closePermit>[2];
     sendJson(response, 200, await closePermit(session, id, body));
+    return true;
+  }
+  // Cerrar el permiso junto con su OT: completa lo que falte y lo lleva a CERRADO.
+  if (method === "POST" && /^\/app\/permits\/[^/]+\/close-with-work-order$/.test(url.pathname)) {
+    const session = requireTenantAccessSession(request, requireTenantSlug(request, env));
+    const id = url.pathname.split("/")[3]!;
+    const body = await readJsonBody(request) as Parameters<typeof closePermitWithWorkOrder>[2];
+    sendJson(response, 200, await closePermitWithWorkOrder(session, id, body ?? {}));
     return true;
   }
   if (method === "POST" && /^\/app\/permits\/[^/]+\/cancel$/.test(url.pathname)) {

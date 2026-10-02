@@ -662,6 +662,116 @@ export async function closePermit(session: TenantAccessSession, id: string, payl
   return updated;
 }
 
+const PERMIT_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "en borrador", REQUESTED: "solicitado", APPROVED: "aprobado", ACTIVE: "activo",
+};
+
+/**
+ * Cierra el permiso junto con su OT: al cerrar la OT, la pantalla avisa que tiene
+ * permisos abiertos y pregunta si se cierran. Si dice que sí, el permiso se
+ * completa (análisis de riesgo, si le falta) y recorre los pasos que no se
+ * hicieron en el sistema —solicitar, aprobar, activar— hasta CERRADO.
+ *
+ * No saltea ningún control de rol: un permiso sin aprobar sólo se aprueba acá
+ * si quien cierra tiene "Autorizar Permisos de Trabajo", igual que a mano. Lo
+ * único distinto es que cada paso queda con la hora en que se registró, y la
+ * nota de cierre dice en qué estado estaba.
+ *
+ * Espacio confinado: sin una medición de gases apta registrada no se cierra (la
+ * regla de los 30 minutos es para activar en el momento, acá el trabajo ya se hizo).
+ */
+export async function closePermitWithWorkOrder(
+  session: TenantAccessSession,
+  id: string,
+  payload: { hazardsIdentified?: string | null; controlMeasures?: string | null; ppeRequired?: string | null; closeNotes?: string | null } = {},
+) {
+  ensureCanManage(session);
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  const current = await getPermit(session, id) as unknown as PermitRecord & {
+    workOrderId: string | null;
+    hazardsIdentified: string | null; controlMeasures: string | null; ppeRequired: string | null;
+    requestedAt: Date | null; approvedAt: Date | null; activatedAt: Date | null;
+    validFrom: Date | null; validTo: Date | null; plannedStart: Date; plannedEnd: Date;
+    gasTests: { verdict: string }[];
+  };
+  if (TERMINAL_STATUSES.has(current.status)) {
+    throw new RouteError(409, "INVALID_STATUS_TRANSITION", `El permiso ${current.permitCode} ya está cerrado.`);
+  }
+  if (!current.workOrderId) {
+    throw new RouteError(400, "VALIDATION_ERROR", `El permiso ${current.permitCode} no está asociado a una OT.`);
+  }
+  const wo = await prisma.workOrder.findFirst({
+    where: { id: current.workOrderId, tenantId: current.tenantId, deletedAt: null },
+    select: { workOrderCode: true, status: true },
+  });
+  if (!wo || !["PLANNED", "IN_PROGRESS", "ON_HOLD"].includes(wo.status)) {
+    throw new RouteError(409, "WORK_ORDER_NOT_OPEN", `La OT del permiso ${current.permitCode} no está abierta.`);
+  }
+
+  // El análisis de riesgo es lo que se exige para solicitar el permiso.
+  const hazards = normalizeOptional(current.hazardsIdentified) ?? normalizeOptional(payload.hazardsIdentified);
+  const controls = normalizeOptional(current.controlMeasures) ?? normalizeOptional(payload.controlMeasures);
+  const ppe = normalizeOptional(current.ppeRequired) ?? normalizeOptional(payload.ppeRequired);
+  const missing = [!hazards && "peligros identificados", !controls && "medidas de control", !ppe && "EPP requerido"].filter(Boolean);
+  if (missing.length > 0) {
+    throw new RouteError(400, "VALIDATION_ERROR", `Faltan datos del permiso ${current.permitCode}: ${missing.join(", ")}.`);
+  }
+
+  const needsApproval = current.status === "DRAFT" || current.status === "REQUESTED";
+  if (needsApproval && !canApprove(session)) {
+    throw new RouteError(
+      403,
+      "PERMIT_NOT_APPROVED",
+      `El permiso ${current.permitCode} todavía no está aprobado y tu usuario no puede aprobarlo: tiene que aprobarlo el Capitán o el Superintendente.`,
+    );
+  }
+  if (current.type === "ENCLOSED_SPACE_ENTRY" && current.status !== "ACTIVE" && !current.gasTests.some(g => g.verdict === "PASS")) {
+    throw new RouteError(
+      400,
+      "GAS_TEST_REQUIRED",
+      `El permiso ${current.permitCode} es de espacio confinado y no tiene una medición de gases apta. Registrala en el permiso antes de cerrarlo.`,
+    );
+  }
+
+  const now = new Date();
+  const userId = session.user.id;
+  const note = current.status === "ACTIVE"
+    ? `Cerrado junto con la OT ${wo.workOrderCode}.`
+    : `Cerrado junto con la OT ${wo.workOrderCode}. Estaba ${PERMIT_STATUS_LABEL[current.status]}: los pasos pendientes se registraron al cerrar la OT.`;
+  const updated = await permitClient(prisma).permitToWork.update({
+    where: { id },
+    data: {
+      status: "CLOSED",
+      hazardsIdentified: hazards,
+      controlMeasures: controls,
+      ppeRequired: ppe,
+      ...(current.requestedAt ? {} : { requestedAt: now, requestedByUserId: userId }),
+      ...(current.approvedAt ? {} : {
+        approvedAt: now, approvedByUserId: userId,
+        validFrom: current.validFrom ?? current.plannedStart,
+        validTo: current.validTo ?? current.plannedEnd,
+      }),
+      ...(current.activatedAt ? {} : { activatedAt: now, activatedByUserId: userId }),
+      closedAt: now,
+      closedByUserId: userId,
+      closeNotes: [normalizeOptional(payload.closeNotes), note].filter(Boolean).join("\n"),
+      updatedByUserId: userId,
+    },
+  });
+
+  void publishAudit(prisma, {
+    tenantId: current.tenantId,
+    actorUserId: userId,
+    action: "Permit.closedWithWorkOrder",
+    entityType: "Permit",
+    entityId: id,
+    metadata: { permitCode: current.permitCode, vesselCode: current.vesselCode, workOrderCode: wo.workOrderCode, previousStatus: current.status },
+  });
+  return updated;
+}
+
 export async function cancelPermit(session: TenantAccessSession, id: string, payload: { reason: string }) {
   ensureCanManage(session);
   const prisma = getPrismaClient();

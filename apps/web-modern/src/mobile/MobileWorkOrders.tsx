@@ -8,6 +8,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePendingProgress } from "../lib/progress-outbox";
 import { api, ApiError } from "../lib/api";
 import { askCloseServiceRequests, closeServiceRequestsWithWo } from "../lib/wo-ss-close";
+import { askClosePermits, closePermitsWithWo } from "../lib/wo-permit-close";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
@@ -48,7 +49,7 @@ interface WO {
   maintenancePlanId: string | null;
   assetId?: string;
   // Sólo en el detalle completo (no en la lista): planes de la OT, con lo que pide el cierre por horas.
-  plans?: Array<{ assetId: string; assetName: string | null; triggerType?: string; lastExecutionHours?: number | null }>;
+  plans?: Array<{ assetId: string; assetName: string | null; triggerType?: string; lastExecutionHours?: number | null; requiredPermitTypes?: string[] }>;
   executedByName: string | null;
   completedDate: string | null;
   observations: string | null;
@@ -643,11 +644,19 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
         return;
       }
     }
-    // SS de la OT todavía abiertas: se avisa y se pregunta si se cierran también.
+    // Permisos de trabajo y SS de la OT todavía abiertos: se avisa y se pregunta
+    // si se cierran también.
+    const permitPlan = await askClosePermits(selected.id, [...new Set((selected.plans ?? []).flatMap(p => p.requiredPermitTypes ?? []))]);
+    if (permitPlan === null) return;
     const ssPlan = await askCloseServiceRequests(selected.id, user?.name ?? "");
     if (ssPlan === null) return;
     setSaving(true); setErr(null);
     try {
+      // Los permisos se cierran ANTES que la OT (el plan puede exigirlos cerrados).
+      if (permitPlan.items.length > 0) {
+        const permitErr = await closePermitsWithWo(permitPlan);
+        if (permitErr) { setErr(permitErr); return; }
+      }
       await api.post(`/app/pms/work-orders/${selected.id}/close`, {
         woResult,
         observations: observations.trim() || null,

@@ -51,6 +51,7 @@ import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
 import { ProgressNoteSheet, toLocalInput } from "../mobile/ProgressNoteSheet";
 import { askCloseServiceRequests, closeServiceRequestsWithWo } from "../lib/wo-ss-close";
+import { askClosePermits, closePermitsWithWo } from "../lib/wo-permit-close";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
@@ -2349,7 +2350,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         return;
       }
     }
-    // SS de la OT todavía abiertas: se avisa y se pregunta si se cierran también.
+    // Permisos de trabajo y SS de la OT todavía abiertos: se avisa y se pregunta
+    // si se cierran también.
+    const permitPlan = await askClosePermits(workOrder.id, requiredPermitTypes);
+    if (permitPlan === null) return;
     const ssPlan = await askCloseServiceRequests(workOrder.id, user?.name ?? "");
     if (ssPlan === null) return;
     setClosing(true); setErr(null);
@@ -2360,6 +2364,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       ]);
       // 1. Guardar TODOS los edits (igual que "Guardar").
       await patchWorkOrder(chkUrl, supUrl);
+      // 1b. Los permisos elegidos se cierran ANTES que la OT: si el plan los exige,
+      // la OT no cierra con un permiso abierto. Si uno falla, la OT no se cierra.
+      if (permitPlan.items.length > 0) {
+        const permitErr = await closePermitsWithWo(permitPlan);
+        if (permitErr) { setErr(permitErr); return; }
+      }
       // 2. Cerrar la OT.
       const res = await api.post<{ id: string; failedMovements?: string[] }>(`/app/pms/work-orders/${workOrder.id}/close`, {
         woResult,
@@ -2394,7 +2404,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [woResult, checklistDocFile, checklistDocUrl, supportingDocFile, supportingDocUrl, patchWorkOrder,
       executedByName, executionDate, observations,
       runningHoursAtExecution, actualHours, spareUsages, uploadIfNeeded, finishClose, t, workOrder.id,
-      workOrder.maintenancePlanId, onPlanExecuted, hourAssets, hoursOf, user?.name]);
+      workOrder.maintenancePlanId, onPlanExecuted, hourAssets, hoursOf, user?.name, requiredPermitTypes]);
 
   // Lo contestado en la auditoría vuelve al formulario ANTES de cerrar: el
   // cierre guarda con el estado del formulario, así que se espera un render
