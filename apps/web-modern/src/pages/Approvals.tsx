@@ -1015,7 +1015,16 @@ export const ApprovalsPage: React.FC = () => {
                         {treePos === "child" && (
                           <span aria-hidden className="pointer-events-none absolute left-3.5 top-0 bottom-0 border-l border-current opacity-40" />
                         )}
-                        <span className="font-bold line-clamp-2">{headlineOf(r)}</span>
+                        {/* La tarea abre la ficha de su OT o SS, igual que el
+                            número (pedido del usuario). Sin color de hover:
+                            sobre la fila roja no se leería. */}
+                        <button
+                          type="button"
+                          onClick={() => openRecord(r)}
+                          className="w-full text-left font-bold line-clamp-2 cursor-pointer hover:underline underline-offset-2"
+                        >
+                          {headlineOf(r)}
+                        </button>
                         {/* Arranca donde termina el título (uno o dos
                             renglones) y la celda recorta lo que sobra. */}
                         {treePos === "parent" && (
