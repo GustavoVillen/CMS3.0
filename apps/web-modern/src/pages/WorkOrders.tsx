@@ -1893,15 +1893,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     () => [...new Set(linkedServiceRequests.map(sr => sr.providerName).filter(Boolean) as string[])],
     [linkedServiceRequests],
   );
-  // Muestra de análisis generada por esta OT. Si existe, la OT es de muestreo y
-  // el código FA se muestra junto a sus SS: es el número que después se busca en
-  // "Muestreos y Análisis". La SS no tiene vínculo propio con la muestra — el
-  // puente es la OT, que es de donde sale la muestra al autorizarse.
-  const { data: linkedSampleData } = useFetch<{ items: Array<{ id: string; sampleCode: string }> }>(
-    `/app/fluid-analyses?workOrderId=${encodeURIComponent(workOrder.id)}`,
-    [workOrder.id],
-  );
-  const linkedSample = linkedSampleData?.items?.[0] ?? null;
   // Alcanza con que la OT esté abierta: la SS se carga junto con la OT y la
   // tramitación de la OT la arrastra (OT aprobada → SS aprobada; OT autorizada →
   // SS autorizada). Ya no se exige que la OT esté autorizada de antemano.
@@ -2543,9 +2534,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <div className="space-y-2">
                 {linkedServiceRequests.map(sr => (
                   // Fila clickeable en vez de <Link>: hay que guardar la OT antes
-                  // de salir, y un link navega sin darnos la oportunidad. Es un
-                  // <div> y no un <button> porque adentro va otro botón (el
-                  // código FA), y un botón dentro de otro es HTML inválido.
+                  // de salir, y un link navega sin darnos la oportunidad.
                   <div
                     key={sr.id}
                     onClick={() => { void saveThenNavigate(`/service-requests?openId=${sr.id}`); }}
@@ -2563,23 +2552,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                         {sr.providerName}
                       </span>
                     )}
-                    {/* Código de la muestra, cuando esta OT generó una. Abre la
-                        muestra; al cerrarla se vuelve a esta OT. Va dentro de la
-                        fila clickeable, así que frena la navegación del padre. */}
-                    {linkedSample && (
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void saveThenNavigate(`/fluid-analyses?openId=${encodeURIComponent(linkedSample.id)}`);
-                        }}
-                        className="shrink-0 font-mono text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-2 py-0.5 hover:bg-cyan-500/20 transition-colors"
-                        title="Guarda la OT y abre la muestra de análisis generada por ella"
-                      >
-                        {linkedSample.sampleCode}
-                      </button>
-                    )}
+                    {/* Sin el código FA (pedido de Gustavo, 02-oct-2026): una OT de
+                        campaña tiene muchas muestras y mostrar una sola confundía.
+                        Las muestras se ven en el recuadro de la SS. */}
                     <span className={`shrink-0 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${SS_STATUS_COLOR[sr.status] ?? SS_STATUS_COLOR.DRAFT}`}>
                       {SS_STATUS_LABEL[sr.status] ?? sr.status}
                     </span>
