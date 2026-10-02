@@ -137,7 +137,7 @@ export async function listTeamMembers(
  */
 export async function listTeamDirectory(
   session: TenantAccessSession,
-): Promise<{ userId: string; name: string; role: string | null; jobTitle: string | null }[]> {
+): Promise<{ userId: string; name: string; role: string | null; jobTitle: string | null; vesselCodes?: string[] }[]> {
   const prisma = getPrismaClient();
 
   if (!prisma) {
@@ -164,6 +164,9 @@ export async function listTeamDirectory(
       // lo cargaron; si no, el rol del sistema, que el frontend traduce).
       role: m.role ?? null,
       jobTitle: m.jobTitle ?? null,
+      // Buques de la persona: la SS ofrece primero al Capitán y al Jefe de
+      // Máquinas de SU buque.
+      vesselCodes: Array.isArray(m.assignedVesselCodes) ? m.assignedVesselCodes : [],
     }))
     .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
 }

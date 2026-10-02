@@ -4,6 +4,7 @@ import { useT, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { AlertDialog } from "./AlertDialog";
 import { RequiredMark } from "./GuideKit";
+import { CrewNameSelect } from "./CrewNameSelect";
 import { subscribeWoSsClose, type WoSsCloseRequest } from "../lib/wo-ss-close";
 
 const STATUS_KEY: Record<string, TranslationKey> = {
@@ -86,8 +87,8 @@ export const WoSsCloseHost: React.FC = () => {
             <div className="space-y-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
               <div>
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/70">{t("ss.guide.field.recibe")}<RequiredMark /></p>
-                <input value={receiver} onChange={e => setReceiver(e.target.value)} placeholder={t("ss.guide.field.recibePh")}
-                  className="w-full rounded-lg border border-fg/10 bg-fg/5 px-3 py-1.5 text-sm text-fg focus:border-accent/50 focus:outline-none" />
+                <CrewNameSelect crew="any" value={receiver} onChange={setReceiver} placeholder={t("ss.guide.field.recibePh")}
+                  className="w-full rounded-lg border border-fg/10 bg-fg/5 px-3 py-1.5 text-sm text-fg focus-within:border-accent/50" />
               </div>
               <div>
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-text-industrial/70">{t("ss.guide.field.conforme")}<RequiredMark /></p>

@@ -41,6 +41,7 @@ import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { WoCloseAuditModal } from "../components/work-orders/WoCloseAuditModal";
 import { PersonSelect } from "../components/PersonSelect";
+import { CrewNameSelect } from "../components/CrewNameSelect";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 
@@ -1270,8 +1271,8 @@ function ReceiveServiceModal({ onClose, onConfirm, busy, initial }: {
     >
       <GuideField id="sr-receive-name" missing={!recibe.trim()}>
         <label className={labelCls}>¿Quién recibe el servicio?<RequiredMark />{!recibe.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-        <input className={inputCls} value={recibe} autoFocus
-          onChange={e => setRecibe(e.target.value)} placeholder="Ej. J.M. CRISTHIAN VERON" />
+        <CrewNameSelect crew="any" className={inputCls} value={recibe}
+          onChange={setRecibe} placeholder="Ej. J.M. CRISTHIAN VERON" />
       </GuideField>
       <div>
         <label className={labelCls}>Ítem recibido (opcional)</label>
@@ -2359,13 +2360,14 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           {field("capitan", <>
             {fieldLabel(<>{t("ss.guide.field.capitan")} *</>, "capitan")}
-            <input className={inputCls} value={form.capitan} disabled={!editable}
-              onChange={e => patchForm({ capitan: e.target.value })} placeholder="Ej. CAP. WILLIAM RIQUELME" />
+            {/* Lista de Capitanes (del buque primero) con autocompletado. */}
+            <CrewNameSelect crew="captain" vesselCode={sr.vesselCode} className={inputCls} value={form.capitan}
+              disabled={!editable} onChange={v => patchForm({ capitan: v })} placeholder="Ej. CAP. WILLIAM RIQUELME" />
           </>)}
           {field("jefeMaq", <>
             {fieldLabel(<>{t("ss.guide.field.jefeMaq")} *</>, "jefeMaq")}
-            <input className={inputCls} value={form.jefeMaq} disabled={!editable}
-              onChange={e => patchForm({ jefeMaq: e.target.value })} placeholder="Ej. J.M. CRISTHIAN VERON" />
+            <CrewNameSelect crew="chief" vesselCode={sr.vesselCode} className={inputCls} value={form.jefeMaq}
+              disabled={!editable} onChange={v => patchForm({ jefeMaq: v })} placeholder="Ej. J.M. CRISTHIAN VERON" />
           </>)}
         </div>
         <p className="text-[11px] text-text-industrial/50">{t("ss.guide.field.signHint")}</p>
@@ -2407,8 +2409,9 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
           </>)}
           {field("recibe", <>
             {fieldLabel(<>{t("ss.guide.field.recibe")} *</>, "recibe")}
-            <input className={inputCls} value={form.recibe} disabled={!editable}
-              onChange={e => patchForm({ recibe: e.target.value })} placeholder={t("ss.guide.field.recibePh")} />
+            {/* Quién recibe: cualquier persona de la empresa. */}
+            <CrewNameSelect crew="any" className={inputCls} value={form.recibe}
+              disabled={!editable} onChange={v => patchForm({ recibe: v })} placeholder={t("ss.guide.field.recibePh")} />
           </>)}
         </div>
         {field("conforme", <>
