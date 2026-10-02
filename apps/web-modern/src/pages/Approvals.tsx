@@ -148,6 +148,17 @@ const fmtDate = (iso: string | null | undefined): string => {
  * (`[ ] Tomar muestras · [ ] Verificar...`). En el globito eso es ruido: se
  * limpian y se separa con puntos, para que la línea se lea de corrido.
  */
+/**
+ * Lo que dice la fila. En la SS manda la DESCRIPCIÓN del servicio, igual que en
+ * la ficha de la SS y en la OT: el título se copia al crearla y queda fijo, así
+ * que una corrección posterior no se veía acá. En la OT, su título.
+ */
+function headlineOf(r: { kind: "WO" | "SR"; title: string | null; task: string | null }): string {
+  return r.kind === "SR"
+    ? (cleanDetail(r.task) || r.title || "—")
+    : (r.title ?? (cleanDetail(r.task) || "—"));
+}
+
 function cleanDetail(text: string | null | undefined): string {
   if (!text) return "";
   return text
@@ -257,9 +268,10 @@ export const ApprovalsPage: React.FC = () => {
 
   /** Todo lo que la celda de la tarea ya no muestra, para el globito. */
   const tooltipOf = useCallback((r: Row): string => {
-    const lines: string[] = [r.title ?? ""];
+    const head = headlineOf(r);
+    const lines: string[] = [head];
     const detail = cleanDetail(r.task);
-    if (detail && detail !== (r.title ?? "").trim()) lines.push(detail);
+    if (detail && detail !== head.trim()) lines.push(detail);
     if (r.dueDate) lines.push(`${t("approvals.due")}: ${fmtDate(r.dueDate)}`);
     if (r.kind === "SR" && r.workOrderCode) lines.push(t("approvals.hangsFrom").replace("{code}", r.workOrderCode));
     if (r.kind === "WO" && r.serviceRequestCount > 0) lines.push(`${t("approvals.linkedSr")}: ${r.serviceRequestCount}`);
@@ -1003,7 +1015,7 @@ export const ApprovalsPage: React.FC = () => {
                         {treePos === "child" && (
                           <span aria-hidden className="pointer-events-none absolute left-3.5 top-0 bottom-0 border-l border-current opacity-40" />
                         )}
-                        <span className="font-bold line-clamp-2">{r.title ?? (cleanDetail(r.task) || "—")}</span>
+                        <span className="font-bold line-clamp-2">{headlineOf(r)}</span>
                         {/* Arranca donde termina el título (uno o dos
                             renglones) y la celda recorta lo que sobra. */}
                         {treePos === "parent" && (
