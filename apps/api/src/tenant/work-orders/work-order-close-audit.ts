@@ -86,7 +86,9 @@ QUÉ REVISAR — la OT COMPLETA, no sólo el cierre
 - LOTO y Permisos de Trabajo — exigencia NIVEL ${LOTO_STRICTNESS} DE 10 (baja, definida por la empresa). Que falte un LOTO o un Permiso de Trabajo vinculado NO es hallazgo MAYOR ni MENOR y NO cambia el veredicto: como mucho va UNA observación (severidad OBSERVACION) recomendando registrarlo la próxima vez. Sólo sube a MENOR si la propia OT cuenta que se trabajó sin aislar un equipo energizado o presurizado, o si hubo un incidente. No preguntes por números de permiso ni certificados LOTO.
 - Registro (ISM 10.2.4): ¿quedó quién lo hizo, cuándo, con qué horas de máquina, qué repuestos se usaron?
 - Repuestos: ¿los repuestos previstos (materiales.repuestosPrevistos) coinciden con los consumidos (materiales.consumidosRegistrados y materiales.aConsumirEnEsteCierre)? Una diferencia sin explicar es un hallazgo.
-- Materiales (aceite, grasa, trapos, sellador…): no mueven stock, así que NUNCA aparecen entre los consumidos. Su registro es materiales.materialesRegistrados. Si lo que se usó figura ahí, el consumo ESTÁ registrado: no es hallazgo, ni próximo paso, ni va en "consumoSinRegistrar".
+- Repuesto o material: REPUESTO es todo lo que el buque lleva en stock (aceites y lubricantes, filtros, juntas, correas, rodamientos, ánodos, piezas). MATERIAL es un consumible menor que no se controla en stock (trapos, lija, cinta, sellador, solvente, grasa en poca cantidad).
+- Materiales: no mueven stock, así que NUNCA aparecen entre los consumidos. Su registro es materiales.materialesRegistrados: si un MATERIAL figura ahí, está registrado y no es hallazgo ni próximo paso.
+- Repuestos cargados en Materiales: si en materiales.materialesRegistrados hay un REPUESTO que no figura entre los consumidos, no es hallazgo (el uso quedó anotado), pero va en "consumoSinRegistrar" con tipo REPUESTO para que se descuente del stock.
 - Consumo sin registrar: si la evidencia (avances, observaciones, respuestas del usuario, detalle) dice que se USÓ, CAMBIÓ o REPUSO un repuesto o un material con una cantidad conocida, y eso no figura en materiales.consumidosRegistrados, ni en materiales.aConsumirEnEsteCierre, ni en materiales.materialesRegistrados, va en "consumoSinRegistrar" además del hallazgo. La cantidad tiene que estar dicha o ser inequívoca ("se cambió el filtro" = 1). Si no se sabe cuánto se usó, no lo pongas ahí: preguntalo. Inspeccionar, medir o verificar no consume nada.
 - Pendientes: si quedó algo pendiente, o si la tarea NO se concluyó, eso NO se cierra y se olvida: tiene que quedar planificado en algún lado.
 - Trazabilidad: ¿hay defecto, diferimiento, MOC, RCA o SS que debería haberse abierto y no se abrió?
@@ -172,7 +174,7 @@ const WO_AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
     ...(AUDIT_RESULT_SCHEMA.properties as Record<string, unknown>),
     consumoSinRegistrar: {
       type: "array",
-      description: "Repuestos o materiales que la evidencia dice que se usaron, con cantidad conocida, y que la OT no tiene registrados. Vacío si no hay ninguno.",
+      description: "Repuestos o materiales que se usaron, con cantidad conocida, y que no se descontaron del stock ni (si es un material) se anotaron. Incluye los REPUESTOS anotados en Materiales. Vacío si no hay ninguno.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -180,8 +182,9 @@ const WO_AUDIT_RESULT_SCHEMA: Anthropic.Tool["input_schema"] = {
           descripcion: { type: "string", description: 'Qué se usó, como lo dice la evidencia ("Aceite SAE 80W-90", "Filtro de combustible").' },
           cantidad: { type: "number", description: "Cuánto se usó." },
           unidad: { type: "string", description: "Unidad de la cantidad: l, ud, kg, m…" },
+          tipo: { type: "string", enum: ["REPUESTO", "MATERIAL"], description: "REPUESTO si el buque lo lleva en stock; MATERIAL si es un consumible menor." },
         },
-        required: ["descripcion", "cantidad", "unidad"],
+        required: ["descripcion", "cantidad", "unidad", "tipo"],
       },
     },
   },
@@ -244,6 +247,14 @@ export interface WoConsumptionOfferItem {
   unit: string;
   /** Ficha del buque a la que se descuenta. null: no está en el catálogo. */
   spare: { id: string; sku: string; name: string; unit: string; onHand: number } | null;
+  /**
+   * Repuesto que no tiene ficha en el buque: se da de alta con estos datos y se
+   * descuenta (pedido del usuario: un repuesto descuenta stock, no va a
+   * Materiales). null con `spare` null: es un material y va a Materiales.
+   */
+  newSpare: { sku: string; name: string; unit: string } | null;
+  /** Ya estaba anotado en Materiales con esta descripción: pasa a Repuestos. */
+  fromMaterial: string | null;
 }
 
 export interface WoCloseAuditFinding {
@@ -342,13 +353,34 @@ function specsMatch(description: string, spare: SpareCandidate): boolean {
   return wanted.every(t => have.includes(t));
 }
 
+const SKU_STOPWORDS = new Set(["de", "del", "la", "el", "los", "las", "para", "con", "y", "en", "sae"]);
+
+/**
+ * Código para una ficha nueva, con el estilo del catálogo ("ACE-80W90-01",
+ * "FIL-COM-01"): tres letras de la primera palabra y la especificación (o tres
+ * letras de la segunda), más un número que no esté usado en el buque. Se puede
+ * corregir después en Repuestos.
+ */
+function proposeSku(description: string, taken: Set<string>): string {
+  const words = normalizeText(description).split(" ").filter(w => w && !SKU_STOPWORDS.has(w));
+  const spec = words.filter(w => /\d/.test(w)).join("").toUpperCase().slice(0, 8);
+  const plain = words.filter(w => !/\d/.test(w)).map(w => w.slice(0, 3).toUpperCase());
+  const base = [plain[0] ?? "REP", spec || plain[1]].filter(Boolean).join("-");
+  for (let n = 1; n < 100; n++) {
+    const sku = `${base}-${String(n).padStart(2, "0")}`;
+    if (!taken.has(sku)) return sku;
+  }
+  return `${base}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 /**
  * Ubica en el catálogo del buque lo que la IA vio consumido y sin registrar.
  *
  * Mismo emparejador que la recepción de remitos (spare-match + desempate por
  * IA): la descripción de un avance ("aceite de la pata") casi nunca coincide
- * letra por letra con la ficha. Lo que no aparece en el catálogo vuelve con
- * `spare: null` y la pantalla lo anota como material, sin mover stock.
+ * letra por letra con la ficha. Si no hay ficha: un REPUESTO se ofrece dar de
+ * alta y descontar (pedido del usuario, oct 2026); un MATERIAL va a Materiales,
+ * sin mover stock. Un repuesto que estaba anotado en Materiales pasa a Repuestos.
  *
  * No se ofrece lo que la OT ya tiene (el mismo repuesto descontado o el mismo
  * material anotado): registrar dos veces es peor que no registrar.
@@ -367,6 +399,7 @@ async function resolveUnregisteredConsumption(
       description: String(r?.descripcion ?? "").trim(),
       quantity: Number(r?.cantidad),
       unit: String(r?.unidad ?? "").trim() || "ud",
+      tipo: r?.tipo === "MATERIAL" ? "MATERIAL" as const : "REPUESTO" as const,
     }))
     .filter(i => i.description && Number.isFinite(i.quantity) && i.quantity > 0 && i.quantity <= 1000)
     .slice(0, MAX_CONSUMPTION_OFFER);
@@ -382,13 +415,15 @@ async function resolveUnregisteredConsumption(
       ...movements.map(m => m.spareId),
       ...(draft.spareUsages ?? []).map(u => u.spareId ?? "").filter(Boolean),
     ]);
-    const materials: string[] = woItems(ctx, draft)
+    // Filas de Materiales: un material ahí ya está registrado; un repuesto ahí
+    // se pasa a Repuestos (y la fila se quita) para que descuente stock.
+    const materials = woItems(ctx, draft)
       .filter(i => i.kind === "MATERIAL")
-      .map((i: any) => normalizeText(String(i.description ?? "")))
-      .filter(Boolean);
-    const alreadyMaterial = (d: string) => {
+      .map(i => ({ original: i.description, norm: normalizeText(i.description) }))
+      .filter(m => m.norm);
+    const materialRow = (d: string): string | null => {
       const n = normalizeText(d);
-      return materials.some(m => m === n || m.includes(n) || n.includes(m));
+      return materials.find(m => m.norm === n || m.norm.includes(n) || n.includes(m.norm))?.original ?? null;
     };
 
     const catalog = await loadVesselCatalog(prisma, wo.tenantId, wo.vesselCode);
@@ -428,11 +463,30 @@ async function resolveUnregisteredConsumption(
       if (s && !specsMatch(it.description, s)) chosen[idx] = null;
     });
 
+    // Códigos ya usados en el buque, también los de fichas borradas: el código
+    // de una ficha nueva no puede chocar con ninguno.
+    const takenSkus = new Set<string>(
+      (await (prisma as any).spare.findMany({
+        where: { tenantId: wo.tenantId, vesselCode: wo.vesselCode },
+        select: { sku: true },
+      })).map((s: { sku: string }) => s.sku.toUpperCase()),
+    );
+
     const out: WoConsumptionOfferItem[] = [];
     items.forEach((it, idx) => {
+      const { tipo, ...item } = it;
       const s = chosen[idx];
+      const fromMaterial = materialRow(it.description);
       if (!s) {
-        if (!alreadyMaterial(it.description)) out.push({ ...it, spare: null });
+        if (tipo === "MATERIAL") {
+          // Un material ya anotado está registrado: no hay nada que hacer.
+          if (!fromMaterial) out.push({ ...item, spare: null, newSpare: null, fromMaterial: null });
+          return;
+        }
+        // Repuesto sin ficha en el buque: se da de alta y se descuenta.
+        const sku = proposeSku(it.description, takenSkus);
+        takenSkus.add(sku);
+        out.push({ ...item, spare: null, newSpare: { sku, name: it.description, unit: it.unit }, fromMaterial });
         return;
       }
       if (usedSpareIds.has(s.id)) return;
@@ -440,9 +494,11 @@ async function resolveUnregisteredConsumption(
       const prev = out.find(o => o.spare?.id === s.id);
       if (prev) { prev.quantity += it.quantity; return; }
       out.push({
-        ...it,
+        ...item,
         unit: s.unit,
         spare: { id: s.id, sku: s.sku, name: s.name, unit: s.unit, onHand: s.onHand },
+        newSpare: null,
+        fromMaterial,
       });
     });
     return out;

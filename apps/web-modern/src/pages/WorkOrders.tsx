@@ -1541,31 +1541,63 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
    *  - Repuesto del catálogo → lista de Repuestos utilizados. Se guarda en el
    *    momento (igual que "Guardar"), así el stock queda descontado aunque
    *    después se vuelva a la orden sin cerrarla.
-   *  - Sin ficha en el catálogo → fila de Materiales del formulario, sin stock.
+   *  - Repuesto sin ficha → se da de alta la ficha (mismo alta que Repuestos,
+   *    pide el mismo permiso) y se descuenta igual. Un repuesto descuenta stock,
+   *    no va a Materiales (pedido del usuario).
+   *  - Material → fila de Materiales del formulario, sin stock.
+   * Si el repuesto estaba anotado en Materiales, esa fila se quita: si no,
+   * quedaría registrado dos veces.
    */
   const registerAuditConsumption = useCallback(async (items: ConsumptionOfferItem[]): Promise<ConsumptionRegisterResult> => {
     const result: ConsumptionRegisterResult = { done: [], failed: [] };
-    const spareItems = items.filter(i => i.spare);
-    if (spareItems.length > 0) {
-      const next: SpareUsage[] = [...spareUsages, ...spareItems.map(i => ({
-        spareId: i.spare!.id,
-        spareName: `${i.spare!.sku} — ${i.spare!.name}`,
-        unit: i.spare!.unit,
-        qty: i.quantity,
-        criticality: woSpares.find(s => s.id === i.spare!.id)?.criticality ?? "C",
-        available: i.spare!.onHand,
+    const toDeduct: Array<{ item: ConsumptionOfferItem; kind: "SPARE" | "NEW_SPARE"; spare: NonNullable<ConsumptionOfferItem["spare"]> }> = [];
+    for (const item of items) {
+      if (item.spare) { toDeduct.push({ item, kind: "SPARE", spare: item.spare }); continue; }
+      if (!item.newSpare) continue;
+      try {
+        const created = await api.post<{ id: string; sku: string; name: string; unit: string }>("/app/pms/spares", {
+          vesselCode: workOrder.vesselCode,
+          sku: item.newSpare.sku,
+          name: item.newSpare.name,
+          unit: item.newSpare.unit,
+        });
+        toDeduct.push({ item, kind: "NEW_SPARE", spare: { id: created.id, sku: created.sku, name: created.name, unit: created.unit, onHand: 0 } });
+      } catch {
+        result.failed.push(item);
+      }
+    }
+    if (toDeduct.length > 0) {
+      const next: SpareUsage[] = [...spareUsages, ...toDeduct.map(({ item, spare }) => ({
+        spareId: spare.id,
+        spareName: `${spare.sku} — ${spare.name}`,
+        unit: spare.unit,
+        qty: item.quantity,
+        criticality: woSpares.find(s => s.id === spare.id)?.criticality ?? "C",
+        available: spare.onHand,
       }))];
       try {
         await api.patch(`/app/pms/work-orders/${workOrder.id}`, {
           spareUsages: next.map(u => ({ spareId: u.spareId, qty: u.qty, unit: u.unit })),
         });
         setSpareUsages(next);
-        result.done.push(...spareItems.map(item => ({ item, kind: "SPARE" as const })));
+        result.done.push(...toDeduct.map(({ item, kind }) => ({ item, kind })));
       } catch {
-        result.failed.push(...spareItems);
+        result.failed.push(...toDeduct.map(d => d.item));
       }
     }
-    const materialItems = isMercurio ? items.filter(i => !i.spare) : [];
+    // Los repuestos que estaban anotados en Materiales salen de ahí.
+    const movedRows = result.done
+      .map(d => d.item.fromMaterial?.trim())
+      .filter((d): d is string => !!d)
+      .map(d => plannedItems.find(r => r.kind === "MATERIAL" && r.description.trim() === d))
+      .filter((r): r is WoPlannedItem => !!r);
+    for (const row of movedRows) {
+      if (row.id) {
+        try { await api.delete(`/app/pms/work-orders/${workOrder.id}/items/${row.id}`); } catch { /* queda anotado: no se pierde nada */ }
+      }
+    }
+    if (movedRows.some(r => !r.id)) setPlannedItems(prev => prev.filter(r => !movedRows.includes(r) || !!r.id));
+    const materialItems = isMercurio ? items.filter(i => !i.spare && !i.newSpare) : [];
     for (const item of materialItems) {
       try {
         await api.post(`/app/pms/work-orders/${workOrder.id}/items`, {
@@ -1576,9 +1608,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         result.failed.push(item);
       }
     }
-    if (materialItems.length > 0) reloadPlannedItems();
+    if (materialItems.length > 0 || movedRows.length > 0) reloadPlannedItems();
     return result;
-  }, [spareUsages, woSpares, isMercurio, workOrder.id, reloadPlannedItems]);
+  }, [spareUsages, woSpares, isMercurio, workOrder.id, workOrder.vesselCode, plannedItems, reloadPlannedItems]);
 
   // ── Defect registration prompt ──
   type DefectPrompt = "idle" | "ask" | "creating" | "created" | "declined";

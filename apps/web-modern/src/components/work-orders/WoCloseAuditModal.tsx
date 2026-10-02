@@ -52,12 +52,19 @@ export interface ConsumptionOfferItem {
   unit: string;
   /** Ficha del buque a la que se descuenta. null: no está en el catálogo. */
   spare: { id: string; sku: string; name: string; unit: string; onHand: number } | null;
+  /** Repuesto sin ficha: se da de alta con estos datos y se descuenta. */
+  newSpare: { sku: string; name: string; unit: string } | null;
+  /** Estaba anotado en Materiales con esta descripción: pasa a Repuestos. */
+  fromMaterial: string | null;
 }
 
 /** Lo que el padre pudo registrar y lo que no. */
 export interface ConsumptionRegisterResult {
-  /** SPARE: Repuestos de la OT + stock. MATERIAL: Materiales de la OT, sin stock. */
-  done: Array<{ item: ConsumptionOfferItem; kind: "SPARE" | "MATERIAL" }>;
+  /**
+   * SPARE: Repuestos de la OT + stock. NEW_SPARE: igual, con ficha recién dada
+   * de alta. MATERIAL: Materiales de la OT, sin stock.
+   */
+  done: Array<{ item: ConsumptionOfferItem; kind: "SPARE" | "NEW_SPARE" | "MATERIAL" }>;
   failed: ConsumptionOfferItem[];
 }
 
@@ -209,7 +216,7 @@ export function WoCloseAuditModal({
 
   // Sólo se ofrece lo que se puede registrar: un repuesto del catálogo, o un
   // material si la OT tiene dónde anotarlo.
-  const offerItems = (result?.consumptionOffer ?? []).filter(i => i.spare || canRegisterMaterials);
+  const offerItems = (result?.consumptionOffer ?? []).filter(i => i.spare || i.newSpare || canRegisterMaterials);
   const showOffer = !!onRegisterConsumption && !loading && !error && !!result && !showQuestions
     && consumption !== "done" && consumption !== "declined" && offerItems.length > 0;
   const selectedItems = offerItems.filter((_, i) => !unselected.has(i));
@@ -275,9 +282,15 @@ export function WoCloseAuditModal({
                         .replace("{spare}", `${item.spare.sku} — ${item.spare.name}`)
                         .replace("{left}", fmtQty(item.spare.onHand - item.quantity))
                         .replace("{onHand}", fmtQty(item.spare.onHand))
+                    : kind === "NEW_SPARE" && item.newSpare
+                    ? t("wo.closeAudit.consumption.doneNewSpare")
+                        .replace("{qty}", fmtQty(item.quantity)).replace(/\{unit\}/g, item.newSpare.unit)
+                        .replace("{item}", item.newSpare.name).replace("{sku}", item.newSpare.sku)
+                        .replace("{left}", fmtQty(-item.quantity))
                     : t("wo.closeAudit.consumption.doneMaterial")
                         .replace("{qty}", fmtQty(item.quantity)).replace("{unit}", item.unit)
                         .replace("{item}", item.description)}
+                  {kind !== "MATERIAL" && item.fromMaterial && ` ${t("wo.closeAudit.consumption.doneFromMaterial")}`}
                 </p>
               ))}
               <p className="text-[11px] opacity-80">{t("wo.closeAudit.consumption.doneHint")}</p>
@@ -405,7 +418,10 @@ export function WoCloseAuditModal({
                                 ? t("wo.closeAudit.consumption.toSpare")
                                     .replace("{spare}", `${item.spare.sku} — ${item.spare.name}`)
                                     .replace("{onHand}", fmtQty(item.spare.onHand)).replace("{unit}", item.spare.unit)
+                                : item.newSpare
+                                ? t("wo.closeAudit.consumption.toNewSpare").replace("{sku}", item.newSpare.sku)
                                 : t("wo.closeAudit.consumption.toMaterial")}
+                              {(item.spare || item.newSpare) && item.fromMaterial && ` ${t("wo.closeAudit.consumption.fromMaterial")}`}
                             </span>
                           </span>
                         </label>
