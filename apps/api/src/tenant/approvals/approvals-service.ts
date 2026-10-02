@@ -58,6 +58,9 @@ export interface PendingApprovalItem {
   authorizedAt?: string | null;
   /** Sólo SS autorizadas: cuándo se mandó al proveedor (null = todavía no). */
   sentAt?: string | null;
+  /** Sólo SS ya recibidas con la OT abierta: cuándo y si fue conforme. */
+  receivedAt?: string | null;
+  receptionConform?: boolean | null;
   /** Sólo OT autorizadas: avances cargados y repuestos consumidos hasta ahora. */
   progressNoteCount?: number;
   spareUsageCount?: number;
@@ -96,7 +99,9 @@ export interface PendingApprovalsResult {
   woExecute: PendingApprovalItem[];
   /**
    * SS autorizadas que todavía no se recibieron: para mandarlas al proveedor y
-   * seguir su hoja de ruta. Salen de la bandeja al recibirse (COMPLETED).
+   * seguir su hoja de ruta. Al recibirse (COMPLETED) siguen mientras su OT esté
+   * abierta, marcadas como cerradas: la OT todavía las tiene asociadas (pedido
+   * de Gustavo, 02-oct-2026). Con la OT cerrada, salen.
    */
   srExecute: PendingApprovalItem[];
 }
@@ -144,6 +149,7 @@ const SR_SELECT = {
   purchaseRequestKinds: true, solicitaByName: true, createdAt: true,
   aprobadoByName: true, aprobadoAt: true,
   autorizadoByName: true, autorizadoAt: true, startedAt: true,
+  receivedAt: true, receptionConform: true,
 } as const;
 
 /**
@@ -200,11 +206,17 @@ export async function listPendingApprovals(
     return where;
   };
 
-  // EJECUTAR = autorizada (falta mandarla al taller) o ya en el taller.
+  // EJECUTAR = autorizada (falta mandarla al taller), ya en el taller, o ya
+  // recibida pero con su OT todavía abierta (se ve como cerrada).
   const srWhere = (status: "SOLICITADA" | "APROBADA" | "EJECUTAR") => {
     const where: Record<string, unknown> = {
       tenantId, deletedAt: null,
-      status: status === "EJECUTAR" ? { in: ["AUTORIZADA", "IN_PROGRESS"] } : status,
+      ...(status === "EJECUTAR"
+        ? { OR: [
+            { status: { in: ["AUTORIZADA", "IN_PROGRESS"] } },
+            { status: "COMPLETED", workOrder: { status: { in: OPEN_WO_STATUSES }, deletedAt: null } },
+          ] }
+        : { status }),
     };
     applyAssignedVesselScope(session, where, vesselCode);
     return where;
@@ -500,8 +512,11 @@ export async function listPendingApprovals(
       ...mapSr(r),
       authorizedByName: r.autorizadoByName ?? null,
       authorizedAt: iso(r.autorizadoAt),
-      sentAt: r.status === "IN_PROGRESS" ? iso(r.startedAt) : null,
+      sentAt: r.status === "IN_PROGRESS" || r.status === "COMPLETED" ? iso(r.startedAt) : null,
       routeEntryCount: routeCountBySr.get(r.id) ?? 0,
+      // Recibida (cerrada): la fila queda en gris con la fecha y la conformidad.
+      receivedAt: r.status === "COMPLETED" ? iso(r.receivedAt) : null,
+      receptionConform: r.status === "COMPLETED" ? (r.receptionConform ?? null) : null,
     })),
   };
 }

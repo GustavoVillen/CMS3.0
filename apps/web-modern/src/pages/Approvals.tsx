@@ -78,6 +78,9 @@ interface PendingItem {
   spareUsageCount?: number;
   /** Sólo las SS autorizadas (srExecute): cuándo se mandó al proveedor. */
   sentAt?: string | null;
+  /** SS ya recibida (cerrada) cuya OT sigue abierta: sigue en la lista, en gris. */
+  receivedAt?: string | null;
+  receptionConform?: boolean | null;
   /** Sólo las SS autorizadas: novedades asentadas en su hoja de ruta. */
   routeEntryCount?: number;
   /** Sólo las OT autorizadas: permisos de trabajo vinculados. */
@@ -232,6 +235,11 @@ export const ApprovalsPage: React.FC = () => {
     ];
   }, [data]);
 
+  /** Fecha de cierre de la fila: cerrada en esta tanda, o SS ya recibida (su OT sigue abierta). */
+  const closedAtOf = useCallback((r: Row): string | undefined =>
+    closed[rowKey(r)] ?? (r.kind === "SR" && r.status === "COMPLETED" ? fmtDate(r.receivedAt ?? null) : undefined),
+  [closed]);
+
   /** Quién aprobó: si vino de las bandejas de autorizar o de ejecución, el paso
    *  ya está firmado y el servicio manda ese nombre en `requestedByName`. */
   const approvedOf = useCallback((r: Row): Signed | null => {
@@ -266,7 +274,7 @@ export const ApprovalsPage: React.FC = () => {
   // filas de acá (OT y SS). "Sin enviar a aprobar" no va: lo que está en
   // preparación no llega a esta bandeja (decisión del usuario).
   const cardMatch = useCallback((r: Row, key: CardKey): boolean => {
-    if (closed[rowKey(r)]) return false;   // cerrada en esta tanda: ya no cuenta
+    if (closedAtOf(r)) return false;   // cerrada (en esta tanda o ya recibida): ya no cuenta
     const deferred = r.status === "ON_HOLD" || r.status === "DEFERRED";
     switch (key) {
       case "overdue":    return !deferred && (daysToDue(r.dueDate) ?? 0) < 0;
@@ -280,7 +288,7 @@ export const ApprovalsPage: React.FC = () => {
       case "srInProgress": return r.kind === "SR" && (r.status === "IN_PROGRESS" || !!sent[rowKey(r)]);
       case "postponed":  return deferred;
     }
-  }, [closed, sent, approvedOf, authorizedOf, can]);
+  }, [closedAtOf, sent, approvedOf, authorizedOf, can]);
 
   const cards = useMemo(() => {
     const n = (key: CardKey) => (data ? rows.filter(r => cardMatch(r, key)).length : null);
@@ -607,7 +615,7 @@ export const ApprovalsPage: React.FC = () => {
       const wClose = t("approvals.exec.closeSr");
       const authorized = !!authorizedOf(r);
       const sentInfo = sent[rowKey(r)] ?? (r.sentAt ? { at: fmtDate(r.sentAt), to: "" } : null);
-      const closedAt = closed[rowKey(r)];
+      const closedAt = closedAtOf(r);
       const waitWhy = t("approvals.pendingAuthorization");
       const sendLabel = r.providers[0] ? t("ss.guide.sendProviderTo").replace("{provider}", r.providers[0]) : wSend;
       const routeCount = r.routeEntryCount ?? 0;
@@ -665,7 +673,7 @@ export const ApprovalsPage: React.FC = () => {
     const wPermits  = t("approvals.col.permits");
     const wSpares   = t("approvals.col.spares");
     const wClose    = t("wo.modal.closeWO");
-    const closedAt  = closed[rowKey(r)];
+    const closedAt  = closedAtOf(r);
     if (closedAt) {
       const why = t("approvals.exec.woClosed");
       return (
@@ -929,7 +937,7 @@ export const ApprovalsPage: React.FC = () => {
                   );
                 }
                 const dd = daysToDue(r.dueDate);
-                const isClosed = !!closed[rowKey(r)];
+                const isClosed = !!closedAtOf(r);
                 const isDone = !!authorizedOf(r);
                 // Mismo semáforo que la Planilla: rojo vencida, amarillo por
                 // vencer, verde cuando la firma está completa, gris ya cerrada.
@@ -1006,6 +1014,12 @@ export const ApprovalsPage: React.FC = () => {
                         {provider && (
                           <span className="block text-[10px] font-semibold opacity-80 truncate">
                             {t("approvals.provider").replace("{name}", provider)}
+                          </span>
+                        )}
+                        {r.kind === "SR" && r.status === "COMPLETED" && (
+                          <span className="mt-0.5 inline-block rounded-full border border-fg/20 bg-fg/5 px-1.5 py-px text-[9.5px] font-extrabold text-fg/70">
+                            {t(r.receptionConform === false ? "approvals.srClosedNc" : "approvals.srClosed")
+                              .replace("{date}", fmtDate(r.receivedAt ?? null))}
                           </span>
                         )}
                       </td>

@@ -5390,6 +5390,8 @@ const dict = {
   "approvals.exec.docxFailed":    { es: "No se pudo generar el documento Word. Intentá de nuevo.", en: "The Word document could not be generated. Try again.", pt: "Não foi possível gerar o documento Word. Tente novamente." },
   "approvals.exec.manualSent":    { es: "No hay casilla de correo configurada: se bajó el formulario y se abrió tu correo ya armado. Adjuntalo y mandalo desde tu cuenta.", en: "No system mailbox is configured: the form was downloaded and your email was opened, ready to go. Attach it and send it from your account.", pt: "Não há caixa de e-mail configurada: o formulário foi baixado e seu e-mail foi aberto já pronto. Anexe-o e envie da sua conta." },
   "approvals.signed.closed":      { es: "Cerrada",                    en: "Closed",                     pt: "Fechada" },
+  "approvals.srClosed":           { es: "SS cerrada · recibida conforme el {date}", en: "SR closed · received as satisfactory on {date}", pt: "SS fechada · recebida conforme em {date}" },
+  "approvals.srClosedNc":         { es: "SS cerrada · recibida NO conforme el {date}", en: "SR closed · received as NOT satisfactory on {date}", pt: "SS fechada · recebida NÃO conforme em {date}" },
   "approvals.col.close":          { es: "Cerrar OT / SS",             en: "Close WO / SR",              pt: "Fechar OS / SS" },
   "approvals.exec.yourSign":      { es: "falta tu firma",             en: "needs your signature",       pt: "falta sua assinatura" },
   "approvals.exec.send":          { es: "Enviar",                     en: "Send",                       pt: "Enviar" },
