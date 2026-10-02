@@ -85,8 +85,9 @@ QUÉ REVISAR — la OT COMPLETA, no sólo el cierre
 - Seguridad: ¿el trabajo requería análisis de riesgo? ¿Hay algo en la evidencia que muestre un trabajo inseguro (se trabajó sobre un equipo energizado o presurizado, hubo un incidente)?
 - LOTO y Permisos de Trabajo — exigencia NIVEL ${LOTO_STRICTNESS} DE 10 (baja, definida por la empresa). Que falte un LOTO o un Permiso de Trabajo vinculado NO es hallazgo MAYOR ni MENOR y NO cambia el veredicto: como mucho va UNA observación (severidad OBSERVACION) recomendando registrarlo la próxima vez. Sólo sube a MENOR si la propia OT cuenta que se trabajó sin aislar un equipo energizado o presurizado, o si hubo un incidente. No preguntes por números de permiso ni certificados LOTO.
 - Registro (ISM 10.2.4): ¿quedó quién lo hizo, cuándo, con qué horas de máquina, qué repuestos se usaron?
-- Repuestos: ¿lo planificado coincide con lo consumido? Una diferencia sin explicar es un hallazgo.
-- Consumo sin registrar: si la evidencia (avances, observaciones, respuestas del usuario, detalle) dice que se USÓ, CAMBIÓ o REPUSO un repuesto o un material con una cantidad conocida, y eso no figura en materiales.consumidosRegistrados, ni en materiales.aConsumirEnEsteCierre, ni como MATERIAL en materiales.planificados, va en "consumoSinRegistrar" además del hallazgo. La cantidad tiene que estar dicha o ser inequívoca ("se cambió el filtro" = 1). Si no se sabe cuánto se usó, no lo pongas ahí: preguntalo. Inspeccionar, medir o verificar no consume nada.
+- Repuestos: ¿los repuestos previstos (materiales.repuestosPrevistos) coinciden con los consumidos (materiales.consumidosRegistrados y materiales.aConsumirEnEsteCierre)? Una diferencia sin explicar es un hallazgo.
+- Materiales (aceite, grasa, trapos, sellador…): no mueven stock, así que NUNCA aparecen entre los consumidos. Su registro es materiales.materialesRegistrados. Si lo que se usó figura ahí, el consumo ESTÁ registrado: no es hallazgo, ni próximo paso, ni va en "consumoSinRegistrar".
+- Consumo sin registrar: si la evidencia (avances, observaciones, respuestas del usuario, detalle) dice que se USÓ, CAMBIÓ o REPUSO un repuesto o un material con una cantidad conocida, y eso no figura en materiales.consumidosRegistrados, ni en materiales.aConsumirEnEsteCierre, ni en materiales.materialesRegistrados, va en "consumoSinRegistrar" además del hallazgo. La cantidad tiene que estar dicha o ser inequívoca ("se cambió el filtro" = 1). Si no se sabe cuánto se usó, no lo pongas ahí: preguntalo. Inspeccionar, medir o verificar no consume nada.
 - Pendientes: si quedó algo pendiente, o si la tarea NO se concluyó, eso NO se cierra y se olvida: tiene que quedar planificado en algún lado.
 - Trazabilidad: ¿hay defecto, diferimiento, MOC, RCA o SS que debería haberse abierto y no se abrió?
 - Plan de mantenimiento: si la OT viene de un plan, ¿el cierre alcanza para acreditar la ejecución del plan?
@@ -210,6 +211,26 @@ export interface WoCloseAuditDraft {
   taskCompleted?: string | null;
   /** Repuestos que se van a descontar del stock al cerrar. */
   spareUsages?: Array<{ spareId?: string | null; name?: string | null; qty?: number | null; unit?: string | null }>;
+  /**
+   * Repuestos y materiales de la sección 4 tal como están en pantalla. Se
+   * guardan solos con una demora: si el usuario carga uno y cierra enseguida,
+   * la base todavía no lo tiene. Sin esto la auditoría leía la base y lo daba
+   * por faltante. Ausente: se usa lo guardado.
+   */
+  plannedItems?: Array<{ kind?: string | null; description?: string | null; quantity?: number | null; unit?: string | null }>;
+}
+
+/** Ítems de la sección 4 que ve la auditoría: los de pantalla si vinieron, si no los guardados. */
+function woItems(ctx: any, draft: WoCloseAuditDraft): Array<{ kind: string; description: string; quantity: number | null; unit: string | null }> {
+  const raw: any[] = Array.isArray(draft.plannedItems) ? draft.plannedItems : (ctx.plannedItems ?? []);
+  return raw
+    .map(i => ({
+      kind: i?.kind === "MATERIAL" ? "MATERIAL" : "SPARE",
+      description: String(i?.description ?? "").trim(),
+      quantity: i?.quantity == null ? null : Number(i.quantity),
+      unit: i?.unit ? String(i.unit) : null,
+    }))
+    .filter(i => i.description);
 }
 
 /**
@@ -361,8 +382,8 @@ async function resolveUnregisteredConsumption(
       ...movements.map(m => m.spareId),
       ...(draft.spareUsages ?? []).map(u => u.spareId ?? "").filter(Boolean),
     ]);
-    const materials: string[] = (ctx.plannedItems ?? [])
-      .filter((i: any) => i.kind === "MATERIAL")
+    const materials: string[] = woItems(ctx, draft)
+      .filter(i => i.kind === "MATERIAL")
       .map((i: any) => normalizeText(String(i.description ?? "")))
       .filter(Boolean);
     const alreadyMaterial = (d: string) => {
@@ -503,7 +524,13 @@ function buildAuditPayload(
       permisosDeTrabajoVinculados: ctx.permitTypes ?? [],
     },
     materiales: {
-      planificados: ctx.plannedItems ?? [],
+      // Los dos recuadros de la sección 4 significan cosas distintas: los
+      // repuestos son lo PREVISTO (se descuentan al consumirse); los materiales
+      // no mueven stock y la fila ES el registro de lo usado. Antes iban juntos
+      // como "planificados" y la IA marcaba como no registrado un aceite que
+      // estaba cargado en Materiales.
+      repuestosPrevistos: woItems(ctx, draft).filter(i => i.kind !== "MATERIAL"),
+      materialesRegistrados: woItems(ctx, draft).filter(i => i.kind === "MATERIAL"),
       consumidosRegistrados: ctx.spareUsages ?? [],
       // Lo que el usuario está por descontar en este mismo cierre.
       aConsumirEnEsteCierre: draft.spareUsages ?? [],

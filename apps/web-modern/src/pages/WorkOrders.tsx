@@ -4941,6 +4941,12 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           pendingDetail: regiForm.pendingDetail,
           taskCompleted: regiForm.taskCompleted,
           spareUsages: spareUsages.map(u => ({ spareId: u.spareId, name: u.spareName ?? null, qty: u.qty, unit: u.unit })),
+          // La sección 4 como está en pantalla: se guarda sola con demora y la
+          // auditoría no puede dar por faltante lo que el usuario recién cargó.
+          // Sólo donde la sección existe (en el resto se usa lo guardado).
+          plannedItems: isMercurio
+            ? plannedItems.filter(i => i.description.trim()).map(i => ({ kind: i.kind, description: i.description, quantity: i.quantity, unit: i.unit }))
+            : undefined,
         }}
         pendingFields={auditPendingFields()}
         onRegisterConsumption={registerAuditConsumption}
