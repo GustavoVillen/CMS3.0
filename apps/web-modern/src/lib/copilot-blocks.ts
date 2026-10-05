@@ -14,11 +14,16 @@ export interface NumberedOption { n: string; label: string }
  * escribir el número. Hacen falta al menos dos para que sea una elección.
  */
 export function extractNumberedOptions(text: string): NumberedOption[] {
-  const out: NumberedOption[] = [];
+  let out: NumberedOption[] = [];
   for (const line of text.split("\n")) {
     const m = line.match(/^\s*(\d{1,2})[.)]\s+(.+?)\s*$/);
+    if (!m) continue;
+    // Cada "1." arranca una lista nueva y vale sólo la última: si el mensaje
+    // enumera datos (las OT) y después pregunta (Sí / No), los botones son la
+    // pregunta. Antes salían las dos listas y había dos "1" y dos "2".
+    if (m[1] === "1") out = [];
     // El botón muestra texto plano: los links quedan con su texto ([x](/ruta) → x).
-    if (m) out.push({ n: m[1]!, label: m[2]!.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\(\s*\)/g, "").replace(/\*\*/g, "").trim() });
+    out.push({ n: m[1]!, label: m[2]!.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\(\s*\)/g, "").replace(/\*\*/g, "").trim() });
   }
   return out.length >= 2 ? out.slice(0, 30) : [];
 }
