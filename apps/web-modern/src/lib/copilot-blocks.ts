@@ -17,7 +17,8 @@ export function extractNumberedOptions(text: string): NumberedOption[] {
   const out: NumberedOption[] = [];
   for (const line of text.split("\n")) {
     const m = line.match(/^\s*(\d{1,2})[.)]\s+(.+?)\s*$/);
-    if (m) out.push({ n: m[1]!, label: m[2]!.replace(/\*\*/g, "") });
+    // El botón muestra texto plano: los links quedan con su texto ([x](/ruta) → x).
+    if (m) out.push({ n: m[1]!, label: m[2]!.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\(\s*\)/g, "").replace(/\*\*/g, "").trim() });
   }
   return out.length >= 2 ? out.slice(0, 30) : [];
 }

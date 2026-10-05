@@ -200,9 +200,11 @@ CODE-TO-NATURAL CONVERSION (mandatory when speaking to the user):
   "Orden de trabajo número {SEQ-without-leading-zeros} del 20{YY}".
   Example: OT-DONCHI-26-0003 → "Orden de trabajo número 3 del 2026".
   Do NOT pronounce the raw code unless the user explicitly asked for it.
-- Inside Markdown LINKS, keep the raw code as the link target/text:
+- The raw code goes ONLY inside the link target (the URL), never as visible text: name the order ONCE, as the link text.
   ✓ [Orden de trabajo número 3 del 2026](/work-orders?autoCode=OT-DONCHI-26-0003)
   ✓ "Encontré el registro en la orden de trabajo número 3 del 2026"
+  ✗ **Orden de trabajo número 3 del 2026** ([OT-DONCHI-26-0003](/work-orders?autoCode=OT-DONCHI-26-0003))  ← the code shown twice
+- VESSELS BY NAME, ALWAYS: tool results carry "vesselName" next to "vesselCode". Name the vessel by vesselName ("DON CHICUETO", "MAO 02"), never by its code ("DCH", "M02", "MGT03") — not in prose, lists, headings or options. The code is only for tool inputs and URLs.
 - Apply the same pattern to other code formats when relevant:
   · Maintenance plan taskCodes (e.g. LATERE-BBA-1M-M) → say the plan title instead
   · Defect codes → say "el defecto número X" if applicable
@@ -442,6 +444,7 @@ const CORE_COPILOT_TOOLS: Anthropic.Tool[] = [
       properties: {
         vesselCode: { type: "string", description: "Filter by vessel code (required)" },
         assetId: { type: "string", description: "Filter by asset ID (optional)" },
+        workOrderCode: { type: "string", description: "Exact work order code (e.g. OT-M02-26-0436). USE THIS whenever the user names a specific order by code or number, in ANY status: without it you only see the latest orders and may wrongly say the order does not exist." },
         textSearch: { type: "string", description: "Case-insensitive keyword search across title, description AND observations (the task/work text). Words are split and matched as an AND of substrings, so word order and filler words don't matter. USE THIS for 'was task X done?' / 'when was X done?' queries (e.g. 'filtro aire', 'cambio aceite', 'inyectores'). Prefer SINGLE KEYWORDS or roots over full phrases. (optional but strongly recommended for task-specific queries)" },
         status: {
           type: "string",
@@ -754,6 +757,43 @@ function searchKnowledgeDocs(
   return wrapUntrusted(JSON.stringify(out));
 }
 
+/**
+ * Nombre de cada buque de la empresa, por código. Las tools devuelven casi
+ * siempre sólo `vesselCode` (M02, MGT03) y la IA terminaba nombrando al buque
+ * por el código. Cache corto: los buques casi no cambian.
+ */
+const vesselNamesCache = new Map<string, { at: number; names: Map<string, string> }>();
+async function vesselNamesOf(tenantId: string): Promise<Map<string, string>> {
+  const hit = vesselNamesCache.get(tenantId);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.names;
+  const prisma = getPrismaClient() as unknown as {
+    vessel: { findMany(a: unknown): Promise<Array<{ code: string; name: string }>> };
+  } | null;
+  const rows = prisma ? await prisma.vessel.findMany({ where: { tenantId }, select: { code: true, name: true } }) : [];
+  const names = new Map(rows.map(r => [r.code, r.name]));
+  vesselNamesCache.set(tenantId, { at: Date.now(), names });
+  return names;
+}
+
+/** Agrega `vesselName` al lado de cada `vesselCode` del resultado de una tool que no lo traiga. */
+function addVesselNames(result: string, names: Map<string, string>): string {
+  if (names.size === 0 || !result.includes("vesselCode")) return result;
+  let parsed: unknown;
+  try { parsed = JSON.parse(result); } catch { return result; }
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (!node || typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    if (typeof obj.vesselCode === "string" && obj.vesselName == null) {
+      const name = names.get(obj.vesselCode);
+      if (name) obj.vesselName = name;
+    }
+    Object.values(obj).forEach(walk);
+  };
+  walk(parsed);
+  return JSON.stringify(parsed);
+}
+
 async function executeCopilotTool(
   name: string,
   input: Record<string, unknown>,
@@ -895,6 +935,11 @@ async function executeCopilotTool(
       if (input.assetId) where.assetId = input.assetId;
       if (input.status) where.status = input.status;
       if (input.type) where.type = input.type;
+      // Una OT nombrada por código se busca directo: antes el copiloto miraba
+      // sólo las últimas y decía que OT-M02-26-0436 "no figura" (existía, PLANNED).
+      if (typeof input.workOrderCode === "string" && input.workOrderCode.trim()) {
+        where.workOrderCode = { equals: input.workOrderCode.trim(), mode: "insensitive" };
+      }
       // Búsqueda por palabra clave en título + descripción + observaciones.
       // Sin esto, el copiloto solo veía las 20 OT más recientes y no encontraba
       // tareas ejecutadas hace meses (ej. "cambio de filtro de aire").
@@ -2086,14 +2131,14 @@ export async function streamCopilotoChat(
         toolUseBlocks.map(async (block) => ({
           type: "tool_result" as const,
           tool_use_id: block.id,
-          content: await executeCopilotTool(
+          content: addVesselNames(await executeCopilotTool(
             block.name,
             block.input as Record<string, unknown>,
             req.tenantId,
             scope,
             req.session,
             req.locale,
-          ),
+          ), await vesselNamesOf(req.tenantId)),
         })),
       );
       loopMessages = [

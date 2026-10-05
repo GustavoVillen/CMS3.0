@@ -630,6 +630,10 @@ const renderMarkdownLite = (
   keyPrefix: string,
   onInternalLinkClick: (path: string) => void,
 ): React.ReactNode => {
+  // Títulos ("### Algo") en negrita y viñetas "* " como "• ": antes se veían los símbolos crudos.
+  content = content
+    .replace(/^[ \t]*#{1,6}[ \t]+(.+?)[ \t]*$/gm, "**$1**")
+    .replace(/^([ \t]*)[*-][ \t]+/gm, "$1• ");
   const nodes: React.ReactNode[] = [];
   const linkRegex = /\[([^\]]+)]\((\/[^\s)]+)\)/g;
   let lastIndex = 0;
