@@ -4,13 +4,18 @@ import { ShieldCheck, Loader2 } from "lucide-react";
 import { usePlatformAuth } from "../../lib/platform-auth";
 import { PasswordInput } from "../../components/PasswordInput";
 
+const friendly = (e: string) =>
+  e === "Credenciales inválidas" ? "Correo o contraseña incorrectos"
+  : e === "Error de conexión" ? "No hay conexión con el servidor. Revisá tu internet e intentá de nuevo."
+  : "No pudimos validar tu ingreso. Intentá de nuevo en un momento.";
+
 export const PlatformLogin: React.FC = () => {
   const { login, loading, error, isAuthenticated } = usePlatformAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/platform", { replace: true });
+    if (isAuthenticated) navigate("/platform/home", { replace: true });
   }, [isAuthenticated, navigate]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,42 +30,42 @@ export const PlatformLogin: React.FC = () => {
       />
       <div className="relative w-full max-w-md">
         <div className="flex items-center justify-center gap-3 mb-10">
-          <div className="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-            <ShieldCheck className="text-red-700 dark:text-red-400 w-7 h-7" />
+          <div className="w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 flex items-center justify-center">
+            <ShieldCheck className="text-accent w-7 h-7" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-fg tracking-tight">Super Admin</h1>
-            <p className="text-xs text-text-industrial/40 tracking-widest uppercase">CMS3.0 Platform</p>
+            <h1 className="text-2xl font-bold text-fg tracking-tight">Administración</h1>
+            <p className="text-sm text-text-industrial/50">Consola general del sistema</p>
           </div>
         </div>
 
         <div className="bento-card">
-          <h2 className="text-lg font-bold text-fg mb-1">Acceso restringido</h2>
-          <p className="text-sm text-text-industrial/50 mb-8">Solo administradores de plataforma</p>
+          <h2 className="text-lg font-bold text-fg mb-1">Ingresar</h2>
+          <p className="text-sm text-text-industrial/50 mb-8">Sólo para el equipo de administración</p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Email</label>
+              <label className="block text-xs font-semibold text-text-industrial/60 mb-1.5">Correo</label>
               <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
-                placeholder="admin@localhost" />
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                placeholder="tu-correo@empresa.com" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-industrial/60 mb-1.5 uppercase tracking-wider">Contraseña</label>
+              <label className="block text-xs font-semibold text-text-industrial/60 mb-1.5">Contraseña</label>
               <PasswordInput value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required
-                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                className="w-full bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
                 placeholder="••••••••" />
             </div>
-            {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>}
+            {error && <div role="alert" className="bg-danger/10 border border-danger/25 rounded-xl px-4 py-3 text-sm text-danger">{friendly(error)}</div>}
             <button type="submit" disabled={loading}
-              className="w-full py-3 rounded-xl bg-red-500/80 text-fg font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+              className="w-full py-3 rounded-xl bg-accent text-white font-bold text-sm hover:bg-accent/90 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</> : "Ingresar"}
             </button>
           </form>
         </div>
 
         <p className="text-center text-xs text-text-industrial/20 mt-6">
-          <a href="/" className="hover:text-text-industrial/40 transition-colors">← Volver al portal de tenant</a>
+          <a href="/" className="hover:text-text-industrial/40 transition-colors">← Volver al sistema</a>
         </p>
       </div>
     </div>

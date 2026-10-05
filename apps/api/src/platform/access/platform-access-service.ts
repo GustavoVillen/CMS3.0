@@ -16,6 +16,7 @@
 import { getPrismaClient } from "../data/prisma-client";
 import { resolveIpGeoMany, type IpGeoInfo } from "./ip-geo-service";
 import { describeUserAgent } from "../../http/user-agent";
+import { getTenantNames, getVesselNames, vesselKey } from "./platform-name-lookup";
 
 // ── Tipos de salida ──────────────────────────────────────────────────────────
 
@@ -39,8 +40,12 @@ export interface ActiveUserRow {
   /** Nombre y apellido; null si el usuario no los tiene cargados. */
   userName: string | null;
   tenantSlug: string;
+  /** Nombre comercial de la empresa; el slug si no tiene. */
+  tenantName: string;
   userRole: string | null;
   vesselCode: string | null;
+  /** Nombre del buque; null si no hay buque o no se encontró. */
+  vesselName: string | null;
   lastRoute: string | null;
   lastSeenAt: string;
   requestCount: number;
@@ -54,6 +59,7 @@ export interface LoginHistoryRow {
   scope: "tenant" | "platform";
   success: boolean;
   tenantSlug: string | null;
+  tenantName: string | null;
   userEmail: string | null;
   userName: string | null;
   userRole: string | null;
@@ -191,6 +197,22 @@ export async function getActiveUsers(windowMinutes = 15): Promise<ActiveUserRow[
     ORDER BY u."userId", u."createdAt" DESC
   `;
 
+  // «Qué está mirando»: el último pedido suele ser un chequeo de fondo (avisos,
+  // perfil, permisos) que la app hace sola cada tantos segundos. Se toma la
+  // última ruta que no sea de ese tipo.
+  if (rows.length) {
+    const screens = await prisma.$queryRaw<Array<{ userId: string; route: string | null }>>`
+      SELECT DISTINCT ON ("userId") "userId", "route"
+      FROM "UsageEvent"
+      WHERE "createdAt" >= ${since} AND "kind" = 'http_request' AND "route" IS NOT NULL
+        AND "route" NOT LIKE '/app/notifications%' AND "route" NOT LIKE '/app/me%'
+        AND "route" NOT LIKE '%role-permissions%' AND "route" NOT LIKE '/app/copiloto/tts%'
+        AND "route" NOT LIKE '/app/health%' AND "route" NOT LIKE '/app/usage%'
+      ORDER BY "userId", "createdAt" DESC`;
+    const screenByUser = new Map(screens.map((s) => [s.userId, s.route]));
+    for (const r of rows) r.lastRoute = screenByUser.get(r.userId) ?? r.lastRoute;
+  }
+
   const geoByIp = await resolveIpGeoMany(rows.map((r) => r.ipAddress));
 
   // El User-Agent no viaja en UsageEvent (sería redundante en cada request):
@@ -206,6 +228,10 @@ export async function getActiveUsers(windowMinutes = 15): Promise<ActiveUserRow[
         select: { id: true, firstName: true, lastName: true },
       })
     : [];
+  const [tenantNames, vesselNames] = await Promise.all([
+    getTenantNames(prisma),
+    getVesselNames(prisma, rows),
+  ]);
   const nameById = new Map(
     people.map((p) => [p.id, [p.firstName, p.lastName].filter(Boolean).join(" ").trim()]),
   );
@@ -216,8 +242,10 @@ export async function getActiveUsers(windowMinutes = 15): Promise<ActiveUserRow[
       userEmail: r.userEmail,
       userName: nameById.get(r.userId) || null,
       tenantSlug: r.tenantSlug,
+      tenantName: tenantNames.get(r.tenantSlug) ?? r.tenantSlug,
       userRole: r.userRole,
       vesselCode: r.vesselCode,
+      vesselName: r.vesselCode ? vesselNames.get(vesselKey(r.tenantSlug, r.vesselCode)) ?? null : null,
       lastRoute: r.lastRoute,
       lastSeenAt: r.lastSeenAt.toISOString(),
       requestCount: Number(r.requestCount ?? 0),
@@ -356,10 +384,14 @@ export async function getLoginHistory(
     };
   });
 
-  const geoByIp = await resolveIpGeoMany(rows.map((r) => r.ip));
+  const [geoByIp, tenantNames] = await Promise.all([
+    resolveIpGeoMany(rows.map((r) => r.ip)),
+    getTenantNames(prisma),
+  ]);
 
   const items: LoginHistoryRow[] = rows.map(({ ip, ...rest }) => ({
     ...rest,
+    tenantName: rest.tenantSlug ? tenantNames.get(rest.tenantSlug) ?? rest.tenantSlug : null,
     location: buildLocation(ip, ip ? geoByIp.get(ip.replace(/^::ffff:/i, "")) : undefined, null, null),
   }));
 

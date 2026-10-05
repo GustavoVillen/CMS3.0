@@ -1055,6 +1055,9 @@ model CopilotQuestion {
   vesselCode    String?
   screen        String?
   question      String   @db.Text
+  // Lo que contestó el copiloto (sin el bloque de acciones). Null en las
+  // preguntas anteriores a oct-2026 o si la respuesta falló.
+  answer        String?  @db.Text
   hasAttachment Boolean  @default(false)
   createdAt     DateTime @default(now())
 

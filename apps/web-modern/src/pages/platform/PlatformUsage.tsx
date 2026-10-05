@@ -1,10 +1,11 @@
 import React from "react";
-import { Activity, Download, LineChart as LineChartIcon, X, Filter, ChevronDown, ChevronUp } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { Download, Wrench } from "lucide-react";
 import { platformFetch, platformAuthedFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
-import { PageHeader } from "../../components/PageHeader";
-import { useTheme } from "../../lib/theme";
+import { PageIntro, Card, KpiCard, KpiRow, BarList, FilterBar, FilterField, Segmented, EmptyState, inputCls } from "../../components/platform/PlatformUi";
+import { featureLabel, FEATURE_OPTIONS, screenLabel, fmtWhen, fmtUsd, fmtBytes, fmtInt } from "../../lib/platform-labels";
+
+type Kind = "ai_call" | "http_request";
 
 interface UsageEvent {
   id: string;
@@ -12,13 +13,11 @@ interface UsageEvent {
   tenantSlug: string;
   userEmail: string;
   vesselCode: string | null;
-  kind: "ai_call" | "http_request";
+  kind: Kind;
   feature: string | null;
   model: string | null;
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
   costUsd: number;
   route: string | null;
   method: string | null;
@@ -27,435 +26,158 @@ interface UsageEvent {
   bytesOut: number;
   latencyMs: number | null;
   errored: boolean;
-  ipAddress: string | null;
 }
-
 interface ListResponse { items: UsageEvent[]; total: number; }
 
-function fmtKb(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+interface Summary {
+  totals: { events: number; costUsd: number; bytes: number; users: number };
+  byDay: Array<{ day: string; events: number; costUsd: number; bytes: number }>;
+  byUser: Array<{ tenantSlug: string; tenantName: string | null; userEmail: string; userName: string | null; events: number; costUsd: number; bytes: number }>;
+  byFeature: Array<{ feature: string | null; events: number; costUsd: number; bytes: number }>;
+  byVessel: Array<{ tenantSlug: string; tenantName: string | null; vesselCode: string | null; vesselName: string | null; events: number; costUsd: number; bytes: number }>;
+  truncated?: boolean;
 }
 
-function fmtTok(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
-  return `${(n / 1_000_000).toFixed(2)}M`;
-}
-
-function fmtUsd(n: number): string {
-  if (n === 0) return "—";
-  if (n < 0.01) return `$${n.toFixed(5)}`;
-  return `$${n.toFixed(4)}`;
-}
-
-// ── Aggregation by minute ────────────────────────────────────────────────────
-// One bucket per (minute, tenant, user, [feature|route]) combination.
-
-interface AggregatedRow {
-  id: string;              // synthetic key for React
-  createdAt: string;       // ISO of the bucket minute (truncated)
+// Fila de la lista: un evento suelto o varios del mismo minuto, persona y función.
+interface Row {
+  id: string;
+  createdAt: string;
   tenantSlug: string;
   userEmail: string;
   vesselCode: string | null;
-  kind: "ai_call" | "http_request";
   feature: string | null;
+  screen: string;
   model: string | null;
-  route: string | null;
-  method: string | null;
-  requests: number;
+  count: number;
+  costUsd: number;
   inputTokens: number;
   outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  costUsd: number;
-  bytesIn: number;
-  bytesOut: number;
-  latencyMs: number | null; // average
-  errored: boolean;         // true if any in the bucket errored
+  bytes: number;
+  latencyMs: number | null;
+  method: string | null;
   statusCode: number | null;
-  ipAddress: string | null; // last IP seen in the bucket (typically only one per user-minute)
+  route: string | null;
 }
 
-function truncateToMinute(iso: string): string {
-  const d = new Date(iso);
-  d.setSeconds(0, 0);
-  return d.toISOString();
+const PERIODS = [
+  { value: "month", label: "Este mes" },
+  { value: "lastMonth", label: "Mes pasado" },
+  { value: "7d", label: "Últimos 7 días" },
+  { value: "30d", label: "Últimos 30 días" },
+  { value: "custom", label: "Elegir fechas…" },
+] as const;
+type Period = typeof PERIODS[number]["value"];
+
+const DAY_MS = 86_400_000;
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parseDay = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+
+/** Rango [desde, hasta] (días completos) del período elegido. */
+function rangeOf(period: Period, cFrom: string, cTo: string): { from: Date | null; to: Date } {
+  const today = startOfDay(new Date());
+  if (period === "month") return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today };
+  if (period === "lastMonth") return { from: new Date(today.getFullYear(), today.getMonth() - 1, 1), to: new Date(today.getFullYear(), today.getMonth(), 0) };
+  if (period === "7d") return { from: new Date(today.getTime() - 6 * DAY_MS), to: today };
+  if (period === "30d") return { from: new Date(today.getTime() - 29 * DAY_MS), to: today };
+  return { from: cFrom ? parseDay(cFrom) : null, to: cTo ? parseDay(cTo) : today };
 }
 
-function aggregateByMinute(items: UsageEvent[]): AggregatedRow[] {
-  const buckets = new Map<string, AggregatedRow & { _latencySum: number; _latencyCount: number }>();
+const WEEKDAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const fmtDM = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
 
-  for (const it of items) {
-    const minute = truncateToMinute(it.createdAt);
-    // Different keys per kind to keep aggregation meaningful:
-    //   AI  : minute + tenant + user + feature + model
-    //   HTTP: minute + tenant + user (one row per user-minute — route/method
-    //         omitted on purpose; use "Sin agrupar" to drill into endpoints)
-    const key = it.kind === "ai_call"
-      ? `${minute}|${it.tenantSlug}|${it.userEmail}|${it.feature ?? ""}|${it.model ?? ""}`
-      : `${minute}|${it.tenantSlug}|${it.userEmail}`;
+// ── Gráfico de barras por día (HTML/CSS) ─────────────────────────────────────
 
-    let b = buckets.get(key);
-    if (!b) {
-      b = {
-        id: key,
-        createdAt: minute,
-        tenantSlug: it.tenantSlug,
-        userEmail: it.userEmail,
-        vesselCode: it.vesselCode,
-        kind: it.kind,
-        feature: it.feature,
-        model: it.model,
-        route: it.route,
-        method: it.method,
-        requests: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheCreationTokens: 0,
-        costUsd: 0,
-        bytesIn: 0,
-        bytesOut: 0,
-        latencyMs: 0,
-        errored: false,
-        statusCode: it.statusCode,
-        ipAddress: it.ipAddress,
-        _latencySum: 0,
-        _latencyCount: 0,
-      };
-      buckets.set(key, b);
-    }
-    if (it.ipAddress) b.ipAddress = it.ipAddress;
-    b.requests += 1;
-    b.inputTokens += it.inputTokens;
-    b.outputTokens += it.outputTokens;
-    b.cacheReadTokens += it.cacheReadTokens;
-    b.cacheCreationTokens += it.cacheCreationTokens;
-    b.costUsd += it.costUsd;
-    b.bytesIn += it.bytesIn;
-    b.bytesOut += it.bytesOut;
-    if (it.errored) b.errored = true;
-    if (it.latencyMs != null) {
-      b._latencySum += it.latencyMs;
-      b._latencyCount += 1;
-    }
-  }
-
-  const out: AggregatedRow[] = [];
-  for (const b of buckets.values()) {
-    b.latencyMs = b._latencyCount > 0 ? Math.round(b._latencySum / b._latencyCount) : null;
-    out.push(b);
-  }
-  // Most recent minute first
-  out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return out;
-}
-
-// ── Nombre legible de cada función de IA ─────────────────────────────────────
-// La clave es la que graba cada servicio en UsageEvent.feature. Una nueva sin
-// entrada acá se muestra con su nombre interno.
-
-const FEATURE_LABELS: Record<string, string> = {
-  copiloto:                                  "Copiloto (pregunta)",
-  wo_close_audit:                            "OT: revisión al cerrar",
-  sr_complete_audit:                         "SS: revisión al completar",
-  wo_acceptance_criteria_suggestion:         "OT: sugerir criterios de aceptación",
-  wo_plan_link_suggestion:                   "OT: sugerir tarea del plan",
-  wo_asset_suggestion:                       "OT: sugerir equipo",
-  wo_multi_plan_summary:                     "OT: resumen de varias tareas",
-  wo_rewrite_deficiencies:                   "OT: redactar deficiencias",
-  wo_scan_extraction:                        "OT: leer OT escaneada",
-  wo_progress_ocr:                           "Avance de OT: leer foto/escaneo",
-  wo_progress_rewrite_observations:          "Avance de OT: redactar observaciones",
-  wo_progress_detect_spares:                 "Avance de OT: detectar repuestos usados",
-  defect_description_suggestion:             "Defecto: redactar descripción",
-  defect_photo_analysis:                     "Defecto: analizar foto",
-  defect_rca_suggestion:                     "Defecto: sugerir análisis de causa",
-  deficiency_detection:                      "Defecto: detectar deficiencia en el texto",
-  deferral_risk_analysis_suggestion:         "Diferimiento: análisis de riesgo",
-  deferral_compensatory_measures_suggestion: "Diferimiento: medidas compensatorias",
-  asset_criticality_suggestion:              "Equipo: sugerir criticidad",
-  asset_health_report:                       "Equipo: informe de salud",
-  plan_rcm_consequence_suggestion:           "Plan: sugerir consecuencia de falla",
-  fluid_analyses:                            "Laboratorio: leer informe",
-  fluid_ai_insights:                         "Laboratorio: interpretar resultados",
-  goods_receipt:                             "Repuestos: leer remito de recepción",
-  moc_draft_suggestion:                      "Gestión del cambio: borrador",
-  moc_risk_assessment_suggestion:            "Gestión del cambio: análisis de riesgo",
-  maintenance_advisor_report:                "Asesor de mantenimiento: informe",
-  maintenance_advisor_draft:                 "Asesor de mantenimiento: borrador",
-  maintenance_advisor_reply:                 "Asesor de mantenimiento: respuesta",
-  monthly_report_draft:                      "Informe mensual: borrador",
-  vetting_assessment_suggestion:             "Vetting: sugerir evaluación",
-  tmsa_assessment_suggestion:                "TMSA: sugerir evaluación",
-  ism_assessment_suggestion:                 "ISM: sugerir evaluación",
-};
-
-function featureLabel(f: string | null): string {
-  return f ? (FEATURE_LABELS[f] ?? f) : "—";
-}
-
-const FEATURE_OPTIONS = Object.entries(FEATURE_LABELS).sort((a, b) => a[1].localeCompare(b[1], "es"));
-
-// ── Columns ──────────────────────────────────────────────────────────────────
-
-const COMMON_COLS_RAW: Column<UsageEvent>[] = [
-  { key: "createdAt",  header: "Fecha",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR")}</span> },
-  { key: "tenantSlug", header: "Tenant",  filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
-  { key: "userEmail",  header: "Usuario", mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
-  { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
-  { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
-];
-
-const AI_COLS_RAW: Column<UsageEvent>[] = [
-  ...COMMON_COLS_RAW,
-  { key: "feature",      header: "Función", filterValue: r => featureLabel(r.feature), render: r => <span className="text-xs text-fg/70" title={r.feature ?? ""}>{featureLabel(r.feature)}</span> },
-  { key: "model",        header: "Modelo",  filterValue: r => r.model ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
-  { key: "inputTokens",  header: "Input",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
-  { key: "outputTokens", header: "Output",  render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
-  { key: "cacheReadTokens", header: "Cache↓", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.cacheReadTokens > 0 ? fmtTok(r.cacheReadTokens) : "—"}</span> },
-  { key: "costUsd",      header: "Costo",   render: r => <span className="font-mono text-xs text-yellow-700 dark:text-yellow-400/80">{fmtUsd(r.costUsd)}</span> },
-  { key: "latencyMs",    header: "Lat.",    render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
-  { key: "errored",      header: "",        render: r => r.errored ? <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" title="Error" /> : null },
-];
-
-const HTTP_COLS_RAW: Column<UsageEvent>[] = [
-  ...COMMON_COLS_RAW,
-  { key: "method",     header: "Mét.",    filterValue: r => r.method ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/60">{r.method ?? "—"}</span> },
-  { key: "route",      header: "Ruta",    render: r => <span className="font-mono text-[10px] text-text-industrial/60 truncate block max-w-[280px]" title={r.route ?? ""}>{r.route ?? "—"}</span> },
-  { key: "statusCode", header: "Status",  render: r => <span className={`font-mono text-xs ${r.statusCode && r.statusCode >= 400 ? "text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>{r.statusCode ?? "—"}</span> },
-  { key: "bytesIn",    header: "↑ In",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesIn)}</span> },
-  { key: "bytesOut",   header: "↓ Out",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesOut)}</span> },
-  { key: "latencyMs",  header: "Lat.",    render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
-];
-
-const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
-  { key: "createdAt",  header: "Minuto",  render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
-  { key: "tenantSlug", header: "Tenant",  filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
-  { key: "userEmail",  header: "Usuario", mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{r.userEmail}</span> },
-  { key: "ipAddress",  header: "IP",      render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
-  { key: "vesselCode", header: "Vessel",  render: r => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
-];
-
-const AI_COLS_AGG: Column<AggregatedRow>[] = [
-  ...COMMON_COLS_AGG,
-  { key: "feature",      header: "Función", filterValue: r => featureLabel(r.feature), render: r => <span className="text-xs text-fg/70" title={r.feature ?? ""}>{featureLabel(r.feature)}</span> },
-  { key: "model",        header: "Modelo",    filterValue: r => r.model ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
-  { key: "requests",     header: "Reqs",      render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
-  { key: "inputTokens",  header: "Input",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
-  { key: "outputTokens", header: "Output",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
-  { key: "cacheReadTokens", header: "Cache↓", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.cacheReadTokens > 0 ? fmtTok(r.cacheReadTokens) : "—"}</span> },
-  { key: "costUsd",      header: "Costo",     render: r => <span className="font-mono text-xs text-yellow-700 dark:text-yellow-400/80">{fmtUsd(r.costUsd)}</span> },
-  { key: "latencyMs",    header: "Lat. avg",  render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
-  { key: "errored",      header: "",          render: r => r.errored ? <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" title="Hubo error en el bucket" /> : null },
-];
-
-// Aggregated HTTP view: one row per (minute + tenant + user). Vessel/route/method
-// are intentionally omitted — they mix values across many requests. Use the
-// "Sin agrupar" toggle to drill into individual endpoints.
-const HTTP_COLS_AGG: Column<AggregatedRow>[] = [
-  { key: "createdAt",  header: "Minuto",   render: r => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR", { hour12: false }).replace(/:\d{2}$/, "")}</span> },
-  { key: "tenantSlug", header: "Tenant",   filterValue: r => r.tenantSlug, render: r => <span className="font-mono text-accent text-xs">{r.tenantSlug}</span> },
-  { key: "userEmail",  header: "Usuario",  mobileTitle: true, render: r => <span className="text-xs text-text-industrial/80 truncate block max-w-[260px]" title={r.userEmail}>{r.userEmail}</span> },
-  { key: "ipAddress",  header: "IP",       render: r => r.ipAddress ? <span className="font-mono text-[10px] text-text-industrial/60">{r.ipAddress}</span> : <span className="text-text-industrial/20">—</span> },
-  { key: "requests",   header: "Reqs",     render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
-  { key: "bytesIn",    header: "↑ In",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesIn)}</span> },
-  { key: "bytesOut",   header: "↓ Out",    render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtKb(r.bytesOut)}</span> },
-  { key: "latencyMs",  header: "Lat. avg", render: r => <span className="font-mono text-[10px] text-text-industrial/40">{r.latencyMs != null ? `${r.latencyMs}ms` : "—"}</span> },
-];
-
-// ── Chart helpers ────────────────────────────────────────────────────────────
-// One line per user. X-axis bucket size auto-selected from the visible time
-// span: ≤2h → minute, ≤7d → hour, >7d → day.
-
-type BucketSize = "minute" | "hour" | "day";
-
-function pickBucketSize(items: UsageEvent[]): BucketSize {
-  if (items.length < 2) return "minute";
-  let min = Infinity, max = -Infinity;
-  for (const it of items) {
-    const t = new Date(it.createdAt).getTime();
-    if (t < min) min = t;
-    if (t > max) max = t;
-  }
-  const spanMs = max - min;
-  const TWO_HOURS = 2 * 60 * 60 * 1000;
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-  if (spanMs <= TWO_HOURS) return "minute";
-  if (spanMs <= SEVEN_DAYS) return "hour";
-  return "day";
-}
-
-function truncateTo(iso: string, bucket: BucketSize): string {
-  const d = new Date(iso);
-  if (bucket === "minute") d.setSeconds(0, 0);
-  else if (bucket === "hour") { d.setMinutes(0, 0, 0); }
-  else { d.setHours(0, 0, 0, 0); }
-  return d.toISOString();
-}
-
-function fmtBucketLabel(iso: string, bucket: BucketSize): string {
-  const d = new Date(iso);
-  if (bucket === "day") return d.toLocaleDateString("es-AR");
-  if (bucket === "hour") return d.toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
-  return d.toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
-}
-
-interface ChartPoint {
-  bucket: string;             // ISO of the bucket (used for sort)
-  label: string;              // formatted X-axis label
-  [userEmail: string]: number | string;
-}
-
-function buildChartSeries(
-  items: UsageEvent[],
-  metric: "tokens" | "bytes",
-): { points: ChartPoint[]; users: string[]; bucket: BucketSize } {
-  const bucket = pickBucketSize(items);
-  // points keyed by bucket ISO → record of user → metric value
-  const grid = new Map<string, Map<string, number>>();
-  const users = new Set<string>();
-
-  for (const it of items) {
-    const b = truncateTo(it.createdAt, bucket);
-    let row = grid.get(b);
-    if (!row) { row = new Map(); grid.set(b, row); }
-    const value = metric === "tokens"
-      ? it.inputTokens + it.outputTokens
-      : it.bytesIn + it.bytesOut;
-    row.set(it.userEmail, (row.get(it.userEmail) ?? 0) + value);
-    users.add(it.userEmail);
-  }
-
-  const usersArr = Array.from(users).sort();
-  const buckets = Array.from(grid.keys()).sort();
-  const points: ChartPoint[] = buckets.map(b => {
-    const row = grid.get(b)!;
-    const point: ChartPoint = { bucket: b, label: fmtBucketLabel(b, bucket) };
-    for (const u of usersArr) {
-      point[u] = row.get(u) ?? 0;
-    }
-    return point;
-  });
-
-  return { points, users: usersArr, bucket };
-}
-
-// Distinct, accessible color palette — colors stay consistent across renders
-const CHART_COLORS = [
-  "#fbbf24", "#60a5fa", "#34d399", "#f472b6", "#a78bfa",
-  "#fb7185", "#22d3ee", "#facc15", "#4ade80", "#c084fc",
-];
-
-const UsageChart: React.FC<{
-  items: UsageEvent[];
-  kind: "ai_call" | "http_request";
-  userNames: Map<string, string>;
-  onClose: () => void;
-}> = ({ items, kind, userNames, onClose }) => {
-  const metric: "tokens" | "bytes" = kind === "ai_call" ? "tokens" : "bytes";
-  const { points, users, bucket } = React.useMemo(
-    () => buildChartSeries(items, metric),
-    [items, metric],
-  );
-
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-  const gridStroke    = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const axisStroke     = isDark ? "rgba(255,255,255,0.2)"  : "rgba(0,0,0,0.15)";
-  const axisTick       = isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.55)";
-  const tooltipBg       = isDark ? "#0f172a" : "#FFFFFF";
-  const tooltipBorder   = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
-  const tooltipText     = isDark ? "#e2e8f0" : "#1A1D24";
-  const legendText      = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.65)";
-
-  const yLabel  = kind === "ai_call" ? "Tokens" : "Bytes";
-  const fmtY = kind === "ai_call" ? fmtTok : fmtKb;
-  const bucketLabel = bucket === "minute" ? "minuto" : bucket === "hour" ? "hora" : "día";
-  const labelFor = (email: string) => userNames.get(email) ?? email;
-
-  if (points.length === 0) {
-    return (
-      <div className="rounded-xl bg-fg/5 border border-fg/10 p-8 text-center text-text-industrial/40 text-sm">
-        Sin datos para graficar.
-      </div>
-    );
-  }
+function DayChart({ days, metric }: { days: Array<{ date: Date; cost: number; uses: number; bytes: number }>; metric: "cost" | "uses" | "bytes" }) {
+  const [hover, setHover] = React.useState<number | null>(null);
+  const val = (d: typeof days[number]) => (metric === "cost" ? d.cost : metric === "uses" ? d.uses : d.bytes);
+  const fmt = (v: number) => (metric === "cost" ? fmtUsd(v) : metric === "uses" ? fmtInt(Math.round(v)) : fmtBytes(v));
+  const max = Math.max(...days.map(val), 0);
+  const top = max > 0 ? max : 1;
+  const n = days.length;
+  const hasWeekend = days.some((d) => d.date.getDay() === 0 || d.date.getDay() === 6);
+  const labelIdx = n <= 5 ? days.map((_, i) => i) : Array.from(new Set([0, 1, 2, 3, 4].map((k) => Math.round((k * (n - 1)) / 4))));
+  const tickCls = "text-[11px] text-text-industrial/50";
 
   return (
-    <div className="rounded-xl bg-fg/3 border border-fg/10 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-xs text-text-industrial/60">
-          {yLabel} por usuario · agrupado por <span className="text-fg">{bucketLabel}</span> · {users.length} usuario{users.length === 1 ? "" : "s"}
+    <div className="px-4 pb-4">
+      <div className="flex gap-2">
+        <div className={`relative w-14 shrink-0 h-40 ${tickCls}`}>
+          <span className="absolute right-0 top-0 -translate-y-1/2">{fmt(top)}</span>
+          <span className="absolute right-0 top-1/2 -translate-y-1/2">{fmt(top / 2)}</span>
+          <span className="absolute right-0 bottom-0 translate-y-1/2">{fmt(0)}</span>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all" title="Cerrar gráfico">
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="w-full h-[240px] md:h-[320px]">
-        <ResponsiveContainer>
-          <LineChart data={points} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-            <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
-            <XAxis dataKey="label" tick={{ fill: axisTick, fontSize: 10 }} stroke={axisStroke} />
-            <YAxis
-              tick={{ fill: axisTick, fontSize: 10 }}
-              stroke={axisStroke}
-              tickFormatter={(v: number) => fmtY(v)}
-              width={60}
-            />
-            <Tooltip
-              contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: tooltipText }}
-              formatter={(value, name) => [fmtY(Number(value)), name]}
-            />
-            <Legend wrapperStyle={{ fontSize: 11, color: legendText }} />
-            {users.map((user, i) => (
-              <Line
-                key={user}
-                type="monotone"
-                dataKey={user}
-                name={labelFor(user)}
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
+        <div className="relative flex-1 min-w-0">
+          <div className="relative h-40 border-b border-fg/15">
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-fg/10" />
+            <div className="absolute inset-0 flex gap-[2px]">
+              {days.map((d, i) => {
+                const v = val(d);
+                const weekend = d.date.getDay() === 0 || d.date.getDay() === 6;
+                return (
+                  <div key={i} className="relative flex-1 h-full flex items-end justify-center" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                    <div className="w-full max-w-[56px] rounded-t-[4px] bg-accent" style={{ height: `${(v / top) * 100}%`, opacity: weekend ? 0.45 : 1, minHeight: v > 0 ? 2 : 0 }} />
+                    {hover === i && (
+                      <div className="absolute z-10 bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-fg/10 bg-surface px-2.5 py-1.5 text-xs shadow-lg pointer-events-none"
+                        style={i < 3 ? { left: 0, transform: "none" } : i > n - 4 ? { left: "auto", right: 0, transform: "none" } : undefined}>
+                        <div className="font-semibold text-fg capitalize">{WEEKDAYS[d.date.getDay()]} {fmtDM(d.date)}</div>
+                        {metric === "bytes"
+                          ? <div className="text-text-industrial/70">{fmtBytes(d.bytes)}</div>
+                          : <div className="text-text-industrial/70">{fmtUsd(d.cost)} · {fmtInt(d.uses)} {d.uses === 1 ? "uso" : "usos"}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="relative h-5 mt-1">
+            {labelIdx.map((i) => (
+              <span key={i} className={`absolute ${tickCls} whitespace-nowrap`}
+                style={{ left: `${((i + 0.5) / n) * 100}%`, transform: i === 0 ? "none" : i === n - 1 ? "translateX(-100%)" : "translateX(-50%)" }}>
+                {fmtDM(days[i].date)}
+              </span>
             ))}
-          </LineChart>
-        </ResponsiveContainer>
+          </div>
+        </div>
       </div>
+      {hasWeekend && <p className="text-xs text-text-industrial/50 mt-1">Las barras más claras son sábados y domingos.</p>}
     </div>
   );
-};
+}
+
+const Dash = () => <span className="text-text-industrial/30">—</span>;
 
 export const PlatformUsagePage: React.FC = () => {
-  const [kind, setKind] = React.useState<"ai_call" | "http_request">("ai_call");
-  const [groupBy, setGroupBy] = React.useState<"none" | "minute">("minute");
+  const [kind, setKind] = React.useState<Kind>("ai_call");
+  const [period, setPeriod] = React.useState<Period>("month");
+  const [cFrom, setCFrom] = React.useState("");
+  const [cTo, setCTo] = React.useState("");
   const [tenantSlug, setTenantSlug] = React.useState("");
-  const [userEmail, setUserEmail]   = React.useState("");
-  const [feature, setFeature]       = React.useState("");
-  const [from, setFrom] = React.useState("");
-  const [to, setTo]     = React.useState("");
-  const [showFilters, setShowFilters] = React.useState(false);
+  const [userEmail, setUserEmail] = React.useState("");
+  const [feature, setFeature] = React.useState("");
+  const [technical, setTechnical] = React.useState(false);
+  const [metric, setMetric] = React.useState<"cost" | "uses">("cost");
 
   const [data, setData] = React.useState<ListResponse | null>(null);
+  const [summary, setSummary] = React.useState<Summary | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [error, setError]     = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  // Resolución de nombres: los eventos de uso guardan solo el email (incluye
-  // los placeholders "named-<ts>@internal.<tenant>.local" de miembros directos
-  // sin login). Se resuelve el nombre real consultando los usuarios de cada
-  // tenant presente en los resultados, con cache por tenant entre reloads.
+  // Opciones de los desplegables: se guardan cuando el filtro correspondiente
+  // está en «Todas», así la lista no se achica al elegir una.
+  const [tenantOpts, setTenantOpts] = React.useState<Array<{ slug: string; name: string }>>([]);
+  const [personOpts, setPersonOpts] = React.useState<Array<{ email: string; name: string }>>([]);
+
+  // Nombres de personas: los de la lista de usuarios de cada empresa (incluye
+  // miembros sin login) y los que ya trae el resumen.
   const [userNames, setUserNames] = React.useState<Map<string, string>>(new Map());
   const tenantUsersCacheRef = React.useRef<Map<string, Map<string, string>>>(new Map());
 
   React.useEffect(() => {
     if (!data) return;
-    const slugs = Array.from(new Set(data.items.map(i => i.tenantSlug)));
-    const missing = slugs.filter(s => !tenantUsersCacheRef.current.has(s));
-
+    const slugs = Array.from(new Set(data.items.map((i) => i.tenantSlug)));
+    const missing = slugs.filter((s) => !tenantUsersCacheRef.current.has(s));
     const combine = () => {
       const combined = new Map<string, string>();
       for (const s of slugs) {
@@ -464,11 +186,9 @@ export const PlatformUsagePage: React.FC = () => {
       }
       setUserNames(combined);
     };
-
     if (missing.length === 0) { combine(); return; }
-
     void (async () => {
-      await Promise.all(missing.map(async slug => {
+      await Promise.all(missing.map(async (slug) => {
         try {
           const res = await platformFetch<{ items: Array<{ email: string; firstName?: string | null; lastName?: string | null }> }>(`/platform/tenants/${slug}/users`);
           const m = new Map<string, string>();
@@ -485,182 +205,326 @@ export const PlatformUsagePage: React.FC = () => {
     })();
   }, [data]);
 
-  const withUserNames = React.useCallback(<T extends { userEmail: string }>(cols: Column<T>[]): Column<T>[] =>
-    cols.map(c => c.key !== "userEmail" ? c : {
-      ...c,
-      render: (r: T) => {
-        const label = userNames.get(r.userEmail) ?? r.userEmail;
-        return <span className="text-xs text-text-industrial/80 truncate block max-w-[200px]" title={r.userEmail}>{label}</span>;
-      },
-    }), [userNames]);
+  const summaryNames = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of summary?.byUser ?? []) if (u.userName) m.set(u.userEmail, u.userName);
+    return m;
+  }, [summary]);
+  const nameOf = React.useCallback((email: string) => summaryNames.get(email) ?? userNames.get(email) ?? email, [summaryNames, userNames]);
+
+  const vesselNames = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of summary?.byVessel ?? []) if (v.vesselCode && v.vesselName) m.set(`${v.tenantSlug}|${v.vesselCode}`, v.vesselName);
+    return m;
+  }, [summary]);
+
+  const range = React.useMemo(() => rangeOf(period, cFrom, cTo), [period, cFrom, cTo]);
+  const rangeFromMs = range.from?.getTime() ?? null;
+  const rangeToMs = range.to.getTime();
 
   const buildQuery = React.useCallback((extra: Record<string, string | number> = {}): string => {
     const sp = new URLSearchParams();
     sp.set("kind", kind);
-    if (tenantSlug.trim()) sp.set("tenantSlug", tenantSlug.trim());
-    if (userEmail.trim())  sp.set("userEmail",  userEmail.trim());
-    if (feature.trim())    sp.set("feature",    feature.trim());
-    if (from)              sp.set("from",       new Date(from).toISOString());
-    if (to)                sp.set("to",         new Date(`${to}T23:59:59`).toISOString());
+    if (tenantSlug) sp.set("tenantSlug", tenantSlug);
+    if (userEmail) sp.set("userEmail", userEmail);
+    if (feature && kind === "ai_call") sp.set("feature", feature);
+    if (rangeFromMs != null) sp.set("from", new Date(rangeFromMs).toISOString());
+    const end = new Date(rangeToMs); end.setHours(23, 59, 59, 999);
+    sp.set("to", end.toISOString());
     for (const [k, v] of Object.entries(extra)) sp.set(k, String(v));
     return sp.toString();
-  }, [kind, tenantSlug, userEmail, feature, from, to]);
+  }, [kind, tenantSlug, userEmail, feature, rangeFromMs, rangeToMs]);
 
   const reload = React.useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const result = await platformFetch<ListResponse>(`/platform/usage?${buildQuery({ limit: 1000 })}`);
-      setData(result);
+      const [list, sum] = await Promise.all([
+        platformFetch<ListResponse>(`/platform/usage?${buildQuery({ limit: 1000 })}`),
+        platformFetch<Summary>(`/platform/usage/summary?${buildQuery()}`),
+      ]);
+      setData(list);
+      setSummary(sum);
     } catch (e: any) {
       setError(e.message ?? "Error");
     } finally {
       setLoading(false);
     }
   }, [buildQuery]);
+  React.useEffect(() => { void reload(); }, [reload]);
 
-  React.useEffect(() => { reload(); }, [reload]);
+  React.useEffect(() => {
+    if (!summary) return;
+    if (!tenantSlug) {
+      const m = new Map<string, string>();
+      for (const u of summary.byUser) m.set(u.tenantSlug, u.tenantName ?? u.tenantSlug);
+      setTenantOpts(Array.from(m, ([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name, "es")));
+    }
+    if (!userEmail) {
+      setPersonOpts(summary.byUser.map((u) => ({ email: u.userEmail, name: u.userName ?? u.userEmail })).sort((a, b) => a.name.localeCompare(b.name, "es")));
+    }
+  }, [summary, tenantSlug, userEmail]);
+
+  // Al cambiar de pestaña la función no aplica a satelital.
+  const changeKind = (k: Kind) => { setKind(k); if (k !== "ai_call") setFeature(""); };
 
   const exportXlsx = React.useCallback(async () => {
     const res = await platformAuthedFetch(`/platform/usage.xlsx?${buildQuery()}`, { method: "GET" });
-    if (!res.ok) { alert("Error al exportar"); return; }
+    if (!res.ok) { alert("No se pudo descargar el Excel. Probá de nuevo."); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `usage-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `consumo-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
   }, [buildQuery]);
 
-  const aggregated = React.useMemo<AggregatedRow[]>(() => {
-    if (!data) return [];
-    return aggregateByMinute(data.items);
-  }, [data]);
+  // ── Datos del gráfico: todos los días del rango, con 0 donde no hubo uso ──
+  const days = React.useMemo(() => {
+    const map = new Map((summary?.byDay ?? []).map((d) => [d.day.slice(0, 10), d]));
+    let start = rangeFromMs != null ? new Date(rangeFromMs) : null;
+    if (!start) {
+      const first = [...map.keys()].sort()[0];
+      start = first ? parseDay(first) : new Date(rangeToMs);
+    }
+    const out: Array<{ date: Date; cost: number; uses: number; bytes: number }> = [];
+    for (let d = new Date(start); d.getTime() <= rangeToMs && out.length < 400; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+      const r = map.get(ymd(d));
+      out.push({ date: new Date(d), cost: r?.costUsd ?? 0, uses: r?.events ?? 0, bytes: r?.bytes ?? 0 });
+    }
+    return out;
+  }, [summary, rangeFromMs, rangeToMs]);
 
-  const totalInputTok  = data?.items.filter(i => i.kind === "ai_call").reduce((s, i) => s + i.inputTokens, 0)  ?? 0;
-  const totalOutputTok = data?.items.filter(i => i.kind === "ai_call").reduce((s, i) => s + i.outputTokens, 0) ?? 0;
-  const totalCost      = data?.items.reduce((s, i) => s + i.costUsd, 0) ?? 0;
-  const totalIn        = data?.items.reduce((s, i) => s + i.bytesIn, 0)  ?? 0;
-  const totalOut       = data?.items.reduce((s, i) => s + i.bytesOut, 0) ?? 0;
+  // ── Filas de la lista ──
+  const rows = React.useMemo<Row[]>(() => {
+    const items = data?.items ?? [];
+    const toRow = (it: UsageEvent, id: string, createdAt: string): Row => ({
+      id, createdAt, tenantSlug: it.tenantSlug, userEmail: it.userEmail, vesselCode: it.vesselCode,
+      feature: it.feature, screen: screenLabel(it.route), model: it.model, count: 0, costUsd: 0,
+      inputTokens: 0, outputTokens: 0, bytes: 0, latencyMs: it.latencyMs, method: it.method, statusCode: it.statusCode, route: it.route,
+    });
+    if (technical) {
+      return items.map((it) => {
+        const r = toRow(it, it.id, it.createdAt);
+        r.count = 1; r.costUsd = it.costUsd; r.inputTokens = it.inputTokens; r.outputTokens = it.outputTokens; r.bytes = it.bytesIn + it.bytesOut;
+        return r;
+      });
+    }
+    const buckets = new Map<string, Row>();
+    for (const it of items) {
+      const d = new Date(it.createdAt); d.setSeconds(0, 0);
+      const minute = d.toISOString();
+      const what = kind === "ai_call" ? (it.feature ?? "") : screenLabel(it.route);
+      const key = `${minute}|${it.tenantSlug}|${it.userEmail}|${what}`;
+      let b = buckets.get(key);
+      if (!b) { b = toRow(it, key, minute); buckets.set(key, b); }
+      b.count += 1; b.costUsd += it.costUsd; b.bytes += it.bytesIn + it.bytesOut;
+    }
+    return [...buckets.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [data, technical, kind]);
 
-  const showingCount = groupBy === "minute" ? aggregated.length : (data?.items.length ?? 0);
+  const vesselOf = (r: Row) => (r.vesselCode ? vesselNames.get(`${r.tenantSlug}|${r.vesselCode}`) ?? r.vesselCode : null);
 
-  const [showChart, setShowChart] = React.useState(false);
-  const chartItems = React.useMemo(
-    () => (data?.items ?? []).filter(i => i.kind === kind),
-    [data, kind],
-  );
+  const columns = React.useMemo<Column<Row>[]>(() => {
+    const cuando: Column<Row> = { key: "createdAt", header: "Cuándo", filterValue: (r) => fmtWhen(r.createdAt), render: (r) => <span className="text-sm text-text-industrial/70 whitespace-nowrap">{fmtWhen(r.createdAt)}</span> };
+    const persona: Column<Row> = { key: "userEmail", header: "Persona", mobileTitle: true, filterValue: (r) => nameOf(r.userEmail), render: (r) => <span className="text-sm text-fg truncate block max-w-[220px]">{nameOf(r.userEmail)}</span> };
+    const cols: Column<Row>[] = [cuando, persona];
+    if (kind === "ai_call") {
+      cols.push({
+        key: "feature", header: "Función", filterValue: (r) => featureLabel(r.feature),
+        render: (r) => <span className="text-sm text-fg/80">{featureLabel(r.feature)}{r.count > 1 && <span className="text-text-industrial/50"> · {r.count} veces</span>}</span>,
+      });
+      cols.push({ key: "vessel", header: "Buque", filterValue: (r) => vesselOf(r) ?? "", render: (r) => { const v = vesselOf(r); return v ? <span className="text-sm text-text-industrial/80">{v}</span> : <Dash />; } });
+      cols.push({ key: "costUsd", header: "Costo", render: (r) => <span className="text-sm text-fg whitespace-nowrap">{fmtUsd(r.costUsd)}</span> });
+      if (technical) {
+        cols.push({ key: "model", header: "Modelo de IA", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60">{r.model ?? "—"}</span> });
+        cols.push({ key: "inputTokens", header: "Texto enviado", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60">{fmtInt(r.inputTokens)}</span> });
+        cols.push({ key: "outputTokens", header: "Texto recibido", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60">{fmtInt(r.outputTokens)}</span> });
+        cols.push({ key: "latencyMs", header: "Demora", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60">{r.latencyMs != null ? `${(r.latencyMs / 1000).toFixed(1).replace(".", ",")} s` : "—"}</span> });
+      }
+    } else {
+      cols.push({
+        key: "screen", header: "Pantalla", filterValue: (r) => r.screen,
+        render: (r) => <span className="text-sm text-fg/80">{r.screen}{r.count > 1 && <span className="text-text-industrial/50"> · {r.count} veces</span>}</span>,
+      });
+      cols.push({ key: "bytes", header: "Datos", render: (r) => <span className="text-sm text-fg whitespace-nowrap">{fmtBytes(r.bytes)}</span> });
+      if (technical) {
+        cols.push({ key: "method", header: "Método", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60">{r.method ?? "—"}</span> });
+        cols.push({ key: "route", header: "Ruta", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60 truncate block max-w-[260px]" title={r.route ?? ""}>{r.route ?? "—"}</span> });
+        cols.push({ key: "statusCode", header: "Resultado", mobileHidden: true, render: (r) => <span className="text-xs text-text-industrial/60">{r.statusCode ?? "—"}</span> });
+      }
+    }
+    return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, technical, nameOf, vesselNames]);
+
+  // ── Resúmenes ──
+  const totals = summary?.totals;
+  const ai = kind === "ai_call";
+  const num = (x: { costUsd: number; bytes: number }) => (ai ? x.costUsd : x.bytes);
+  const fmtNum = (v: number) => (ai ? fmtUsd(v) : fmtBytes(v));
+  const nDays = Math.max(days.length, 1);
+
+  const topFeature = React.useMemo(() => [...(summary?.byFeature ?? [])].sort((a, b) => b.costUsd - a.costUsd)[0], [summary]);
+  const topVessel = React.useMemo(() => [...(summary?.byVessel ?? [])].sort((a, b) => b.bytes - a.bytes)[0], [summary]);
+
+  const personItems = React.useMemo(() => {
+    const list = [...(summary?.byUser ?? [])].sort((a, b) => num(b) - num(a));
+    return list.map((u) => ({
+      key: `${u.tenantSlug}|${u.userEmail}`,
+      label: u.userName ?? u.userEmail,
+      detail: ai ? `${u.tenantName ?? u.tenantSlug} · ${fmtInt(u.events)} ${u.events === 1 ? "uso" : "usos"}` : (u.tenantName ?? u.tenantSlug),
+      value: num(u),
+      valueText: fmtNum(num(u)),
+      onClick: () => setUserEmail(u.userEmail),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary, ai]);
+
+  const featureItems = React.useMemo(() => {
+    const list = [...(summary?.byFeature ?? [])].sort((a, b) => b.costUsd - a.costUsd);
+    const top = list.slice(0, 8).map((f) => ({
+      key: f.feature ?? "-", label: featureLabel(f.feature), detail: `${fmtInt(f.events)} ${f.events === 1 ? "uso" : "usos"}`, value: f.costUsd, valueText: fmtUsd(f.costUsd),
+      onClick: () => f.feature && setFeature(f.feature),
+    }));
+    const rest = list.slice(8);
+    if (rest.length > 0) {
+      const c = rest.reduce((s, f) => s + f.costUsd, 0);
+      const e = rest.reduce((s, f) => s + f.events, 0);
+      top.push({ key: "__otras", label: `Otras (${rest.length} funciones)`, detail: `${fmtInt(e)} usos`, value: c, valueText: fmtUsd(c), onClick: undefined as unknown as () => void });
+    }
+    return top;
+  }, [summary]);
+
+  const vesselItems = React.useMemo(() =>
+    [...(summary?.byVessel ?? [])].sort((a, b) => b.bytes - a.bytes).map((v) => ({
+      key: `${v.tenantSlug}|${v.vesselCode ?? ""}`,
+      label: v.vesselName ?? v.vesselCode ?? "Oficina / sin buque",
+      detail: v.tenantName ?? v.tenantSlug,
+      value: v.bytes,
+      valueText: fmtBytes(v.bytes),
+    })), [summary]);
+
+  const periodText = period === "custom" ? "las fechas elegidas" : (PERIODS.find((p) => p.value === period)?.label ?? "").toLowerCase();
+  const empty = !loading && !error && (totals?.events ?? 0) === 0;
 
   return (
-    <div className="space-y-5">
-      <PageHeader icon={Activity} title="Consumo IA + Satelital" total={data?.total} onReload={reload}>
-        <button onClick={() => setShowChart(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${showChart ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"}`}>
-          <LineChartIcon className="w-3.5 h-3.5" /> Gráfico
-        </button>
-        <button onClick={exportXlsx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
-          <Download className="w-3.5 h-3.5 text-accent" /> Excel
-        </button>
-      </PageHeader>
+    <div>
+      <PageIntro
+        title="Consumo de IA"
+        description="Cuánto se usó la inteligencia artificial y los datos por satélite, quién los usó y en qué."
+        actions={
+          <>
+            <button onClick={() => setTechnical((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg border text-sm transition-all ${technical ? "bg-accent/10 border-accent/30 text-accent font-semibold" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"}`}>
+              <Wrench className="w-4 h-4" /> Ver detalle técnico
+            </button>
+            <button onClick={exportXlsx} className="inline-flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-sm text-text-industrial hover:border-accent/30 transition-all">
+              <Download className="w-4 h-4 text-accent" /> Descargar Excel
+            </button>
+          </>
+        }
+      />
 
-      {/* Tabs IA / HTTP */}
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <button onClick={() => setKind("ai_call")}
-          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "ai_call" ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/20"}`}>
-          Tokens IA
-        </button>
-        <button onClick={() => setKind("http_request")}
-          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${kind === "http_request" ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/60 hover:border-accent/20"}`}>
-          Bytes Satelital
-        </button>
-
-        <span className="md:ml-4 text-[10px] text-text-industrial/40 uppercase tracking-wider">Agrupar:</span>
-        <button onClick={() => setGroupBy("minute")}
-          className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "minute" ? "bg-fg/10 border-fg/20 text-fg" : "bg-transparent border-fg/10 text-text-industrial/50 hover:border-fg/20"}`}>
-          Por minuto
-        </button>
-        <button onClick={() => setGroupBy("none")}
-          className={`px-2.5 py-1 rounded-md text-[11px] border transition-all ${groupBy === "none" ? "bg-fg/10 border-fg/20 text-fg" : "bg-transparent border-fg/10 text-text-industrial/50 hover:border-fg/20"}`}>
-          Sin agrupar
-        </button>
+      <div className="mb-3">
+        <Segmented value={kind} onChange={changeKind} options={[{ value: "ai_call", label: "Inteligencia artificial" }, { value: "http_request", label: "Datos por satélite" }]} />
       </div>
 
-      {/* Filtros: en el celular quedan plegados detrás de un botón */}
-      <button onClick={() => setShowFilters(v => !v)}
-        className="md:hidden w-full min-h-10 flex items-center justify-between px-3 rounded-lg bg-fg/5 border border-fg/10 text-xs font-bold text-fg">
-        <span className="flex items-center gap-1.5"><Filter className="w-3.5 h-3.5" /> Filtros</span>
-        {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </button>
-      <div className={`${showFilters ? "flex" : "hidden"} md:flex flex-wrap gap-2 items-end`}>
-        <input value={tenantSlug} onChange={e => setTenantSlug(e.target.value)} placeholder="Tenant slug…"
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-full md:w-32" />
-        <input value={userEmail} onChange={e => setUserEmail(e.target.value)} placeholder="Email contiene…"
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 w-full md:w-48" />
-        {kind === "ai_call" && (
-          <select value={feature} onChange={e => setFeature(e.target.value)}
-            className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-            <option value="">Todas las funciones</option>
-            {FEATURE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      <FilterBar>
+        <FilterField label="Período">
+          <select className={inputCls} value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
+            {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
+        </FilterField>
+        {period === "custom" && (
+          <>
+            <FilterField label="Desde"><input type="date" className={inputCls} value={cFrom} onChange={(e) => setCFrom(e.target.value)} /></FilterField>
+            <FilterField label="Hasta"><input type="date" className={inputCls} value={cTo} onChange={(e) => setCTo(e.target.value)} /></FilterField>
+          </>
         )}
-        <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
-        <input type="date" value={to} onChange={e => setTo(e.target.value)}
-          className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50" />
-        <button onClick={reload}
-          className="px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-all">
-          Aplicar
-        </button>
-      </div>
+        <FilterField label="Empresa">
+          <select className={inputCls} value={tenantSlug} onChange={(e) => { setTenantSlug(e.target.value); setUserEmail(""); }}>
+            <option value="">Todas</option>
+            {tenantOpts.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
+          </select>
+        </FilterField>
+        <FilterField label="Persona">
+          <select className={inputCls} value={userEmail} onChange={(e) => setUserEmail(e.target.value)}>
+            <option value="">Todas</option>
+            {userEmail && !personOpts.some((p) => p.email === userEmail) && <option value={userEmail}>{nameOf(userEmail)}</option>}
+            {personOpts.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
+          </select>
+        </FilterField>
+        {ai && (
+          <FilterField label="Función">
+            <select className={inputCls} value={feature} onChange={(e) => setFeature(e.target.value)}>
+              <option value="">Todas</option>
+              {FEATURE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </FilterField>
+        )}
+      </FilterBar>
 
-      {/* Resumen */}
-      {data && (
-        <div className="flex flex-wrap gap-4 text-xs text-text-industrial/60">
-          <span>Eventos crudos: <span className="text-fg">{data.total}</span></span>
-          {groupBy === "minute" && <span>Filas mostradas: <span className="text-fg">{showingCount}</span></span>}
-          {kind === "ai_call" && (
-            <>
-              <span>Input: <span className="text-fg">{fmtTok(totalInputTok)}</span></span>
-              <span>Output: <span className="text-fg">{fmtTok(totalOutputTok)}</span></span>
-              <span>Costo: <span className="text-yellow-700 dark:text-yellow-400/80">{fmtUsd(totalCost)}</span></span>
-            </>
-          )}
-          {kind === "http_request" && (
-            <>
-              <span>Total ↑: <span className="text-fg">{fmtKb(totalIn)}</span></span>
-              <span>Total ↓: <span className="text-fg">{fmtKb(totalOut)}</span></span>
-            </>
-          )}
-        </div>
-      )}
+      {error && <p className="text-sm text-danger mb-3">No se pudo cargar el consumo: {error}</p>}
 
-      {showChart && (
-        <UsageChart items={chartItems} kind={kind} userNames={userNames} onClose={() => setShowChart(false)} />
-      )}
-
-      {groupBy === "minute" ? (
-        <DataTable
-          columns={withUserNames(kind === "ai_call" ? AI_COLS_AGG : HTTP_COLS_AGG)}
-          data={aggregated.filter(r => r.kind === kind)}
-          loading={loading}
-          error={error}
-          keyFn={r => r.id}
-          emptyText="Sin eventos en el rango seleccionado"
-          mobileCards
-        />
+      {empty ? (
+        <Card><EmptyState title="Sin consumo en este período" text="Probá con otro período o sacá algún filtro para ver más datos." /></Card>
       ) : (
-        <DataTable
-          columns={withUserNames(kind === "ai_call" ? AI_COLS_RAW : HTTP_COLS_RAW)}
-          data={data?.items ?? null}
-          loading={loading}
-          error={error}
-          keyFn={r => r.id}
-          emptyText="Sin eventos en el rango seleccionado"
-          mobileCards
-        />
+        <>
+          {ai ? (
+            <KpiRow>
+              <KpiCard label="Gasto del período" value={fmtUsd(totals?.costUsd)} hint={`promedio ${fmtUsd((totals?.costUsd ?? 0) / nDays)} por día`} />
+              <KpiCard label="Veces que se usó" value={fmtInt(totals?.events)} hint={`por ${fmtInt(totals?.users)} ${totals?.users === 1 ? "persona" : "personas"}`} />
+              <KpiCard label="Lo que más gastó" value={topFeature ? featureLabel(topFeature.feature) : "—"}
+                hint={topFeature && totals && totals.costUsd > 0 ? `${fmtUsd(topFeature.costUsd)} · ${Math.round((topFeature.costUsd / totals.costUsd) * 100)}% del total` : undefined} />
+            </KpiRow>
+          ) : (
+            <KpiRow>
+              <KpiCard label="Datos usados" value={fmtBytes(totals?.bytes)} hint={`en ${periodText}`} />
+              <KpiCard label="Buque que más usó" value={topVessel ? (topVessel.vesselName ?? topVessel.vesselCode ?? "Oficina / sin buque") : "—"}
+                hint={topVessel ? fmtBytes(topVessel.bytes) : undefined} />
+            </KpiRow>
+          )}
+
+          {!ai && (
+            <Card title="Por buque" className="mb-4">
+              <BarList items={vesselItems} />
+            </Card>
+          )}
+
+          <Card title="Por día" className="mb-4"
+            actions={ai ? <Segmented value={metric} onChange={setMetric} options={[{ value: "cost", label: "Gasto" }, { value: "uses", label: "Veces que se usó" }]} /> : undefined}>
+            <DayChart days={days} metric={ai ? metric : "bytes"} />
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <Card title="Por persona" subtitle="Tocá una persona para filtrar por ella.">
+              <BarList items={personItems} />
+            </Card>
+            {ai && (
+              <Card title="Por función">
+                <BarList items={featureItems} />
+              </Card>
+            )}
+          </div>
+        </>
       )}
+
+      <Card title="Detalle de usos" subtitle={summary?.truncated ? "El resumen de arriba es parcial: el período tiene muchísimos registros. Achicá el período para verlo completo." : undefined}>
+        <div className="px-1 pb-2">
+          <DataTable
+            columns={columns}
+            data={loading ? null : rows}
+            loading={loading}
+            error={error}
+            keyFn={(r) => r.id}
+            emptyText="Sin usos en este período"
+            mobileCards
+          />
+        </div>
+      </Card>
     </div>
   );
 };

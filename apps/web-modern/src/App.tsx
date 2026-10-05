@@ -100,6 +100,7 @@ const VettingPage = React.lazy(() => import("./pages/Vetting").then(m => ({ defa
 
 // Platform (sólo SUPERADMIN — un tenant normal nunca descarga estos chunks)
 const PlatformLogin = React.lazy(() => import("./pages/platform/PlatformLogin").then(m => ({ default: m.PlatformLogin })));
+const PlatformHomePage = React.lazy(() => import("./pages/platform/PlatformHome").then(m => ({ default: m.PlatformHomePage })));
 const PlatformTenantsPage = React.lazy(() => import("./pages/platform/PlatformTenants").then(m => ({ default: m.PlatformTenantsPage })));
 const PlatformUsersPage = React.lazy(() => import("./pages/platform/PlatformUsers").then(m => ({ default: m.PlatformUsersPage })));
 const PlatformAuditPage = React.lazy(() => import("./pages/platform/PlatformAudit").then(m => ({ default: m.PlatformAuditPage })));
@@ -232,7 +233,8 @@ export default function App() {
             {/* ── Platform super-admin ── */}
             <Route path="/platform/login" element={<PlatformLoginRedirect />} />
             <Route path="/platform" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
-              <Route index element={<Navigate to="/platform/tenants" replace />} />
+              <Route index element={<Navigate to="/platform/home" replace />} />
+              <Route path="home" element={<PlatformHomePage />} />
               <Route path="tenants" element={<PlatformTenantsPage />} />
               <Route path="users"   element={<PlatformUsersPage />} />
               <Route path="access"  element={<PlatformAccessPage />} />
@@ -335,7 +337,7 @@ export default function App() {
 
 function PlatformLoginRedirect() {
   const { isAuthenticated } = usePlatformAuth();
-  return isAuthenticated ? <Navigate to="/platform/tenants" replace /> : <PlatformLogin />;
+  return isAuthenticated ? <Navigate to="/platform/home" replace /> : <PlatformLogin />;
 }
 
 function TenantI18nWrapper({ children }: { children: React.ReactNode }) {

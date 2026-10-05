@@ -20,6 +20,7 @@
  */
 
 import { getPrismaClient } from "../data/prisma-client";
+import { getTenantNames, getVesselNames, vesselKey } from "./platform-name-lookup";
 
 // ── Umbrales de alerta ────────────────────────────────────────────────────────
 // Heurísticos, punto de partida para calibrar con datos reales. La severidad es
@@ -52,7 +53,7 @@ export interface UserActivityIdentity {
   legacyUserId: string | null;
   fullName: string | null;
   status: string;
-  memberships: Array<{ tenantSlug: string; role: string; membershipStatus: string }>;
+  memberships: Array<{ tenantSlug: string; tenantName?: string; role: string; membershipStatus: string }>;
   createdAt: string;
   lastSeenAt: string | null;
   lastIp: string | null;
@@ -82,7 +83,9 @@ export interface ActivityEvent {
   /** Detalle secundario (ruta, entidad, motivo de rechazo, modelo de IA). */
   detail: string | null;
   tenantSlug: string | null;
+  tenantName: string | null;
   vesselCode: string | null;
+  vesselName: string | null;
   ip: string | null;
   success: boolean | null;
 }
@@ -101,6 +104,7 @@ export interface UserSearchRow {
   legacyUserId: string | null;
   fullName: string | null;
   tenantSlug: string | null;
+  tenantName: string | null;
   role: string | null;
 }
 
@@ -189,12 +193,14 @@ export async function searchUsers(query: string): Promise<UserSearchRow[]> {
     take: 25,
   });
 
+  const tenantNames = await getTenantNames(prisma);
   return users.map((u) => ({
     userId: u.id,
     email: u.email,
     legacyUserId: u.legacyUserId,
     fullName: fullNameOf(u.firstName, u.lastName),
     tenantSlug: u.memberships[0]?.tenant?.slug ?? null,
+    tenantName: u.memberships[0]?.tenant?.slug ? tenantNames.get(u.memberships[0].tenant.slug) ?? u.memberships[0].tenant.slug : null,
     role: u.memberships[0]?.role ?? null,
   }));
 }
@@ -360,6 +366,8 @@ export async function getUserActivity(filters: UserActivityFilters): Promise<Use
         detail: success ? null : (str(meta.reason) ?? "credenciales inválidas"),
         tenantSlug: a.tenant?.slug ?? str(meta.tenantSlug),
         vesselCode: null,
+        tenantName: null,
+        vesselName: null,
         ip: str(meta.ip),
         success,
       });
@@ -372,6 +380,8 @@ export async function getUserActivity(filters: UserActivityFilters): Promise<Use
         detail: a.entityId ? `${a.entityType} · ${a.entityId}` : a.entityType,
         tenantSlug: a.tenant?.slug ?? null,
         vesselCode: str(meta.vesselCode),
+        tenantName: null,
+        vesselName: null,
         ip: null,
         success: null,
       });
@@ -389,6 +399,8 @@ export async function getUserActivity(filters: UserActivityFilters): Promise<Use
         detail: u.model ?? null,
         tenantSlug: u.tenantSlug,
         vesselCode: u.vesselCode,
+        tenantName: null,
+        vesselName: null,
         ip: u.ipAddress,
         success: !u.errored,
       });
@@ -410,6 +422,8 @@ export async function getUserActivity(filters: UserActivityFilters): Promise<Use
       detail: u.route ? u.route.split("?")[0] : null,
       tenantSlug: u.tenantSlug,
       vesselCode: u.vesselCode,
+      tenantName: null,
+      vesselName: null,
       ip: u.ipAddress,
       success: u.statusCode == null ? null : u.statusCode < 400,
     });
@@ -417,11 +431,23 @@ export async function getUserActivity(filters: UserActivityFilters): Promise<Use
 
   events.sort((a, b) => b.at.localeCompare(a.at));
   const truncated = events.length > limit;
+  const page = events.slice(0, limit);
+
+  // La consola muestra empresa y buque por nombre, no por código.
+  const [tenantNames, vesselNames] = await Promise.all([
+    getTenantNames(prisma),
+    getVesselNames(prisma, page),
+  ]);
+  for (const e of page) {
+    e.tenantName = e.tenantSlug ? tenantNames.get(e.tenantSlug) ?? e.tenantSlug : null;
+    e.vesselName = e.tenantSlug && e.vesselCode ? vesselNames.get(vesselKey(e.tenantSlug, e.vesselCode)) ?? null : null;
+  }
+  for (const m of identity.memberships) m.tenantName = tenantNames.get(m.tenantSlug) ?? m.tenantSlug;
 
   return {
     user: identity,
     alerts,
-    events: events.slice(0, limit),
+    events: page,
     truncated,
   };
 }

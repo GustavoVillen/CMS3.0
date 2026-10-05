@@ -1,11 +1,14 @@
 import React from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Radar, MapPin, Smartphone, Wifi } from "lucide-react";
+import { MapPin, RefreshCw } from "lucide-react";
 import { platformFetch } from "../../lib/platform-auth";
 import { escapeHtml } from "../../lib/utils";
 import { DataTable, type Column } from "../../components/DataTable";
-import { PageHeader } from "../../components/PageHeader";
+import {
+  PageIntro, StatusPill, Card, FilterBar, FilterField, Segmented, EmptyState, TwoLines, inputCls,
+} from "../../components/platform/PlatformUi";
+import { roleLabel, screenLabel, failureLabel, fmtWhen, fmtAgo } from "../../lib/platform-labels";
 
 // Leaflet rompe las rutas de sus íconos al empaquetarse con Vite — mismo
 // arreglo que en PlatformVesselMap.
@@ -35,8 +38,10 @@ interface ActiveUser {
   userEmail: string;
   userName: string | null;
   tenantSlug: string;
+  tenantName: string;
   userRole: string | null;
   vesselCode: string | null;
+  vesselName: string | null;
   lastRoute: string | null;
   lastSeenAt: string;
   requestCount: number;
@@ -50,6 +55,7 @@ interface LoginRow {
   scope: "tenant" | "platform";
   success: boolean;
   tenantSlug: string | null;
+  tenantName: string | null;
   userEmail: string | null;
   userEmailRedacted: boolean;
   userName: string | null;
@@ -66,48 +72,23 @@ const WINDOW_OPTIONS = [
   { minutes: 1440, label: "24 horas" },
 ];
 
-const FAILURE_LABELS: Record<string, string> = {
-  wrong_password:      "Contraseña incorrecta",
-  user_not_found:      "Usuario inexistente",
-  user_inactive:       "Usuario inactivo",
-  invalid_credentials: "Credenciales inválidas",
-};
-
 // ── Formato ──────────────────────────────────────────────────────────────────
 
-function fmtAge(iso: string): string {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 1) return "ahora";
-  if (mins < 60) return `hace ${mins} min`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `hace ${hrs} h`;
-  return `hace ${Math.floor(hrs / 24)} d`;
+const personName = (u: { userName: string | null; userEmail: string | null }) => u.userName ?? u.userEmail ?? "—";
+
+function placeLine(location: AccessLocation): string {
+  return location.source === "device" ? "ubicación exacta del celular" : "ubicación aproximada";
 }
 
-/** Convierte "PY" en 🇵🇾 usando los símbolos regionales de Unicode. */
-function flagEmoji(countryCode: string | null): string {
-  if (!countryCode || countryCode.length !== 2) return "";
-  const base = 0x1f1e6 - 65;
-  return String.fromCodePoint(
-    base + countryCode.toUpperCase().charCodeAt(0),
-    base + countryCode.toUpperCase().charCodeAt(1),
-  );
-}
-
-const LocationCell: React.FC<{ location: AccessLocation }> = ({ location }) => (
-  <div className="leading-tight">
-    <div className="text-xs text-fg/80 flex items-center gap-1.5">
-      {flagEmoji(location.countryCode) && <span>{flagEmoji(location.countryCode)}</span>}
-      <span>{location.label}</span>
-      {location.source === "device" && (
-        <span className="text-[9px] px-1 py-px rounded bg-success/10 text-success border border-success/25" title="Posición real tomada del GPS del dispositivo">
-          GPS
-        </span>
-      )}
-    </div>
-    <div className="text-[10px] font-mono text-text-industrial/40">
-      {location.ipAddress ?? "sin IP"}{location.isp ? ` · ${location.isp}` : ""}
-    </div>
+const LocationCell: React.FC<{ location: AccessLocation; tech: boolean }> = ({ location, tech }) => (
+  <div className="leading-tight min-w-0">
+    <div className="text-sm text-fg">{location.label}</div>
+    <div className="text-xs text-text-industrial/50">{placeLine(location)}</div>
+    {tech && (
+      <div className="text-xs text-text-industrial/50">
+        {location.ipAddress ?? "sin IP"}{location.isp ? ` · ${location.isp}` : ""}
+      </div>
+    )}
   </div>
 );
 
@@ -149,18 +130,15 @@ function spreadOverlaps(users: ActiveUser[]): Array<{ user: ActiveUser; lat: num
 
 function buildPopup(u: ActiveUser): string {
   const loc = u.location;
+  const vessel = u.vesselName ?? u.vesselCode;
   const lines = [
-    `<strong style="font-size:14px">${escapeHtml(u.userName ?? u.userEmail)}</strong>`,
-    `<span style="color:#888">${escapeHtml(u.tenantSlug)}${u.userRole ? ` · ${escapeHtml(u.userRole)}` : ""}</span>`,
-    u.vesselCode ? `<span>🚢 ${escapeHtml(u.vesselCode)}</span>` : "",
-    `<span>${flagEmoji(loc.countryCode)} ${escapeHtml(loc.label)}</span>`,
-    loc.isp ? `<span style="color:#666;font-size:11px">${escapeHtml(loc.isp)}</span>` : "",
-    u.device ? `<span style="color:#666;font-size:11px">${escapeHtml(u.device)}</span>` : "",
-    `<span style="color:#666;font-size:11px">${escapeHtml(fmtAge(u.lastSeenAt))}</span>`,
-    `<span style="color:#999;font-size:10px">${loc.source === "device" ? "Posición del dispositivo (GPS)" : "Ubicación estimada por IP"}</span>`,
-  ].filter(Boolean);
+    `<strong style="font-size:14px">${escapeHtml(personName(u))}</strong>`,
+    vessel ? `<span>A bordo del ${escapeHtml(vessel)}</span>` : `<span>En oficina</span>`,
+    `<span>${escapeHtml(loc.label)}</span>`,
+    `<span style="color:#666;font-size:11px">${escapeHtml(placeLine(loc))} · ${escapeHtml(fmtAgo(u.lastSeenAt))}</span>`,
+  ];
 
-  return `<div style="font-family:system-ui,sans-serif;font-size:12px;line-height:1.6">${lines.join("<br/>")}</div>`;
+  return `<div style="font-family:system-ui,sans-serif;font-size:13px;line-height:1.6">${lines.join("<br/>")}</div>`;
 }
 
 const AccessMap: React.FC<{
@@ -216,94 +194,85 @@ const AccessMap: React.FC<{
 
 // ── Columnas ─────────────────────────────────────────────────────────────────
 
-const ACTIVE_COLS: Column<ActiveUser>[] = [
-  {
-    key: "userEmail", header: "Usuario", mobileTitle: true,
-    render: (r) => (
-      <div className="leading-tight">
-        <div className="text-xs text-fg/90 truncate max-w-[220px]" title={r.userEmail}>{r.userName ?? r.userEmail}</div>
-        {r.userRole && <div className="text-[10px] text-text-industrial/40">{r.userRole}</div>}
-      </div>
-    ),
-  },
-  { key: "tenantSlug", header: "Empresa", filterValue: (r) => r.tenantSlug, render: (r) => <span className="font-mono text-xs text-accent">{r.tenantSlug}</span> },
-  { key: "vesselCode", header: "Buque",   render: (r) => r.vesselCode ? <span className="font-mono text-xs text-accent/70">{r.vesselCode}</span> : <span className="text-text-industrial/20">—</span> },
-  {
-    key: "location", header: "Ubicación",
-    sortValue: (r) => r.location.label,
-    render: (r) => <LocationCell location={r.location} />,
-  },
-  { key: "device", header: "Dispositivo", render: (r) => <span className="text-xs text-text-industrial/60">{r.device ?? "—"}</span> },
-  {
-    key: "lastRoute", header: "Pantalla",
-    render: (r) => <span className="font-mono text-[10px] text-text-industrial/50 truncate block max-w-[220px]" title={r.lastRoute ?? ""}>{r.lastRoute ?? "—"}</span>,
-  },
-  { key: "requestCount", header: "Acciones", render: (r) => <span className="font-mono text-xs text-text-industrial/70">{r.requestCount}</span> },
-  {
-    key: "lastSeenAt", header: "Visto", mobileTitle: true,
-    render: (r) => (
-      <span className="text-xs text-text-industrial/60" title={new Date(r.lastSeenAt).toLocaleString("es-AR")}>
-        {fmtAge(r.lastSeenAt)}
-      </span>
-    ),
-  },
-];
+function activeColumns(tech: boolean): Column<ActiveUser>[] {
+  const cols: Column<ActiveUser>[] = [
+    {
+      key: "userEmail", header: "Persona", mobileTitle: true,
+      sortValue: (r) => personName(r),
+      filterValue: (r) => personName(r),
+      render: (r) => <TwoLines main={personName(r)} sub={roleLabel(r.userRole)} />,
+    },
+    {
+      key: "tenantName", header: "Empresa y buque",
+      filterValue: (r) => r.tenantName ?? r.tenantSlug,
+      render: (r) => <TwoLines main={r.tenantName ?? r.tenantSlug} sub={r.vesselName ?? r.vesselCode ?? "Sin buque asignado"} />,
+    },
+    {
+      key: "location", header: "Dónde está", mobileHidden: true,
+      sortValue: (r) => r.location.label,
+      render: (r) => <LocationCell location={r.location} tech={tech} />,
+    },
+    { key: "device", header: "Desde qué equipo", mobileHidden: true, render: (r) => <span className="text-sm text-text-industrial/70">{r.device ?? "—"}</span> },
+    {
+      key: "lastRoute", header: "Qué está mirando", mobileHidden: true,
+      sortValue: (r) => screenLabel(r.lastRoute),
+      filterValue: (r) => screenLabel(r.lastRoute),
+      render: (r) => <span className="text-sm text-text-industrial/70">{screenLabel(r.lastRoute)}</span>,
+    },
+  ];
+  if (tech) {
+    cols.push({ key: "requestCount", header: "Pedidos al sistema", mobileHidden: true, render: (r) => <span className="text-sm text-text-industrial/70">{r.requestCount}</span> });
+  }
+  cols.push({
+    key: "lastSeenAt", header: "Última actividad",
+    render: (r) => <span className="text-sm text-text-industrial/70 whitespace-nowrap">{fmtAgo(r.lastSeenAt)}</span>,
+  });
+  return cols;
+}
 
-const LOGIN_COLS: Column<LoginRow>[] = [
-  {
-    key: "createdAt", header: "Fecha", mobileTitle: true,
-    render: (r) => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.createdAt).toLocaleString("es-AR")}</span>,
-  },
-  {
-    key: "success", header: "Resultado", mobileTitle: true,
-    sortValue: (r) => (r.success ? 1 : 0),
-    filterValue: (r) => r.success ? "INGRESÓ" : "RECHAZADO",
-    render: (r) => r.success
-      ? <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-success/10 text-success border-success/25">INGRESÓ</span>
-      : (
-        <span className="inline-block text-[10px] px-2 py-0.5 rounded-full border font-bold bg-danger/10 text-danger border-danger/25"
-              title={FAILURE_LABELS[r.failureReason ?? ""] ?? r.failureReason ?? ""}>
-          RECHAZADO
-        </span>
+function loginColumns(tech: boolean): Column<LoginRow>[] {
+  return [
+    {
+      key: "createdAt", header: "Cuándo", mobileTitle: true,
+      render: (r) => <span className="text-sm text-text-industrial/70 whitespace-nowrap">{fmtWhen(r.createdAt)}</span>,
+    },
+    {
+      key: "success", header: "Resultado", mobileTitle: true,
+      sortValue: (r) => (r.success ? 1 : 0),
+      filterValue: (r) => (r.success ? "Entró" : "Rechazado"),
+      render: (r) => r.success ? <StatusPill tone="ok">Entró</StatusPill> : <StatusPill tone="bad">Rechazado</StatusPill>,
+    },
+    {
+      key: "userEmail", header: "Persona",
+      sortValue: (r) => (r.userEmailRedacted ? "" : personName(r)),
+      filterValue: (r) => (r.userEmailRedacted ? "Intento anterior al registro de nombres" : personName(r)),
+      render: (r) => {
+        if (r.userEmailRedacted) {
+          return <TwoLines main="Intento anterior al registro de nombres" sub={failureLabel(null)} />;
+        }
+        if (!r.success && r.failureReason === "user_not_found") {
+          return <TwoLines main={`«${r.userEmail ?? ""}»`} sub={failureLabel(r.failureReason)} />;
+        }
+        return <TwoLines main={personName(r)} sub={r.success ? undefined : failureLabel(r.failureReason)} />;
+      },
+    },
+    {
+      key: "tenantName", header: "Empresa", mobileHidden: true,
+      filterValue: (r) => (r.scope === "platform" ? "Consola" : r.tenantName ?? r.tenantSlug ?? ""),
+      render: (r) => <span className="text-sm text-text-industrial/80">{r.scope === "platform" ? "Consola" : r.tenantName ?? r.tenantSlug ?? "—"}</span>,
+    },
+    {
+      key: "location", header: "Desde dónde", mobileHidden: true,
+      sortValue: (r) => r.location.label,
+      render: (r) => (
+        <div className="leading-tight min-w-0">
+          <LocationCell location={r.location} tech={tech} />
+          {r.device && <div className="text-xs text-text-industrial/50">{r.device}</div>}
+        </div>
       ),
-  },
-  {
-    key: "userEmail", header: "Usuario",
-    render: (r) => (
-      <div className="leading-tight">
-        {r.userEmailRedacted ? (
-          // El audit no guarda el usuario tecleado en un intento fallido, solo
-          // un identificador ofuscado. Se muestra tal cual para poder reconocer
-          // al mismo atacante insistiendo, sin fingir que es un email real.
-          <div className="text-[11px] font-mono text-text-industrial/50" title="Identificador oculto: permite reconocer intentos repetidos del mismo origen sin guardar el usuario tecleado">
-            🔒 {r.userEmail}
-          </div>
-        ) : (
-          <>
-            <div className="text-xs text-fg/90 truncate max-w-[220px]" title={r.userEmail ?? ""}>{r.userName ?? r.userEmail ?? "—"}</div>
-            {r.userName && r.userEmail && <div className="text-[10px] text-text-industrial/40 truncate max-w-[220px]">{r.userEmail}</div>}
-          </>
-        )}
-        {!r.success && r.failureReason && (
-          <div className="text-[10px] text-danger/70">{FAILURE_LABELS[r.failureReason] ?? r.failureReason}</div>
-        )}
-      </div>
-    ),
-  },
-  {
-    key: "tenantSlug", header: "Empresa",
-    filterValue: (r) => r.scope === "platform" ? "consola admin" : (r.tenantSlug ?? ""),
-    render: (r) => r.scope === "platform"
-      ? <span className="font-mono text-xs text-red-700 dark:text-red-400">consola admin</span>
-      : <span className="font-mono text-xs text-accent">{r.tenantSlug ?? "—"}</span>,
-  },
-  {
-    key: "location", header: "Ubicación",
-    sortValue: (r) => r.location.label,
-    render: (r) => <LocationCell location={r.location} />,
-  },
-  { key: "device", header: "Dispositivo", render: (r) => <span className="text-xs text-text-industrial/60">{r.device ?? "—"}</span> },
-];
+    },
+  ];
+}
 
 // ── Página ───────────────────────────────────────────────────────────────────
 
@@ -314,14 +283,14 @@ export const PlatformAccessPage: React.FC = () => {
   const [activeLoading, setActiveLoading] = React.useState(true);
   const [lastRefresh, setLastRefresh] = React.useState<Date>(new Date());
   const [focusUserId, setFocusUserId] = React.useState<string | null>(null);
+  const [tech, setTech] = React.useState(false);
 
   const [logins, setLogins] = React.useState<LoginRow[] | null>(null);
-  const [loginsTotal, setLoginsTotal] = React.useState(0);
   const [loginsError, setLoginsError] = React.useState<string | null>(null);
   const [loginsLoading, setLoginsLoading] = React.useState(true);
-  const [tenantSlug, setTenantSlug] = React.useState("");
-  const [userEmail, setUserEmail] = React.useState("");
-  const [result, setResult] = React.useState("");
+  const [empresa, setEmpresa] = React.useState("");
+  const [persona, setPersona] = React.useState("");
+  const [result, setResult] = React.useState<"" | "ok" | "bad">("");
 
   const loadActive = React.useCallback(async () => {
     setActiveLoading(true);
@@ -330,7 +299,7 @@ export const PlatformAccessPage: React.FC = () => {
       setActive(data.items);
       setActiveError(null);
     } catch (e: any) {
-      setActiveError(e?.message ?? "Error al cargar los conectados");
+      setActiveError(e?.message ?? "No se pudo cargar quién está conectado");
     } finally {
       setActiveLoading(false);
       setLastRefresh(new Date());
@@ -340,20 +309,15 @@ export const PlatformAccessPage: React.FC = () => {
   const loadLogins = React.useCallback(async () => {
     setLoginsLoading(true);
     try {
-      const sp = new URLSearchParams({ limit: "300" });
-      if (tenantSlug.trim()) sp.set("tenantSlug", tenantSlug.trim());
-      if (userEmail.trim())  sp.set("userEmail",  userEmail.trim());
-      if (result)            sp.set("result",     result);
-      const data = await platformFetch<{ items: LoginRow[]; total: number }>(`/platform/access/logins?${sp.toString()}`);
+      const data = await platformFetch<{ items: LoginRow[]; total: number }>(`/platform/access/logins?limit=300`);
       setLogins(data.items);
-      setLoginsTotal(data.total);
       setLoginsError(null);
     } catch (e: any) {
-      setLoginsError(e?.message ?? "Error al cargar el historial");
+      setLoginsError(e?.message ?? "No se pudo cargar el historial");
     } finally {
       setLoginsLoading(false);
     }
-  }, [tenantSlug, userEmail, result]);
+  }, []);
 
   React.useEffect(() => { loadActive(); }, [loadActive]);
   React.useEffect(() => { loadLogins(); }, [loadLogins]);
@@ -369,95 +333,138 @@ export const PlatformAccessPage: React.FC = () => {
     [active],
   );
 
+  const empresas = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const r of logins ?? []) {
+      const n = r.tenantName ?? r.tenantSlug;
+      if (r.scope === "tenant" && n) s.add(n);
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b, "es"));
+  }, [logins]);
+
+  const personas = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const r of logins ?? []) {
+      if (r.userEmailRedacted || r.failureReason === "user_not_found") continue;
+      if (r.userName ?? r.userEmail) s.add(personName(r));
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b, "es"));
+  }, [logins]);
+
+  const filteredLogins = React.useMemo(() => {
+    if (!logins) return null;
+    return logins.filter((r) => {
+      if (empresa && (r.scope === "platform" || (r.tenantName ?? r.tenantSlug) !== empresa)) return false;
+      if (persona && (r.userEmailRedacted || personName(r) !== persona)) return false;
+      if (result === "ok" && !r.success) return false;
+      if (result === "bad" && r.success) return false;
+      return true;
+    });
+  }, [logins, empresa, persona, result]);
+
   const reloadAll = React.useCallback(() => { loadActive(); loadLogins(); }, [loadActive, loadLogins]);
+
+  const activeCols = React.useMemo(() => activeColumns(tech), [tech]);
+  const loginCols = React.useMemo(() => loginColumns(tech), [tech]);
+
+  const btnCls = "inline-flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg border border-fg/10 bg-fg/5 text-sm text-text-industrial hover:border-accent/40";
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Radar} title="Accesos" total={active?.length} onReload={reloadAll}>
-        <div className="flex items-center gap-1">
-          {WINDOW_OPTIONS.map((opt) => (
-            <button key={opt.minutes} onClick={() => setWindowMinutes(opt.minutes)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs transition-all ${
-                windowMinutes === opt.minutes
-                  ? "bg-accent/15 border-accent/30 text-accent"
-                  : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
-              }`}>
-              {opt.label}
+      <PageIntro
+        title="Conectados e ingresos"
+        description="Quién está usando el sistema ahora y quién intentó entrar."
+        actions={
+          <>
+            <button onClick={() => setTech((v) => !v)} className={btnCls}>
+              {tech ? "Ocultar detalle técnico" : "Ver detalle técnico"}
             </button>
-          ))}
-        </div>
-      </PageHeader>
+            <button onClick={reloadAll} className={btnCls}>
+              <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+            </button>
+          </>
+        }
+      />
 
-      <p className="text-xs text-text-industrial/40 -mt-2">
-        Actividad de los últimos {WINDOW_OPTIONS.find((o) => o.minutes === windowMinutes)?.label}.
-        Se actualiza solo cada 60 s · última lectura {lastRefresh.toLocaleTimeString("es-AR")}
-      </p>
-
-      {/* ── Mapa ── */}
-      <div className="rounded-xl border border-border overflow-hidden h-[260px] md:h-[380px]">
-        <AccessMap users={mappable} focusUserId={focusUserId} />
-      </div>
-
-      {mappable.length < (active?.length ?? 0) && (
-        <p className="text-[11px] text-text-industrial/40 flex items-center gap-1.5">
-          <MapPin className="w-3 h-3" />
-          {(active?.length ?? 0) - mappable.length} de {active?.length} conectados no se pueden ubicar en el mapa
-          (red local o IP sin ubicación conocida). Igual aparecen en la tabla.
-        </p>
-      )}
-
-      {/* ── Conectados ahora ── */}
-      <section className="space-y-2">
-        <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-          <Wifi className="w-4 h-4 text-accent" />
-          Conectados ahora
-          <span className="text-xs font-normal text-text-industrial/40">
-            ({active?.length ?? 0}) · clic en una fila para ubicarla en el mapa
-          </span>
-        </h3>
-        <DataTable
-          columns={ACTIVE_COLS}
-          data={active}
-          loading={activeLoading && active === null}
-          error={activeError}
-          keyFn={(r) => r.userId}
-          onRowClick={(r) => setFocusUserId(r.userId)}
-          emptyText="Nadie usó la app en esta ventana de tiempo."
-          mobileCards
-        />
-      </section>
-
-      {/* ── Historial de ingresos ── */}
-      <section className="space-y-2">
-        <h3 className="text-sm font-bold text-fg flex items-center gap-2">
-          <Smartphone className="w-4 h-4 text-accent" />
-          Historial de ingresos
-          <span className="text-xs font-normal text-text-industrial/40">({loginsTotal})</span>
-        </h3>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <input value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} placeholder="Empresa (slug)"
-            className="w-full md:w-auto px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-base md:text-xs text-fg placeholder:text-text-industrial/30 focus:outline-none focus:border-accent/40" />
-          <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="Usuario"
-            className="w-full md:w-auto px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-base md:text-xs text-fg placeholder:text-text-industrial/30 focus:outline-none focus:border-accent/40" />
-          <select value={result} onChange={(e) => setResult(e.target.value)}
-            className="w-full md:w-auto px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-base md:text-xs text-fg focus:outline-none focus:border-accent/40">
-            <option value="">Todos</option>
-            <option value="success">Solo ingresos</option>
-            <option value="failed">Solo rechazados</option>
-          </select>
+      <Card
+        title={`Conectados ahora · ${active?.length ?? 0} ${active?.length === 1 ? "persona" : "personas"}`}
+        subtitle={`Se actualiza solo cada minuto (última lectura ${lastRefresh.toLocaleTimeString("es-AR")}). Tocá una fila para ubicarla en el mapa.`}
+        actions={
+          <FilterField label="Mostrar conectados en los últimos">
+            <Segmented
+              value={String(windowMinutes)}
+              options={WINDOW_OPTIONS.map((o) => ({ value: String(o.minutes), label: o.label }))}
+              onChange={(v) => setWindowMinutes(Number(v))}
+            />
+          </FilterField>
+        }
+      >
+        <div className="h-[260px] md:h-[380px] border-y border-border">
+          <AccessMap users={mappable} focusUserId={focusUserId} />
         </div>
 
-        <DataTable
-          columns={LOGIN_COLS}
-          data={logins}
-          loading={loginsLoading && logins === null}
-          error={loginsError}
-          keyFn={(r) => r.id}
-          emptyText="Sin ingresos registrados."
-          mobileCards
-        />
-      </section>
+        {mappable.length < (active?.length ?? 0) && (
+          <p className="px-4 pt-2 text-xs text-text-industrial/50 flex items-center gap-1.5">
+            <MapPin className="w-3 h-3" />
+            {(active?.length ?? 0) - mappable.length} de {active?.length} conectados no se pueden ubicar en el mapa
+            (red local o ubicación desconocida). Igual aparecen en la tabla.
+          </p>
+        )}
+
+        <div className="p-4">
+          <DataTable
+            columns={activeCols}
+            data={active}
+            loading={activeLoading && active === null}
+            error={activeError}
+            keyFn={(r) => r.userId}
+            onRowClick={(r) => setFocusUserId(r.userId)}
+            emptyText="Nadie usó el sistema en este período. Probá con una ventana más larga."
+            mobileCards
+          />
+        </div>
+      </Card>
+
+      <Card title="Historial de ingresos" subtitle="Cada vez que alguien entró o intentó entrar.">
+        <div className="px-4">
+          <FilterBar>
+            <FilterField label="Empresa">
+              <select value={empresa} onChange={(e) => setEmpresa(e.target.value)} className={inputCls}>
+                <option value="">Todas</option>
+                {empresas.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </FilterField>
+            <FilterField label="Persona">
+              <select value={persona} onChange={(e) => setPersona(e.target.value)} className={inputCls}>
+                <option value="">Todas</option>
+                {personas.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </FilterField>
+            <FilterField label="Resultado">
+              <Segmented
+                value={result}
+                options={[{ value: "", label: "Todos" }, { value: "ok", label: "Entró" }, { value: "bad", label: "Rechazado" }]}
+                onChange={setResult}
+              />
+            </FilterField>
+          </FilterBar>
+        </div>
+        <div className="px-4 pb-4">
+          {filteredLogins && filteredLogins.length === 0 && !loginsLoading ? (
+            <EmptyState title="No hay ingresos con esos filtros" text="Cambiá la empresa, la persona o el resultado para ver más." />
+          ) : (
+            <DataTable
+              columns={loginCols}
+              data={filteredLogins}
+              loading={loginsLoading && logins === null}
+              error={loginsError}
+              keyFn={(r) => r.id}
+              emptyText="Sin ingresos registrados."
+              mobileCards
+            />
+          )}
+        </div>
+      </Card>
     </div>
   );
 };

@@ -1,11 +1,12 @@
 import React from "react";
 import {
   UserSearch, ShieldAlert, LogIn, FileDown, Monitor, Sparkles, Pencil,
-  Download, Layers, MoonStar, Fingerprint,
+  Download, Layers, MoonStar,
 } from "lucide-react";
 import { platformFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
-import { PageHeader } from "../../components/PageHeader";
+import { PageIntro, StatusPill, EmptyState, TwoLines } from "../../components/platform/PlatformUi";
+import { roleLabel, statusInfo, screenLabel, featureLabel, FEATURE_LABELS, fmtWhen, fmtDate } from "../../lib/platform-labels";
 
 // ── Tipos (espejo de platform/access/platform-user-activity-service.ts) ────────
 
@@ -18,6 +19,7 @@ interface UserSearchRow {
   legacyUserId: string | null;
   fullName: string | null;
   tenantSlug: string | null;
+  tenantName: string | null;
   role: string | null;
 }
 
@@ -27,7 +29,7 @@ interface Identity {
   legacyUserId: string | null;
   fullName: string | null;
   status: string;
-  memberships: Array<{ tenantSlug: string; role: string; membershipStatus: string }>;
+  memberships: Array<{ tenantSlug: string; tenantName?: string; role: string; membershipStatus: string }>;
   createdAt: string;
   lastSeenAt: string | null;
   lastIp: string | null;
@@ -53,7 +55,9 @@ interface ActivityEvent {
   label: string;
   detail: string | null;
   tenantSlug: string | null;
+  tenantName: string | null;
   vesselCode: string | null;
+  vesselName: string | null;
   ip: string | null;
   success: boolean | null;
 }
@@ -122,87 +126,107 @@ const UserPicker: React.FC<{
         const data = await platformFetch<{ items: UserSearchRow[] }>(`/platform/user-activity/search?q=${encodeURIComponent(term)}`);
         if (!cancelled) { setResults(data.items); setOpen(true); }
       } catch { /* silencioso: es un buscador */ }
-    }, 250);
+    }, 400);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [q]);
 
   return (
-    <div className="relative w-full max-w-md">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 focus-within:border-accent/40">
+    <label className="flex flex-col gap-1 text-[11px] font-semibold text-text-industrial/60 w-full max-w-md relative">
+      Persona
+      <div className="flex items-center gap-2 px-3 py-2.5 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 focus-within:border-accent/50">
         <UserSearch className="w-4 h-4 text-text-industrial/40 shrink-0" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
-          placeholder={current ? `${current.fullName ?? current.legacyUserId ?? current.email} — buscar otro usuario…` : "Buscar usuario por nombre, usuario o email…"}
-          className="flex-1 min-w-0 bg-transparent text-base md:text-xs text-fg placeholder:text-text-industrial/40 focus:outline-none"
+          placeholder={current ? `${displayName(current)}. Buscar a otra persona…` : "Escribí un nombre, usuario o correo…"}
+          className="flex-1 min-w-0 bg-transparent text-base md:text-sm font-normal text-fg placeholder:text-text-industrial/40 focus:outline-none"
         />
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-surface dark:bg-[#0B1120] shadow-xl max-h-72 overflow-y-auto">
+        <div className="absolute top-full z-50 mt-1 w-full rounded-lg border border-border bg-surface dark:bg-[#0B1120] shadow-xl max-h-72 overflow-y-auto font-normal">
           {results.map((u) => (
             <button
               key={u.userId}
+              type="button"
               onClick={() => { onPick(u); setOpen(false); setQ(""); }}
               className="w-full text-left px-3 py-2 hover:bg-accent/10 transition-colors border-b border-border/50 last:border-0"
             >
-              <div className="text-xs text-fg font-medium">{u.fullName ?? u.legacyUserId ?? u.email}</div>
-              <div className="text-[10px] text-text-industrial/50 font-mono">
-                {u.legacyUserId ? `${u.legacyUserId} · ` : ""}{u.email}
-                {u.tenantSlug ? ` · ${u.tenantSlug}` : ""}{u.role ? ` · ${u.role}` : ""}
+              <div className="text-sm text-fg">
+                <span className="font-medium">{u.fullName ?? u.legacyUserId ?? u.email}</span>
+                <span className="text-text-industrial/60">
+                  {u.tenantName ?? u.tenantSlug ? ` · ${u.tenantName ?? u.tenantSlug}` : ""}{u.role ? ` · ${roleLabel(u.role)}` : ""}
+                </span>
               </div>
+              {u.legacyUserId && u.fullName && <div className="text-xs text-text-industrial/50">usuario {u.legacyUserId}</div>}
             </button>
           ))}
         </div>
       )}
-    </div>
+    </label>
   );
 };
 
+const displayName = (u: Identity) => u.fullName ?? u.legacyUserId ?? u.email;
+const isPlaceholderEmail = (e: string) => /^named-/i.test(e) || /@internal$/i.test(e);
+
+/** Detalle del evento en lenguaje de persona: rutas como pantallas, claves de IA como funciones. */
+function humanDetail(detail: string | null): string {
+  if (!detail) return "—";
+  if (detail.startsWith("/")) return screenLabel(detail);
+  if (FEATURE_LABELS[detail]) return featureLabel(detail);
+  return detail;
+}
+
 // ── Columnas de la línea de tiempo ─────────────────────────────────────────────
 
-const EVENT_COLS: Column<ActivityEvent>[] = [
-  {
-    key: "at", header: "Fecha", mobileTitle: true,
-    render: (r) => <span className="font-mono text-xs text-text-industrial/60">{new Date(r.at).toLocaleString("es-AR")}</span>,
-  },
-  {
-    key: "type", header: "Tipo", mobileTitle: true,
-    filterValue: (r) => TYPE_BADGE[r.type].label,
-    render: (r) => {
-      const b = TYPE_BADGE[r.type];
-      const Icon = b.icon;
-      return (
-        <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-bold ${b.cls}`}>
-          <Icon className="w-3 h-3" /> {b.label}
-        </span>
-      );
+function eventColumns(tech: boolean): Column<ActivityEvent>[] {
+  const cols: Column<ActivityEvent>[] = [
+    {
+      key: "at", header: "Cuándo", mobileTitle: true,
+      render: (r) => <span className="text-sm text-text-industrial/70 whitespace-nowrap">{fmtWhen(r.at)}</span>,
     },
-  },
-  {
-    key: "label", header: "Qué hizo",
-    render: (r) => (
-      <span className={`text-xs ${r.success === false ? "text-danger" : "text-fg/90"}`}>{r.label}</span>
-    ),
-  },
-  {
-    key: "detail", header: "Detalle",
-    render: (r) => <span className="font-mono text-[10px] text-text-industrial/50 truncate block max-w-[280px]" title={r.detail ?? ""}>{r.detail ?? "—"}</span>,
-  },
-  {
-    key: "tenantSlug", header: "Empresa / Buque",
-    render: (r) => (
-      <span className="text-xs">
-        {r.tenantSlug ? <span className="font-mono text-accent">{r.tenantSlug}</span> : <span className="text-text-industrial/30">—</span>}
-        {r.vesselCode ? <span className="font-mono text-accent/70"> · {r.vesselCode}</span> : ""}
-      </span>
-    ),
-  },
-  {
-    key: "ip", header: "IP",
-    render: (r) => <span className="font-mono text-[10px] text-text-industrial/40">{r.ip ?? "—"}</span>,
-  },
-];
+    {
+      key: "type", header: "Tipo", mobileTitle: true,
+      filterValue: (r) => TYPE_BADGE[r.type].label,
+      render: (r) => {
+        const b = TYPE_BADGE[r.type];
+        const Icon = b.icon;
+        return (
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-semibold ${b.cls}`}>
+            <Icon className="w-3 h-3" /> {b.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: "label", header: "Qué hizo",
+      render: (r) => <span className={`text-sm ${r.success === false ? "text-danger" : "text-fg/90"}`}>{r.label}</span>,
+    },
+    {
+      key: "detail", header: "Detalle", mobileHidden: true,
+      sortValue: (r) => humanDetail(r.detail),
+      render: (r) => <span className="text-sm text-text-industrial/70 block max-w-[280px] truncate" title={humanDetail(r.detail)}>{humanDetail(r.detail)}</span>,
+    },
+    {
+      key: "tenantName", header: "Empresa y buque", mobileHidden: true,
+      filterValue: (r) => r.tenantName ?? r.tenantSlug ?? "",
+      render: (r) => {
+        const empresa = r.tenantName ?? r.tenantSlug;
+        const buque = r.vesselName ?? r.vesselCode;
+        if (!empresa && !buque) return <span className="text-text-industrial/40">—</span>;
+        return <span className="text-sm text-text-industrial/80">{[empresa, buque].filter(Boolean).join(" · ")}</span>;
+      },
+    },
+  ];
+  if (tech) {
+    cols.push({
+      key: "ip", header: "IP", mobileHidden: true,
+      render: (r) => <span className="text-xs text-text-industrial/50">{r.ip ?? "—"}</span>,
+    });
+  }
+  return cols;
+}
 
 // ── Página ──────────────────────────────────────────────────────────────────
 
@@ -214,19 +238,7 @@ export const PlatformUserActivityPage: React.FC = () => {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notFound, setNotFound] = React.useState(false);
-
-  // Al entrar, preseleccionar a Carlos Arrascaeta si existe. El buscador queda
-  // igual disponible para auditar a cualquier otro usuario.
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await platformFetch<{ items: UserSearchRow[] }>(`/platform/user-activity/search?q=${encodeURIComponent("ARRASCAETA")}`);
-        if (!cancelled && res.items.length > 0) setSelectedUserId(res.items[0].userId);
-      } catch { /* si falla, el usuario elige a mano */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const [tech, setTech] = React.useState(false);
 
   const load = React.useCallback(async () => {
     if (!selectedUserId) { setData(null); return; }
@@ -245,7 +257,7 @@ export const PlatformUserActivityPage: React.FC = () => {
       setData(res);
     } catch (e: any) {
       if (e?.status === 404) setNotFound(true);
-      else setError(e?.message ?? "Error al cargar la actividad");
+      else setError(e?.message ?? "No se pudo cargar la actividad");
     } finally {
       setLoading(false);
     }
@@ -263,87 +275,108 @@ export const PlatformUserActivityPage: React.FC = () => {
   };
 
   const u = data?.user ?? null;
+  const eventCols = React.useMemo(() => eventColumns(tech), [tech]);
+  const periodLabel = WINDOW_OPTIONS.find((o) => o.days === days)?.label;
+  const primary = u?.memberships[0];
+  const st = u ? statusInfo(u.status, "person") : null;
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Fingerprint} title="Auditoría de usuario" onReload={load}>
-        <div className="flex items-center gap-1">
-          {WINDOW_OPTIONS.map((opt) => (
-            <button key={opt.days} onClick={() => setDays(opt.days)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs transition-all ${
-                days === opt.days ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
-              }`}>
-              {opt.label}
+      <PageIntro
+        title="Actividad por persona"
+        description="Elegí a una persona para ver todo lo que hizo en el sistema y si hay algo fuera de lo común."
+        actions={
+          <>
+            <button onClick={() => setTech((v) => !v)}
+              className="px-3 py-2 md:py-1.5 rounded-lg border border-fg/10 bg-fg/5 text-sm text-text-industrial hover:border-accent/40">
+              {tech ? "Ocultar detalle técnico" : "Ver detalle técnico"}
             </button>
-          ))}
-        </div>
-      </PageHeader>
+            <button onClick={load} disabled={!selectedUserId}
+              className="px-3 py-2 md:py-1.5 rounded-lg border border-fg/10 bg-fg/5 text-sm text-text-industrial hover:border-accent/40 disabled:opacity-40">
+              Actualizar
+            </button>
+          </>
+        }
+      />
 
-      <UserPicker onPick={(picked) => setSelectedUserId(picked.userId)} current={u} />
+      <div className="flex flex-col md:flex-row md:items-end gap-3">
+        <UserPicker onPick={(picked) => setSelectedUserId(picked.userId)} current={u} />
+        <div className="flex flex-col gap-1 text-[11px] font-semibold text-text-industrial/60">
+          Período
+          <div className="flex flex-wrap items-center gap-1 font-normal">
+            {WINDOW_OPTIONS.map((opt) => (
+              <button key={opt.days} onClick={() => setDays(opt.days)}
+                className={`px-3 py-2 md:py-1.5 rounded-lg border text-sm transition-all ${
+                  days === opt.days ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial hover:border-accent/30"
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {notFound && (
-        <div className="text-center py-16 text-text-industrial/40 text-sm">Usuario no encontrado.</div>
+        <EmptyState title="No encontramos a esa persona" text="Buscala de nuevo por nombre o usuario." />
       )}
 
       {!selectedUserId && !notFound && (
-        <div className="text-center py-16 text-text-industrial/30 text-sm">
-          Buscá un usuario arriba para ver todo lo que hace en el sistema.
+        <div className="rounded-xl border border-border bg-fg/[0.02]">
+          <EmptyState title="Todavía no elegiste a nadie" text="Elegí una persona para ver su actividad." />
         </div>
       )}
 
-      {u && (
+      {u && st && (
         <>
           {/* ── Ficha de identidad ── */}
           <div className="rounded-xl border border-border bg-fg/[0.02] p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="text-base font-bold text-fg">{u.fullName ?? u.legacyUserId ?? u.email}</div>
-                <div className="text-xs text-text-industrial/60 font-mono mt-0.5">
-                  {u.legacyUserId ? `usuario: ${u.legacyUserId} · ` : ""}{u.email}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-lg font-bold text-fg">{displayName(u)}</div>
+                  <StatusPill tone={st.tone}>{st.label}</StatusPill>
                 </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {u.memberships.map((m, i) => (
-                    <span key={i} className="text-[10px] px-2 py-0.5 rounded-full border border-accent/20 bg-accent/5 text-accent">
-                      {m.tenantSlug} · {m.role}{m.membershipStatus !== "ACTIVE" ? ` (${m.membershipStatus})` : ""}
-                    </span>
-                  ))}
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${u.status === "ACTIVE" ? "border-success/25 bg-success/10 text-success" : "border-fg/15 bg-fg/5 text-text-industrial/60"}`}>
-                    {u.status}
-                  </span>
+                <div className="text-sm text-text-industrial/70 mt-1">
+                  {primary ? `${roleLabel(primary.role)} · ${primary.tenantName ?? primary.tenantSlug}` : "Sin empresa asignada"}
+                  {u.memberships.length > 1 ? ` y ${u.memberships.length - 1} más` : ""}
+                </div>
+                <div className="text-xs text-text-industrial/50 mt-0.5">
+                  {u.legacyUserId ? `usuario ${u.legacyUserId} · ` : ""}{isPlaceholderEmail(u.email) ? "sin correo cargado" : u.email}
                 </div>
               </div>
-              <div className="md:text-right text-xs text-text-industrial/60 leading-relaxed">
-                <div>Última señal: <span className="text-fg/80">{u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString("es-AR") : "—"}</span></div>
-                <div>Última IP: <span className="font-mono text-fg/70">{u.lastIp ?? "—"}</span></div>
-                <div>Alta: <span className="text-fg/60">{new Date(u.createdAt).toLocaleDateString("es-AR")}</span></div>
+              <div className="md:text-right text-sm text-text-industrial/60 leading-relaxed">
+                <div>Última actividad: <span className="text-fg/80">{fmtWhen(u.lastSeenAt)}</span></div>
+                <div>Alta: <span className="text-fg/70">{fmtDate(u.createdAt)}</span></div>
+                {tech && <div>Última IP: <span className="text-fg/70">{u.lastIp ?? "—"}</span></div>}
               </div>
             </div>
           </div>
 
-          {/* ── Alertas de robo de información ── */}
+          {/* ── Señales de riesgo ── */}
           <section className="space-y-2">
             <h3 className="text-sm font-bold text-fg flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-danger" />
               Señales de riesgo
-              <span className="text-xs font-normal text-text-industrial/40">
-                · {data?.alerts.totalRequests ?? 0} acciones en {WINDOW_OPTIONS.find((o) => o.days === days)?.label}
+              <span className="text-xs font-normal text-text-industrial/50">
+                · {data?.alerts.totalRequests ?? 0} acciones en {periodLabel}
               </span>
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {(data?.alerts.items ?? []).map((a) => {
                 const meta = ALERT_META[a.key];
                 const Icon = meta.icon;
                 return (
                   <div key={a.key} className={`rounded-xl border p-3 ${SEV_CLASS[a.severity]}`} title={meta.hint}>
-                    <div className="flex items-center gap-1.5 text-[11px] opacity-80">
+                    <div className="flex items-center gap-1.5 text-xs opacity-80">
                       <Icon className="w-3.5 h-3.5" /> {meta.label}
                     </div>
                     <div className="text-2xl font-bold mt-1 tabular-nums">{meta.fmt(a.value)}</div>
+                    <div className="text-xs opacity-70 mt-1">{meta.hint}</div>
                   </div>
                 );
               })}
             </div>
-            <p className="text-[11px] text-text-industrial/40">
+            <p className="text-xs text-text-industrial/50">
               Los colores son una guía (ámbar = mirar, rojo = revisar), no una acusación. El detalle está en la línea de tiempo.
             </p>
           </section>
@@ -355,7 +388,7 @@ export const PlatformUserActivityPage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-1">
                 {TYPE_CHIPS.map((c) => (
                   <button key={c.type} onClick={() => toggleType(c.type)}
-                    className={`px-3 md:px-2 py-2 md:py-1 rounded-lg border text-[11px] transition-all ${
+                    className={`px-3 md:px-2.5 py-2 md:py-1 rounded-lg border text-xs transition-all ${
                       types.has(c.type) ? "bg-accent/15 border-accent/30 text-accent" : "bg-fg/5 border-fg/10 text-text-industrial/50 hover:border-accent/30"
                     }`}>
                     {c.label}
@@ -365,13 +398,13 @@ export const PlatformUserActivityPage: React.FC = () => {
             </div>
 
             {data?.truncated && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              <p className="text-xs text-amber-600 dark:text-amber-400">
                 Se muestran los eventos más recientes del período. Acortá la ventana de tiempo para ver el resto.
               </p>
             )}
 
             <DataTable
-              columns={EVENT_COLS}
+              columns={eventCols}
               data={data?.events ?? null}
               loading={loading && data === null}
               error={error}

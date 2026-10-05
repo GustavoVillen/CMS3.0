@@ -1,9 +1,12 @@
 import React, { useState, useCallback } from "react";
-import { MessageSquare, Send, RotateCcw, Loader2, CheckCircle2, AlertCircle, Plus } from "lucide-react";
+import { Plus, Loader2, CheckCircle2, Info } from "lucide-react";
 import { platformFetch, platformPost, platformPatch } from "../../lib/platform-auth";
-import { StatusBadge, fmtDate } from "../../components/DataTable";
-import { PageHeader } from "../../components/PageHeader";
+import { DataTable, type Column } from "../../components/DataTable";
 import { ModalCloseButton } from "../../components/ModalCloseButton";
+import { AlertDialog } from "../../components/AlertDialog";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { PageIntro, StatusPill } from "../../components/platform/PlatformUi";
+import { capabilityLabel, localeLabel, statusInfo, fmtDate, CAPABILITY_LABELS, LOCALE_LABELS } from "../../lib/platform-labels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,17 +25,10 @@ interface Prompt {
 
 interface ListResponse { items: Prompt[]; total: number; }
 
-const CAPABILITIES = [
-  "knowledge_assistant",
-  "defect_assistant",
-  "deferral_analysis",
-  "barrier_interviewer",
-  "maintenance_insights",
-  "daily_executive_summary",
-  "document_summarizer",
-  "evidence_link_assistant",
-];
-const LOCALES      = ["es", "en", "pt"];
+const CAPABILITIES = Object.keys(CAPABILITY_LABELS);
+const LOCALES = Object.keys(LOCALE_LABELS);
+
+const firstLine = (s: string) => (s.split("\n").find(l => l.trim()) ?? "").trim();
 
 // ─── Data hook ────────────────────────────────────────────────────────────────
 
@@ -54,9 +50,8 @@ function usePlatformList<T>(path: string) {
 
 function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    // En el celular sube desde abajo; en ambos casos se desplaza si no entra.
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm md:p-4">
-      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-t-2xl md:rounded-2xl w-full max-w-xl shadow-2xl max-h-[92dvh] flex flex-col">
+      <div className="bg-surface dark:bg-[#0D1526] border border-fg/10 rounded-t-2xl md:rounded-2xl w-full max-w-2xl shadow-2xl max-h-[92dvh] flex flex-col">
         <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-fg/5 shrink-0">
           <h2 className="text-sm font-bold text-fg truncate">{title}</h2>
           <ModalCloseButton onClose={onClose} />
@@ -70,66 +65,67 @@ function ModalWrapper({ title, onClose, children }: { title: string; onClose: ()
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
+      <label className="block text-xs font-semibold text-text-industrial/60 mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
       {children}
     </div>
   );
 }
 
 // text-base en el celular: con menos de 16px el iPhone agranda la pantalla al tocar el campo.
-const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/10 transition-all";
 const sel = inp + " appearance-none";
-const textarea = inp.replace("md:text-sm", "md:text-xs") + " resize-none font-mono leading-relaxed";
-
-function ErrMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
-}
+const textarea = inp + " resize-y leading-relaxed min-h-[16rem]";
 
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
   return (
-    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-red-500/80 text-fg font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-accent text-accent-fg font-bold text-sm hover:bg-accent/80 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
       {l ? <><Loader2 className="w-4 h-4 animate-spin" />{label}...</> : label}
     </button>
   );
 }
+
+const btn = "px-3 py-2 md:py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-sm text-fg hover:bg-fg/10 disabled:opacity-50 transition-colors whitespace-nowrap";
+const btnPri = "px-3 py-2 md:py-1.5 rounded-lg bg-accent text-accent-fg text-sm font-semibold hover:bg-accent/80 disabled:opacity-50 transition-colors whitespace-nowrap";
 
 // ─── Create Prompt Modal ──────────────────────────────────────────────────────
 
 function CreatePromptModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ capability: CAPABILITIES[0] ?? "knowledge_assistant", locale: "es", title: "", content: "" });
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string|null>(null);
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
+    e.preventDefault();
+    if (!form.title.trim() || !form.content.trim()) { setErr("Completá el título y el contenido de las instrucciones."); return; }
+    setLoading(true);
     try { await platformPost("/platform/prompts", form); onCreated(); onClose(); }
-    catch (ex: any) { setErr(ex.message ?? "Error al crear prompt"); }
+    catch (ex: any) { setErr(ex.message ?? "No se pudieron crear las instrucciones"); }
     finally { setLoading(false); }
   };
   return (
-    <ModalWrapper title="Crear Prompt" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_6rem] md:grid-cols-2 gap-3">
-          <Field label="Capability">
+    <ModalWrapper title="Nuevas instrucciones" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Función">
             <select className={sel} value={form.capability} onChange={set("capability")}>
-              {CAPABILITIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {CAPABILITIES.map(c => <option key={c} value={c}>{capabilityLabel(c)}</option>)}
             </select>
           </Field>
-          <Field label="Locale">
+          <Field label="Idioma">
             <select className={sel} value={form.locale} onChange={set("locale")}>
-              {LOCALES.map(l => <option key={l} value={l}>{l}</option>)}
+              {LOCALES.map(l => <option key={l} value={l}>{localeLabel(l)}</option>)}
             </select>
           </Field>
         </div>
         <Field label="Título" required>
-          <input className={inp} required value={form.title} onChange={set("title")} placeholder="Prompt de copiloto naval" />
+          <input className={inp} value={form.title} onChange={set("title")} placeholder="Por ejemplo: Asistente de consultas, versión de octubre" />
         </Field>
-        <Field label="Contenido del prompt" required>
-          <textarea className={textarea} required rows={10} value={form.content} onChange={set("content")} placeholder="Eres un asistente especializado en gestión de mantenimiento naval..." />
+        <Field label="Contenido" required>
+          <textarea className={textarea} rows={12} value={form.content} onChange={set("content")} placeholder="Escribí acá el texto de base que va a recibir la IA." />
         </Field>
-        {err && <ErrMsg msg={err} />}
-        <SaveBtn loading={loading} label="Crear Prompt" />
+        <SaveBtn loading={loading} label="Guardar como borrador" />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
@@ -139,26 +135,28 @@ function CreatePromptModal({ onClose, onCreated }: { onClose: () => void; onCrea
 function EditPromptModal({ prompt, onClose, onSaved }: { prompt: Prompt; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ title: prompt.title, content: prompt.content });
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string|null>(null);
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
+    e.preventDefault();
+    if (!form.title.trim() || !form.content.trim()) { setErr("Completá el título y el contenido de las instrucciones."); return; }
+    setLoading(true);
     try { await platformPatch(`/platform/prompts/${prompt.id}`, form); onSaved(); onClose(); }
-    catch (ex: any) { setErr(ex.message ?? "Error al guardar"); }
+    catch (ex: any) { setErr(ex.message ?? "No se pudieron guardar los cambios"); }
     finally { setLoading(false); }
   };
   return (
-    <ModalWrapper title={`Editar — ${prompt.capability} · ${prompt.locale.toUpperCase()} · v${prompt.version}`} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <ModalWrapper title={`Editar: ${capabilityLabel(prompt.capability)} · ${localeLabel(prompt.locale)} · versión ${prompt.version}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <Field label="Título" required>
-          <input className={inp} required value={form.title} onChange={set("title")} />
+          <input className={inp} value={form.title} onChange={set("title")} />
         </Field>
-        <Field label="Contenido del prompt" required>
-          <textarea className={textarea} required rows={12} value={form.content} onChange={set("content")} />
+        <Field label="Contenido" required>
+          <textarea className={textarea} rows={14} value={form.content} onChange={set("content")} />
         </Field>
-        {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
@@ -167,96 +165,98 @@ function EditPromptModal({ prompt, onClose, onSaved }: { prompt: Prompt; onClose
 
 export const PlatformPromptsPage: React.FC = () => {
   const { data, loading, error, reload } = usePlatformList<ListResponse>("/platform/prompts");
-  const [actMsg, setActMsg]         = useState<string | null>(null);
-  const [actLoading, setActLoading] = useState(false);
-  const [creating, setCreating]     = useState(false);
-  const [editing, setEditing]       = useState<Prompt | null>(null);
+  const [busy, setBusy]         = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing]   = useState<Prompt | null>(null);
+  const [confirm, setConfirm]   = useState<{ p: Prompt; act: "publish" | "rollback" } | null>(null);
+  const [actErr, setActErr]     = useState<string | null>(null);
+  const [notice, setNotice]     = useState<string | null>(null);
 
-  const handleAction = async (p: Prompt, act: "publish" | "rollback") => {
-    setActLoading(true); setActMsg(null);
+  React.useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  const runAction = async () => {
+    if (!confirm) return;
+    const { p, act } = confirm;
+    setConfirm(null); setBusy(true);
     try {
       await platformPost(`/platform/prompts/${p.id}/${act}`, {});
-      setActMsg(`${act === "publish" ? "Publicado" : "Revertido"} correctamente`);
+      setNotice(act === "publish" ? "Publicado. Ya está en uso." : "Listo. Se volvió a la versión anterior.");
       reload();
     } catch (e: any) {
-      setActMsg(`Error: ${e.message}`);
+      setActErr(e.message ?? "No se pudo completar la acción");
     } finally {
-      setActLoading(false);
+      setBusy(false);
     }
   };
 
-  const prompts = data?.items ?? [];
+  const rows = React.useMemo(() => [...(data?.items ?? [])].sort((a, b) =>
+    capabilityLabel(a.capability).localeCompare(capabilityLabel(b.capability), "es") ||
+    a.locale.localeCompare(b.locale) || b.version - a.version), [data]);
+
+  const columns: Column<Prompt>[] = [
+    { key: "fn", header: "Función", mobileTitle: true, filterValue: r => capabilityLabel(r.capability),
+      render: r => (
+        <div className="min-w-0 max-w-md">
+          <div className="text-sm font-bold text-fg">{capabilityLabel(r.capability)}</div>
+          <div className="text-xs text-text-industrial/60 truncate">{firstLine(r.content) || r.title}</div>
+        </div>
+      ) },
+    { key: "locale", header: "Idioma", filterValue: r => localeLabel(r.locale), render: r => <span className="text-sm">{localeLabel(r.locale)}</span> },
+    { key: "status", header: "Estado", filterValue: r => statusInfo(r.status).label,
+      render: r => {
+        const s = statusInfo(r.status);
+        return <StatusPill tone={s.tone}>{s.label} · versión {r.version}</StatusPill>;
+      } },
+    { key: "updatedAt", header: "Última modificación", sortable: true, sortValue: r => r.updatedAt, render: r => <span className="text-sm whitespace-nowrap">{fmtDate(r.updatedAt)}</span> },
+    { key: "actions", header: "", render: r => (
+      <div className="flex flex-wrap gap-2" onClick={e => e.stopPropagation()}>
+        <button type="button" className={btn} disabled={busy} onClick={() => setEditing(r)}>Editar</button>
+        {r.status === "PUBLISHED" ? (
+          <button type="button" className={btn} disabled={busy} onClick={() => setConfirm({ p: r, act: "rollback" })}>Volver a la anterior</button>
+        ) : r.status === "DRAFT" ? (
+          <button type="button" className={btnPri} disabled={busy} onClick={() => setConfirm({ p: r, act: "publish" })}>Publicar</button>
+        ) : null}
+      </div>
+    ) },
+  ];
+
+  const confirmMsg = confirm
+    ? confirm.act === "publish"
+      ? `Desde ahora la IA va a usar la versión ${confirm.p.version} de ${capabilityLabel(confirm.p.capability)} en todas las empresas.`
+      : `La IA va a dejar de usar la versión ${confirm.p.version} de ${capabilityLabel(confirm.p.capability)} y vuelve a la anterior, en todas las empresas.`
+    : "";
 
   return (
-    <div className="space-y-5">
-      <PageHeader icon={MessageSquare} title="Platform Prompts" total={data?.total} onReload={reload}>
-        <button onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Nuevo Prompt
-        </button>
-      </PageHeader>
+    <div>
+      <PageIntro title="Instrucciones de la IA"
+        description="El texto de base que recibe la inteligencia artificial en cada función. Un cambio publicado afecta enseguida a todas las empresas."
+        actions={<button type="button" onClick={() => setCreating(true)} className={btnPri + " flex items-center gap-1.5"}><Plus className="w-3.5 h-3.5" /> Nuevas instrucciones</button>} />
 
-      {actMsg && (
-        <div className={`flex items-center gap-2 text-xs p-3 rounded-xl border ${actMsg.startsWith("Error") ? "bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400" : "bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400"}`}>
-          {actMsg.startsWith("Error") ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
-          {actMsg}
+      <div className="flex items-start gap-2 text-sm rounded-xl border border-warning/25 bg-warning/10 text-fg px-3 py-2.5 mb-4">
+        <Info className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+        <span>Los cambios se guardan como borrador. Recién se usan cuando apretás «Publicar», y el sistema te pide confirmarlo.</span>
+      </div>
+
+      {notice && (
+        <div role="status" className="flex items-center gap-2 text-sm rounded-xl border border-success/25 bg-success/10 text-success px-3 py-2.5 mb-4">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />{notice}
         </div>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 text-accent animate-spin" /></div>
-      ) : error ? (
-        <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/20"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>
-      ) : prompts.length === 0 ? (
-        <div className="text-center py-16 text-text-industrial/20 text-sm">Sin prompts registrados</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {prompts.map(p => (
-            <div key={p.id} className="bento-card space-y-3 cursor-pointer hover:border-fg/20 transition-all md:hover:scale-[1.02]" onClick={() => setEditing(p)}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-text-industrial/30 font-bold">
-                    {p.capability} · {p.locale.toUpperCase()} · v{p.version}
-                  </p>
-                  <h3 className="text-sm font-bold text-fg mt-0.5">{p.title}</h3>
-                </div>
-                <StatusBadge status={p.status} />
-              </div>
-
-              <p className="text-xs text-text-industrial/50 line-clamp-3 bg-fg/[0.02] rounded-lg p-3 border border-fg/5 font-mono leading-relaxed">
-                {p.content}
-              </p>
-
-              <div className="flex items-center justify-between text-[10px] text-text-industrial/30 pt-1 border-t border-fg/5">
-                <span>Actualizado: {fmtDate(p.updatedAt)}</span>
-                {p.publishedAt && <span>Publicado: {fmtDate(p.publishedAt)}</span>}
-              </div>
-
-              <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                {p.status !== "PUBLISHED" && (
-                  <button
-                    onClick={() => handleAction(p, "publish")}
-                    disabled={actLoading}
-                    className="flex-1 md:flex-none justify-center min-h-10 md:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-xs font-bold hover:bg-green-500/20 disabled:opacity-50 transition-all">
-                    <Send className="w-3 h-3" /> Publicar
-                  </button>
-                )}
-                {p.status === "PUBLISHED" && (
-                  <button
-                    onClick={() => handleAction(p, "rollback")}
-                    disabled={actLoading}
-                    className="flex-1 md:flex-none justify-center min-h-10 md:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-xs font-bold hover:bg-yellow-500/20 disabled:opacity-50 transition-all">
-                    <RotateCcw className="w-3 h-3" /> Revertir
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <DataTable columns={columns} data={loading ? null : rows} loading={loading} error={error} keyFn={r => r.id}
+        emptyText="Todavía no hay instrucciones cargadas. Tocá «Nuevas instrucciones» para crear la primera." mobileCards />
 
       {creating && <CreatePromptModal onClose={() => setCreating(false)} onCreated={reload} />}
-      {editing  && <EditPromptModal prompt={editing} onClose={() => setEditing(null)} onSaved={reload} />}
+      {editing && <EditPromptModal prompt={editing} onClose={() => setEditing(null)} onSaved={reload} />}
+      {confirm && (
+        <ConfirmDialog message={confirmMsg} confirmLabel={confirm.act === "publish" ? "Publicar" : "Volver a la anterior"} cancelLabel="Cancelar"
+          onConfirm={runAction} onCancel={() => setConfirm(null)} />
+      )}
+      {actErr && <AlertDialog message={actErr} onClose={() => setActErr(null)} />}
     </div>
   );
 };

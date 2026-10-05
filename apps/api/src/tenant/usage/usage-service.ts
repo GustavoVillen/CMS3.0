@@ -390,10 +390,7 @@ export interface UsageEventRow {
   ipAddress: string | null;
 }
 
-export async function listUsageEvents(filters: ListUsageFilters): Promise<{ items: UsageEventRow[]; total: number }> {
-  const prisma = getPrismaClient();
-  if (!prisma) return { items: [], total: 0 };
-
+function buildUsageWhere(filters: ListUsageFilters): Record<string, unknown> {
   const where: Record<string, unknown> = {};
   if (filters.kind) where.kind = filters.kind;
   if (filters.tenantSlug) where.tenantSlug = filters.tenantSlug;
@@ -406,6 +403,14 @@ export async function listUsageEvents(filters: ListUsageFilters): Promise<{ item
       ...(filters.to ? { lte: filters.to } : {}),
     };
   }
+  return where;
+}
+
+export async function listUsageEvents(filters: ListUsageFilters): Promise<{ items: UsageEventRow[]; total: number }> {
+  const prisma = getPrismaClient();
+  if (!prisma) return { items: [], total: 0 };
+
+  const where = buildUsageWhere(filters);
 
   const limit = Math.min(Math.max(filters.limit ?? 100, 1), 1000);
   const offset = Math.max(filters.offset ?? 0, 0);
@@ -443,6 +448,76 @@ export async function listUsageEvents(filters: ListUsageFilters): Promise<{ item
   ]);
 
   return { items, total };
+}
+
+// ── Resumen para la consola (totales, por día, por persona, por función) ────
+// Los totales y gráficos de la consola tienen que cubrir TODO el período
+// filtrado, no sólo la página de filas que se lista. Se agrega en memoria
+// porque el costo depende del modelo de cada evento (aiCostUsd); con el
+// volumen actual (decenas de miles de eventos) es barato. Tope de seguridad:
+// SUMMARY_MAX_EVENTS; si se supera, `truncated` lo avisa.
+
+const SUMMARY_MAX_EVENTS = 200_000;
+const DAY_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" });
+
+export interface UsageSummaryBucket { events: number; costUsd: number; bytes: number }
+export interface UsageSummary {
+  totals: UsageSummaryBucket & { users: number };
+  byDay: Array<UsageSummaryBucket & { day: string }>;
+  byUser: Array<UsageSummaryBucket & { tenantSlug: string; userEmail: string }>;
+  byFeature: Array<UsageSummaryBucket & { feature: string | null }>;
+  byVessel: Array<UsageSummaryBucket & { tenantSlug: string; vesselCode: string | null }>;
+  truncated: boolean;
+}
+
+export async function getUsageSummary(filters: ListUsageFilters): Promise<UsageSummary> {
+  const empty: UsageSummary = { totals: { events: 0, costUsd: 0, bytes: 0, users: 0 }, byDay: [], byUser: [], byFeature: [], byVessel: [], truncated: false };
+  const prisma = getPrismaClient();
+  if (!prisma) return empty;
+
+  const rows = await prisma.usageEvent.findMany({
+    where: buildUsageWhere(filters) as never,
+    select: {
+      createdAt: true, tenantSlug: true, userEmail: true, vesselCode: true, kind: true, feature: true, model: true,
+      inputTokens: true, outputTokens: true, cacheReadTokens: true, cacheCreationTokens: true, bytesIn: true, bytesOut: true,
+    },
+    take: SUMMARY_MAX_EVENTS + 1,
+  });
+  const truncated = rows.length > SUMMARY_MAX_EVENTS;
+  if (truncated) rows.length = SUMMARY_MAX_EVENTS;
+
+  const add = (m: Map<string, UsageSummaryBucket>, key: string, cost: number, bytes: number) => {
+    const b = m.get(key) ?? { events: 0, costUsd: 0, bytes: 0 };
+    b.events += 1; b.costUsd += cost; b.bytes += bytes;
+    m.set(key, b);
+  };
+  const days = new Map<string, UsageSummaryBucket>();
+  const users = new Map<string, UsageSummaryBucket>();
+  const features = new Map<string, UsageSummaryBucket>();
+  const vessels = new Map<string, UsageSummaryBucket>();
+  const totals = { events: 0, costUsd: 0, bytes: 0 };
+
+  for (const r of rows) {
+    const cost = r.kind === "ai_call"
+      ? aiCostUsd(r.model ?? "", r.inputTokens, r.outputTokens, r.cacheReadTokens, r.cacheCreationTokens)
+      : 0;
+    const bytes = r.bytesIn + r.bytesOut;
+    totals.events += 1; totals.costUsd += cost; totals.bytes += bytes;
+    add(days, DAY_FMT.format(r.createdAt), cost, bytes);
+    add(users, `${r.tenantSlug}|${r.userEmail}`, cost, bytes);
+    add(features, r.feature ?? "", cost, bytes);
+    add(vessels, `${r.tenantSlug}|${r.vesselCode ?? ""}`, cost, bytes);
+  }
+
+  const byCost = (a: UsageSummaryBucket, b: UsageSummaryBucket) => b.costUsd - a.costUsd || b.bytes - a.bytes || b.events - a.events;
+  return {
+    totals: { ...totals, users: users.size },
+    byDay: [...days].map(([day, b]) => ({ day, ...b })).sort((a, b) => a.day.localeCompare(b.day)),
+    byUser: [...users].map(([k, b]) => { const [tenantSlug, userEmail] = k.split("|"); return { tenantSlug, userEmail, ...b }; }).sort(byCost),
+    byFeature: [...features].map(([f, b]) => ({ feature: f || null, ...b })).sort(byCost),
+    byVessel: [...vessels].map(([k, b]) => { const [tenantSlug, code] = k.split("|"); return { tenantSlug, vesselCode: code || null, ...b }; }).sort(byCost),
+    truncated,
+  };
 }
 
 // ── Vessel positions ─────────────────────────────────────────────────────────

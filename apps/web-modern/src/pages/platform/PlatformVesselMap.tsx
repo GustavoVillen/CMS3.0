@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../../lib/api";
 import { escapeHtml } from "../../lib/utils";
+import { PageIntro, StatusPill, Card, FilterBar, FilterField, EmptyState, TwoLines, inputCls } from "../../components/platform/PlatformUi";
+import { fmtAgo } from "../../lib/platform-labels";
 
 // Fix Leaflet's broken default icon paths when bundled with Vite
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -14,22 +16,21 @@ L.Icon.Default.mergeOptions({ iconUrl: markerIcon, iconRetinaUrl: markerIcon2x, 
 
 interface VesselPosition {
   vesselCode: string;
+  vesselName?: string | null;
   tenantSlug: string;
+  tenantName?: string | null;
   userEmail: string;
+  userName?: string | null;
   latitude: number;
   longitude: number;
   seenAt: string;
 }
 
-function fmtAge(seenAt: string): string {
-  const diffMs = Date.now() - new Date(seenAt).getTime();
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return "hace menos de 1 min";
-  if (mins < 60) return `hace ${mins} min`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `hace ${hrs} h`;
-  return `hace ${Math.floor(hrs / 24)} d`;
-}
+const FRESH_MS = 6 * 60 * 60 * 1000;
+
+const vesselOf = (p: VesselPosition) => p.vesselName ?? p.vesselCode;
+const tenantOf = (p: VesselPosition) => p.tenantName ?? p.tenantSlug;
+const personOf = (p: VesselPosition) => p.userName ?? p.userEmail;
 
 export function PlatformVesselMapPage() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -38,6 +39,8 @@ export function PlatformVesselMapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [empresa, setEmpresa] = useState("");
+  const [persona, setPersona] = useState("");
 
   // Fetch positions
   const fetchPositions = async () => {
@@ -46,7 +49,7 @@ export function PlatformVesselMapPage() {
       setPositions(data.items);
       setError(null);
     } catch {
-      setError("Error al cargar posiciones");
+      setError("No se pudieron cargar las posiciones");
     } finally {
       setLoading(false);
       setLastRefresh(new Date());
@@ -58,6 +61,19 @@ export function PlatformVesselMapPage() {
     const interval = setInterval(fetchPositions, 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  const empresas = useMemo(
+    () => Array.from(new Set(positions.map(tenantOf))).sort((a, b) => a.localeCompare(b, "es")),
+    [positions],
+  );
+  const personas = useMemo(
+    () => Array.from(new Set(positions.map(personOf))).sort((a, b) => a.localeCompare(b, "es")),
+    [positions],
+  );
+  const shown = useMemo(
+    () => positions.filter((p) => (!empresa || tenantOf(p) === empresa) && (!persona || personOf(p) === persona)),
+    [positions, empresa, persona],
+  );
 
   // Init map once
   useEffect(() => {
@@ -83,15 +99,14 @@ export function PlatformVesselMapPage() {
       if (layer instanceof L.Marker) map.removeLayer(layer);
     });
 
-    positions.forEach(pos => {
-      const age = fmtAge(pos.seenAt);
+    shown.forEach(pos => {
       const popup = `
-        <div style="font-family:monospace;font-size:13px;line-height:1.6">
-          <strong style="font-size:15px">🚢 ${escapeHtml(pos.vesselCode)}</strong><br/>
-          <span style="color:#888">${escapeHtml(pos.tenantSlug)}</span><br/>
-          <span>${escapeHtml(pos.userEmail)}</span><br/>
-          <span style="color:#666;font-size:11px">${escapeHtml(age)}</span><br/>
-          <span style="color:#666;font-size:11px">${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)}</span>
+        <div style="font-family:system-ui,sans-serif;font-size:13px;line-height:1.6">
+          <strong style="font-size:15px">${escapeHtml(vesselOf(pos))}</strong><br/>
+          <span>${escapeHtml(tenantOf(pos))}</span><br/>
+          <span>Informado por ${escapeHtml(personOf(pos))}</span><br/>
+          <span style="color:#666;font-size:11px">${escapeHtml(fmtAgo(pos.seenAt))}</span><br/>
+          <span style="color:#666;font-size:11px">Latitud ${pos.latitude.toFixed(5)}, longitud ${pos.longitude.toFixed(5)}</span>
         </div>
       `;
       L.marker([pos.latitude, pos.longitude])
@@ -100,103 +115,108 @@ export function PlatformVesselMapPage() {
     });
 
     // Fit bounds if there are positions
-    if (positions.length > 0) {
-      const bounds = L.latLngBounds(positions.map(p => [p.latitude, p.longitude]));
+    if (shown.length > 0) {
+      const bounds = L.latLngBounds(shown.map(p => [p.latitude, p.longitude]));
       map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8 });
     }
-  }, [positions]);
+  }, [shown]);
+
+  const statusOf = (p: VesselPosition) =>
+    Date.now() - new Date(p.seenAt).getTime() < FRESH_MS
+      ? <StatusPill tone="ok">Al día</StatusPill>
+      : <StatusPill tone="warn">Sin señal reciente</StatusPill>;
 
   return (
     <div className="md:h-full flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div>
-          <h1 className="text-lg font-bold text-fg">Posición de Embarcaciones</h1>
-          <p className="text-xs text-text-industrial/50 mt-0.5">
-            Última actualización: {lastRefresh.toLocaleTimeString()} · Actualiza cada 60 s · Solo usuarios Técnico/Operador a bordo
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {loading && (
-            <span className="text-xs text-text-industrial/40 animate-pulse">Cargando…</span>
-          )}
-          {error && (
-            <span className="text-xs text-red-700 dark:text-red-400">{error}</span>
-          )}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10">
-            <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-            <span className="text-xs text-fg font-medium">{positions.length} embarcación{positions.length !== 1 ? "es" : ""}</span>
-          </div>
+      <PageIntro
+        title="Ubicación de los buques"
+        description="Dónde está cada buque según el último celular a bordo que compartió su ubicación."
+        actions={
           <button
             onClick={fetchPositions}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-fg/5 border border-fg/10 text-text-industrial/70 hover:text-fg hover:bg-fg/10 transition-all"
+            className="px-3 py-2 md:py-1.5 rounded-lg border border-fg/10 bg-fg/5 text-sm text-text-industrial hover:border-accent/40"
           >
             Actualizar
           </button>
-        </div>
+        }
+      />
+
+      <div>
+        <FilterBar>
+          <FilterField label="Empresa">
+            <select value={empresa} onChange={(e) => setEmpresa(e.target.value)} className={inputCls}>
+              <option value="">Todas</option>
+              {empresas.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Persona">
+            <select value={persona} onChange={(e) => setPersona(e.target.value)} className={inputCls}>
+              <option value="">Todas</option>
+              {personas.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </FilterField>
+        </FilterBar>
+        <p className="text-xs text-text-industrial/50">
+          {loading ? "Cargando…" : `${shown.length} ${shown.length === 1 ? "buque" : "buques"}`} · se actualiza solo cada minuto (última lectura {lastRefresh.toLocaleTimeString("es-AR")})
+          {error && <span className="text-danger"> · {error}</span>}
+        </p>
       </div>
 
-      {/* Map */}
       {/* En el celular el mapa tiene alto fijo y la lista va debajo, con scroll de página. */}
-      <div className="h-[55dvh] md:h-auto shrink-0 md:shrink md:flex-1 rounded-xl overflow-hidden border border-fg/10 min-h-0">
+      <div className="h-[55dvh] md:h-auto shrink-0 md:shrink md:flex-1 rounded-xl overflow-hidden border border-fg/10 min-h-[320px]">
         <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
       </div>
 
-      {/* Tarjetas (celular) */}
-      {positions.length > 0 && (
-        <div className="md:hidden space-y-2">
-          {positions.map((p, i) => (
-            <div key={i} className="rounded-xl border border-fg/10 bg-surface p-3">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-mono font-bold text-fg text-sm">{p.vesselCode}</p>
-                <span className="text-xs text-text-industrial/40 shrink-0">{fmtAge(p.seenAt)}</span>
+      {shown.length > 0 && (
+        <Card className="shrink-0">
+          {/* Tarjetas (celular) */}
+          <div className="md:hidden divide-y divide-fg/5">
+            {shown.map((p, i) => (
+              <div key={i} className="p-3 space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <TwoLines main={<span className="font-bold">{vesselOf(p)}</span>} sub={tenantOf(p)} />
+                  {statusOf(p)}
+                </div>
+                <div className="text-xs text-text-industrial/60">Informado por {personOf(p)} · {fmtAgo(p.seenAt)}</div>
               </div>
-              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs mt-2">
-                <dt className="text-text-industrial/40">Tenant</dt><dd className="text-right text-text-industrial/60">{p.tenantSlug}</dd>
-                <dt className="text-text-industrial/40">Usuario</dt><dd className="text-right text-text-industrial/60 break-all">{p.userEmail}</dd>
-                <dt className="text-text-industrial/40">Lat / Long</dt><dd className="text-right font-mono text-text-industrial/50">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</dd>
-              </dl>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
 
-      {/* Table (escritorio) */}
-      {positions.length > 0 && (
-        <div className="hidden md:block shrink-0 rounded-xl border border-fg/10 overflow-hidden">
-          <table className="w-full text-xs">
+          {/* Tabla (escritorio) */}
+          <table className="hidden md:table w-full text-sm">
             <thead>
-              <tr className="border-b border-fg/10 bg-fg/5">
-                <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Buque</th>
-                <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Tenant</th>
-                <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Usuario</th>
-                <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Lat / Long</th>
-                <th className="px-4 py-2 text-left text-text-industrial/40 font-medium">Última señal</th>
+              <tr className="border-b border-fg/10 bg-fg/5 text-left text-text-industrial/60">
+                <th className="px-4 py-2 font-semibold">Buque</th>
+                <th className="px-4 py-2 font-semibold">Empresa</th>
+                <th className="px-4 py-2 font-semibold">Informado por</th>
+                <th className="px-4 py-2 font-semibold">Última posición</th>
               </tr>
             </thead>
             <tbody>
-              {positions.map((p, i) => (
-                <tr key={i} className="border-b border-fg/5 hover:bg-fg/3 transition-colors">
-                  <td className="px-4 py-2 font-mono font-bold text-fg">{p.vesselCode}</td>
-                  <td className="px-4 py-2 text-text-industrial/60">{p.tenantSlug}</td>
-                  <td className="px-4 py-2 text-text-industrial/60">{p.userEmail}</td>
-                  <td className="px-4 py-2 font-mono text-text-industrial/50">
-                    {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
+              {shown.map((p, i) => (
+                <tr key={i} className="border-b border-fg/5 last:border-0">
+                  <td className="px-4 py-2 font-bold text-fg">{vesselOf(p)}</td>
+                  <td className="px-4 py-2 text-text-industrial/80">{tenantOf(p)}</td>
+                  <td className="px-4 py-2 text-text-industrial/80">{personOf(p)}</td>
+                  <td className="px-4 py-2">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="text-text-industrial/70">{fmtAgo(p.seenAt)}</span>
+                      {statusOf(p)}
+                    </span>
                   </td>
-                  <td className="px-4 py-2 text-text-industrial/40">{fmtAge(p.seenAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
 
       {!loading && positions.length === 0 && (
-        <div className="shrink-0 rounded-xl border border-fg/10 bg-fg/3 p-8 text-center">
-          <p className="text-sm text-text-industrial/40">Sin posiciones registradas aún.</p>
-          <p className="text-xs text-text-industrial/25 mt-1">
-            Los usuarios Técnico/Operador deben permitir el acceso a la ubicación en su navegador.
-          </p>
+        <div className="shrink-0 rounded-xl border border-fg/10 bg-fg/[0.02]">
+          <EmptyState
+            title="Todavía ningún buque compartió su ubicación"
+            text="Cuando alguien a bordo permita el acceso a la ubicación en su celular, el buque aparece acá."
+          />
         </div>
       )}
     </div>

@@ -10,7 +10,9 @@ import { requirePlatformAccessSession, requirePlatformSuperadmin } from "./auth/
 import { loginPlatformUser, refreshPlatformSession } from "./auth/platform-auth-service";
 import { registerPlatformAccessSession } from "../tenant/auth/session-store";
 import { listPlatformAuditEvents } from "./audit/platform-audit-service";
-import { listUsageEvents, aiCostUsd, getLatestVesselPositions } from "../tenant/usage/usage-service";
+import { listUsageEvents, aiCostUsd, getLatestVesselPositions, getUsageSummary } from "../tenant/usage/usage-service";
+import { getPrismaClient } from "./data/prisma-client";
+import { getTenantNames, getVesselNames, getUserNamesByEmail, vesselKey } from "./access/platform-name-lookup";
 import {
   createPlatformTenant, getPlatformTenant, listPlatformTenants, updatePlatformTenant,
 } from "./tenants/platform-tenants-service";
@@ -254,6 +256,9 @@ export async function handlePlatformRoutes(
       actorType:  url.searchParams.get("actorType"),
       action:     url.searchParams.get("action"),
       entityType: url.searchParams.get("entityType"),
+      from: parseDateParam(url.searchParams.get("from")),
+      to:   parseDateParam(url.searchParams.get("to")),
+      limit: Number(url.searchParams.get("limit") ?? 500),
     });
     sendJson(response, 200, { items: records, total: records.length });
     return true;
@@ -272,6 +277,35 @@ export async function handlePlatformRoutes(
         : 0,
     }));
     sendJson(response, 200, { items: itemsWithCost, total });
+    return true;
+  }
+  // Totales y series del período filtrado completo (no sólo la página listada),
+  // con nombres de persona, empresa y buque ya resueltos.
+  if (method === "GET" && url.pathname === "/platform/usage/summary") {
+    const session = requirePlatformAccessSession(request);
+    requirePlatformSuperadmin(session);
+    const summary = await getUsageSummary(parseUsageFilters(url.searchParams));
+    const prisma = getPrismaClient();
+    const [tenantNames, vesselNames, userNames] = prisma
+      ? await Promise.all([
+          getTenantNames(prisma),
+          getVesselNames(prisma, summary.byVessel),
+          getUserNamesByEmail(prisma, summary.byUser.map((u) => u.userEmail)),
+        ])
+      : [new Map<string, string>(), new Map<string, string>(), new Map<string, string>()];
+    sendJson(response, 200, {
+      ...summary,
+      byUser: summary.byUser.map((u) => ({
+        ...u,
+        userName: userNames.get(u.userEmail) ?? null,
+        tenantName: tenantNames.get(u.tenantSlug) ?? u.tenantSlug,
+      })),
+      byVessel: summary.byVessel.map((v) => ({
+        ...v,
+        vesselName: v.vesselCode ? vesselNames.get(vesselKey(v.tenantSlug, v.vesselCode)) ?? null : null,
+        tenantName: tenantNames.get(v.tenantSlug) ?? v.tenantSlug,
+      })),
+    }, request);
     return true;
   }
   if (method === "GET" && url.pathname === "/platform/usage.xlsx") {
@@ -300,7 +334,7 @@ export async function handlePlatformRoutes(
     const toRaw = url.searchParams.get("to");
     const from = fromRaw ? new Date(fromRaw) : null;
     const to = toRaw ? new Date(toRaw) : null;
-    const { items, total } = await listCopilotQuestions({
+    const { items, total, storage } = await listCopilotQuestions({
       tenantSlug: url.searchParams.get("tenantSlug"),
       userEmail:  url.searchParams.get("userEmail"),
       search:     url.searchParams.get("search"),
@@ -309,7 +343,7 @@ export async function handlePlatformRoutes(
       limit:  Number(url.searchParams.get("limit")  ?? 200),
       offset: Number(url.searchParams.get("offset") ?? 0),
     });
-    sendJson(response, 200, { items, total });
+    sendJson(response, 200, { items, total, storage }, request);
     return true;
   }
 
@@ -387,7 +421,17 @@ export async function handlePlatformRoutes(
     const session = requirePlatformAccessSession(request);
     requirePlatformSuperadmin(session);
     const positions = await getLatestVesselPositions();
-    sendJson(response, 200, { items: positions });
+    const prisma = getPrismaClient();
+    const [tenantNames, userNames] = prisma
+      ? await Promise.all([getTenantNames(prisma), getUserNamesByEmail(prisma, positions.map((p) => p.userEmail))])
+      : [new Map<string, string>(), new Map<string, string>()];
+    sendJson(response, 200, {
+      items: positions.map((p) => ({
+        ...p,
+        tenantName: tenantNames.get(p.tenantSlug) ?? p.tenantSlug,
+        userName: userNames.get(p.userEmail) ?? null,
+      })),
+    });
     return true;
   }
 
@@ -463,4 +507,10 @@ function parseUsageFilters(sp: URLSearchParams): import("../tenant/usage/usage-s
     limit:  Number(sp.get("limit")  ?? 100),
     offset: Number(sp.get("offset") ?? 0),
   };
+}
+
+function parseDateParam(raw: string | null): Date | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
 }

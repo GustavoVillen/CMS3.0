@@ -1488,12 +1488,14 @@ export async function handleTenantRoutes(
     // Sólo el SUPERADMIN de plataforma lo lee, para detectar qué necesitan los
     // usuarios y mejorar el sistema.
     const lastUserMessage = (body.messages ?? []).filter(m => m.role === "user").pop();
+    let questionLog: ReturnType<typeof recordCopilotQuestion> | null = null;
+    let answerText = "";
     if (lastUserMessage?.content) {
       const sc = body.screenContext as Record<string, unknown> | null;
       const screen = sc
         ? [sc.module, sc.screen].filter(v => typeof v === "string" && v).join(" / ") || null
         : null;
-      recordCopilotQuestion({
+      questionLog = recordCopilotQuestion({
         tenantId:      tenant.id,
         tenantSlug:    slug,
         userId:        session.user.id,
@@ -1539,8 +1541,9 @@ export async function handleTenantRoutes(
           includeKnowledgeDocs: body.includeKnowledgeDocs,
           abortSignal:    abortController.signal,
         },
-        (text) => { response.write(`data: ${JSON.stringify({ text })}\n\n`); },
+        (text) => { answerText += text; response.write(`data: ${JSON.stringify({ text })}\n\n`); },
         (actions, rawBlock) => {
+          if (rawBlock) answerText = answerText.replace(rawBlock, "");
           // Emitimos un evento SSE separado con las acciones sugeridas.
           // El frontend va a borrar `rawBlock` del texto ya mostrado y
           // renderizar botones "Aplicar" para cada action.
@@ -1548,6 +1551,7 @@ export async function handleTenantRoutes(
         },
       );
       response.write("data: [DONE]\n\n");
+      questionLog?.saveAnswer(answerText);
     } catch (e: any) {
       const raw: string = e.message ?? "Error";
       let friendly = raw;

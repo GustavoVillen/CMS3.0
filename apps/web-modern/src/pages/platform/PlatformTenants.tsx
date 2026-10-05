@@ -1,17 +1,15 @@
 import React, { useState, useCallback, useRef } from "react";
-import {
-  Building2, Plus, Users, Globe, Mail, Loader2,
-  CheckCircle2, AlertCircle, ChevronRight, Star, StarOff, ImagePlus, Pencil, Trash2,
-} from "lucide-react";
+import { Plus, Loader2, Star, ImagePlus, Pencil, Trash2, Copy, Search } from "lucide-react";
 import { platformFetch, platformPost, platformPatch, platformDelete } from "../../lib/platform-auth";
-import { DataTable, StatusBadge, fmtDate, type Column } from "../../components/DataTable";
-import { PageHeader } from "../../components/PageHeader";
+import { DataTable, type Column } from "../../components/DataTable";
 import { PasswordInput } from "../../components/PasswordInput";
 import { ModalCloseButton } from "../../components/ModalCloseButton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { AlertDialog } from "../../components/AlertDialog";
+import { PageIntro, StatusPill, EmptyState, TwoLines } from "../../components/platform/PlatformUi";
+import { roleLabel, statusInfo, localeLabel, currencyLabel, fmtDate, TENANT_ROLE_LABELS } from "../../lib/platform-labels";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface Tenant {
   id: string; slug: string; displayName: string; status: string; plan?: string;
@@ -20,44 +18,43 @@ interface Tenant {
   logoUrlLight?: string | null;
   workOrderPdfTemplate?: "STANDARD" | "MERCURIO";
   createdAt: string; updatedAt: string;
+  vesselCount?: number; userCount?: number;
 }
 interface TenantDomain  { id: string; tenantSlug: string; host: string; isPrimary: boolean; createdAt: string; }
-interface TenantUser    { id: string; tenantSlug: string; email: string; role: string; userStatus: string; membershipStatus: string; firstName?: string|null; lastName?: string|null; createdAt: string; }
+interface TenantUser    { id: string; tenantSlug: string; email: string; role: string; userStatus: string; membershipStatus: string; legacyUserId?: string|null; firstName?: string|null; lastName?: string|null; createdAt: string; }
 interface TenantInvite  { id: string; tenantSlug: string; email: string; role: string; locale: string; status: string; token?: string|null; createdAt: string; expiresAt: string; }
 interface ListResponse  { items: Tenant[]; total: number; }
 
 const STATUSES   = ["ACTIVE", "SUSPENDED", "PROVISIONING", "DISABLED"];
 const LOCALES    = ["es", "en", "pt"];
 const TIMEZONES  = ["America/Argentina/Buenos_Aires", "America/Asuncion", "America/Sao_Paulo", "America/New_York", "Europe/Madrid", "UTC"];
+const TIMEZONE_LABELS: Record<string, string> = {
+  "America/Argentina/Buenos_Aires": "Buenos Aires",
+  "America/Asuncion": "Asunción",
+  "America/Sao_Paulo": "San Pablo",
+  "America/New_York": "Nueva York",
+  "Europe/Madrid": "Madrid",
+  UTC: "Hora universal (UTC)",
+};
+const timezoneLabel = (tz: string) => TIMEZONE_LABELS[tz] ?? tz.split("/").pop()!.replace(/_/g, " ");
 const CURRENCIES = ["ARS", "PYG", "BRL", "USD", "EUR"];
 const WO_PDF_TEMPLATES: Array<{ value: "STANDARD" | "MERCURIO"; label: string }> = [
-  { value: "STANDARD", label: "Estándar (genérico)" },
+  { value: "STANDARD", label: "Formato estándar" },
   // El formulario vigente de Mercurio (REGI-MAN-02.4 "Orden de trabajo") es la
   // plantilla MERCURIO_OT; esta entrada es el papel anterior, que se conserva.
-  { value: "MERCURIO", label: "Mercurio Group (formulario anterior)" },
+  { value: "MERCURIO", label: "Formulario anterior de la empresa" },
 ];
-const TENANT_ROLES = [
-  "TENANT_ADMIN",
-  "FLEET_SUPERINTENDENT",
-  "MAINTENANCE_MANAGER",
-  "TECHNICIAN_OPERATOR",
-  "INSPECTOR_COMPLIANCE",
-  "PROCUREMENT_STORE",
-  "AUDITOR_READONLY",
-];
-// Etiquetas alineadas con la "persona típica" del manual de uso. El panel
-// superadmin no respeta el locale del tenant, por eso quedan fijas en español.
-const ROLE_LABELS: Record<string, string> = {
-  TENANT_ADMIN:         "DPA / Director de Operaciones",
-  FLEET_SUPERINTENDENT: "Superintendente técnico",
-  MAINTENANCE_MANAGER:  "Capitán / Jefe de Máquinas",
-  TECHNICIAN_OPERATOR:  "Tripulante operativo",
-  INSPECTOR_COMPLIANCE: "Inspector / Auditor interno",
-  PROCUREMENT_STORE:    "Compras / Logística",
-  AUDITOR_READONLY:     "Auditor externo",
-};
+const woPdfLabel = (v?: string | null) => WO_PDF_TEMPLATES.find(t => t.value === v)?.label ?? "Formato estándar";
+const TENANT_ROLES = Object.keys(TENANT_ROLE_LABELS);
+const BASE_DOMAIN = "cms3.shipcms.cloud";
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+/** "Mi Empresa S.A." -> "mi-empresa-s-a" */
+function slugify(name: string): string {
+  return name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+const isPlaceholderEmail = (e: string) => e.startsWith("named-");
+
+// ─── Ayudas compartidas ───────────────────────────────────────────────────────
 
 function usePlatformList<T>(path: string) {
   const [data, setData]       = React.useState<T | null>(null);
@@ -88,28 +85,25 @@ function ModalWrapper({ title, onClose, children }: { title: string; onClose: ()
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
+      <label className="block text-xs font-semibold text-text-industrial/60 mb-1.5">{label}{required && <span className="text-danger"> *</span>}</label>
       {children}
+      {hint && <p className="text-xs text-text-industrial/50 mt-1">{hint}</p>}
     </div>
   );
 }
 
 // text-base en el celular: con menos de 16px el iPhone agranda la pantalla al tocar el campo.
-const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-red-500/30 focus:ring-1 focus:ring-red-500/10 transition-all";
+const inp = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 md:py-2 text-base md:text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/10 transition-all";
 const sel = inp + " appearance-none";
+const btnPri = "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-bold hover:brightness-110 disabled:opacity-50 transition-all";
+const btnSec = "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-bold text-fg hover:bg-fg/10 transition-all";
 
-function ErrMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2"><AlertCircle className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
-}
-function OkMsg({ msg }: { msg: string }) {
-  return <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />{msg}</div>;
-}
 function SaveBtn({ loading: l, label = "Guardar" }: { loading: boolean; label?: string }) {
   return (
-    <button type="submit" disabled={l} className="w-full py-2.5 rounded-xl bg-red-500/80 text-fg font-bold text-sm hover:bg-red-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+    <button type="submit" disabled={l} className={`${btnPri} w-full py-2.5 text-sm`}>
       {l ? <><Loader2 className="w-4 h-4 animate-spin" />{label}...</> : label}
     </button>
   );
@@ -191,7 +185,7 @@ function processLogo(dataUrl: string, colorize: "keep" | "white", tolerance = 40
 function LogoVariant({ label, bg, value, onClear }: { label: string; bg: string; value: string | null; onClear: () => void }) {
   return (
     <div className="flex flex-col gap-1.5 flex-1">
-      <span className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">{label}</span>
+      <span className="text-[10px] font-bold text-text-industrial/40">{label}</span>
       <div className="rounded-xl border border-fg/10 flex items-center justify-center h-16 overflow-hidden relative" style={{ background: bg }}>
         {value
           ? <img src={value} alt={label} className="w-full h-full object-contain p-2" />
@@ -253,54 +247,61 @@ function DualLogoPicker({ dark, light, onChange }: {
   );
 }
 
-// ─── Create Tenant Modal ──────────────────────────────────────────────────────
+// ─── Nueva empresa ────────────────────────────────────────────────────────────
 
 function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ slug: "", displayName: "", supportEmail: "", defaultLocale: "es", timezone: "America/Argentina/Buenos_Aires", currency: "ARS", logoUrl: null as string | null, logoUrlLight: null as string | null, workOrderPdfTemplate: "STANDARD" as "STANDARD" | "MERCURIO" });
+  const [slugTouched, setSlugTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const onName = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setForm(f => ({ ...f, displayName: v, slug: slugTouched ? f.slug : slugify(v) }));
+  };
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
+    e.preventDefault();
+    if (!form.displayName.trim()) { setErr("Falta el nombre de la empresa."); return; }
+    if (!form.slug) { setErr("Falta la dirección para entrar. Usá sólo letras minúsculas, números y guiones."); return; }
+    if (!form.supportEmail.trim()) { setErr("Falta el correo de contacto de la empresa."); return; }
+    setLoading(true); setErr(null);
     try { await platformPost("/platform/tenants", { ...form, enabledLocales: [form.defaultLocale], status: "ACTIVE" }); onCreated(); onClose(); }
-    catch (ex: any) { setErr(ex.message ?? "Error al crear tenant"); }
+    catch (ex: any) { setErr(ex.message ?? "No se pudo crear la empresa."); }
     finally { setLoading(false); }
   };
   return (
-    <ModalWrapper title="Crear Tenant" onClose={onClose}>
+    <ModalWrapper title="Nueva empresa" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Logo de la empresa">
-          <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
+        <Field label="Nombre de la empresa" required>
+          <input className={inp} value={form.displayName} onChange={onName} placeholder="Mi Empresa S.A." autoFocus />
         </Field>
-        <Field label="Slug (único, solo minúsculas y guiones)" required>
-          <input className={inp} required value={form.slug} onChange={set("slug")} placeholder="mi-empresa" pattern="[a-z0-9-]+" />
+        <Field label="Dirección para entrar" required hint={`Quedaría: ${form.slug || "empresa"}.${BASE_DOMAIN}. Se arma sola con el nombre; se puede cambiar.`}>
+          <input className={inp} value={form.slug} onChange={e => { setSlugTouched(true); setForm(f => ({ ...f, slug: slugify(e.target.value) })); }} placeholder="mi-empresa" />
         </Field>
-        <Field label="Nombre para mostrar" required>
-          <input className={inp} required value={form.displayName} onChange={set("displayName")} placeholder="Mi Empresa S.A." />
+        <Field label="Correo de contacto de la empresa" required>
+          <input className={inp} type="email" value={form.supportEmail} onChange={set("supportEmail")} placeholder="soporte@empresa.com" />
         </Field>
-        <Field label="Email de soporte" required>
-          <input className={inp} type="email" required value={form.supportEmail} onChange={set("supportEmail")} placeholder="soporte@empresa.com" />
-        </Field>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Field label="Locale"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
-          <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-          <div className="col-span-2 md:col-span-1">
-            <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Field label="Idioma" required><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{localeLabel(l)}</option>)}</select></Field>
+          <Field label="Moneda" required><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{currencyLabel(c)}</option>)}</select></Field>
+          <Field label="Hora local" required><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{timezoneLabel(tz)}</option>)}</select></Field>
         </div>
-        <Field label="Plantilla PDF de Orden de Trabajo">
+        <Field label="Formato de la OT en PDF">
           <select className={sel} value={form.workOrderPdfTemplate} onChange={set("workOrderPdfTemplate")}>
             {WO_PDF_TEMPLATES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </Field>
-        {err && <ErrMsg msg={err} />}
-        <SaveBtn loading={loading} label="Crear Tenant" />
+        <Field label="Logo de la empresa">
+          <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
+        </Field>
+        <SaveBtn loading={loading} label="Crear empresa" />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
 
-// ─── Edit Tenant Modal ────────────────────────────────────────────────────────
+// ─── Editar datos de la empresa ───────────────────────────────────────────────
 
 function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ displayName: tenant.displayName, supportEmail: tenant.supportEmail, status: tenant.status, defaultLocale: tenant.defaultLocale, timezone: tenant.timezone, currency: tenant.currency, logoUrl: tenant.logoUrl ?? null as string | null, logoUrlLight: tenant.logoUrlLight ?? null as string | null, workOrderPdfTemplate: (tenant.workOrderPdfTemplate ?? "STANDARD") as "STANDARD" | "MERCURIO" });
@@ -308,60 +309,65 @@ function EditTenantModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose
   const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
+    e.preventDefault();
+    if (!form.displayName.trim()) { setErr("Falta el nombre de la empresa."); return; }
+    if (!form.supportEmail.trim()) { setErr("Falta el correo de contacto de la empresa."); return; }
+    setLoading(true); setErr(null);
     try { await platformPatch(`/platform/tenants/${tenant.slug}`, { ...form, enabledLocales: [form.defaultLocale] }); onSaved(); onClose(); }
-    catch (ex: any) { setErr(ex.message ?? "Error al guardar"); }
+    catch (ex: any) { setErr(ex.message ?? "No se pudo guardar."); }
     finally { setLoading(false); }
   };
   return (
-    <ModalWrapper title={`Editar — ${tenant.slug}`} onClose={onClose}>
+    <ModalWrapper title={`Editar datos de ${tenant.displayName}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Logo de la empresa">
-          <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
+        <Field label="Nombre de la empresa" required><input className={inp} value={form.displayName} onChange={set("displayName")} /></Field>
+        <Field label="Correo de contacto de la empresa" required><input className={inp} type="email" value={form.supportEmail} onChange={set("supportEmail")} /></Field>
+        <Field label="Estado" hint="Si se suspende, nadie de la empresa puede entrar hasta reactivarla.">
+          <select className={sel} value={form.status} onChange={set("status")}>{STATUSES.map(s => <option key={s} value={s}>{statusInfo(s).label}</option>)}</select>
         </Field>
-        <Field label="Nombre para mostrar" required><input className={inp} required value={form.displayName} onChange={set("displayName")} /></Field>
-        <Field label="Email de soporte" required><input className={inp} type="email" required value={form.supportEmail} onChange={set("supportEmail")} /></Field>
-        <Field label="Estado"><select className={sel} value={form.status} onChange={set("status")}>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Field label="Locale"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
-          <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-          <div className="col-span-2 md:col-span-1">
-            <Field label="Timezone"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.split("/").pop()!.replace("_", " ")}</option>)}</select></Field>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Field label="Idioma"><select className={sel} value={form.defaultLocale} onChange={set("defaultLocale")}>{LOCALES.map(l => <option key={l} value={l}>{localeLabel(l)}</option>)}</select></Field>
+          <Field label="Moneda"><select className={sel} value={form.currency} onChange={set("currency")}>{CURRENCIES.map(c => <option key={c} value={c}>{currencyLabel(c)}</option>)}</select></Field>
+          <Field label="Hora local"><select className={sel} value={form.timezone} onChange={set("timezone")}>{TIMEZONES.includes(form.timezone) ? null : <option value={form.timezone}>{timezoneLabel(form.timezone)}</option>}{TIMEZONES.map(tz => <option key={tz} value={tz}>{timezoneLabel(tz)}</option>)}</select></Field>
         </div>
-        <Field label="Plantilla PDF de Orden de Trabajo">
+        <Field label="Formato de la OT en PDF">
           <select className={sel} value={form.workOrderPdfTemplate} onChange={set("workOrderPdfTemplate")}>
             {WO_PDF_TEMPLATES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </Field>
-        {err && <ErrMsg msg={err} />}
+        <Field label="Logo de la empresa">
+          <DualLogoPicker dark={form.logoUrl} light={form.logoUrlLight} onChange={(d, l) => setForm(f => ({ ...f, logoUrl: d, logoUrlLight: l }))} />
+        </Field>
         <SaveBtn loading={loading} />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
 
-// ─── Sub-modals for Tenant Detail ─────────────────────────────────────────────
+// ─── Ventanas del detalle ─────────────────────────────────────────────────────
 
 function AddDomainModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; onClose: () => void; onAdded: () => void }) {
   const [host, setHost] = useState(""); const [isPrimary, setIsPrimary] = useState(false);
   const [loading, setLoading] = useState(false); const [err, setErr] = useState<string|null>(null);
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
-    try { await platformPost(`/platform/tenants/${tenantSlug}/domains`, { host, isPrimary }); onAdded(); onClose(); }
-    catch (ex: any) { setErr(ex.message ?? "Error"); }
+    e.preventDefault();
+    if (!host.trim()) { setErr("Falta la dirección."); return; }
+    setLoading(true); setErr(null);
+    try { await platformPost(`/platform/tenants/${tenantSlug}/domains`, { host: host.trim(), isPrimary }); onAdded(); onClose(); }
+    catch (ex: any) { setErr(ex.message ?? "No se pudo agregar la dirección."); }
     finally { setLoading(false); }
   };
   return (
-    <ModalWrapper title="Agregar Dominio" onClose={onClose}>
+    <ModalWrapper title="Agregar dirección web" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Host (sin protocolo)" required><input className={inp} required value={host} onChange={e => setHost(e.target.value)} placeholder="empresa.com" /></Field>
+        <Field label="Dirección (sin https://)" required><input className={inp} value={host} onChange={e => setHost(e.target.value)} placeholder="empresa.com" autoFocus /></Field>
         <label className="flex items-center gap-2 text-sm text-text-industrial/70 cursor-pointer">
-          <input type="checkbox" checked={isPrimary} onChange={e => setIsPrimary(e.target.checked)} className="accent-red-500" /> Marcar como dominio primario
+          <input type="checkbox" checked={isPrimary} onChange={e => setIsPrimary(e.target.checked)} className="accent-accent" /> Usar como dirección principal
         </label>
-        {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} label="Agregar" />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
@@ -369,72 +375,98 @@ function AddDomainModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; 
 function AddInviteModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; onClose: () => void; onAdded: () => void }) {
   const [form, setForm] = useState({ email: "", role: "TECHNICIAN_OPERATOR", locale: "es" });
   const [loading, setLoading] = useState(false); const [err, setErr] = useState<string|null>(null);
-  const [token, setToken] = useState<string|null>(null);
+  const [created, setCreated] = useState<{ token?: string; expiresAt?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
-    try { const res = await platformPost<{ token?: string }>(`/platform/tenants/${tenantSlug}/invitations`, form); if (res.token) setToken(res.token); onAdded(); }
-    catch (ex: any) { setErr(ex.message ?? "Error"); }
+    e.preventDefault();
+    if (!form.email.trim()) { setErr("Falta el correo de la persona."); return; }
+    setLoading(true); setErr(null);
+    try {
+      const res = await platformPost<{ token?: string; expiresAt?: string }>(`/platform/tenants/${tenantSlug}/invitations`, form);
+      setCreated(res ?? {}); onAdded();
+    }
+    catch (ex: any) { setErr(ex.message ?? "No se pudo crear la invitación."); }
     finally { setLoading(false); }
   };
-  if (token) return (
-    <ModalWrapper title="Invitación creada" onClose={onClose}>
+  if (created) return (
+    <ModalWrapper title="Invitación lista" onClose={onClose}>
       <div className="space-y-3">
-        <OkMsg msg="Invitación generada correctamente" />
-        <Field label="Token (copia antes de cerrar)">
-          <code className="block bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-xs text-green-700 dark:text-green-400 break-all select-all">{token}</code>
-        </Field>
-        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-sm text-fg font-bold hover:bg-fg/10 transition-all">Cerrar</button>
+        {created.token ? (
+          <>
+            {/* La app todavía no tiene una pantalla pública que reciba la invitación: se entrega el código tal cual. */}
+            <p className="text-sm text-fg">Copiá este código y mandáselo a la persona.</p>
+            <Field label="Código de invitación">
+              <div className="flex gap-2">
+                <input readOnly value={created.token} onFocus={e => e.currentTarget.select()} className={inp} />
+                <button type="button" className={btnPri} onClick={() => { void navigator.clipboard?.writeText(created.token!); setCopied(true); }}>
+                  <Copy className="w-3.5 h-3.5" />{copied ? "Copiado" : "Copiar"}
+                </button>
+              </div>
+            </Field>
+          </>
+        ) : <p className="text-sm text-fg">La invitación quedó creada.</p>}
+        {created.expiresAt && <p className="text-xs text-text-industrial/50">Vence el {fmtDate(created.expiresAt)}.</p>}
+        <button onClick={onClose} className={`${btnPri} w-full py-2.5 text-sm`}>Listo</button>
       </div>
     </ModalWrapper>
   );
   return (
-    <ModalWrapper title="Crear Invitación" onClose={onClose}>
+    <ModalWrapper title="Invitar a alguien" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email" required><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
-          <Field label="Locale"><select className={sel} value={form.locale} onChange={set("locale")}>{LOCALES.map(l => <option key={l} value={l}>{l}</option>)}</select></Field>
+        <Field label="Correo de la persona" required><input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="nombre@empresa.com" autoFocus /></Field>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Rol" required><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></Field>
+          <Field label="Idioma"><select className={sel} value={form.locale} onChange={set("locale")}>{LOCALES.map(l => <option key={l} value={l}>{localeLabel(l)}</option>)}</select></Field>
         </div>
-        {err && <ErrMsg msg={err} />}
-        <SaveBtn loading={loading} label="Crear Invitación" />
+        <SaveBtn loading={loading} label="Crear invitación" />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
 
 function AddTenantUserModal({ tenantSlug, onClose, onAdded }: { tenantSlug: string; onClose: () => void; onAdded: () => void }) {
-  const [form, setForm] = useState({ email: "", password: "", role: "TECHNICIAN_OPERATOR", firstName: "", lastName: "" });
+  const [form, setForm] = useState({ email: "", password: "", role: "TECHNICIAN_OPERATOR", firstName: "", lastName: "", legacyUserId: "" });
   const [loading, setLoading] = useState(false); const [err, setErr] = useState<string|null>(null);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setErr(null);
-    try { await platformPost(`/platform/tenants/${tenantSlug}/users`, { ...form, userStatus: "ACTIVE", membershipStatus: "ACTIVE" }); onAdded(); onClose(); }
-    catch (ex: any) { setErr(ex.message ?? "Error"); }
+    e.preventDefault();
+    if (!form.firstName.trim()) { setErr("Falta el nombre."); return; }
+    if (!form.legacyUserId.trim()) { setErr("Falta el usuario para entrar."); return; }
+    if (/\s/.test(form.legacyUserId.trim())) { setErr("El usuario para entrar no puede tener espacios."); return; }
+    if (!form.email.trim()) { setErr("Falta el correo."); return; }
+    if (!form.password) { setErr("Falta la contraseña."); return; }
+    setLoading(true); setErr(null);
+    try { await platformPost(`/platform/tenants/${tenantSlug}/users`, { ...form, legacyUserId: form.legacyUserId.trim().toUpperCase(), userStatus: "ACTIVE", membershipStatus: "ACTIVE" }); onAdded(); onClose(); }
+    catch (ex: any) { setErr(ex.message ?? "No se pudo crear el usuario."); }
     finally { setLoading(false); }
   };
   return (
-    <ModalWrapper title="Crear Usuario de Tenant" onClose={onClose}>
+    <ModalWrapper title="Nuevo usuario" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Email" required><input className={inp} type="email" required value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" /></Field>
-        <Field label="Contraseña" required><PasswordInput className={inp} required value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
-        <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
-        <Field label="Rol"><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}</select></Field>
-        {err && <ErrMsg msg={err} />}
-        <SaveBtn loading={loading} label="Crear Usuario" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Nombre" required><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="Ej.: Walter" autoFocus /></Field>
+          <Field label="Apellido"><input className={inp} value={form.lastName} onChange={set("lastName")} placeholder="Ej.: García" /></Field>
+        </div>
+        <Field label="Usuario para entrar" required hint="Es lo que la persona escribe al entrar. Sin espacios."><input className={inp} value={form.legacyUserId} onChange={set("legacyUserId")} placeholder="Ej.: GARCIA" /></Field>
+        <Field label="Correo" required><input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="nombre@empresa.com" /></Field>
+        <Field label="Contraseña" required><PasswordInput className={inp} value={form.password} onChange={set("password")} placeholder="••••••••" /></Field>
+        <Field label="Rol" required><select className={sel} value={form.role} onChange={set("role")}>{TENANT_ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></Field>
+        <SaveBtn loading={loading} label="Crear usuario" />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
 
-// ─── Edit User Modal ──────────────────────────────────────────────────────────
-
 function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: string; user: TenantUser; onClose: () => void; onSaved: () => void }) {
-  const isNamedEmail = user.email.startsWith("named-");
+  const noMail = isPlaceholderEmail(user.email);
   const [form, setForm] = useState({
     firstName: user.firstName ?? "",
     lastName:  user.lastName  ?? "",
-    email:     isNamedEmail ? "" : user.email,
+    legacyUserId: user.legacyUserId ?? "",
+    email:     noMail ? "" : user.email,
     role:      user.role,
     password:  "",
     confirm:   "",
@@ -449,306 +481,339 @@ function EditUserModal({ tenantSlug, user, onClose, onSaved }: { tenantSlug: str
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.password && form.password !== form.confirm) { setErr("Las contraseñas no coinciden."); return; }
-    if (form.password && form.password.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres."); return; }
+    if (form.password && form.password.length < 6) { setErr("La contraseña tiene que tener al menos 6 caracteres."); return; }
+    if (/\s/.test(form.legacyUserId.trim())) { setErr("El usuario para entrar no puede tener espacios."); return; }
     const payload: Record<string, string> = { firstName: form.firstName, lastName: form.lastName, role: form.role };
+    const username = form.legacyUserId.trim().toUpperCase();
+    if (username && username !== (user.legacyUserId ?? "")) payload.legacyUserId = username;
     if (form.email && form.email !== user.email) payload.email = form.email;
     if (form.password) payload.password = form.password;
     setLoading(true); setErr(null);
     try {
       await platformPatch(`/platform/tenants/${tenantSlug}/users/${user.id}`, payload);
       setOk(true);
-    } catch (ex: any) { setErr(ex.message ?? "Error al guardar"); }
+    } catch (ex: any) { setErr(ex.message ?? "No se pudo guardar."); }
     finally { setLoading(false); }
   };
 
   if (ok) return (
     <ModalWrapper title="Usuario actualizado" onClose={() => { onSaved(); onClose(); }}>
       <div className="space-y-3">
-        <OkMsg msg="Usuario actualizado correctamente." />
-        <button onClick={() => { onSaved(); onClose(); }} className="w-full py-2.5 rounded-xl bg-fg/5 border border-fg/10 text-sm text-fg font-bold hover:bg-fg/10 transition-all">Cerrar</button>
+        <p className="text-sm text-fg">Los cambios quedaron guardados.</p>
+        <button onClick={() => { onSaved(); onClose(); }} className={`${btnPri} w-full py-2.5 text-sm`}>Listo</button>
       </div>
     </ModalWrapper>
   );
 
   return (
-    <ModalWrapper title={`Editar usuario — ${user.firstName || user.email}`} onClose={onClose}>
+    <ModalWrapper title={`Editar a ${personName(user)}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Usuario"><input className={inp} value={form.firstName} onChange={set("firstName")} placeholder="SUPER_REM" /></Field>
-        <Field label="Email">
-          <input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="usuario@empresa.com" />
-          {isNamedEmail && <p className="text-[10px] text-yellow-700 dark:text-yellow-400/70 mt-1">Este usuario no tiene email real — asigná uno.</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Nombre"><input className={inp} value={form.firstName} onChange={set("firstName")} /></Field>
+          <Field label="Apellido"><input className={inp} value={form.lastName} onChange={set("lastName")} /></Field>
+        </div>
+        <Field label="Usuario para entrar" hint="Es lo que la persona escribe al entrar. Sin espacios."><input className={inp} value={form.legacyUserId} onChange={set("legacyUserId")} placeholder="Ej.: GARCIA" /></Field>
+        <Field label="Correo" hint={noMail ? "Esta persona no tiene correo cargado. Cargale uno." : undefined}>
+          <input className={inp} type="email" value={form.email} onChange={set("email")} placeholder="nombre@empresa.com" />
         </Field>
         <Field label="Rol">
           <select className={sel} value={form.role} onChange={set("role")}>
-            {TENANT_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r.replace(/_/g," ")}</option>)}
+            {TENANT_ROLES.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
           </select>
         </Field>
         <div className="border-t border-fg/5 pt-3 space-y-3">
-          <p className="text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest">Nueva contraseña (opcional)</p>
+          <p className="text-xs font-semibold text-text-industrial/60">Contraseña nueva (opcional)</p>
           <Field label="Contraseña">
-            <PasswordInput className={inp} value={form.password} onChange={set("password")} placeholder="Dejar vacío para no cambiar" />
+            <PasswordInput className={inp} value={form.password} onChange={set("password")} placeholder="Dejala vacía para no cambiarla" />
           </Field>
           {form.password && (
-            <Field label="Confirmar contraseña">
+            <Field label="Repetir contraseña">
               <PasswordInput className={inp} value={form.confirm} onChange={set("confirm")} placeholder="••••••••" />
             </Field>
           )}
         </div>
-        {err && <ErrMsg msg={err} />}
         <SaveBtn loading={loading} label="Guardar cambios" />
       </form>
+      {err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     </ModalWrapper>
   );
 }
 
-// ─── Tenant Detail Drawer ─────────────────────────────────────────────────────
+// ─── Detalle de la empresa (panel a la derecha) ───────────────────────────────
 
-type DetailTab = "domains" | "users" | "invitations";
+type DetailTab = "data" | "users" | "invitations" | "domains";
 
-function TenantDetailDrawer({ tenant, onClose, onChanged }: { tenant: Tenant; onClose: () => void; onChanged: () => void }) {
-  const [tab, setTab] = useState<DetailTab>("domains");
+const KV = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <>
+    <span className="text-xs text-text-industrial/50 pt-0.5">{label}</span>
+    <div className="text-sm text-fg">{children}</div>
+  </>
+);
+
+function personName(u: TenantUser) {
+  const full = [u.firstName, u.lastName].filter(Boolean).join(" ");
+  return full || (isPlaceholderEmail(u.email) ? "Sin nombre" : u.email);
+}
+
+function TenantDetailDrawer({ tenant, onClose, onChanged, onEdit }: { tenant: Tenant; onClose: () => void; onChanged: () => void; onEdit: () => void }) {
+  const [tab, setTab] = useState<DetailTab>("users");
   const [addDomain, setAddDomain]       = useState(false);
   const [addUser, setAddUser]           = useState(false);
   const [addInvite, setAddInvite]       = useState(false);
   const [editUser, setEditUser] = useState<TenantUser | null>(null);
   const [revoking, setRevoking] = useState<TenantUser | null>(null);
-  const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: domains, loading: dLoading, reload: dReload } = usePlatformList<TenantDomain[]>(`/platform/tenants/${tenant.slug}/domains`);
   const { data: users,   loading: uLoading, error: uError, reload: uReload } = usePlatformList<{ items: TenantUser[]; total: number }>(`/platform/tenants/${tenant.slug}/users`);
   const { data: invites, loading: iLoading, reload: iReload } = usePlatformList<TenantInvite[]>(`/platform/tenants/${tenant.slug}/invitations`);
 
   const setPrimary = async (domain: TenantDomain) => {
-    try { await platformPatch(`/platform/tenants/${tenant.slug}/domains/${domain.id}`, { isPrimary: true }); dReload(); }
-    catch { /* ignore */ }
+    try { await platformPatch(`/platform/tenants/${tenant.slug}/domains/${domain.id}`, { isPrimary: true }); dReload(); onChanged(); }
+    catch (e) { setActionError(e instanceof Error ? e.message : "No se pudo cambiar la dirección principal."); }
   };
 
-  // Revoca el acceso de un user al tenant. Soft delete: la membership pasa a
-  // REVOKED pero el user y su historial se conservan.
+  // Quita el acceso de una persona a la empresa. La persona y su historial se conservan.
   const revokeUser = async (u: TenantUser) => {
     setRevoking(null);
     try {
       await platformDelete(`/platform/tenants/${tenant.slug}/users/${u.id}`);
-      uReload();
+      uReload(); onChanged();
     } catch (e) {
-      setRevokeError(e instanceof Error ? e.message : "Error al revocar.");
+      setActionError(e instanceof Error ? e.message : "No se pudo quitar el acceso.");
     }
   };
 
-  type TabDef = { id: DetailTab; label: string; icon: React.ElementType };
-  const TABS: TabDef[] = [
-    { id: "domains",     label: "Dominios",     icon: Globe  },
-    { id: "users",       label: "Usuarios",     icon: Users  },
-    { id: "invitations", label: "Invitaciones", icon: Mail   },
+  const st = statusInfo(tenant.status);
+  const TABS: Array<{ id: DetailTab; label: string }> = [
+    { id: "data",        label: "Datos" },
+    { id: "users",       label: "Usuarios" },
+    { id: "invitations", label: "Invitaciones" },
+    { id: "domains",     label: "Direcciones web" },
   ];
+
+  const q = search.trim().toLowerCase();
+  const shownUsers = (users?.items ?? []).filter(u => !q || `${personName(u)} ${u.legacyUserId ?? ""} ${u.email}`.toLowerCase().includes(q));
+  const addBtn = (label: string, onClick: () => void) => (
+    <button onClick={onClick} className={btnPri}><Plus className="w-3.5 h-3.5" /> {label}</button>
+  );
+  const spinner = <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>;
 
   return (
     <>
       {/* Escritorio: panel a la derecha del menú. Celular: toda la pantalla bajo la barra superior. */}
       <div className="fixed inset-0 top-12 md:left-56 z-40 flex">
-        <div className="hidden md:block flex-1 bg-black/50 backdrop-blur-sm" />
-        <aside className="w-full md:w-[460px] bg-surface dark:bg-[#0A1020] md:border-l border-fg/10 flex flex-col h-full overflow-hidden">
+        <div className="hidden md:block flex-1 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <aside role="dialog" aria-label={tenant.displayName} className="w-full md:w-[520px] bg-surface dark:bg-[#0A1020] md:border-l border-fg/10 flex flex-col h-full overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-fg/5 shrink-0">
             <div className="min-w-0">
-              <p className="text-xs font-mono text-text-industrial/40">{tenant.slug}</p>
               <h2 className="text-base font-bold text-fg truncate">{tenant.displayName}</h2>
+              <p className="text-xs text-text-industrial/50 mt-0.5">{tenant.vesselCount ?? 0} buques · {tenant.userCount ?? 0} usuarios</p>
             </div>
-            <ModalCloseButton onClose={onClose} />
+            <div className="flex items-center gap-2 shrink-0">
+              <StatusPill tone={st.tone}>{st.label}</StatusPill>
+              <ModalCloseButton onClose={onClose} />
+            </div>
           </div>
 
-          <div className="flex border-b border-fg/5 shrink-0">
+          <div className="flex border-b border-fg/5 shrink-0 overflow-x-auto">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3 md:px-5 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-red-500 text-red-700 dark:text-red-400" : "border-transparent text-text-industrial/40 hover:text-fg"}`}>
-                <t.icon className="w-3.5 h-3.5" />{t.label}
+                className={`flex-1 md:flex-none whitespace-nowrap px-3 md:px-4 py-3 text-xs font-bold border-b-2 transition-all ${tab === t.id ? "border-accent text-accent" : "border-transparent text-text-industrial/50 hover:text-fg"}`}>
+                {t.label}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 md:p-6 pb-[calc(0.75rem+env(safe-area-inset-bottom))] space-y-4">
+          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 md:p-6 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4">
 
-            {tab === "domains" && (
+            {tab === "data" && (
               <>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-text-industrial/40">Dominios registrados</p>
-                  <button onClick={() => setAddDomain(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Agregar</button>
+                <div className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-3 items-start">
+                  <KV label="Nombre"><b>{tenant.displayName}</b></KV>
+                  <KV label="Estado">
+                    <StatusPill tone={st.tone}>{st.label}</StatusPill>
+                    <p className="text-xs text-text-industrial/50 mt-1">Si se suspende, nadie de la empresa puede entrar hasta reactivarla.</p>
+                  </KV>
+                  <KV label="Correo de contacto">{tenant.supportEmail || "—"}</KV>
+                  <KV label="Idioma del sistema">{localeLabel(tenant.defaultLocale)}</KV>
+                  <KV label="Moneda">{currencyLabel(tenant.currency)}</KV>
+                  <KV label="Hora local">{timezoneLabel(tenant.timezone)}</KV>
+                  <KV label="Formato de la OT en PDF">{woPdfLabel(tenant.workOrderPdfTemplate)}</KV>
+                  <KV label="Logo">
+                    {tenant.logoUrl
+                      ? <img src={tenant.logoUrl} alt={tenant.displayName} className="h-12 max-w-[200px] object-contain bg-white rounded-lg p-1.5 border border-fg/10" />
+                      : <span className="text-text-industrial/50">Sin logo cargado</span>}
+                  </KV>
+                  <KV label="Cliente desde">{fmtDate(tenant.createdAt)}</KV>
                 </div>
-                {dLoading
-                  ? <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>
-                  : !domains?.length
-                  ? <div className="text-center py-10 text-text-industrial/20 text-sm">Sin dominios registrados</div>
-                  : domains.map(d => (
-                    <div key={d.id} className="flex items-center justify-between gap-3 bento-card py-3 px-4">
-                      <div className="min-w-0 break-all">
-                        <p className="text-sm font-mono text-fg">{d.host}</p>
-                        <p className="text-[10px] text-text-industrial/30 mt-0.5">{fmtDate(d.createdAt)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {d.isPrimary
-                          ? <span className="flex items-center gap-1 text-[10px] text-yellow-700 dark:text-yellow-400 font-bold"><Star className="w-3 h-3" /> Primario</span>
-                          : <button onClick={() => setPrimary(d)} className="flex items-center gap-1 min-h-10 md:min-h-0 text-[10px] text-text-industrial/30 hover:text-yellow-400 transition-colors"><StarOff className="w-3 h-3" /> Hacer primario</button>
-                        }
-                      </div>
-                    </div>
-                  ))
-                }
+                <button onClick={onEdit} className={btnPri}><Pencil className="w-3.5 h-3.5" /> Editar datos</button>
               </>
             )}
 
             {tab === "users" && (
               <>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-text-industrial/40">{users?.total ?? "—"} usuarios</p>
-                  <div className="flex items-center gap-2">
-                    <button onClick={uReload} className="p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all" title="Recargar"><Loader2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setAddUser(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Crear usuario</button>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-industrial/40" />
+                    <input className={`${inp} pl-9`} placeholder="Buscar persona" value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
+                  {addBtn("Nuevo usuario", () => setAddUser(true))}
                 </div>
-                {uLoading
-                  ? <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>
-                  : uError
-                  ? <ErrMsg msg={uError} />
-                  : !users?.items.length
-                  ? <div className="text-center py-10 text-text-industrial/20 text-sm">Sin usuarios</div>
-                  : users.items.map(u => (
-                    <div key={u.id} className="bento-card py-3 px-4 flex flex-col md:flex-row md:items-start md:justify-between gap-2 md:gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm text-fg font-medium truncate">{u.firstName || u.email}</p>
-                        <p className="text-[10px] text-text-industrial/40 mt-0.5 truncate">{u.firstName ? u.email : "—"}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 md:shrink-0">
-                        <span className="text-[10px] font-bold text-accent">{ROLE_LABELS[u.role] ?? u.role.replace(/_/g," ")}</span>
-                        <StatusBadge status={u.membershipStatus} />
-                        {/* En el celular los botones llevan texto y son más grandes para el dedo. */}
-                        <div className="flex w-full md:w-auto gap-2">
-                          <button
-                            onClick={() => setEditUser(u)}
-                            title="Editar usuario"
-                            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 min-h-10 md:min-h-0 p-1.5 rounded-lg border border-fg/10 md:border-0 text-xs font-bold md:font-normal text-fg md:text-text-industrial/30 hover:bg-fg/10 hover:text-yellow-400 transition-all"
-                          >
-                            <Pencil className="w-3.5 h-3.5" /><span className="md:hidden">Editar</span>
-                          </button>
-                          {u.membershipStatus !== "REVOKED" && (
-                            <button
-                              onClick={() => setRevoking(u)}
-                              title="Revocar acceso al tenant"
-                              className="flex-1 md:flex-none flex items-center justify-center gap-1.5 min-h-10 md:min-h-0 p-1.5 rounded-lg border border-fg/10 md:border-0 text-xs font-bold md:font-normal text-danger md:text-text-industrial/30 hover:bg-red-500/10 hover:text-red-400 transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /><span className="md:hidden">Revocar acceso</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                {uLoading ? spinner
+                  : uError ? <EmptyState title="No se pudo cargar la lista" text={uError} />
+                  : !shownUsers.length ? <EmptyState title={q ? "No hay nadie con ese nombre" : "Todavía no hay usuarios"} text={q ? "Probá con otra búsqueda." : "Tocá «Nuevo usuario» para cargar a la primera persona."} />
+                  : (
+                    <div className="divide-y divide-fg/5 border border-fg/10 rounded-xl">
+                      {shownUsers.map(u => {
+                        const active = u.membershipStatus === "ACTIVE" && u.userStatus === "ACTIVE";
+                        return (
+                          <div key={u.id} className="p-3 flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <TwoLines main={personName(u)} sub={[u.legacyUserId ? `Usuario ${u.legacyUserId}` : null, isPlaceholderEmail(u.email) ? null : u.email].filter(Boolean).join(" · ")} />
+                                {isPlaceholderEmail(u.email) && <div className="mt-1"><StatusPill tone="warn">Sin correo cargado</StatusPill></div>}
+                              </div>
+                              {active ? <StatusPill tone="ok">Puede entrar</StatusPill> : <StatusPill tone="muted">Sin acceso</StatusPill>}
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-text-industrial/60">{roleLabel(u.role)}</span>
+                              <div className="flex gap-2">
+                                <button onClick={() => setEditUser(u)} className={btnSec}><Pencil className="w-3.5 h-3.5" /> Editar</button>
+                                {u.membershipStatus !== "REVOKED" && (
+                                  <button onClick={() => setRevoking(u)} className={`${btnSec} text-danger`}><Trash2 className="w-3.5 h-3.5" /> Quitar acceso</button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))
-                }
+                  )}
               </>
             )}
 
             {tab === "invitations" && (
               <>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-text-industrial/40">Invitaciones enviadas</p>
-                  <button onClick={() => setAddInvite(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"><Plus className="w-3 h-3" /> Invitar</button>
-                </div>
-                {iLoading
-                  ? <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-text-industrial/30" /></div>
-                  : !invites?.length
-                  ? <div className="text-center py-10 text-text-industrial/20 text-sm">Sin invitaciones</div>
-                  : invites.map(inv => (
-                    <div key={inv.id} className="bento-card py-3 px-4 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm text-fg truncate">{inv.email}</p>
-                        <p className="text-[10px] text-text-industrial/40 mt-0.5">Expira: {fmtDate(inv.expiresAt)}</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] font-bold text-accent">{ROLE_LABELS[inv.role] ?? inv.role.replace(/_/g," ")}</span>
-                        <StatusBadge status={inv.status} />
-                      </div>
+                <p className="text-sm text-text-industrial/60">Una invitación es un enlace que le mandás a la persona para que cree su propia contraseña.{invites?.[0]?.expiresAt ? " Cada una tiene fecha de vencimiento." : ""}</p>
+                <div>{addBtn("Invitar a alguien", () => setAddInvite(true))}</div>
+                {iLoading ? spinner
+                  : !invites?.length ? <EmptyState title="No hay invitaciones" text="Cuando invites a alguien va a aparecer acá hasta que la acepte." />
+                  : (
+                    <div className="divide-y divide-fg/5 border border-fg/10 rounded-xl">
+                      {invites.map(inv => {
+                        const s = statusInfo(inv.status);
+                        return (
+                          <div key={inv.id} className="p-3 flex items-start justify-between gap-3">
+                            <TwoLines main={inv.email} sub={`${roleLabel(inv.role)} · vence el ${fmtDate(inv.expiresAt)}`} />
+                            <StatusPill tone={s.tone}>{s.label}</StatusPill>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))
-                }
+                  )}
+              </>
+            )}
+
+            {tab === "domains" && (
+              <>
+                <p className="text-sm text-text-industrial/60">Las direcciones de internet con las que la gente de {tenant.displayName} entra al sistema.</p>
+                <div>{addBtn("Agregar dirección", () => setAddDomain(true))}</div>
+                {dLoading ? spinner
+                  : !domains?.length ? <EmptyState title="Todavía no hay direcciones" text="Agregá la dirección con la que van a entrar." />
+                  : (
+                    <div className="divide-y divide-fg/5 border border-fg/10 rounded-xl">
+                      {domains.map(d => (
+                        <div key={d.id} className="p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0 break-all">
+                            <p className="text-sm font-semibold text-fg">{d.host}</p>
+                            <p className="text-xs text-text-industrial/50 mt-0.5">Agregada el {fmtDate(d.createdAt)}</p>
+                          </div>
+                          {d.isPrimary
+                            ? <StatusPill tone="info"><Star className="w-3 h-3" /> Principal</StatusPill>
+                            : <button onClick={() => setPrimary(d)} className={btnSec}>Hacer principal</button>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </>
             )}
           </div>
         </aside>
       </div>
 
-      {addDomain    && <AddDomainModal tenantSlug={tenant.slug} onClose={() => setAddDomain(false)} onAdded={() => { dReload(); onChanged(); }} />}
-      {addUser      && <AddTenantUserModal tenantSlug={tenant.slug} onClose={() => setAddUser(false)} onAdded={() => { uReload(); onChanged(); }} />}
-      {addInvite    && <AddInviteModal tenantSlug={tenant.slug} onClose={() => setAddInvite(false)} onAdded={() => iReload()} />}
-      {editUser && <EditUserModal tenantSlug={tenant.slug} user={editUser} onClose={() => setEditUser(null)} onSaved={uReload} />}
+      {addDomain && <AddDomainModal tenantSlug={tenant.slug} onClose={() => setAddDomain(false)} onAdded={() => { dReload(); onChanged(); }} />}
+      {addUser   && <AddTenantUserModal tenantSlug={tenant.slug} onClose={() => setAddUser(false)} onAdded={() => { uReload(); onChanged(); }} />}
+      {addInvite && <AddInviteModal tenantSlug={tenant.slug} onClose={() => setAddInvite(false)} onAdded={() => iReload()} />}
+      {editUser  && <EditUserModal tenantSlug={tenant.slug} user={editUser} onClose={() => setEditUser(null)} onSaved={uReload} />}
       {revoking && (
         <ConfirmDialog
-          message={
-            `¿Revocar el acceso de ${revoking.firstName ? `${revoking.firstName} (${revoking.email})` : revoking.email} al tenant?\n\n` +
-            `Perderá la posibilidad de loguearse, pero el historial se mantiene. ` +
-            `Podés reactivarlo después editando el usuario.`
-          }
-          confirmLabel="Revocar"
+          message={`Le vas a quitar el acceso a ${personName(revoking)} a ${tenant.displayName}. No va a poder entrar más.`}
+          confirmLabel="Quitar acceso"
           cancelLabel="Cancelar"
           onConfirm={() => { void revokeUser(revoking); }}
           onCancel={() => setRevoking(null)}
         />
       )}
-      {revokeError && <AlertDialog message={revokeError} onClose={() => setRevokeError(null)} />}
+      {actionError && <AlertDialog message={actionError} onClose={() => setActionError(null)} />}
     </>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Página ───────────────────────────────────────────────────────────────────
 
 export const PlatformTenantsPage: React.FC = () => {
   const { data, loading, error, reload } = usePlatformList<ListResponse>("/platform/tenants");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing]   = useState<Tenant | null>(null);
-  const [detail, setDetail]     = useState<Tenant | null>(null);
+  const [detailSlug, setDetailSlug] = useState<string | null>(null);
+  const [mainHosts, setMainHosts] = useState<Record<string, string>>({});
+  const [hostsTick, setHostsTick] = useState(0);
 
-  const BASE_COLS: Column<Tenant>[] = [
-    { key: "slug",         header: "Slug",    render: r => <span className="font-mono font-bold text-fg text-xs">{r.slug}</span> },
-    { key: "displayName",  header: "Nombre",  mobileTitle: true, render: r => <span className="font-medium text-fg">{r.displayName}</span> },
-    { key: "status",       header: "Estado",  mobileTitle: true, filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
-    { key: "defaultLocale",header: "Locale",  filterValue: r => r.defaultLocale, render: r => r.defaultLocale },
-    { key: "currency",     header: "Moneda",  filterValue: r => r.currency, render: r => r.currency },
-    { key: "createdAt",    header: "Creado",  render: r => fmtDate(r.createdAt) },
-    {
-      key: "id", header: "",
-      render: r => (
-        <>
-          <button title="Ver detalle" onClick={e => { e.stopPropagation(); setDetail(r); }}
-            className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-fg/10 text-text-industrial/40 hover:text-fg transition-all">
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-          {/* Celular: la tarjeta no tiene fila que "clickear", así que las dos salidas van a la vista. */}
-          <div className="md:hidden flex gap-2">
-            <button onClick={e => { e.stopPropagation(); setEditing(r); }}
-              className="flex-1 min-h-10 flex items-center justify-center gap-1.5 rounded-xl border border-fg/10 text-xs font-bold text-fg">
-              <Pencil className="w-3.5 h-3.5" /> Editar
-            </button>
-            <button onClick={e => { e.stopPropagation(); setDetail(r); }}
-              className="flex-1 min-h-10 flex items-center justify-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-700 dark:text-red-400">
-              Usuarios y más <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </>
-      ),
-    },
+  // Dirección principal de cada empresa, para mostrarla debajo del nombre.
+  React.useEffect(() => {
+    const items = data?.items;
+    if (!items?.length) return;
+    let alive = true;
+    void Promise.all(items.map(async t => {
+      try {
+        const ds = await platformFetch<TenantDomain[]>(`/platform/tenants/${t.slug}/domains`);
+        const main = ds.find(d => d.isPrimary) ?? ds[0];
+        return [t.slug, main?.host ?? ""] as const;
+      } catch { return [t.slug, ""] as const; }
+    })).then(pairs => { if (alive) setMainHosts(Object.fromEntries(pairs)); });
+    return () => { alive = false; };
+  }, [data, hostsTick]);
+
+  const detail = detailSlug ? data?.items.find(t => t.slug === detailSlug) ?? null : null;
+
+  const COLS: Column<Tenant>[] = [
+    { key: "displayName", header: "Empresa", mobileTitle: true, sortable: true, sortValue: r => r.displayName,
+      render: r => <TwoLines main={r.displayName} sub={mainHosts[r.slug] || undefined} /> },
+    { key: "status", header: "Estado", mobileTitle: true, filterValue: r => statusInfo(r.status).label,
+      render: r => { const s = statusInfo(r.status); return <StatusPill tone={s.tone}>{s.label}</StatusPill>; } },
+    { key: "vesselCount", header: "Buques", sortable: true, sortValue: r => r.vesselCount ?? 0, render: r => r.vesselCount ?? 0 },
+    { key: "userCount", header: "Usuarios", sortable: true, sortValue: r => r.userCount ?? 0, render: r => r.userCount ?? 0 },
+    { key: "defaultLocale", header: "Idioma", filterValue: r => localeLabel(r.defaultLocale), render: r => localeLabel(r.defaultLocale) },
+    { key: "createdAt", header: "Cliente desde", sortable: true, sortValue: r => r.createdAt, render: r => fmtDate(r.createdAt) },
   ];
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Building2} title="Tenants" total={data?.total} onReload={reload}>
-        <button onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Nuevo Tenant
-        </button>
-      </PageHeader>
+      <PageIntro
+        title="Empresas"
+        description="Las empresas que usan el sistema. Tocá una para ver y cambiar sus datos, su gente, sus invitaciones y las direcciones con las que entra."
+        actions={<button onClick={() => setCreating(true)} className={btnPri}><Plus className="w-3.5 h-3.5" /> Nueva empresa</button>}
+      />
 
-      <DataTable columns={BASE_COLS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id} emptyText="No hay tenants registrados" onRowClick={r => setEditing(r)} mobileCards />
+      <DataTable columns={COLS} data={data?.items ?? null} loading={loading} error={error} keyFn={r => r.id}
+        emptyText="Todavía no hay empresas. Tocá «Nueva empresa» para crear la primera."
+        onRowClick={r => setDetailSlug(r.slug)} mobileCards />
 
-      {creating && <CreateTenantModal onClose={() => setCreating(false)} onCreated={reload} />}
+      {creating && <CreateTenantModal onClose={() => setCreating(false)} onCreated={() => { reload(); setHostsTick(n => n + 1); }} />}
       {editing  && <EditTenantModal tenant={editing} onClose={() => setEditing(null)} onSaved={reload} />}
-      {detail   && <TenantDetailDrawer tenant={detail} onClose={() => setDetail(null)} onChanged={reload} />}
+      {detail   && <TenantDetailDrawer tenant={detail} onClose={() => setDetailSlug(null)} onChanged={() => { reload(); setHostsTick(n => n + 1); }} onEdit={() => setEditing(detail)} />}
     </div>
   );
 };

@@ -29,6 +29,9 @@ export interface PlatformTenantSummary {
   workOrderPdfTemplate: WorkOrderPdfTemplateKey;
   createdAt: string;
   updatedAt: string;
+  /** Sólo en el listado: buques activos y usuarios con acceso vigente. */
+  vesselCount?: number;
+  userCount?: number;
 }
 
 export interface PlatformTenantListFilters {
@@ -175,7 +178,19 @@ export async function listPlatformTenants(filters: PlatformTenantListFilters = {
     orderBy: { createdAt: "asc" },
   });
 
-  return tenants.map((tenant) => toSummaryFromPrisma(tenant));
+  const ids = tenants.map((t) => t.id);
+  const [vessels, members] = await Promise.all([
+    prisma.vessel.groupBy({ by: ["tenantId"], where: { tenantId: { in: ids }, deletedAt: null }, _count: { _all: true } }),
+    prisma.tenantMembership.groupBy({ by: ["tenantId"], where: { tenantId: { in: ids }, status: "ACTIVE" }, _count: { _all: true } }),
+  ]);
+  const vesselCount = new Map(vessels.map((v) => [v.tenantId, v._count._all]));
+  const userCount = new Map(members.map((m) => [m.tenantId, m._count._all]));
+
+  return tenants.map((tenant) => ({
+    ...toSummaryFromPrisma(tenant),
+    vesselCount: vesselCount.get(tenant.id) ?? 0,
+    userCount: userCount.get(tenant.id) ?? 0,
+  }));
 }
 
 export async function getPlatformTenant(slug: string): Promise<PlatformTenantSummary> {

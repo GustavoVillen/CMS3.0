@@ -120,6 +120,8 @@ export async function loginPlatformUser(
         id: user.id,
         email: user.email,
         role: user.role,
+        firstName: user.firstName ?? null,
+        lastName: user.lastName ?? null,
       },
       context: {
         kind: "platform",
@@ -196,7 +198,7 @@ export async function refreshPlatformSession(request: PlatformRefreshRequest): P
 
     return {
       session: tokens,
-      user: { id: user.id, email: user.email, role: user.role },
+      user: { id: user.id, email: user.email, role: user.role, firstName: user.firstName ?? null, lastName: user.lastName ?? null },
     };
   } catch (error) {
     if (isDevelopmentMode()) {
