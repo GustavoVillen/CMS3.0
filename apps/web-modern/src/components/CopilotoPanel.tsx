@@ -635,7 +635,8 @@ const renderMarkdownLite = (
     .replace(/^[ \t]*#{1,6}[ \t]+(.+?)[ \t]*$/gm, "**$1**")
     .replace(/^([ \t]*)[*-][ \t]+/gm, "$1• ");
   const nodes: React.ReactNode[] = [];
-  const linkRegex = /\[([^\]]+)]\((\/[^\s)]+)\)/g;
+  // `*` y no `+`: "(/)" a secas es el Dashboard y antes quedaba como texto crudo.
+  const linkRegex = /\[([^\]]+)]\((\/[^\s)]*)\)/g;
   let lastIndex = 0;
   let linkIndex = 0;
 
