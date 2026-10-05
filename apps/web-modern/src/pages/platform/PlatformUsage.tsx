@@ -153,6 +153,52 @@ function aggregateByMinute(items: UsageEvent[]): AggregatedRow[] {
   return out;
 }
 
+// ── Nombre legible de cada función de IA ─────────────────────────────────────
+// La clave es la que graba cada servicio en UsageEvent.feature. Una nueva sin
+// entrada acá se muestra con su nombre interno.
+
+const FEATURE_LABELS: Record<string, string> = {
+  copiloto:                                  "Copiloto (pregunta)",
+  wo_close_audit:                            "OT: revisión al cerrar",
+  sr_complete_audit:                         "SS: revisión al completar",
+  wo_acceptance_criteria_suggestion:         "OT: sugerir criterios de aceptación",
+  wo_plan_link_suggestion:                   "OT: sugerir tarea del plan",
+  wo_asset_suggestion:                       "OT: sugerir equipo",
+  wo_multi_plan_summary:                     "OT: resumen de varias tareas",
+  wo_rewrite_deficiencies:                   "OT: redactar deficiencias",
+  wo_scan_extraction:                        "OT: leer OT escaneada",
+  wo_progress_ocr:                           "Avance de OT: leer foto/escaneo",
+  wo_progress_rewrite_observations:          "Avance de OT: redactar observaciones",
+  wo_progress_detect_spares:                 "Avance de OT: detectar repuestos usados",
+  defect_description_suggestion:             "Defecto: redactar descripción",
+  defect_photo_analysis:                     "Defecto: analizar foto",
+  defect_rca_suggestion:                     "Defecto: sugerir análisis de causa",
+  deficiency_detection:                      "Defecto: detectar deficiencia en el texto",
+  deferral_risk_analysis_suggestion:         "Diferimiento: análisis de riesgo",
+  deferral_compensatory_measures_suggestion: "Diferimiento: medidas compensatorias",
+  asset_criticality_suggestion:              "Equipo: sugerir criticidad",
+  asset_health_report:                       "Equipo: informe de salud",
+  plan_rcm_consequence_suggestion:           "Plan: sugerir consecuencia de falla",
+  fluid_analyses:                            "Laboratorio: leer informe",
+  fluid_ai_insights:                         "Laboratorio: interpretar resultados",
+  goods_receipt:                             "Repuestos: leer remito de recepción",
+  moc_draft_suggestion:                      "Gestión del cambio: borrador",
+  moc_risk_assessment_suggestion:            "Gestión del cambio: análisis de riesgo",
+  maintenance_advisor_report:                "Asesor de mantenimiento: informe",
+  maintenance_advisor_draft:                 "Asesor de mantenimiento: borrador",
+  maintenance_advisor_reply:                 "Asesor de mantenimiento: respuesta",
+  monthly_report_draft:                      "Informe mensual: borrador",
+  vetting_assessment_suggestion:             "Vetting: sugerir evaluación",
+  tmsa_assessment_suggestion:                "TMSA: sugerir evaluación",
+  ism_assessment_suggestion:                 "ISM: sugerir evaluación",
+};
+
+function featureLabel(f: string | null): string {
+  return f ? (FEATURE_LABELS[f] ?? f) : "—";
+}
+
+const FEATURE_OPTIONS = Object.entries(FEATURE_LABELS).sort((a, b) => a[1].localeCompare(b[1], "es"));
+
 // ── Columns ──────────────────────────────────────────────────────────────────
 
 const COMMON_COLS_RAW: Column<UsageEvent>[] = [
@@ -165,7 +211,7 @@ const COMMON_COLS_RAW: Column<UsageEvent>[] = [
 
 const AI_COLS_RAW: Column<UsageEvent>[] = [
   ...COMMON_COLS_RAW,
-  { key: "feature",      header: "Feature", filterValue: r => r.feature ?? "", render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
+  { key: "feature",      header: "Función", filterValue: r => featureLabel(r.feature), render: r => <span className="text-xs text-fg/70" title={r.feature ?? ""}>{featureLabel(r.feature)}</span> },
   { key: "model",        header: "Modelo",  filterValue: r => r.model ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
   { key: "inputTokens",  header: "Input",   render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
   { key: "outputTokens", header: "Output",  render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.outputTokens)}</span> },
@@ -195,7 +241,7 @@ const COMMON_COLS_AGG: Column<AggregatedRow>[] = [
 
 const AI_COLS_AGG: Column<AggregatedRow>[] = [
   ...COMMON_COLS_AGG,
-  { key: "feature",      header: "Feature",   filterValue: r => r.feature ?? "", render: r => <span className="text-xs text-fg/70">{r.feature ?? "—"}</span> },
+  { key: "feature",      header: "Función", filterValue: r => featureLabel(r.feature), render: r => <span className="text-xs text-fg/70" title={r.feature ?? ""}>{featureLabel(r.feature)}</span> },
   { key: "model",        header: "Modelo",    filterValue: r => r.model ?? "", render: r => <span className="font-mono text-[10px] text-text-industrial/50">{r.model ?? "—"}</span> },
   { key: "requests",     header: "Reqs",      render: r => <span className="font-mono text-xs text-text-industrial/80">{r.requests}</span> },
   { key: "inputTokens",  header: "Input",     render: r => <span className="font-mono text-xs text-text-industrial/70">{fmtTok(r.inputTokens)}</span> },
@@ -555,9 +601,8 @@ export const PlatformUsagePage: React.FC = () => {
         {kind === "ai_call" && (
           <select value={feature} onChange={e => setFeature(e.target.value)}
             className="bg-fg/5 border border-fg/10 rounded-lg px-3 py-2.5 md:py-1.5 text-base md:text-xs text-text-industrial focus:outline-none focus:border-accent/50">
-            <option value="">Toda feature</option>
-            <option value="copiloto">copiloto</option>
-            <option value="fluid_analyses">fluid_analyses</option>
+            <option value="">Todas las funciones</option>
+            {FEATURE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         )}
         <input type="date" value={from} onChange={e => setFrom(e.target.value)}
