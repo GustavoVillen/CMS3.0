@@ -33,6 +33,7 @@ interface AccessLocation {
 interface ActiveUser {
   userId: string;
   userEmail: string;
+  userName: string | null;
   tenantSlug: string;
   userRole: string | null;
   vesselCode: string | null;
@@ -149,7 +150,7 @@ function spreadOverlaps(users: ActiveUser[]): Array<{ user: ActiveUser; lat: num
 function buildPopup(u: ActiveUser): string {
   const loc = u.location;
   const lines = [
-    `<strong style="font-size:14px">${escapeHtml(u.userEmail)}</strong>`,
+    `<strong style="font-size:14px">${escapeHtml(u.userName ?? u.userEmail)}</strong>`,
     `<span style="color:#888">${escapeHtml(u.tenantSlug)}${u.userRole ? ` · ${escapeHtml(u.userRole)}` : ""}</span>`,
     u.vesselCode ? `<span>🚢 ${escapeHtml(u.vesselCode)}</span>` : "",
     `<span>${flagEmoji(loc.countryCode)} ${escapeHtml(loc.label)}</span>`,
@@ -220,7 +221,7 @@ const ACTIVE_COLS: Column<ActiveUser>[] = [
     key: "userEmail", header: "Usuario", mobileTitle: true,
     render: (r) => (
       <div className="leading-tight">
-        <div className="text-xs text-fg/90 truncate max-w-[220px]" title={r.userEmail}>{r.userEmail}</div>
+        <div className="text-xs text-fg/90 truncate max-w-[220px]" title={r.userEmail}>{r.userName ?? r.userEmail}</div>
         {r.userRole && <div className="text-[10px] text-text-industrial/40">{r.userRole}</div>}
       </div>
     ),

@@ -145,8 +145,12 @@ export async function loginTenantUser(
     // vesselCode + password fue eliminado — las tripulaciones ahora son Users
     // normales gestionados desde "Gestión del Equipo".)
     if (!membership) {
-      // All paths failed. Single audit event with neutral metadata
-      // (don't reveal which path got how far — keep response identical).
+      // La respuesta al cliente es siempre la misma; el motivo y el usuario
+      // quedan sólo en el audit, que únicamente ve la consola de plataforma.
+      // El texto tecleado se guarda sólo si no corresponde a ningún usuario,
+      // para poder ver qué nombre se intentó.
+      const known = (candidates.find((c) => c.user.status === "ACTIVE") ?? candidates[0])?.user ?? null;
+      const reason = !known ? "user_not_found" : known.status === "ACTIVE" ? "wrong_password" : "user_inactive";
       recordLoginFailure(`tenant:${tenant.slug}`, identifier);
       await publishSystemAudit(prisma, {
         tenantId: tenant.id,
@@ -156,6 +160,8 @@ export async function loginTenantUser(
         metadata: {
           tenantSlug: tenant.slug,
           identifierHash: redactEmail(identifier),
+          reason,
+          ...(known ? { userId: known.id } : { identifierTyped: identifier.slice(0, 80) }),
           ip: origin.ipAddress,
           userAgent: origin.userAgent,
         },

@@ -36,6 +36,8 @@ export interface AccessLocation {
 export interface ActiveUserRow {
   userId: string;
   userEmail: string;
+  /** Nombre y apellido; null si el usuario no los tiene cargados. */
+  userName: string | null;
   tenantSlug: string;
   userRole: string | null;
   vesselCode: string | null;
@@ -196,10 +198,23 @@ export async function getActiveUsers(windowMinutes = 15): Promise<ActiveUserRow[
   // el que esa persona abrió la sesión que sigue usando.
   const deviceByUserId = await getLastKnownDevices(prisma, rows.map((r) => r.userId));
 
+  // UsageEvent sólo guarda el email, y los miembros dados de alta sin correo
+  // tienen uno de relleno ("named-…@internal…"): el nombre sale de User.
+  const people = rows.length
+    ? await prisma.user.findMany({
+        where: { id: { in: rows.map((r) => r.userId) } },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    : [];
+  const nameById = new Map(
+    people.map((p) => [p.id, [p.firstName, p.lastName].filter(Boolean).join(" ").trim()]),
+  );
+
   return rows
     .map((r) => ({
       userId: r.userId,
       userEmail: r.userEmail,
+      userName: nameById.get(r.userId) || null,
       tenantSlug: r.tenantSlug,
       userRole: r.userRole,
       vesselCode: r.vesselCode,
@@ -280,18 +295,49 @@ export async function getLoginHistory(
     prisma.auditEvent.count({ where: where as never }),
   ]);
 
+  // Los rechazos no tienen actor: el usuario al que apuntaba el intento (si
+  // existía) viene en metadata.userId (empresa) o en entityId (plataforma).
+  const failedTenantUserIds = new Set<string>();
+  const failedPlatformUserIds = new Set<string>();
+  for (const event of records) {
+    if (!event.action.endsWith("_FAILED")) continue;
+    const meta = (event.metadata ?? {}) as Record<string, unknown>;
+    if (event.action.startsWith("PLATFORM_")) {
+      if (event.entityType === "PlatformUser" && event.entityId) failedPlatformUserIds.add(event.entityId);
+    } else {
+      const id = str(meta.userId);
+      if (id) failedTenantUserIds.add(id);
+    }
+  }
+  const personSelect = { id: true, email: true, firstName: true, lastName: true } as const;
+  const [failedTenantUsers, failedPlatformUsers] = await Promise.all([
+    failedTenantUserIds.size
+      ? prisma.user.findMany({ where: { id: { in: [...failedTenantUserIds] } }, select: personSelect })
+      : Promise.resolve([]),
+    failedPlatformUserIds.size
+      ? prisma.platformUser.findMany({ where: { id: { in: [...failedPlatformUserIds] } }, select: personSelect })
+      : Promise.resolve([]),
+  ]);
+  const tenantUserById = new Map(failedTenantUsers.map((u) => [u.id, u]));
+  const platformUserById = new Map(failedPlatformUsers.map((u) => [u.id, u]));
+
   const rows = records.map((event) => {
     const meta = (event.metadata ?? {}) as Record<string, unknown>;
     const isPlatform = event.action.startsWith("PLATFORM_");
-    const person = isPlatform ? event.actorPlatformUser : event.actorUser;
+    const targetId = isPlatform ? (event.entityType === "PlatformUser" ? event.entityId : null) : str(meta.userId);
+    const target = targetId
+      ? (isPlatform ? platformUserById.get(targetId) : tenantUserById.get(targetId)) ?? null
+      : null;
+    const person = (isPlatform ? event.actorPlatformUser : event.actorUser) ?? target;
 
     const fullName = person
       ? [person.firstName, person.lastName].filter(Boolean).join(" ").trim()
       : "";
 
-    // En los rechazos no hay usuario resuelto y el audit solo guarda el
-    // identificador ofuscado — nunca el email tecleado ni la contraseña.
-    const realEmail = person?.email ?? str(meta.email);
+    // Rechazo contra un usuario existente: se muestra ese usuario. Contra uno
+    // inexistente: lo tecleado (identifierTyped). Los audits viejos sólo
+    // tienen el identificador ofuscado. La contraseña nunca se guarda.
+    const realEmail = person?.email ?? str(meta.email) ?? str(meta.identifierTyped);
     const redacted = str(meta.emailHash) ?? str(meta.identifierHash);
 
     return {
@@ -322,6 +368,7 @@ export async function getLoginHistory(
   const needle = String(filters.userEmail ?? "").trim().toLowerCase();
   if (!needle) return { items, total };
 
-  const filtered = items.filter((r) => (r.userEmail ?? "").toLowerCase().includes(needle));
+  const filtered = items.filter((r) =>
+    `${r.userEmail ?? ""} ${r.userName ?? ""}`.toLowerCase().includes(needle));
   return { items: filtered, total: filtered.length };
 }
