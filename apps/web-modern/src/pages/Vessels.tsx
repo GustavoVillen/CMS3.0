@@ -23,6 +23,10 @@ interface Vessel {
   isCrewed?: boolean | null;
   imo?: string | null;
   registration?: string | null;
+  flag?: string | null;
+  portOfRegistry?: string | null;
+  classSociety?: string | null;
+  manager?: string | null;
   powerHp?: number | null;
   dwtTons?: number | null;
   lengthM?: number | null;
@@ -86,6 +90,10 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
   const [isCrewed, setIsCrewed] = useState<string>(initial?.isCrewed == null ? "" : String(initial.isCrewed));
   const [imo, setImo] = useState(asInputText(initial?.imo));
   const [registration, setRegistration] = useState(asInputText(initial?.registration));
+  const [flag, setFlag] = useState(asInputText(initial?.flag));
+  const [portOfRegistry, setPortOfRegistry] = useState(asInputText(initial?.portOfRegistry));
+  const [classSociety, setClassSociety] = useState(asInputText(initial?.classSociety));
+  const [manager, setManager] = useState(asInputText(initial?.manager));
   const [powerHp, setPowerHp] = useState(asInputText(initial?.powerHp));
   const [dwtTons, setDwtTons] = useState(asInputText(initial?.dwtTons));
   const [lengthM, setLengthM] = useState(asInputText(initial?.lengthM));
@@ -119,6 +127,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
     fieldValues: {
       code: code || null, name: name || null, owner: owner || null, vesselType: vesselType || null,
       isCrewed: isCrewed || null, imo: imo || null, registration: registration || null,
+      flag: flag || null, portOfRegistry: portOfRegistry || null, classSociety: classSociety || null, manager: manager || null,
       powerHp: powerHp || null, dwtTons: dwtTons || null, lengthM: lengthM || null, beamM: beamM || null,
       depthM: depthM || null, buildYear: buildYear || null, buildCountry: buildCountry || null, status: status || null,
     },
@@ -128,7 +137,8 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
     const { pick, result } = copilotOptionPicker(vesselCopilotOptions, { isCrewed: t("vessel.crewed"), status: t("col.status") });
     const text: Array<[string, (v: string) => void]> = [
       ["name", setName], ["owner", setOwner], ["vesselType", setVesselType], ["imo", setImo],
-      ["registration", setRegistration], ["powerHp", setPowerHp], ["dwtTons", setDwtTons], ["lengthM", setLengthM],
+      ["registration", setRegistration], ["flag", setFlag], ["portOfRegistry", setPortOfRegistry],
+      ["classSociety", setClassSociety], ["manager", setManager], ["powerHp", setPowerHp], ["dwtTons", setDwtTons], ["lengthM", setLengthM],
       ["beamM", setBeamM], ["depthM", setDepthM], ["buildYear", setBuildYear], ["buildCountry", setBuildCountry],
     ];
     for (const [key, set] of text) if (fields[key] !== undefined) set(fields[key]!);
@@ -151,6 +161,10 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
         isCrewed: isCrewed === "" ? null : isCrewed === "true",
         imo: asNullableText(imo),
         registration: asNullableText(registration),
+        flag: asNullableText(flag),
+        portOfRegistry: asNullableText(portOfRegistry),
+        classSociety: asNullableText(classSociety),
+        manager: asNullableText(manager),
         powerHp: asNullableNumber(powerHp),
         dwtTons: asNullableNumber(dwtTons),
         lengthM: asNullableNumber(lengthM),
@@ -174,7 +188,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    code, name, owner, vesselType, isCrewed, imo, registration, powerHp, dwtTons,
+    code, name, owner, vesselType, isCrewed, imo, registration, flag, portOfRegistry, classSociety, manager, powerHp, dwtTons,
     lengthM, beamM, depthM, trnTn, trbTn, buildYear, buildCountry,
     incorporationDate, incorporationType, status,
   });
@@ -240,6 +254,18 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
             </Field>
             <Field label="Matricula">
               <input value={registration} onChange={e => setRegistration(e.target.value)} maxLength={60} placeholder="4497-RE" className="input-field" />
+            </Field>
+            <Field label={t("vessel.flag")}>
+              <input value={flag} onChange={e => setFlag(e.target.value)} maxLength={60} placeholder="Paraguay" className="input-field" />
+            </Field>
+            <Field label={t("vessel.portOfRegistry")}>
+              <input value={portOfRegistry} onChange={e => setPortOfRegistry(e.target.value)} maxLength={80} placeholder="Asunción" className="input-field" />
+            </Field>
+            <Field label={t("vessel.classSociety")}>
+              <input value={classSociety} onChange={e => setClassSociety(e.target.value)} maxLength={80} placeholder="RINA" className="input-field" />
+            </Field>
+            <Field label={t("vessel.manager")}>
+              <input value={manager} onChange={e => setManager(e.target.value)} maxLength={120} placeholder="Mercurio Naviera" className="input-field" />
             </Field>
             <Field label="Potencia_HP">
               <input value={powerHp} onChange={e => setPowerHp(e.target.value)} inputMode="decimal" placeholder="6400" className="input-field" />
@@ -352,6 +378,10 @@ export const VesselsPage: React.FC = () => {
     { key: "code",      header: t("col.code"),      render: r => <span className="font-mono font-bold text-fg">{r.code}</span> },
     { key: "name",      header: t("col.name"),      render: r => <span className="font-medium text-fg">{r.name}</span> },
     { key: "vesselType",header: "TIPO",            filterValue: r => r.vesselType ?? "", render: r => <span className="text-text-industrial/80">{r.vesselType ?? "—"}</span> },
+    { key: "flag",        header: t("vessel.flag"),           filterValue: r => r.flag ?? "",           render: r => <span className="text-text-industrial/80">{r.flag ?? "—"}</span> },
+    { key: "portOfRegistry", header: t("vessel.portOfRegistry"), filterValue: r => r.portOfRegistry ?? "", render: r => <span className="text-text-industrial/80">{r.portOfRegistry ?? "—"}</span> },
+    { key: "classSociety", header: t("vessel.classSociety"),  filterValue: r => r.classSociety ?? "",   render: r => <span className="text-text-industrial/80">{r.classSociety ?? "—"}</span> },
+    { key: "manager",     header: t("vessel.manager"),        filterValue: r => r.manager ?? "",        render: r => <span className="text-text-industrial/80">{r.manager ?? "—"}</span> },
     { key: "status",    header: t("col.status"),    filterValue: r => r.status, render: r => <StatusBadge status={r.status} /> },
     {
       key: "actions", header: "",

@@ -15,6 +15,10 @@ const VESSEL_SELECT = {
   isCrewed: true,
   imo: true,
   registration: true,
+  flag: true,
+  portOfRegistry: true,
+  classSociety: true,
+  manager: true,
   powerHp: true,
   dwtTons: true,
   lengthM: true,
@@ -85,6 +89,10 @@ export interface VesselWriteInput {
   isCrewed?: boolean | null;
   imo?: string | null;
   registration?: string | null;
+  flag?: string | null;
+  portOfRegistry?: string | null;
+  classSociety?: string | null;
+  manager?: string | null;
   powerHp?: number | string | null;
   dwtTons?: number | string | null;
   lengthM?: number | string | null;
@@ -134,6 +142,10 @@ function buildVesselDetailsData(input: Partial<VesselWriteInput>): Record<string
     isCrewed: input.isCrewed ?? null,
     imo: normalizeOptionalText(input.imo),
     registration: normalizeOptionalText(input.registration),
+    flag: normalizeOptionalText(input.flag),
+    portOfRegistry: normalizeOptionalText(input.portOfRegistry),
+    classSociety: normalizeOptionalText(input.classSociety),
+    manager: normalizeOptionalText(input.manager),
     powerHp: normalizeOptionalNumber(input.powerHp),
     dwtTons: normalizeOptionalNumber(input.dwtTons),
     lengthM: normalizeOptionalNumber(input.lengthM),
@@ -150,6 +162,7 @@ function buildVesselDetailsData(input: Partial<VesselWriteInput>): Record<string
 
 const DETAIL_FIELDS = new Set([
   "owner", "vesselType", "isCrewed", "imo", "registration",
+  "flag", "portOfRegistry", "classSociety", "manager",
   "powerHp", "dwtTons", "lengthM", "beamM", "depthM", "trnTn", "trbTn",
   "buildYear", "buildCountry", "incorporationDate", "incorporationType",
 ]);
@@ -251,6 +264,9 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
   if (input.isCrewed !== undefined) detailsToUpdate.isCrewed = input.isCrewed ?? null;
   if (input.imo !== undefined) detailsToUpdate.imo = normalizeOptionalText(input.imo);
   if (input.registration !== undefined) detailsToUpdate.registration = normalizeOptionalText(input.registration);
+  for (const key of ["flag", "portOfRegistry", "classSociety", "manager"] as const) {
+    if (input[key] !== undefined) detailsToUpdate[key] = normalizeOptionalText(input[key]);
+  }
   if (input.powerHp !== undefined) detailsToUpdate.powerHp = normalizeOptionalNumber(input.powerHp);
   if (input.dwtTons !== undefined) detailsToUpdate.dwtTons = normalizeOptionalNumber(input.dwtTons);
   if (input.lengthM !== undefined) detailsToUpdate.lengthM = normalizeOptionalNumber(input.lengthM);

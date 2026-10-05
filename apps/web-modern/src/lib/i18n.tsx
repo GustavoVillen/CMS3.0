@@ -995,6 +995,10 @@ const dict = {
   // Excepción declarada de cobertura: equipo que no lleva plan de mantenimiento.
   // Ficha del buque: si lleva dotacion permanente a bordo (va a los prompts de IA).
   "vessel.crewed":              { es: "Tripulada",                                            en: "Crewed",                                             pt: "Tripulada" },
+  "vessel.flag":                { es: "Bandera",                                              en: "Flag",                                               pt: "Bandeira" },
+  "vessel.portOfRegistry":      { es: "Puerto de registro",                                   en: "Port of registry",                                   pt: "Porto de registro" },
+  "vessel.classSociety":        { es: "Sociedad de clase",                                    en: "Class society",                                      pt: "Sociedade classificadora" },
+  "vessel.manager":             { es: "Manager",                                              en: "Manager",                                            pt: "Gestor" },
   "vessel.crewed.yes":          { es: "Sí, con dotación a bordo",                              en: "Yes, crew on board",                                 pt: "Sim, com tripulação a bordo" },
   "vessel.crewed.no":           { es: "No tripulada",                                          en: "Unmanned",                                           pt: "Não tripulada" },
   "vessel.crewed.unknown":      { es: "Sin declarar",                                          en: "Not declared",                                       pt: "Não declarado" },

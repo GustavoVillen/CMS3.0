@@ -353,7 +353,7 @@ export const EXTENDED_COPILOT_TOOLS: Anthropic.Tool[] = [
   {
     name: "query_vessels",
     description:
-      "Query the fleet registry (buques). Use this to resolve a vessel NAME the user mentioned into its vesselCode before calling other query_* tools, to list the fleet, or to answer questions about the ship itself: IMO number, registration, owner, type, power (HP), deadweight, dimensions (length/beam/depth), gross and net tonnage, build year and country. ALWAYS refer to a vessel by its name in your answer, never by its code.",
+      "Query the fleet registry (buques). Use this to resolve a vessel NAME the user mentioned into its vesselCode before calling other query_* tools, to list the fleet, or to answer questions about the ship itself: IMO number, registration, flag, port of registry, class society, manager, owner, type, power (HP), deadweight, dimensions (length/beam/depth), gross and net tonnage, build year and country. ALWAYS refer to a vessel by its name in your answer, never by its code.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -1120,7 +1120,7 @@ export async function executeExtendedCopilotTool(
         orderBy: { name: "asc" },
         select: {
           code: true, name: true, owner: true, vesselType: true, status: true,
-          imo: true, registration: true, powerHp: true, dwtTons: true,
+          imo: true, registration: true, flag: true, portOfRegistry: true, classSociety: true, manager: true, powerHp: true, dwtTons: true,
           lengthM: true, beamM: true, depthM: true, trnTn: true, trbTn: true,
           buildYear: true, buildCountry: true, incorporationDate: true, incorporationType: true,
         },

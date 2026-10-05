@@ -1350,6 +1350,12 @@ model Vessel {
   isCrewed         Boolean?
   imo              String?
   registration     String?
+  // Datos de registro (oct 2026): bandera, puerto de registro, sociedad de
+  // clase y compania que opera la embarcacion (manager).
+  flag             String?
+  portOfRegistry   String?
+  classSociety     String?
+  manager          String?
   powerHp          Float?
   dwtTons          Float?
   lengthM          Float?
