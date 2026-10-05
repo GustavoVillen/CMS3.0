@@ -1062,14 +1062,19 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       rcaContributingCause:  rcaContributingCause  || null,
       rcaRootCause:          rcaRootCause          || null,
       rcaPreventiveActions:  rcaPreventiveActions  || null,
+      // Constancia de cierre ("¿cómo comprobaste que quedó resuelto?"): la pide
+      // la ventana de cierre y el copiloto la necesita para cerrar a pedido.
+      closeVerification:      closeCheck            || null,
+      closeVerificationOther: closeCheckOther       || null,
     },
     // Listas cerradas: el copiloto tiene que proponer uno de estos valores exactos.
     fieldOptions: {
       severity:         DEFECT_SEVERITIES.map(v => ({ value: v, label: t(SEVERITY_LABEL_KEYS[v]) })),
       operationalState: DEFECT_OPERATIONAL_STATES.map(v => ({ value: v, label: t(OPERATIONAL_STATE_LABEL_KEYS[v]) })),
       rcaMethodology:   RCA_METHODOLOGY_OPTIONS.map(o => ({ value: o.value, label: t(o.labelKey) })),
+      closeVerification: CLOSE_CHECK_OPTIONS.map(o => ({ value: o.key, label: t(o.labelKey) })),
     },
-    relatedEntities: { workOrderId: defect.workOrderId, assetId: defect.assetId },
+    relatedEntities: { workOrderId: defect.workOrderId, assetId: defect.assetId, rcaApproved: rcaApprovedAt ? "yes" : "no" },
   });
 
   const analyzeRca = useCallback(async () => {
@@ -1111,7 +1116,8 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       severity:         DEFECT_SEVERITIES.map(v => ({ value: v, label: t(SEVERITY_LABEL_KEYS[v]) })),
       operationalState: DEFECT_OPERATIONAL_STATES.map(v => ({ value: v, label: t(OPERATIONAL_STATE_LABEL_KEYS[v]) })),
       rcaMethodology:   RCA_METHODOLOGY_OPTIONS.map(o => ({ value: o.value, label: t(o.labelKey) })),
-    }, { severity: t("form.severity"), operationalState: t("form.operationalState"), rcaMethodology: t("def.rcaMethodology") });
+      closeVerification: CLOSE_CHECK_OPTIONS.map(o => ({ value: o.key, label: t(o.labelKey) })),
+    }, { severity: t("form.severity"), operationalState: t("form.operationalState"), rcaMethodology: t("def.rcaMethodology"), closeVerification: t("def.verify.closeQuestion") });
     if (fields.description          !== undefined) setDescription(fields.description);
     if (fields.classification       !== undefined) setClassification(fields.classification);
     const sev = pick("severity", fields.severity);
@@ -1126,16 +1132,11 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
     if (fields.rcaContributingCause !== undefined) setRcaContributingCause(fields.rcaContributingCause);
     if (fields.rcaRootCause         !== undefined) setRcaRootCause(fields.rcaRootCause);
     if (fields.rcaPreventiveActions !== undefined) setRcaPreventiveActions(fields.rcaPreventiveActions);
+    const check = pick("closeVerification", fields.closeVerification);
+    if (check) setCloseCheck(check as CloseCheckKey);
+    if (fields.closeVerificationOther !== undefined) setCloseCheckOther(fields.closeVerificationOther);
     return result();
   } : null);
-  // Los "Analizar con IA" / "Sugerir con IA" del defecto, para que el copiloto
-  // los dispare ([RECALCULAR]): antes no los tenía y decía que los había pedido.
-  useCopilotFormActions(!isClosed ? {
-    immediateAction: handleImmediateActionClick,
-    rca: analyzeRca,
-    photos: handleAnalyzeStoredPhotos,
-  } : null);
-
   const patchDefect = useCallback(async (extra?: Record<string, unknown>) => {
     if (!description.trim()) { setActionError(t("error.briefDescRequired")); return false; }
     if (!classification.trim()) { setActionError(t("def.classification")); return false; }
@@ -1306,6 +1307,33 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
       await startCreateWo({ repairType: "TEMPORARIA" });
     }
   }, [repairType, closeCheckText, patchDefect, closeDefectAndWo, startCreateWo, t]);
+
+  /** Aprobar el RCA: guarda TODO el formulario (mismo patchDefect que "Guardar") y no cierra el modal. */
+  const approveRca = useCallback(async () => {
+    if (isClosed || rcaApprovedAt || !rcaRootCause.trim()) return;
+    const now = new Date().toISOString();
+    if (!await patchDefect({ rcaApprovedAt: now })) return;
+    setRcaApprovedAt(now);
+    onReload();
+  }, [isClosed, rcaApprovedAt, rcaRootCause, patchDefect, onReload]);
+
+  /** Cierre pedido por el copiloto: mismo camino que la ventana con "reparación definitiva". */
+  const closeFromCopilot = useCallback(async () => {
+    if (!closeCheckText) { setActionError(t("def.verify.required")); return; }
+    if (!await patchDefect({ repairType: "PERMANENTE" })) return;
+    await closeDefectAndWo();
+  }, [closeCheckText, patchDefect, closeDefectAndWo, t]);
+
+  // Lo que el copiloto puede disparar ([RECALCULAR]): los "Analizar / Sugerir con IA",
+  // aprobar el RCA y cerrar. Pasan por los mismos guardados que los botones, así
+  // que el backend sigue validando permisos y buque.
+  useCopilotFormActions(!isClosed ? {
+    immediateAction: handleImmediateActionClick,
+    rca: analyzeRca,
+    photos: handleAnalyzeStoredPhotos,
+    approveRca,
+    closeDefect: closeFromCopilot,
+  } : null);
 
   /** ISM 10.2.3 — confirmar desde el defecto si el arreglo sigue funcionando. */
   const verifyEffectiveness = useCallback(async (outcome: "EFFECTIVE" | "INEFFECTIVE") => {
@@ -1745,14 +1773,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
                   {!isClosed && !rcaApprovedAt && rcaRootCause.trim() && (
                     <button
                       type="button"
-                      onClick={async () => {
-                        const now = new Date().toISOString();
-                        // Guarda TODOS los campos del formulario (no solo RCA) — mismo patchDefect
-                        // que usa "Guardar" — y no cierra el modal.
-                        if (!await patchDefect({ rcaApprovedAt: now })) return;
-                        setRcaApprovedAt(now);
-                        onReload();
-                      }}
+                      onClick={() => { void approveRca(); }}
                       className="self-start px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
                     >
                       {t("def.rcaApprove")}

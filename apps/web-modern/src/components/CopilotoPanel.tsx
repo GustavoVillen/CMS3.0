@@ -1233,6 +1233,7 @@ export const CopilotoPanel: React.FC = () => {
       // Si la pantalla se abrió recién EN ESTE turno, el formulario todavía no
       // montó y no hay dónde escribir: los campos quedan en el botón "Aplicar",
       // que aparece solo apenas el formulario se registra.
+      let finalFieldsApplied = false;
       {
         const finalFields = extractCamposBlock(assistantContent);
         if (finalFields && !hasApplyFieldsCallback) setPendingFields(finalFields);
@@ -1249,6 +1250,7 @@ export const CopilotoPanel: React.FC = () => {
           // Lo que cambie en pantalla en los próximos segundos lo hizo el copiloto, no el usuario.
           lastApplyAtRef.current = Date.now();
           const applied = applyFields(finalFields);
+          finalFieldsApplied = true;
           // Lo que el formulario no aceptó se dice: antes el copiloto anunciaba
           // "seleccionado el compresor" y la casilla seguía vacía. El aviso lo
           // escribe el sistema; en el turno siguiente la IA ve el campo vacío
@@ -1272,6 +1274,9 @@ export const CopilotoPanel: React.FC = () => {
       if (recalc && formActionNames.length > 0) {
         setRecalcRunning(true);
         lastApplyAtRef.current = Date.now();
+        // Si en la misma respuesta vinieron campos, se espera a que el formulario
+        // los pinte: si no, la acción (aprobar RCA, cerrar) guardaría los valores viejos.
+        if (finalFieldsApplied) await new Promise(r => window.setTimeout(r, 120));
         try { await runFormActions(recalc); }
         finally { setRecalcRunning(false); lastApplyAtRef.current = Date.now(); }
       }
