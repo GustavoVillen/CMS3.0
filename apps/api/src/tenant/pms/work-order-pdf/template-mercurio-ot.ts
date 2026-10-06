@@ -87,7 +87,7 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
     doc.on("error", reject);
 
     const rightInfo = (page: number) =>
-      `${formMeta.formCode} — Pagina ${page} — ${wo.workOrderCode} — ${wo.vesselCode} — ${fmt(new Date())}`;
+      `${formMeta.formCode} — Pagina ${page} — ${wo.workOrderCode} — ${vesselName ?? wo.vesselCode} — ${fmt(new Date())}`;
 
     const canvas = createFormCanvas(doc, {
       ml: ML, w: W, marginT: MARGIN_T, contentBottom: CONTENT_BOTTOM,
