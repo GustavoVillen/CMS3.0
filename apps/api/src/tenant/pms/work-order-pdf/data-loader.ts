@@ -337,12 +337,15 @@ export async function loadWorkOrderPdfContext(
           const hhmm = (d: Date | null) => d ? new Date(d).toISOString().slice(11, 16) : "";
           const desde = hhmm(l.startedAt);
           const hasta = hhmm(l.completedAt);
+          // Inicio y fin iguales = el registro no trae hora (cargas por fecha):
+          // se deja el horario en blanco en vez de imprimir "00:00 - 00:00".
+          const sinHora = !!desde && desde === hasta;
           scheduleRows.push({
             date: l.startedAt ?? null,
             technician: l.executedByName ?? "",
             place: (wo as any).location ?? "",
             company: (wo as any).providerName ?? "",
-            time: desde && hasta ? `${desde} - ${hasta}` : desde,
+            time: sinHora ? "" : desde && hasta ? `${desde} - ${hasta}` : desde,
           });
         }
       }
