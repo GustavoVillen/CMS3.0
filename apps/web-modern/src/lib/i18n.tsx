@@ -994,6 +994,10 @@ const dict = {
   "asset.critRationale":        { es: "Fundamento de Criticidad",                             en: "Criticality Rationale",                              pt: "Fundamento de Criticidade" },
   // Excepción declarada de cobertura: equipo que no lleva plan de mantenimiento.
   // Ficha del buque: si lleva dotacion permanente a bordo (va a los prompts de IA).
+  "vessel.closeAudit":          { es: "Auditoría IA al cerrar OT y SS", en: "AI audit when closing WO and SR", pt: "Auditoria IA ao fechar OT e SS" },
+  "vessel.closeAudit.on":       { es: "Habilitada", en: "Enabled", pt: "Habilitada" },
+  "vessel.closeAudit.off":      { es: "Suspendida", en: "Suspended", pt: "Suspensa" },
+  "vessel.closeAudit.hint":     { es: "Suspendida: las OT y SS de esta embarcación se cierran directo, sin el informe de auditoría.", en: "Suspended: this vessel's WOs and SRs close directly, without the audit report.", pt: "Suspensa: as OT e SS desta embarcação fecham direto, sem o relatório de auditoria." },
   "vessel.crewed":              { es: "Tripulada",                                            en: "Crewed",                                             pt: "Tripulada" },
   "vessel.flag":                { es: "Bandera",                                              en: "Flag",                                               pt: "Bandeira" },
   "vessel.portOfRegistry":      { es: "Puerto de registro",                                   en: "Port of registry",                                   pt: "Porto de registro" },

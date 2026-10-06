@@ -1371,6 +1371,9 @@ model Vessel {
   incorporationDate DateTime?
   incorporationType String?
   status                VesselStatus  @default(ACTIVE)
+  // Auditoría de IA al cerrar OT y completar SS (oct 2026). La enciende o apaga
+  // el administrador por embarcación; apagada, el cierre va directo sin informe.
+  aiCloseAuditEnabled   Boolean       @default(true)
   crewPasswordHash      String?
   crewPasswordUpdatedAt DateTime?
   createdAt             DateTime      @default(now())

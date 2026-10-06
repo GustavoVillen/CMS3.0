@@ -1239,6 +1239,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     isMercurio ? "/app/pms/work-orders/form" : null, [isMercurio]);
   const paperDoc = woFormDoc ?? WO_FORM_FALLBACK;
   const { vessels: contextVesselsForPaper } = useVesselContext();
+  // El admin puede suspender la auditoría de IA del cierre por embarcación.
+  const closeAuditOn = contextVesselsForPaper.find(v => v.code === workOrder.vesselCode)?.aiCloseAuditEnabled !== false;
   const paperVesselName =
     contextVesselsForPaper.find(v => v.code === workOrder.vesselCode)?.name ?? workOrder.vesselCode;
   const { theme: paperTheme } = useTheme();
@@ -4979,7 +4981,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 autoFocus
                 value={executedByName}
                 onChange={e => setExecutedByName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { setShowCloseDialog(false); setCloseAuditOpts({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); } }}
+                onKeyDown={e => { if (e.key === "Enter") { setShowCloseDialog(false); const o = { completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }; if (closeAuditOn) setCloseAuditOpts(o); else setCloseAfterApply(o); } }}
                 className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
                 placeholder="Nombre y apellido"
               />
@@ -4997,7 +4999,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowCloseDialog(false)} disabled={closing} className="px-3 py-1.5 rounded-lg text-sm text-text-industrial/70 hover:bg-fg/5 disabled:opacity-50">Cancelar</button>
             <button
-              onClick={() => { setShowCloseDialog(false); setCloseAuditOpts({ completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }); }}
+              onClick={() => { setShowCloseDialog(false); const o = { completedDate: closeDate || undefined, closedByUserId: closeOnBehalfUserId || undefined }; if (closeAuditOn) setCloseAuditOpts(o); else setCloseAfterApply(o); }}
               disabled={closing}
               className="px-4 py-1.5 rounded-lg text-sm font-bold bg-success-sea text-white hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
               {closing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

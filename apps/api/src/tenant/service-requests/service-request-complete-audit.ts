@@ -18,6 +18,7 @@ import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-ser
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
+import { assertCloseAuditEnabled } from "../vessels/vessels-service";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
@@ -201,6 +202,7 @@ export async function auditServiceRequestComplete(
   ]);
   const vesselCode: string | null = (ctx.sr as any)?.vesselCode ?? null;
   const srRow = ctx.sr as { tenantId: string; workOrderId: string };
+  await assertCloseAuditEnabled(srRow.tenantId, vesselCode);
   const payload = buildAuditPayload(
     ctx, hojaRuta, samples, body.draft ?? {}, body.answers ?? {},
     await getVesselAiContext(session.tenantSlug, vesselCode),

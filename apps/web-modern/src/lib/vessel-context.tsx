@@ -8,6 +8,8 @@ interface VesselOption {
   status: string;
   /** Ej. "Remolcador", "Barcaza Tanque - Rake". Puede faltar en buques viejos. */
   vesselType?: string | null;
+  /** Auditoría de IA al cerrar OT / completar SS. false = suspendida por el admin. */
+  aiCloseAuditEnabled?: boolean;
 }
 
 /**

@@ -21,6 +21,7 @@ import { recordAiUsage, assertAiBudgetAvailableBySlug } from "../usage/usage-ser
 import { log } from "../../common/logger";
 import { RouteError } from "../../http/route-error";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
+import { assertCloseAuditEnabled } from "../vessels/vessels-service";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getCachedTenantBySlug } from "../tenant-cache";
 import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/ai-locale";
@@ -635,6 +636,7 @@ export async function auditWorkOrderClose(
   // Ya filtra por tenant y vessel scope (getTenantWorkOrder).
   const ctx = await loadWorkOrderPdfContext(session, workOrderId);
   const wo = ctx.wo as { id: string; tenantId: string; vesselCode?: string };
+  await assertCloseAuditEnabled(wo.tenantId, wo.vesselCode);
   const payload = buildAuditPayload(
     ctx, body.draft ?? {}, body.answers ?? {},
     await getVesselAiContext(session.tenantSlug, wo?.vesselCode),

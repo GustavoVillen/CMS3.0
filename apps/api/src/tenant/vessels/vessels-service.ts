@@ -6,6 +6,21 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 import { invalidateVesselAiContext } from "../ai/vessel-ai-context";
 
+/**
+ * La auditoría de IA del cierre (OT y SS) está encendida en esta embarcación.
+ * Si el buque no aparece (datos viejos), se audita: es el comportamiento de siempre.
+ */
+export async function assertCloseAuditEnabled(tenantId: string, vesselCode: string | null | undefined) {
+  const prisma = getPrismaClient();
+  if (!prisma || !vesselCode) return;
+  const vessel = await (prisma as unknown as {
+    vessel: { findFirst(a: unknown): Promise<{ aiCloseAuditEnabled: boolean } | null> };
+  }).vessel.findFirst({ where: { tenantId, code: vesselCode, deletedAt: null }, select: { aiCloseAuditEnabled: true } });
+  if (vessel && vessel.aiCloseAuditEnabled === false) {
+    throw new RouteError(409, "CLOSE_AUDIT_DISABLED", "La auditoría de cierre está suspendida en esta embarcación.");
+  }
+}
+
 const VESSEL_SELECT = {
   id: true,
   code: true,
@@ -31,6 +46,7 @@ const VESSEL_SELECT = {
   incorporationDate: true,
   incorporationType: true,
   status: true,
+  aiCloseAuditEnabled: true,
   createdAt: true,
 } as const;
 
@@ -105,6 +121,8 @@ export interface VesselWriteInput {
   incorporationDate?: string | null;
   incorporationType?: string | null;
   status?: string;
+  /** Auditoría de IA al cerrar OT / completar SS en esta embarcación. */
+  aiCloseAuditEnabled?: boolean;
 }
 
 function normalizeOptionalText(value: unknown): string | null {
@@ -255,6 +273,7 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
     data.name = name;
   }
   if (input.status !== undefined) data.status = input.status;
+  if (input.aiCloseAuditEnabled !== undefined) data.aiCloseAuditEnabled = input.aiCloseAuditEnabled === true;
 
   const updated = await prisma.vessel.update({ where: { id }, data });
 

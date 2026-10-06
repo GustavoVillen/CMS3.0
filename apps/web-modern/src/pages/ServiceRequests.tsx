@@ -2728,7 +2728,15 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
           busy={busy}
           initial={{ recibe: form.recibe, item: form.recepcionItem, conforme: form.conforme, notas: receptionNotes }}
           onClose={() => setReceiving(false)}
-          onConfirm={async v => { setReceptionNotes(v.closeNotes); setReceptionAudit(v); setReceiving(false); }}
+          onConfirm={async v => {
+            setReceptionNotes(v.closeNotes); setReceiving(false);
+            // Auditoría suspendida por el admin en esta embarcación: se completa directo.
+            if (vessels.find(x => x.code === sr.vesselCode)?.aiCloseAuditEnabled === false) {
+              act("complete", v).catch(e => setActionError(e instanceof Error ? e.message : t("common.saveError")));
+            } else {
+              setReceptionAudit(v);
+            }
+          }}
         />
       )}
       {/* Auditoría de IA antes de completar, igual que al cerrar la OT. No frena

@@ -21,6 +21,7 @@ interface Vessel {
   owner?: string | null;
   vesselType?: string | null;
   isCrewed?: boolean | null;
+  aiCloseAuditEnabled?: boolean;
   imo?: string | null;
   registration?: string | null;
   flag?: string | null;
@@ -88,6 +89,8 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
   // "" = no declarado. Va a los prompts de IA: en una unidad sin gente a bordo
   // el analisis de riesgo y el RCM cambian.
   const [isCrewed, setIsCrewed] = useState<string>(initial?.isCrewed == null ? "" : String(initial.isCrewed));
+  // Auditoría de IA al cerrar OT y SS: encendida salvo que el admin la suspenda.
+  const [closeAudit, setCloseAudit] = useState<string>(initial?.aiCloseAuditEnabled === false ? "false" : "true");
   const [imo, setImo] = useState(asInputText(initial?.imo));
   const [registration, setRegistration] = useState(asInputText(initial?.registration));
   const [flag, setFlag] = useState(asInputText(initial?.flag));
@@ -159,6 +162,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
         owner: asNullableText(owner),
         vesselType: asNullableText(vesselType),
         isCrewed: isCrewed === "" ? null : isCrewed === "true",
+        aiCloseAuditEnabled: closeAudit === "true",
         imo: asNullableText(imo),
         registration: asNullableText(registration),
         flag: asNullableText(flag),
@@ -188,7 +192,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    code, name, owner, vesselType, isCrewed, imo, registration, flag, portOfRegistry, classSociety, manager, powerHp, dwtTons,
+    code, name, owner, vesselType, isCrewed, closeAudit, imo, registration, flag, portOfRegistry, classSociety, manager, powerHp, dwtTons,
     lengthM, beamM, depthM, trnTn, trbTn, buildYear, buildCountry,
     incorporationDate, incorporationType, status,
   });
@@ -247,6 +251,12 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
                 <option value="">{t("vessel.crewed.unknown")}</option>
                 <option value="true">{t("vessel.crewed.yes")}</option>
                 <option value="false">{t("vessel.crewed.no")}</option>
+              </select>
+            </Field>
+            <Field label={t("vessel.closeAudit")}>
+              <select value={closeAudit} onChange={e => setCloseAudit(e.target.value)} className="input-field" title={t("vessel.closeAudit.hint")}>
+                <option value="true">{t("vessel.closeAudit.on")}</option>
+                <option value="false">{t("vessel.closeAudit.off")}</option>
               </select>
             </Field>
             <Field label="IMO">
