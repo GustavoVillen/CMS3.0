@@ -95,6 +95,8 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
   let tenantDbId: string | null = null;
   let assetName: string | null = null;
   let assetIsSafetyCritical = false;
+  // En el papel va el NOMBRE del buque ("MAO 01"), nunca el código ("M01").
+  let vesselName: string | null = null;
   let lastLog: { result: string; executedByName: string; completedAt: Date | null; runningHoursAtExecution: number | null; notes: string | null } | null = null;
   if (prisma) {
     const tenantRow = await (prisma as any).tenant.findUnique({
@@ -127,6 +129,13 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         lastLog.notes = `Registrado desde ${ref}`;
       }
     }
+    try {
+      const vessel = await (prisma as any).vessel.findFirst({
+        where: { tenantId: tenantDbId, code: p["vesselCode"] },
+        select: { name: true },
+      });
+      vesselName = vessel?.name ?? null;
+    } catch { /* non-blocking: cae al código */ }
     if (plan.assetId) {
       try {
         const asset = await (prisma as any).asset.findUnique({
@@ -150,6 +159,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
       logoBuffer: form.logoBuffer ?? tenantLogoBuffer,
       tenantName: tenantName ?? session.tenantSlug.toUpperCase(),
       plan: p,
+      vesselName,
       assetName,
       assetIsSafetyCritical,
       lastLog,
@@ -614,7 +624,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     sectionHeader("Identificación");
 
     inlineRow([
-      { label: "Embarcación",   value: val(p["vesselCode"]),   color: "#1d4ed8" },
+      { label: "Embarcación",   value: val(vesselName ?? p["vesselCode"]),   color: "#1d4ed8" },
       { label: "Activo / Equipo", value: val(assetName ?? p["assetId"]) },
       { label: "Estado",        value: statusLabel(p["status"] as string), color: accent },
     ]);
@@ -756,7 +766,7 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
     doc.fontSize(8).font(FONT_REGULAR).fillColor(gray)
       .text("Copilot Management System — Documento generado automáticamente.", ML + 18, footerY, { width: W / 2 - 18 });
     doc.fontSize(8).font(FONT_REGULAR).fillColor(gray)
-      .text(`${val(p["taskCode"])} · ${val(p["vesselCode"])} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
+      .text(`${val(p["taskCode"])} · ${val(vesselName ?? p["vesselCode"])} · ${fmt(new Date())}`, ML, footerY, { width: W, align: "right" });
 
     doc.end();
   });

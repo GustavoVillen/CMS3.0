@@ -35,6 +35,8 @@ export interface MercurioMaintenancePlanData {
   logoBuffer: Buffer | null;
   tenantName: string;
   plan: Record<string, unknown>;
+  /** Nombre del buque para el papel; si falta, se imprime el código. */
+  vesselName?: string | null;
   assetName: string | null;
   assetIsSafetyCritical: boolean;
   lastLog: {
@@ -61,7 +63,8 @@ function frequencyLabel(p: Record<string, unknown>): string {
 }
 
 export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenancePlanData): Promise<Buffer> {
-  const { meta, logoBuffer, tenantName, plan: p, assetName, assetIsSafetyCritical, lastLog, tz, locale } = data;
+  const { meta, logoBuffer, tenantName, plan: p, vesselName, assetName, assetIsSafetyCritical, lastLog, tz, locale } = data;
+  const vesselLabel = val(vesselName ?? p["vesselCode"]);
   const fmtDate = (d: unknown) => fmtDateTz(d as string | null | undefined, tz, locale);
 
   return new Promise((resolve, reject) => {
@@ -72,7 +75,7 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     doc.on("error", reject);
 
     const rightInfo = (page: number) =>
-      `${val(p["taskCode"])} — ${val(p["vesselCode"])} — Pagina ${page} — ${fmtDate(new Date())}`;
+      `${val(p["taskCode"])} — ${vesselLabel} — Pagina ${page} — ${fmtDate(new Date())}`;
 
     const canvas = createFormCanvas(doc, {
       ml: ML, w: W, marginT: MARGIN_T, contentBottom: CONTENT_BOTTOM,
@@ -95,7 +98,7 @@ export async function renderMercurioMaintenancePlanPdf(data: MercurioMaintenance
     const LBL_W = 95, PM_LBL_W = 55, PM_VAL_W = 120;
     const vesselW = W - LBL_W - PM_LBL_W - PM_VAL_W;
     cell(ML, canvas.y, LBL_W, RH, "Embarcacion", lbl);
-    cell(ML + LBL_W, canvas.y, vesselW, RH, sanitizePdfText(val(p["vesselCode"])), { bold: true, fontSize: 9, align: "center" });
+    cell(ML + LBL_W, canvas.y, vesselW, RH, sanitizePdfText(vesselLabel), { bold: true, fontSize: 9, align: "center" });
     cell(ML + LBL_W + vesselW, canvas.y, PM_LBL_W, RH, "PM No.", lbl);
     cell(ML + LBL_W + vesselW + PM_LBL_W, canvas.y, PM_VAL_W, RH, sanitizePdfText(val(p["taskCode"])), { bold: true, fontSize: 9, color: "#1d4ed8", align: "center" });
     canvas.y += RH;
