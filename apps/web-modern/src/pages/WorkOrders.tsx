@@ -220,6 +220,7 @@ interface WorkOrder {
   woResult: string | null;
   executedByName: string | null;
   observations: string | null;
+  comments?: string | null;
   supportingDocUrl: string | null;
   createdAt: string;
   // Tramitación (cadena de aprobación del tablero)
@@ -1707,6 +1708,30 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [loadingConsequence, setLoadingConsequence] = useState(false);
   const [loadingRewrite,   setLoadingRewrite]    = useState(false);
   const [showProgressSheet, setShowProgressSheet] = useState(false);
+
+  // Comentarios del proceso: un recuadro libre que se guarda solo al salir de él
+  // (no pasa por "Guardar" ni va al PDF). Sólo lectura con la OT cerrada.
+  const [comments, setComments] = useState(workOrder.comments ?? "");
+  const [commentsState, setCommentsState] = useState<"idle" | "saving" | "saved">("idle");
+  const [commentsErr, setCommentsErr] = useState<string | null>(null);
+  const savedCommentsRef = useRef(workOrder.comments ?? "");
+  useEffect(() => {
+    setComments(workOrder.comments ?? "");
+    savedCommentsRef.current = workOrder.comments ?? "";
+  }, [workOrder.id, workOrder.comments]);
+  const canEditComments = canManage && canEditStatus(workOrder.status);
+  const saveComments = useCallback(async () => {
+    if (!canEditComments || comments === savedCommentsRef.current) return;
+    setCommentsState("saving");
+    try {
+      await api.patch(`/app/pms/work-orders/${workOrder.id}`, { comments: comments.trim() || null });
+      savedCommentsRef.current = comments;
+      setCommentsState("saved");
+    } catch (e) {
+      setCommentsState("idle");
+      setCommentsErr(e instanceof ApiError ? e.message : t("wo.comments.saveError"));
+    }
+  }, [canEditComments, comments, workOrder.id, t]);
   const [notesReloadKey,    setNotesReloadKey]    = useState(0);
 
   // Tras guardar/editar/borrar un avance, reconsulta la OT (con delay para dar
@@ -3833,10 +3858,33 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   );
   const lockedProps = { locked: !isApproved, lockedLabel: t("wo.guide.locked"), lockedText: t("wo.guide.lockedHint") };
 
+  const commentsBox = (
+    <div className="rounded-2xl border-[1.5px] border-fg/10 bg-surface p-3 flex flex-col gap-1.5 min-h-[140px]">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-text-industrial/60">{t("wo.comments.title")}</span>
+        <span className="ml-auto text-[10px] text-text-industrial/50">
+          {commentsState === "saving" ? t("wo.comments.saving") : commentsState === "saved" ? t("wo.comments.saved") : ""}
+        </span>
+      </div>
+      <textarea
+        value={comments}
+        onChange={e => { setComments(e.target.value); setCommentsState("idle"); }}
+        onBlur={() => { void saveComments(); }}
+        readOnly={!canEditComments}
+        placeholder={canEditComments ? t("wo.comments.ph") : ""}
+        className="flex-1 w-full resize-none rounded-lg border border-fg/15 bg-transparent px-2.5 py-2 text-sm text-fg placeholder:text-text-industrial/40 focus:outline-none focus:ring-2 focus:ring-accent/40 read-only:bg-fg/[0.03]"
+      />
+      {commentsErr && <AlertDialog message={commentsErr} onClose={() => setCommentsErr(null)} />}
+    </div>
+  );
+
   const guidedBody = (
     <>
       {defAiBanner}
-      {nextStepCard}
+      <div className="grid gap-3 lg:grid-cols-2 items-stretch">
+        {nextStepCard}
+        {commentsBox}
+      </div>
       {holdNotices}
       {newSrModalEl}
 

@@ -120,6 +120,8 @@ export interface UpdateWorkOrderInput {
   runningHoursAtExecution?: number | null;
   actualHours?: number | null;
   observations?: string | null;
+  // Notas libres del proceso: se guardan solas al salir del recuadro.
+  comments?: string | null;
   supportingDocUrl?: string | null;
   // Área / responsable + Mercurio form fields
   department?: WorkOrderDepartment | null;
@@ -918,6 +920,7 @@ export async function updateTenantWorkOrder(session: TenantAccessSession, id: st
   if (payload.runningHoursAtExecution !== undefined) data.runningHoursAtExecution = payload.runningHoursAtExecution ?? null;
   if (payload.actualHours !== undefined) data.actualHours = payload.actualHours ?? null;
   if (payload.observations !== undefined) data.observations = normalizeOptionalText(payload.observations);
+  if (payload.comments !== undefined) data.comments = normalizeOptionalText(payload.comments);
   if (payload.supportingDocUrl !== undefined) data.supportingDocUrl = normalizeOptionalText(payload.supportingDocUrl);
   if (payload.department !== undefined) data.department = payload.department ?? null;
 

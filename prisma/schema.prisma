@@ -1827,6 +1827,9 @@ model WorkOrder {
   woResult                String?
   executedByName          String?
   observations            String?
+  // Notas libres de coordinación durante el proceso (oct 2026). Sólo pantalla:
+  // no van al PDF ni al informe técnico, que se arma con los avances.
+  comments                String?                    @db.Text
   supportingDocUrl        String?
   runningHoursAtExecution Float?
   createdAt           DateTime          @default(now())
