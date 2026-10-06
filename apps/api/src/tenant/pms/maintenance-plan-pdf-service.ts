@@ -129,6 +129,33 @@ export async function buildMaintenancePlanPdf(session: TenantAccessSession, id: 
         lastLog.notes = `Registrado desde ${ref}`;
       }
     }
+    // La última ejecución también puede ser una OT cerrada que no dejó registro
+    // de ejecución (cierre por el flujo de la OT). Si es más reciente que el
+    // último registro, el papel muestra esa OT: si no, el recuadro contradice
+    // la fecha de última ejecución del plan.
+    try {
+      const [links, logWoIds] = await Promise.all([
+        (prisma as any).workOrderMaintenancePlan.findMany({ where: { maintenancePlanId: id, tenantId: tenantDbId }, select: { workOrderId: true } }),
+        (prisma as any).workLog.findMany({ where: { maintenancePlanId: id, tenantId: tenantDbId, workOrderId: { not: null } }, select: { workOrderId: true } }),
+      ]);
+      const lastWo = await (prisma as any).workOrder.findFirst({
+        where: {
+          tenantId: tenantDbId, status: "CLOSED", deletedAt: null, completedDate: { not: null },
+          OR: [{ maintenancePlanId: id }, { id: { in: [...links, ...logWoIds].map((x: { workOrderId: string }) => x.workOrderId) } }],
+        },
+        orderBy: { completedDate: "desc" },
+        select: { workOrderCode: true, completedDate: true, woResult: true, executedByName: true, runningHoursAtExecution: true },
+      });
+      if (lastWo?.completedDate && (!lastLog?.completedAt || new Date(lastWo.completedDate) > new Date(lastLog.completedAt))) {
+        lastLog = {
+          result: lastWo.woResult === "WITH_DEFICIENCIES" ? "COMPLETED_WITH_OBSERVATIONS" : "COMPLETED",
+          executedByName: lastWo.executedByName ?? "",
+          completedAt: lastWo.completedDate,
+          runningHoursAtExecution: lastWo.runningHoursAtExecution ?? null,
+          notes: `Registrado en la ${lastWo.workOrderCode}`,
+        };
+      }
+    } catch { /* non-blocking: queda el último registro */ }
     try {
       const vessel = await (prisma as any).vessel.findFirst({
         where: { tenantId: tenantDbId, code: p["vesselCode"] },
