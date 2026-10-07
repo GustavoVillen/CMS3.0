@@ -1,5 +1,13 @@
 HISTORY.txt
 
+[2026-10-07] DATOS: tecnico asignado "Admin Mercurio" vaciado en 15 OT abiertas (produccion)
+Agent: Claude Opus 5.5
+- La cuenta admin@mercurio.com figuraba como tecnico asignado en 15 OT abiertas (13 abiertas por
+  H. Portillo, 10 de barcazas del 05-oct) y el PDF la imprimia en "FIRMA Y ACLARACION DEL ASIGNADO".
+  A pedido de Gustavo se vacio el campo. Sin cambio de codigo.
+- Backup: /root/backups-cms3/cms3-antes-tecnico-admin-20261007-141933.dump +
+  tecnico-admin-antes-20261007.csv (id, codigo y tecnico anterior de las 15).
+
 [2026-10-07] PDF de la OT (Mercurio): sin firma repetida
 Agent: Claude Opus 5.5
 - Si quien abrio la OT es tambien el tecnico asignado, el recuadro "FIRMA Y ACLARACION DEL ASIGNADO"
