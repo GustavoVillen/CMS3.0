@@ -1,5 +1,20 @@
 HISTORY.txt
 
+[2026-10-07] Permiso de trabajo electrico solo en tableros o con tension
+Agent: Claude Opus 5.5
+- Regla de Mercurio: el permiso ELECTRICAL_ISOLATION se exige para trabajar dentro de un tablero
+  (principal, emergencia, distribucion), sobre barras, contactores/protecciones, interruptor principal o
+  cables de fuerza, con el equipo energizado o en media/alta tension. Cortar el breaker con candado y
+  tarjeta y trabajar sin tension (motores, borneras, bombas, radar, alternador, megado) es LOTO.
+  Mismo criterio en el generador de LOTO de los planes y en la sugerencia de permisos de la OT
+  (permit-classifier.ts).
+- DATOS (produccion, 07-oct): de 392 planes de mercurio con permiso electrico, 355 lo perdieron y 37
+  lo conservan (TEP, interruptor principal de alternadores, rele de potencia inversa, tableros PEM,
+  tablero de emergencia/24V, transformadores de LTE). Backup: /root/backups-cms3/
+  cms3-antes-permiso-electrico-20261007-040330.dump + permiso-electrico-antes-20261007.csv (estado
+  previo de los 355). La demo no tenia el permiso en ningun plan.
+  Pasos: pull + build web + restart.
+
 [2026-10-07] Informe de salud por grupo SFI + busqueda por N.o de OT en Planes y Planilla
 Agent: Claude Opus 5.5
 - Planilla a Bordo: el boton "Ficha" de la barra del grupo SFI ("G2: Sistemas de Carga") abre el informe
