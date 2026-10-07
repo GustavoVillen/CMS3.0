@@ -1,5 +1,6 @@
-import { createReadStream, statSync } from "node:fs";
+import { createWriteStream, mkdirSync, createReadStream, statSync } from "node:fs";
 import { join, extname } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
 import { applySecurityHeaders } from "../../http/security-headers";
 
@@ -17,8 +18,39 @@ const MIME_MAP: Record<string, string> = {
   ".txt":  "text/plain; charset=utf-8",
 };
 
-// Sirve las planillas que se subieron a los planes antes de oct-2026 (ese
-// adjunto del plan ya no existe: la planilla de una ejecución va en su OT).
+function tenantDir(tenantSlug: string): string {
+  const dir = join(UPLOADS_ROOT, tenantSlug);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export async function saveChecklistDocument(
+  tenantSlug: string,
+  originalName: string,
+  buffer: Buffer,
+): Promise<{ url: string; name: string }> {
+  const ext = extname(originalName).toLowerCase();
+  if (!Object.keys(MIME_MAP).includes(ext)) {
+    throw new Error(`Tipo de archivo no permitido: ${ext}`);
+  }
+
+  const dir = tenantDir(tenantSlug);
+  const savedName = randomUUID() + ext;
+  const filePath = join(dir, savedName);
+
+  await new Promise<void>((resolve, reject) => {
+    const stream = createWriteStream(filePath);
+    stream.on("finish", resolve);
+    stream.on("error", reject);
+    stream.end(buffer);
+  });
+
+  return {
+    url: `/uploads/checklists/${tenantSlug}/${savedName}`,
+    name: originalName,
+  };
+}
+
 export function serveChecklistUpload(
   response: ServerResponse,
   tenantSlug: string,

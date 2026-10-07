@@ -92,6 +92,7 @@ import {
 } from "../maintenance-plans/maintenance-plans-ai-suggestions";
 import { suggestPlanConsequence } from "../maintenance-plans/maintenance-plans-rcm-ai";
 import { rewriteDeficiencies } from "../work-orders/work-orders-rewrite-ai";
+import { saveChecklistDocument } from "./checklist-uploads-service";
 import { buildWorkOrderPdf, buildWorkOrderDoc } from "./work-order-pdf-service";
 import { serveDoc } from "./doc-export";
 import { serveDocx } from "./docx-export";
@@ -288,6 +289,18 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof completeChecklistPlan>[2];
     sendJson(response, 200, await completeChecklistPlan(session, id, body));
+    return true;
+  }
+
+  if (method === "POST" && /^\/app\/pms\/maintenance-plans\/[^/]+\/upload-checklist$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const rawName = request.headers["x-filename"];
+    const originalName = decodeURIComponent(Array.isArray(rawName) ? rawName[0] : rawName ?? "checklist");
+    const buffer = await readBinaryBody(request);
+    if (!buffer.length) throw new RouteError(400, "EMPTY_BODY", "El archivo está vacío.");
+    const { url: fileUrl, name } = await saveChecklistDocument(tenantSlug, originalName, buffer);
+    await updateTenantMaintenancePlan(session, id, { checklistTemplate: fileUrl });
+    sendJson(response, 200, { url: fileUrl, name });
     return true;
   }
 

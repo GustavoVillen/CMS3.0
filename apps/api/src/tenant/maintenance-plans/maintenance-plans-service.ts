@@ -170,8 +170,6 @@ export interface QuickClosePlanInput {
   runningHoursAtExecution?: number | null;
   notes?: string | null;
   completedAt?: string | Date | null;
-  /** Planilla completada al ejecutar (archivo ya subido): queda en la OT del registro. */
-  checklistDocUrl?: string | null;
 }
 
 export interface CompleteChecklistInput {
@@ -1593,20 +1591,6 @@ async function generateWorkOrderCode(
   return `${workOrderPrefix(tenantSlug)}-${vesselCode}-${woYY}-${String(maxSeq + 1 + seqOffset).padStart(4, "0")}`;
 }
 
-/**
- * Un archivo que esta empresa ya subió (/app/attachments/upload). Cualquier
- * otra cosa se rechaza: la OT no puede apuntar a archivos de otra empresa ni a
- * una dirección de afuera.
- */
-function ownUploadUrl(session: TenantAccessSession, value: unknown): string | null {
-  const url = normalizeOptionalText(typeof value === "string" ? value : null);
-  if (!url) return null;
-  if (!url.startsWith(`/uploads/attachments/${session.tenantSlug}/`) || url.includes("..")) {
-    throw new RouteError(400, "INVALID_FILE", "El archivo de la planilla no es válido.");
-  }
-  return url;
-}
-
 export async function quickClosePlan(
   session: TenantAccessSession,
   id: string,
@@ -1636,7 +1620,6 @@ export async function quickClosePlan(
   );
 
   const executedByName = normalizeRequiredText(payload.executedByName, "executedByName");
-  const checklistDocUrl = ownUploadUrl(session, payload.checklistDocUrl);
   const planAny = plan as any;
   // Toda ejecución sin flujo de OT (DUE_ONLY / CHECKLIST) genera igual
   // un registro de OT: nace AUTORIZADA (firmada por "Sistema", sin aprobación
@@ -1670,7 +1653,6 @@ export async function quickClosePlan(
             observations: normalizeOptionalText(payload.notes),
             runningHoursAtExecution,
             actualHours: hoursWorked,
-            checklistDocUrl,
             title: plan.title,
             description: plan.description,
             taskMasterId: plan.taskMasterId ?? null,
@@ -2391,6 +2373,10 @@ export async function openFormalWorkOrder(
           ? normalizeOptionalNumber(payload.estimatedHours, "estimatedHours")
           : (planAny.estimatedHours ?? null),
         taskMasterId: plan.taskMasterId ?? null,
+        // LISTA DE CHEQUEO del ítem del PDM (Word/PDF/Excel): la OT la hereda
+        // para que quien ejecuta la tenga a mano — es la planilla que se usa
+        // durante la inspección. Con varios ítems, la del primero que tenga una.
+        checklistDocUrl: allPlans.map(p => (p as any).checklistTemplate).find(Boolean) ?? null,
         acceptanceCriteria: inheritMerged(payload.acceptanceCriteria, planAny.acceptanceCriteria, merged.acceptanceCriteria),
         loto: inheritMerged(payload.loto, planAny.loto, merged.loto),
         riskLevel: inheritMerged(payload.riskLevel, planAny.riskLevel, merged.riskLevel),
@@ -2562,7 +2548,6 @@ export interface ReportExecutionInput {
   completedAt?: string | Date | null;
   runningHoursAtExecution?: number | null;
   hoursWorked?: number | null;
-  checklistDocUrl?: string | null;
 }
 
 export async function reportExecution(
@@ -2586,7 +2571,6 @@ export async function reportExecution(
     completedAt: payload.completedAt,
     runningHoursAtExecution: normalizeOptionalNumber(payload.runningHoursAtExecution, "runningHoursAtExecution"),
     hoursWorked: normalizeOptionalNumber(payload.hoursWorked, "hoursWorked"),
-    checklistDocUrl: payload.checklistDocUrl,
   });
 
   return {
