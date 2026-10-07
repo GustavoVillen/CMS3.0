@@ -59,7 +59,10 @@ cae en alguno de estos casos (si no, NO):
 - HOT_WORK: soldadura, corte, amolado, llama abierta o cualquier fuente de ignición.
 - ENCLOSED_SPACE_ENTRY: entrar a tanque, cofferdam, sentina cerrada, caja de mar o espacio sin ventilación.
 - WORKING_ALOFT: trabajo en altura, sobre la borda o con andamio/arnés.
-- ELECTRICAL_ISOLATION: intervenir tableros, cables o equipos energizados, o trabajar sobre media/alta tensión.
+- ELECTRICAL_ISOLATION: sólo si el trabajo se hace DENTRO de un tablero eléctrico (principal, de emergencia o de
+  distribución), sobre cables de fuerza o barras, con el equipo energizado porque no se puede cortar, o en
+  media/alta tensión. Cortar el breaker de un equipo con candado y tarjeta y trabajar sin tensión (motores,
+  borneras, bombas, radar, luces, electrónica, alternador, medición de aislación) NO lleva permiso: alcanza con el LOTO.
 - COLD_WORK: abrir sistemas presurizados o con combustible/aceite caliente sin fuente de ignición.
 - UNDERWATER_WORK: trabajo de buzo o bajo la línea de flotación.
 Un bloqueo LOTO común (cortar un breaker, cerrar una válvula) NO alcanza por sí solo

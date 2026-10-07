@@ -66,21 +66,27 @@ const KEYWORDS: Record<PermitType, string[]> = {
     "aloft",
     "outboard",
   ],
+  // Regla de Mercurio (oct 2026): permiso sólo para trabajar DENTRO de un
+  // tablero, sobre cables de fuerza o barras, con tensión o en media/alta
+  // tensión. Cortar el breaker de un equipo y trabajar sin tensión es LOTO, no
+  // permiso: por eso no están "breaker", "loto", "alternador", "capacitor" ni
+  // "aislamiento eléctrico" (también es el nombre del bloqueo y del megado).
+  // Mismo criterio que el generador de LOTO de los planes (maintenance-plans-ai-suggestions.ts).
   ELECTRICAL_ISOLATION: [
     "cuadro eléctrico", "cuadro electrico",
     "panel eléctrico", "panel electrico",
-    "breaker", "interruptor automático",
+    "tablero eléctrico", "tablero electrico",
+    "tablero principal", "tablero de emergencia",
+    "tablero de distribución", "tablero de distribucion",
+    "interior del tablero",
+    "barras", "cable de fuerza", "cables de fuerza",
     "seccionador",
     "transformador",
-    "alternador",
-    "capacitor", "condensador",
     "alta tensión", "alta tension",
     "media tensión", "media tension",
     "440v", "440 v",
     "6.6kv", "6.6 kv",
-    "energizado", "energizada",
-    "loto", "lock-out", "lockout",
-    "aislamiento eléctrico", "aislamiento electrico",
+    "energizado", "energizada", "con tensión", "con tension",
   ],
   UNDERWATER_WORK: [
     "buceo", "buzo", "buzos",
