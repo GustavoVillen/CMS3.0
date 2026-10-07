@@ -23,6 +23,8 @@ export interface WoPlanRow {
   triggerType?: string;
   frequencyHours?: number | null;
   lastExecutionHours?: number | null;
+  /** Tipo de análisis del plan (FLUID, VIBRATION…): la OT es Predictivo. */
+  samplingKind?: string | null;
 }
 
 interface PlanOption { id: string; taskCode: string; title: string; assetName?: string | null; status?: string }

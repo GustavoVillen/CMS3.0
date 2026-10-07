@@ -274,6 +274,7 @@ Reglas:
 - Si el texto dice "se inspeccionó", "se verificó", "se midió" — eso NO consume repuestos, NO matchear.
 - Si el texto menciona varios items del mismo tipo (ej. "ambos filtros de aire"), incrementar la cantidad.
 - Usar exactamente el unit del repuesto del catálogo.
+- Si viene "equipo", sólo valen repuestos de ESE equipo o de su marca: un repuesto nombrado para otra máquina ("para Volvo Penta" cuando el equipo es un generador Cummins) NO es match, aunque sea el mismo tipo de pieza. Los fluidos cuentan: "11 litros de aceite" es el aceite de ese equipo, cantidad 11.
 
 Respondé EXCLUSIVAMENTE con JSON válido (sin markdown):
 {"detected": [{"spareId": "id_del_catalogo", "quantity": 1, "unit": "unit_del_catalogo"}]}
@@ -302,6 +303,8 @@ export async function detectSparesFromText(
   vesselCode: string | null,
   text: string,
   spares: SpareCatalogItem[],
+  /** Equipo de la OT con marca y modelo ("Motor Auxiliar Babor — Cummins"): acota los matches a sus repuestos. */
+  equipment?: string | null,
 ): Promise<DetectedSpareUsage[]> {
   const apiKey = aiApiKey();
   if (!apiKey) return [];
@@ -313,6 +316,7 @@ export async function detectSparesFromText(
   const locale = await getTenantAiLocale(tenantSlug);
 
   const payload = {
+    ...(equipment ? { equipo: equipment } : {}),
     observaciones: text.trim(),
     catalogo: spares.map(s => ({
       id: s.id,

@@ -32,6 +32,14 @@ export interface PendingApprovalItem {
   assetName: string | null;
   /** Id del equipo (mismo origen que assetName): el nombre lleva a sus planes. */
   assetId: string | null;
+  /**
+   * TODOS los equipos de la OT, el principal primero: una OT puede ejecutar
+   * planes de varios equipos ("una sola OT para ambos radares") y antes la fila
+   * mostraba sólo el principal.
+   */
+  assetNames: string[];
+  /** Ids de esos equipos: el nombre lleva a los planes de todos. */
+  assetIds: string[];
   title: string | null;
   /** LA TAREA: descripción del trabajo (OT) o del servicio pedido (SS). */
   task: string | null;
@@ -401,12 +409,19 @@ export async function listPendingApprovals(
   const planRows = planIds.length > 0
     ? await (prisma as any).maintenancePlan.findMany({
         where: { id: { in: planIds }, tenantId },
-        select: { id: true, sfiGroupNumber: true },
+        select: { id: true, sfiGroupNumber: true, assetId: true },
       }) as any[]
+    : [];
+  // Equipos de los planes vinculados que no son el principal de ninguna OT listada.
+  const knownAssetIds = new Set((assetRows as any[]).map(a => a.id));
+  const extraAssetIds = [...new Set(planRows.map(p => p.assetId).filter((id: string | null) => id && !knownAssetIds.has(id)))] as string[];
+  const extraAssetRows = extraAssetIds.length > 0
+    ? await (prisma as any).asset.findMany({ where: { id: { in: extraAssetIds }, tenantId }, select: { id: true, name: true, sfiCode: true } }) as any[]
     : [];
 
   const vesselNameById   = new Map<string, string | null>((vesselRows as any[]).map(v => [v.code, v.name ?? null]));
-  const assetNameById    = new Map<string, string | null>((assetRows as any[]).map(a => [a.id, a.name ?? null]));
+  const assetNameById    = new Map<string, string | null>([...(assetRows as any[]), ...extraAssetRows].map(a => [a.id, a.name ?? null]));
+  const planAssetById    = new Map<string, string | null>(planRows.map(p => [p.id, p.assetId ?? null]));
   const assetSfiById     = new Map<string, string | null>((assetRows as any[]).map(a => [a.id, a.sfiCode ?? null]));
   const providerNameById = new Map<string, string | null>((providerRows as any[]).map(p => [p.id, p.name ?? null]));
   const parentWoById     = new Map<string, any>((parentWoRows as any[]).map(w => [w.id, w]));
@@ -425,6 +440,22 @@ export async function listPendingApprovals(
     if (fromPlan !== undefined) return fromPlan;
     const digit = /^\s*(\d)/.exec((wo.assetId ? assetSfiById.get(wo.assetId) : null) ?? "");
     return digit ? Number(digit[1]) : null;
+  };
+
+  /** Ids de los equipos de una OT: el principal y los de sus planes, sin repetir. */
+  const woAssetIds = (wo: { id: string; assetId: string | null; maintenancePlanId: string | null } | null | undefined): string[] => {
+    if (!wo) return [];
+    const ids = [wo.assetId, ...[wo.maintenancePlanId, ...(linkedPlansByWo.get(wo.id) ?? [])].map(id => (id ? planAssetById.get(id) : null))];
+    return [...new Set(ids.filter((id): id is string => !!id))];
+  };
+  /** Nombres de esos equipos, en el mismo orden. */
+  const woAssetNames = (wo: Parameters<typeof woAssetIds>[0]): string[] => {
+    const names: string[] = [];
+    for (const id of woAssetIds(wo)) {
+      const name = assetNameById.get(id);
+      if (name && !names.includes(name)) names.push(name);
+    }
+    return names;
   };
 
   /** Taller de una fila: el del catálogo si lo eligió de la lista, si no el texto libre. */
@@ -462,6 +493,8 @@ export async function listPendingApprovals(
       vesselName: vesselNameById.get(r.vesselCode) ?? null,
       assetName: r.assetId ? (assetNameById.get(r.assetId) ?? null) : null,
       assetId: r.assetId ?? null,
+      assetNames: woAssetNames(r),
+      assetIds: woAssetIds(r),
       title: r.title ?? null,
       task: r.description ?? null,
       causes: null,
@@ -492,6 +525,8 @@ export async function listPendingApprovals(
       vesselName: vesselNameById.get(r.vesselCode) ?? null,
       assetName: wo?.assetId ? (assetNameById.get(wo.assetId) ?? null) : null,
       assetId: wo?.assetId ?? null,
+      assetNames: woAssetNames(wo),
+      assetIds: woAssetIds(wo),
       title: r.title ?? null,
       task: r.description ?? null,
       causes: r.causes ?? null,

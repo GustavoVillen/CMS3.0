@@ -5640,6 +5640,7 @@ const dict = {
 
   // ─── Copiloto: completar la OT junto al usuario ───
   "copilot.woOpened":             { es: "Ya la tenés abierta en pantalla:", en: "It's now open on your screen:", pt: "Já está aberta na sua tela:" },
+  "copilot.woAwaitApproval":      { es: "Tiene que ser aprobada antes de registrar el mantenimiento: tocá «Enviar a aprobar» y esperá la aprobación. Cuando esté aprobada, pedime de nuevo que registre el mantenimiento y la completamos.", en: "It has to be approved before the maintenance can be registered: press «Send for approval» and wait for the approval. Once it is approved, ask me again to register the maintenance and we'll complete it.", pt: "Ela precisa ser aprovada antes de registrar a manutenção: toque em «Enviar para aprovação» e aguarde a aprovação. Quando estiver aprovada, peça de novo para registrar a manutenção e nós a completamos." },
   "copilot.woFillOffer":          { es: "¿La completamos juntos? Te voy preguntando lo que falta y lo cargo yo en el formulario.", en: "Shall we fill it in together? I'll ask you what's missing and load it into the form.", pt: "Vamos preenchê-la juntos? Eu vou perguntando o que falta e carrego no formulário." },
   "copilot.actionDone":           { es: "Hecho. El sistema aplicó:", en: "Done. The system applied:", pt: "Pronto. O sistema aplicou:" },
   "person.unassigned":            { es: "— sin asignar —", en: "— unassigned —", pt: "— sem atribuir —" },

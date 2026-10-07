@@ -1,5 +1,26 @@
 HISTORY.txt
 
+[2026-10-07] Copiloto registra mantenimientos + OT de Mercurio con datos por defecto
+Agent: Claude Opus 5.5
+- Copiloto "registrar mantenimiento de X" / parte de a bordo pegado: la herramienta
+  find_work_order_to_register (copilot-register-maintenance.ts) decide con datos que OT corresponde
+  (el modelo inventaba OT cerradas). OT abierta y aprobada -> la abre ([COMPLETAR]) y la completa:
+  fecha, horas del equipo, tarea concluida, repuestos usados (catalogo del buque + detector con marca
+  del equipo), avance con el texto tal cual (accion add_progress_note), resultado preguntado. Sin
+  aprobar -> avisa que hay que esperar. Sin OT -> boton "Abrir OT" desde el plan y aviso de aprobacion.
+  Guardas del servidor: [COMPLETAR] y datos de cierre se anulan si la OT no esta abierta y aprobada en
+  pantalla; botones de plan con codigo inventado se reparan con la lista anterior o no se muestran.
+- Copiloto: "una sola OT para ambos/todos" (additionalPlans) cuando encajan varios planes.
+- OT Mercurio (wo-form-defaults.ts): ubicacion/viaje/condicion = ultimos del buque, Sistema segun
+  remolcador/barcaza, tecnico = Jefe de Maquinas (cargo en Equipo, si no el texto), vencimiento =
+  inicio + 7 dias, tipo Preventivo (Predictivo en analisis de laboratorio). OT nuevas nacen asi; las
+  abiertas vacias se precargan al abrirlas.
+- OT: "Asignado a: Tercerizado" muestra Proveedor (sin SS abre la SS a ese taller; con SS cambia su
+  taller). SS de papel muestran el taller escrito a mano.
+- Seguimiento: todos los equipos de una OT multi-plan, abre los planes de todos, columna Equipo verde.
+- Vista guiada: seccion completa en verde (GuideKit).
+- Sin cambios de schema. Frontend + backend: pull + build web + restart.
+
 [2026-10-01] Copiloto: interactua de verdad con los formularios (tanda 1)
 Agent: Claude Opus 5.5
 - Caso que lo disparo: en "Nuevo plan" el copiloto dijo "pedi recalcular riesgo, criterios y LOTO" y no

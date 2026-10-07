@@ -41,6 +41,8 @@ import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { loadCurrentHoursNumberByAsset } from "../asset-hours/asset-hours-service";
 import { resolvePlanDueStatus, EXECUTION_STATUSES } from "./plan-due-status";
 import { buildAdvisorCopilotBlock } from "../maintenance-advisor/maintenance-advisor-service";
+import { detectSparesFromText } from "../work-orders/work-order-progress-ai";
+import { CREW_ASSET_SYNONYMS, REGISTER_MAINTENANCE_TOOL, FIND_WORK_ORDER_TO_REGISTER, findWorkOrderToRegister } from "./copilot-register-maintenance";
 
 // ---------------------------------------------------------------------------
 // Immutable guardrails — never exposed to prompt editing
@@ -94,10 +96,10 @@ Use the exact key names from the fieldValues object in the screen context. Only 
 - The 'label' is a short button text (max 60 chars) describing the action in Spanish, e.g. "Asignar Jefe de Máquinas como responsable".
 - Emit one entry per plan, even if the patch is the same — never use wildcards or arrays in 'target'.
 - After the [ACCIONES] block, briefly explain what each action will do so the user understands before clicking.
-- OPENING A WORK ORDER (OT) OR SERVICE REQUEST (SS) FROM A FREE-TEXT REQUEST: when the user describes work they want done ("Renovación de Clase", "abrir una SS para el motor principal", "hay que reparar la bomba de achique") instead of asking a question, follow this flow. NEVER emit a 'target' you have not verified with a query tool first — a hallucinated taskCode/assetCode/workOrderCode is a hard failure, not a minor mistake.
+- OPENING A WORK ORDER (OT) OR SERVICE REQUEST (SS) FROM A FREE-TEXT REQUEST (work still TO BE DONE — if the user wants to register work ALREADY done, "registrar mantenimiento…", follow REGISTRAR UN MANTENIMIENTO HECHO instead): when the user describes work they want done ("Renovación de Clase", "abrir una SS para el motor principal", "hay que reparar la bomba de achique") instead of asking a question, follow this flow. NEVER emit a 'target' you have not verified with a query tool first — a hallucinated taskCode/assetCode/workOrderCode is a hard failure, not a minor mistake.
   1. FIRST, before asking the user anything: call query_maintenance_plans with vesselCode + textSearch using the user's own words (e.g. "Renovación de Clase", "motor principal") — plan titles often match the request directly even without knowing the equipment up front. In parallel or if that search is inconclusive, call query_assets (textSearch) to try to resolve an equipment the request names or implies. Only ask the user to clarify equipment/plan AFTER these searches come back empty or ambiguous — never ask a question a query tool could answer first. If several equipments/plans could plausibly apply, present them as a NUMBERED list (see NUMBERED CHOICES rule above) so the user can just reply with a number.
-  2. If exactly one ACTIVE plan clearly matches the request (from step 1), propose type "create_work_order_from_plan": [ACCIONES][{"type":"create_work_order_from_plan","target":"TASKCODE_EXACTO","label":"Abrir OT desde el plan ...","patch":{}}][/ACCIONES]. The 'target' MUST be the plan's exact taskCode from query_maintenance_plans. 'patch' is optional — allowed fields ONLY: dueDate, priority, assignedToUserId; leave it {} unless the user specified one of those. Opening the OT this way automatically inherits everything from the plan (title, criteria, LOTO, risk) and — if the plan's department is PROVEEDOR — automatically opens the matching Solicitud(es) de Servicio to the configured taller(es); say so explicitly in your explanation so the user knows a SS is coming too, don't let them think they still need to ask for it separately.
-  3. If several plans could match, present them as a NUMBERED list and ask the user which one (or confirm none applies) — do not pick for them.
+  2. If exactly one ACTIVE plan clearly matches the request (from step 1), propose type "create_work_order_from_plan": [ACCIONES][{"type":"create_work_order_from_plan","target":"TASKCODE_EXACTO","label":"Abrir OT desde el plan ...","patch":{}}][/ACCIONES]. The 'target' MUST be the plan's exact taskCode from query_maintenance_plans. 'patch' is optional — allowed fields ONLY: dueDate, priority, assignedToUserId and additionalPlans (see step 3); leave it {} unless the user specified one of those. Opening the OT this way automatically inherits everything from the plan (title, criteria, LOTO, risk) and — if the plan's department is PROVEEDOR — automatically opens the matching Solicitud(es) de Servicio to the configured taller(es); say so explicitly in your explanation so the user knows a SS is coming too, don't let them think they still need to ask for it separately.
+  3. If several plans could match, present them as a NUMBERED list — each line with the plan's taskCode exactly as query_maintenance_plans returned it, so you can use it in the next reply — and ask the user which one (or confirm none applies) — do not pick for them. When 2 to 10 plans of the SAME vessel match, add ONE more numbered option at the END: "Una sola OT para ambos" (two plans) or "Una sola OT para todos" (more). If the user picks it, propose ONE action that opens a single OT executing all of them: [ACCIONES][{"type":"create_work_order_from_plan","target":"<taskCode of the first plan>","label":"Abrir una OT para <both/all, by name>","patch":{"additionalPlans":["<taskCode 2>","<taskCode 3>"]}}][/ACCIONES] — every taskCode exactly as query_maintenance_plans returned it. Say in one line that it is ONE OT with one PDM item per plan (and, if any of them is a workshop plan, that the SS come with it).
   4. If NO plan matches (a real corrective/unplanned job, or the user makes clear it's not a periodic task): you need, at minimum, a clear TITLE and whether it's PREVENTIVE, CORRECTIVE or INSPECTION (map "reparación"/"falla"/"rotura" → CORRECTIVE, "inspección" → INSPECTION, anything periodic-sounding without a matching plan → ask, don't assume PREVENTIVE). If any of these is missing or ambiguous, ask before emitting an action. If the work needs an outside taller, also resolve the provider via query_providers (textSearch) — if it's not in the catalog, ask the user for the taller name instead of leaving it blank. Once you have title + type (+ department/providerId if it's tercerizado), propose type "create_work_order": [ACCIONES][{"type":"create_work_order","target":"ASSETCODE_EXACTO","label":"Abrir OT correctiva ...","patch":{"title":"...","type":"CORRECTIVE","description":"...","department":"PROVEEDOR","providerId":"PROVIDER_ID_EXACTO"}}][/ACCIONES]. 'target' MUST be the asset's exact assetCode from query_assets. 'patch' ALLOWED fields ONLY: title (required), type (required), description, priority, department, providerId, dueDate.
   5. If the user explicitly asked for a Solicitud de Servicio (SS) and the OT you are about to open is a standalone one from step 4 (not from a plan with department PROVEEDOR, which already covers this in step 2) — the SS cannot be created in the same click because it needs the new OT's id. After the user applies the create_work_order action, on your NEXT reply verify the OT now exists with query_work_orders (match by title/asset/recency) and then propose a SEPARATE action: [ACCIONES][{"type":"create_service_request","target":"WORKORDERCODE_EXACTO","label":"Abrir SS a ...","patch":{"providerId":"PROVIDER_ID_EXACTO","title":"...","description":"..."}}][/ACCIONES]. 'target' MUST be the OT's exact workOrderCode. 'patch' ALLOWED fields ONLY: title, description, providerId (required), priority. Tell the user this is a second, separate confirmation.
   6. Always end your reply with a short plain-Spanish explanation of what clicking the button will actually do (open this OT for this equipment from this plan; and/or open a SS to this taller) BEFORE the user clicks — never silently execute.
@@ -124,6 +126,20 @@ Use the exact key names from the fieldValues object in the screen context. Only 
      Keep only the ones the user asked for ("acceptanceCriteria" = criterios de aceptación, "loto" = LOTO/instrumentos/EPP, "risk" = nivel + análisis de riesgo). If the user declines, leave them exactly as they are — even if they are empty. NEVER emit [RECALCULAR] without asking first, and never emit it together with a [CAMPOS] block for those same fields.
   6. When nothing is left, say the OT is complete, and tell the user to review it on screen and press Guardar. You never save: you load the fields, the person confirms.
   7. OUTSIDE WORKSHOP ON AN EXISTING OT: the WO_EDIT form has NO provider field — the workshop lives in the OT's Service Request (SS). If fieldValues.assignedToArea is "TERCERIZADO" (or department is "PROVEEDOR") and relatedEntities.serviceRequestCount is "0", the workshop was never requested. When the user names the workshop — or, if they did not, before closing the loop — resolve it with query_providers and propose [ACCIONES][{"type":"create_service_request","target":"<the OT code>","label":"Abrir SS a <taller>","patch":{"providerId":"PROVIDER_ID_EXACTO","title":"...","description":"<the service requested>"}}][/ACCIONES]. Never say you "registered" the workshop without that action: saying it in the chat stores nothing. If the workshop is not in the catalog, say so and ask whether to pick another one.
+- REGISTRAR UN MANTENIMIENTO HECHO. Trigger: the user wants to record maintenance that was ALREADY done on an equipment — "registrar mantenimiento del MG babor", "registrar service al auxiliar estribor", "hice el cambio de aceite del principal", or a pasted crew report ("Servis mg babor / Hs total 6.220 / Cambio de aceite 11 litros / filtros…"). Keep it simple and short; the user must always know what is happening. Flow:
+  1. FIRST and ONLY lookup: call find_work_order_to_register with vesselCode (the vessel selected in the app, or the one the user named; if none, ask which vessel), equipment (the user's words: "mg babor") and work (what was done, or the whole report). Do not call query_assets, query_work_orders or query_maintenance_plans for this, never choose an OT or a plan yourself, and never write an OT code or taskCode the tool did not return.
+  2. Do exactly what its "instruction" says for its "next":
+     · COMPLETE → one line ("Abro la OT … para registrarlo.") and the [COMPLETAR] block. No list of other OTs, no question.
+     · WAIT_SEND / WAIT_APPROVAL → the OT exists but is not approved: tell them it has to be approved and that they must wait for the approval (and, if it was never sent, to press «Enviar a aprobar»), then the [ABRIR] block. Load nothing.
+     · OPEN_FROM_PLAN → no OT open: one line saying the button opens it from the plan, then that it has to be approved and they must wait for the approval before registering the maintenance; the [ACCIONES] block exactly as given. Never start the form questions (voyage, condition, area…).
+     · ASK_WHICH / ASK_PLAN / ASK_EQUIPMENT / ASK_WORK / ASK_VESSEL / NO_EQUIPMENT / NOTHING_FOUND → ask exactly that, as a short numbered list when there are candidates, and nothing else. When the user answers a list (a number, a code, a title), call find_work_order_to_register AGAIN with the same equipment and work and pick = their answer, and follow the new "next" — never act on the choice yourself (an OT they pick may not be approved).
+     If the user asks to register maintenance while ANOTHER OT is open on screen, the tool still decides which OT it is: do not complete the OT on screen unless the tool says COMPLETE for it.
+  3. "[COMPLETAR OT]" — a user message that is (or ends with) this marker was written by the system, never write it yourself: the OT is now the ACTIVE RECORD, with a "closure" block. If closure.editable is false, say it is not approved yet and load nothing. NEVER load hours, spares, result or a progress note — and never say you registered them — unless the ACTIVE RECORD is that OT with a closure block: without it nothing reaches the form. Otherwise COMPLETE IT AND GUIDE THE USER:
+     a) Everything the user ALREADY told you goes in ONE [CAMPOS] right away, without asking for confirmation (the user's words are their confirmation): executionDate (the date they gave, or TODAY YYYY-MM-DD), "hours:<assetId>" (running hours; "6.220" is 6220, the dot separates thousands), taskCompleted "YES" (it was done), and every spare they said they used, in spareUsages as [{"spareId":"<id>","qty":<n>}] with qty = EXACTLY the number the user said ("11 litros" → 11; never round, convert or adjust it to a package size) — take the ids from the "SPARES … IDENTIFIED BY THE SYSTEM" block (load each one that matches what the user said, without asking) or, for anything else, from the "SPARE CATALOGUE" block. A spare that is not in the catalogue is not a question: say in one line that it is not in the vessel's catalogue and stays only in the progress note. Never put woResult here.
+     b) As soon as you have the text of what was done (the pasted report, or what the user answered), propose [ACCIONES][{"type":"add_progress_note","target":"<workOrderCode>","label":"Registrar avance","patch":{"text":"<what the user wrote, EXACTLY, line breaks as \n>"}}][/ACCIONES] and say "Tocá «Registrar avance» para guardar el parte como avance de la OT." (an OT cannot be closed without a progress note). Copy the user's text, never a summary. Add "occurredAt":"YYYY-MM-DD" only if they gave a day other than today. Skip it if closure.progressNotes.lastText already is that text or the chat shows it was applied.
+     c) Then GUIDE: ask ONLY what is still missing, ONE question per message, in this order: the running hours (when an "hours:" key in closure.values is still empty) → the spares used (if the user said nothing about spares: "¿Usaste repuestos? Decime cuáles y cuántos, o «ninguno»") → what was done (only if there is no text for the progress note yet) → the result ("¿Cómo quedó el trabajo?" with "1. Satisfactorio" / "2. Con deficiencias"). When the user answers, load that answer with [CAMPOS] (and propose the progress note if it was the text of what was done) and ask the next missing one in the same reply.
+     d) The result is the person's decision: load woResult only from their answer ("SATISFACTORY" / "WITH_DEFICIENCIES"; with deficiencies, ask what was found — the screen offers to open a defect). Then tell them to review the OT and press Guardar, and that closing it (Cerrar OT: signature, date and closing check) is theirs. You never save, sign or close; the fields are only loaded on screen until they press Guardar.
+  4. If the tool returned otherOpenMatches for another job of the same report (e.g. the oil sample OT), mention it in ONE line at the very end: approved → "Cuando guardes esta, pedime y sigo con la OT … (…)."; not approved → "La OT … (…) todavía no está aprobada: hay que esperar la aprobación." Never open it on your own.
 - FORM ASSISTANT — when the ACTIVE RECORD brings an "assist" block, the user has a form or a step of a flow open on screen (new work order, new permit, progress note, spare consumption, checklist, lab upload, spare receipt…). You help WITHOUT asking whether they want help: the form is already on screen (never emit [ABRIR] for it). SYSTEM MARKERS — a user message that is exactly one of these was written by the system, not the user; never write them yourself:
   · "[AYUDAR]" — the user just opened this flow. Start right away with the first question of the screen (at most a 3-4 word lead-in like "Arranquemos."). Do NOT ask "¿querés que te ayude?".
   · "[SIGUIENTE PASO]" — the screen moved to another step/window. Ask the first question of the NEW screen.
@@ -443,7 +459,8 @@ const CORE_COPILOT_TOOLS: Anthropic.Tool[] = [
       type: "object" as const,
       properties: {
         vesselCode: { type: "string", description: "Filter by vessel code (required)" },
-        assetId: { type: "string", description: "Filter by asset ID (optional)" },
+        assetId: { type: "string", description: "Filter by asset ID (optional). Also matches work orders whose MAIN equipment is another one but that execute a maintenance plan of this equipment (an OT can cover several equipments)." },
+        openOnly: { type: "boolean", description: "If true, only work orders still open (PLANNED, IN_PROGRESS or ON_HOLD). Use it to find the open OT a crew report belongs to." },
         workOrderCode: { type: "string", description: "Exact work order code (e.g. OT-M02-26-0436). USE THIS whenever the user names a specific order by code or number, in ANY status: without it you only see the latest orders and may wrongly say the order does not exist." },
         textSearch: { type: "string", description: "Case-insensitive keyword search across title, description AND observations (the task/work text). Words are split and matched as an AND of substrings, so word order and filler words don't matter. USE THIS for 'was task X done?' / 'when was X done?' queries (e.g. 'filtro aire', 'cambio aceite', 'inyectores'). Prefer SINGLE KEYWORDS or roots over full phrases. (optional but strongly recommended for task-specific queries)" },
         status: {
@@ -656,7 +673,7 @@ const CORE_COPILOT_TOOLS: Anthropic.Tool[] = [
 ];
 
 /** Catálogo completo declarado al modelo: núcleo + resto de los módulos. */
-const COPILOT_TOOLS: Anthropic.Tool[] = [...CORE_COPILOT_TOOLS, ...EXTENDED_COPILOT_TOOLS];
+const COPILOT_TOOLS: Anthropic.Tool[] = [...CORE_COPILOT_TOOLS, ...EXTENDED_COPILOT_TOOLS, REGISTER_MAINTENANCE_TOOL];
 
 // ---------------------------------------------------------------------------
 // Tool executor — runs Prisma queries, always scoped to tenantId
@@ -811,6 +828,9 @@ async function executeCopilotTool(
   const limit = Math.min(Number(input.limit ?? 10), 20);
 
   try {
+    if (name === FIND_WORK_ORDER_TO_REGISTER) {
+      return await findWorkOrderToRegister(input, tenantId, scope);
+    }
     if (name === "search_knowledge_docs") {
       const docs = await getActiveTenantAiDocs(tenantId);
       return searchKnowledgeDocs(
@@ -932,8 +952,18 @@ async function executeCopilotTool(
       };
       const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
       if (!scopeResult.ok) return scopeResult.reason;
-      if (input.assetId) where.assetId = input.assetId;
+      // El equipo puede ser el principal de la OT o el de uno de sus planes:
+      // una OT de "Service MG BR y ER" cuelga de un solo equipo pero ejecuta
+      // los planes de los dos. Va en AND porque textSearch usa su propio OR.
+      const woAnd: Record<string, unknown>[] = [];
+      if (input.assetId) {
+        woAnd.push({ OR: [
+          { assetId: input.assetId },
+          { planLinks: { some: { maintenancePlan: { assetId: input.assetId } } } },
+        ] });
+      }
       if (input.status) where.status = input.status;
+      else if (input.openOnly === true) where.status = { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] };
       if (input.type) where.type = input.type;
       // Una OT nombrada por código se busca directo: antes el copiloto miraba
       // sólo las últimas y decía que OT-M02-26-0436 "no figura" (existía, PLANNED).
@@ -961,6 +991,7 @@ async function executeCopilotTool(
           ];
         }
       }
+      if (woAnd.length > 0) where.AND = [...((where.AND as Record<string, unknown>[] | undefined) ?? []), ...woAnd];
 
       const rows = await prisma.workOrder.findMany({
         where,
@@ -987,10 +1018,23 @@ async function executeCopilotTool(
           actualHours: true,
           runningHoursAtExecution: true,
           acceptanceCriteria: true,
+          // Para ubicar la OT de un parte de a bordo: qué planes ejecuta y si
+          // ya está aprobada (sin aprobar no se cargan avances ni resultado).
+          aprobadoAt: true,
+          autorizadoAt: true,
+          planLinks: {
+            orderBy: { sortOrder: "asc" },
+            select: { maintenancePlan: { select: { taskCode: true, title: true } } },
+          },
         },
       });
 
-      const namedWos = await attachAssetNames(prisma, tenantId, rows as any[]);
+      const shaped = (rows as any[]).map(({ aprobadoAt, autorizadoAt, planLinks, ...r }) => ({
+        ...r,
+        approved: !!(aprobadoAt || autorizadoAt),
+        plans: (planLinks ?? []).map((l: any) => ({ taskCode: l.maintenancePlan?.taskCode, title: l.maintenancePlan?.title })),
+      }));
+      const namedWos = await attachAssetNames(prisma, tenantId, shaped);
       return wrapUntrusted(JSON.stringify(
         namedWos.length > 0 ? namedWos : { message: "No work orders found matching the given criteria." },
       ));
@@ -1150,11 +1194,16 @@ async function executeCopilotTool(
       if (!scopeResult.ok) return scopeResult.reason;
       if (input.criticality) where.criticality = input.criticality;
       if (input.textSearch) {
-        const tokens = String(input.textSearch).split(/\s+/).map(t => t.trim()).filter(t => t.length >= 3);
+        // Vocabulario de a bordo: "MG babor" es el motor generador, que según el
+        // buque está cargado como "Motor Auxiliar" o "Motor Generador"; BR/ER son
+        // babor/estribor. Cada palabra vale por cualquiera de sus equivalentes.
+        const tokens = String(input.textSearch).split(/\s+/).map(t => t.trim())
+          .filter(t => t.length >= 3 || CREW_ASSET_SYNONYMS[t.toLowerCase()]);
         const fields = ["name", "assetCode", "manufacturer", "model"];
         if (tokens.length > 0) {
           where.AND = tokens.map(tok => ({
-            OR: fields.map(f => ({ [f]: { contains: tok, mode: "insensitive" } })),
+            OR: (CREW_ASSET_SYNONYMS[tok.toLowerCase()] ?? [tok]).flatMap(word =>
+              fields.map(f => ({ [f]: { contains: word, mode: "insensitive" } }))),
           }));
         } else {
           where.OR = fields.map(f => ({ [f]: { contains: input.textSearch as string, mode: "insensitive" } }));
@@ -1605,6 +1654,8 @@ export interface SuggestedAction {
   label?: string;
   patch?: Record<string, unknown>;
   vesselCode?: string;
+  /** Para qué se propone: "register_maintenance" = abrir la OT de un mantenimiento a registrar (el panel avisa que hay que esperar la aprobación). */
+  intent?: string;
 }
 
 /**
@@ -1672,10 +1723,67 @@ function parseActionsBlock(fullText: string): { actions: SuggestedAction[]; rawB
       label:   typeof a.label === "string" ? a.label : undefined,
       patch:   (a.patch && typeof a.patch === "object" && !Array.isArray(a.patch)) ? a.patch as Record<string, unknown> : {},
       vesselCode: typeof a.vesselCode === "string" ? a.vesselCode : undefined,
+      intent:  typeof a.intent === "string" ? a.intent : undefined,
     });
   }
   if (actions.length === 0) return null;
   return { actions, rawBlock: fullText.slice(start, end + endMarker.length) };
+}
+
+/**
+ * Verifica —y si hace falta repara— los planes de un botón "Abrir OT desde el
+ * plan" ANTES de mostrarlo. Devuelve false si no hay forma de armarlo bien.
+ *
+ * El modelo llegó a inventar el código del plan ("DCH-RAD-01-1Y-M" por
+ * DCH-RADAR-BR-01) y el botón fallaba al tocarlo. Lo que sí es confiable es la
+ * lista que el propio copiloto mostró en su mensaje anterior: cada plan va con
+ * su enlace /maintenance-plans?openId=<id>, en orden. Con eso:
+ *   - "una sola OT para ambos/todos" (el botón trae planes adicionales) → todos los de la lista;
+ *   - el usuario contestó un número → ese de la lista.
+ * Los planes se buscan dentro de la empresa y de los buques del usuario, y
+ * tienen que ser todos del mismo buque (una OT no mezcla buques).
+ */
+async function resolvePlanAction(a: SuggestedAction, req: CopilotoRequest, scope: VesselScope): Promise<boolean> {
+  const prisma = getPrismaClient() as any;
+  if (!prisma) return true; // sin base no se verifica acá: lo valida el aplicador de la acción
+  type Plan = { id: string; taskCode: string; vesselCode: string };
+  const find = async (ref: string): Promise<Plan | null> => {
+    const value = ref.trim();
+    if (!value) return null;
+    const where: Record<string, unknown> = { tenantId: req.tenantId, deletedAt: null, OR: [{ id: value }, { taskCode: value.toUpperCase() }] };
+    if (!applyVesselWhereScope(where, undefined, scope).ok) return null;
+    return prisma.maintenancePlan.findFirst({ where, select: { id: true, taskCode: true, vesselCode: true } });
+  };
+
+  const extraRefs = Array.isArray(a.patch?.additionalPlans) ? (a.patch!.additionalPlans as unknown[]).map(v => String(v ?? "")) : [];
+  let main = await find(a.target);
+  let extras: Array<Plan | null> = await Promise.all(extraRefs.map(find));
+
+  if (!main || extras.some(e => !e)) {
+    const lastUserIdx = req.messages.map(m => m.role).lastIndexOf("user");
+    const prevAssistant = [...req.messages.slice(0, Math.max(lastUserIdx, 0))].reverse().find(m => m.role === "assistant");
+    const ids = [...new Set([...(prevAssistant?.content ?? "").matchAll(/maintenance-plans\?openId=([A-Za-z0-9_-]+)/g)].map(m => m[1]!))];
+    const listed = (await Promise.all(ids.map(find))).filter((p): p is Plan => !!p);
+    const answer = (req.messages[lastUserIdx]?.content ?? "").replace(/^\[Contexto activo: [^\]]*\]\n/, "").trim();
+    if (extraRefs.length > 0 && listed.length >= 2) {
+      main = listed[0]!;
+      extras = listed.slice(1);
+    } else if (/^\d{1,2}$/.test(answer) && listed[Number(answer) - 1]) {
+      main = listed[Number(answer) - 1]!;
+      extras = [];
+    } else {
+      return false;
+    }
+    log.warn(`[copiloto] plan del botón reparado → ${main.taskCode}${extras.length ? " + " + extras.map(e => e!.taskCode).join(",") : ""}`);
+  }
+
+  const plans = [main, ...extras] as Plan[];
+  if (plans.some(p => p.vesselCode !== main!.vesselCode)) return false;
+  a.target = main.taskCode;
+  a.vesselCode = main.vesselCode;
+  const { additionalPlans: _dropped, ...rest } = a.patch ?? {};
+  a.patch = extras.length > 0 ? { ...rest, additionalPlans: (extras as Plan[]).map(p => p.taskCode) } : rest;
+  return true;
 }
 
 /**
@@ -1768,6 +1876,8 @@ export async function streamCopilotoChat(
 
   // ── Volatile system blocks (per-request, after the cache breakpoint) ──
   const volatileSystemBlocks: Anthropic.TextBlockParam[] = [];
+  /** Repuestos que el detector encontró en lo que dijo el usuario al completar una OT (ver el cierre de la respuesta). */
+  let detectedSpares: Array<{ spareId: string; label: string }> = [];
 
   // Agente del celular: pide de a una cosa y siempre con opciones numeradas.
   if (req.mode === "agent") {
@@ -1896,6 +2006,147 @@ export async function streamCopilotoChat(
             ? `- Run the form's own actions (the "Sugerir con IA" generators and, where listed, approveRca / closeDefect) with [RECALCULAR][...] using ONLY these names: ${formActions.map(a => `"${a}"`).join(", ")}. Ask first; run them only after the user says yes.\n`
             : `- AI generators: NONE available on this screen. Never emit [RECALCULAR] and never say you asked to recalculate anything here.\n`),
       });
+    }
+
+    // Sección de cierre de la OT (resultado, horas, repuestos usados). Va aparte
+    // de fieldValues para que el bucle de preguntas de la cabecera no la tome
+    // como campos pendientes: se completa desde un parte de a bordo o a pedido.
+    const closure = ctx.closure as { editable?: unknown } | undefined;
+    if (ctx.screen === "WO_EDIT" && closure && typeof closure === "object") {
+      volatileSystemBlocks.push({
+        type: "text",
+        text:
+          `## CLOSURE SECTION OF THIS WORK ORDER (result, hours, spares used)\n` +
+          (closure.editable === true
+            ? `Writable with [CAMPOS], using ONLY the keys in closure.values (closed lists with the exact value from closure.options) plus "spareUsages" as [{"spareId":"<id>","qty":<number>}] with spareIds taken from closure.plannedItems or query_spares. ` +
+              `Fill these only when completing the OT from a crew report or when the user asks for it — never inside the header question loop. Loading them saves nothing: the person presses Guardar.`
+            : `LOCKED: this OT is not approved yet, so the result, hours, spares and progress notes cannot be loaded. Never put closure keys in [CAMPOS] and never propose add_progress_note for it.`),
+      });
+
+      // Mientras se completa la OT desde un parte de a bordo, el catálogo de
+      // repuestos del buque va en el contexto: dejarlo a una búsqueda que el
+      // modelo decida hacer no alcanzó (se salteaba query_spares e inventaba
+      // ids). Sólo en esos turnos, y dentro del alcance de buques del usuario.
+      // El panel antepone "[Contexto activo: …]" al último mensaje: el aviso
+      // llega como última línea, no como mensaje entero.
+      const completing = req.messages.slice(-16).some(m =>
+        m.role === "user" && typeof m.content === "string" && /(^|\n)\s*\[COMPLETAR OT\]\s*$/.test(m.content));
+      const woVessel = typeof ctx.vesselCode === "string" ? ctx.vesselCode : "";
+      if (closure.editable === true && completing && woVessel) {
+        // Los mismos que ofrece la pantalla (sólo activos): otro id lo rechaza el formulario.
+        const spareWhere: Record<string, unknown> = { tenantId: req.tenantId, deletedAt: null, status: "ACTIVE" };
+        if (applyVesselWhereScope(spareWhere, woVessel, scope).ok) {
+          const prismaRaw = getPrismaClient() as any;
+          const spares: Array<{ id: string; sku: string; name: string; unit: string; manufacturerPartNumber: string | null }> = prismaRaw
+            ? await prismaRaw.spare.findMany({
+                where: spareWhere,
+                select: { id: true, sku: true, name: true, unit: true, manufacturerPartNumber: true },
+                orderBy: { name: "asc" },
+                take: 300,
+              })
+            : [];
+          // Marca y modelo de los equipos de la OT: sin esto el modelo elegía el
+          // aceite del motor principal (Volvo Penta) para un generador Cummins.
+          // Los repuestos vinculados a esos equipos (SpareAsset) van marcados.
+          const wo = prismaRaw && typeof ctx.entityId === "string"
+            ? await prismaRaw.workOrder.findFirst({
+                where: { id: ctx.entityId, tenantId: req.tenantId, vesselCode: woVessel, deletedAt: null },
+                select: { assetId: true, planLinks: { select: { maintenancePlan: { select: { assetId: true } } } } },
+              })
+            : null;
+          const woAssetIds = wo
+            ? [...new Set<string>([wo.assetId, ...wo.planLinks.map((l: any) => l.maintenancePlan?.assetId).filter(Boolean)])]
+            : [];
+          const woAssets: Array<{ name: string; manufacturer: string | null; model: string | null }> = woAssetIds.length > 0
+            ? await prismaRaw.asset.findMany({
+                where: { id: { in: woAssetIds }, tenantId: req.tenantId },
+                select: { name: true, manufacturer: true, model: true },
+              })
+            : [];
+          const linked = new Set<string>(woAssetIds.length > 0
+            ? (await prismaRaw.spareAsset.findMany({
+                where: { tenantId: req.tenantId, assetId: { in: woAssetIds } },
+                select: { spareId: true },
+              })).map((l: { spareId: string }) => l.spareId)
+            : []);
+          const equipmentLabel = woAssets.map(a => [a.name, a.manufacturer, a.model].filter(Boolean).join(" — ")).join("; ");
+
+          // En el turno que contesta "[COMPLETAR OT]", los repuestos del parte los
+          // identifica el detector de los avances (consulta corta y dedicada, con
+          // el equipo de la OT). El modelo del chat solo no era confiable: a veces
+          // daba el aceite del generador por "fuera de catálogo".
+          const lastUser = [...req.messages].reverse().find(m => m.role === "user");
+          const answeringMarker = !!lastUser && /(^|\n)\s*\[COMPLETAR OT\]\s*$/.test(lastUser.content);
+          // Qué texto se revisa: en el turno del aviso, el pedido o parte que lo
+          // originó; después, la respuesta del usuario (en el modo guiado contesta
+          // "3 filtros de combustible y 1 de aceite"). Un "1" o un "sí" no se revisa.
+          let sourceText = "";
+          if (answeringMarker) {
+            const before = req.messages.slice(0, req.messages.lastIndexOf(lastUser!));
+            const report = [...before].reverse().find(m =>
+              m.role === "user" && !/\[(COMPLETAR OT|SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA)\]\s*$/.test(m.content));
+            sourceText = (report?.content ?? "").replace(/^\[Contexto activo: [^\]]*\]\n/, "").trim();
+          } else if (lastUser) {
+            const answer = lastUser.content.replace(/^\[Contexto activo: [^\]]*\]\n/, "").trim();
+            if (/[a-záéíóúñ]{4,}/i.test(answer)) sourceText = answer;
+          }
+          let detectedLines: string[] | null = null;
+          if (sourceText && spares.length > 0) {
+            const byId = new Map(spares.map(s => [s.id, s]));
+            const found = await detectSparesFromText(
+              req.tenantId, req.tenantSlug, req.userId, req.userEmail ?? "", woVessel, sourceText, spares, equipmentLabel || null,
+            );
+            const valid = found.filter(d => byId.has(d.spareId));
+            detectedLines = valid
+              .map(d => { const s = byId.get(d.spareId)!; return `${d.spareId} | ${s.sku} | ${s.name} | qty ${d.quantity} ${s.unit}`; });
+            const already = new Set(((closure as { spareUsages?: Array<{ spareId?: string }> }).spareUsages ?? []).map(u => u.spareId));
+            detectedSpares = valid
+              .filter(d => !already.has(d.spareId))
+              .map(d => { const s = byId.get(d.spareId)!; return { spareId: d.spareId, label: `${s.sku} — ${s.name} (${d.quantity} ${s.unit})` }; });
+          }
+          // La regla general (proponer, esperar el sí, recién ahí cargar) le
+          // ganaba a la del parte: el modelo pedía confirmar datos que el
+          // usuario ya había dado. Recordatorio pegado al registro activo.
+          volatileSystemBlocks.push({
+            type: "text",
+            text:
+              `## YOU ARE COMPLETING ${String(ctx.entityCode ?? "this OT")} FROM WHAT THE USER TOLD YOU IN THIS CHAT\n` +
+              `What the user already told you IS their confirmation: the general "propose first, load after the yes" rule does NOT apply to it. ` +
+              `Load it now, never ask them to confirm data they gave. Look at closure.values to see what is already loaded and never reload it.\n` +
+              `- Every reply in this flow: [CAMPOS] with what the user gave (in the reply to "[COMPLETAR OT]": executionDate, the hours, taskCompleted "YES" and the spares identified by the system that match what the user said), the add_progress_note [ACCIONES] once you have the text of what was done, and then EXACTLY ONE question — the first missing item in this order: running hours → spares used ("¿Usaste repuestos? Decime cuáles y cuántos, o «ninguno»") → what was done → the result (1. Satisfactorio / 2. Con deficiencias). Never stack two questions.\n` +
+              `- qty is EXACTLY the number the user said ("11 litros" → 11, "3 filtros" → 3): never round, convert or adjust it to a package size.\n` +
+              `- An item that is not in the catalogue is NOT a question: say it in one line ("El racor no está en el catálogo del buque: queda sólo en el avance").\n` +
+              `- Reply to the result ("1"/"Satisfactorio" or "2"/"Con deficiencias"): it MUST carry [CAMPOS]{"woResult":"SATISFACTORY"} (or "WITH_DEFICIENCIES"). Saying it is "marcado" without that block loads nothing.\n` +
+              `- Never re-propose add_progress_note if the chat already shows it was applied or closure.progressNotes.lastText is that text. Until the user presses that button the progress note does NOT exist: introduce it with exactly "Tocá «Registrar avance» para guardar el parte como avance de la OT." and never write "registré" / "quedó registrado" about it. The same for the fields: they are loaded on screen, not saved, until the person presses Guardar.`,
+          });
+          volatileSystemBlocks.push({
+            type: "text",
+            text:
+              `## SPARE CATALOGUE OF THIS VESSEL (for spareUsages; id | sku | name | unit)\n` +
+              (woAssets.length > 0
+                ? `Equipment of this OT: ${equipmentLabel}. ` +
+                  `A spare fits only if it is for THIS make/type of equipment (a part "para Volvo Penta" does not fit a Cummins generator, even if it is the same kind of part).\n`
+                : "") +
+              (spares.length > 0
+                ? `Pick spares ONLY from this list and copy the id exactly. A part named for another machine is not a match.` +
+                  (linked.size > 0 ? ` Lines marked [EQUIPO] are linked to this OT's equipment: prefer them.` : "") + `\n` +
+                  wrapUntrusted(spares.map(s => `${s.id} | ${s.sku} | ${s.name} | ${s.unit}${linked.has(s.id) ? " [EQUIPO]" : ""}`).join("\n"))
+                : `This vessel has no spares in the catalogue: nothing can go in spareUsages; say so and leave the spares in the progress note text.`),
+          });
+          if (detectedLines) {
+            volatileSystemBlocks.push({
+              type: "text",
+              text:
+                `## SPARES OF THE REPORT ALREADY IDENTIFIED BY THE SYSTEM (id | sku | name | quantity)\n` +
+                (detectedLines.length > 0
+                  ? `Load each of these in the spareUsages of your [CAMPOS] with this id and quantity WHEN it matches what the user said (same kind of part, and litres for a fluid / units for a part); skip one that does not match and any already in closure.spareUsages. Do not ask about the ones that match.\n` +
+                    wrapUntrusted(detectedLines.join("\n")) + `\n`
+                  : `The system found no catalogue spare in the report.\n`) +
+                `For any OTHER item the report says was changed: if the catalogue above has several candidates for it, ask (numbered); if it has none, say in one line that it is not in the vessel's catalogue and stays only in the progress note.`,
+            });
+          }
+        }
+      }
     }
 
     // OT tercerizada sin SS: el taller nunca se pidió. Recordatorio puntual —
@@ -2062,6 +2313,8 @@ export async function streamCopilotoChat(
   // Acumulamos el texto total de todas las rondas para parsear [ACCIONES] al final.
   // Sigue streameando chunk por chunk al cliente como antes.
   let accumulatedText = "";
+  /** Planes que find_work_order_to_register mandó abrir en esta respuesta (ver más abajo). */
+  const registerPlanCodes = new Set<string>();
 
   // ── Agentic loop ────────────────────────────────────────────────────────────
   // Antes era una única ronda (fase 1 con tools → fase 2 SIN tools). Si en la
@@ -2084,6 +2337,16 @@ export async function streamCopilotoChat(
   while (true) {
     const allowTools = round < MAX_TOOL_ROUNDS;
     const roundStarted = Date.now();
+    // Última ronda, sin tools: Gemini a veces igual pide otra consulta y la
+    // respuesta queda vacía ("No pude completar la respuesta"). Se le avisa que
+    // conteste con lo que ya tiene.
+    const lastLoop = loopMessages[loopMessages.length - 1];
+    if (!allowTools && round > 0 && lastLoop?.role === "user" && Array.isArray(lastLoop.content)) {
+      loopMessages = [
+        ...loopMessages.slice(0, -1),
+        { role: "user", content: [...lastLoop.content, { type: "text", text: "(No more lookups are available in this reply: answer now with what you already found.)" }] },
+      ];
+    }
     const stream = client.messages.stream({
       model: MODEL,
       // 4096 (antes 2048): un RCA completo (6 campos) en un bloque [CAMPOS] puede
@@ -2128,18 +2391,28 @@ export async function streamCopilotoChat(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
       );
       const toolResults = await Promise.all(
-        toolUseBlocks.map(async (block) => ({
-          type: "tool_result" as const,
-          tool_use_id: block.id,
-          content: addVesselNames(await executeCopilotTool(
+        toolUseBlocks.map(async (block) => {
+          const result = await executeCopilotTool(
             block.name,
             block.input as Record<string, unknown>,
             req.tenantId,
             scope,
             req.session,
             req.locale,
-          ), await vesselNamesOf(req.tenantId)),
-        })),
+          );
+          // Plan del que se abre la OT para registrar un mantenimiento: el botón
+          // lleva la marca desde acá, no del modelo (a veces la omitía y el panel
+          // ofrecía el cuestionario en vez de avisar que hay que esperar la aprobación).
+          if (block.name === FIND_WORK_ORDER_TO_REGISTER) {
+            const plan = result.match(/"next":"OPEN_FROM_PLAN"[\s\S]*?"taskCode":"([^"]+)"/);
+            if (plan) registerPlanCodes.add(plan[1]!.toUpperCase());
+          }
+          return {
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: addVesselNames(result, await vesselNamesOf(req.tenantId)),
+          };
+        }),
       );
       loopMessages = [
         ...loopMessages,
@@ -2162,6 +2435,98 @@ export async function streamCopilotoChat(
     onChunk(fallback);
   }
 
+  // [COMPLETAR]: el panel sólo abre una OT abierta y aprobada, de esta empresa y
+  // de los buques del usuario. El modelo llegó a "encontrar" OT cerradas de otra
+  // cosa; si el código no pasa, se anula el bloque y se le dice al usuario.
+  const completeMatch = accumulatedText.match(/\[COMPLETAR\]([\s\S]*?)\[\/COMPLETAR\]/);
+  if (completeMatch) {
+    const code = completeMatch[1]!.trim().toUpperCase();
+    const woWhere: Record<string, unknown> = { tenantId: req.tenantId, workOrderCode: code, deletedAt: null };
+    const inScope = applyVesselWhereScope(woWhere, undefined, scope).ok;
+    const prismaRaw = getPrismaClient() as any;
+    const wo: { status: string; aprobadoAt: Date | null; autorizadoAt: Date | null } | null = inScope && prismaRaw
+      ? await prismaRaw.workOrder.findFirst({ where: woWhere, select: { status: true, aprobadoAt: true, autorizadoAt: true } })
+      : null;
+    const open = !!wo && ["PLANNED", "IN_PROGRESS", "ON_HOLD"].includes(wo.status);
+    const approved = !!wo && !!(wo.aprobadoAt || wo.autorizadoAt);
+    if (!open || !approved) {
+      const reason = !wo ? "missing" : !open ? "closed" : "notApproved";
+      const lang = req.locale === "en" || req.locale === "pt" ? req.locale : "es";
+      const texts: Record<string, Record<string, string>> = {
+        es: {
+          missing: `No encontré la ${code} en tus buques, así que no la abro.`,
+          closed: `La ${code} ya no está abierta, así que no la abro.`,
+          notApproved: `La ${code} todavía no está aprobada: hay que esperar la aprobación para registrar el mantenimiento.`,
+        },
+        en: {
+          missing: `I could not find ${code} in your vessels, so I am not opening it.`,
+          closed: `${code} is no longer open, so I am not opening it.`,
+          notApproved: `${code} is not approved yet: the maintenance can be registered once it is approved.`,
+        },
+        pt: {
+          missing: `Não encontrei a ${code} nos seus navios, então não vou abri-la.`,
+          closed: `A ${code} não está mais aberta, então não vou abri-la.`,
+          notApproved: `A ${code} ainda não foi aprovada: é preciso esperar a aprovação para registrar a manutenção.`,
+        },
+      };
+      const note = `\n\n[COMPLETAR_ANULADO]${texts[lang]![reason]}`;
+      log.warn(`[copiloto] [COMPLETAR] anulado: ${code} (${reason})`);
+      accumulatedText += note;
+      onChunk(note);
+    }
+  }
+
+  // Repuestos que el detector encontró y el modelo ni cargó ni mencionó: no se
+  // cargan solos (el detector también se equivoca: llegó a tomar "18 litros de
+  // aceite" por 18 filtros de aire), pero tampoco se pierden en silencio. Se le
+  // pregunta al usuario, que es quien sabe qué usó.
+  if (detectedSpares.length > 0 && !/\[(COMPLETAR|CAMPOS)_ANULADO\]/.test(accumulatedText)) {
+    const loadedIds = new Set<string>();
+    const block = accumulatedText.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
+    if (block) {
+      const raw = block[1]!.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      let fields: Record<string, unknown> = {};
+      try { fields = JSON.parse(raw); } catch { try { fields = JSON.parse(escapeControlCharsInJsonStrings(raw)); } catch { /* ilegible: lo avisa el panel */ } }
+      if (Array.isArray(fields.spareUsages)) for (const u of fields.spareUsages as Array<{ spareId?: unknown }>) loadedIds.add(String(u?.spareId ?? ""));
+    }
+    const missing = detectedSpares.filter(d => !loadedIds.has(d.spareId) && !accumulatedText.includes(d.label.split(" — ")[0]!));
+    if (missing.length > 0) {
+      const lang = req.locale === "en" || req.locale === "pt" ? req.locale : "es";
+      const intro = {
+        es: "Revisá los repuestos: en lo que escribiste también veo esto, que no cargué:",
+        en: "Check the spares: in what you wrote I also see this, which I did not load:",
+        pt: "Confira as peças: no que você escreveu também vejo isto, que não carreguei:",
+      }[lang];
+      const ask = { es: "¿Lo cargo?", en: "Shall I load it?", pt: "Carrego?" }[lang];
+      const note = `\n\n${intro} ${missing.map(d => d.label).join("; ")}. ${ask}`;
+      accumulatedText += note;
+      onChunk(note);
+    }
+  }
+
+  // Datos del cierre de una OT (horas, repuestos usados, resultado) sólo entran
+  // con esa OT abierta y aprobada en pantalla. Con el registro en otro lado el
+  // modelo llegó a "registrar" horas con un código de equipo inventado: se anula
+  // el bloque (el panel no lo carga) y se avisa en vez de dejar el "registré".
+  const closureFieldsSent = [...accumulatedText.matchAll(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/g)]
+    .some(m => /"(hours:[^"]*|spareUsages|woResult)"\s*:/.test(m[1]!));
+  if (closureFieldsSent) {
+    const sc = (req.screenContext ?? {}) as Record<string, unknown>;
+    const closureOk = sc.screen === "WO_EDIT" && (sc.closure as { editable?: unknown } | undefined)?.editable === true;
+    if (!closureOk) {
+      const lang = req.locale === "en" || req.locale === "pt" ? req.locale : "es";
+      const text = {
+        es: "Ojo: no cargué nada todavía. Esos datos van en el cierre de la OT, y la OT tiene que estar abierta y aprobada en pantalla.",
+        en: "Note: nothing was loaded yet. That data goes in the OT closure, and the OT must be open and approved on screen.",
+        pt: "Atenção: nada foi carregado ainda. Esses dados vão no fechamento da OT, e a OT precisa estar aberta e aprovada na tela.",
+      }[lang];
+      const note = `\n\n[CAMPOS_ANULADO]${text}`;
+      log.warn(`[copiloto] [CAMPOS] de cierre anulado (pantalla ${String(sc.screen ?? "-")})`);
+      accumulatedText += note;
+      onChunk(note);
+    }
+  }
+
   // [DEBUG TEMPORAL] Diagnóstico RCA: ver qué devolvió realmente el modelo.
   if (req.capability === "defect_assistant") {
     log.info(`[copiloto-debug] cap=${req.capability} rounds=${round} stop=${lastStopReason} len=${accumulatedText.length} hasCAMPOS=${accumulatedText.includes("[CAMPOS]")} hasClose=${accumulatedText.includes("[/CAMPOS]")} :: ${accumulatedText.slice(0, 1800).replace(/\s+/g, " ")}`);
@@ -2173,7 +2538,29 @@ export async function streamCopilotoChat(
   if (onActions) {
     const parsed = parseActionsBlock(accumulatedText);
     if (parsed) {
-      try { onActions(parsed.actions, parsed.rawBlock); } catch { /* swallow */ }
+      const kept: SuggestedAction[] = [];
+      for (const a of parsed.actions) {
+        if (a.type === "create_work_order_from_plan") {
+          const ok = await resolvePlanAction(a, req, scope);
+          if (!ok) {
+            const lang = req.locale === "en" || req.locale === "pt" ? req.locale : "es";
+            const note = `\n\n${{
+              es: "No pude armar el botón: no encontré esos planes en tus buques. Decime de nuevo cuál querés abrir.",
+              en: "I could not build the button: those plans are not in your vessels. Tell me again which one to open.",
+              pt: "Não consegui montar o botão: esses planos não estão nos seus navios. Diga de novo qual abrir.",
+            }[lang]}`;
+            log.warn(`[copiloto] acción descartada: plan inexistente ${a.target} ${JSON.stringify(a.patch?.additionalPlans ?? [])}`);
+            accumulatedText += note;
+            onChunk(note);
+            continue;
+          }
+          if (registerPlanCodes.has(a.target.trim().toUpperCase())) a.intent = "register_maintenance";
+        }
+        kept.push(a);
+      }
+      if (kept.length > 0) {
+        try { onActions(kept, parsed.rawBlock); } catch { /* swallow */ }
+      }
     }
   }
 }

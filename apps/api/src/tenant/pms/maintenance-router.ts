@@ -43,6 +43,7 @@ import {
   resumeWorkOrder,
   setWorkOrderApproval,
 } from "../work-orders/work-orders-service";
+import { getWoFormDefaults } from "../work-orders/wo-form-defaults";
 import {
   createServiceRequestForWorkOrder,
   listWorkOrderServiceRequests,
@@ -388,6 +389,14 @@ export async function handleMaintenanceRoutes(
   // secciones, en el mismo orden, con las mismas etiquetas. Sin esto, la
   // pantalla tendria una copia hardcodeada del formulario y divergiria del
   // documento apenas un tenant cambie su config.
+  // Datos que la hoja de la OT completa sola en Mercurio (último lugar/viaje/
+  // condición del buque, sistema, Jefe de Máquinas, días al vencimiento).
+  // null en los tenants sin ese formulario.
+  if (method === "GET" && url.pathname === "/app/pms/work-orders/form-defaults") {
+    sendJson(response, 200, { defaults: await getWoFormDefaults(session, url.searchParams.get("vesselCode") ?? "") });
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/app/pms/work-orders/form") {
     const form = await resolveTenantForm(session.tenantSlug, "WORK_ORDER");
     sendJson(response, 200, { meta: form.meta, config: form.config, logoUrl: form.logoUrl });

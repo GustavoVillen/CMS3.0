@@ -30,6 +30,21 @@ export type CopilotModule =
   | "DASHBOARD"
   | string;
 
+/** Lo que el copiloto ve de la sección de cierre de una OT (ver `CopilotScreenContext.closure`). */
+export interface CopilotWoClosure {
+  /** false = OT sin aprobar: resultado, horas, repuestos y avances están trabados. */
+  editable: boolean;
+  /** Claves que acepta [CAMPOS]. Las horas van como `hours:<assetId>`, una por equipo con horómetro. */
+  values: Record<string, string | null>;
+  options: Record<string, Array<{ value: string; label: string }>>;
+  hourAssets: Array<{ assetId: string; name: string; lastHours: number | null }>;
+  /** Repuestos y materiales que el plan previó para esta OT. */
+  plannedItems: Array<{ kind: string; spareId: string | null; description: string; quantity: number; unit: string }>;
+  /** Repuestos ya cargados en "Repuestos utilizados". */
+  spareUsages: Array<{ spareId: string; name: string; qty: number; unit: string }>;
+  progressNotes: { count: number; lastText: string | null };
+}
+
 /** Structured snapshot of what the user is currently working on. */
 export interface CopilotScreenContext {
   /** Which application module is active. */
@@ -60,6 +75,12 @@ export interface CopilotScreenContext {
   fieldLabels?: Record<string, string>;
   /** Pista corta por campo cuando la etiqueta sola se presta a confusión ("ciudad o km"). */
   fieldHints?: Record<string, string>;
+  /**
+   * Sección de cierre de una OT abierta (resultado, horas, repuestos usados).
+   * Va aparte de `fieldValues` para que el bucle de preguntas de la cabecera no
+   * la tome como pendiente: el copiloto la completa desde un parte de a bordo.
+   */
+  closure?: CopilotWoClosure;
   /** Presente cuando la pantalla es un paso de un flujo con asistente (useCopilotAssist). */
   assist?: {
     /** Clave de ESTA apertura del flujo: todos sus pasos la comparten. */

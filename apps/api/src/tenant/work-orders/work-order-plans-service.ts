@@ -34,6 +34,8 @@ export interface WorkOrderPlanRow {
   frequencyHours: number | null;
   /** Última lectura de horas con la que se ejecutó el plan (referencia y piso al cerrar). */
   lastExecutionHours: number | null;
+  /** Tipo de análisis (FLUID, VIBRATION…): con él la OT es de mantenimiento Predictivo. */
+  samplingKind: string | null;
 }
 
 type AnyPrisma = NonNullable<ReturnType<typeof getPrismaClient>>;
@@ -102,7 +104,7 @@ export async function listWorkOrderPlans(
     where: { id: { in: ids }, tenantId, deletedAt: null },
     select: {
       id: true, taskCode: true, title: true, assetId: true, requiredPermitTypes: true,
-      triggerType: true, frequencyHours: true, lastExecutionHours: true,
+      triggerType: true, frequencyHours: true, lastExecutionHours: true, samplingKind: true,
     },
   });
   const assetIds = [...new Set(plans.map((p: any) => p.assetId))] as string[];
@@ -128,6 +130,7 @@ export async function listWorkOrderPlans(
       triggerType: p.triggerType,
       frequencyHours: p.frequencyHours ?? null,
       lastExecutionHours: p.lastExecutionHours ?? null,
+      samplingKind: p.samplingKind ?? null,
     });
   }
   return rows;

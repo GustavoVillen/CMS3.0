@@ -14,6 +14,7 @@ import { RouteError } from "../../http/route-error";
 import { updateTenantMaintenancePlan, openFormalWorkOrder } from "../maintenance-plans/maintenance-plans-service";
 import { createTenantWorkOrder, type WorkOrderDepartment } from "../work-orders/work-orders-service";
 import { createServiceRequestForWorkOrder } from "../service-requests/service-requests-service";
+import { createProgressNote } from "../work-orders/work-order-progress-notes-service";
 import { recordHoursReadings } from "../asset-hours/asset-hours-service";
 import { getDefect, updateDefect, closeDefect } from "../pms/defects-service";
 import { hasPermission } from "../auth/role-permissions";
@@ -37,7 +38,10 @@ const ALLOWED_PLAN_FIELDS = new Set([
 ]);
 
 /** create_work_order_from_plan: todo opcional, openFormalWorkOrder hereda el resto del plan. */
-const ALLOWED_WO_FROM_PLAN_FIELDS = new Set(["dueDate", "priority", "assignedToUserId"]);
+const ALLOWED_WO_FROM_PLAN_FIELDS = new Set(["dueDate", "priority", "assignedToUserId", "additionalPlans"]);
+
+/** Tope de planes extra en una sola OT abierta desde el copiloto ("una sola OT para ambos radares"). */
+const MAX_ADDITIONAL_PLANS = 10;
 
 /** create_work_order (standalone/correctivo): title y type los exige applyCreateWorkOrder, no la whitelist. */
 const ALLOWED_WO_STANDALONE_FIELDS = new Set([
@@ -52,6 +56,9 @@ const ALLOWED_ASSET_HOURS_FIELDS = new Set(["runningHours", "readingDate", "rpm"
 
 /** create_work_order_from_defect: buque, equipo y tipo salen del defecto, no de la IA. */
 const ALLOWED_WO_FROM_DEFECT_FIELDS = new Set(["title", "description", "priority", "dueDate"]);
+
+/** add_progress_note: el parte de a bordo como avance de la OT. `text` lo exige applyAddProgressNote. */
+const ALLOWED_PROGRESS_NOTE_FIELDS = new Set(["text", "occurredAt"]);
 
 /**
  * Nota de cierre del defecto cuando el trabajo pasa a una OT nueva. Es el MISMO
@@ -69,7 +76,7 @@ export interface CopilotAction {
   /**
    * Tipo de acción: "update_plan" | "create_work_order_from_plan" |
    * "create_work_order" | "create_service_request" | "record_asset_hours" |
-   * "create_work_order_from_defect".
+   * "create_work_order_from_defect" | "add_progress_note".
    */
   type: string;
   /**
@@ -128,6 +135,9 @@ export async function applyCopilotAction(
   }
   if (action.type === "create_work_order_from_defect") {
     return applyCreateWorkOrderFromDefect(session, action);
+  }
+  if (action.type === "add_progress_note") {
+    return applyAddProgressNote(session, action);
   }
   throw new RouteError(400, "UNSUPPORTED_ACTION_TYPE", `Tipo de acción no soportado: "${action.type}".`);
 }
@@ -242,13 +252,39 @@ async function applyCreateWorkOrderFromPlan(
     throw new RouteError(404, "PLAN_NOT_FOUND", `No se encontró un plan con taskCode "${taskCode}".`);
   }
 
-  const patch = filterPatch(action.patch, ALLOWED_WO_FROM_PLAN_FIELDS) as {
+  const { additionalPlans, ...patch } = filterPatch(action.patch, ALLOWED_WO_FROM_PLAN_FIELDS) as {
     dueDate?: string; priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; assignedToUserId?: string;
+    additionalPlans?: unknown;
   };
 
-  log.info(`[copilot-action] create_work_order_from_plan target=${taskCode} user=${session.user.email}`);
+  // Una sola OT para varios planes: los demás llegan por taskCode (lo que ve la
+  // IA) y se resuelven acá dentro de la empresa. openFormalWorkOrder es el mismo
+  // camino que "Abrir OT" con planes adicionales: valida buque y alcance por su
+  // cuenta y arma la OT con un ítem del PDM por plan.
+  const extraCodes = [...new Set(
+    (Array.isArray(additionalPlans) ? additionalPlans : [])
+      .map(v => String(v ?? "").trim().toUpperCase())
+      .filter(v => v && v !== taskCode),
+  )];
+  if (extraCodes.length > MAX_ADDITIONAL_PLANS) {
+    throw new RouteError(400, "TOO_MANY_PLANS", `Una OT desde el copiloto admite hasta ${MAX_ADDITIONAL_PLANS} planes adicionales.`);
+  }
+  const additionalPlanIds: string[] = [];
+  for (const code of extraCodes) {
+    const extraWhere: Record<string, unknown> = { tenantId: tenant.id, taskCode: code, deletedAt: null };
+    if (action.vesselCode) extraWhere.vesselCode = action.vesselCode;
+    const extra = await (prisma as unknown as { maintenancePlan: { findFirst(a: unknown): Promise<{ id: string } | null> } })
+      .maintenancePlan.findFirst({ where: extraWhere, select: { id: true } });
+    if (!extra) throw new RouteError(404, "PLAN_NOT_FOUND", `No se encontró un plan con taskCode "${code}".`);
+    additionalPlanIds.push(extra.id);
+  }
 
-  const workOrder = await openFormalWorkOrder(session, plan.id, patch);
+  log.info(`[copilot-action] create_work_order_from_plan target=${taskCode}${extraCodes.length ? ` +${extraCodes.join(",")}` : ""} user=${session.user.email}`);
+
+  const workOrder = await openFormalWorkOrder(session, plan.id, {
+    ...patch,
+    ...(additionalPlanIds.length > 0 ? { additionalPlanIds } : {}),
+  });
 
   return {
     ok: true,
@@ -513,4 +549,82 @@ async function applyCreateWorkOrderFromDefect(
       vesselCode: workOrder.vesselCode,
     },
   };
+}
+
+/**
+ * add_progress_note: el parte que mandó la tripulación ("Servis MG babor, hs
+ * 6.220, cambio de aceite…") queda como AVANCE de la OT, con el texto tal cual.
+ * Es la evidencia de lo que se hizo: sin avance la OT no cierra.
+ *
+ * Reutiliza createProgressNote tal cual — el mismo camino que el botón
+ * "Avances" de la OT. De ahí salen el alcance de buque, el bloqueo de OT
+ * cerrada y el pipeline que rearma las Observaciones desde los avances.
+ *
+ * La pantalla sólo deja cargar avances con la OT aprobada (isResultEditable en
+ * WorkOrders.tsx); el endpoint no lo exige, así que se exige acá: por chat no
+ * se puede hacer lo que el formulario no deja. `target` = workOrderCode.
+ */
+async function applyAddProgressNote(
+  session: TenantAccessSession,
+  action: CopilotAction,
+): Promise<ApplyCopilotActionResult> {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const tenant = await prisma.tenant.findUnique({ where: { slug: session.tenantSlug } });
+  if (!tenant) throw new RouteError(404, "TENANT_NOT_FOUND", "Tenant no encontrado.");
+
+  const workOrderCode = String(action.target ?? "").trim().toUpperCase();
+  if (!workOrderCode) throw new RouteError(400, "MISSING_TARGET", "Falta el código de la orden de trabajo.");
+
+  const woWhere: Record<string, unknown> = { tenantId: tenant.id, workOrderCode, deletedAt: null };
+  if (action.vesselCode) woWhere.vesselCode = action.vesselCode;
+  const db = prisma as unknown as {
+    workOrder: { findFirst(a: unknown): Promise<{ id: string; vesselCode: string; aprobadoAt: Date | null; autorizadoAt: Date | null } | null> };
+    workOrderProgressNote: { findFirst(a: unknown): Promise<{ id: string } | null> };
+  };
+  const workOrder = await db.workOrder.findFirst({
+    where: woWhere,
+    select: { id: true, vesselCode: true, aprobadoAt: true, autorizadoAt: true },
+  });
+  if (!workOrder) {
+    throw new RouteError(404, "WORK_ORDER_NOT_FOUND", `No se encontró una orden de trabajo con código "${workOrderCode}".`);
+  }
+  // El alcance de buque va primero: los avisos de abajo no tienen que contarle
+  // nada de una OT ajena (createProgressNote lo vuelve a verificar).
+  if (session.user.role !== "TENANT_ADMIN" && !session.user.assignedVesselCodes.includes(workOrder.vesselCode)) {
+    throw new RouteError(403, "FORBIDDEN", "Sin acceso al vessel de esta OT.");
+  }
+  if (!workOrder.aprobadoAt && !workOrder.autorizadoAt) {
+    throw new RouteError(409, "WORK_ORDER_NOT_APPROVED", `La ${workOrderCode} todavía no está aprobada: los avances se cargan recién cuando la aprueban.`);
+  }
+
+  const patch = filterPatch(action.patch, ALLOWED_PROGRESS_NOTE_FIELDS);
+  const text = typeof patch.text === "string" ? patch.text.trim() : "";
+  if (!text) throw new RouteError(400, "MISSING_TEXT", "Falta el texto del avance.");
+
+  // El mismo parte pegado dos veces no se registra dos veces.
+  const duplicate = await db.workOrderProgressNote.findFirst({
+    where: { tenantId: tenant.id, workOrderId: workOrder.id, kind: "TEXT", text },
+    select: { id: true },
+  });
+  if (duplicate) {
+    throw new RouteError(409, "PROGRESS_NOTE_DUPLICATE", `Ese avance ya está registrado en la ${workOrderCode}.`);
+  }
+
+  // Fecha sin hora: mediodía UTC, así cae en el mismo día en cualquier huso de
+  // la flota. Sin fecha (o con la de hoy) el avance es de este momento.
+  const rawDate = typeof patch.occurredAt === "string" ? patch.occurredAt.trim() : "";
+  let occurredAt: string | undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) && rawDate !== new Date().toISOString().slice(0, 10)) {
+    const d = new Date(`${rawDate}T12:00:00Z`);
+    if (isNaN(d.getTime())) throw new RouteError(400, "INVALID_DATE", "La fecha del avance no es válida.");
+    if (d.getTime() > Date.now()) throw new RouteError(400, "FUTURE_DATE", "La fecha del avance no puede ser futura.");
+    occurredAt = d.toISOString();
+  }
+
+  log.info(`[copilot-action] add_progress_note target=${workOrderCode} user=${session.user.email}`);
+
+  const note = await createProgressNote(session, workOrder.id, { kind: "TEXT", text, occurredAt });
+
+  return { ok: true, applied: { type: action.type, target: workOrderCode, entityId: note.id } };
 }

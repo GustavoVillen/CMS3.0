@@ -14,6 +14,7 @@ import { log } from "../../common/logger";
 import { archivePdf } from "../settings/pdf-archive-service";
 import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../common/record-lock";
 import { withUniqueRetry } from "../../common/unique-retry";
+import { resolveWoFormDefaults, addDays } from "./wo-form-defaults";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "./wo-inspection-flow";
 import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
 
@@ -717,6 +718,11 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
     }
   }
 
+  // Hoja de Mercurio: lo que vino vacío se completa (último lugar/viaje/condición
+  // del buque, sistema según el tipo de buque, Jefe de Máquinas, vencimiento a
+  // una semana). Ver wo-form-defaults.ts.
+  const formDefaults = await resolveWoFormDefaults(tenantId, vesselCode);
+
   const year = new Date().getFullYear();
   const yy = String(year).slice(-2);
   // Secuencia por MAX del número en el código (no COUNT por createdAt): con
@@ -766,10 +772,10 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         criticality: payload.criticality ?? "B",
         openDate: woOpenDate,
         ...(isAdmin ? { createdAt: woOpenDate } : {}),
-        dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
+        dueDate: parseOptionalDate(payload.dueDate, "dueDate") ?? (formDefaults ? addDays(woOpenDate, formDefaults.dueDays) : null),
         title: normalizeOptionalText(payload.title),
         description: normalizeOptionalText(payload.description),
-        assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
+        assignedToUserId: normalizeOptionalText(payload.assignedToUserId) ?? formDefaults?.assignedToUserId ?? null,
         estimatedHours: normalizeOptionalNumber(payload.estimatedHours, "estimatedHours"),
         taskMasterId,
         acceptanceCriteria: normalizeOptionalText(payload.acceptanceCriteria),
@@ -785,15 +791,16 @@ export async function createTenantWorkOrder(session: TenantAccessSession, payloa
         providerId: (payload.assignedToArea === "TERCERIZADO" || payload.department === "PROVEEDOR")
           ? normalizeOptionalText(payload.providerId)
           : null,
-        location: normalizeOptionalText(payload.location),
+        location: normalizeOptionalText(payload.location) ?? formDefaults?.location ?? null,
         communicationMethod: payload.communicationMethod ?? [],
         distribution: payload.distribution ?? [],
-        // Formulario REGI-MAN-02.3 — nullable, sólo se llenan si vienen.
-        voyageNumber: normalizeOptionalText(payload.voyageNumber),
-        operatingCondition: payload.operatingCondition ?? null,
+        // Formulario REGI-MAN-02.3 — nullable; lo que no vino se completa con
+        // los datos por defecto de la hoja de Mercurio (formDefaults).
+        voyageNumber: normalizeOptionalText(payload.voyageNumber) ?? formDefaults?.voyageNumber ?? null,
+        operatingCondition: payload.operatingCondition ?? (formDefaults?.operatingCondition as typeof payload.operatingCondition) ?? null,
         requestedByArea: payload.requestedByArea ?? null,
         assignedToArea: payload.assignedToArea ?? null,
-        systemArea: payload.systemArea ?? null,
+        systemArea: payload.systemArea ?? formDefaults?.systemArea ?? null,
         maintenanceKind: payload.maintenanceKind ?? null,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,

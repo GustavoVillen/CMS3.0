@@ -37,6 +37,8 @@ export function extractNumberedOptions(text: string): NumberedOption[] {
  * cualquiera de esas cosas hacía que el bloque se descartara sin aviso.
  */
 export function extractCamposBlock(text: string): Record<string, string> | null {
+  // El servidor anula los datos del cierre de una OT que no está abierta y aprobada en pantalla.
+  if (text.includes("[CAMPOS_ANULADO]")) return null;
   const match = text.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
   if (!match) return null;
   const raw = match[1]!.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -47,7 +49,8 @@ export function extractCamposBlock(text: string): Record<string, string> | null 
         const out: Record<string, string> = {};
         for (const [key, value] of Object.entries(parsed)) {
           if (value == null) continue;
-          out[key] = Array.isArray(value) ? value.map(String).join("\n")
+          // Los objetos de una lista (los repuestos {spareId, qty}) van como JSON, uno por renglón.
+          out[key] = Array.isArray(value) ? value.map(v => (v && typeof v === "object" ? JSON.stringify(v) : String(v))).join("\n")
             : typeof value === "object" ? JSON.stringify(value)
             : String(value);
         }
@@ -113,6 +116,21 @@ export function extractOpenScreenBlock(text: string): string | null {
 }
 
 /**
+ * OT que la IA abre para completarla desde un parte de a bordo:
+ * [COMPLETAR]OT-M01-26-0123[/COMPLETAR]. El panel la abre y, cuando ya está en
+ * pantalla, le avisa a la IA para que cargue el cierre. Sólo se acepta un
+ * código (letras, números y guiones): nada de rutas ni direcciones.
+ */
+export function extractCompleteWoBlock(text: string): string | null {
+  // El servidor lo anula si la OT no está abierta y aprobada (copiloto-service).
+  if (text.includes("[COMPLETAR_ANULADO]")) return null;
+  const match = text.match(/\[COMPLETAR\]([\s\S]*?)\[\/COMPLETAR\]/);
+  if (!match) return null;
+  const code = match[1]!.trim().toUpperCase();
+  return /^[A-Z0-9][A-Z0-9-]{2,40}$/.test(code) ? code : null;
+}
+
+/**
  * Texto que se ve en el globo del chat: sin los bloques de máquina.
  * También corta un bloque a medio llegar (el chat streamea de a pedazos), para
  * que el usuario no vea el marcador crudo por un instante.
@@ -122,8 +140,9 @@ export function stripAiBlocks(text: string): string {
     .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
-    .replace(/\[(?:CAMPOS|RECALCULAR|ABRIR)\][\s\S]*$/, "")
+    .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
+    .replace(/\[(?:CAMPOS|RECALCULAR|ABRIR|COMPLETAR)\][\s\S]*$/, "")
     // Avisos internos del panel a la IA: si el modelo los repite, no se muestran.
-    .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA)\]/g, "")
+    .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA|COMPLETAR OT|COMPLETAR_ANULADO|CAMPOS_ANULADO)\]/g, "")
     .trim();
 }

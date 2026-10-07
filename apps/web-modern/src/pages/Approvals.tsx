@@ -60,6 +60,10 @@ interface PendingItem {
   vesselName: string | null;
   assetName: string | null;
   assetId?: string | null;
+  /** Todos los equipos de la OT, el principal primero (una OT puede cubrir planes de varios). */
+  assetNames?: string[];
+  /** Ids de esos equipos, mismo orden. */
+  assetIds?: string[];
   title: string | null;
   task: string | null;
   priority: string | null;
@@ -194,6 +198,8 @@ const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
 /** OT en preparación: todavía nadie la mandó a aprobar. Ámbar, como su columna del tablero. */
 const BTN_PREP = `${BTN_BASE} bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25`;
 const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
+/** Columna EQUIPO: verde (pedido de Gustavo, oct 2026; antes salmón como la Planilla). */
+const ASSET_CELL = "bg-[#C6EFCE] text-[#1F3864]";
 
 export const ApprovalsPage: React.FC = () => {
   const t = useT();
@@ -201,10 +207,14 @@ export const ApprovalsPage: React.FC = () => {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch<PendingApprovals>("/app/pms/approvals/pending?all=1");
 
-  /** El nombre del equipo lleva a Planes, ya filtrado por ese equipo (igual que la Planilla). */
-  const openAssetPlans = (r: { vesselCode: string; assetId?: string | null }) => {
-    if (!r.assetId) return;
-    navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(r.vesselCode)}&assetId=${encodeURIComponent(r.assetId)}`);
+  /**
+   * El nombre del equipo lleva a Planes, ya filtrado por ese equipo (igual que
+   * la Planilla). Una OT que cubre varios equipos abre los planes de todos.
+   */
+  const openAssetPlans = (r: { vesselCode: string; assetId?: string | null; assetIds?: string[] }) => {
+    const ids = r.assetIds && r.assetIds.length > 0 ? r.assetIds : r.assetId ? [r.assetId] : [];
+    if (ids.length === 0) return;
+    navigate(`/maintenance-plans?vesselCode=${encodeURIComponent(r.vesselCode)}&assetId=${encodeURIComponent(ids.join(","))}`);
   };
 
   const [query, setQuery]     = useState("");
@@ -329,7 +339,7 @@ export const ApprovalsPage: React.FC = () => {
     const byCard = cardFilter ? rows.filter(r => cardMatch(r, cardFilter)) : rows;
     return q
       ? byCard.filter(r => textMatches(
-          [r.code, r.vesselName, r.assetName, r.title, r.task, r.workOrderCode, ...r.providers].filter(Boolean).join(" "),
+          [r.code, r.vesselName, r.assetName, ...(r.assetNames ?? []), r.title, r.task, r.workOrderCode, ...r.providers].filter(Boolean).join(" "),
           q,
         ))
       : byCard;
@@ -944,19 +954,28 @@ export const ApprovalsPage: React.FC = () => {
                     {r.assetName ?? "—"}
                   </button>
                 ) : (r.assetName ?? "—");
+                // Una OT para varios equipos (ej. ambos radares): los demás van
+                // debajo del principal. Antes la fila mostraba sólo el principal.
+                const otherAssets = (r.assetNames ?? []).filter(n => n !== r.assetName);
+                const otherAssetsEl = otherAssets.length > 0 && (
+                  <span className="block text-[10px] font-semibold opacity-75">+ {otherAssets.join(" · ")}</span>
+                );
                 const assetCell = groupByAsset ? (
-                  <span className="inline-flex w-full items-center justify-center gap-1">
-                    <button type="button" onClick={() => toggleAsset(key)}
-                      title={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
-                      aria-label={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
-                      className="shrink-0 rounded p-0.5 hover:bg-black/10">
-                      {isCollapsed
-                        ? <ChevronRight className="w-3 h-3 opacity-60" />
-                        : <ChevronDown className="w-3 h-3 opacity-60" />}
-                    </button>
-                    <span className="font-bold">{assetName}</span>
-                  </span>
-                ) : assetName;
+                  <>
+                    <span className="inline-flex w-full items-center justify-center gap-1">
+                      <button type="button" onClick={() => toggleAsset(key)}
+                        title={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
+                        aria-label={t(isCollapsed ? "approvals.fold.expand" : "approvals.fold.collapse")}
+                        className="shrink-0 rounded p-0.5 hover:bg-black/10">
+                        {isCollapsed
+                          ? <ChevronRight className="w-3 h-3 opacity-60" />
+                          : <ChevronDown className="w-3 h-3 opacity-60" />}
+                      </button>
+                      <span className="font-bold">{assetName}</span>
+                    </span>
+                    {otherAssetsEl}
+                  </>
+                ) : <>{assetName}{otherAssetsEl}</>;
 
                 // Equipo plegado: una sola línea con cuántos registros tiene y
                 // cuántos están vencidos (mismo criterio que la tarjeta).
@@ -968,7 +987,7 @@ export const ApprovalsPage: React.FC = () => {
                       {vesselRow}
                       <tr>
                         <td className={`${td} text-center font-bold bg-surface text-fg`}>{itemNumber}</td>
-                        <td className={`${td} text-center font-bold bg-[#F8CBAD] text-[#1F3864]`}>{assetCell}</td>
+                        <td className={`${td} text-center font-bold ${ASSET_CELL}`}>{assetCell}</td>
                         <td colSpan={COLS - 2} className={`${td} py-1.5 font-semibold text-text-industrial/70 bg-fg/[0.03]`}>
                           {group.length === 1 ? t("approvals.fold.recordOne") : t("approvals.fold.records").replace("{n}", String(group.length))}
                           {late > 0 && (
@@ -1013,7 +1032,7 @@ export const ApprovalsPage: React.FC = () => {
                         <td rowSpan={span} className={`${td} text-center font-bold bg-surface text-fg`}>{itemNumber}</td>
                       )}
                       {firstOfAsset && (
-                        <td rowSpan={span} className={`${td} text-center font-bold bg-[#F8CBAD] text-[#1F3864]`}>
+                        <td rowSpan={span} className={`${td} text-center font-bold ${ASSET_CELL}`}>
                           {assetCell}
                         </td>
                       )}

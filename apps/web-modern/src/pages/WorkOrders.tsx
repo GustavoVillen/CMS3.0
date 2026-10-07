@@ -47,7 +47,7 @@ import { useRoleHasPermission } from "../lib/role-permissions";
 import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
 import { printWorkOrder, printOpenWorkOrdersReport, printServiceRequest } from "../lib/print-work-order";
 import { useVesselContext } from "../lib/vessel-context";
-import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext, copilotOptionPicker } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotDataRefresh, useCopilotAssist, useCopilotFlowKey, CopilotFlowProvider, useCopilotScreenContext, copilotOptionPicker, type CopilotWoClosure } from "../lib/copilot-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { PermitModal, type PermitModalPrefill } from "./Permits";
 import { suggestPermitTypesFromText, PERMIT_TYPE_LABEL, type PermitType } from "../lib/permit-classifier";
@@ -255,6 +255,13 @@ interface ActionTarget { workOrder: WorkOrder; type: ActionType; }
 function toDateInputValue(value: string | null | undefined): string {
   if (!value) return "";
   return value.includes("T") ? value.slice(0, 10) : value;
+}
+/** "YYYY-MM-DD" + `days` días, en el mismo formato (mediodía local: sin saltos por huso). */
+function plusDays(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T12:00:00`);
+  if (isNaN(d.getTime())) return ymd;
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function normalizeOptionalText(value: string): string | null {
   const text = value.trim();
@@ -1118,7 +1125,9 @@ const NewServiceRequestModal: React.FC<{
   busy: boolean;
   onClose: () => void;
   onConfirm: (servicio: string) => Promise<void>;
-}> = ({ defaultValue, busy, onClose, onConfirm }) => {
+  /** Taller ya elegido en "Asignado a: Tercerizado": se muestra para que se sepa a quién va. */
+  providerName?: string | null;
+}> = ({ defaultValue, busy, onClose, onConfirm, providerName }) => {
   const t = useT();
   const [servicio, setServicio] = useState(defaultValue);
   const [error, setError] = useState<string | null>(null);
@@ -1156,6 +1165,12 @@ const NewServiceRequestModal: React.FC<{
         </>
       }
     >
+      {providerName && (
+        <div>
+          <label className={labelCls}>{t("wo.modal.provider")}</label>
+          <p className="text-sm font-bold text-fg">{providerName}</p>
+        </div>
+      )}
       <div>
         <label className={labelCls}>{t("wo.newSs.question")}</label>
         <AutoTextArea className={inputCls + " min-h-[72px] resize-y"} value={servicio} autoFocus
@@ -1739,7 +1754,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // Tras guardar/editar/borrar un avance, reconsulta la OT (con delay para dar
   // tiempo al pipeline asincrónico de IA que reconsolida Observaciones y detecta
   // repuestos) y refresca la ventana: spareUsages + Observaciones.
-  const refreshAfterAvance = useCallback(() => {
+  // `keepSpares`: el avance lo registró el copiloto mientras Repuestos utilizados
+  // tiene filas cargadas sin guardar; traer la lista del servidor las borraría.
+  const refreshAfterAvance = useCallback((keepSpares = false) => {
     const delay = 5000;
     setTimeout(async () => {
       try {
@@ -1748,7 +1765,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         );
         // ── Repuestos detectados por IA ──
         const freshUsages = fresh.spareUsages ?? [];
-        if (freshUsages.length > 0) {
+        if (freshUsages.length > 0 && !keepSpares) {
           const catalog = sparesData?.items ?? [];
           setSpareUsages(freshUsages.map((u: any) => {
             const found = catalog.find((s: any) => s.id === u.spareId);
@@ -1774,6 +1791,51 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // Vencimiento: mismo permiso que el recuadro de la cabecera. Se comparte para
   // que el copiloto no ofrezca completar una fecha que la pantalla tiene trabada.
   const canEditDueDate = (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable;
+
+  // ── Datos que la hoja de Mercurio completa sola (pedido de Gustavo, oct 2026) ──
+  // Ubicación, viaje y condición: los últimos del buque. Sistema según el tipo
+  // de buque. Técnico: el Jefe de Máquinas. Vencimiento: una semana desde el
+  // inicio. Las OT nuevas ya nacen así (wo-form-defaults.ts en la API); acá se
+  // precargan las que se abren con esos recuadros vacíos, y se guardan con
+  // Guardar. Lo que ya está cargado no se toca.
+  const { data: formDefaultsData } = useFetch<{ defaults: { location: string | null; voyageNumber: string | null; operatingCondition: string | null; systemArea: string | null; assignedToUserId: string; dueDays: number } | null }>(
+    isMercurio && isEditable ? `/app/pms/work-orders/form-defaults?vesselCode=${encodeURIComponent(workOrder.vesselCode)}` : null,
+    [workOrder.id, isMercurio, isEditable],
+  );
+  const defaultsAppliedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const d = formDefaultsData?.defaults;
+    if (!d || defaultsAppliedFor.current === workOrder.id) return;
+    defaultsAppliedFor.current = workOrder.id;
+    if (!location.trim() && d.location) setLocation(d.location);
+    // TIPO DE MANTENIMIENTO de una OT de plan: Preventivo, o Predictivo si todos
+    // sus planes son análisis de laboratorio (tipo de muestra + título de
+    // muestreo/análisis). Sólo con el tipo preventivo de siempre: la Inspección
+    // y lo que alguien pasó a correctivo no se tocan. Mismo criterio que
+    // maintenanceKindFromPlans (api/.../wo-form-defaults.ts).
+    const isAnalysis = (p: { samplingKind?: string | null; title?: string | null }) => !!p.samplingKind
+      && /muestr|analis|analiz|vibraci|termograf|megad/.test((p.title ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""));
+    const woPlans = workOrder.plans ?? [];
+    const planKind = workOrder.maintenancePlanId && type === "PREVENTIVE"
+      ? (woPlans.length > 0 && woPlans.every(isAnalysis) ? "PREDICTIVO" : "PREVENTIVO")
+      : "";
+    setRegiForm(prev => ({
+      ...prev,
+      voyageNumber: prev.voyageNumber || d.voyageNumber || "",
+      operatingCondition: prev.operatingCondition || d.operatingCondition || "",
+      systemArea: prev.systemArea || d.systemArea || "",
+      maintenanceKind: prev.maintenanceKind || planKind,
+    }));
+    if (!assignedTo) setAssignedTo(d.assignedToUserId);
+    if (!dueDate && canEditDueDate && startDate) setDueDate(plusDays(startDate, d.dueDays));
+  // Una sola vez por OT, cuando llegan los datos: después manda lo que escriba la persona.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formDefaultsData, workOrder.id]);
+  /** Fecha de inicio cambiada a mano: el vencimiento la sigue (una semana después), si se puede editar. */
+  const changeStartDate = (value: string) => {
+    setStartDate(value);
+    if (isMercurio && canEditDueDate && value) setDueDate(plusDays(value, formDefaultsData?.defaults?.dueDays ?? 7));
+  };
 
   /**
    * Lo que el copiloto ve de esta OT: los recuadros que se completan AL ABRIRLA
@@ -1851,15 +1913,146 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   }, [isMercurio, directoryData, t]);
 
 
+  // ── Sección de cierre para el copiloto (parte de a bordo) ──
+  // El copiloto completa la OT desde lo que manda la tripulación ("Servis MG
+  // babor, hs 6.220, cambio de filtros…"): necesita ver resultado, horas por
+  // equipo, repuestos previstos y ya cargados, y si ya hay avances. Va aparte de
+  // fieldValues: el bucle de preguntas de la cabecera no la toma como pendiente.
+  // Avances: pedido propio (no depende de que la sección esté desplegada).
+  const { data: copilotNotesData, reload: reloadCopilotNotes } = useFetch<{ items: ProgressNote[] }>(
+    `/app/pms/work-orders/${workOrder.id}/progress-notes`,
+    [workOrder.id],
+  );
+  // Mismos equipos que dibuja hoursFields: sin planes por horas, la OT de plan
+  // igual pide una lectura del equipo principal.
+  const copilotHourAssets = useMemo(
+    () => hourAssets.length > 0
+      ? hourAssets.map(a => ({ assetId: a.assetId, name: a.assetName, lastHours: a.lastHours }))
+      : workOrder.maintenancePlanId
+        ? [{ assetId: workOrder.assetId, name: workOrder.assetName ?? "", lastHours: null }]
+        : [],
+    [hourAssets, workOrder.maintenancePlanId, workOrder.assetId, workOrder.assetName],
+  );
+  const copilotClosureOptions = useMemo(() => ({
+    woResult: [
+      { value: "SATISFACTORY",      label: t("wo.modal.result.satisfactory") },
+      { value: "WITH_DEFICIENCIES", label: t("wo.modal.result.withDeficiencies") },
+    ],
+    ...(isMercurio ? { taskCompleted: [{ value: "YES", label: t("common.yes") }, { value: "NO", label: t("common.no") }] } : {}),
+  }), [isMercurio, t]);
+  const copilotClosure = useMemo((): CopilotWoClosure => {
+    const notes = copilotNotesData?.items ?? [];
+    const lastNote = notes
+      .filter(n => n.text?.trim())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    const values: Record<string, string | null> = {
+      executionDate:  executionDate  || null,
+      woResult:       woResult       || null,
+      executedByName: executedByName || null,
+      actualHours:    actualHours    || null,
+      ...(isMercurio ? { taskCompleted: regiForm.taskCompleted || null, pendingDetail: regiForm.pendingDetail || null } : {}),
+    };
+    for (const a of copilotHourAssets) values[`hours:${a.assetId}`] = hoursOf(a.assetId) || null;
+    return {
+      editable: isResultEditable,
+      values,
+      options: copilotClosureOptions,
+      hourAssets: copilotHourAssets,
+      plannedItems: plannedItems.map(i => ({ kind: i.kind, spareId: i.spareId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })),
+      spareUsages: spareUsages.map(u => ({ spareId: u.spareId, name: u.spareName, qty: u.qty, unit: u.unit })),
+      progressNotes: { count: notes.length, lastText: lastNote?.text?.slice(0, 600) ?? null },
+    };
+  }, [copilotNotesData, executionDate, woResult, executedByName, actualHours, isMercurio, regiForm.taskCompleted,
+      regiForm.pendingDetail, copilotHourAssets, hoursOf, isResultEditable, copilotClosureOptions, plannedItems, spareUsages]);
+
+  /**
+   * Carga en la sección de cierre lo que manda el copiloto. Sólo con la OT
+   * aprobada, igual que la pantalla: si no, todo vuelve como rechazado.
+   * Devuelve las etiquetas de lo que no pudo entrar.
+   */
+  const applyCopilotClosure = (fields: Record<string, string>, pick: (key: string, value: string | null | undefined) => string | null): string[] => {
+    const rejected: string[] = [];
+    const hourKeys = Object.keys(fields).filter(k => k.startsWith("hours:"));
+    const closureKeys = ["executionDate", "woResult", "executedByName", "actualHours", "taskCompleted", "pendingDetail", "spareUsages", ...hourKeys];
+    const incoming = closureKeys.filter(k => fields[k] !== undefined);
+    if (incoming.length === 0) return rejected;
+    if (!isResultEditable) {
+      rejected.push(t("wo.guide.step.closure"));
+      return rejected;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fields.executionDate ?? "")) setExecutionDate(fields.executionDate!);
+    else if (fields.executionDate !== undefined) rejected.push(t("wo.modal.executionDate"));
+    if (fields.executedByName !== undefined) setExecutedByName(fields.executedByName);
+    if (fields.actualHours !== undefined) {
+      const n = Number(fields.actualHours);
+      if (Number.isFinite(n) && n >= 0) setActualHours(String(n)); else rejected.push(t("wo.modal.actualHours"));
+    }
+    const result = pick("woResult", fields.woResult);
+    if (result) handleWoResultChange(result);
+    const regiPatch: Partial<WoRegiForm> = {};
+    const done = isMercurio ? pick("taskCompleted", fields.taskCompleted) : null;
+    if (done) regiPatch.taskCompleted = done as WoRegiForm["taskCompleted"];
+    if (isMercurio && fields.pendingDetail !== undefined) regiPatch.pendingDetail = fields.pendingDetail;
+    if (Object.keys(regiPatch).length > 0) { touchRegi(); setRegiForm(prev => ({ ...prev, ...regiPatch })); }
+
+    // Horas por equipo. "6.220" de a bordo es 6220 (punto de miles), no 6,22.
+    for (const key of hourKeys) {
+      const assetId = key.slice("hours:".length);
+      const raw = String(fields[key]).trim();
+      const n = Number(/^\d{1,3}(\.\d{3})+$/.test(raw) ? raw.replace(/\./g, "") : raw.replace(",", "."));
+      const asset = copilotHourAssets.find(a => a.assetId === assetId);
+      if (!asset || !Number.isFinite(n) || n < 0) { rejected.push(asset ? t("wo.modal.runningHoursOf").replace("{asset}", asset.name) : t("wo.modal.runningHours")); continue; }
+      if (assetId === workOrder.assetId) setRunningHoursAtExecution(String(n));
+      else setExtraHours(prev => ({ ...prev, [assetId]: String(n) }));
+    }
+
+    // Repuestos utilizados: sólo del catálogo de este buque. Una fila por
+    // repuesto (si ya estaba, se corrige la cantidad). Se descuentan recién al Guardar.
+    if (fields.spareUsages !== undefined) {
+      const items: Array<{ spareId?: unknown; qty?: unknown; quantity?: unknown }> = [];
+      try {
+        const parsed: unknown = JSON.parse(fields.spareUsages);
+        if (Array.isArray(parsed)) items.push(...parsed);
+        else if (parsed && typeof parsed === "object") items.push(parsed as typeof items[number]);
+      } catch {
+        for (const line of fields.spareUsages.split("\n")) {
+          try { const p: unknown = JSON.parse(line); if (p && typeof p === "object") items.push(p as typeof items[number]); } catch { /* renglón ilegible */ }
+        }
+      }
+      const add: SpareUsage[] = [];
+      for (const it of items) {
+        const spare = woSpares.find(s => s.id === String(it.spareId ?? ""));
+        const qty = Number(it.qty ?? it.quantity);
+        if (!spare || !Number.isFinite(qty) || qty <= 0) { rejected.push(`${t("wo.spares.section")}: ${String(it.spareId ?? "?")}`); continue; }
+        add.push({ spareId: spare.id, spareName: `${spare.sku} — ${spare.name}`, unit: spare.unit, qty, criticality: spare.criticality, available: spare.available });
+      }
+      if (items.length === 0) rejected.push(t("wo.spares.section"));
+      if (add.length > 0) {
+        setSpareUsages(prev => {
+          const next = [...prev];
+          for (const u of add) {
+            const i = next.findIndex(x => x.spareId === u.spareId);
+            if (i >= 0) next[i] = { ...next[i]!, qty: u.qty }; else next.push(u);
+          }
+          return next;
+        });
+      }
+    }
+    return rejected;
+  };
+
   useCopilotApplyFields(isEditable ? (fields) => {
     // Lista cerrada: sólo entra un valor que exista de verdad en el recuadro.
     // Lo que no entra vuelve como "rejected" y el copiloto lo avisa.
-    const { pick, result } = copilotOptionPicker(copilotFieldOptions, {
+    const { pick, result } = copilotOptionPicker({ ...copilotFieldOptions, ...copilotClosureOptions }, {
       priority: t("wo.modal.priority"), riskLevel: t("wo.modal.riskLevel"), assignedToUserId: t("wo.modal.assignee"),
       operatingCondition: t("wo.modal.operatingCondition"), requestedByArea: t("wo.modal.requestedBy"),
       assignedToArea: t("wo.modal.assignedTo"), systemArea: t("wo.modal.system"), maintenanceKind: t("wo.modal.type"),
       department: t("wo.modal.department"), consequenceCategory: t("wo.modal.consequenceCategory"),
+      woResult: t("wo.modal.result"), taskCompleted: t("wo.modal.taskCompleted"),
     });
+    const closureRejected = applyCopilotClosure(fields, pick);
 
     // -- Texto libre y campos sueltos de la OT (se persisten con "Guardar") --
     if (fields.title              !== undefined) setTitle(fields.title);
@@ -1908,7 +2101,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       touchRegi();
       setRegiForm(prev => ({ ...prev, ...regiPatch }));
     }
-    return result();
+    const res = result();
+    return { ...res, rejected: [...res.rejected, ...closureRejected] };
   } : null);
 
   // Clic en el rótulo TAREA: la IA arma la lista de tareas desde el equipo y el
@@ -2121,8 +2315,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const linkedServiceRequests = linkedSrData?.items ?? [];
   // El copiloto puede abrir una SS desde el chat ("Abrir SS a CONDOR"): el
   // recuadro de SS de esta OT tiene que mostrarla apenas se aplica, sin cerrar
-  // y reabrir la ventana.
-  useCopilotDataRefresh(reloadServiceRequests);
+  // y reabrir la ventana. Lo mismo con el avance que registra desde un parte de
+  // a bordo: aparece en Avances y, unos segundos después, en Observaciones.
+  useCopilotDataRefresh(() => {
+    reloadServiceRequests();
+    void reloadCopilotNotes();
+    setNotesReloadKey(k => k + 1);
+    refreshAfterAvance(true);
+  });
 
   // Si la OT se abrió dentro de un flujo que el copiloto venía guiando (Nueva
   // OT / Nueva Inspección desde el Tablero), sigue en modo guiado acá.
@@ -2140,6 +2340,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     // Cuántas SS tiene: si está asignada a un tercerizado y no tiene ninguna, el
     // taller nunca se pidió (el copiloto ofrece abrirla).
     relatedEntities: { serviceRequestCount: String(linkedServiceRequests.length) },
+    ...(isEditable ? { closure: copilotClosure } : {}),
     ...(copilotFlow && isEditable ? { assist: { flow: copilotFlow, title: workOrder.workOrderCode } } : {}),
   });
 
@@ -2164,13 +2365,15 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // desde la OT — ver createServiceRequestForWorkOrder.
   // Devuelve el id de la SS creada: el llamador la abre para que se complete el
   // formulario (REGI-LOG-01.3) sin tener que buscarla en la lista.
-  const handleCreateServiceRequest = useCallback(async (servicio: string): Promise<string | null> => {
+  const handleCreateServiceRequest = useCallback(async (servicio: string, providerId?: string): Promise<string | null> => {
     setCreatingSr(true);
     try {
       const created = await api.post<{ id?: string }>(`/app/pms/work-orders/${workOrder.id}/service-requests`, {
         title: servicio,
         description: servicio,
         priority: workOrder.priority,
+        // Taller elegido en "Asignado a: Tercerizado" de la OT; sin él, el backend hereda el de la OT.
+        ...(providerId ? { providerId } : {}),
       });
       reloadServiceRequests();
       setNewSrOpen(false);
@@ -2188,6 +2391,17 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     await api.patch(`/app/pms/service-requests/${serviceRequestId}`, { providerId: newProviderId || null });
     reloadServiceRequests();
   }, [reloadServiceRequests]);
+
+  // ── PROVEEDOR al marcar "Asignado a: Tercerizado" (pedido de Gustavo, oct 2026) ──
+  // El taller sigue viviendo en la SS (un solo dato, el que imprime la hoja):
+  // sin SS, elegirlo pregunta qué servicio se le pide y abre la SS a ese taller;
+  // con SS, el selector le cambia el taller a esa SS.
+  const [pendingSrProvider, setPendingSrProvider] = useState("");
+  const [providerErr, setProviderErr] = useState<string | null>(null);
+  const changeSrProvider = useCallback(async (serviceRequestId: string, providerId: string) => {
+    try { await handleChangeServiceRequestProvider(serviceRequestId, providerId); }
+    catch (e) { setProviderErr(e instanceof ApiError ? e.message : t("common.saveError")); }
+  }, [handleChangeServiceRequestProvider, t]);
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const handleGeneratePdf = useCallback(async () => {
@@ -2760,15 +2974,21 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               <NewServiceRequestModal
                 busy={creatingSr}
                 defaultValue={title || workOrder.title || ""}
-                onClose={() => setNewSrOpen(false)}
+                providerName={pendingSrProvider ? (providers.find(p => p.id === pendingSrProvider)?.name ?? null) : null}
+                onClose={() => { setNewSrOpen(false); setPendingSrProvider(""); }}
                 // Creada la SS se va derecho a su formulario: escribir el nombre
                 // del servicio es el primer paso del pedido, no el último. Si la
                 // OT tiene cambios sin guardar, saveThenNavigate los guarda antes
                 // de salir (y si el guardado falla, se queda acá con el error).
+                // Excepción: si se abrió eligiendo el proveedor en "Asignado a",
+                // la persona está completando la OT y se queda en ella; la SS
+                // aparece en la lista con su taller.
                 onConfirm={async (servicio) => {
-                  const id = await handleCreateServiceRequest(servicio);
+                  const fromProvider = pendingSrProvider;
+                  const id = await handleCreateServiceRequest(servicio, fromProvider || undefined);
+                  setPendingSrProvider("");
                   if (id) markJustCreated("ss", id);
-                  if (id) await saveThenNavigate(`/service-requests?openId=${id}`);
+                  if (id && !fromProvider) await saveThenNavigate(`/service-requests?openId=${id}`);
                 }}
               />
             )}
@@ -2905,7 +3125,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
                         {t("wo.modal.startDate")}
                       </label>
-                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                      <input type="date" value={startDate} onChange={e => changeStartDate(e.target.value)}
                         disabled={!isEditable} className={inputCls} />
                     </div>
                     <div>
@@ -3952,6 +4172,38 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {segBtns(WO_ASSIGNED_TO, regiForm.assignedToArea,
             v => handlePaperChange({ assignedToArea: regiForm.assignedToArea === v ? "" : v }), !isEditable)}
         </>)}
+        {/* Tercerizado: el taller se elige acá mismo. Sin SS, elegirlo abre la SS
+            a ese taller (pregunta qué servicio se pide); con SS, cambia el taller
+            de cada una. El dato vive en la SS, que es lo que imprime la hoja. */}
+        {regiForm.assignedToArea === "TERCERIZADO" && (
+          <div className="space-y-1.5">
+            {guideLabel(t("wo.modal.provider"))}
+            {linkedServiceRequests.length === 0 ? (
+              <select value={pendingSrProvider} className={inputCls}
+                disabled={!isEditable || !canOpenServiceRequest || creatingSr}
+                onChange={e => { const v = e.target.value; setPendingSrProvider(v); if (v) setNewSrOpen(true); }}>
+                <option value="">{t("wo.modal.providerSelect")}</option>
+                {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            ) : linkedServiceRequests.map(sr => (
+              <div key={sr.id} className="flex items-center gap-2">
+                <span className="font-mono text-[11px] font-bold text-accent shrink-0">{sr.serviceRequestCode}</span>
+                <select value={sr.providerId ?? (sr.providerName ? "__free__" : "")} className={inputCls}
+                  disabled={!isEditable || ["COMPLETED", "CANCELLED", "REJECTED"].includes(sr.status)}
+                  onChange={e => { if (e.target.value !== "__free__") void changeSrProvider(sr.id, e.target.value); }}>
+                  <option value="">{t("wo.modal.providerSelect")}</option>
+                  {/* Taller escrito a mano en la SS (fuera del catálogo): es el valor actual. */}
+                  {!sr.providerId && sr.providerName && <option value="__free__">{sr.providerName}</option>}
+                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {/* Taller que ya no está activo en el catálogo: se sigue viendo. */}
+                  {sr.providerId && !providers.some(p => p.id === sr.providerId) && (
+                    <option value={sr.providerId}>{sr.providerName ?? sr.providerId}</option>
+                  )}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             {guideLabel(t("wo.guide.field.tecnico"))}
@@ -4871,6 +5123,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     {/* ── Vista guiada: avisos ── */}
     {isMercurio && err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     {closeBlockMsg && <AlertDialog message={closeBlockMsg} onClose={() => setCloseBlockMsg(null)} />}
+    {providerErr && <AlertDialog message={providerErr} onClose={() => setProviderErr(null)} />}
 
     {showCreatedIntro && (
       <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

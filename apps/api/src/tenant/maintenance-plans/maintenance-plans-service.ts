@@ -11,6 +11,7 @@ import { summarizeMultiPlanFields, type SummaryPlan } from "../work-orders/wo-pl
 import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asset-hours/asset-hours-service";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
 import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
+import { resolveWoFormDefaults, maintenanceKindFromPlans } from "../work-orders/wo-form-defaults";
 
 /**
  * ISM 10.1 — origen normativo de la tarea. Mismo enum que usan los ítems de
@@ -717,6 +718,9 @@ export async function listTenantMaintenancePlans(
   session: TenantAccessSession,
   filters: MaintenancePlanListFilters = {},
 ) {
+  // Uno o varios equipos separados por coma: desde Seguimiento, una OT que
+  // cubre planes de varios equipos abre los planes de todos.
+  const assetFilterIds = (filters.assetId ?? "").split(",").map(s => s.trim()).filter(Boolean);
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) {
     const devItems = listDevMaintenancePlansForTenant(
@@ -738,7 +742,7 @@ export async function listTenantMaintenancePlans(
         const taskMasterId = "taskMasterId" in item ? (item as unknown as { taskMasterId?: string | null }).taskMasterId : undefined;
         if (filters.executionStatus && item.executionStatus !== filters.executionStatus) return false;
         if (filters.taskMasterId && taskMasterId !== filters.taskMasterId) return false;
-        if (filters.assetId && (item as unknown as { assetId?: string }).assetId !== filters.assetId) return false;
+        if (assetFilterIds.length > 0 && !assetFilterIds.includes((item as unknown as { assetId?: string }).assetId ?? "")) return false;
         return true;
       });
   }
@@ -759,7 +763,7 @@ export async function listTenantMaintenancePlans(
   else if (filters.triggerTypeNot) where.triggerType = { not: filters.triggerTypeNot };
   if (filters.executionStatus) where.executionStatus = filters.executionStatus;
   if (filters.taskMasterId) where.taskMasterId = filters.taskMasterId;
-  if (filters.assetId) where.assetId = filters.assetId;
+  if (assetFilterIds.length > 0) where.assetId = assetFilterIds.length === 1 ? assetFilterIds[0] : { in: assetFilterIds };
 
   // Omit heavy AI-generated text fields from the list response — they are
   // refetched on demand via getTenantMaintenancePlan when the user opens a row.
@@ -2314,6 +2318,11 @@ export async function openFormalWorkOrder(
       }
     : {};
 
+  // Hoja de Mercurio: lo que vino vacío se completa (último lugar/viaje/condición
+  // del buque, sistema según el tipo de buque, Jefe de Máquinas, vencimiento a
+  // una semana). Ver work-orders/wo-form-defaults.ts.
+  const formDefaults = await resolveWoFormDefaults(plan.tenantId, plan.vesselCode);
+
   // Con varios ítems, Tarea y Solicitud nacen en una frase escrita por la IA en
   // vez de la lista por ítem (wo-plan-summary-ai.ts); si alguien las editó, o
   // la IA falla, quedan como vinieron. Va ANTES de la transacción: la IA no
@@ -2356,10 +2365,10 @@ export async function openFormalWorkOrder(
         // createdAt alineado a la fecha de apertura: así en el PDF coinciden la
         // FECHA y la fecha de la firma de SOLICITA (que se toma de createdAt).
         createdAt: woOpenDate,
-        dueDate: parseOptionalDate(payload.dueDate, "dueDate"),
+        dueDate: parseOptionalDate(payload.dueDate, "dueDate") ?? (formDefaults ? addDays(woOpenDate, formDefaults.dueDays) : null),
         title: woText.title ?? plan.title,
         description: woText.description,
-        assignedToUserId: normalizeOptionalText(payload.assignedToUserId),
+        assignedToUserId: normalizeOptionalText(payload.assignedToUserId) ?? formDefaults?.assignedToUserId ?? null,
         estimatedHours: payload.estimatedHours !== undefined
           ? normalizeOptionalNumber(payload.estimatedHours, "estimatedHours")
           : (planAny.estimatedHours ?? null),
@@ -2386,12 +2395,18 @@ export async function openFormalWorkOrder(
         department: planAny.department ?? null,
         assignedToArea,
         providerId: woProviderId,
-        // El plan no define estos — los completa quien abre la OT.
+        // El plan no define estos — los completa quien abre la OT. Lo que no
+        // vino sale de los datos por defecto de la hoja de Mercurio.
         requestedByArea: normalizeOptionalText(payload.requestedByArea) ?? null,
-        systemArea: normalizeOptionalText(payload.systemArea) ?? null,
-        voyageNumber: normalizeOptionalText(payload.voyageNumber) ?? null,
-        operatingCondition: payload.operatingCondition ?? null,
-        location: normalizeOptionalText(payload.location) ?? null,
+        systemArea: normalizeOptionalText(payload.systemArea) ?? formDefaults?.systemArea ?? null,
+        // TIPO DE MANTENIMIENTO: desde el plan es Preventivo (Predictivo si son
+        // análisis). La Inspección conserva su tipo: no lleva maintenanceKind.
+        maintenanceKind: formDefaults && woType !== "INSPECTION"
+          ? maintenanceKindFromPlans(allPlans as Array<{ samplingKind?: string | null; title?: string | null }>)
+          : null,
+        voyageNumber: normalizeOptionalText(payload.voyageNumber) ?? formDefaults?.voyageNumber ?? null,
+        operatingCondition: payload.operatingCondition ?? (formDefaults?.operatingCondition as typeof payload.operatingCondition) ?? null,
+        location: normalizeOptionalText(payload.location) ?? formDefaults?.location ?? null,
         createdByUserId: woCreatorId,
         updatedByUserId: woCreatorId,
       },

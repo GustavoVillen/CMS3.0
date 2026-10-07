@@ -21,16 +21,27 @@ export const GuideSection: React.FC<{
   locked?: boolean;
   lockedLabel?: string;
   lockedText?: string;
+  /**
+   * Sección completa: la tarjeta entera va en verde (pedido de Gustavo, oct
+   * 2026: se ve de lejos qué está listo). Si no se pasa, se deduce del `pill`:
+   * un GuidePill sin nada pendiente.
+   */
+  done?: boolean;
   children: React.ReactNode;
-}> = ({ n, title, subtitle, pill, action, open, onToggle, locked, lockedLabel, lockedText, children }) => (
-  <section className={`rounded-2xl border border-fg/10 ${locked ? "bg-fg/[0.03] opacity-75" : "bg-surface dark:bg-white/[0.02]"}`}>
+}> = ({ n, title, subtitle, pill, action, open, onToggle, locked, lockedLabel, lockedText, done, children }) => {
+  const complete = !locked && (done ?? (React.isValidElement(pill) && pill.type === GuidePill
+    && (pill.props as { missing?: number }).missing === 0));
+  return (
+  <section className={`rounded-2xl border ${locked ? "border-fg/10 bg-fg/[0.03] opacity-75"
+    : complete ? "border-success-sea/40 bg-success-sea/[0.06]"
+    : "border-fg/10 bg-surface dark:bg-white/[0.02]"}`}>
     {/* El encabezado NO es un solo <button>: `action` trae botones propios (ej.
         "Sugerir con IA") y un botón dentro de otro es HTML inválido. Se abre y
         se cierra desde el título y desde la flecha. */}
     <div className="flex items-center gap-2.5 w-full px-4 py-3">
       <button type="button" onClick={locked ? undefined : onToggle} disabled={locked}
         className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default">
-        <span className="w-[22px] h-[22px] rounded-full bg-fg text-surface text-[11px] font-bold flex items-center justify-center shrink-0">{n}</span>
+        <span className={`w-[22px] h-[22px] rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 ${complete ? "bg-success-sea text-white" : "bg-fg text-surface"}`}>{n}</span>
         <span className="min-w-0">
           <span className="block text-[13px] font-extrabold text-fg">{title}</span>
           <span className="block text-[11px] text-text-industrial/60">{locked ? lockedText : subtitle}</span>
@@ -52,7 +63,8 @@ export const GuideSection: React.FC<{
     </div>
     {open && !locked && <div className="px-4 pb-4 pt-1 space-y-3.5">{children}</div>}
   </section>
-);
+  );
+};
 
 /**
  * Envoltorio de un campo. Si falta completarlo: franja y fondo naranja, para

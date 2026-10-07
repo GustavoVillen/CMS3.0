@@ -425,8 +425,10 @@ export async function listWorkOrderServiceRequests(session: TenantAccessSession,
   });
 
   // Nombre del taller de cada SS: la OT tiene que mostrar A QUIÉN se le pidió el
-  // trabajo, no un id. La SS siempre apunta al catálogo (no hay proveedor
-  // escrito a mano en la SS, a diferencia de la OT).
+  // trabajo, no un id. Normalmente apunta al catálogo, pero las SS de papel
+  // cargadas a mano traen el taller escrito en `tallerNotes` (ej. "RPM
+  // CORPORATION"): sin esto la OT decía que no había taller. Mismo criterio que
+  // providerOf en approvals-service.
   const providerIds = [...new Set(rows.map((r: any) => r.providerId).filter(Boolean))] as string[];
   const providers = providerIds.length > 0
     ? await (prisma as any).provider.findMany({
@@ -437,7 +439,7 @@ export async function listWorkOrderServiceRequests(session: TenantAccessSession,
   const nameById = new Map<string, string>(providers.map((p: any) => [p.id, p.name]));
   return rows.map((r: any) => ({
     ...r,
-    providerName: (r.providerId ? nameById.get(r.providerId) : null) ?? null,
+    providerName: (r.providerId ? nameById.get(r.providerId) : null) ?? (String(r.tallerNotes ?? "").trim() || null),
   }));
 }
 

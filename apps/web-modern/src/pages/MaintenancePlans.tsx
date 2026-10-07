@@ -4481,7 +4481,9 @@ export const MaintenancePlansPage: React.FC = () => {
   // sigue proponiendo el backend (`suggest-code`), que ya numera sin repetir.
   const newPlanDefaults = useMemo(() => {
     const vessel = vesselFilter || selectedVesselCode || undefined;
-    const asset = assetFilter || undefined;
+    // Filtro de varios equipos (OT que cubre varios, desde Seguimiento): no hay
+    // un equipo único que proponer.
+    const asset = assetFilter && !assetFilter.includes(",") ? assetFilter : undefined;
     // El grupo sale de la pestaña SFI si hay una elegida; si no, del grupo que
     // comparten las tareas del equipo filtrado (un equipo suele vivir en uno).
     let group: number | null | undefined;

@@ -49,6 +49,8 @@ function buildVoiceSummary(text: string): string {
     .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
+    .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
+    .replace(/\[(?:COMPLETAR|CAMPOS)_ANULADO\]/g, "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\[([^\]]+)]\([^\)]+\)/g, "$1")
     .replace(/^#{1,3}\s+/gm, "")
@@ -90,6 +92,8 @@ function buildVoiceSummaryClean(text: string): string {
     .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
+    .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
+    .replace(/\[(?:COMPLETAR|CAMPOS)_ANULADO\]/g, "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\[([^\]]+)]\([^\)]+\)/g, "$1")
     .replace(/^#{1,3}\s+/gm, "")
@@ -144,7 +148,7 @@ import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
 import {
-  extractNumberedOptions, extractCamposBlock, extractRecalcBlock, extractOpenScreenBlock, stripAiBlocks,
+  extractNumberedOptions, extractCamposBlock, extractRecalcBlock, extractOpenScreenBlock, extractCompleteWoBlock, stripAiBlocks,
 } from "../lib/copilot-blocks";
 import { useT, useWoTerms, type WoTerms } from "../lib/i18n";
 
@@ -158,6 +162,8 @@ interface SuggestedAction {
   label?: string;
   patch?: Record<string, unknown>;
   vesselCode?: string;
+  /** "register_maintenance": la OT se abre para registrar un mantenimiento hecho y tiene que esperar la aprobación. */
+  intent?: string;
   /** Estado UI local: idle | applying | applied | failed */
   state?: "idle" | "applying" | "applied" | "failed";
   errorMsg?: string;
@@ -178,6 +184,12 @@ interface ChatMessage {
   onChoice?: (value: string) => void | string | null | Promise<void | string | null>;
   /** Ya se contestó: los botones quedan deshabilitados. */
   answered?: string;
+  /**
+   * Confirmación del sistema tras aplicar una acción ("Hecho. El sistema
+   * aplicó…"). No le quita los botones a la pregunta anterior: tocar
+   * "Registrar avance" no puede dejar sin opciones al "¿Cómo quedó el trabajo?".
+   */
+  systemNote?: boolean;
 }
 
 
@@ -195,6 +207,8 @@ const NEXT_STEP_MESSAGE = "[SIGUIENTE PASO]";
 const AUTO_START_MESSAGE = "[AYUDAR]";
 /** El usuario eligió algo a mano en la misma pantalla: la IA vuelve a mirarla y sigue desde ahí. */
 const SCREEN_CHANGE_MESSAGE = "[CAMBIO EN PANTALLA]";
+/** La OT que la IA abrió con [COMPLETAR] ya está en pantalla: que cargue el cierre desde el parte. */
+const COMPLETE_WO_MESSAGE = "[COMPLETAR OT]";
 
 /** Preferencia por persona (y por navegador) de no recibir ofrecimientos de ayuda en los formularios. */
 function assistOptOutKey(userId: string | undefined): string {
@@ -754,6 +768,10 @@ export const CopilotoPanel: React.FC = () => {
   const streamingRef = useRef(false);
   streamingRef.current = streaming;
   const [systemMsgTick, setSystemMsgTick] = useState(0);
+  /** OT que la IA abrió con [COMPLETAR] y todavía no recibió el aviso de que está en pantalla. */
+  const pendingCompleteRef = useRef<{ code: string; at: number } | null>(null);
+  const completeTimerRef = useRef<number | null>(null);
+  const [completeTick, setCompleteTick] = useState(0);
 
   // File attachment state
   const [pendingFile, setPendingFile]   = useState<FileContent | null>(null);
@@ -1228,6 +1246,17 @@ export const CopilotoPanel: React.FC = () => {
         navigate(openPath);
       }
 
+      // ── OT a completar desde un parte de a bordo ──
+      // Se abre y, apenas está en pantalla, se le avisa a la IA (efecto de abajo).
+      const completeCode = extractCompleteWoBlock(assistantContent);
+      if (completeCode) {
+        pendingCompleteRef.current = { code: completeCode, at: Date.now() };
+        if (!(screenContext?.screen === "WO_EDIT" && (screenContext.entityCode ?? "").toUpperCase() === completeCode)) {
+          navigate(`/work-orders/${encodeURIComponent(completeCode)}`);
+        }
+        setCompleteTick(n => n + 1);
+      }
+
       // ── Campos: se aplican al final, no de a pedazos ──
       // El bloque [CAMPOS] recién está completo cuando cerró el stream; hacerlo
       // adentro del loop lo aplicaría una vez por chunk.
@@ -1243,7 +1272,7 @@ export const CopilotoPanel: React.FC = () => {
         const finalFields = extractCamposBlock(assistantContent);
         if (finalFields && !hasApplyFieldsCallback) setPendingFields(finalFields);
         // Bloque ilegible o cortado: se avisa en vez de callarlo.
-        if (!finalFields && assistantContent.includes("[CAMPOS]") && hasApplyFieldsCallback) {
+        if (!finalFields && assistantContent.includes("[CAMPOS]") && !assistantContent.includes("[CAMPOS_ANULADO]") && hasApplyFieldsCallback) {
           setMessages(prev => [...prev, { role: "assistant", content: t("copilot.fieldsUnreadable") }]);
         }
         if (finalFields && hasApplyFieldsCallback) {
@@ -1338,9 +1367,12 @@ export const CopilotoPanel: React.FC = () => {
       if (createdCode && CREATES_WORK_ORDER.has(action.type)) {
         const path = `/work-orders/${encodeURIComponent(createdCode)}`;
         navigate(path);
+        // Abierta para registrar un mantenimiento ya hecho: no se ofrece llenar
+        // la hoja, se avisa que hay que esperar la aprobación (pedido de Gustavo).
+        const next = action.intent === "register_maintenance" ? t("copilot.woAwaitApproval") : t("copilot.woFillOffer");
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: `${t("copilot.woOpened")} **${createdCode}**\n\n${t("copilot.woFillOffer")}`,
+          content: `${t("copilot.woOpened")} **${createdCode}**\n\n${next}`,
         }]);
       } else {
         // Confirmación escrita por EL SISTEMA, no por la IA, y sólo después de
@@ -1356,6 +1388,7 @@ export const CopilotoPanel: React.FC = () => {
         setMessages(prev => [...prev, {
           role: "assistant",
           content: `${t("copilot.actionDone")} ${action.label ?? action.type}`,
+          systemNote: true,
         }]);
       }
 
@@ -1514,6 +1547,27 @@ export const CopilotoPanel: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [systemMsgTick, streaming, screenContext]);
   useEffect(() => onFormSelfFillEnd(() => setSystemMsgTick(n => n + 1)), []);
+
+  // OT abierta con [COMPLETAR]: apenas está en pantalla con su formulario, la IA
+  // recibe "[COMPLETAR OT]" y carga el cierre desde el parte. Se espera un
+  // instante para que lleguen los avances y los repuestos previstos de la OT.
+  // Si en 20 s no abrió (código equivocado, sin acceso), se abandona.
+  useEffect(() => {
+    const pending = pendingCompleteRef.current;
+    if (!pending || streaming) return;
+    if (!expandedRef.current || Date.now() - pending.at > 20_000) { pendingCompleteRef.current = null; return; }
+    const onScreen = screenContext?.screen === "WO_EDIT"
+      && (screenContext.entityCode ?? "").toUpperCase() === pending.code
+      && hasApplyFieldsCallback;
+    if (!onScreen || completeTimerRef.current) return;
+    completeTimerRef.current = window.setTimeout(() => {
+      completeTimerRef.current = null;
+      if (pendingCompleteRef.current !== pending) return;
+      pendingCompleteRef.current = null;
+      void sendMessageRef.current(COMPLETE_WO_MESSAGE, { hidden: true });
+    }, 1500);
+  }, [completeTick, streaming, screenContext, hasApplyFieldsCallback]);
+  useEffect(() => () => { if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current); }, []);
   useEffect(() => {
     if (!requestMessage) return;
     if (!expanded) setExpanded(true);
@@ -1598,9 +1652,10 @@ export const CopilotoPanel: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   // Última respuesta visible: sólo ésa muestra sus opciones numeradas como botones.
+  // Las confirmaciones del sistema no cuentan (ver ChatMessage.systemNote).
   let lastVisibleIdx = -1;
   for (let k = messages.length - 1; k >= 0; k--) {
-    if (!messages[k]!.hidden) { lastVisibleIdx = k; break; }
+    if (!messages[k]!.hidden && !messages[k]!.systemNote) { lastVisibleIdx = k; break; }
   }
 
   if (!expanded) {
