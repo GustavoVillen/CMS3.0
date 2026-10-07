@@ -15,6 +15,7 @@
 // el fondo atrás. El único texto libre "en caja" (limitaciones) usa
 // renderLabeledTextBox.
 import type { HealthMetrics, HealthReportText, HealthSources } from "../assets/asset-health-service";
+import type { GroupEquipmentRow } from "../assets/asset-group-health-service";
 import { sanitizePdfText } from "./pdf-helpers";
 
 /** Cursor + salto de página del documento que dibuja (el canvas de Mercurio ya lo cumple). */
@@ -141,7 +142,7 @@ function defectKind(m: HealthMetrics): { kind: Kind; text: string } {
 // ── Bloques ──────────────────────────────────────────────────────────────────
 
 export function drawFicha(
-  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; vessel: string; equipment: string; code: string; period: string; generated: string },
+  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; vessel: string; equipment: string; code: string; period: string; generated: string; equipmentLabel?: string },
 ) {
   const H = 30;
   flow.ensureSpace(H + 14);
@@ -152,7 +153,7 @@ export function drawFicha(
   let cx = x;
   const cells: Array<[string, string, string?]> = [
     ["EMBARCACIÓN", o.vessel],
-    ["EQUIPO", o.equipment, o.code],
+    [o.equipmentLabel ?? "EQUIPO", o.equipment, o.code],
     ["PERÍODO ANALIZADO", o.period],
   ];
   cells.forEach(([lab, val, extra], i) => {
@@ -172,7 +173,7 @@ export function drawFicha(
 
 /** Devuelve true si el resumen es tan largo que la tarjeta salió sin texto (el llamador lo imprime en una caja aparte). */
 export function drawStateHero(
-  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; healthState: string; summary: string },
+  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; healthState: string; summary: string; stateCaption?: string },
 ): boolean {
   const st = STATE_KIND[o.healthState] ?? STATE_KIND.ATTENTION!;
   const c = KIND[st.kind];
@@ -192,7 +193,7 @@ export function drawStateHero(
 
   // Izquierda: ícono grande + estado
   drawSymbol(doc, st.kind, x + LEFT / 2, y + 32, 21, "ring");
-  doc.font("Helvetica").fontSize(5.8).fillColor(MUTED).text("ESTADO DEL EQUIPO", x, y + 60, { width: LEFT, align: "center", characterSpacing: 0.6, lineBreak: false });
+  doc.font("Helvetica").fontSize(5.8).fillColor(MUTED).text(o.stateCaption ?? "ESTADO DEL EQUIPO", x, y + 60, { width: LEFT, align: "center", characterSpacing: 0.6, lineBreak: false });
   doc.font("Helvetica-Bold").fontSize(15).fillColor(c.fg).text(st.label, x, y + 71, { width: LEFT, align: "center", lineBreak: false });
 
   // Derecha: lectura + escala
@@ -231,7 +232,7 @@ export function drawSectionTitle(doc: PDFKit.PDFDocument, flow: Flow, o: { x: nu
 }
 
 export function drawTiles(
-  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; metrics: HealthMetrics; locale: string; fmtDate: (d: string) => string },
+  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; metrics: HealthMetrics; locale: string; fmtDate: (d: string) => string; equipmentCount?: number },
 ) {
   const m = o.metrics;
   const GAP = 6, TW = (o.w - GAP * 2) / 3, TH = 88;
@@ -266,9 +267,14 @@ export function drawTiles(
     { title: "POSTERGACIONES ACTIVAS", value: String(m.deferralsActive), suffix: m.deferralsActive === 1 ? "tarea diferida" : "tareas diferidas",
       sub: "Tareas del plan con fecha corrida",
       pill: m.deferralsActive > 0 ? { kind: "warn", text: "Activas" } : { kind: "good", text: "Ninguna" } },
-    { title: "HORAS DE MARCHA", value: m.currentHours != null ? nf(m.currentHours, o.locale) : "—", suffix: m.currentHours != null ? "h" : "",
-      sub: m.currentHoursDate ? `Última lectura al ${o.fmtDate(m.currentHoursDate)}` : "Sin lecturas",
-      pill: { kind: "neu", text: "Dato del horómetro" } },
+    // En el informe de un grupo no se suman horómetros de equipos distintos:
+    // la sexta tarjeta cuenta los equipos y las horas van por equipo en la tabla.
+    o.equipmentCount != null
+      ? { title: "EQUIPOS DEL GRUPO", value: String(o.equipmentCount), suffix: o.equipmentCount === 1 ? "equipo" : "equipos",
+          sub: "Con tareas del grupo en el plan", pill: { kind: "neu", text: "Informativo" } }
+      : { title: "HORAS DE MARCHA", value: m.currentHours != null ? nf(m.currentHours, o.locale) : "—", suffix: m.currentHours != null ? "h" : "",
+          sub: m.currentHoursDate ? `Última lectura al ${o.fmtDate(m.currentHoursDate)}` : "Sin lecturas",
+          pill: { kind: "neu", text: "Dato del horómetro" } },
   ];
 
   const y0 = flow.y;
@@ -394,6 +400,92 @@ export function drawSourceChips(doc: PDFKit.PDFDocument, flow: Flow, o: { x: num
   flow.y = y + CH + 4;
 }
 
+/**
+ * Señal de un equipo del grupo por sus conteos (mismas reglas de color que las
+ * tarjetas). La palabra dice el MOTIVO y no "Riesgo/Atención": esas palabras son
+ * la lectura de la IA del grupo, y la tabla no debe contradecirla.
+ */
+function equipmentKind(r: GroupEquipmentRow): { kind: Kind; text: string } {
+  if (r.labBad > 0) return { kind: "bad", text: "Lab. crítico" };
+  if (r.plansOverdue > 0) return { kind: "bad", text: "Vencidas" };
+  if (r.plansDueSoon > 0 || r.labCaution > 0 || r.defectsOpen > 0 || r.deferralsActive > 0) return { kind: "warn", text: "A seguir" };
+  return { kind: "good", text: "Al día" };
+}
+
+/** Recorta con "…" hasta que entre en el ancho: con `width` pdfkit parte el renglón. */
+function fitText(doc: PDFKit.PDFDocument, text: string, width: number): string {
+  if (doc.widthOfString(text) <= width) return text;
+  let t = text;
+  while (t.length > 1 && doc.widthOfString(`${t}…`) > width) t = t.slice(0, -1);
+  return `${t.trimEnd()}…`;
+}
+
+/** Tabla de equipos del grupo: fila por fila, repite el encabezado al pasar de página. */
+export function drawEquipmentTable(
+  doc: PDFKit.PDFDocument, flow: Flow, o: { x: number; w: number; rows: GroupEquipmentRow[]; locale: string },
+) {
+  const cols: Array<{ label: string; w: number }> = [
+    { label: "EQUIPO", w: 0.36 },
+    { label: "VENCIDAS", w: 0.09 },
+    { label: "POR VENCER", w: 0.09 },
+    { label: "DEFECTOS", w: 0.09 },
+    { label: "LAB. ROJO/PREC.", w: 0.11 },
+    { label: "HORAS", w: 0.10 },
+    { label: "ESTADO", w: 0.16 },
+  ];
+  const widths = cols.map(c => c.w * o.w);
+  const HEAD = 16, ROW = 22;
+  const header = () => {
+    const y = flow.y;
+    doc.lineWidth(0.7).rect(o.x, y, o.w, HEAD).fillAndStroke(SOFT, LINE);
+    let cx = o.x;
+    // Sin `width`: con ancho fijo pdfkit parte la palabra ("VENCIDA S"). Se centra a mano.
+    doc.font("Helvetica-Bold").fontSize(5.9).fillColor(MUTED);
+    cols.forEach((c, i) => {
+      const tw = doc.widthOfString(c.label);
+      doc.text(c.label, i === 0 ? cx + 6 : cx + Math.max(1, (widths[i]! - tw) / 2), y + 5.5, { lineBreak: false });
+      cx += widths[i]!;
+    });
+    flow.y = y + HEAD;
+  };
+  flow.ensureSpace(HEAD + ROW);
+  header();
+  for (const r of o.rows) {
+    const before = flow.y;
+    flow.ensureSpace(ROW);
+    if (flow.y < before) { flow.ensureSpace(HEAD + ROW); header(); }
+    const y = flow.y;
+    doc.lineWidth(0.7).rect(o.x, y, o.w, ROW).strokeColor(LINE).stroke();
+    let cx = o.x;
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(INK);
+    doc.text(fitText(doc, sanitizePdfText(r.name ?? r.assetCode), widths[0]! - 12), cx + 6, y + 4, { lineBreak: false });
+    doc.font("Helvetica").fontSize(6.5).fillColor(MUTED);
+    doc.text(fitText(doc, sanitizePdfText([r.assetCode, r.isSafetyCritical ? "crítico ISM 10.3" : null].filter(Boolean).join(" · ")), widths[0]! - 12), cx + 6, y + 13, { lineBreak: false });
+    cx += widths[0]!;
+    const cells: Array<[string, boolean]> = [
+      [String(r.plansOverdue), r.plansOverdue > 0],
+      [String(r.plansDueSoon), false],
+      [String(r.defectsOpen), false],
+      [`${r.labBad} / ${r.labCaution}`, r.labBad > 0],
+      [r.currentHours != null ? nf(r.currentHours, o.locale) : "—", false],
+    ];
+    cells.forEach(([v, bad], i) => {
+      doc.font(bad ? "Helvetica-Bold" : "Helvetica").fontSize(8.5).fillColor(bad ? KIND.bad.fg : INK)
+        .text(v, cx + 4, y + 7, { width: widths[i + 1]! - 8, align: "center", lineBreak: false });
+      cx += widths[i + 1]!;
+    });
+    const ek = equipmentKind(r);
+    const pillW = doc.font("Helvetica-Bold").fontSize(6.8).widthOfString(ek.text) + 21;
+    drawPill(doc, ek.kind, ek.text, cx + (widths[6]! - pillW) / 2, y + 5.25);
+    flow.y = y + ROW;
+  }
+  flow.y += 3;
+  flow.ensureSpace(12);
+  doc.font("Helvetica-Oblique").fontSize(6.8).fillColor(MUTED)
+    .text("Ordenados de mayor a menor cantidad de señales. Los números los calcula el sistema.", o.x, flow.y, { width: o.w, lineBreak: false });
+  flow.y += 12;
+}
+
 export interface HealthBodyInput {
   x: number;
   w: number;
@@ -404,7 +496,9 @@ export interface HealthBodyInput {
   text: HealthReportText;
   sources: HealthSources;
   /** Sólo el PDF de Mercurio: el estándar ya trae esos datos en su encabezado. */
-  ficha?: { vessel: string; equipment: string; code: string; period: string; generated: string };
+  ficha?: { vessel: string; equipment: string; code: string; period: string; generated: string; equipmentLabel?: string };
+  /** Informe de un grupo SFI: tabla de equipos y lectura por equipo de la IA. */
+  group?: { equipment: GroupEquipmentRow[]; equipmentText: string };
 }
 
 /**
@@ -418,16 +512,23 @@ export function drawHealthBody(
   textBox: (label: string, body: string) => void,
 ) {
   const { x, w, metrics: m, text } = input;
+  const g = input.group;
   if (input.ficha) drawFicha(doc, flow, { x, w, ...input.ficha });
 
-  const compact = drawStateHero(doc, flow, { x, w, healthState: input.healthState, summary: text.summary });
+  const compact = drawStateHero(doc, flow, { x, w, healthState: input.healthState, summary: text.summary, stateCaption: g ? "ESTADO DEL GRUPO" : undefined });
   if (compact) {
     drawSectionTitle(doc, flow, { x, w, title: "Resumen", keepWith: 50 });
     textBox("", text.summary);
   }
 
-  drawSectionTitle(doc, flow, { x, w, title: "Los números del equipo", note: "los calcula el sistema", keepWith: 170 });
-  drawTiles(doc, flow, { x, w, metrics: m, locale: input.locale, fmtDate: d => input.fmtDate(d) });
+  drawSectionTitle(doc, flow, { x, w, title: g ? "Los números del grupo" : "Los números del equipo", note: "los calcula el sistema", keepWith: 170 });
+  drawTiles(doc, flow, { x, w, metrics: m, locale: input.locale, fmtDate: d => input.fmtDate(d), equipmentCount: g?.equipment.length });
+
+  if (g) {
+    flow.y += 4;
+    drawSectionTitle(doc, flow, { x, w, title: "Equipos del grupo", note: "uno por fila", keepWith: 60 });
+    drawEquipmentTable(doc, flow, { x, w, rows: g.equipment, locale: input.locale });
+  }
 
   const st = STATE_KIND[input.healthState] ?? STATE_KIND.ATTENTION!;
   drawSectionTitle(doc, flow, { x, w, title: "Qué conviene revisar", note: "sugerencias", keepWith: 40 });
@@ -438,6 +539,15 @@ export function drawHealthBody(
   // El detalle arranca en hoja propia si en la actual no entra el primer bloque.
   flow.ensureSpace(190);
   drawSectionTitle(doc, flow, { x, w, title: "Detalle por área", keepWith: 60 });
+  if (g) {
+    const kinds = g.equipment.map(equipmentKind);
+    const flagged = kinds.filter(k => k.kind !== "good").length;
+    const ek: { kind: Kind; text: string } = {
+      kind: kinds.some(k => k.kind === "bad") ? "bad" : flagged > 0 ? "warn" : "good",
+      text: flagged > 0 ? `${flagged} de ${kinds.length} equipos` : "Todos al día",
+    };
+    drawAreaCard(doc, flow, { x, w, kind: ek.kind, title: "Equipos que requieren atención", pill: ek.text, text: g.equipmentText });
+  }
   drawAreaCard(doc, flow, { x, w, kind: pk.kind, title: "Mantenimiento planificado", pill: pk.text, text: text.maintenance });
   drawAreaCard(doc, flow, { x, w, kind: lk.kind, title: "Análisis de laboratorio", pill: lk.text, text: text.lab });
   drawAreaCard(doc, flow, { x, w, kind: dk.kind, title: "Defectos y fallas repetidas", pill: dk.text, text: text.defects });

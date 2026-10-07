@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-10-07] Informe de salud por grupo SFI + busqueda por N.o de OT en Planes y Planilla
+Agent: Claude Opus 5.5
+- Planilla a Bordo: el boton "Ficha" de la barra del grupo SFI ("G2: Sistemas de Carga") abre el informe
+  de salud del CONJUNTO de equipos del grupo (asset-group-health-service.ts). Los numeros los calcula el
+  sistema (sumados y por equipo); la IA solo redacta. Historial inmutable (tabla nueva
+  AssetGroupHealthReport), PDF y copia al Drive en "Informes de salud". Permisos del informe del equipo
+  (assetHealth.generate / assetHealth.view). Consola superadmin: funcion "Grupo de equipos: informe de salud".
+- Planilla: botones de estado (VENCIDAS / POR VENCER / OT ABIERTA), cada tarea en un solo boton.
+- Planes y Planilla: el buscador encuentra por el numero de la OT abierta o diferida ("468").
+- SCHEMA: modelo nuevo AssetGroupHealthReport (solo agrega, no toca tablas existentes).
+  Pasos: pull + db push + prisma generate + build web + restart (demo: rehacer plantilla).
+
 [2026-10-07] Copiloto registra mantenimientos + OT de Mercurio con datos por defecto
 Agent: Claude Opus 5.5
 - Copiloto "registrar mantenimiento de X" / parte de a bordo pegado: la herramienta

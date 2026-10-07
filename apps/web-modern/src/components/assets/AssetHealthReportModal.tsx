@@ -7,9 +7,13 @@
 //
 // Los números de las tarjetas vienen de `metrics` (los calcula el backend); el
 // texto de las secciones es de la IA y se rotula como tal.
+//
+// La misma ventana sirve para el informe de un GRUPO SFI del buque (barra
+// "G2: Sistemas de Carga" de la Planilla): se pasa `group` en vez de `asset`, y
+// el cuerpo suma la tabla de equipos y la lectura por equipo.
 import React, { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Sparkles, FileDown, Loader2, Wrench, FlaskConical, AlertTriangle, Lightbulb, Paperclip, Info } from "lucide-react";
+import { Sparkles, FileDown, Loader2, Wrench, FlaskConical, AlertTriangle, Lightbulb, Paperclip, Info, Boxes } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { fmtDate } from "../../lib/utils";
@@ -27,15 +31,25 @@ export interface HealthReportSummary {
   createdByName: string | null;
 }
 
+interface GroupEquipmentRow {
+  assetId: string; assetCode: string; name: string | null; isSafetyCritical: boolean;
+  plansOverdue: number; plansDueSoon: number; defectsOpen: number;
+  labBad: number; labCaution: number; deferralsActive: number; currentHours: number | null;
+}
+
 interface HealthReportFull extends HealthReportSummary {
   metrics: {
     plansActive: number; plansOverdue: number; plansDueSoon: number;
     defectsOpen: number; labBad: number; labCaution: number;
     currentHours: number | null; currentHoursDate: string | null;
+    /** Sólo en el informe de un grupo. */
+    equipmentCount?: number; equipment?: GroupEquipmentRow[];
   };
   report: {
     summary: string; maintenance: string; lab: string; defects: string;
     recommendations: string[]; limitations: string;
+    /** Sólo en el informe de un grupo: equipos que requieren atención. */
+    equipment?: string;
   };
   sources: {
     plans: number; workOrders: number; workLogs: number; labAnalyses: number; defects: number;
@@ -50,7 +64,10 @@ export const HEALTH_STATE_STYLE: Record<HealthState, { dot: string; box: string;
 };
 
 interface Props {
-  asset: { id: string; assetCode: string; name: string | null };
+  /** Informe de un equipo… */
+  asset?: { id: string; assetCode: string; name: string | null };
+  /** …o de un grupo SFI del buque. */
+  group?: { vesselCode: string; sfiGroup: number; name: string };
   vesselName: string;
   canGenerate: boolean;
   /** Historial ya cargado por la ficha (evita un segundo pedido al abrir). */
@@ -62,7 +79,7 @@ interface Props {
   onChanged: (items: HealthReportSummary[]) => void;
 }
 
-export const AssetHealthReportModal: React.FC<Props> = ({ asset, vesselName, canGenerate, initialItems, generateOnOpen, onClose, onChanged }) => {
+export const AssetHealthReportModal: React.FC<Props> = ({ asset, group, vesselName, canGenerate, initialItems, generateOnOpen, onClose, onChanged }) => {
   const t = useT();
   const [items, setItems] = useState<HealthReportSummary[]>(initialItems);
   const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
@@ -71,8 +88,11 @@ export const AssetHealthReportModal: React.FC<Props> = ({ asset, vesselName, can
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
-  const assetLabel = asset.name ?? asset.assetCode;
-  const base = `/app/pms/assets/${asset.id}/health-reports`;
+  const assetLabel = group ? `G${group.sfiGroup}: ${group.name}` : (asset?.name ?? asset?.assetCode ?? "");
+  const base = group
+    ? `/app/pms/assets/groups/${encodeURIComponent(group.vesselCode)}/${group.sfiGroup}/health-reports`
+    : `/app/pms/assets/${asset?.id ?? ""}/health-reports`;
+  const fileCode = (group ? `${group.vesselCode}-G${group.sfiGroup}` : asset?.assetCode ?? "").replace(/[^A-Za-z0-9._-]+/g, "");
 
   const openReport = useCallback(async (id: string) => {
     setSelectedId(id);
@@ -124,7 +144,7 @@ export const AssetHealthReportModal: React.FC<Props> = ({ asset, vesselName, can
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `informe-salud-${asset.assetCode.replace(/[^A-Za-z0-9._-]+/g, "")}-${report.createdAt.slice(0, 10)}.pdf`;
+      a.download = `informe-salud-${fileCode}-${report.createdAt.slice(0, 10)}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -203,7 +223,7 @@ export const AssetHealthReportModal: React.FC<Props> = ({ asset, vesselName, can
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
                   <Loader2 className="w-9 h-9 animate-spin text-violet-600" />
                   <p className="text-sm font-bold text-fg">{fill("asset.health.generating", { asset: assetLabel })}</p>
-                  <p className="text-xs text-text-industrial/60 max-w-md">{t("asset.health.generatingSub")}</p>
+                  <p className="text-xs text-text-industrial/60 max-w-md">{t(group ? "asset.health.generatingGroupSub" : "asset.health.generatingSub")}</p>
                 </div>
               ) : loading || !report ? (
                 <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-text-industrial/40" /></div>
@@ -232,14 +252,18 @@ const ReportBody: React.FC<{
   const aiTag = (key: TranslationKey) => (
     <span className="ml-1.5 rounded-full border border-violet-400/40 bg-violet-500/[0.07] px-2 py-0.5 text-[10px] font-extrabold text-violet-700 dark:text-violet-300 align-middle">{t(key)}</span>
   );
+  const equipment = m.equipment;
   const kpis: Array<[string, string]> = [
     [fill("asset.health.kpiOf", { n: m.plansOverdue, total: m.plansActive }), t("asset.health.kpiOverdue")],
     [String(m.defectsOpen), t("asset.health.kpiDefects")],
     [`${m.labBad} / ${m.labCaution}`, t("asset.health.kpiLab")],
-    [
-      m.currentHours != null ? `${Math.round(m.currentHours).toLocaleString("es-AR")} h` : "—",
-      m.currentHoursDate ? fill("asset.health.kpiHoursAt", { date: fmtDate(m.currentHoursDate) }) : t("asset.health.kpiHours"),
-    ],
+    // En un grupo no se suman horómetros: la cuarta tarjeta cuenta los equipos.
+    equipment
+      ? [String(m.equipmentCount ?? equipment.length), t("asset.health.kpiEquipment")]
+      : [
+          m.currentHours != null ? `${Math.round(m.currentHours).toLocaleString("es-AR")} h` : "—",
+          m.currentHoursDate ? fill("asset.health.kpiHoursAt", { date: fmtDate(m.currentHoursDate) }) : t("asset.health.kpiHours"),
+        ],
   ];
 
   return (
@@ -263,6 +287,11 @@ const ReportBody: React.FC<{
         </div>
         <p className="mt-1 text-[10.5px] text-text-industrial/45">{t("asset.health.numbersNote")}</p>
       </div>
+
+      {equipment && <EquipmentTable rows={equipment} t={t} />}
+      {equipment && (
+        <Section icon={<Boxes className="w-4 h-4 text-red-600" />} title={t("asset.health.secEquipment")} text={report.report.equipment ?? ""} />
+      )}
 
       <Section icon={<Wrench className="w-4 h-4 text-sky-600" />} title={t("asset.health.secMaintenance")} text={report.report.maintenance} />
       <Section icon={<FlaskConical className="w-4 h-4 text-violet-600" />} title={t("asset.health.secLab")} text={report.report.lab} />
@@ -292,6 +321,67 @@ const ReportBody: React.FC<{
           })}
           <br />{t("asset.health.disclaimer")}
         </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Señal de un equipo del grupo por sus conteos: mismas reglas que el PDF. La
+ * palabra dice el motivo, no "Riesgo/Atención" (eso es la lectura del grupo).
+ */
+function equipmentSignal(r: GroupEquipmentRow): { color: HealthState; key: TranslationKey } {
+  if (r.labBad > 0) return { color: "RISK", key: "asset.health.eqSignal.labBad" };
+  if (r.plansOverdue > 0) return { color: "RISK", key: "asset.health.eqSignal.overdue" };
+  if (r.plansDueSoon > 0 || r.labCaution > 0 || r.defectsOpen > 0 || r.deferralsActive > 0) return { color: "ATTENTION", key: "asset.health.eqSignal.watch" };
+  return { color: "GOOD", key: "asset.health.eqSignal.ok" };
+}
+
+/** Tabla de equipos del informe de un grupo (ya viene ordenada por el backend). */
+const EquipmentTable: React.FC<{ rows: GroupEquipmentRow[]; t: (k: TranslationKey) => string }> = ({ rows, t }) => {
+  const th = "px-2 py-1.5 text-[10.5px] font-extrabold uppercase tracking-wide text-text-industrial/55 text-center";
+  const td = "px-2 py-1.5 text-[12.5px] text-fg text-center";
+  return (
+    <div>
+      <h3 className="flex items-center gap-1.5 text-[13.5px] font-black text-fg mb-1.5"><Boxes className="w-4 h-4 text-sky-600" />{t("asset.health.secEquipmentTable")}</h3>
+      <div className="overflow-x-auto rounded-xl border border-fg/10">
+        <table className="w-full min-w-[560px] border-collapse">
+          <thead className="bg-fg/[0.03]">
+            <tr>
+              <th className={th + " text-left"}>{t("asset.health.col.equipment")}</th>
+              <th className={th}>{t("asset.health.col.overdue")}</th>
+              <th className={th}>{t("asset.health.col.dueSoon")}</th>
+              <th className={th}>{t("asset.health.col.defects")}</th>
+              <th className={th}>{t("asset.health.col.lab")}</th>
+              <th className={th}>{t("asset.health.col.hours")}</th>
+              <th className={th}>{t("asset.health.col.state")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const sig = equipmentSignal(r);
+              return (
+                <tr key={r.assetId} className="border-t border-fg/10">
+                  <td className="px-2 py-1.5 text-left">
+                    <span className="block text-[12.5px] font-bold text-fg">{r.name ?? r.assetCode}</span>
+                    <span className="block text-[10.5px] text-text-industrial/60">{r.assetCode}{r.isSafetyCritical ? ` · ${t("asset.health.safetyCritical")}` : ""}</span>
+                  </td>
+                  <td className={td + (r.plansOverdue > 0 ? " font-black text-red-600" : "")}>{r.plansOverdue}</td>
+                  <td className={td}>{r.plansDueSoon}</td>
+                  <td className={td}>{r.defectsOpen}</td>
+                  <td className={td + (r.labBad > 0 ? " font-black text-red-600" : "")}>{r.labBad} / {r.labCaution}</td>
+                  <td className={td}>{r.currentHours != null ? Math.round(r.currentHours).toLocaleString("es-AR") : "—"}</td>
+                  <td className={td}>
+                    <span className="inline-flex items-center gap-1 text-[11.5px] font-bold">
+                      <span className={`inline-block w-2 h-2 rounded-full ${HEALTH_STATE_STYLE[sig.color].dot}`} />
+                      {t(sig.key)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

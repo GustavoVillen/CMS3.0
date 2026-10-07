@@ -1520,6 +1520,34 @@ model AssetHealthReport {
   @@index([tenantId, vesselCode])
 }
 
+/// Informe de salud del CONJUNTO de equipos de un grupo SFI de un buque (la banda
+/// "G2: Sistemas de Carga" de la Planilla). Mismo criterio que AssetHealthReport:
+/// inmutable, cada "Generar nuevo" es una fila. Los equipos que formaban el grupo
+/// en ese momento quedan en `metrics.equipment` (la foto, aunque el plan cambie).
+model AssetGroupHealthReport {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vesselCode      String
+  /// Grupo SFI 0–9 (primer dígito), igual que la Planilla de Mantenimiento.
+  sfiGroup        Int
+  /// GOOD | ATTENTION | RISK — lectura de la IA, no un dato de cumplimiento.
+  healthState     String
+  periodFrom      DateTime
+  periodTo        DateTime
+  /// Números del sistema sumados en el grupo + una fila por equipo (`equipment`).
+  metrics         Json
+  /// Texto de la IA: summary, equipment, maintenance, lab, defects, recommendations, limitations.
+  report          Json
+  sources         Json
+  locale          String
+  model           String
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdByName   String?
+
+  @@index([tenantId, vesselCode, sfiGroup, createdAt])
+}
+
 /// Informe del asesor técnico del Director de Mantenimiento (CMS3 Technical
 /// Manager Advisor). Inmutable: cada análisis de la flota es una fila nueva.
 /// `evidence` es la FOTO de los registros que leyó la IA (E-1, E-2…): "Ver

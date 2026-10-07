@@ -28,7 +28,7 @@ import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { markJustCreated } from "../lib/just-created";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { useFetch } from "../lib/hooks";
-import { useAuth } from "../lib/auth";
+import { useAuth, useCan } from "../lib/auth";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import { NAV } from "../lib/nav-items";
@@ -41,6 +41,7 @@ import {
   providerIdsOf, providerNamesOf, severityOf, severityOfRow, fmtDate,
 } from "../lib/maintenance-sheet-model";
 import { textMatches } from "../lib/text-search";
+import { AssetHealthReportModal, type HealthReportSummary } from "../components/assets/AssetHealthReportModal";
 
 /** Lo que agrega la lista de planes por encima de lo que usa la planilla. */
 type SheetRow = SheetPlan & {
@@ -97,6 +98,18 @@ const WoSignMark: React.FC<{ sign?: SheetRow["activeWorkOrderSign"] }> = ({ sign
 /** Sin agrupar por equipo, dentro de cada grupo va primero lo más urgente. */
 const SEV_RANK: Record<Severity, number> = { overdue: 0, soon: 1, none: 2, outOfService: 3 };
 
+/**
+ * Botones de estado de la barra de filtros (pedido de Gustavo, oct 2026: antes
+ * era un solo botón "vencidas, por vencer y con OT abierta"). Se suman entre sí:
+ * dos encendidos muestran lo de los dos; ninguno, la planilla entera.
+ */
+const DUE_FILTERS = [
+  { key: "overdue", label: "msheet.fl.overdue" },
+  { key: "soon",    label: "msheet.fl.soon" },
+  { key: "openWo",  label: "msheet.fl.openWo" },
+] as const satisfies readonly { key: string; label: TranslationKey }[];
+type DueFilter = typeof DUE_FILTERS[number]["key"];
+
 /** Botones G0…G9 de la barra de filtros (los mismos de Planes y Seguimiento). */
 const SFI_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
@@ -136,6 +149,11 @@ export function MaintenanceSheetPage() {
   const canSeeEquipment = !!equipmentNav && !hiddenNavPaths.includes("/equipment")
     && (!equipmentNav.roles || equipmentNav.roles.includes((user?.role ?? "") as never));
   const canEditMilestones = user?.role === "TENANT_ADMIN";
+  // "Ficha" del grupo SFI = informe de salud del conjunto de equipos de la banda.
+  // Mismos permisos que el informe de un equipo (el backend valida lo mismo).
+  const can = useCan();
+  const canGenerateHealth = can("assetHealth.generate");
+  const canViewHealth = canGenerateHealth || can("assetHealth.view");
 
   const plansPath = selectedVesselCode ? "/app/pms/maintenance-plans?limit=2000" : null;
   const assetsPath = selectedVesselCode ? "/app/pms/assets?limit=500" : null;
@@ -159,7 +177,12 @@ export function MaintenanceSheetPage() {
 
   // ── Filtros de pantalla (el papel no los tiene, la pantalla sí los necesita) ─
   const [query, setQuery] = useState("");
-  const [onlyDue, setOnlyDue] = useState(false);
+  const [dueFilters, setDueFilters] = useState<Set<DueFilter>>(new Set());
+  const toggleDueFilter = (k: DueFilter) => setDueFilters(prev => {
+    const next = new Set(prev);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    return next;
+  });
   // Barra de filtros (Preview V1, oct 2026): la misma de Seguimiento.
   const [sfiGroup, setSfiGroup] = useState<number | "ALL">("ALL");
   // Encendido = la planilla del papel, y cada equipo se puede plegar. Apagado =
@@ -168,7 +191,7 @@ export function MaintenanceSheetPage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const preGroup: SheetGroup[] = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q && !onlyDue) return sheet;
+    if (!q && dueFilters.size === 0) return sheet;
     return sheet
       .map(g => ({
         ...g,
@@ -176,22 +199,29 @@ export function MaintenanceSheetPage() {
           .map(b => ({
             ...b,
             plans: b.plans.filter(p => {
-              // Un equipo fuera de servicio no entra en "lo que hay que hacer":
-              // sus tareas vencen igual, pero no se pueden ejecutar hasta que la
-              // máquina vuelva. Mismo criterio con el que van en rosa y con el que
-              // el Dashboard las cuenta aparte.
-              // Con OT abierta entra siempre (pedido de Gustavo, sep 2026): es
-              // trabajo en curso y hay que poder seguirlo desde acá.
-              const hasOpenWo = !!(p as SheetRow).activeWorkOrderCode;
-              if (onlyDue && !hasOpenWo && (b.outOfService || severityOf(p) === "none")) return false;
+              if (dueFilters.size > 0) {
+                // Cada tarea cae en UN solo botón. Con OT abierta va sólo a OT
+                // ABIERTA: abrir la OT la pinta de amarillo, y sin esto POR VENCER
+                // las traería todas. Un equipo fuera de servicio no entra en
+                // VENCIDAS ni POR VENCER: sus tareas vencen igual, pero no se
+                // ejecutan hasta que la máquina vuelva (mismo criterio que el rosa
+                // de la fila y el Dashboard).
+                const kind: DueFilter | null = (p as SheetRow).activeWorkOrderCode ? "openWo"
+                  : b.outOfService ? null
+                  : severityOf(p) === "overdue" ? "overdue"
+                  : severityOf(p) === "soon" ? "soon"
+                  : null;
+                if (!kind || !dueFilters.has(kind)) return false;
+              }
               if (!q) return true;
-              return textMatches(`${b.name} ${p.title} ${p.taskCode}`, q);
+              // También el número de la OT abierta: "468" encuentra OT-M02-26-0468.
+              return textMatches(`${b.name} ${p.title} ${p.taskCode} ${(p as SheetRow).activeWorkOrderCode ?? ""}`, q);
             }),
           }))
           .filter(b => b.plans.length > 0),
       }))
       .filter(g => g.blocks.length > 0);
-  }, [sheet, query, onlyDue]);
+  }, [sheet, query, dueFilters]);
   // Qué botones G0…G9 tienen tareas con los otros filtros puestos (los vacíos
   // salen apagados). Las tareas sin grupo se ven sólo con "Sin filtro".
   const groupsWithRows = useMemo(() => new Set(preGroup.map(g => g.group)), [preGroup]);
@@ -209,8 +239,8 @@ export function MaintenanceSheetPage() {
     return next;
   });
   const toggleAllBlocks = () => setCollapsed(allCollapsed ? new Set() : new Set(visibleBlockKeys));
-  const anyFilter = sfiGroup !== "ALL" || !!query || onlyDue;
-  const clearFilters = () => { setSfiGroup("ALL"); setQuery(""); setOnlyDue(false); };
+  const anyFilter = sfiGroup !== "ALL" || !!query || dueFilters.size > 0;
+  const clearFilters = () => { setSfiGroup("ALL"); setQuery(""); setDueFilters(new Set()); };
 
   const totalTasks = useMemo(
     () => visible.reduce((n, g) => n + g.blocks.reduce((m, b) => m + b.plans.length, 0), 0),
@@ -291,7 +321,8 @@ export function MaintenanceSheetPage() {
     fieldValues: {
       vesselName:        selectedVessel?.name ?? null,
       search:            query.trim() || null,
-      onlyDue:           onlyDue ? "true" : "false",
+      // Botones de estado encendidos: "overdue,soon,openWo" (null = ninguno).
+      dueFilters:        dueFilters.size > 0 ? [...dueFilters].join(",") : null,
       sfiGroup:          sfiGroup === "ALL" ? null : `G${sfiGroup}`,
       visibleTasks:      String(totalTasks),
       // Lo tildado es lo que el usuario quiere hacer ahora: con esto el copiloto
@@ -306,6 +337,27 @@ export function MaintenanceSheetPage() {
   const [prefill, setPrefill] = useState<WoPrefill | null>(null);
   const [creating, setCreating] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
+
+  // Informe de salud del grupo: se trae el historial al tocar "Ficha" y recién
+  // ahí se abre la ventana (sin informes y con permiso, se abre generando).
+  const [groupHealth, setGroupHealth] = useState<{ group: number; items: HealthReportSummary[] } | null>(null);
+  const [loadingGroupHealth, setLoadingGroupHealth] = useState<number | null>(null);
+  const openGroupHealth = useCallback(async (group: number) => {
+    if (!selectedVesselCode || loadingGroupHealth != null) return;
+    setLoadingGroupHealth(group);
+    try {
+      const res = await api.get<{ items: HealthReportSummary[] }>(
+        `/app/pms/assets/groups/${encodeURIComponent(selectedVesselCode)}/${group}/health-reports`,
+      );
+      const items = res.items ?? [];
+      if (items.length === 0 && !canGenerateHealth) setAlert(t("msheet.groupHealthNone"));
+      else setGroupHealth({ group, items });
+    } catch (err) {
+      setAlert(err instanceof ApiError ? err.message : t("asset.health.loadError"));
+    } finally {
+      setLoadingGroupHealth(null);
+    }
+  }, [selectedVesselCode, loadingGroupHealth, canGenerateHealth, t]);
 
   /**
    * Tanda de órdenes a crear: un grupo de tareas por cada OT, en orden.
@@ -868,10 +920,15 @@ export function MaintenanceSheetPage() {
                 </button>
               );
             })}
-            <button type="button" onClick={() => setOnlyDue(v => !v)} aria-pressed={onlyDue}
-              className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${onlyDue ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
-              {t("msheet.onlyDue")}
-            </button>
+            {DUE_FILTERS.map(f => {
+              const on = dueFilters.has(f.key);
+              return (
+                <button key={f.key} type="button" onClick={() => toggleDueFilter(f.key)} aria-pressed={on}
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${on ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
+                  {t(f.label)}
+                </button>
+              );
+            })}
             <button type="button" onClick={() => setGroupByAsset(v => !v)} aria-pressed={groupByAsset}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all ${groupByAsset ? "border-accent/40 bg-accent/10 text-accent" : "border-fg/10 bg-fg/5 text-text-industrial hover:border-accent/30"}`}>
               <ListTree className="w-3.5 h-3.5" /> {t("mp.page.groupByEquipment")}
@@ -994,7 +1051,24 @@ export function MaintenanceSheetPage() {
                 <React.Fragment key={g.group}>
                   <tr>
                     <td colSpan={9} className="px-3 py-1 text-[11px] font-bold text-white bg-[#1F3864] border border-border">
-                      {groupTitle(g.group)}
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{groupTitle(g.group)}</span>
+                        {/* Ficha del grupo (pedido de Gustavo, oct 2026): informe de
+                            salud del conjunto de equipos de esta banda. */}
+                        {canViewHealth && g.group !== NO_GROUP && selectedVesselCode && (
+                          <button
+                            type="button"
+                            onClick={() => { void openGroupHealth(g.group); }}
+                            disabled={loadingGroupHealth != null}
+                            title={t("msheet.groupHealthHint")}
+                            aria-label={t("msheet.groupHealthHint")}
+                            className="inline-flex items-center gap-1 rounded-md border border-white/40 bg-white/90 px-1.5 py-0.5 text-[9px] font-bold text-[#1F3864] hover:bg-white disabled:opacity-60"
+                          >
+                            {loadingGroupHealth === g.group ? <Loader2 className="w-3 h-3 animate-spin" /> : <IdCard className="w-3 h-3" />}
+                            {t("msheet.assetSheet")}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   {!groupByAsset ? flatRows(g) : g.blocks.map(b => collapsed.has(b.key) ? foldedRow(b) : b.plans.map((plan, i) => {
@@ -1076,6 +1150,18 @@ export function MaintenanceSheetPage() {
             }
             finishQueue(queue.length, workOrderCode);
           }}
+        />
+      )}
+
+      {groupHealth && selectedVesselCode && (
+        <AssetHealthReportModal
+          group={{ vesselCode: selectedVesselCode, sfiGroup: groupHealth.group, name: t(`sfi.g.${groupHealth.group}` as TranslationKey) }}
+          vesselName={selectedVessel?.name ?? selectedVesselCode}
+          canGenerate={canGenerateHealth}
+          initialItems={groupHealth.items}
+          generateOnOpen={groupHealth.items.length === 0}
+          onClose={() => setGroupHealth(null)}
+          onChanged={items => setGroupHealth(prev => (prev ? { ...prev, items } : prev))}
         />
       )}
 

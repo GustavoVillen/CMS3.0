@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { getAssetHealthReport, type HealthMetrics, type HealthReportText, type HealthSources } from "../assets/asset-health-service";
+import { getGroupHealthReport, type GroupHealthMetrics, type GroupHealthReportText, type GroupEquipmentRow } from "../assets/asset-group-health-service";
 import { LOGO_PATH, resolveTenantLogo, sanitizePdfText, renderLabeledTextBox } from "./pdf-helpers";
 import { resolveTenantTime, fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 import { resolveTenantForm } from "./tenant-forms-service";
@@ -28,14 +29,41 @@ export async function buildAssetHealthReportPdf(
   assetId: string,
   reportId: string,
 ): Promise<{ buffer: Buffer; fileName: string }> {
+  const r = await getAssetHealthReport(session, assetId, reportId) as any;
+  return renderHealthPdf(session, r, null);
+}
+
+/** PDF del informe de un grupo SFI: mismo documento, con la tabla de equipos. */
+export async function buildGroupHealthReportPdf(
+  session: TenantAccessSession,
+  vesselCode: string,
+  group: string,
+  reportId: string,
+): Promise<{ buffer: Buffer; fileName: string }> {
+  const r = await getGroupHealthReport(session, vesselCode, group, reportId) as any;
+  const metrics = r.metrics as GroupHealthMetrics;
+  const text = r.report as GroupHealthReportText;
+  // El grupo ocupa el lugar del equipo en el encabezado: "G2" + "Sistemas de Carga".
+  const asGroup = {
+    ...r,
+    asset: { assetCode: `G${r.group.sfiGroup}`, name: r.group.name || `G${r.group.sfiGroup}`, vesselCode: r.group.vesselCode, vesselName: r.group.vesselName },
+  };
+  return renderHealthPdf(session, asGroup, { equipment: metrics.equipment ?? [], equipmentText: text.equipment ?? "" });
+}
+
+async function renderHealthPdf(
+  session: TenantAccessSession,
+  r: any,
+  group: { equipment: GroupEquipmentRow[]; equipmentText: string } | null,
+): Promise<{ buffer: Buffer; fileName: string }> {
   const { tz, locale } = await resolveTenantTime(session.tenantSlug);
   const fmt = (d: Date | string | null | undefined) => (d ? fmtDateTz(d, tz, locale) : "—");
 
-  const r = await getAssetHealthReport(session, assetId, reportId) as any;
   const metrics = r.metrics as HealthMetrics;
   const text = r.report as HealthReportText;
   const sources = r.sources as HealthSources;
   const assetTitle = r.asset.name ?? r.asset.assetCode;
+  const kicker = group ? "INFORME DE SALUD DEL GRUPO" : "INFORME DE SALUD DEL EQUIPO";
 
   let tenantName: string | null = null;
   let tenantLogoBuffer: Buffer | null = null;
@@ -53,7 +81,10 @@ export async function buildAssetHealthReportPdf(
 
   const dateStr = new Date(r.createdAt).toISOString().slice(0, 10);
   // Los códigos traen "#" ("LTE-MP-#4"): fuera del nombre de archivo.
-  const fileName = `informe-salud-${String(r.asset.assetCode).replace(/[^A-Za-z0-9._-]+/g, "")}-${dateStr}.pdf`;
+  const codePart = group
+    ? `${String(r.asset.vesselCode).replace(/[^A-Za-z0-9._-]+/g, "")}-${r.asset.assetCode}`
+    : String(r.asset.assetCode).replace(/[^A-Za-z0-9._-]+/g, "");
+  const fileName = `informe-salud-${codePart}-${dateStr}.pdf`;
 
   // Documento controlado para los tenants con estilo Mercurio (mismo criterio
   // que el plan de mantenimiento y el diferimiento).
@@ -77,6 +108,7 @@ export async function buildAssetHealthReportPdf(
         vesselName: r.asset.vesselName ?? null,
       },
       metrics, text, sources,
+      group: group ?? undefined,
       tz, locale,
     });
     return { buffer: mercurioBuffer, fileName };
@@ -102,7 +134,7 @@ export async function buildAssetHealthReportPdf(
       catch { /* logo unavailable */ }
     }
     const titleW = W - LOGO_W - 16;
-    doc.fontSize(8).font("Helvetica-Bold").fillColor("#6d28d9").text("INFORME DE SALUD DEL EQUIPO", ML, y, { width: titleW, characterSpacing: 0.6 });
+    doc.fontSize(8).font("Helvetica-Bold").fillColor("#6d28d9").text(kicker, ML, y, { width: titleW, characterSpacing: 0.6 });
     doc.fontSize(17).font("Helvetica-Bold").fillColor(black).text(sanitizePdfText(assetTitle), ML, y + 12, { width: titleW });
     doc.fontSize(10).font("Helvetica").fillColor(gray)
       .text(sanitizePdfText([r.asset.assetCode, r.asset.vesselName].filter(Boolean).join("  ·  ")), ML, y + 34, { width: titleW });
@@ -124,6 +156,7 @@ export async function buildAssetHealthReportPdf(
     drawHealthBody(doc, flow, {
       x: ML, w: W, locale, fmtDate: (d) => fmt(d),
       healthState: r.healthState, metrics, text, sources,
+      group: group ?? undefined,
     }, textBox);
 
     // ── Pie ──
@@ -136,7 +169,7 @@ export async function buildAssetHealthReportPdf(
         try { doc.image(LOGO_PATH, ML, footerY - 1, { width: 14, height: 14 }); } catch { /* logo missing */ }
       }
       doc.fontSize(8).font("Helvetica").fillColor(gray)
-        .text("Copilot Management System — Informe de salud del equipo", ML + 18, footerY, { width: W / 2 + 40, lineBreak: false });
+        .text(`Copilot Management System — ${group ? "Informe de salud del grupo" : "Informe de salud del equipo"}`, ML + 18, footerY, { width: W / 2 + 40, lineBreak: false });
       doc.fontSize(8).font("Helvetica").fillColor(gray)
         .text(`${tenantName ?? session.tenantSlug} · Página ${i - range.start + 1} de ${range.count}`, ML, footerY, { width: W, align: "right", lineBreak: false });
     }

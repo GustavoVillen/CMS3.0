@@ -9,6 +9,7 @@
 import PDFDocument from "pdfkit";
 import { sanitizePdfText } from "./pdf-helpers";
 import type { HealthMetrics, HealthReportText, HealthSources } from "../assets/asset-health-service";
+import type { GroupEquipmentRow } from "../assets/asset-group-health-service";
 import { drawHealthBody } from "./asset-health-pdf-visuals";
 import { fmtDate as fmtDateTz, fmtDateTime as fmtDateTimeTz } from "../../common/tenant-time";
 import {
@@ -46,6 +47,8 @@ export interface MercurioAssetHealthData {
   text: HealthReportText;
   /** Qué evidencia se leyó. */
   sources: HealthSources;
+  /** Informe de un grupo SFI: `asset` lleva "G2" / nombre del grupo y esto la tabla de equipos. */
+  group?: { equipment: GroupEquipmentRow[]; equipmentText: string };
   tz: string;
   locale: string;
 }
@@ -56,7 +59,7 @@ function val(v: unknown): string {
 }
 
 export async function renderMercurioAssetHealthPdf(data: MercurioAssetHealthData): Promise<Buffer> {
-  const { meta, logoBuffer, tenantName, report, asset, metrics, text, sources, tz, locale } = data;
+  const { meta, logoBuffer, tenantName, report, asset, metrics, text, sources, tz, locale, group } = data;
   const fmtDate = (d: unknown) => fmtDateTz(d as string | null | undefined, tz, locale);
 
   return new Promise((resolve, reject) => {
@@ -101,9 +104,10 @@ export async function renderMercurioAssetHealthPdf(data: MercurioAssetHealthData
     drawHealthBody(doc, canvas, {
       x: ML, w: W, locale,
       fmtDate: (d) => fmtDate(d),
-      healthState: report.healthState, metrics, text, sources,
+      healthState: report.healthState, metrics, text, sources, group,
       ficha: {
         vessel: vesselText,
+        equipmentLabel: group ? "GRUPO SFI" : undefined,
         equipment: val(asset.name ?? asset.assetCode),
         code: val(asset.assetCode),
         period: `${fmtDate(report.periodFrom)} a ${fmtDate(report.periodTo)}`,

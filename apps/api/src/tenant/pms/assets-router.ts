@@ -93,6 +93,48 @@ export async function handleAssetRoutes(
     return true;
   }
 
+  // Informe de salud de un grupo SFI del buque (la barra "G2: …" de la Planilla).
+  // Mismo esquema que el del equipo; permisos y alcance en asset-group-health-service.
+  const groupHealthMatch = url.pathname.match(/^\/app\/pms\/assets\/groups\/([^/]+)\/([^/]+)\/health-reports(?:\/([^/]+))?(\/pdf)?$/);
+  if (groupHealthMatch) {
+    const vesselCode = decodeURIComponent(groupHealthMatch[1]!);
+    const group = groupHealthMatch[2]!;
+    const reportId = groupHealthMatch[3] ?? null;
+    const {
+      listGroupHealthReports, getGroupHealthReport, generateGroupHealthReport,
+    } = await import("../assets/asset-group-health-service");
+    if (!reportId && method === "GET") {
+      sendJson(response, 200, await listGroupHealthReports(session, vesselCode, group));
+      return true;
+    }
+    if (!reportId && method === "POST") {
+      enforceRateLimit(request, `ai-health:${session.user.id}`, { maxRequests: 5, windowMs: 60_000 });
+      sendJson(response, 201, await generateGroupHealthReport(session, vesselCode, group));
+      return true;
+    }
+    if (reportId && !groupHealthMatch[4] && method === "GET") {
+      sendJson(response, 200, await getGroupHealthReport(session, vesselCode, group, reportId));
+      return true;
+    }
+    if (reportId && groupHealthMatch[4] && method === "GET") {
+      enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+      const { buildGroupHealthReportPdf } = await import("./asset-health-pdf-service");
+      const { buffer, fileName } = await buildGroupHealthReportPdf(session, vesselCode, group, reportId);
+      response.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${fileName}"`,
+        "Content-Length": buffer.length,
+      });
+      response.end(buffer);
+      // Copia en el Drive: misma carpeta "Informes de salud" del buque.
+      void archivePdf(session, {
+        kind: "SAL", fileName, buffer,
+        from: { delegate: "assetGroupHealthReport", id: reportId, vesselField: "vesselCode" },
+      });
+      return true;
+    }
+  }
+
   // Informe de salud del equipo (IA). Historial inmutable: POST agrega uno nuevo.
   // Permisos y alcance por buque se validan en asset-health-service.
   const healthMatch = url.pathname.match(/^\/app\/pms\/assets\/([^/]+)\/health-reports(?:\/([^/]+))?(\/pdf)?$/);

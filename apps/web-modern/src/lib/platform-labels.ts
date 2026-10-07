@@ -101,6 +101,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   deferral_compensatory_measures_suggestion: "Diferimiento: medidas compensatorias",
   asset_criticality_suggestion:              "Equipo: sugerir criticidad",
   asset_health_report:                       "Equipo: informe de salud",
+  asset_group_health_report:                 "Grupo de equipos: informe de salud",
   plan_rcm_consequence_suggestion:           "Plan: sugerir consecuencia de falla",
   fluid_analyses:                            "Laboratorio: leer informe",
   fluid_ai_insights:                         "Laboratorio: interpretar resultados",

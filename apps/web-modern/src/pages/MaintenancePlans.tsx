@@ -3880,6 +3880,9 @@ export const MaintenancePlansPage: React.FC = () => {
         textMatches(p.title ?? "", q) ||
         textMatches(p.description ?? "", q) ||
         textMatches(p.responsible ?? "", q) ||
+        // El número de la OT abierta o diferida: "468" encuentra OT-M02-26-0468.
+        textMatches(p.activeWorkOrderCode ?? "", q) ||
+        textMatches(p.deferredWorkOrderCode ?? "", q) ||
         String(p.sfiGroupNumber ?? "").includes(q) ||
         textMatches(p.assetName ?? "", q)
       );
