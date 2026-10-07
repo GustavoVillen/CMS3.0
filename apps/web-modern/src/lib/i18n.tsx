@@ -315,7 +315,6 @@ const dict = {
   "insp.frequency":        { es: "Frecuencia (días)",        en: "Frequency (days)",        pt: "Frequência (dias)" },
   "insp.checklist":        { es: "Checklist de Inspección",  en: "Inspection Checklist",    pt: "Checklist de Inspeção" },
   // ── Inspecciones = OT de inspección ──────────────────────────────────────────
-  "mp.checklistInspectionHint": { es: "Es la planilla que se completa durante la inspección. La orden de trabajo la hereda del plan.", en: "This is the sheet filled in during the inspection. The work order inherits it from the plan.", pt: "É a planilha preenchida durante a inspeção. A ordem de serviço a herda do plano." },
   "wo.tramita.inspectionAutoAuthorized": { es: "Inspección: autorizada de entrada. No requiere aprobación ni autorización.", en: "Inspection: authorized on creation. It requires no approval or authorization.", pt: "Inspeção: autorizada de saída. Não requer aprovação nem autorização." },
   "wo.tramita.inspectionSsNote":         { es: "Las Solicitudes de Servicio de esta orden sí se aprueban y autorizan desde cada solicitud.", en: "Service Requests on this order are still approved and authorized from each request.", pt: "As Solicitações de Serviço desta ordem são aprovadas e autorizadas em cada solicitação." },
   // ── Dashboard: generar una inspección ────────────────────────────────────────
@@ -492,10 +491,6 @@ const dict = {
   "team.qual.notes":       { es: "Aclaraciones",             en: "Notes",                   pt: "Observações" },
   "empty.team":            { es: "Sin miembros en el equipo", en: "No team members",        pt: "Sem membros na equipe" },
 
-  "mp.checklistTemplate":  { es: "Documento de Checklist", en: "Checklist Document",      pt: "Documento de Checklist" },
-  "mp.checklistUpload":    { es: "Subir documento",         en: "Upload document",         pt: "Enviar documento" },
-  "mp.checklistUploading": { es: "Subiendo…",               en: "Uploading…",              pt: "Enviando…" },
-  "mp.checklistNoFile":    { es: "Sin documento adjunto",   en: "No document attached",    pt: "Sem documento anexado" },
 
   // Superintendents matrix
   "sup.primary":      { es: "PRIMARIO",          en: "PRIMARY",            pt: "PRIMÁRIO" },
@@ -3322,8 +3317,6 @@ const dict = {
   "mp.sec.whoSub":            { es: "Área, taller, responsable y repuestos", en: "Area, workshop, owner and spares", pt: "Área, oficina, responsável e peças" },
   "mp.sec.safety":            { es: "Seguridad",              en: "Safety",                pt: "Segurança" },
   "mp.sec.safetySub":         { es: "Bloqueo, riesgo y qué pasa si no se hace", en: "Lockout, risk and what happens if it isn't done", pt: "Bloqueio, risco e o que acontece se não for feito" },
-  "mp.sec.docs":              { es: "Documentos",             en: "Documents",             pt: "Documentos" },
-  "mp.sec.docsSub":           { es: "Planilla para ejecutar", en: "Execution sheet",       pt: "Planilha de execução" },
   // ─── Plan de muestreo en la ventana del plan (preview V17b) ───
   "mp.samp.question":         { es: "¿Esta tarea toma una muestra para laboratorio?", en: "Does this task take a sample for the lab?", pt: "Esta tarefa coleta uma amostra para laboratório?" },
   "mp.samp.questionHint":     { es: "Aceite, combustible, agua, vibraciones, termografía…", en: "Oil, fuel, water, vibration, thermography…", pt: "Óleo, combustível, água, vibração, termografia…" },
@@ -3439,7 +3432,6 @@ const dict = {
   "mp.f.responsiblePh":       { es: "Ej: Jefe de Máquinas",   en: "E.g.: Chief Engineer",  pt: "Ex: Chefe de Máquinas" },
   "mp.f.planStatus":          { es: "Estado del plan",        en: "Plan status",           pt: "Estado do plano" },
   "mp.f.lotoTitle":           { es: "Bloqueo y etiquetado (LOTO)", en: "Lockout / tagout (LOTO)", pt: "Bloqueio e etiquetagem (LOTO)" },
-  "mp.f.downloadTemplate":    { es: "Descargar planilla",     en: "Download sheet",        pt: "Baixar planilha" },
   "mp.moc.inlineTitle":       { es: "Cambiaste la frecuencia.", en: "You changed the frequency.", pt: "Você mudou a frequência." },
   "mp.moc.inlineBody":        { es: "Al guardar te vamos a preguntar si querés abrir un MOC (ISM 10.3): cambiar el cronograma de un plan aprobado queda registrado para auditoría.", en: "When saving we'll ask whether to open an MOC (ISM 10.3): changing an approved plan's schedule is recorded for audit.", pt: "Ao salvar perguntaremos se deseja abrir um MOC (ISM 10.3): mudar o cronograma de um plano aprovado fica registrado para auditoria." },
   "mp.sentence.every":        { es: "Se ejecuta {freq}.",     en: "It runs {freq}.",       pt: "É executado {freq}." },
@@ -3461,7 +3453,6 @@ const dict = {
   "fluid.plan.other":          { es: "Otro",                  en: "Other",                 pt: "Outro" },
 
   // MaintenancePlanModal — footer / acciones / confirmaciones
-  "mp.modal.checklistSaveFirst":{ es: "Guardá el plan primero para poder subir el documento.", en: "Save the plan first to upload the document.", pt: "Salve o plano primeiro para enviar o documento." },
   "mp.modal.delete":           { es: "Eliminar",              en: "Delete",                pt: "Excluir" },
   "mp.modal.openWO":           { es: "Abrir OT",              en: "Open WO",               pt: "Abrir OS" },
   "mp.modal.reportResult":     { es: "Reportar Resultado",    en: "Report Result",         pt: "Reportar Resultado" },

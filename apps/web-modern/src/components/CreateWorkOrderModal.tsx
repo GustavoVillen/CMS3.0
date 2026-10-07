@@ -45,7 +45,6 @@ export interface WoPrefill {
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
   estimatedHours?: number | null;
-  checklistDocUrl?: string | null;
   loto?: string | null;
   samplingFluidType?: string | null;
   /**
@@ -89,7 +88,6 @@ export function buildWoPrefillFromPlan(
     consequenceCategory: plan.consequenceCategory,
     consequenceRationale: plan.consequenceRationale,
     estimatedHours: plan.estimatedHours,
-    checklistDocUrl: plan.checklistTemplate,
     samplingFluidType: plan.samplingFluidType,
     additionalPlans,
   };
@@ -115,7 +113,6 @@ interface MaintenancePlanLike {
   consequenceCategory?: "SAFETY" | "ENVIRONMENTAL" | "OPERATIONAL" | "NON_OPERATIONAL" | null;
   consequenceRationale?: string | null;
   estimatedHours: number | null;
-  checklistTemplate: string | null;
   samplingFluidType?: string | null;
   nextDueDate: string | null;
 }
@@ -1988,8 +1985,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
           </FormSection>
 
           {/* "Adjuntos" (sólo traía el Documento checklist) se sacó en sep 2026:
-              no lo usan. El código del checklist del plan sigue viajando en
-              prefill.checklistDocUrl al crear la OT. */}
+              no lo usan. Desde oct 2026 la OT tampoco hereda el checklist del plan. */}
 
           {prefill?.samplingFluidType && (
             <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/25 rounded-xl px-4 py-3">

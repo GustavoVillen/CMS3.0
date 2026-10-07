@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-10-07] Planes: sin la seccion "Documentos" (checklist del plan)
+Agent: Claude Opus 5.5
+- La ficha del plan queda con 4 secciones (sale "5 · Documentos / Documento de Checklist").
+- La OT ya no hereda el checklist del plan: en mercurio ese campo traia rotulos sueltos
+  ("BAT-EGA-ANUAL", 37 planes, cargados por Excel) que llegaban a la OT como si fueran un documento y
+  el auditor de cierre los contaba como "checklist cargado". La columna checklistTemplate sale de la
+  plantilla e importacion Excel de planes. El dato queda en la base, sin uso.
+- "Reportar resultado" (planes sin OT formal): la planilla subida queda en la OT del registro
+  (checklistDocUrl en el alta, solo archivos de /uploads/attachments/<empresa>/), no en el plan.
+- Sale el endpoint POST /maintenance-plans/:id/upload-checklist; los archivos viejos de
+  /uploads/checklists se siguen sirviendo.
+  Pasos: pull + build web + restart.
+
 [2026-10-07] Copiloto: repuestos del parte en una OT ya abierta
 Agent: Claude Opus 5.5
 - Con la OT aprobada en pantalla, "carga los repuestos" (sin cantidades) revisa los avances de la OT

@@ -37,7 +37,6 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
-  Paperclip,
   Pencil,
   Plus,
   Save,
@@ -69,7 +68,6 @@ import { MocModal, type MocPrefill } from "./Moc";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
 import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
-import { downloadAuthedFile } from "../lib/authed-media";
 import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
@@ -564,7 +562,7 @@ const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-s
 const selectCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 // Rótulo de campo de la ventana por secciones (V15): en minúscula, más legible.
 const fLabelCls = "flex items-center text-xs font-semibold text-text-industrial/70";
-const PLAN_SECTIONS = ["what", "when", "who", "safety", "docs"] as const;
+const PLAN_SECTIONS = ["what", "when", "who", "safety"] as const;
 /** Qué analiza un plan de muestreo (V17b): sólo el tipo, sin detalle de fluido. */
 const SAMPLING_KINDS: { kind: "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER"; icon: typeof Wrench }[] = [
   { kind: "FLUID", icon: Droplets },
@@ -694,12 +692,15 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
     setSaving(true);
     setError(null);
     try {
+      // La planilla completada queda en la OT del registro (nace cerrada, por eso va en el alta).
+      let checklistDocUrl: string | null = null;
       if (docFile) {
         setUploading(true);
-        await api.upload(`/app/pms/maintenance-plans/${plan.id}/upload-checklist`, docFile);
+        checklistDocUrl = (await api.upload<{ url: string }>("/app/attachments/upload?entityType=WorkOrder", docFile)).url ?? null;
         setUploading(false);
       }
       await api.post(`/app/pms/maintenance-plans/${plan.id}/report-execution`, {
+        checklistDocUrl,
         executedByName: executedByName.trim(),
         executedByUserId: executedByUserId || null,
         result,
@@ -1371,7 +1372,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [triggerResultMode, setTriggerResultMode] = useState(plan?.triggerResultMode ?? "DUE_ONLY");
   const [windowMode, setWindowMode] = useState(plan?.windowMode ?? "AUTO");
   const [windowLeadDays, setWindowLeadDays] = useState(String(plan?.windowLeadDays ?? ""));
-  const [checklistTemplate, setChecklistTemplate] = useState(plan?.checklistTemplate ?? "");
   // samplingKind = "" (no sampling) | "FLUID" | "VIBRATION" | "THERMAL" | "ULTRASOUND" | "INSULATION" | "OTHER"
   // Para retrocompatibilidad: si el plan tenía samplingFluidType pero no samplingKind, asumimos FLUID.
   const [samplingKind, setSamplingKind] = useState<string>(
@@ -1381,8 +1381,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   // Permisos de trabajo que exige la tarea (preview V41). El Sí sin tipos no se guarda.
   const [requiresPermit, setRequiresPermit] = useState<boolean>((plan?.requiredPermitTypes?.length ?? 0) > 0);
   const [requiredPermitTypes, setRequiredPermitTypes] = useState<string[]>(plan?.requiredPermitTypes ?? []);
-  const [checklistUploading, setChecklistUploading] = useState(false);
-  const [checklistUploadError, setChecklistUploadError] = useState<string | null>(null);
   const [loadingCriteria, setLoadingCriteria] = useState(false);
   const [loadingLoto, setLoadingLoto] = useState(false);
   const [loadingRisk, setLoadingRisk] = useState(false);
@@ -1573,13 +1571,10 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     setTriggerResultMode(plan.triggerResultMode ?? "DUE_ONLY");
     setWindowMode(plan.windowMode ?? "AUTO");
     setWindowLeadDays(String(plan.windowLeadDays ?? ""));
-    setChecklistTemplate(plan.checklistTemplate ?? "");
     setSamplingKind(plan.samplingKind ?? (plan.samplingFluidType ? "FLUID" : ""));
     setSamplingFluidType(plan.samplingFluidType ?? "");
     setRequiresPermit((plan.requiredPermitTypes?.length ?? 0) > 0);
     setRequiredPermitTypes(plan.requiredPermitTypes ?? []);
-    setChecklistUploading(false);
-    setChecklistUploadError(null);
     setActionError(null);
     setShowExecution(false);
     setShowPostpone(false);
@@ -1879,7 +1874,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           triggerResultMode,
           windowMode,
           windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
-          checklistTemplate: normalizeOptionalText(checklistTemplate),
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
@@ -1925,7 +1919,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
           triggerResultMode,
           windowMode,
           windowLeadDays: windowLeadDays ? Number(windowLeadDays) : null,
-          checklistTemplate: normalizeOptionalText(checklistTemplate),
           samplingKind:      samplingKind || null,
           // fluidType solo se manda cuando el kind es FLUID; en otros casos null.
           samplingFluidType: samplingKind === "FLUID" ? (samplingFluidType || null) : null,
@@ -1994,7 +1987,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
     windowMode, windowLeadDays,
-    checklistTemplate, samplingKind, samplingFluidType, requiresPermit, requiredPermitTypes,
+    samplingKind, samplingFluidType, requiresPermit, requiredPermitTypes,
     lastExecDate, lastExecHours, nextDueDateOverride, nextDueHoursOverride, plannedSpares, requiresSpares,
   }, `${saveResetKey}:${planSyncKey}`);
   planDirtyRef.current = planDirty;
@@ -2309,10 +2302,9 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     when: 0,
     who: Number(missing.responsible) + Number(missing.purpose),
     safety: Number(missing.loto) + Number(missing.risk),
-    docs: 0,
   };
   const totalMissing = sectionMissing.what + sectionMissing.who + sectionMissing.safety;
-  const [openSecs, setOpenSecs] = useState<Record<PlanSectionKey, boolean>>({ what: true, when: true, who: true, safety: true, docs: true });
+  const [openSecs, setOpenSecs] = useState<Record<PlanSectionKey, boolean>>({ what: true, when: true, who: true, safety: true });
   const [activeSec, setActiveSec] = useState<PlanSectionKey>("what");
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const goToSection = (k: PlanSectionKey) => {
@@ -2340,7 +2332,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     when:   { title: t("mp.sec.when"),   sub: t("mp.sec.whenSub"),   icon: CalendarRange },
     who:    { title: t("mp.sec.who"),    sub: t("mp.sec.whoSub"),    icon: Users },
     safety: { title: t("mp.sec.safety"), sub: t("mp.sec.safetySub"), icon: ShieldAlert },
-    docs:   { title: t("mp.sec.docs"),   sub: t("mp.sec.docsSub"),   icon: Paperclip },
   };
   const sectionPill = (k: PlanSectionKey) => (k === "what" || k === "who" || k === "safety") && !readOnly
     ? <GuidePill missing={sectionMissing[k]} completeLabel={t("mp.guide.complete")} missingOne={t("mp.guide.missingOne")} missingMany={t("mp.guide.missingMany")} />
@@ -3256,69 +3247,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                         <RichTextArea value={consequenceRationale} onChange={setConsequenceRationale} rows={2} className={inputCls} disabled={readOnly || loadingConsequence} />
                       </div>
                     </div>
-                  </fieldset>
-                </GuideSection>
-              </div>
-
-              {/* ── 5 · Documentos ── (el plan de muestreo subió a "Qué se hace", V17b) */}
-              <div id="mp-sec-docs">
-                <GuideSection n={5} title={sectionMeta.docs.title} subtitle={sectionMeta.docs.sub}
-                  open={openSecs.docs} onToggle={() => setOpenSecs(s => ({ ...s, docs: !s.docs }))}>
-                  <fieldset disabled={readOnly} className="min-w-0 space-y-3.5 disabled:opacity-70">
-                    {/* LISTA DE CHEQUEO del ítem del PDM (Word / PDF / Excel). Siempre
-                        visible: es la planilla que se usa al ejecutar, y en una
-                        inspección es lo que se completa. */}
-                    <div className="space-y-1.5">
-                      <label className={fLabelCls}>{t("mp.checklistTemplate")}</label>
-                      {taskType === "INSPECTION" && (
-                        <p className="text-[11px] text-text-industrial/50">{t("mp.checklistInspectionHint")}</p>
-                      )}
-                      <div className="rounded-xl border border-fg/10 bg-fg/5 p-3 space-y-3">
-                        {checklistTemplate && (checklistTemplate.startsWith("/uploads/") || checklistTemplate.startsWith("/app/files/")) ? (
-                          <div className="flex items-center justify-between gap-3">
-                            <button type="button"
-                              onClick={() => { void downloadAuthedFile(checklistTemplate); }}
-                              className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 hover:text-green-300 truncate"
-                              title={t("mp.f.downloadTemplate")}>
-                              <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                              <span className="truncate">{checklistTemplate.split("/").pop()}</span>
-                            </button>
-                            <button type="button" onClick={() => setChecklistTemplate("")} className="text-text-industrial/40 hover:text-red-400 transition-colors shrink-0"><X className="w-4 h-4" /></button>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-text-industrial/40">{t("mp.checklistNoFile")}</p>
-                        )}
-                        {isNew ? (
-                          <p className="text-[10px] text-yellow-700 dark:text-yellow-400/70">{t("mp.modal.checklistSaveFirst")}</p>
-                        ) : (
-                          <label className={`flex items-center gap-2 cursor-pointer w-fit px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                            checklistUploading ? "border-fg/10 text-text-industrial/40 cursor-not-allowed" : "border-green-500/30 text-green-700 dark:text-green-400 hover:bg-green-500/10"
-                          }`}>
-                            {checklistUploading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("mp.checklistUploading")}</> : <><FileSpreadsheet className="w-3.5 h-3.5" /> {t("mp.checklistUpload")}</>}
-                            <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt" className="sr-only"
-                              disabled={checklistUploading || isNew}
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file || !plan) return;
-                                e.target.value = "";
-                                setChecklistUploading(true);
-                                setChecklistUploadError(null);
-                                try {
-                                  const res = await api.upload(`/app/pms/maintenance-plans/${plan.id}/upload-checklist`, file);
-                                  setChecklistTemplate((res as { url: string }).url);
-                                } catch (err) {
-                                  setChecklistUploadError(err instanceof ApiError ? err.message : t("common.saveError"));
-                                } finally {
-                                  setChecklistUploading(false);
-                                }
-                              }}
-                            />
-                          </label>
-                        )}
-                        {checklistUploadError && <p className="text-xs text-red-700 dark:text-red-400">{checklistUploadError}</p>}
-                      </div>
-                    </div>
-
                   </fieldset>
                 </GuideSection>
               </div>
