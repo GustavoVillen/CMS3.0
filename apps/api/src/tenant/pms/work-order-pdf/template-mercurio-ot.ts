@@ -581,14 +581,18 @@ export async function renderMercurioOtPdf(ctx: WorkOrderPdfContext): Promise<Buf
         // La calificación del firmante (TMSA: representante calificado y con
         // experiencia) va sobre el nombre. Sólo si alguno de los dos la tiene
         // cargada se agranda el recuadro: las OT sin el dato quedan igual.
-        const qual: Array<string | null | undefined> = [ctx.createdByQualification, ctx.assignedQualification];
+        // Si quien abrió la OT es también el técnico asignado, su firma no se
+        // repite: el recuadro del asignado queda en blanco para firmar a mano
+        // (OT-MGT11-26-0012 salió con la misma firma en los dos).
+        const sameSigner = Boolean(w.assignedToUserId) && w.assignedToUserId === w.createdByUserId;
+        const qual: Array<string | null | undefined> = [ctx.createdByQualification, sameSigner ? null : ctx.assignedQualification];
         const hasQual = qual.some(q => Boolean(q && q.trim()));
         const H = hasQual ? 128 : 116;
         ensureSpace(H + 10);
         const half = Math.floor(W / 2);
         const boxes: Array<[string, string | null, Buffer | null | undefined]> = [
           ["FIRMA Y ACLARACION DEL SOLICITANTE", ctx.createdByFormName ?? createdByName, ctx.solicitaSignatureBuffer],
-          ["FIRMA Y ACLARACION DEL ASIGNADO", ctx.assignedFormName ?? assignedName, ctx.assignedSignatureBuffer],
+          ["FIRMA Y ACLARACION DEL ASIGNADO", sameSigner ? null : ctx.assignedFormName ?? assignedName, sameSigner ? null : ctx.assignedSignatureBuffer],
         ];
         boxes.forEach(([lab, name, sig], i) => {
           const bx = ML + i * half;
