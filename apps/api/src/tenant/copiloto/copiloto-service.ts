@@ -33,6 +33,7 @@ import {
   applyVesselWhereScope,
   attachAssetNames,
   deniedVesselResponse,
+  sameProgressNoteText,
   wrapUntrusted,
   type VesselScope,
 } from "./copilot-tool-utils";
@@ -1659,6 +1660,47 @@ export interface SuggestedAction {
   intent?: string;
 }
 
+/** Comienzo de la pregunta del sistema por repuestos del parte que el modelo no cargó. */
+const SPARES_NOTE_INTRO = {
+  es: "Revisá los repuestos: en lo que escribiste también veo esto, que no cargué:",
+  en: "Check the spares: in what you wrote I also see this, which I did not load:",
+  pt: "Confira as peças: no que você escreveu também vejo isto, que não carreguei:",
+} as const;
+
+/**
+ * Repuestos de esa pregunta ("STD-FIL-06 — Filtro de aceite … (1 UN); …"),
+ * para cargar exactamente esos cuando el usuario contesta que sí. Con un "ok"
+ * el modelo los volvía a elegir solo y cambiaba uno por otro (OT-M02-26-0472).
+ */
+function sparesOfNote(text: string, spares: Array<{ id: string; sku: string; unit: string }>): Array<{ spareId: string; quantity: number; unit: string }> {
+  const intro = Object.values(SPARES_NOTE_INTRO).find(i => text.includes(i));
+  if (!intro) return [];
+  const list = text.slice(text.lastIndexOf(intro) + intro.length);
+  const bySku = new Map(spares.map(s => [s.sku.toUpperCase(), s]));
+  const out: Array<{ spareId: string; quantity: number; unit: string }> = [];
+  for (const m of list.matchAll(/(?:^|;)\s*(\S+) — [^;]*?\((\d+(?:[.,]\d+)?) [^)]*\)/g)) {
+    const s = bySku.get(m[1]!.toUpperCase());
+    if (s && !out.some(o => o.spareId === s.id)) out.push({ spareId: s.id, quantity: Number(m[2]!.replace(",", ".")), unit: s.unit });
+  }
+  return out;
+}
+
+/** ¿La OT ya tiene un avance con este texto? (mismo criterio que add_progress_note al aplicarlo) */
+async function progressNoteExists(tenantId: string, workOrderCode: string, text: unknown): Promise<boolean> {
+  const prismaRaw = getPrismaClient() as any;
+  if (!prismaRaw || typeof text !== "string" || !text.trim()) return false;
+  const wo = await prismaRaw.workOrder.findFirst({
+    where: { tenantId, workOrderCode: workOrderCode.trim().toUpperCase(), deletedAt: null },
+    select: { id: true },
+  });
+  if (!wo) return false;
+  const notes: Array<{ text: string | null }> = await prismaRaw.workOrderProgressNote.findMany({
+    where: { tenantId, workOrderId: wo.id, kind: "TEXT", deletedAt: null },
+    select: { text: true },
+  });
+  return notes.some(n => sameProgressNoteText(n.text ?? "", text));
+}
+
 /**
  * Detecta el bloque [ACCIONES][...JSON...][/ACCIONES] en el texto completo.
  * Devuelve las acciones parseadas y el rango (start, end) que el frontend
@@ -2007,8 +2049,19 @@ export async function streamCopilotoChat(
       // llega como última línea, no como mensaje entero.
       const completing = req.messages.slice(-16).some(m =>
         m.role === "user" && typeof m.content === "string" && /(^|\n)\s*\[COMPLETAR OT\]\s*$/.test(m.content));
+      const lastUser = [...req.messages].reverse().find(m => m.role === "user");
+      const lastAnswer = (lastUser?.content ?? "").replace(/^\[Contexto activo: [^\]]*\]\n/, "").trim();
+      // Con la OT abierta en pantalla también se puede pedir sólo los repuestos
+      // ("cargá los repuestos del parte"): mismo catálogo y detector que al completarla.
+      const asksSpares = /\b(repuestos?|spares?|pe[cç]as?)\b/i.test(lastAnswer);
+      // "Sí" a la pregunta del sistema por los repuestos del parte: se cargan esos, no los que elija el modelo.
+      const prevAssistant = lastUser
+        ? [...req.messages.slice(0, req.messages.lastIndexOf(lastUser))].reverse().find(m => m.role === "assistant")
+        : undefined;
+      const acceptsSparesNote = !!prevAssistant && Object.values(SPARES_NOTE_INTRO).some(i => prevAssistant.content.includes(i))
+        && /^(s[ií]|si+|ok|okey|dale|bueno|listo|correcto|carg[aá]\w*|yes|sim)\b/i.test(lastAnswer);
       const woVessel = typeof ctx.vesselCode === "string" ? ctx.vesselCode : "";
-      if (closure.editable === true && completing && woVessel) {
+      if (closure.editable === true && (completing || asksSpares || acceptsSparesNote) && woVessel) {
         // Los mismos que ofrece la pantalla (sólo activos): otro id lo rechaza el formulario.
         const spareWhere: Record<string, unknown> = { tenantId: req.tenantId, deletedAt: null, status: "ACTIVE" };
         if (applyVesselWhereScope(spareWhere, woVessel, scope).ok) {
@@ -2051,27 +2104,41 @@ export async function streamCopilotoChat(
           // identifica el detector de los avances (consulta corta y dedicada, con
           // el equipo de la OT). El modelo del chat solo no era confiable: a veces
           // daba el aceite del generador por "fuera de catálogo".
-          const lastUser = [...req.messages].reverse().find(m => m.role === "user");
           const answeringMarker = !!lastUser && /(^|\n)\s*\[COMPLETAR OT\]\s*$/.test(lastUser.content);
           // Qué texto se revisa: en el turno del aviso, el pedido o parte que lo
           // originó; después, la respuesta del usuario (en el modo guiado contesta
           // "3 filtros de combustible y 1 de aceite"). Un "1" o un "sí" no se revisa.
+          // Un pedido sin cantidades ("cargá los repuestos") revisa los avances de
+          // la OT, donde quedó el parte.
           let sourceText = "";
+          let sparesFrom: "chat" | "notes" | "accepted" = "chat";
           if (answeringMarker) {
             const before = req.messages.slice(0, req.messages.lastIndexOf(lastUser!));
             const report = [...before].reverse().find(m =>
               m.role === "user" && !/\[(COMPLETAR OT|SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA)\]\s*$/.test(m.content));
             sourceText = (report?.content ?? "").replace(/^\[Contexto activo: [^\]]*\]\n/, "").trim();
-          } else if (lastUser) {
-            const answer = lastUser.content.replace(/^\[Contexto activo: [^\]]*\]\n/, "").trim();
-            if (/[a-záéíóúñ]{4,}/i.test(answer)) sourceText = answer;
+          } else if (acceptsSparesNote) {
+            sparesFrom = "accepted";
+          } else if (asksSpares && !/\d/.test(lastAnswer) && prismaRaw && typeof ctx.entityId === "string") {
+            const notes: Array<{ text: string | null; processedText: string | null }> = await prismaRaw.workOrderProgressNote.findMany({
+              where: { tenantId: req.tenantId, workOrderId: ctx.entityId, vesselCode: woVessel, deletedAt: null },
+              select: { text: true, processedText: true },
+              orderBy: { createdAt: "desc" },
+              take: 10,
+            });
+            sourceText = notes.map(n => (n.processedText ?? n.text ?? "").trim()).filter(Boolean).join("\n\n").slice(0, 3000);
+            sparesFrom = "notes";
+          } else if (/[a-záéíóúñ]{4,}/i.test(lastAnswer)) {
+            sourceText = lastAnswer;
           }
           let detectedLines: string[] | null = null;
-          if (sourceText && spares.length > 0) {
+          if ((sourceText || sparesFrom === "accepted") && spares.length > 0) {
             const byId = new Map(spares.map(s => [s.id, s]));
-            const found = await detectSparesFromText(
-              req.tenantId, req.tenantSlug, req.userId, req.userEmail ?? "", woVessel, sourceText, spares, equipmentLabel || null,
-            );
+            const found = sparesFrom === "accepted"
+              ? sparesOfNote(prevAssistant!.content, spares)
+              : await detectSparesFromText(
+                  req.tenantId, req.tenantSlug, req.userId, req.userEmail ?? "", woVessel, sourceText, spares, equipmentLabel || null,
+                );
             const valid = found.filter(d => byId.has(d.spareId));
             detectedLines = valid
               .map(d => { const s = byId.get(d.spareId)!; return `${d.spareId} | ${s.sku} | ${s.name} | qty ${d.quantity} ${s.unit}`; });
@@ -2091,7 +2158,7 @@ export async function streamCopilotoChat(
               `Load it now, never ask them to confirm data they gave. Look at closure.values to see what is already loaded and never reload it.\n` +
               `- Every reply in this flow: [CAMPOS] with what the user gave (in the reply to "[COMPLETAR OT]": executionDate, the hours, taskCompleted "YES" and the spares identified by the system that match what the user said), the add_progress_note [ACCIONES] once you have the text of what was done, and then EXACTLY ONE question — the first missing item in this order: running hours → spares used ("¿Usaste repuestos? Decime cuáles y cuántos, o «ninguno»") → what was done → the result (1. Satisfactorio / 2. Con deficiencias). Never stack two questions.\n` +
               `- qty is EXACTLY the number the user said ("11 litros" → 11, "3 filtros" → 3): never round, convert or adjust it to a package size.\n` +
-              `- An item that is not in the catalogue is NOT a question: say it in one line ("El racor no está en el catálogo del buque: queda sólo en el avance").\n` +
+              `- An item that is not in the catalogue is NOT a question: say it in one line ("<pieza> no está en el catálogo del buque: queda sólo en el avance"). Only for an item that truly has no match: a spare you are loading in spareUsages IS in the catalogue.\n` +
               `- Reply to the result ("1"/"Satisfactorio" or "2"/"Con deficiencias"): it MUST carry [CAMPOS]{"woResult":"SATISFACTORY"} (or "WITH_DEFICIENCIES"). Saying it is "marcado" without that block loads nothing.\n` +
               `- Never re-propose add_progress_note if the chat already shows it was applied or closure.progressNotes.lastText is that text. Until the user presses that button the progress note does NOT exist: introduce it with exactly "Tocá «Registrar avance» para guardar el parte como avance de la OT." and never write "registré" / "quedó registrado" about it. The same for the fields: they are loaded on screen, not saved, until the person presses Guardar.`,
           });
@@ -2115,10 +2182,14 @@ export async function streamCopilotoChat(
               text:
                 `## SPARES OF THE REPORT ALREADY IDENTIFIED BY THE SYSTEM (id | sku | name | quantity)\n` +
                 (detectedLines.length > 0
-                  ? `Load each of these in the spareUsages of your [CAMPOS] with this id and quantity WHEN it matches what the user said (same kind of part, and litres for a fluid / units for a part); skip one that does not match and any already in closure.spareUsages. Do not ask about the ones that match.\n` +
+                  ? (sparesFrom === "accepted"
+                      ? `The user just said yes to loading exactly this list: put ALL of them, and only them, in the spareUsages of your [CAMPOS] with this id and quantity. Do not swap, drop or re-pick any.\n`
+                      : `Load each of these in the spareUsages of your [CAMPOS] with this id and quantity WHEN it matches what the ${sparesFrom === "notes" ? "OT's progress notes (the crew report)" : "user"} said (same kind of part, and litres for a fluid / units for a part); skip one that does not match and any already in closure.spareUsages. Do not ask about the ones that match.\n`) +
                     wrapUntrusted(detectedLines.join("\n")) + `\n`
-                  : `The system found no catalogue spare in the report.\n`) +
-                `For any OTHER item the report says was changed: if the catalogue above has several candidates for it, ask (numbered); if it has none, say in one line that it is not in the vessel's catalogue and stays only in the progress note.`,
+                  : `The system found no catalogue spare in the ${sparesFrom === "notes" ? "OT's progress notes" : "report"}.\n`) +
+                (sparesFrom === "accepted"
+                  ? `Say nothing about other items of the report: that list already covers them.`
+                  : `For any OTHER item the report says was changed: if the catalogue above has several candidates for it, ask (numbered); if it has none, say in one line that it is not in the vessel's catalogue and stays only in the progress note.`),
             });
           }
         }
@@ -2464,11 +2535,7 @@ export async function streamCopilotoChat(
     const missing = detectedSpares.filter(d => !loadedIds.has(d.spareId) && !accumulatedText.includes(d.label.split(" — ")[0]!));
     if (missing.length > 0) {
       const lang = req.locale === "en" || req.locale === "pt" ? req.locale : "es";
-      const intro = {
-        es: "Revisá los repuestos: en lo que escribiste también veo esto, que no cargué:",
-        en: "Check the spares: in what you wrote I also see this, which I did not load:",
-        pt: "Confira as peças: no que você escreveu também vejo isto, que não carreguei:",
-      }[lang];
+      const intro = SPARES_NOTE_INTRO[lang];
       const ask = { es: "¿Lo cargo?", en: "Shall I load it?", pt: "Carrego?" }[lang];
       const note = `\n\n${intro} ${missing.map(d => d.label).join("; ")}. ${ask}`;
       accumulatedText += note;
@@ -2527,6 +2594,11 @@ export async function streamCopilotoChat(
             continue;
           }
           if (registerPlanCodes.has(a.target.trim().toUpperCase())) a.intent = "register_maintenance";
+        }
+        // El parte ya es un avance de esa OT: el botón sobraría (al tocarlo diría "ya está registrado").
+        if (a.type === "add_progress_note" && await progressNoteExists(req.tenantId, a.target, a.patch?.text)) {
+          log.info(`[copiloto] add_progress_note omitido: ya es un avance de ${a.target}`);
+          continue;
         }
         kept.push(a);
       }

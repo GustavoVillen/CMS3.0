@@ -20,6 +20,7 @@ import { getDefect, updateDefect, closeDefect } from "../pms/defects-service";
 import { hasPermission } from "../auth/role-permissions";
 import { getTenantAiLocale, type AiLocale } from "../ai/ai-locale";
 import { log } from "../../common/logger";
+import { sameProgressNoteText } from "./copilot-tool-utils";
 
 /**
  * Campos permitidos en el patch del update_plan. Cualquier otro campo
@@ -580,7 +581,7 @@ async function applyAddProgressNote(
   if (action.vesselCode) woWhere.vesselCode = action.vesselCode;
   const db = prisma as unknown as {
     workOrder: { findFirst(a: unknown): Promise<{ id: string; vesselCode: string; aprobadoAt: Date | null; autorizadoAt: Date | null } | null> };
-    workOrderProgressNote: { findFirst(a: unknown): Promise<{ id: string } | null> };
+    workOrderProgressNote: { findMany(a: unknown): Promise<Array<{ text: string | null }>> };
   };
   const workOrder = await db.workOrder.findFirst({
     where: woWhere,
@@ -602,12 +603,12 @@ async function applyAddProgressNote(
   const text = typeof patch.text === "string" ? patch.text.trim() : "";
   if (!text) throw new RouteError(400, "MISSING_TEXT", "Falta el texto del avance.");
 
-  // El mismo parte pegado dos veces no se registra dos veces.
-  const duplicate = await db.workOrderProgressNote.findFirst({
-    where: { tenantId: tenant.id, workOrderId: workOrder.id, kind: "TEXT", text },
-    select: { id: true },
+  // El mismo parte pegado dos veces no se registra dos veces (aunque cambien los blancos).
+  const existing = await db.workOrderProgressNote.findMany({
+    where: { tenantId: tenant.id, workOrderId: workOrder.id, kind: "TEXT", deletedAt: null },
+    select: { text: true },
   });
-  if (duplicate) {
+  if (existing.some(n => sameProgressNoteText(n.text ?? "", text))) {
     throw new RouteError(409, "PROGRESS_NOTE_DUPLICATE", `Ese avance ya está registrado en la ${workOrderCode}.`);
   }
 

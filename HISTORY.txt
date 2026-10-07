@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-10-07] Copiloto: repuestos del parte en una OT ya abierta
+Agent: Claude Opus 5.5
+- Con la OT aprobada en pantalla, "carga los repuestos" (sin cantidades) revisa los avances de la OT
+  con el detector y el catalogo del buque, igual que al completarla desde el parte.
+- "Si"/"ok" a la pregunta del sistema "Revisa los repuestos: ... ¿Lo cargo?" carga exactamente esa
+  lista (se lee del mensaje), no la que vuelva a elegir el modelo (cambiaba un filtro por otro).
+- El ejemplo del prompt "El racor no esta en el catalogo" se reemplazo: el modelo lo copiaba aunque el
+  Racor estuviera en el catalogo.
+- No se ofrece "Registrar avance" si ese texto ya es un avance de la OT; la comparacion de avances
+  repetidos ignora blancos y mayusculas y no cuenta los borrados.
+  Pasos: pull + restart (solo backend).
+
 [2026-10-07] Copiloto: el bloque [CAMPOS] se lee aunque venga mal cerrado
 Agent: Claude Opus 5.5
 - Gemini mando [CAMPOS] sin [/CAMPOS] y despues con un corchete de mas ("}]}][/CAMPOS]"): el panel

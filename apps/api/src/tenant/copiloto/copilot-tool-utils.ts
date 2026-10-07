@@ -195,3 +195,12 @@ export function daysUntil(date: Date | string | null | undefined): number | null
 export function toolResult(rows: unknown[], emptyMessage: string): string {
   return wrapUntrusted(JSON.stringify(rows.length > 0 ? rows : { message: emptyMessage }));
 }
+
+/**
+ * Dos textos de avance son el mismo parte aunque cambien espacios, renglones o
+ * mayúsculas (el chat y el formulario no guardan los blancos igual).
+ */
+export function sameProgressNoteText(a: string, b: string): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  return norm(a) === norm(b);
+}
