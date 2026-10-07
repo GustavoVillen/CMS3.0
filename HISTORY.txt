@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-10-07] Avances: fotos .jfif y .heic al adjuntar
+Agent: Claude Opus 5.5
+- En OT-M02-26-0478 el servidor rechazo 6 veces una foto del celular adjuntada con "Archivo"
+  ("Tipo de archivo no permitido"): estaba en .heic o .jfif y el sistema solo guarda JPG/PNG/WEBP.
+- "Archivo" ahora pasa esas imagenes a JPG (sin achicarlas como "Foto") y muestra la miniatura.
+  Si el equipo no puede abrir la foto (HEIC en la PC) avisa al adjuntarla, no al guardar.
+  Lo mismo con "Foto".
+- El servidor acepta .jfif (es un JPG con otro nombre) y lo graba como .jpg, en todos los adjuntos.
+  Pasos: pull + build web + restart.
+
 [2026-10-07] DATOS: tecnico asignado "Admin Mercurio" vaciado en 15 OT abiertas (produccion)
 Agent: Claude Opus 5.5
 - La cuenta admin@mercurio.com figuraba como tecnico asignado en 15 OT abiertas (13 abiertas por

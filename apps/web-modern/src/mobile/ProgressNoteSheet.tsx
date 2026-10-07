@@ -16,16 +16,15 @@ interface Props {
 
 interface DetectedSpare { spareId: string; sku: string; name: string; quantity: number; unit: string }
 
-// Comprime una imagen usando Canvas a máx 1280px y calidad JPEG 0.75.
+// Comprime una imagen usando Canvas (por defecto a máx 1280px y calidad JPEG 0.75).
 // Devuelve el archivo original si algo falla.
-async function compressImage(f: File): Promise<File> {
+async function compressImage(f: File, MAX = 1280, quality = 0.75): Promise<File> {
   return new Promise(resolve => {
     const img = new Image();
     const url = URL.createObjectURL(f);
     img.onload = () => {
       URL.revokeObjectURL(url);
       let { width: w, height: h } = img;
-      const MAX = 1280;
       if (w > MAX || h > MAX) {
         if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
         else { w = Math.round(w * MAX / h); h = MAX; }
@@ -35,13 +34,31 @@ async function compressImage(f: File): Promise<File> {
       canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
       canvas.toBlob(blob => {
         if (!blob) { resolve(f); return; }
-        const name = f.name.replace(/\.[^.]+$/, ".jpg");
-        resolve(new File([blob], name, { type: "image/jpeg" }));
-      }, "image/jpeg", 0.75);
+        resolve(new File([blob], asJpgName(f.name), { type: "image/jpeg" }));
+      }, "image/jpeg", quality);
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve(f); };
     img.src = url;
   });
+}
+
+const asJpgName = (name: string) => `${name.replace(/\.[^.]+$/, "")}.jpg`;
+
+// Imágenes que el servidor guarda tal cual. Las demás (.jfif, .heic, .gif…) se pasan a JPG.
+const ACCEPTED_IMAGE = /\.(jpe?g|png|webp)$/i;
+// Por tipo o por nombre: Windows a veces no informa el tipo de una foto HEIC.
+const isImageFile = (f: File) => f.type.startsWith("image/") || /\.(hei[cf]|jfif|avif|gif|bmp|tiff?)$/i.test(f.name);
+
+/**
+ * Deja una imagen adjuntada como "Archivo" en un formato que el servidor acepta,
+ * sin achicarla de más (puede ser un informe escaneado). Si el navegador no la
+ * puede abrir (p. ej. una foto HEIC del celular en la PC) devuelve la original.
+ */
+async function toAcceptedImage(f: File): Promise<File> {
+  if (ACCEPTED_IMAGE.test(f.name)) return f;
+  // .jfif: es un JPG con otro nombre, alcanza con renombrarlo.
+  if (f.type === "image/jpeg") return new File([f], asJpgName(f.name), { type: "image/jpeg" });
+  return compressImage(f, 2560, 0.85);
 }
 
 /** `YYYY-MM-DDThh:mm` en hora local, para <input type="datetime-local">. */
@@ -138,24 +155,27 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
   }, []);
 
   // ─── Adjuntos ──────────────────────────────────────────────────────────────
-  const addPhotos = useCallback(async (list: FileList | null) => {
+  const addFiles = useCallback(async (list: FileList | null, from: "photo" | "file") => {
     if (!list || list.length === 0) return;
     setCompressing(true);
     try {
       const added: Attachment[] = [];
+      const rejected: string[] = [];
       for (const f of Array.from(list)) {
-        const c = f.type.startsWith("image/") ? await compressImage(f) : f;
-        added.push({ key: `${Date.now()}-${Math.random()}`, file: c, kind: c.type.startsWith("image/") ? "PHOTO" : "DOCUMENT", preview: c.type.startsWith("image/") ? URL.createObjectURL(c) : null });
+        const key = `${Date.now()}-${Math.random()}`;
+        if (!isImageFile(f)) { added.push({ key, file: f, kind: "DOCUMENT", preview: null }); continue; }
+        // "Foto" la achica para que viaje liviana; "Archivo" sólo la pasa a un formato aceptado.
+        const c = from === "photo" ? await compressImage(f) : await toAcceptedImage(f);
+        // Si no se pudo pasar a JPG, el servidor la rechazaría al guardar: se avisa ahora.
+        if (!ACCEPTED_IMAGE.test(c.name)) { rejected.push(f.name); continue; }
+        added.push({ key, file: c, kind: from === "photo" ? "PHOTO" : "DOCUMENT", preview: URL.createObjectURL(c) });
       }
       setFiles(prev => [...prev, ...added]);
+      if (rejected.length > 0) setErr(t("pn.imageUnsupported").replace("{name}", rejected.join(", ")));
     } finally {
       setCompressing(false);
     }
-  }, []);
-  const addDocs = useCallback((list: FileList | null) => {
-    if (!list || list.length === 0) return;
-    setFiles(prev => [...prev, ...Array.from(list).map(f => ({ key: `${Date.now()}-${Math.random()}`, file: f, kind: "DOCUMENT" as const, preview: null }))]);
-  }, []);
+  }, [t]);
   const removeFile = (key: string) => setFiles(prev => {
     const f = prev.find(x => x.key === key);
     if (f?.preview) URL.revokeObjectURL(f.preview);
@@ -305,12 +325,12 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   ))}
                   <label className="w-[72px] h-[72px] rounded-xl border-2 border-dashed border-fg/15 flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-bold text-text-industrial/60 cursor-pointer hover:bg-fg/5">
                     {compressing ? <Loader2 className="w-5 h-5 animate-spin text-accent" /> : <Camera className="w-5 h-5" />} {t("pn.photo")}
-                    <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => { void addPhotos(e.target.files); e.target.value = ""; }} />
+                    <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => { void addFiles(e.target.files, "photo"); e.target.value = ""; }} />
                   </label>
                   <label className="w-[72px] h-[72px] rounded-xl border-2 border-dashed border-fg/15 flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-bold text-text-industrial/60 cursor-pointer hover:bg-fg/5">
                     <Paperclip className="w-5 h-5" /> {t("pn.file")}
                     {/* ZIP: un informe con sus anexos en un solo archivo. Cada sistema reporta el .zip distinto. */}
-                    <input type="file" accept="application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple className="hidden" onChange={e => { addDocs(e.target.files); e.target.value = ""; }} />
+                    <input type="file" accept="application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple className="hidden" onChange={e => { void addFiles(e.target.files, "file"); e.target.value = ""; }} />
                   </label>
                 </div>
               </div>

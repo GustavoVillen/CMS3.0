@@ -962,6 +962,7 @@ const dict = {
   "pn.nAttachments": { es: "{n} adjuntos", en: "{n} attachments", pt: "{n} anexos" },
   "pn.needSomething": { es: "Escribí algo o sumá una foto.", en: "Write something or add a photo.", pt: "Escreva algo ou adicione uma foto." },
   "pn.futureDate": { es: "La fecha no puede ser futura.", en: "The date can't be in the future.", pt: "A data não pode ser futura." },
+  "pn.imageUnsupported": { es: "No se pudo abrir la imagen {name} en este equipo: está en un formato que no es compatible. Pasala a JPG o sacá la foto con la cámara en formato común (sin «alta eficiencia»).", en: "The image {name} could not be opened on this device: its format isn't supported. Convert it to JPG or take the photo with the camera in the common format (not \"high efficiency\").", pt: "Não foi possível abrir a imagem {name} neste aparelho: o formato não é compatível. Converta para JPG ou tire a foto com a câmera no formato comum (sem \"alta eficiência\")." },
   "pn.offlineHint": { es: "Sin señal queda guardado en el teléfono y se envía solo.", en: "Without signal it stays on the phone and is sent automatically.", pt: "Sem sinal fica salvo no telefone e é enviado sozinho." },
   "pn.saveError": { es: "No se pudo guardar el avance.", en: "The progress note could not be saved.", pt: "Não foi possível salvar o avanço." },
   "pn.queuedTitle": { es: "Guardado en el teléfono", en: "Saved on the phone", pt: "Salvo no telefone" },

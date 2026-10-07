@@ -15,6 +15,9 @@ const MIME_MAP: Record<string, string> = {
   ".png":  "image/png",
   ".jpg":  "image/jpeg",
   ".jpeg": "image/jpeg",
+  // JPG con otro nombre: Windows guarda así fotos bajadas de WhatsApp o del correo.
+  // Se graba como .jpg (ver saveAttachment).
+  ".jfif": "image/jpeg",
   ".webp": "image/webp",
   ".txt":  "text/plain; charset=utf-8",
   // Audio
@@ -55,7 +58,7 @@ export async function saveAttachment(
   }
 
   const dir = entityDir(tenantSlug, entityType);
-  const savedName = randomUUID() + ext;
+  const savedName = randomUUID() + (ext === ".jfif" ? ".jpg" : ext);
   const filePath = join(dir, savedName);
 
   await new Promise<void>((resolve, reject) => {
