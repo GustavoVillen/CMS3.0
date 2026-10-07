@@ -1,5 +1,14 @@
 HISTORY.txt
 
+[2026-10-07] Copiloto: el bloque [CAMPOS] se lee aunque venga mal cerrado
+Agent: Claude Opus 5.5
+- Gemini mando [CAMPOS] sin [/CAMPOS] y despues con un corchete de mas ("}]}][/CAMPOS]"): el panel
+  lo descartaba ("la respuesta llego incompleta"), ocultaba el resto de la respuesta y el servidor
+  preguntaba por los repuestos que el modelo ya habia elegido bien (OT-M02-26-0472).
+- El final del bloque se busca contando llaves. Misma regla en el panel (copilot-blocks.ts) y en el
+  servidor (copilot-fields-block.ts), asi la guarda de datos de cierre ve lo mismo que el panel carga.
+  Pasos: pull + build web + restart.
+
 [2026-10-07] Permiso de trabajo electrico solo en tableros o con tension
 Agent: Claude Opus 5.5
 - Regla de Mercurio: el permiso ELECTRICAL_ISOLATION se exige para trabajar dentro de un tablero

@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useCopilotScreenContext } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { MarkdownText } from "./MarkdownText";
+import { removeCamposBlocks } from "../lib/copilot-blocks";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -15,12 +16,11 @@ interface ChatMessage {
 // que no debe ver el usuario). El resto del markdown (**bold**, headings, listas)
 // se renderiza con <MarkdownText>.
 function cleanCampos(text: string): string {
-  return text.replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "");
+  return removeCamposBlocks(text);
 }
 
 function buildVoiceSummary(text: string): string {
-  return text
-    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+  return removeCamposBlocks(text)
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
     .replace(/^#{1,3}\s+/gm, "")

@@ -28,6 +28,7 @@ import { RouteError } from "../../http/route-error";
 import { recordAiUsage, assertAiBudgetAvailable } from "../usage/usage-service";
 import type { FileContent } from "./file-parser-service";
 import { log } from "../../common/logger";
+import { readCamposBlocks, escapeControlCharsInJsonStrings } from "./copilot-fields-block";
 import {
   applyVesselWhereScope,
   attachAssetNames,
@@ -1659,31 +1660,6 @@ export interface SuggestedAction {
 }
 
 /**
- * Escapa saltos de línea y tabulaciones que aparecen DENTRO de un texto entre
- * comillas de un JSON; los de afuera (formato) quedan como están.
- */
-function escapeControlCharsInJsonStrings(json: string): string {
-  let out = "";
-  let inString = false;
-  let escaped = false;
-  for (const ch of json) {
-    if (inString) {
-      if (escaped) { escaped = false; out += ch; continue; }
-      if (ch === "\\") { escaped = true; out += ch; continue; }
-      if (ch === "\"") { inString = false; out += ch; continue; }
-      if (ch === "\n") { out += "\\n"; continue; }
-      if (ch === "\r") { out += "\\r"; continue; }
-      if (ch === "\t") { out += "\\t"; continue; }
-      out += ch;
-      continue;
-    }
-    if (ch === "\"") inString = true;
-    out += ch;
-  }
-  return out;
-}
-
-/**
  * Detecta el bloque [ACCIONES][...JSON...][/ACCIONES] en el texto completo.
  * Devuelve las acciones parseadas y el rango (start, end) que el frontend
  * debe borrar de lo que ya mostró. Si no hay bloque o el JSON es inválido,
@@ -2482,13 +2458,9 @@ export async function streamCopilotoChat(
   // pregunta al usuario, que es quien sabe qué usó.
   if (detectedSpares.length > 0 && !/\[(COMPLETAR|CAMPOS)_ANULADO\]/.test(accumulatedText)) {
     const loadedIds = new Set<string>();
-    const block = accumulatedText.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
-    if (block) {
-      const raw = block[1]!.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-      let fields: Record<string, unknown> = {};
-      try { fields = JSON.parse(raw); } catch { try { fields = JSON.parse(escapeControlCharsInJsonStrings(raw)); } catch { /* ilegible: lo avisa el panel */ } }
-      if (Array.isArray(fields.spareUsages)) for (const u of fields.spareUsages as Array<{ spareId?: unknown }>) loadedIds.add(String(u?.spareId ?? ""));
-    }
+    // El primer bloque, igual que el panel; si es ilegible lo avisa el panel.
+    const fields = readCamposBlocks(accumulatedText)[0]?.fields ?? {};
+    if (Array.isArray(fields.spareUsages)) for (const u of fields.spareUsages as Array<{ spareId?: unknown }>) loadedIds.add(String(u?.spareId ?? ""));
     const missing = detectedSpares.filter(d => !loadedIds.has(d.spareId) && !accumulatedText.includes(d.label.split(" — ")[0]!));
     if (missing.length > 0) {
       const lang = req.locale === "en" || req.locale === "pt" ? req.locale : "es";
@@ -2508,8 +2480,8 @@ export async function streamCopilotoChat(
   // con esa OT abierta y aprobada en pantalla. Con el registro en otro lado el
   // modelo llegó a "registrar" horas con un código de equipo inventado: se anula
   // el bloque (el panel no lo carga) y se avisa en vez de dejar el "registré".
-  const closureFieldsSent = [...accumulatedText.matchAll(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/g)]
-    .some(m => /"(hours:[^"]*|spareUsages|woResult)"\s*:/.test(m[1]!));
+  const closureFieldsSent = readCamposBlocks(accumulatedText)
+    .some(b => /"(hours:[^"]*|spareUsages|woResult)"\s*:/.test(b.json ?? ""));
   if (closureFieldsSent) {
     const sc = (req.screenContext ?? {}) as Record<string, unknown>;
     const closureOk = sc.screen === "WO_EDIT" && (sc.closure as { editable?: unknown } | undefined)?.editable === true;

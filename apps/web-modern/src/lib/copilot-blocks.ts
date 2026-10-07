@@ -28,20 +28,90 @@ export function extractNumberedOptions(text: string): NumberedOption[] {
   return out.length >= 2 ? out.slice(0, 30) : [];
 }
 
+/** Dónde está un bloque [CAMPOS] en el texto y su JSON (null si todavía no llegó entero o vino cortado). */
+interface CamposSpan { start: number; end: number; json: string | null }
+
+const CAMPOS_OPEN = "[CAMPOS]";
+const CAMPOS_CLOSE = "[/CAMPOS]";
+
+/**
+ * Bloques [CAMPOS] del texto. El final se busca contando llaves, no confiando
+ * en la etiqueta de cierre: Gemini a veces la omite o deja un corchete de más
+ * antes ("...}]}][/CAMPOS]"), y el bloque entero se perdía (OT-M02-26-0472:
+ * los repuestos no entraron y el resto de la respuesta quedó oculto). El
+ * servidor lo lee con la misma regla (copilot-fields-block.ts), para poder
+ * anular lo que el panel cargaría.
+ */
+function locateCamposBlocks(text: string): CamposSpan[] {
+  const out: CamposSpan[] = [];
+  let from = 0;
+  for (;;) {
+    const start = text.indexOf(CAMPOS_OPEN, from);
+    if (start < 0) return out;
+    let i = start + CAMPOS_OPEN.length;
+    i += /^\s*(?:```(?:json)?\s*)?/i.exec(text.slice(i))![0].length;
+    const jsonEnd = text[i] === "{" ? closingBraceEnd(text, i) : -1;
+    if (jsonEnd < 0) {
+      // JSON a medio llegar (el chat streamea) o cortado: hasta el cierre, si lo hay.
+      const close = text.indexOf(CAMPOS_CLOSE, i);
+      const end = close >= 0 ? close + CAMPOS_CLOSE.length : text.length;
+      out.push({ start, end, json: null });
+      from = end;
+      continue;
+    }
+    // Lo que sobra entre el JSON y el cierre (corchetes, llaves, ```) va con el bloque.
+    const tail = /^[\s\]}`]*\[\/CAMPOS\]/.exec(text.slice(jsonEnd)) ?? /^\s*```/.exec(text.slice(jsonEnd));
+    const end = jsonEnd + (tail ? tail[0].length : 0);
+    out.push({ start, end, json: text.slice(i, jsonEnd) });
+    from = end;
+  }
+}
+
+/** Posición justo después de la llave que cierra el objeto que abre en `open`; -1 si no cierra. */
+function closingBraceEnd(text: string, open: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === "\"") inString = false;
+      continue;
+    }
+    if (ch === "\"") inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/** El texto sin los bloques [CAMPOS] (también el que está a medio llegar). */
+export function removeCamposBlocks(text: string): string {
+  let out = "";
+  let last = 0;
+  for (const b of locateCamposBlocks(text)) {
+    out += text.slice(last, b.start);
+    last = b.end;
+  }
+  return (out + text.slice(last)).replace(/\[\/CAMPOS\]/g, "");
+}
+
 /**
  * Extract the JSON payload from a [CAMPOS]{...}[/CAMPOS] block, or null if absent/invalid.
  *
- * Tolera lo que el modelo a veces manda mal: el JSON entre ``` , saltos de
- * línea reales dentro de un texto (un análisis de varios renglones) y valores
- * que no son texto (una lista de acciones se carga un renglón por ítem). Antes
- * cualquiera de esas cosas hacía que el bloque se descartara sin aviso.
+ * Tolera lo que el modelo a veces manda mal: el JSON entre ``` , el cierre
+ * ausente o con un corchete de más, saltos de línea reales dentro de un texto
+ * (un análisis de varios renglones) y valores que no son texto (una lista de
+ * acciones se carga un renglón por ítem). Antes cualquiera de esas cosas hacía
+ * que el bloque se descartara.
  */
 export function extractCamposBlock(text: string): Record<string, string> | null {
   // El servidor anula los datos del cierre de una OT que no está abierta y aprobada en pantalla.
   if (text.includes("[CAMPOS_ANULADO]")) return null;
-  const match = text.match(/\[CAMPOS\]([\s\S]*?)\[\/CAMPOS\]/);
-  if (!match) return null;
-  const raw = match[1]!.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const raw = locateCamposBlocks(text)[0]?.json;
+  if (!raw) return null;
   for (const candidate of [raw, escapeLineBreaksInStrings(raw)]) {
     try {
       const parsed: unknown = JSON.parse(candidate);
@@ -136,12 +206,11 @@ export function extractCompleteWoBlock(text: string): string | null {
  * que el usuario no vea el marcador crudo por un instante.
  */
 export function stripAiBlocks(text: string): string {
-  return text
-    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+  return removeCamposBlocks(text)
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
     .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
-    .replace(/\[(?:CAMPOS|RECALCULAR|ABRIR|COMPLETAR)\][\s\S]*$/, "")
+    .replace(/\[(?:RECALCULAR|ABRIR|COMPLETAR)\][\s\S]*$/, "")
     // Avisos internos del panel a la IA: si el modelo los repite, no se muestran.
     .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA|COMPLETAR OT|COMPLETAR_ANULADO|CAMPOS_ANULADO)\]/g, "")
     .trim();

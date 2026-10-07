@@ -45,8 +45,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function buildVoiceSummary(text: string): string {
-  const clean = text
-    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+  const clean = removeCamposBlocks(text)
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
     .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
@@ -88,8 +87,7 @@ function buildVoiceText(text: string): string {
 
 /** Mismo limpiado que el resumen, sin recortar. */
 function buildVoiceSummaryClean(text: string): string {
-  return text
-    .replace(/\[CAMPOS\][\s\S]*?\[\/CAMPOS\]/g, "")
+  return removeCamposBlocks(text)
     .replace(/\[RECALCULAR\][\s\S]*?\[\/RECALCULAR\]/g, "")
     .replace(/\[ABRIR\][\s\S]*?\[\/ABRIR\]/g, "")
     .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
@@ -149,6 +147,7 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useResizable } from "../lib/hooks";
 import {
   extractNumberedOptions, extractCamposBlock, extractRecalcBlock, extractOpenScreenBlock, extractCompleteWoBlock, stripAiBlocks,
+  removeCamposBlocks,
 } from "../lib/copilot-blocks";
 import { useT, useWoTerms, type WoTerms } from "../lib/i18n";
 
