@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V1 — Director de Mantenimiento</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root { --fg:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --sky:#0284c7; --violet:#7c3aed; --red:#dc2626; --amber:#b45309; --green:#059669; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg); color:var(--fg); padding:24px 16px 80px; }
+  .wrap { max-width:1180px; margin:0 auto; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; letter-spacing:.04em; }
+  h1 { font-size:20px; margin:10px 0 4px; }
+  .lead { color:var(--muted); font-size:13px; margin:0 0 20px; max-width:860px; line-height:1.55; }
+  .demo { font-size:10.5px; color:#94a3b8; font-weight:600; }
+  .step { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:30px 0 8px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:18px; box-shadow:0 18px 44px rgba(15,23,42,.08); overflow:hidden; }
+  .note { font-size:11.5px; color:#475569; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:8px 10px; margin:10px 0 0; line-height:1.5; }
+  button { font-family:inherit; cursor:pointer; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border-radius:10px; padding:7px 12px; font-size:12px; font-weight:800; border:1px solid var(--line); background:#fff; color:#334155; }
+  .btn:hover { background:#f8fafc; }
+  .btn.pri { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+  .btn.pri:hover { background:#6d28d9; }
+  .btn.sm { padding:5px 9px; font-size:11.5px; }
+  .x { width:30px; height:30px; border-radius:99px; background:#e11d48; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0; border:0; }
+
+  /* ── App shell simulada ── */
+  .shell { display:grid; grid-template-columns:210px 1fr; min-height:600px; }
+  @media (max-width:860px){ .shell { grid-template-columns:1fr; } .side { display:none; } }
+  .side { background:#0f172a; color:#cbd5e1; padding:14px 10px; font-size:12.5px; }
+  .side .sec { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin:12px 8px 6px; }
+  .side .it { padding:7px 10px; border-radius:8px; margin-bottom:2px; }
+  .side .it.on { background:#7c3aed; color:#fff; font-weight:800; }
+  .side .new { font-size:9.5px; background:#fde68a; color:#78350f; border-radius:99px; padding:0 6px; margin-left:4px; font-weight:800; }
+  .content { padding:18px 20px; background:#f8fafc; min-width:0; }
+  .topbar { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .role { font-size:11px; font-weight:800; background:#ede9fe; color:#6d28d9; border-radius:99px; padding:2px 9px; }
+
+  /* ── Encabezado de la página ── */
+  .ph { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .ph .ico { width:42px; height:42px; border-radius:12px; background:#ede9fe; color:#6d28d9; display:flex; align-items:center; justify-content:center; font-size:21px; }
+  .ph h2 { font-size:19px; margin:0; font-weight:900; }
+  .ph .sub { font-size:12px; color:var(--muted); }
+  .grow { flex:1; min-width:220px; }
+  .gen { display:flex; align-items:center; gap:10px; border-radius:14px; padding:9px 15px; background:linear-gradient(135deg,#7c3aed,#4f46e5); color:#fff; border:0; box-shadow:0 6px 16px rgba(79,70,229,.28); text-align:left; }
+  .gen .ic { width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-size:17px; }
+  .gen b { display:block; font-size:13.5px; font-weight:900; }
+  .gen small { display:block; font-size:11px; opacity:.85; }
+  select { font-family:inherit; font-size:12px; border:1px solid var(--line); border-radius:10px; padding:7px 10px; background:#fff; }
+
+  /* ── 4 preguntas ── */
+  .q4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:12px; }
+  @media (max-width:980px){ .q4 { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px){ .q4 { grid-template-columns:1fr; } }
+  .q { background:#fff; border:1px solid var(--line); border-radius:14px; padding:10px 12px; border-top:4px solid; }
+  .q h4 { margin:0 0 4px; font-size:12px; font-weight:900; display:flex; gap:6px; align-items:center; }
+  .q p { margin:0; font-size:12px; color:#334155; line-height:1.5; }
+  .q1 { border-top-color:#dc2626; } .q2 { border-top-color:#d97706; } .q3 { border-top-color:#0284c7; } .q4c { border-top-color:#059669; }
+  .ailabel { font-size:9.5px; font-weight:800; color:#6d28d9; border:1px solid #c4b5fd; background:#f5f3ff; border-radius:99px; padding:0 6px; }
+
+  /* ── Fichas de números ── */
+  .kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-bottom:14px; }
+  @media (max-width:980px){ .kpis { grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:560px){ .kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:#fff; border:1px solid var(--line); border-radius:12px; padding:9px 11px; }
+  .kpi b { font-size:22px; font-weight:900; display:block; line-height:1.1; }
+  .kpi small { font-size:11px; color:var(--muted); line-height:1.35; display:block; }
+  .kpi.bad b { color:#b91c1c; } .kpi.warn b { color:#b45309; }
+  .sysl { font-size:9.5px; font-weight:800; color:#0369a1; border:1px solid #bae6fd; background:#f0f9ff; border-radius:99px; padding:0 6px; }
+
+  /* ── Pestañas ── */
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:12px; }
+  .tab { border:0; background:none; padding:8px 12px; font-size:12.5px; font-weight:800; color:var(--muted); border-bottom:3px solid transparent; }
+  .tab.on { color:#6d28d9; border-bottom-color:#7c3aed; }
+  .cnt { font-size:10.5px; background:#f1f5f9; border-radius:99px; padding:0 6px; margin-left:4px; }
+
+  /* ── Hallazgos ── */
+  .fl { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center; font-size:12px; color:var(--muted); }
+  .find { background:#fff; border:1px solid var(--line); border-left:5px solid; border-radius:14px; margin-bottom:10px; }
+  .find.P-crit { border-left-color:#b91c1c; } .find.P-high { border-left-color:#ea580c; } .find.P-med { border-left-color:#ca8a04; } .find.P-low { border-left-color:#64748b; }
+  .fh { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; cursor:pointer; }
+  .pb { font-size:10.5px; font-weight:900; border-radius:6px; padding:2px 7px; white-space:nowrap; }
+  .pb.crit { background:#b91c1c; color:#fff; } .pb.high { background:#ffedd5; color:#9a3412; } .pb.med { background:#fef9c3; color:#854d0e; } .pb.low { background:#f1f5f9; color:#475569; }
+  .ft { font-size:14px; font-weight:900; margin:0 0 3px; }
+  .fs { font-size:12.5px; color:#475569; line-height:1.5; margin:0; }
+  .meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .chip { font-size:10.5px; font-weight:800; border-radius:99px; padding:1px 8px; border:1px solid var(--line); background:#f8fafc; color:#475569; }
+  .chip.sys { background:#fdf4ff; color:#86198f; border-color:#f5d0fe; }
+  .chip.ev { background:#f0f9ff; color:#0369a1; border-color:#bae6fd; }
+  .chip.noev { background:#fef2f2; color:#b91c1c; border-color:#fecaca; }
+  .chip.act { background:#ecfdf5; color:#047857; border-color:#a7f3d0; }
+  .chev { color:#94a3b8; font-size:18px; margin-left:auto; transition:transform .15s; }
+  .find.open .chev { transform:rotate(90deg); }
+  .fb { display:none; border-top:1px solid #f1f5f9; padding:4px 14px 14px; }
+  .find.open .fb { display:block; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; }
+  @media (max-width:760px){ .grid2 { grid-template-columns:1fr; } }
+  .blk h5 { margin:10px 0 3px; font-size:10.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .blk p, .blk li { margin:0; font-size:12.5px; line-height:1.55; color:#1e293b; }
+  .blk ul { margin:0; padding-left:18px; }
+  .fact { border-left:3px solid #0284c7; background:#f0f9ff; border-radius:8px; padding:7px 10px; }
+  .interp { border-left:3px solid #7c3aed; background:#faf5ff; border-radius:8px; padding:7px 10px; }
+  .advice { border-left:3px solid #059669; background:#f0fdf4; border-radius:8px; padding:7px 10px; }
+  .actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); }
+  .alts { width:100%; border-collapse:collapse; font-size:11.5px; margin-top:4px; }
+  .alts th { text-align:left; font-size:10px; color:#94a3b8; text-transform:uppercase; padding:4px 6px; background:#f8fafc; }
+  .alts td { padding:5px 6px; border-top:1px solid #f1f5f9; vertical-align:top; }
+  .insuf { background:#fff; border:1.5px dashed #cbd5e1; border-radius:14px; padding:12px 14px; margin-top:6px; }
+  .insuf h4 { margin:0 0 6px; font-size:13px; }
+  .insuf li { font-size:12.5px; color:#334155; line-height:1.55; }
+
+  /* ── Tabla acciones ── */
+  .tbl { width:100%; border-collapse:collapse; font-size:12px; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .tbl th { text-align:left; color:#94a3b8; font-weight:800; font-size:10.5px; text-transform:uppercase; padding:7px 9px; background:#f8fafc; }
+  .tbl td { padding:7px 9px; border-top:1px solid #f1f5f9; color:#334155; vertical-align:middle; }
+  .st { font-size:10.5px; font-weight:800; border-radius:99px; padding:1px 8px; white-space:nowrap; }
+  .st.o { background:#fee2e2; color:#b91c1c; } .st.g { background:#fef3c7; color:#92400e; } .st.v { background:#dcfce7; color:#15803d; }
+  .late { color:#b91c1c; font-weight:800; }
+  .hist { background:#fff; border:1px solid var(--line); border-radius:12px; padding:9px 12px; margin-bottom:6px; font-size:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .hist.sel { border-color:#7c3aed; box-shadow:0 0 0 2px rgba(124,58,237,.12); }
+
+  /* ── Modales ── */
+  .ov { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:flex-start; justify-content:center; padding:40px 12px; z-index:50; overflow:auto; }
+  .ov.on { display:flex; }
+  .modal { background:#fff; border-radius:18px; width:100%; max-width:760px; box-shadow:0 24px 60px rgba(15,23,42,.3); overflow:hidden; }
+  .mh { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); border-top:4px solid #7c3aed; }
+  .mh h3 { margin:0; font-size:15px; font-weight:900; flex:1; }
+  .mb { padding:14px 16px; }
+  .mf { display:flex; justify-content:flex-end; gap:8px; padding:10px 16px; border-top:1px solid var(--line); background:#f8fafc; }
+  .evrow { display:grid; grid-template-columns:52px 1fr auto; gap:10px; align-items:start; border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-bottom:6px; font-size:12px; }
+  .evid { font-family:ui-monospace,monospace; font-weight:800; color:#0369a1; }
+  .evrow b { font-size:12.5px; }
+  .evrow .d { color:var(--muted); font-size:11.5px; margin-top:2px; line-height:1.45; }
+  .lnk { font-size:11.5px; font-weight:800; color:#0284c7; white-space:nowrap; text-decoration:none; }
+  label { display:block; font-size:11.5px; font-weight:800; color:#334155; margin:10px 0 4px; }
+  .req::after { content:" *"; color:#dc2626; }
+  input[type=text], input[type=date], textarea, .mb select { width:100%; font-family:inherit; font-size:12.5px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  .mandatory { background:#fffbeb; border-color:#fcd34d !important; }
+  textarea { min-height:190px; line-height:1.5; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:560px){ .row2 { grid-template-columns:1fr; } }
+  .hint { font-size:11px; color:var(--muted); margin-top:4px; }
+  .ok { font-size:11.5px; color:#047857; font-weight:800; display:none; }
+
+  /* ── Equipo ── */
+  .drawer { max-width:520px; }
+  .chk { display:flex; gap:10px; align-items:flex-start; border:1.5px solid #c4b5fd; background:#faf5ff; border-radius:12px; padding:10px 12px; margin-top:10px; }
+  .chk input { margin-top:3px; width:16px; height:16px; }
+  .chk b { font-size:12.5px; } .chk span { font-size:11.5px; color:#475569; display:block; line-height:1.45; }
+  .rules { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 18px; font-size:13px; line-height:1.6; }
+  .rules table { border-collapse:collapse; margin:6px 0 4px; }
+  .rules td, .rules th { border:1px solid var(--line); padding:5px 10px; font-size:12px; text-align:left; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V1 · NO ES LA APP</span>
+  <h1>Director de Mantenimiento — Asesor técnico (CMS3 Technical Manager Advisor)</h1>
+  <p class="lead">
+    Pantalla nueva, sólo para quien tenga la marca <b>Director de Mantenimiento</b> en Equipo.
+    El sistema junta los registros reales de toda la flota; la IA los analiza con el criterio del asesor y
+    <b>sólo puede citar registros que existen</b> (cada uno con su etiqueta E-1, E-2…). Cada informe queda guardado con fecha y autor.
+    <br><span class="demo">Todos los datos, códigos y fechas de esta página son de EJEMPLO. Tocá las tarjetas y los botones: abren las ventanitas.</span>
+  </p>
+
+  <!-- ───────────── 1. Equipo ───────────── -->
+  <div class="step">1 · Equipo → ficha de la persona (sólo lo ve un administrador)</div>
+  <div class="card drawer" style="padding:14px 16px;">
+    <div style="font-size:15px;font-weight:900;">Juan Pérez</div>
+    <div style="font-size:12px;color:var(--muted);">jperez@empresa.com</div>
+    <label>Rol</label>
+    <select style="width:100%"><option>DPA / Director de Operaciones</option></select>
+    <div class="chk">
+      <input type="checkbox" checked>
+      <div><b>Director de Mantenimiento</b>
+        <span>Le habilita la pantalla del asesor técnico. Sólo se puede marcar en un administrador. Si le cambian el rol, la marca se quita sola.</span></div>
+    </div>
+  </div>
+  <div class="note" style="max-width:520px;">Se puede marcar a más de una persona. Cuando está marcada, en Equipo y arriba a la derecha aparece como <b>“Director de Mantenimiento”</b>.</div>
+
+  <!-- ───────────── 2. Pantalla ───────────── -->
+  <div class="step">2 · Pantalla del Director</div>
+  <div class="card">
+    <div class="shell">
+      <aside class="side">
+        <div class="sec">Dirección</div>
+        <div class="it on">🧭 Asesor técnico <span class="new">NUEVO</span></div>
+        <div class="sec">Operación</div>
+        <div class="it">Tablero</div><div class="it">Órdenes de trabajo</div><div class="it">Solicitudes de servicio</div>
+        <div class="it">Planes de mantenimiento</div><div class="it">Defectos</div><div class="it">Repuestos</div>
+        <div class="it">…</div>
+      </aside>
+      <main class="content">
+        <div class="topbar">Juan Pérez <span class="role">Director de Mantenimiento</span></div>
+
+        <div class="ph">
+          <div class="ico">🧭</div>
+          <div class="grow">
+            <h2>Asesor técnico</h2>
+            <div class="sub">Informe del 19/09/2026 08:42 · Juan Pérez · 5 buques · 214 registros leídos</div>
+          </div>
+          <select title="Informes anteriores"><option>19/09/2026 08:42 (actual)</option><option>12/09/2026 09:10</option><option>05/09/2026 17:31</option></select>
+          <button class="gen" onclick="openOv('ovGen')">
+            <span class="ic">✨</span>
+            <span><b>Analizar la flota ahora</b><small>Con IA · tarda 1–2 minutos</small></span>
+          </button>
+        </div>
+
+        <!-- 4 preguntas -->
+        <div class="q4">
+          <div class="q q1"><h4>⚠️ ¿Qué nos puede lastimar? <span class="ailabel">IA</span></h4>
+            <p>La bomba de incendio de emergencia de LATERE lleva 2 postergaciones seguidas y no tiene fecha comprometida.</p></div>
+          <div class="q q2"><h4>🔧 ¿Qué estamos gestionando mal? <span class="ailabel">IA</span></h4>
+            <p>Se cierran OT sin evidencia y sin causa raíz: el mismo defecto vuelve en el Generador #2 de DON CHICUETO.</p></div>
+          <div class="q q3"><h4>🎯 ¿Qué requiere mi atención ahora? <span class="ailabel">IA</span></h4>
+            <p>2 hallazgos críticos/altos con plazo de 48 h. El resto entra en un plan de recuperación del atraso.</p></div>
+          <div class="q q4c"><h4>✅ ¿Qué hago? <span class="ailabel">IA</span></h4>
+            <p>Pedir hoy al JM de LATERE estado, recursos y fecha de la prueba. Revisar con el Superintendente el criterio de cierre de OT.</p></div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpis">
+          <div class="kpi bad"><b>3</b><small>Vencidos en equipos críticos (A / ISM 10.3)</small></div>
+          <div class="kpi warn"><b>58%</b><small>Correctivo últimos 90 días</small></div>
+          <div class="kpi warn"><b>6</b><small>Postergaciones activas</small></div>
+          <div class="kpi bad"><b>2</b><small>Repuestos críticos bajo mínimo</small></div>
+          <div class="kpi warn"><b>3</b><small>Equipos con defecto repetido</small></div>
+          <div class="kpi bad"><b>1</b><small>Laboratorio en alarma sin OT</small></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;"><span class="sysl">SISTEMA</span> los números los calcula el sistema, no la IA.</div>
+
+        <!-- Pestañas -->
+        <div class="tabs">
+          <button class="tab on" data-t="tFind" onclick="tab(this)">Hallazgos <span class="cnt">6</span></button>
+          <button class="tab" data-t="tAct" onclick="tab(this)">Acciones en seguimiento <span class="cnt">4</span></button>
+          <button class="tab" data-t="tHist" onclick="tab(this)">Historial <span class="cnt">3</span></button>
+        </div>
+
+        <!-- Hallazgos -->
+        <section id="tFind">
+          <div class="fl">Ordenados por riesgo, no por antigüedad ·
+            <select><option>Todos los buques</option><option>LATERE</option><option>DON CHICUETO</option></select>
+            <select><option>Todas las prioridades</option><option>Crítica</option><option>Alta</option></select>
+          </div>
+
+          <!-- F1 -->
+          <div class="find P-crit open">
+            <div class="fh" onclick="tog(this)">
+              <span class="pb crit">CRÍTICA</span>
+              <div class="grow">
+                <p class="ft">La prueba de la bomba de incendio de emergencia de LATERE está postergada por segunda vez</p>
+                <p class="fs">Equipo crítico para la seguridad (ISM 10.3). Vencida hace 41 días, sin fecha nueva comprometida.</p>
+                <div class="meta"><span class="chip">🚢 LATERE</span><span class="chip ev">4 evidencias</span><span class="chip">Plazo: 48 h</span><span class="chip">Responsable: Jefe de Máquinas</span></div>
+              </div>
+              <span class="chev">›</span>
+            </div>
+            <div class="fb">
+              <div class="grid2">
+                <div class="blk">
+                  <h5>Por qué importa</h5>
+                  <p>Si hay un incendio con la bomba principal fuera de servicio, esta es la única defensa. Dos postergaciones seguidas en un equipo de seguridad es un patrón que una auditoría TMSA o de bandera marca como normalización del desvío.</p>
+                  <h5>Evidencia <span class="sysl">SISTEMA</span></h5>
+                  <div class="fact">Plan LTE-FF-012 vencido el 09/08/2026 [E-3]. Postergaciones DEF-0041 (jun) y DEF-0057 (ago) [E-7, E-8]. Sin OT abierta para el plan [E-3]. Último registro de prueba: 14/02/2026 [E-9].</div>
+                  <h5>Mi evaluación <span class="ailabel">IA · interpretación</span></h5>
+                  <div class="interp">El problema no parece técnico sino de programación: las dos postergaciones citan “buque en operación”. Es posible que la ventana operativa nunca permita la prueba si no se la reserva de antemano. No hay registro de la causa de fondo.</div>
+                </div>
+                <div class="blk">
+                  <h5>Acción recomendada</h5>
+                  <p>Pedir al Jefe de Máquinas, en 48 h: estado actual de la bomba, qué necesita para la prueba y fecha comprometida. Si no hay ventana en 7 días, evaluar una medida provisoria formal con análisis de riesgo.</p>
+                  <h5>Responsable · Plazo</h5>
+                  <p>Jefe de Máquinas de LATERE · respuesta en 48 h, prueba en 7 días.</p>
+                  <h5>Cómo verificar</h5>
+                  <p>OT cerrada con presión y caudal medidos, fotos y firma; plan LTE-FF-012 al día.</p>
+                  <h5>Consejo de gestión</h5>
+                  <div class="advice">Planteárselo como un problema de ventana, no de incumplimiento: preguntá qué le impide hacerla y ofrecé coordinar con Operaciones la ventana. Si vuelve a postergarse, escalar al DPA.</div>
+                </div>
+              </div>
+              <div class="blk">
+                <h5>Alternativas</h5>
+                <table class="alts">
+                  <tr><th>Opción</th><th>A favor</th><th>En contra</th><th>Riesgo</th></tr>
+                  <tr><td>Parar el buque 4 h para la prueba</td><td>Cierra el tema ya</td><td>Pérdida operativa</td><td>Bajo</td></tr>
+                  <tr><td>Hacerla en el próximo puerto (≈10 días)</td><td>Sin parada extra</td><td>10 días más sin evidencia</td><td>Medio</td></tr>
+                </table>
+              </div>
+              <div class="actions">
+                <button class="btn sm" onclick="openOv('ovEv')">🔎 Ver evidencia</button>
+                <button class="btn sm" onclick="openOv('ovMail')">✉️ Redactar correo</button>
+                <button class="btn sm" onclick="openOv('ovMail')">❓ Pedir información</button>
+                <button class="btn sm" onclick="alert('Abre el formulario de OT existente, con buque, equipo, título y descripción ya cargados.')">🛠 Crear OT</button>
+                <button class="btn sm pri" onclick="openOv('ovAct')">📌 Crear acción</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- F2 -->
+          <div class="find P-high">
+            <div class="fh" onclick="tog(this)">
+              <span class="pb high">ALTA</span>
+              <div class="grow">
+                <p class="ft">El mismo defecto vuelve en el Generador #2 de DON CHICUETO (3 veces en 150 días)</p>
+                <p class="fs">Las 3 OT se cerraron cambiando la junta, sin causa raíz ni mediciones.</p>
+                <div class="meta"><span class="chip">🚢 DON CHICUETO</span><span class="chip ev">5 evidencias</span><span class="chip sys">Sistémico</span><span class="chip act">Acción abierta</span></div>
+              </div>
+              <span class="chev">›</span>
+            </div>
+            <div class="fb"><p class="fs" style="padding-top:8px;">(Mismas secciones que la tarjeta de arriba.)</p></div>
+          </div>
+
+          <!-- F3 -->
+          <div class="find P-high">
+            <div class="fh" onclick="tog(this)">
+              <span class="pb high">ALTA</span>
+              <div class="grow">
+                <p class="ft">Análisis de aceite en alarma del Motor Principal #4 de LATERE sin OT posterior</p>
+                <p class="fs">Laboratorio del 01/09: hierro y silicio en alarma. Pasaron 18 días sin acción registrada.</p>
+                <div class="meta"><span class="chip">🚢 LATERE</span><span class="chip ev">2 evidencias</span></div>
+              </div>
+              <span class="chev">›</span>
+            </div>
+            <div class="fb"><p class="fs" style="padding-top:8px;">(Mismas secciones.)</p></div>
+          </div>
+
+          <!-- F4 -->
+          <div class="find P-med">
+            <div class="fh" onclick="tog(this)">
+              <span class="pb med">MEDIA</span>
+              <div class="grow">
+                <p class="ft">58% del mantenimiento de la flota fue correctivo en los últimos 90 días</p>
+                <p class="fs">Para un plan preventivo maduro se espera bastante menos. Sugiere planes que no anticipan fallas.</p>
+                <div class="meta"><span class="chip">Toda la flota</span><span class="chip ev">1 evidencia</span><span class="chip sys">Sistémico</span></div>
+              </div>
+              <span class="chev">›</span>
+            </div>
+            <div class="fb"><p class="fs" style="padding-top:8px;">(Mismas secciones.)</p></div>
+          </div>
+
+          <!-- F5 -->
+          <div class="find P-med">
+            <div class="fh" onclick="tog(this)">
+              <span class="pb med">MEDIA</span>
+              <div class="grow">
+                <p class="ft">4 OT cerradas este mes sin resultado, fotos ni notas de avance</p>
+                <p class="fs">No hay forma de demostrar ante una auditoría qué se hizo.</p>
+                <div class="meta"><span class="chip">🚢 3 buques</span><span class="chip ev">4 evidencias</span></div>
+              </div>
+              <span class="chev">›</span>
+            </div>
+            <div class="fb"><p class="fs" style="padding-top:8px;">(Mismas secciones.)</p></div>
+          </div>
+
+          <!-- F6: sin evidencia -->
+          <div class="find P-low">
+            <div class="fh" onclick="tog(this)">
+              <span class="pb low">BAJA</span>
+              <div class="grow">
+                <p class="ft">Posible sobrecarga de trabajo administrativo a bordo</p>
+                <p class="fs">La IA lo sugiere, pero no citó registros válidos: se muestra como hipótesis, no como hecho.</p>
+                <div class="meta"><span class="chip noev">⚠ Sin evidencia verificable</span></div>
+              </div>
+              <span class="chev">›</span>
+            </div>
+            <div class="fb"><p class="fs" style="padding-top:8px;">Sin botón “Crear OT”: primero hay que confirmar el hecho (se ofrece “Pedir información”).</p></div>
+          </div>
+
+          <div class="insuf">
+            <h4>ℹ️ Información insuficiente para una conclusión confiable</h4>
+            <ul>
+              <li><b>Costos de mantenimiento:</b> el CMS no registra costos de OT ni de repuestos. Para analizarlos hace falta cargarlos.</li>
+              <li><b>Plazos reales de entrega de proveedores:</b> no hay órdenes de compra; sólo existe el plazo teórico del repuesto.</li>
+              <li><b>Horas-hombre:</b> 9 de 112 OT cerradas tienen horas reales cargadas; no alcanza para medir carga de trabajo.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Acciones -->
+        <section id="tAct" style="display:none;">
+          <div class="fl">Acciones creadas desde los hallazgos. Se cierran sólo cuando se verifica la evidencia.
+            <select><option>Abiertas y en gestión</option><option>Todas</option><option>Verificadas</option></select>
+          </div>
+          <table class="tbl">
+            <tr><th>Acción</th><th>Buque</th><th>Responsable</th><th>Vence</th><th>Prioridad</th><th>Estado</th><th></th></tr>
+            <tr><td>Estado y fecha de prueba bomba de incendio de emergencia</td><td>LATERE</td><td>Jefe de Máquinas</td><td>21/09/2026</td><td><span class="pb crit">CRÍTICA</span></td><td><span class="st o">● Abierta</span></td><td><button class="btn sm">Actualizar</button></td></tr>
+            <tr><td>Análisis de causa raíz fuga Generador #2</td><td>DON CHICUETO</td><td>Superintendente técnico</td><td class="late">15/09/2026 · vencida</td><td><span class="pb high">ALTA</span></td><td><span class="st g">◐ En gestión</span></td><td><button class="btn sm">Actualizar</button></td></tr>
+            <tr><td>Criterio mínimo de evidencia al cerrar OT</td><td>Flota</td><td>Superintendente técnico</td><td>30/09/2026</td><td><span class="pb med">MEDIA</span></td><td><span class="st g">◐ En gestión</span></td><td><button class="btn sm">Actualizar</button></td></tr>
+            <tr><td>Reponer filtros críticos bajo mínimo</td><td>LATERE</td><td>Compras / Logística</td><td>10/09/2026</td><td><span class="pb high">ALTA</span></td><td><span class="st v">✔ Verificada</span></td><td><button class="btn sm">Ver</button></td></tr>
+          </table>
+        </section>
+
+        <!-- Historial -->
+        <section id="tHist" style="display:none;">
+          <div class="hist sel"><b>19/09/2026 08:42</b> · Juan Pérez · 6 hallazgos (1 crítico, 2 altos) <span class="grow"></span><button class="btn sm">Abrir</button></div>
+          <div class="hist"><b>12/09/2026 09:10</b> · Juan Pérez · 7 hallazgos (2 críticos, 2 altos) <span class="grow"></span><button class="btn sm">Abrir</button></div>
+          <div class="hist"><b>05/09/2026 17:31</b> · Juan Pérez · 5 hallazgos (0 críticos, 3 altos) <span class="grow"></span><button class="btn sm">Abrir</button></div>
+          <div class="note">Cada informe guarda la foto de lo que vio la IA en ese momento: la evidencia de un informe viejo sigue siendo la de esa fecha.</div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div class="note">A la derecha sigue estando el <b>copiloto</b>: en esta pantalla responde con el criterio del asesor y conoce el informe abierto (“¿por qué el Generador #2 es sistémico?”, “armame el plan de recuperación del atraso”).</div>
+
+  <!-- ───────────── 3. Reglas ───────────── -->
+  <div class="step">3 · Quién hace qué</div>
+  <div class="rules">
+    <table>
+      <tr><th></th><th>Quién</th></tr>
+      <tr><td>Ve la pantalla y genera informes</td><td>Sólo un administrador con la marca Director de Mantenimiento</td></tr>
+      <tr><td>Crea, actualiza y verifica acciones</td><td>El Director</td></tr>
+      <tr><td>Pone o saca la marca</td><td>Cualquier administrador, desde Equipo</td></tr>
+      <tr><td>Correos</td><td>La IA los redacta; el Director los copia o los abre en su correo y los envía él</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═════════ Modal: generando ═════════ -->
+<div class="ov" id="ovGen" onclick="bg(event,this)">
+  <div class="modal" style="max-width:440px;">
+    <div class="mh"><h3>Analizando la flota…</h3><button class="x" onclick="closeOv('ovGen')">✕</button></div>
+    <div class="mb" style="text-align:center;font-size:12.5px;color:#475569;line-height:1.6;">
+      <div style="font-size:30px;">✨</div>
+      Leyendo planes, OT, defectos, postergaciones, laboratorio, repuestos, certificados y tripulación de 5 buques.<br>
+      <b>Tarda 1 a 2 minutos.</b> Podés seguir usando el sistema; el informe queda guardado.
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ Modal: evidencia ═════════ -->
+<div class="ov" id="ovEv" onclick="bg(event,this)">
+  <div class="modal">
+    <div class="mh"><h3>🔎 Evidencia — Bomba de incendio de emergencia · LATERE</h3><button class="x" onclick="closeOv('ovEv')">✕</button></div>
+    <div class="mb">
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;">Registros tal como estaban el 19/09/2026 08:42, cuando se generó el informe.</div>
+      <div class="evrow"><span class="evid">E-3</span><div><b>Plan LTE-FF-012 · Prueba bomba de incendio de emergencia</b><div class="d">Vencido desde 09/08/2026 (41 días) · Equipo criticidad A · ISM 10.3 · frecuencia 3 meses</div></div><a class="lnk" href="#">Abrir plan →</a></div>
+      <div class="evrow"><span class="evid">E-7</span><div><b>Postergación DEF-0041</b><div class="d">Pedida 02/06/2026 · aprobada · motivo: “buque en operación”</div></div><a class="lnk" href="#">Abrir →</a></div>
+      <div class="evrow"><span class="evid">E-8</span><div><b>Postergación DEF-0057</b><div class="d">Pedida 05/08/2026 · aprobada · motivo: “buque en operación” · sin fecha objetivo</div></div><a class="lnk" href="#">Abrir →</a></div>
+      <div class="evrow"><span class="evid">E-9</span><div><b>OT-LTE-2026-0033 · Prueba bomba de incendio de emergencia</b><div class="d">Cerrada 14/02/2026 · presión 7,5 bar registrada</div></div><a class="lnk" href="#">Abrir OT →</a></div>
+    </div>
+    <div class="mf"><button class="btn" onclick="closeOv('ovEv')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- ═════════ Modal: correo ═════════ -->
+<div class="ov" id="ovMail" onclick="bg(event,this)">
+  <div class="modal">
+    <div class="mh"><h3>✉️ Redactar correo</h3><button class="x" onclick="closeOv('ovMail')">✕</button></div>
+    <div class="mb">
+      <div class="row2">
+        <div><label class="req">Para</label><select class="mandatory"><option>Jefe de Máquinas — LATERE</option><option>Capitán — LATERE</option><option>Superintendente técnico</option><option>Compras / Logística</option><option>Proveedor</option></select></div>
+        <div><label class="req">Tipo</label><select class="mandatory"><option>Pedido de información</option><option>Instrucción</option><option>Seguimiento</option></select></div>
+      </div>
+      <label>Asunto <span class="ailabel">IA · editable</span></label>
+      <input type="text" value="LATERE – Prueba bomba de incendio de emergencia (plan LTE-FF-012): estado y fecha">
+      <label>Texto <span class="ailabel">IA · editable</span></label>
+      <textarea>Hola,
+
+La prueba de la bomba de incendio de emergencia (plan LTE-FF-012) está vencida desde el 09/08 y lleva dos postergaciones por operación. Como es un equipo crítico para la seguridad, necesito cerrar el tema esta semana.
+
+Te pido, antes del lunes 21/09:
+1. Estado actual de la bomba (¿arranca? ¿alguna novedad?).
+2. Qué necesitás para hacer la prueba (tiempo de parada, repuestos, apoyo).
+3. Fecha comprometida.
+
+Si el problema es la ventana operativa, avisame y lo coordino con Operaciones.
+Para cerrarlo voy a necesitar la OT con presión y caudal medidos y fotos.
+
+Gracias,
+Juan Pérez
+Director de Mantenimiento</textarea>
+      <div class="hint">Nada se envía desde el sistema: lo copiás o lo abrís en tu correo y lo mandás vos.</div>
+    </div>
+    <div class="mf">
+      <span class="ok" id="okCopy">¡Copiado!</span>
+      <button class="btn" onclick="document.getElementById('okCopy').style.display='inline'">📋 Copiar</button>
+      <button class="btn pri" onclick="alert('Abre tu programa de correo con el asunto y el texto ya puestos.')">Abrir en mi correo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ Modal: crear acción ═════════ -->
+<div class="ov" id="ovAct" onclick="bg(event,this)">
+  <div class="modal" style="max-width:560px;">
+    <div class="mh"><h3>📌 Crear acción de seguimiento</h3><button class="x" onclick="closeOv('ovAct')">✕</button></div>
+    <div class="mb">
+      <label class="req">Acción</label>
+      <input type="text" class="mandatory" value="Estado y fecha de prueba bomba de incendio de emergencia">
+      <div class="row2">
+        <div><label class="req">Responsable</label><select class="mandatory"><option>Jefe de Máquinas — LATERE</option><option>Superintendente técnico</option></select></div>
+        <div><label class="req">Fecha objetivo</label><input type="date" class="mandatory" value="2026-09-21"></div>
+      </div>
+      <div class="row2">
+        <div><label class="req">Prioridad</label><select class="mandatory"><option>Crítica</option><option>Alta</option><option>Media</option><option>Baja</option></select></div>
+        <div><label>Buque</label><select><option>LATERE</option></select></div>
+      </div>
+      <label>Cómo se verifica el cierre</label>
+      <input type="text" value="OT cerrada con presión y caudal medidos, fotos y firma">
+      <div class="hint">Viene precargado desde el hallazgo. Queda vinculada al informe y a su evidencia.</div>
+    </div>
+    <div class="mf"><button class="btn" onclick="closeOv('ovAct')">Cancelar</button><button class="btn pri" onclick="closeOv('ovAct')">Crear acción</button></div>
+  </div>
+</div>
+
+<script>
+  function tog(h){ h.parentElement.classList.toggle('open'); }
+  function tab(b){ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    ['tFind','tAct','tHist'].forEach(id=>document.getElementById(id).style.display = id===b.dataset.t ? '' : 'none'); }
+  function openOv(id){ document.getElementById(id).classList.add('on'); }
+  function closeOv(id){ document.getElementById(id).classList.remove('on'); }
+  function bg(e,el){ if(e.target===el) el.classList.remove('on'); }
+</script>
+</body>
+</html>

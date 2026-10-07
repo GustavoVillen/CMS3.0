@@ -1,0 +1,766 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2, Wrench } from "lucide-react";
+import { useFetch } from "../lib/hooks";
+import { ModalCloseButton } from "../components/ModalCloseButton";
+import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
+import { CertificateRenewalDialog } from "../components/CertificateRenewalDialog";
+import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
+import { api, ApiError } from "../lib/api";
+import { DataTable, StatusBadge, type Column } from "../components/DataTable";
+import { VesselLabel } from "../components/EntityLabels";
+import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
+import { PageHeader } from "../components/PageHeader";
+import { ExcelPanel } from "../components/ExcelPanel";
+import { useAuth, useCan } from "../lib/auth";
+import { useT } from "../lib/i18n";
+import { useCopilotEmitter } from "../lib/copilot-context";
+import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
+import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
+import { AutoTextArea } from "../components/AutoTextArea";
+import { ClassCycleBar, ClassCycleLegend, ClassCycleSituation, computeClassCycle, type ClassCycleInfo, type ClassCycleModel } from "../components/ClassCycleBar";
+import { useVesselContext } from "../lib/vessel-context";
+
+interface CertificateRenewal {
+  id: string;
+  previousIssueDate: string;
+  previousExpiryDate: string;
+  previousSourceLink?: string | null;
+  previousSourceName?: string | null;
+  issueDate: string;
+  expiryDate: string;
+  notes?: string | null;
+  createdAt: string;
+  createdByName: string;
+}
+
+interface Certificate {
+  id: string;
+  certificateCode: string;
+  name: string;
+  vesselCode: string;
+  issuingAuthority: string;
+  status: string;
+  issueDate: string;
+  expiryDate: string;
+  lastInspectionDate?: string | null;
+  notes?: string | null;
+  assetId?: string | null;
+  /** Plan de mantenimiento cuyo servicio renueva este certificado. */
+  maintenancePlanId?: string | null;
+  // Resueltos por la API para no pedir cada equipo/plan por separado.
+  assetName?: string | null;
+  maintenancePlanTaskCode?: string | null;
+  maintenancePlanTitle?: string | null;
+  maintenancePlanLastExecutionDate?: string | null;
+  renewals?: CertificateRenewal[];
+  originalSourceLink?: string | null;
+  originalSourceName?: string | null;
+  originalSourceMimeOrExt?: string | null;
+  createdAt: string;
+  /** Esquema de clase del buque (sólo en el listado). null = tipo de buque desconocido. */
+  classCycle?: ClassCycleInfo | null;
+}
+
+interface ListResponse { items: Certificate[]; total: number; }
+
+/**
+ * El mantenimiento vinculado ya se hizo DESPUÉS de la emisión del certificado:
+ * el proveedor debería haber emitido uno nuevo y todavía no se cargó.
+ *
+ * Se deriva de los datos, sin guardar ningún estado: así el aviso aparece
+ * igual sin importar cómo se cerró el mantenimiento (móvil, express, desde la
+ * OT o por el reporte diario).
+ */
+function isRenewalPending(c: Certificate): boolean {
+  if (!c.maintenancePlanId || !c.maintenancePlanLastExecutionDate) return false;
+  const exec = dayKey(c.maintenancePlanLastExecutionDate);
+  const issued = dayKey(c.issueDate);
+  if (exec === null || issued === null) return false;
+  // Estrictamente POSTERIOR en días. Comparar el instante daba un falso aviso
+  // eterno: las ejecuciones se guardan ancladas al mediodía UTC y las emisiones
+  // a medianoche, así que el MISMO día parecía "después" por 12 horas — y al
+  // renovar volvía a pasar, porque la emisión nueva era otra vez medianoche.
+  return exec > issued;
+}
+
+/** Día calendario (UTC) de una fecha, para comparar sin que la hora moleste. */
+function dayKey(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function asDateInput(value: string | null | undefined): string {
+  if (!value) return "";
+  const s = String(value);
+  return s.includes("T") ? s.slice(0, 10) : s;
+}
+
+function computeAutoCertificateStatus(expiryDateValue: string): "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" {
+  const expiry = new Date(expiryDateValue);
+  if (Number.isNaN(expiry.getTime())) return "ACTIVE";
+  const diffDays = Math.floor((expiry.getTime() - Date.now()) / 86400000);
+  if (diffDays < 0) return "EXPIRED";
+  if (diffDays <= 30) return "EXPIRING_SOON";
+  return "ACTIVE";
+}
+
+const CERT_STATUS_STYLES: Record<string, string> = {
+  ACTIVE: "bg-success-sea/10 text-success-sea border-success-sea/20",
+  EXPIRING_SOON: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
+  EXPIRED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  SUSPENDED: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
+  CLOSED: "bg-fg/5 text-text-industrial/40 border-fg/10",
+};
+
+
+// ── ExpiryCell ──────────────────────────────────────────────────────────────
+
+function ExpiryCell({ date }: { date?: string | null }) {
+  if (!date) return <span className="text-text-industrial/30">—</span>;
+  const d = new Date(date);
+  const diff = Math.floor((d.getTime() - Date.now()) / 86400000);
+  const cls = diff < 0 ? "text-red-700 dark:text-red-400 font-bold" : diff <= 30 ? "text-yellow-700 dark:text-yellow-400 font-bold" : "text-text-industrial/70";
+  return <span className={cls}>{fmtDate(date)}{diff < 0 ? " ⚠" : diff <= 30 ? " ⏰" : ""}</span>;
+}
+
+// ── Form modal ───────────────────────────────────────────────────────────────
+
+interface CertFormProps {
+  initial?: Certificate | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved }) => {
+  const t = useT();
+  const isEdit = !!initial;
+
+  const [certCode, setCertCode]   = useState(initial?.certificateCode ?? "");
+  const [name, setName]           = useState(initial?.name ?? "");
+  const [vesselCode, setVessel]   = useState(initial?.vesselCode ?? "");
+  const [authority, setAuthority] = useState(initial?.issuingAuthority ?? "");
+  const [issueDate, setIssueDate] = useState(asDateInput(initial?.issueDate));
+  const [expiryDate, setExpiry]   = useState(asDateInput(initial?.expiryDate));
+  const [lastInsp, setLastInsp]   = useState(asDateInput(initial?.lastInspectionDate));
+  const [notes, setNotes]         = useState(initial?.notes ?? "");
+  const [originalSourceLink, setOriginalSourceLink] = useState(initial?.originalSourceLink ?? "");
+  const [originalSourceName, setOriginalSourceName] = useState(initial?.originalSourceName ?? "");
+  const [originalSourceMimeOrExt, setOriginalSourceMimeOrExt] = useState(initial?.originalSourceMimeOrExt ?? "");
+  const [assetId, setAssetId]     = useState(initial?.assetId ?? "");
+  const [planId, setPlanId]       = useState(initial?.maintenancePlanId ?? "");
+  const [saving, setSaving]       = useState(false);
+  const [showRenew, setShowRenew] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasLink = originalSourceLink.trim() !== "";
+  const { data: vesselsData } = useFetch<{ items: { code: string; name: string }[] }>("/app/vessels?limit=200", []);
+
+  // Equipos y planes del buque, para vincular el certificado con el servicio que
+  // lo renueva. Se piden con api.get (no useFetch) para que el selector global de
+  // buque del header no pise el vesselCode del certificado.
+  const [assets, setAssets] = useState<Array<{ id: string; name: string; assetCode?: string | null }>>([]);
+  const [plans, setPlans] = useState<Array<{ id: string; taskCode: string; title: string; assetId?: string | null }>>([]);
+  useEffect(() => {
+    const vc = vesselCode.trim().toUpperCase();
+    if (!vc) { setAssets([]); setPlans([]); return; }
+    let cancelled = false;
+    void Promise.all([
+      api.get<{ items: typeof assets }>(`/app/pms/assets?vesselCode=${encodeURIComponent(vc)}&limit=500`).catch(() => ({ items: [] })),
+      api.get<{ items: typeof plans }>(`/app/pms/maintenance-plans?vesselCode=${encodeURIComponent(vc)}&limit=2000`).catch(() => ({ items: [] })),
+    ]).then(([a, p]) => {
+      if (cancelled) return;
+      setAssets(a.items ?? []);
+      setPlans(p.items ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [vesselCode]);
+
+  // Shape que espera el buscador compartido (código siempre presente).
+  const assetOptions = useMemo(
+    () => assets.map(a => ({ id: a.id, assetCode: a.assetCode ?? "", name: a.name ?? null })),
+    [assets],
+  );
+
+  // Con equipo elegido se ofrecen sólo sus planes; si no, todos los del buque.
+  const planOptions = useMemo(() => {
+    const list = assetId ? plans.filter(p => p.assetId === assetId) : plans;
+    return [...list].sort((a, b) => a.taskCode.localeCompare(b.taskCode, "es"));
+  }, [plans, assetId]);
+
+  const derivedStatus = useMemo(() => {
+    const trimmed = expiryDate.trim();
+    if (!trimmed) return initial?.status ?? "ACTIVE";
+    const auto = computeAutoCertificateStatus(trimmed);
+    if ((initial?.status === "SUSPENDED" || initial?.status === "CLOSED") && isEdit) {
+      return initial.status;
+    }
+    return auto;
+  }, [expiryDate, initial?.status, isEdit]);
+
+  useCopilotEmitter({
+    module: "CERTIFICATES",
+    screen: isEdit ? "CERT_EDIT" : "CERT_CREATE",
+    entityId: initial?.id,
+    entityCode: initial?.certificateCode,
+    vesselCode: vesselCode || initial?.vesselCode,
+    workflowStage: derivedStatus,
+    canEdit: true,
+    fieldValues: {
+      name:         name         || null,
+      certCode:     certCode     || null,
+      authority:    authority    || null,
+      expiryDate:   expiryDate   || null,
+      issueDate:    issueDate    || null,
+    },
+  });
+
+  const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
+
+  const handleSelectOriginalFile = useCallback(() => {
+    setSourceError(null);
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFilePicked = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setSourceError(null);
+    setUploading(true);
+    try {
+      const result = await api.upload<{ url: string; name: string }>("/app/certificates/upload-source", file);
+      setOriginalSourceLink(result.url);
+      setOriginalSourceName(result.name);
+      const ext = result.name.includes(".") ? "." + result.name.split(".").pop()!.toLowerCase() : "";
+      setOriginalSourceMimeOrExt(ext);
+    } catch (err) {
+      setSourceError(err instanceof Error ? err.message : "No se pudo subir el archivo.");
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+
+  const handleOpenOriginalSource = useCallback(() => {
+    const link = originalSourceLink.trim();
+    if (!link) return;
+    window.open(link, "_blank", "noopener,noreferrer");
+  }, [originalSourceLink]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        certificateCode: certCode.trim().toUpperCase(),
+        name: name.trim(),
+        vesselCode: vesselCode.trim().toUpperCase(),
+        issuingAuthority: authority.trim(),
+        issueDate,
+        expiryDate,
+        lastInspectionDate: lastInsp || null,
+        notes: notes.trim() || null,
+        assetId: assetId || null,
+        maintenancePlanId: planId || null,
+        originalSourceLink: originalSourceLink.trim() || null,
+        originalSourceName: originalSourceName.trim() || null,
+        originalSourceMimeOrExt: originalSourceMimeOrExt.trim() || null,
+      };
+      if (isEdit) {
+        await api.patch(`/app/certificates/${initial!.id}`, payload);
+      } else {
+        await api.post("/app/certificates", payload);
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ESC guard
+  const isDirty = useDirtyTracker({
+    certCode, name, vesselCode, authority, issueDate, expiryDate, lastInsp, notes,
+    originalSourceLink, originalSourceName, originalSourceMimeOrExt, assetId, planId,
+  });
+  const requestClose = useEscapeGuard({
+    isDirty,
+    onSave: () => handleSubmit({ preventDefault: () => {} } as React.FormEvent),
+    onClose,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-fg/10">
+          <div className="flex items-center gap-3">
+            <FileText className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold text-fg">
+              {isEdit ? "Editar Certificado" : "Nuevo Certificado"}
+            </h2>
+          </div>
+          <ModalCloseButton onClose={requestClose} />
+        </div>
+        {isEdit && initial && isRenewalPending(initial) && (
+          <div className="mx-6 mt-4 flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+            <p className="text-xs text-yellow-700 dark:text-yellow-400">
+              El mantenimiento <span className="font-bold">{initial.maintenancePlanTaskCode}</span> se ejecutó el{" "}
+              {fmtDate(initial.maintenancePlanLastExecutionDate)} y este certificado sigue con las fechas anteriores.
+            </p>
+            <button
+              type="button" onClick={() => setShowRenew(true)}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold hover:brightness-110"
+            >
+              Renovar
+            </button>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <GuideField id="cert-code" missing={!certCode.trim()}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.code")}<RequiredMark />{!certCode.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <input
+                value={certCode}
+                onChange={e => setCertCode(e.target.value.toUpperCase())}
+                required
+                placeholder="CERT-001"
+                className={inputCls}
+              />
+            </GuideField>
+            <GuideField id="cert-vessel" missing={!vesselCode}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.vessel")}<RequiredMark />{!vesselCode && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <select
+                value={vesselCode}
+                onChange={e => setVessel(e.target.value)}
+                required
+                disabled={isEdit}
+                className={`${inputCls} disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                <option value="">Seleccionar vessel...</option>
+                {(vesselsData?.items ?? []).map(v => (
+                  <option key={v.code} value={v.code}>{v.code} — {v.name}</option>
+                ))}
+              </select>
+            </GuideField>
+          </div>
+          <GuideField id="cert-name" missing={!name.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.name")}<RequiredMark />{!name.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <input value={name} onChange={e => setName(e.target.value)} required placeholder="Certificado de Seguridad" className={inputCls} />
+          </GuideField>
+          <GuideField id="cert-authority" missing={!authority.trim()}>
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.authority")}<RequiredMark />{!authority.trim() && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+            <input value={authority} onChange={e => setAuthority(e.target.value)} required placeholder="Prefectura Naval Argentina" className={inputCls} />
+          </GuideField>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <GuideField id="cert-issue-date" missing={!issueDate}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.issued")}<RequiredMark />{!issueDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} required className={inputCls} />
+            </GuideField>
+            <GuideField id="cert-expiry-date" missing={!expiryDate}>
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.expiry")}<RequiredMark />{!expiryDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
+              <input type="date" value={expiryDate} onChange={e => setExpiry(e.target.value)} required className={inputCls} />
+            </GuideField>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Últ. Inspección</label>
+              <input type="date" value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.status")}</label>
+            <div className="min-h-[42px] flex items-center">
+              <span className={`inline-block text-xs px-3 py-1 rounded-full border font-bold ${CERT_STATUS_STYLES[derivedStatus] ?? "bg-fg/5 text-text-industrial/40 border-fg/10"}`}>
+                {derivedStatus}
+              </span>
+            </div>
+          </div>
+          {/* Vínculo con el mantenimiento que lo renueva (servicios tercerizados
+              que terminan en un certificado del proveedor, ej. el AIS). */}
+          <div className="rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-4">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-accent/80">Mantenimiento asociado</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Equipo</label>
+                {/* Mismo buscador con typeahead que el modal de Plan y el de OT:
+                    los buques tienen decenas de equipos y una lista desplegable
+                    obliga a recorrerla a mano. */}
+                <AssetSearchDropdown
+                  assets={assetOptions}
+                  value={assetId}
+                  onChange={id => { setAssetId(id); setPlanId(""); }}
+                  disabled={!vesselCode}
+                  placeholder="Buscar equipo…"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Se renueva con el plan</label>
+                <select
+                  value={planId}
+                  onChange={e => setPlanId(e.target.value)}
+                  disabled={!vesselCode}
+                  className={`${inputCls} disabled:opacity-60`}
+                >
+                  <option value="">— Ninguno —</option>
+                  {planOptions.map(p => (
+                    <option key={p.id} value={p.id}>{p.taskCode} — {p.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-[11px] text-text-industrial/40 leading-relaxed">
+              Al reportar la ejecución de ese plan, el sistema te va a ofrecer renovar este certificado con
+              las fechas del documento que emita el proveedor.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Archivo original</label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSelectOriginalFile}
+                disabled={uploading}
+                className="shrink-0 w-10 h-10 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 transition-all flex items-center justify-center disabled:opacity-50"
+                title="Seleccionar archivo"
+              >
+                {uploading
+                  ? <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                  : <Folder className={`w-4 h-4 ${hasLink ? "text-yellow-700 dark:text-yellow-400" : "text-text-industrial/40"}`} />
+                }
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenOriginalSource}
+                disabled={!hasLink}
+                className="shrink-0 w-10 h-10 rounded-xl bg-fg/5 border border-fg/10 hover:border-accent/40 transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Abrir archivo"
+              >
+                <ExternalLink className="w-4 h-4 text-accent" />
+              </button>
+              {originalSourceName && (
+                <span className="text-xs text-text-industrial/50 truncate">{originalSourceName}</span>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFilePicked} />
+            {sourceError && (
+              <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{sourceError}</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Notas</label>
+            <AutoTextArea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
+          </div>
+          {/* Historial de vigencias: lo que antes se perdía al pisar el registro. */}
+          {isEdit && (initial?.renewals?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-fg/10 bg-fg/[0.02] p-4 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-accent/80">Historial de renovaciones</p>
+              {(initial?.renewals ?? []).map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-[11px] border-b border-fg/5 last:border-0 py-1.5">
+                  <span className="text-text-industrial/70">
+                    {fmtDate(r.previousIssueDate)} → {fmtDate(r.previousExpiryDate)}
+                    <span className="text-text-industrial/30"> · reemplazada por </span>
+                    <span className="text-fg font-medium">{fmtDate(r.issueDate)} → {fmtDate(r.expiryDate)}</span>
+                  </span>
+                  <span className="shrink-0 text-text-industrial/40">
+                    {r.createdByName} · {fmtDate(r.createdAt)}
+                    {r.previousSourceLink && (
+                      <a
+                        href={r.previousSourceLink} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="ml-2 text-accent hover:underline"
+                        title="Abrir el certificado anterior"
+                      >archivo anterior</a>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            {isEdit && (
+              <button
+                type="button"
+                onClick={() => setShowRenew(true)}
+                className="mr-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-fg/5 border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/40 transition-all"
+                title="Cargar una vigencia nueva y archivar la actual"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-accent" /> Renovar
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
+            <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:brightness-110 disabled:opacity-50 transition-all">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : isEdit ? t("common.saveChanges") : t("common.create")}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {showRenew && initial && (
+        <CertificateRenewalDialog
+          cert={initial}
+          defaultIssueDate={initial.maintenancePlanLastExecutionDate ?? null}
+          maintenancePlanId={initial.maintenancePlanId ?? null}
+          onClose={() => setShowRenew(false)}
+          onRenewed={() => { setShowRenew(false); onSaved(); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Delete confirm ───────────────────────────────────────────────────────────
+
+const DeleteConfirm: React.FC<{ cert: Certificate; onClose: () => void; onDeleted: () => void }> = ({ cert, onClose, onDeleted }) => {
+  const t = useT();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/app/certificates/${cert.id}`);
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.deleteError"));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="relative w-full max-w-sm bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <h2 className="text-sm font-bold text-fg">¿Eliminar certificado?</h2>
+        <p className="text-xs text-text-industrial/60">
+          <span className="text-fg font-bold">{cert.certificateCode} — {cert.name}</span>
+        </p>
+        {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-text-industrial/60 hover:text-fg hover:bg-fg/5 transition-all">{t("common.cancel")}</button>
+          <button onClick={handleDelete} disabled={deleting} className="px-4 py-2 rounded-xl bg-red-500/80 text-fg font-bold text-xs hover:bg-red-500 disabled:opacity-50 transition-all">
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.delete")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export const CertificatesPage: React.FC = () => {
+  const t = useT();
+  const { user } = useAuth();
+  const can = useCan();
+  const isAdmin = user?.role === "TENANT_ADMIN";
+  // Quién crea/edita certificados (subir archivos renovados) se configura en
+  // Equipo → Permisos por rol. Borrar sigue siendo solo admin.
+  const canWrite = can("certificate.manage");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const statusFilter = (searchParams.get("status") ?? "").trim();
+  const vesselFilter = (searchParams.get("vesselCode") ?? "").trim();
+  const [vesselInput, setVesselInput] = useState(vesselFilter);
+  const [showExcel, setShowExcel] = useState(false);
+  const [formCert, setFormCert] = useState<Certificate | null | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<Certificate | null>(null);
+
+  useCopilotEmitter(formCert === undefined ? { module: "CERTIFICATES", screen: "CERT_LIST" } : null);
+
+  useEffect(() => { setVesselInput(vesselFilter); }, [vesselFilter]);
+
+  const updateFilters = useCallback((next: { status?: string; vesselCode?: string }) => {
+    const params = new URLSearchParams(searchParams);
+    const nextStatus = next.status !== undefined ? next.status : statusFilter;
+    const nextVessel = next.vesselCode !== undefined ? next.vesselCode : vesselFilter;
+    if (nextStatus) params.set("status", nextStatus); else params.delete("status");
+    if (nextVessel) params.set("vesselCode", nextVessel); else params.delete("vesselCode");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams, statusFilter, vesselFilter]);
+
+  const path = useMemo(() => {
+    const p = new URLSearchParams();
+    if (statusFilter) p.set("status", statusFilter);
+    if (vesselFilter) p.set("vesselCode", vesselFilter);
+    return `/app/certificates${p.toString() ? `?${p.toString()}` : ""}`;
+  }, [statusFilter, vesselFilter]);
+
+  const { data, loading, error, reload } = useFetch<ListResponse>(path, [path]);
+  // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx):
+  // la planilla muestra exactamente los registros que contó esa tarjeta.
+  const tmsaFilter = useTmsaFilter();
+  const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, r => r.id), [data, tmsaFilter]);
+
+  const openEdit = useCallback(async (row: Certificate) => {
+    try {
+      const detail = await api.get<Certificate>(`/app/certificates/${row.id}`);
+      setFormCert(detail);
+    } catch {
+      setFormCert(row);
+    }
+  }, []);
+
+  // ── Ciclo de clase (Preview certificados-ciclo V1) ──
+  const { vessels } = useVesselContext();
+  const [kindFilter, setKindFilter] = useState<"" | "TUG" | "BARGE" | "action">("");
+  const [search, setSearch] = useState("");
+  const models = useMemo(() => {
+    const m = new Map<string, ClassCycleModel>();
+    for (const c of data?.items ?? []) if (c.classCycle) m.set(c.id, computeClassCycle(c.expiryDate, c.classCycle));
+    return m;
+  }, [data]);
+  // Lo más urgente primero; los que no tienen ciclo, al final por vencimiento.
+  const urgency = useCallback((c: Certificate) => models.get(c.id)?.level ?? -1, [models]);
+  const shownItems = useMemo(() => {
+    if (!tmsaItems) return tmsaItems;
+    const q = search.trim().toLowerCase();
+    const vesselName = (code: string) => vessels.find(v => v.code === code)?.name ?? code;
+    return tmsaItems
+      .filter(c => !kindFilter
+        || (kindFilter === "action" ? urgency(c) >= 2 : c.classCycle?.vesselKind === kindFilter))
+      .filter(c => !q || `${vesselName(c.vesselCode)} ${c.issuingAuthority} ${c.name}`.toLowerCase().includes(q))
+      .sort((a, b) => urgency(b) - urgency(a) || a.expiryDate.localeCompare(b.expiryDate));
+  }, [tmsaItems, kindFilter, search, vessels, urgency]);
+
+  const columns: Column<Certificate>[] = useMemo(() => [
+    {
+      key: "vesselCode", header: t("col.vessel"),
+      sortValue: r => vessels.find(v => v.code === r.vesselCode)?.name ?? r.vesselCode,
+      render: r => (
+        <div className="min-w-[8rem]">
+          <VesselLabel code={r.vesselCode} className="text-xs font-bold" />
+          <div className="text-[11px] text-text-industrial/50">{vessels.find(v => v.code === r.vesselCode)?.vesselType ?? ""}</div>
+        </div>
+      ),
+    },
+    {
+      key: "name", header: t("cert.cycle.certificate"),
+      render: r => (
+        <div className="min-w-[11rem] max-w-[16rem]">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium text-fg line-clamp-2">{r.name}</span>
+          {/* Tiene un plan que lo renueva: al ejecutar ese mantenimiento el
+              sistema va a ofrecer cargar la vigencia nueva. */}
+          {r.maintenancePlanId && (
+            <span
+              className="shrink-0 inline-flex"
+              aria-label="Con plan de mantenimiento asociado"
+              title={`Se renueva con el plan ${r.maintenancePlanTaskCode ?? ""}${r.maintenancePlanTitle ? ` — ${r.maintenancePlanTitle}` : ""}`}
+            >
+              <Wrench className="w-3.5 h-3.5 text-accent" />
+            </span>
+          )}
+          {/* El mantenimiento que lo renueva ya se hizo y el certificado sigue viejo. */}
+          {isRenewalPending(r) && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-[10px] font-bold text-yellow-700 dark:text-yellow-400"
+              title={`El mantenimiento ${r.maintenancePlanTaskCode ?? ""} se ejecutó el ${fmtDate(r.maintenancePlanLastExecutionDate)} — falta cargar el certificado nuevo`}
+            >
+              <RefreshCw className="w-3 h-3" /> Pendiente de actualizar
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-text-industrial/60">
+          {r.issuingAuthority} · <span className="font-mono text-accent">{r.certificateCode}</span>
+        </div>
+        </div>
+      ),
+    },
+    {
+      key: "cycle", header: t("cert.cycle.col"), sortable: false,
+      render: r => {
+        const m = models.get(r.id);
+        // Sin tipo de buque no hay esquema de clase: se muestra el vencimiento como antes.
+        if (!m || !r.classCycle) return (
+          <div className="flex items-center gap-3 text-xs">
+            <ExpiryCell date={r.expiryDate} />
+            <span className="text-[11px] text-text-industrial/50">{t("cert.cycle.noType")}</span>
+          </div>
+        );
+        return <ClassCycleBar model={m} cycleYears={r.classCycle.cycleYears} />;
+      },
+    },
+    {
+      key: "status", header: t("cert.cycle.situation"),
+      sortValue: r => urgency(r),
+      render: r => {
+        const m = models.get(r.id);
+        return m ? <ClassCycleSituation model={m} /> : <StatusBadge status={r.status} />;
+      },
+    },
+    {
+      key: "actions", header: "", sortable: false,
+      render: r => isAdmin ? (
+        <button
+          onClick={e => { e.stopPropagation(); setDeleteTarget(r); }}
+          className="p-1.5 rounded-lg text-text-industrial/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
+          title={t("common.delete")}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      ) : null,
+    },
+  ], [t, isAdmin, vessels, models, urgency]);
+
+  return (
+    <div className="space-y-5">
+      {showExcel && <ExcelPanel module="certificates" onClose={() => { setShowExcel(false); reload(); }} />}
+      {formCert !== undefined && (
+        <CertificateForm
+          initial={formCert}
+          onClose={() => setFormCert(undefined)}
+          onSaved={() => { setFormCert(undefined); reload(); }}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteConfirm
+          cert={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); reload(); }}
+        />
+      )}
+
+      <PageHeader icon={FileText} title={t("page.certificates")} total={data?.total} onReload={reload}>
+        {canWrite && (
+          <button onClick={() => setFormCert(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
+            <Plus className="w-3.5 h-3.5" /> {t("common.new")}
+          </button>
+        )}
+        <button onClick={() => setShowExcel(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial hover:border-accent/30 transition-all">
+          <FileSpreadsheet className="w-3.5 h-3.5 text-accent" /> Excel
+        </button>
+      </PageHeader>
+
+      <TmsaFilterBanner filter={tmsaFilter} shown={tmsaItems?.length ?? 0} total={data?.items?.length ?? 0} />
+      <div className="rounded-2xl border border-fg/10 bg-surface p-3 flex flex-wrap items-center gap-1.5">
+        {([["", "cert.cycle.filter.all"], ["TUG", "cert.cycle.filter.tugs"], ["BARGE", "cert.cycle.filter.barges"], ["action", "cert.cycle.filter.action"]] as const).map(([k, key]) => (
+          <button key={k} type="button" aria-pressed={kindFilter === k} onClick={() => setKindFilter(k)}
+            className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-bold transition-colors ${
+              kindFilter === k ? "border-accent bg-accent text-accent-fg" : "border-fg/10 bg-surface text-text-industrial/60 hover:text-fg"
+            }`}>
+            {t(key)}
+          </button>
+        ))}
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("cert.cycle.search")}
+          className="w-full sm:w-64 sm:ml-auto rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1 text-xs text-fg placeholder-text-industrial/30 focus:outline-none" />
+      </div>
+      <ClassCycleLegend />
+      <DataTable
+        columns={columns}
+        data={shownItems}
+        loading={loading}
+        error={error}
+        keyFn={r => r.id}
+        emptyText={t("empty.certificates")}
+        onRowClick={canWrite ? row => { void openEdit(row); } : undefined}
+      />
+    </div>
+  );
+};

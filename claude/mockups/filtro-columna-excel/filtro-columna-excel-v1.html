@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Filtro por columna (tipo Excel) — Vista Planilla — Preview V1</title>
+<style>
+  :root{
+    --bg:#F4F5F7;--surface:#FFFFFF;--surface2:#F0F1F4;--fg:#1A1D24;--muted:#6B7280;--border:#E2E4E9;
+    --accent:#0284C7;--success:#0E9F6E;--warning:#D97706;--danger:#DC2626;
+  }
+  body.dark{
+    --bg:#080D1D;--surface:#1C2541;--surface2:rgba(255,255,255,.05);--fg:#E0E1DD;--muted:#94A3B8;--border:rgba(255,255,255,.12);
+    --accent:#38BDF8;--success:#06D6A0;--warning:#FBBF24;--danger:#F87171;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);padding:18px;font-size:13px}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,select{font:inherit;color:var(--fg)}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+  svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  .demo{background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;text-align:center;padding:5px;border-radius:8px;margin-bottom:12px}
+  header.pg{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  header.pg h1{font-size:18px;font-weight:800}
+  header.pg .sub{font-size:11px;color:var(--muted)}
+  .tgl{border:1px solid var(--border);border-radius:9px;padding:5px 10px;font-size:12px;background:var(--surface);margin-left:auto}
+
+  /* Filtros de pantalla que YA existen (contexto, no son la propuesta) */
+  .pagefilters{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:10px;opacity:.85}
+  .pagefilters .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+  .pf{border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:5px 9px;font-size:12px;color:var(--muted)}
+  .pf.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);font-weight:700}
+
+  /* ── Barra de filtros activos (NUEVO) ── */
+  .activebar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:8px;min-height:30px}
+  .fchip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 6px 4px 10px;font-size:11.5px;font-weight:600;
+         color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  .fchip b{font-weight:800}
+  .fchip button{display:flex;align-items:center;border-radius:999px;padding:2px;opacity:.7}
+  .fchip button:hover{opacity:1;background:color-mix(in srgb,var(--accent) 20%,transparent)}
+  .clearall{font-size:11.5px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+  .clearall:hover{color:var(--danger)}
+  .count{margin-left:auto;font-size:11.5px;color:var(--muted)}
+  .count b{color:var(--fg)}
+
+  /* ── Grilla ── */
+  .gridwrap{border:1px solid var(--border);border-radius:12px;overflow:auto;background:var(--surface);max-height:62vh;scrollbar-gutter:stable}
+  table{border-collapse:collapse;width:100%;table-layout:fixed;min-width:1180px}
+  thead th{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--border);
+           padding:6px 4px 6px 8px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
+  thead th .hd{display:flex;align-items:center;gap:4px;min-width:0}
+  thead th .lab{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  thead th .sortbtn{display:flex;align-items:center;gap:3px;flex:1;min-width:0;text-transform:uppercase;letter-spacing:.07em;font-weight:800;font-size:10px;color:inherit}
+  thead th .sortbtn:hover{color:var(--fg)}
+  thead th .arrow{opacity:.35;font-size:10px}
+  thead th .arrow.on{opacity:1;color:var(--accent)}
+  /* embudo */
+  .funnel{flex:none;width:19px;height:19px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);opacity:.45}
+  th:hover .funnel{opacity:.9}
+  .funnel:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);opacity:1}
+  .funnel.on{opacity:1;color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
+  .funnel.open{opacity:1;color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent)}
+
+  tbody td{border-bottom:1px solid color-mix(in srgb,var(--fg) 7%,transparent);padding:4px 8px;font-size:11.5px;vertical-align:top}
+  tbody tr:hover{background:color-mix(in srgb,var(--fg) 3%,transparent)}
+  td .vessel{display:block;font-size:10px;color:var(--accent);opacity:.85}
+  td .trunc{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .amber{color:var(--warning)}
+  .badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:800;white-space:nowrap}
+  .b-ok{color:var(--success);background:color-mix(in srgb,var(--success) 12%,transparent);border:1px solid color-mix(in srgb,var(--success) 30%,transparent)}
+  .b-soon{color:var(--warning);background:color-mix(in srgb,var(--warning) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning) 30%,transparent)}
+  .b-late{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)}
+  .empty{text-align:center;padding:44px 10px;color:var(--muted)}
+  .empty p{font-size:13px;margin-bottom:10px}
+  .empty button{border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700}
+
+  /* ── Panel del filtro ── */
+  .backdrop{position:fixed;inset:0;z-index:40}
+  .panel{position:fixed;z-index:50;width:268px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+         box-shadow:0 14px 40px rgba(0,0,0,.28);overflow:hidden;display:flex;flex-direction:column;max-height:430px}
+  .panel .ph{padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  .panel .sorts{display:flex;flex-direction:column;border-bottom:1px solid var(--border);padding:3px}
+  .panel .sorts button{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:12px;text-align:left}
+  .panel .sorts button:hover{background:var(--surface2)}
+  .panel .sorts button.on{color:var(--accent);font-weight:700;background:color-mix(in srgb,var(--accent) 10%,transparent)}
+  .panel .srch{padding:7px 8px;border-bottom:1px solid var(--border)}
+  .panel .srch input{width:100%;border:1px solid var(--border);background:var(--surface2);border-radius:8px;padding:6px 8px;font-size:12px;outline:none}
+  .panel .srch input:focus{border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
+  .vals{overflow-y:auto;padding:4px;flex:1;scrollbar-gutter:stable}
+  .vals label{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;font-size:12px;cursor:pointer}
+  .vals label:hover{background:var(--surface2)}
+  .vals label.all{font-weight:700;border-bottom:1px solid var(--border);border-radius:0;margin-bottom:3px}
+  .vals input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);flex:none}
+  .vals .vt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vals .vn{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .vals .none{padding:14px 8px;text-align:center;font-size:11.5px;color:var(--muted)}
+  .pf2{display:flex;gap:6px;padding:8px;border-top:1px solid var(--border);align-items:center}
+  .pf2 .clr{font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px;margin-right:auto}
+  .pf2 .clr:hover{color:var(--danger)}
+  .pf2 .btn{border:1px solid var(--border);border-radius:9px;padding:6px 12px;font-size:12px;font-weight:700;background:var(--surface2)}
+  .pf2 .btn.primary{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+
+  /* celular: el panel sube desde abajo */
+  @media (max-width:640px){
+    body{padding:10px}
+    .panel{left:0!important;right:0;top:auto!important;bottom:0;width:100%;max-height:78vh;border-radius:16px 16px 0 0}
+  }
+
+  .notes{margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:12.5px;line-height:1.55;max-width:900px}
+  .notes h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:12px 0 5px}
+  .notes h2:first-child{margin-top:0}
+  .notes ul{padding-left:18px}.notes li{margin:3px 0}
+</style>
+</head>
+<body>
+<div class="demo">PROTOTIPO — datos de ejemplo. No es el sistema real.</div>
+
+<header class="pg">
+  <div>
+    <h1>Plan de Mantenimiento — Vista Planilla</h1>
+    <div class="sub">DON CHICUETO · datos de ejemplo</div>
+  </div>
+  <button class="tgl" onclick="document.body.classList.toggle('dark')">Cambiar a claro / oscuro</button>
+</header>
+
+<div class="pagefilters">
+  <span class="lbl">Ya existe hoy:</span>
+  <span class="pf on">Buque: DON CHICUETO</span>
+  <span class="pf">Buscar…</span>
+  <span class="pf on">G0</span><span class="pf">G1</span><span class="pf">G4</span><span class="pf">G6</span>
+  <span class="pf">Sólo vencidos</span>
+</div>
+
+<div class="activebar" id="activebar"></div>
+
+<div class="gridwrap">
+  <table>
+    <colgroup>
+      <col style="width:56px"><col style="width:128px"><col style="width:190px"><col style="width:270px">
+      <col style="width:150px"><col style="width:112px"><col style="width:74px"><col style="width:120px"><col style="width:124px">
+    </colgroup>
+    <thead><tr id="head"></tr></thead>
+    <tbody id="body"></tbody>
+  </table>
+</div>
+
+<div class="notes">
+  <h2>Qué probar</h2>
+  <ul>
+    <li>Tocá el <b>embudo</b> del encabezado de <b>Frecuencia</b>, <b>Origen</b>, <b>Equipo</b> o <b>Estado</b>: se abre el panel con los valores y cuántas filas tiene cada uno.</li>
+    <li>Destildá algunos y <b>Aceptar</b>. El embudo queda azul y arriba aparece un cartelito con lo filtrado.</li>
+    <li>Abrí el embudo de otra columna: sólo ofrece los valores que <b>siguen visibles</b> con el filtro anterior puesto (igual que Excel).</li>
+    <li>El buscador del panel sirve para columnas con muchos valores (Título, Equipo).</li>
+    <li>"Limpiar todo" arriba a la izquierda, o "Quitar filtro" dentro de cada panel.</li>
+    <li>Achicá la ventana a ancho de celular: el panel sube desde abajo.</li>
+  </ul>
+  <h2>Decisiones del diseño</h2>
+  <ul>
+    <li>Ordenar y filtrar viven en el <b>mismo panel</b> (como Excel), pero el clic en el nombre de la columna sigue ordenando como hoy: no se pierde el atajo.</li>
+    <li>Las columnas de <b>fecha</b> (última ejecución / próximo vencimiento) no llevan embudo de checkboxes: 300 fechas distintas no se tildan de a una. Para eso ya están los filtros de la pantalla (Sólo vencidos, semana).</li>
+    <li>Los filtros de columna se suman a los de la pantalla, no los reemplazan.</li>
+    <li>Cuando el filtro deja la planilla vacía, se explica por qué y se ofrece limpiarlo.</li>
+  </ul>
+</div>
+
+<script>
+// ─────────── Datos de ejemplo ───────────
+const EQUIPOS = ["Servomotor de timón","Bomba hidráulica Nº1","Motor principal Br","Motor principal Er","Generador Nº1","Generador Nº2","Compresor de aire","Tablero PEM","Pala de timón","Caja reductora Br"];
+const TITULOS = ["Mecanismos – Engrase","Flexibles y conexiones – Verificar ausencia de pérdidas","Empaquetadura de limera – Controlar estado","Ángulo de pala – Verificar sincronismo","Tanque – Filtro de aceite y aceite – Cambiar","Tablero – Verificar conexiones y luces","Motores eléctricos – Tomar aislación","Motores eléctricos – Recorrido general","Tanque centralina – Limpiar","Pala de timón – Recorrido general y prueba de estanqueidad","Inyectores – Control de presión","Válvulas – Regulación de luces"];
+const FREQ = ["Mensual","Trimestral","Semestral","Anual","6 Años / Dique Seco"];
+const ORIGEN = ["Fabricante","Clasificadora","Bandera","Compañía","Sin declarar"];
+const ESTADOS = [["Vigente","b-ok"],["Por vencer","b-soon"],["Vencido","b-late"]];
+const AREAS = [0,1,4,6];
+let rnd = 7; const R = () => (rnd = (rnd*1103515245+12345) % 2147483648) / 2147483648;
+const pick = a => a[Math.floor(R()*a.length)];
+const ROWS = Array.from({length:64},(_,i)=>{
+  const f = pick(FREQ), e = pick(EQUIPOS), est = pick(ESTADOS);
+  return {sfi:"G"+pick(AREAS), code:"MTTO-DCH-"+String(101+i), equipo:e, title:pick(TITULOS),
+          origen:pick(ORIGEN), freq:f, hs:[1,2,4,8,12][Math.floor(R()*5)], estado:est[0], cls:est[1]};
+});
+
+// ─────────── Columnas ───────────
+// filt:true = lleva embudo. Las fechas quedan afuera a propósito (ver notas).
+const COLS = [
+  {k:"sfi",    lab:"SFI",        filt:true,  mono:true},
+  {k:"code",   lab:"Código",     filt:true,  mono:true, vessel:true},
+  {k:"equipo", lab:"Equipo",     filt:true},
+  {k:"title",  lab:"Trabajo a realizar", filt:true},
+  {k:"origen", lab:"Origen",     filt:true,  amber:v=>v==="Sin declarar"},
+  {k:"freq",   lab:"Frecuencia", filt:true,  mono:true},
+  {k:"hs",     lab:"Hs est.",    filt:false, mono:true},
+  {k:"estado", lab:"Estado",     filt:true,  badge:true},
+  {k:"acc",    lab:"Acciones",   filt:false},
+];
+
+let filters = {};            // {col: Set(valores permitidos)}
+let sortKey = null, sortDir = "asc";
+let open = null;             // columna con el panel abierto
+let draft = null;            // selección provisoria dentro del panel
+let search = "";
+
+// Filas visibles aplicando todos los filtros MENOS el de `except` (comportamiento Excel)
+const visible = except => ROWS.filter(r =>
+  Object.entries(filters).every(([k,set]) => k===except || set.has(String(r[k]))));
+
+function render(){
+  const rows0 = visible(null);
+  const rows = sortKey ? [...rows0].sort((a,b)=>{
+    const d = sortDir==="asc"?1:-1, x=a[sortKey], y=b[sortKey];
+    return (typeof x==="number" ? x-y : String(x).localeCompare(String(y),"es",{numeric:true}))*d;
+  }) : rows0;
+
+  // encabezados
+  document.getElementById("head").innerHTML = COLS.map(c=>{
+    const on = !!filters[c.k], act = sortKey===c.k;
+    return `<th><div class="hd">
+      <button class="sortbtn" onclick="doSort('${c.k}')"><span class="lab">${c.lab}</span>
+        <span class="arrow ${act?'on':''}">${act?(sortDir==="asc"?"↑":"↓"):"↕"}</span></button>
+      ${c.filt?`<button class="funnel ${on?'on':''} ${open===c.k?'open':''}" id="f-${c.k}" title="Filtrar ${c.lab}" onclick="openPanel(event,'${c.k}')">
+        <svg viewBox="0 0 24 24"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg></button>`:""}
+    </div></th>`;
+  }).join("");
+
+  // filas
+  const b = document.getElementById("body");
+  if(!rows.length){
+    b.innerHTML = `<tr><td colspan="${COLS.length}" class="empty">
+      <p>Ningún plan coincide con los filtros de columna puestos.</p>
+      <button onclick="clearAll()">Limpiar todos los filtros</button></td></tr>`;
+  } else {
+    b.innerHTML = rows.map(r=>`<tr>
+      <td class="mono">${r.sfi}</td>
+      <td class="mono">${r.code}<span class="vessel">DON CHICUETO</span></td>
+      <td><span class="trunc">${r.equipo}</span></td>
+      <td><span class="trunc" title="${r.title}">${r.title}</span></td>
+      <td class="${r.origen==="Sin declarar"?"amber":""}"><span class="trunc">${r.origen}</span></td>
+      <td class="mono"><span class="trunc">${r.freq}</span></td>
+      <td class="mono">${r.hs}</td>
+      <td><span class="badge ${r.cls}">${r.estado}</span></td>
+      <td style="color:var(--muted)">Ejecutar · Diferir</td></tr>`).join("");
+  }
+
+  // barra de filtros activos
+  const keys = Object.keys(filters);
+  document.getElementById("activebar").innerHTML =
+    (keys.length ? keys.map(k=>{
+        const c = COLS.find(x=>x.k===k), sel=[...filters[k]];
+        const txt = sel.length<=2 ? sel.join(", ") : sel.length+" valores";
+        return `<span class="fchip"><b>${c.lab}:</b> ${txt}
+          <button title="Quitar" onclick="clearCol('${k}')"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></span>`;
+      }).join("") + `<button class="clearall" onclick="clearAll()">Limpiar todo</button>`
+    : `<span style="font-size:11.5px;color:var(--muted)">Sin filtros de columna. Usá el embudo del encabezado.</span>`)
+    + `<span class="count">Mostrando <b>${rows.length}</b> de ${ROWS.length} planes</span>`;
+
+  if(open) drawPanel();
+}
+
+function doSort(k){ if(sortKey!==k){sortKey=k;sortDir="asc";} else sortDir = sortDir==="asc"?"desc":"asc"; render(); }
+function clearCol(k){ delete filters[k]; render(); }
+function clearAll(){ filters={}; render(); }
+
+function optionsFor(k){
+  const map = new Map();
+  visible(k).forEach(r=>{const v=String(r[k]); map.set(v,(map.get(v)||0)+1);});
+  return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],"es",{numeric:true}));
+}
+
+function openPanel(e,k){
+  e.stopPropagation();
+  if(open===k){ closePanel(); return; }
+  open=k; search="";
+  draft = new Set(filters[k] ? filters[k] : optionsFor(k).map(o=>o[0]));
+  render();
+}
+function closePanel(){ open=null; draft=null; document.querySelectorAll(".panel,.backdrop").forEach(n=>n.remove()); render(); }
+
+function drawPanel(){
+  document.querySelectorAll(".panel,.backdrop").forEach(n=>n.remove());
+  const k=open, c=COLS.find(x=>x.k===k), opts=optionsFor(k);
+  const shown = opts.filter(o=>o[0].toLowerCase().includes(search.toLowerCase()));
+  const allOn = shown.length>0 && shown.every(o=>draft.has(o[0]));
+
+  const bd=document.createElement("div"); bd.className="backdrop"; bd.onclick=closePanel; document.body.appendChild(bd);
+  const p=document.createElement("div"); p.className="panel";
+  p.onclick=e=>e.stopPropagation();
+  p.innerHTML=`
+    <div class="ph">${c.lab}</div>
+    <div class="sorts">
+      <button class="${sortKey===k&&sortDir==="asc"?"on":""}" onclick="doSort('${k}')">↑ Ordenar A → Z</button>
+      <button class="${sortKey===k&&sortDir==="desc"?"on":""}" onclick="doSort('${k}');if(sortDir!=='desc')doSort('${k}')">↓ Ordenar Z → A</button>
+    </div>
+    <div class="srch"><input id="sq" placeholder="Buscar valor…" value="${search}" autocomplete="off"></div>
+    <div class="vals" id="vals">
+      ${shown.length? `<label class="all"><input type="checkbox" ${allOn?"checked":""} onchange="toggleAll(this.checked)">
+         <span class="vt">(Seleccionar todo)</span><span class="vn">${shown.length}</span></label>`+
+        shown.map(o=>`<label><input type="checkbox" ${draft.has(o[0])?"checked":""} onchange="toggleVal(${JSON.stringify(o[0]).replace(/"/g,'&quot;')},this.checked)">
+         <span class="vt" title="${o[0]}">${o[0]}</span><span class="vn">${o[1]}</span></label>`).join("")
+       : `<div class="none">Ningún valor coincide con la búsqueda.</div>`}
+    </div>
+    <div class="pf2">
+      ${filters[k]?`<button class="clr" onclick="clearCol('${k}');closePanel()">Quitar filtro</button>`:`<span class="clr" style="visibility:hidden">·</span>`}
+      <button class="btn" onclick="closePanel()">Cancelar</button>
+      <button class="btn primary" onclick="applyPanel()">Aceptar</button>
+    </div>`;
+  document.body.appendChild(p);
+
+  const btn=document.getElementById("f-"+k).getBoundingClientRect();
+  if(window.innerWidth>640){
+    p.style.left = Math.min(btn.left, window.innerWidth-280)+"px";
+    p.style.top  = Math.min(btn.bottom+4, window.innerHeight-p.offsetHeight-8)+"px";
+  }
+  const sq=document.getElementById("sq");
+  sq.oninput=e=>{search=e.target.value;drawPanel();document.getElementById("sq").focus();};
+  if(search) sq.focus();
+}
+function toggleVal(v,on){ on?draft.add(v):draft.delete(v); drawPanel(); }
+function toggleAll(on){
+  optionsFor(open).filter(o=>o[0].toLowerCase().includes(search.toLowerCase()))
+    .forEach(o=>on?draft.add(o[0]):draft.delete(o[0]));
+  drawPanel();
+}
+function applyPanel(){
+  const all=optionsFor(open).map(o=>o[0]);
+  if(draft.size===0){ alert("Hay que dejar al menos un valor tildado."); return; }
+  if(draft.size===all.length) delete filters[open]; else filters[open]=new Set(draft);
+  closePanel();
+}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&open) closePanel(); });
+render();
+</script>
+</body>
+</html>

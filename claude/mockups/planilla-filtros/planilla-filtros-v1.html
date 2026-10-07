@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planilla a Bordo — Filtros V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --border:#E2E4E9;
+  --accent:#0284C7; --accent-fg:#FFF; --success:#16A34A; --warning:#D97706;
+  --danger:#DC2626; --muted:#6B7280; --navy:#1F3864; --peach:#F8CBAD; --thead:#D9E2E3;
+  color-scheme:light;
+}
+html.dark{
+  --bg:#080D1D; --surface:#1C2541; --fg:#E0E1DD; --border:rgba(255,255,255,.10);
+  --accent:#38BDF8; --accent-fg:#0B132B; --success:#22C55E; --warning:#FBBF24;
+  --danger:#F87171; --muted:#9BA3B4; --thead:#243B61;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Inter",system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1640px;margin:0 auto;padding:14px 16px 60px}
+button{font:inherit;cursor:pointer;color:inherit}
+
+.demo{margin-bottom:12px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--warning) 14%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent)}
+
+/* ── Encabezado (PageHeader) ── */
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head .l{display:flex;gap:12px;align-items:center}
+.ico{width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);display:grid;place-items:center;font-size:18px}
+.head h1{margin:0;font-size:19px;font-weight:800;display:flex;gap:8px;align-items:center}
+.total{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--fg) 7%,transparent);color:var(--muted)}
+.follow{margin-left:8px;display:inline-flex;gap:8px;align-items:center;padding:8px 16px;border-radius:12px;background:#059669;color:#fff;font-size:14px;font-weight:700;border:0}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 5%,transparent);border-radius:9px;padding:6px 11px;font-size:12px;color:var(--muted)}
+.btn.main{border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);font-weight:700}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.gone{opacity:.45;text-decoration:line-through}
+
+/* ── LA BARRA (igual a la de Seguimiento) ── */
+.bar{border:1px solid var(--border);background:var(--surface);border-radius:16px;padding:8px 12px;margin-bottom:12px}
+.bar .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.lab{margin-right:4px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pill{border:1.5px solid var(--border);background:var(--surface);color:var(--muted);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;min-width:2.4rem}
+.pill:hover{color:var(--fg)}
+.pill[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-fg)}
+.pill:disabled{opacity:.35;cursor:default}
+.tool{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 5%,transparent);border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--muted)}
+.tool[aria-pressed="true"]{border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent)}
+.tool.sq{padding:6px 8px}
+.search{display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 5%,transparent);border-radius:9px;padding:6px 10px;margin-left:auto}
+.search input{border:0;background:transparent;outline:0;width:260px;font-size:12px;color:var(--fg);font-family:inherit}
+.search .x{border:0;background:transparent;color:var(--muted);font-size:12px;padding:0}
+.new{outline:2px dashed color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:4px;border-radius:16px}
+
+/* ── Planilla (igual que hoy) ── */
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.scroller{overflow:auto;max-height:calc(100vh - 19rem)}
+table{width:100%;min-width:1100px;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;z-index:2;background:var(--thead);color:var(--navy);font-size:10px;font-weight:800;padding:7px 6px;border:1px solid var(--border);text-align:center}
+html.dark thead th{color:#DCE6F5}
+td{border:1px solid var(--border);padding:2px 7px;font-size:11px;line-height:1.25;vertical-align:middle}
+.grp td{background:var(--navy);color:#fff;font-weight:700;padding:4px 12px}
+.it{text-align:center;font-weight:700;background:var(--surface);color:var(--fg)}
+.eq{background:var(--peach);color:var(--navy);font-weight:700;text-align:center;position:relative;padding:22px 8px 6px}
+.eq .ficha{position:absolute;top:4px;right:4px;font-size:9px;font-weight:700;border:1px solid rgba(31,56,100,.3);background:rgba(255,255,255,.8);border-radius:6px;padding:1px 5px;color:var(--navy)}
+.eq .fold{position:absolute;top:4px;left:4px;font-size:10px;font-weight:800;border:1px solid rgba(31,56,100,.3);background:rgba(255,255,255,.8);border-radius:6px;padding:0 5px;color:var(--navy);line-height:16px}
+.eq .name{text-decoration:none}
+.eq .name:hover{text-decoration:underline}
+.eq small{display:block;font-weight:400;font-size:10px;opacity:.8}
+.eq.flat{padding:3px 8px;font-weight:600}
+.sep td.last{border-bottom:2px solid var(--navy)}
+.mono{font-family:ui-monospace,monospace;text-align:center}
+tr.overdue td.tone{background:#DC2626;color:#fff}
+tr.soon td.tone{background:#FDE047;color:#422006}
+tr.oos td.tone{background:#FFE0E0;color:#C00000}
+.wo{font-family:ui-monospace,monospace;font-weight:700;font-size:10px;text-decoration:underline}
+.oos{text-align:center;font-size:9px;font-weight:800}
+.oos.on{background:#FFE0E0;color:#C00000}
+.folded td.sum{font-size:11px;color:var(--muted);font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
+.folded .red{color:var(--danger);font-weight:800}
+.folded .yel{color:#A16207;font-weight:800}
+.empty{padding:40px;text-align:center;font-size:13px;color:var(--muted)}
+
+.note{margin-top:14px;padding:12px 16px;border-radius:14px;border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);
+  background:color-mix(in srgb,var(--accent) 5%,transparent);font-size:12px;line-height:1.55}
+.note h3{margin:0 0 6px;font-size:13px}
+.note ul{margin:0;padding-left:18px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:9px 16px;border-radius:12px;font-size:12.5px;font-weight:600;display:none;z-index:70}
+.toast.show{display:block}
+@media (max-width:760px){ .search{margin-left:0;width:100%} .search input{width:100%} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="demo">⚠ PROTOTIPO V1 — datos de ejemplo, no es un buque real. Probá G0–G9, «Vencidas, por vencer y con OT abierta», «Agrupar por equipo», el plegado y el buscador.</div>
+
+  <div class="head">
+    <div class="l">
+      <div class="ico">📋</div>
+      <h1>Planilla a Bordo — MAO 01 <span class="total" id="total">—</span></h1>
+      <button class="follow">✔ Seguimiento</button>
+    </div>
+    <div class="tools">
+      <button class="iconbtn btn" title="Recargar">⟳</button>
+      <button class="btn">📗 Planilla de Mantenimiento</button>
+      <button class="btn main" id="create" disabled>🔧 Crear OT y SS cuando corresponda</button>
+    </div>
+  </div>
+
+  <!-- ═══ Barra nueva: misma de Seguimiento + el filtro de pendientes que ya existía ═══ -->
+  <div class="bar new">
+    <div class="row">
+      <span class="lab">Grupo</span>
+      <div id="groups" style="display:contents"></div>
+      <button class="tool" id="onlyDue" aria-pressed="false">Vencidas, por vencer y con OT abierta</button>
+      <button class="tool" id="byAsset" aria-pressed="true">☰ Agrupar por equipo</button>
+      <button class="tool sq" id="foldAll" title="Colapsar todo">⇳</button>
+      <button class="tool" id="clear" style="display:none">Limpiar</button>
+      <label class="search">🔍
+        <input id="q" placeholder="Buscar por equipo, tarea o código…">
+        <button class="x" id="qx" style="display:none" aria-label="Borrar búsqueda">✕</button>
+      </label>
+    </div>
+  </div>
+
+  <div class="sheet"><div class="scroller">
+    <table>
+      <colgroup><col style="width:40px"><col style="width:208px"><col style="width:128px"><col><col style="width:96px"><col style="width:128px"><col style="width:128px"><col style="width:160px"><col style="width:96px"></colgroup>
+      <thead><tr><th>Ítem</th><th>Descripción</th><th></th><th>Tarea a realizar</th><th>Realizar cada</th><th>Última verificación</th><th>Próximo recorrido</th><th>Proveedor</th><th>Fuera de servicio</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div></div>
+
+  <div class="note">
+    <h3>Qué cambia (esta caja no va en la app)</h3>
+    <ul>
+      <li><b>Barra de filtros nueva</b> arriba de la planilla, igual a la de Seguimiento: <b>GRUPO</b> (Sin filtro, G0 a G9), <b>Agrupar por equipo</b>, <b>plegar / desplegar todo</b>, <b>Limpiar</b> y el <b>buscador a la derecha</b>.</li>
+      <li><b>El buscador y el botón «Vencidas, por vencer y con OT abierta» bajan a esa barra</b> (hoy están arriba, mezclados con Excel y Crear OT). Arriba quedan sólo las acciones: Planilla de Mantenimiento (Excel) y Crear OT.</li>
+      <li><b>G0 a G9</b> muestran sólo esa franja azul del sistema (G6 = Propulsión y Generación, etc.). Los grupos sin tareas quedan apagados. Las tareas sin grupo asignado se ven sólo con «Sin filtro». <b>El número de ítem no cambia</b> al filtrar: sigue siendo el del papel.</li>
+      <li>Los filtros se suman: grupo + pendientes + búsqueda.</li>
+      <li><b>Agrupar por equipo encendido (como entra hoy):</b> la planilla del papel. Nuevo: un botón chico <b>▾</b> arriba a la izquierda de cada equipo pliega sus tareas y deja una línea con cuántas tiene, cuántas vencidas y cuántas por vencer. El nombre del equipo sigue llevando a su plan y «Ficha» a la ficha, como hoy.</li>
+      <li><b>Agrupar por equipo apagado:</b> dentro de cada grupo, las tareas van <b>por urgencia</b> (vencidas, por vencer, el resto) con el equipo escrito en cada fila.</li>
+      <li>La selección para crear OT, las fechas editables del admin y el Excel siguen igual. El Excel sigue bajando la planilla completa, sin filtros.</li>
+    </ul>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══ DATOS DE EJEMPLO ═══ */
+const SFI = ["Inspecciones y Pruebas","Casco y Estructuras","Sistemas de Carga","LCI y Salvamento","Sistemas de Navegación",
+  "Sistemas de Habitabilidad","Sistemas de Propulsión y Generación","Sistemas Auxiliares","Sistemas Eléctricos","Sistemas de Automatización y Control"];
+// sev: overdue | soon | none ; wo: OT abierta
+const BLOCKS = [
+  { g:0, item:1, name:"Casco", sub:"Inspección de clase", tasks:[
+    { code:"M01-0-01", t:"Inspección de Sociedad Clasificadora", every:"12 meses", last:"15/09/2025", next:"15/09/2026", sev:"overdue", wo:"OT-M01-26-0586" },
+    { code:"M01-0-02", t:"Prueba de estanqueidad de escotillas", every:"6 meses", last:"02/06/2026", next:"02/12/2026", sev:"none" } ] },
+  { g:3, item:2, name:"Bomba contra incendio", hours:"1.240 h · 28/09/2026", tasks:[
+    { code:"M01-3-01", t:"Prueba de funcionamiento y presión", every:"1 mes", last:"20/08/2026", next:"20/09/2026", sev:"overdue" },
+    { code:"M01-3-02", t:"Cambio de aceite", every:"500", last:"800", next:"1.300", sev:"soon" } ] },
+  { g:3, item:3, name:"Extintores", tasks:[
+    { code:"M01-3-05", t:"Recarga anual", every:"12 meses", last:"10/03/2026", next:"10/03/2027", sev:"none", prov:"MATAFUEGOS SUR" } ] },
+  { g:6, item:4, name:"Motor Principal Babor", sub:"CAT 3512", hours:"15.230 h · 30/09/2026", tasks:[
+    { code:"M01-6-01", t:"Cambio de filtros de combustible", every:"500", last:"14.800", next:"15.300", sev:"soon" },
+    { code:"M01-6-02", t:"Tomar muestras y analizar el aceite lubricante", every:"3 meses", last:"01/07/2026", next:"01/10/2026", sev:"soon", wo:"OT-M01-26-0612", prov:"CONDOR S.A.C.I" },
+    { code:"M01-6-03", t:"Regulación de válvulas", every:"2.000", last:"14.000", next:"16.000", sev:"none" },
+    { code:"M01-6-04", t:"Cambio de aceite y filtros", every:"250", last:"14.900", next:"15.150", sev:"overdue" } ] },
+  { g:6, item:5, name:"Generador Nº 1", sub:"Stamford", hours:"6.710 h · 30/09/2026", tasks:[
+    { code:"M01-6-10", t:"Inspección de escobillas y limpieza de colectores", every:"6 meses", last:"12/04/2026", next:"12/10/2026", sev:"soon" },
+    { code:"M01-6-11", t:"Megado del alternador", every:"12 meses", last:"05/01/2026", next:"05/01/2027", sev:"none" } ] },
+  { g:6, item:6, name:"Motor Auxiliar Estribor", oos:true, tasks:[
+    { code:"M01-6-20", t:"Cambio de aceite", every:"250", last:"3.100", next:"3.350", sev:"oos" } ] },
+  { g:7, item:7, name:"Compresor de aire", tasks:[
+    { code:"M01-7-01", t:"Cambio de válvulas de descarga", every:"12 meses", last:"20/11/2025", next:"20/11/2026", sev:"none" },
+    { code:"M01-7-02", t:"Purga y limpieza del pulmón", every:"1 mes", last:"25/09/2026", next:"25/10/2026", sev:"none" } ] },
+  { g:8, item:8, name:"Tablero principal", tasks:[
+    { code:"M01-8-01", t:"Termografía de guardamotores", every:"12 meses", last:"03/10/2025", next:"03/10/2026", sev:"soon", prov:"TERMOTEC S.R.L." } ] },
+];
+
+/* ═══ Estado ═══ */
+let group = "ALL", onlyDue = false, byAsset = true, folded = new Set();
+const $ = s => document.querySelector(s);
+const RANK = { overdue:0, soon:1, none:2, oos:3 };
+
+function filteredBlocks(skipGroup) {
+  const q = $("#q").value.trim().toLowerCase();
+  return BLOCKS
+    .filter(b => skipGroup || group === "ALL" || b.g === group)
+    .map(b => ({ ...b, tasks: b.tasks.filter(t =>
+      (!onlyDue || t.wo || (!b.oos && t.sev !== "none")) &&
+      (!q || `${b.name} ${t.t} ${t.code}`.toLowerCase().includes(q))) }))
+    .filter(b => b.tasks.length > 0);
+}
+
+const woCell = t => t.wo ? `<span class="wo">${t.wo}</span>` : `<input type="checkbox" data-sel>`;
+const provCell = t => t.prov ? `🏭 ${t.prov}` : "";
+const tone = (t, b) => b.oos ? "oos" : t.sev === "none" ? "" : t.sev;
+
+function render() {
+  const base = filteredBlocks(true);
+  $("#groups").innerHTML =
+    `<button class="pill" data-g="ALL" aria-pressed="${group==="ALL"}">Sin filtro</button>` +
+    SFI.map((name, g) => {
+      const has = base.some(b => b.g === g), on = group === g;
+      return `<button class="pill" data-g="${g}" aria-pressed="${on}" ${!has && !on ? "disabled" : ""} title="G${g} · ${name}">G${g}</button>`;
+    }).join("");
+  $("#onlyDue").setAttribute("aria-pressed", onlyDue);
+  $("#byAsset").setAttribute("aria-pressed", byAsset);
+  $("#foldAll").style.display = byAsset ? "" : "none";
+  const q = $("#q").value.trim();
+  $("#qx").style.display = q ? "" : "none";
+  $("#clear").style.display = group !== "ALL" || q || onlyDue ? "" : "none";
+
+  const blocks = filteredBlocks(false);
+  $("#total").textContent = blocks.reduce((n, b) => n + b.tasks.length, 0);
+  const keys = blocks.map(b => b.name);
+  const allFolded = keys.length > 0 && keys.every(k => folded.has(k));
+  $("#foldAll").textContent = allFolded ? "⇕" : "⇳";
+  $("#foldAll").title = allFolded ? "Expandir todo" : "Colapsar todo";
+
+  let html = "";
+  const groups = [...new Set(blocks.map(b => b.g))];
+  for (const g of groups) {
+    html += `<tr class="grp"><td colspan="9">G${g}: ${SFI[g]}</td></tr>`;
+    const gb = blocks.filter(b => b.g === g);
+    if (!byAsset) {
+      const rows = gb.flatMap(b => b.tasks.map(t => ({ b, t })))
+        .sort((x, y) => RANK[x.b.oos ? "oos" : x.t.sev] - RANK[y.b.oos ? "oos" : y.t.sev]);
+      for (const { b, t } of rows) {
+        html += `<tr class="${tone(t, b)}"><td class="it">${b.item}</td><td class="eq flat">${b.name}</td>
+          <td class="mono tone">${woCell(t)}</td><td class="tone">${t.t}</td><td class="mono tone">${t.every}</td>
+          <td class="mono tone">${t.last}</td><td class="mono tone">${t.next}</td><td class="tone">${provCell(t)}</td>
+          <td class="oos ${b.oos ? "on" : ""}">${b.oos ? "FUERA DE SERVICIO" : ""}</td></tr>`;
+      }
+      continue;
+    }
+    for (const b of gb) {
+      const isFolded = folded.has(b.name);
+      const eqCell = (span) => `<td class="eq" rowspan="${span}">
+          <button class="fold" data-fold="${b.name}" title="${isFolded ? "Desplegar las tareas de este equipo" : "Plegar las tareas de este equipo"}">${isFolded ? "▸" : "▾"}</button>
+          <button class="ficha" data-toast="Abre la ficha del equipo">🪪 Ficha</button>
+          <a href="#" class="name" data-toast="Lleva al plan de mantenimiento de ${b.name}">${b.name}${b.sub ? `<small>${b.sub}</small>` : ""}${b.hours ? `<small>${b.hours}</small>` : ""}</a></td>`;
+      if (isFolded) {
+        const late = b.tasks.filter(t => t.sev === "overdue").length, soon = b.tasks.filter(t => t.sev === "soon").length;
+        html += `<tr class="folded sep"><td class="it last">${b.item}</td>${eqCell(1)}
+          <td class="sum last" colspan="6">${b.tasks.length} tarea${b.tasks.length>1?"s":""}${late ? ` · <span class="red">${late} vencida${late>1?"s":""}</span>` : ""}${soon ? ` · <span class="yel">${soon} por vencer</span>` : ""}</td>
+          <td class="oos last ${b.oos ? "on" : ""}">${b.oos ? "FUERA DE SERVICIO" : ""}</td></tr>`;
+        continue;
+      }
+      b.tasks.forEach((t, i) => {
+        const last = i === b.tasks.length - 1 ? "last" : "";
+        html += `<tr class="${tone(t, b)} sep">
+          ${i === 0 ? `<td class="it last" rowspan="${b.tasks.length}">${b.item}</td>${eqCell(b.tasks.length)}` : ""}
+          <td class="mono tone ${last}">${woCell(t)}</td><td class="tone ${last}">${t.t}</td><td class="mono tone ${last}">${t.every}</td>
+          <td class="mono tone ${last}">${t.last}</td><td class="mono tone ${last}">${t.next}</td><td class="tone ${last}">${provCell(t)}</td>
+          ${i === 0 ? `<td class="oos last ${b.oos ? "on" : ""}" rowspan="${b.tasks.length}">${b.oos ? "FUERA DE SERVICIO" : ""}</td>` : ""}</tr>`;
+      });
+    }
+  }
+  $("#rows").innerHTML = html || `<tr><td colspan="9" class="empty">No hay tareas para mostrar con estos filtros.</td></tr>`;
+}
+
+/* ═══ Eventos ═══ */
+const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2400); };
+document.addEventListener("click", e => {
+  const el = e.target.closest("button, a"); if (!el) return;
+  if (el.dataset.toast) { e.preventDefault(); toast(el.dataset.toast + " (en la app)"); return; }
+  if (el.dataset.g !== undefined) { const g = el.dataset.g === "ALL" ? "ALL" : Number(el.dataset.g); group = group === g ? "ALL" : g; render(); }
+  if (el.dataset.fold) { folded.has(el.dataset.fold) ? folded.delete(el.dataset.fold) : folded.add(el.dataset.fold); render(); }
+  if (el.id === "onlyDue") { onlyDue = !onlyDue; render(); }
+  if (el.id === "byAsset") { byAsset = !byAsset; render(); }
+  if (el.id === "foldAll") { const keys = filteredBlocks(false).map(b => b.name);
+    folded = keys.every(k => folded.has(k)) ? new Set() : new Set(keys); render(); }
+  if (el.id === "clear") { group = "ALL"; onlyDue = false; $("#q").value = ""; render(); }
+  if (el.id === "qx") { $("#q").value = ""; render(); $("#q").focus(); }
+});
+document.addEventListener("change", e => { if (e.target.matches("[data-sel]")) {
+  const n = document.querySelectorAll("[data-sel]:checked").length; $("#create").disabled = n === 0; } });
+$("#q").oninput = render;
+render();
+</script>
+</body>
+</html>

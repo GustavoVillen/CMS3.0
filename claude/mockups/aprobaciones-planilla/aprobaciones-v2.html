@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aprobaciones — Prototipo V2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Colores de la pantalla real (Approvals.tsx + Planilla a Bordo). */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --border:#E2E4E9;
+  --accent:#0284C7; --accent-fg:#FFF; --success:#16A34A; --warning:#D97706;
+  --danger:#DC2626; --muted:#6B7280; --navy:#1F3864; --peach:#F8CBAD; --thead:#D9E2E3;
+  color-scheme:light;
+}
+html.dark{
+  --bg:#080D1D; --surface:#1C2541; --fg:#E0E1DD; --border:rgba(255,255,255,.10);
+  --accent:#38BDF8; --accent-fg:#0B132B; --success:#22C55E; --warning:#FBBF24;
+  --danger:#F87171; --muted:#9BA3B4; --thead:#243B61;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Inter",system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1640px;margin:0 auto;padding:14px 16px 60px}
+button{font:inherit;cursor:pointer;color:inherit}
+.muted{color:var(--muted)}
+
+.demo{display:flex;gap:8px;align-items:center;margin-bottom:12px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--warning) 14%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent)}
+
+/* ── Encabezado (PageHeader) ── */
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head .l{display:flex;gap:12px;align-items:center}
+.back{border:0;background:transparent;font-size:20px;color:var(--muted);padding:4px 8px}
+.ico{width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);display:grid;place-items:center;font-size:18px}
+.head h1{margin:0;font-size:19px;font-weight:800;letter-spacing:-.01em}
+.head .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tools{display:flex;gap:8px;align-items:center}
+.search{padding:7px 10px 7px 28px;width:190px;border-radius:9px;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 5%,transparent);font-size:12px;color:var(--fg)}
+.iconbtn{border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:6px 9px;font-size:13px}
+
+.signas{display:flex;gap:8px;align-items:center;padding:8px 12px;border-radius:12px;margin-bottom:12px;font-size:12px;
+  background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)}
+
+/* ── Tabla ── */
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.scroller{overflow:auto;max-height:calc(100vh - 17rem);scrollbar-gutter:stable}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;z-index:2;background:var(--thead);color:var(--navy);font-size:10px;font-weight:800;
+  padding:7px 6px;border:1px solid var(--border);text-align:center;text-transform:uppercase}
+html.dark thead th{color:#DCE6F5}
+thead th:not(:nth-child(-n+5)){letter-spacing:.02em}
+/* Las 3 columnas nuevas llevan una marca arriba: son la parte de "ejecución". */
+thead th.new{background:color-mix(in srgb,var(--thead) 70%,#BFD7EA)}
+html.dark thead th.new{background:#1E4A6E}
+td{border:1px solid var(--border);padding:2px 7px;font-size:11px;line-height:1.25;vertical-align:middle}
+.grp td{background:var(--navy);color:#fff;font-weight:700;font-size:11px;padding:4px 12px;border-color:var(--navy)}
+.eq{background:var(--peach);color:var(--navy);font-weight:700;text-align:center}
+.it{text-align:center;font-weight:700}
+.task{vertical-align:top;padding-top:4px;padding-bottom:4px}
+/* Sólo el título, hasta 2 renglones. La descripción queda en el globito. */
+.task b{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+/* En las SS, el proveedor va debajo del título: es quien hace el trabajo. */
+.task em{display:block;font-style:normal;font-size:10px;font-weight:600;opacity:.8}
+.rec{text-align:center;vertical-align:top;padding-top:4px}
+.kind{display:inline-block;font-size:8.5px;font-weight:800;padding:1px 6px;border-radius:999px}
+.k-ot{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
+.k-ss{background:color-mix(in srgb,var(--warning) 25%,transparent);color:var(--warning)}
+/* El código es un enlace: lleva a la ficha de esa OT o SS. */
+.golink{display:block;margin:2px auto 0;border:0;background:transparent;padding:0;font-family:ui-monospace,monospace;font-weight:700;font-size:11px;
+  white-space:nowrap;color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+.golink:hover{text-decoration-style:solid;color:var(--accent)}
+tr.overdue .golink:hover{color:#fff}
+.due{text-align:center;font-family:ui-monospace,monospace;white-space:nowrap;vertical-align:top;padding-top:4px}
+tr.overdue td.tone{background:#DC2626;color:#fff;border-color:rgba(255,255,255,.35)}
+tr.soon td.tone{background:#FDE047;color:#422006}
+tr.done td.tone{background:color-mix(in srgb,var(--success) 10%,transparent)}
+tr.closed td.tone{background:color-mix(in srgb,var(--fg) 5%,transparent);color:var(--muted)}
+.act{padding:4px;background:var(--surface)}
+
+/* ── Botones de la fila (mismo molde que Aprobar / Autorizar) ── */
+.tg{width:100%;min-height:31px;border-radius:8px;border:1.5px solid;font-size:10.5px;font-weight:800;text-transform:uppercase;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:3px 6px;transition:.12s;background:transparent}
+.tg .who{font-size:9px;font-weight:600;text-transform:none;opacity:.9;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg.on{background:var(--surface);border-color:var(--accent);color:var(--accent)}
+.tg.on:hover{background:var(--accent);color:var(--accent-fg)}
+.tg.ok{background:var(--success);border-color:var(--success);color:#fff;cursor:default}
+.tg.wait{border-color:color-mix(in srgb,var(--fg) 20%,transparent);border-style:dashed;color:color-mix(in srgb,var(--fg) 38%,transparent);cursor:not-allowed}
+.tg.no{border-color:color-mix(in srgb,var(--fg) 15%,transparent);color:color-mix(in srgb,var(--fg) 32%,transparent);cursor:not-allowed}
+.tg:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.tg .cnt{font-size:9px;font-weight:700;text-transform:none;opacity:.85}
+/* Fila de SS: las 3 celdas se unen en un aviso, no hay nada que tocar. */
+.srnote{text-align:center;font-size:10px;color:var(--muted);font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:11px 16px;margin-top:12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;font-size:11px;color:var(--muted);font-weight:600}
+.legend .tg{width:auto;min-height:22px;padding:2px 9px;font-size:9.5px;display:inline-flex}
+.legend .ex{display:flex;gap:6px;align-items:center}
+
+/* ── Cambios de V2, señalados para evaluar ── */
+.v2note{margin-top:14px;padding:12px 16px;border-radius:14px;border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);
+  background:color-mix(in srgb,var(--accent) 5%,transparent);font-size:12px;line-height:1.55}
+.v2note h3{margin:0 0 6px;font-size:13px}
+.v2note ul{margin:0;padding-left:18px}
+
+/* ── Ventanas ── */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.scrim.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.3);
+  width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column}
+.modal.wide{max-width:980px}
+.mh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 12px}
+.mh h2{margin:0;font-size:14px;font-weight:800}
+.mh p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+/* <ModalCloseButton>: X roja redonda */
+.xbtn{width:28px;height:28px;border-radius:50%;border:0;background:#EF4444;color:#fff;font-weight:800;font-size:14px;flex-shrink:0}
+.mb{padding:4px 20px 12px;overflow:auto;flex:1}
+.mf{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px 18px;border-top:1px solid var(--border)}
+.primary{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:9px 18px;font-size:12px;font-weight:800}
+.primary.close{background:var(--success)}
+.ghost{background:transparent;border:1px solid var(--border);border-radius:12px;padding:9px 16px;font-size:12px;font-weight:700}
+.lbl{display:block;font-size:11px;font-weight:800;margin:12px 0 5px}
+.req{color:var(--danger)}
+.field{width:100%;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 4%,transparent);border-radius:10px;padding:8px 10px;font-size:13px;color:var(--fg);font-family:inherit}
+.field.need{border-color:color-mix(in srgb,var(--danger) 45%,transparent)}
+textarea.field{min-height:84px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:7px 12px;font-size:12px;font-weight:600;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.hint{font-size:11px;color:var(--muted);margin:6px 0 0}
+.box{border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-top:10px}
+.sprow{display:grid;grid-template-columns:1fr 76px 40px 92px 30px;gap:6px;align-items:center;margin-bottom:6px}
+.stock{font-size:11px;font-weight:800;text-align:right}
+.s-ok{color:#047857} .s-warn{color:#B45309} .s-crit{color:#B91C1C}
+.trash{border:0;background:transparent;color:var(--muted);font-size:14px}
+.add{border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);
+  border-radius:8px;padding:3px 9px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+/* OT completa (representación): secciones cerradas + la del cierre abierta */
+.sec{border:1px solid var(--border);border-radius:12px;margin-bottom:8px}
+.sec > summary{list-style:none;padding:10px 14px;font-size:12px;font-weight:800;cursor:pointer;display:flex;justify-content:space-between}
+.sec > summary::-webkit-details-marker{display:none}
+.sec .inner{padding:0 14px 12px}
+.sec.focus{border:2px solid var(--success);box-shadow:0 0 0 4px color-mix(in srgb,var(--success) 12%,transparent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:9px 16px;border-radius:12px;font-size:12.5px;font-weight:600;display:none;z-index:70}
+.toast.show{display:block}
+.alert{max-width:380px}
+.alert .mb p{font-size:13px;line-height:1.5;margin:0 0 4px;white-space:pre-line}
+
+@media (max-width:900px){
+  .scroller{max-height:none;overflow:visible}
+  table,thead,tbody,tr,td{display:block;width:100%}
+  colgroup,thead{display:none}
+  tr.grp td{border-radius:10px;margin:12px 0 6px}
+  tr:not(.grp){border:1px solid var(--border);border-radius:12px;padding:9px;margin:8px 0;background:var(--surface)}
+  tr:not(.grp) td{border:0;padding:2px 0;background:transparent!important;color:inherit!important}
+  tr.overdue{border-left:4px solid var(--danger)} tr.soon{border-left:4px solid var(--warning)}
+  td.eq{background:transparent!important;text-align:left;font-size:13px}
+  td.it{display:none}
+  /* Celular: tarjeta en grilla de 6 — firmas de a 2, ejecución de a 3. */
+  tr:not(.grp){display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+  tr:not(.grp) td{grid-column:span 6}
+  td.rec,td.due{grid-column:span 3!important;text-align:left}
+  td.rec .golink{margin:2px 0 0}
+  td.act{grid-column:span 3!important;padding:2px 0 0}
+  td.act.x3{grid-column:span 2!important}
+  .grid2{grid-template-columns:1fr}
+  .sprow{grid-template-columns:1fr 64px 34px 30px}.sprow .stock{grid-column:1/4;text-align:left}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="demo">⚠ PROTOTIPO V2 — datos de ejemplo, no son OT reales. Sirve sólo para evaluar el diseño. Probá los botones de las columnas nuevas.</div>
+
+  <div class="head">
+    <div class="l">
+      <button class="back" aria-label="Volver">←</button>
+      <div class="ico">📋</div>
+      <div><h1>Aprobaciones</h1><div class="sub" id="sub">—</div></div>
+    </div>
+    <div class="tools">
+      <div style="position:relative"><span style="position:absolute;left:9px;top:6px;font-size:12px;opacity:.4">🔍</span>
+        <input class="search" id="q" placeholder="Buscar..."></div>
+      <button class="iconbtn" title="Recargar">⟳</button>
+      <button class="iconbtn" id="theme" title="Claro / oscuro">◐</button>
+    </div>
+  </div>
+
+  <div class="signas">📋 <span>Firmás como <b>Admin Mercurio</b>. Ese nombre es el que se imprime en el PDF.</span></div>
+
+  <div class="sheet"><div class="scroller">
+    <table>
+      <colgroup>
+        <col style="width:44px"><col style="width:170px"><col><col style="width:104px"><col style="width:86px">
+        <col style="width:112px"><col style="width:112px">
+        <col style="width:112px"><col style="width:104px"><col style="width:104px">
+      </colgroup>
+      <thead><tr>
+        <th>Ítem</th><th>Equipo</th><th>Tarea</th><th>Registro</th><th>Vence</th>
+        <th>Aprobar</th><th>Autorizar</th>
+        <th class="new">Avances</th><th class="new">Repuestos</th><th class="new">Cerrar OT</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div></div>
+
+  <div class="legend">
+    <strong style="color:var(--fg)">Botones:</strong>
+    <span class="ex"><span class="tg on">Aprobar</span> se puede usar</span>
+    <span class="ex"><span class="tg ok">✓ Aprobado</span> ya hecho (queda fijo)</span>
+    <span class="ex"><span class="tg wait">Avances</span> falta autorizar</span>
+    <span class="ex"><span class="tg no">Autorizar</span> sin atribución</span>
+    <span style="margin-left:auto">Fila roja = vencida · amarilla = vence esta semana</span>
+  </div>
+
+  <div class="v2note">
+    <h3>Qué cambia en V2 (esta caja no va en la app)</h3>
+    <ul>
+      <li><b>3 columnas nuevas a la derecha:</b> Avances · Repuestos · Cerrar OT. Se encienden recién cuando la OT está <b>autorizada</b>; antes aparecen punteadas con “falta autorizar”.</li>
+      <li><b>Las OT autorizadas se quedan en la bandeja hasta cerrarse</b> (hoy desaparecen al recargar). Al cerrar, la fila queda gris con “✓ Cerrada” y sale de la lista en la próxima recarga.</li>
+      <li><b>Filas de SS:</b> las 3 celdas se unen en un aviso: los avances, repuestos y cierre se hacen en la OT de la que cuelga.</li>
+      <li>Cada botón abre la <b>misma ventana que ya existe</b> en el sistema: Registrar avance (la del celular y la OT), Consumo de repuestos (la del Tablero, sin el paso de elegir OT) y la <b>OT completa abierta en el cierre</b>.</li>
+      <li><b>Columna Tarea: sólo el título</b> (hasta 2 renglones). La descripción y las líneas “Solicitudes de servicio colgadas” / “Cuelga de…” ya no se ven; quedan en el globito al pasar el mouse. <b>En las SS se muestra además el proveedor</b> debajo del título.</li>
+      <li><b>El número de OT o SS es un enlace</b> (subrayado punteado): al tocarlo se va a la ficha de esa OT o SS.</li>
+      <li>Debajo de Avances y Repuestos se ve cuántos hay cargados, para saber de un vistazo si falta algo antes de cerrar.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══ Ventana: Registrar avance (ProgressNoteSheet) ═══ -->
+<div class="scrim" id="mAvance"><div class="modal">
+  <div class="mh"><div><h2>Registrar avance</h2><p id="avWo">—</p></div><button class="xbtn" data-close aria-label="Cerrar">✕</button></div>
+  <div class="mb">
+    <label class="lbl" for="avText">¿Qué se hizo? <span class="req">*</span></label>
+    <textarea class="field need" id="avText" placeholder="Escribí o dictá lo que se hizo…"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <button class="chip">🎤 Dictar</button><span class="hint" style="margin:0">Texto o al menos una foto</span>
+    </div>
+    <span class="lbl">Frases rápidas</span>
+    <div class="chips" id="avPhrases"></div>
+    <span class="lbl">Fotos y documentos</span>
+    <div class="chips"><button class="chip" id="avPhoto">📷 Foto</button><button class="chip">📎 Archivo</button><span class="hint" id="avFiles" style="margin:4px 0 0 4px"></span></div>
+    <span class="lbl">¿Cuándo?</span>
+    <div class="seg" id="avWhen">
+      <button aria-pressed="true" data-w="now">Ahora</button><button data-w="morning">Hoy a la mañana</button><button data-w="yesterday">Ayer</button><button data-w="other">Otra fecha</button>
+    </div>
+    <input type="datetime-local" class="field" id="avOther" style="display:none;margin-top:8px;max-width:240px">
+    <span class="lbl">¿Cómo sigue? (opcional)</span>
+    <div class="chips" id="avFollow"><button class="chip">Sigue en curso</button><button class="chip">Espera repuesto</button><button class="chip">Listo para cerrar</button></div>
+  </div>
+  <div class="mf"><button class="primary" id="avSave">Guardar avance</button></div>
+</div></div>
+
+<!-- ═══ Ventana: Consumo de repuestos (SpareConsumptionModal) ═══ -->
+<div class="scrim" id="mSpares"><div class="modal">
+  <div class="mh"><div><h2 id="spWo">—</h2><p id="spAsset">—</p></div><button class="xbtn" data-close aria-label="Cerrar">✕</button></div>
+  <div class="mb" style="min-height:300px">
+    <p class="hint" style="margin:0 0 10px">Lo que cargues acá descuenta stock del buque. Los materiales sueltos que no están en el catálogo se anotan en el recuadro Repuestos/Materiales de la orden.</p>
+    <div class="sprow" style="font-size:10px;font-weight:800;color:var(--muted)"><span>Repuesto <span class="req">*</span></span><span style="text-align:center">Cantidad <span class="req">*</span></span><span></span><span style="text-align:right">Existencia</span><span></span></div>
+    <div id="spRows"></div>
+    <p class="hint" id="spEmpty" style="font-style:italic">Todavía no hay consumo registrado en esta orden.</p>
+    <button class="add" id="spAdd">+ Agregar repuesto</button>
+  </div>
+  <div class="mf"><button class="primary" id="spSave">Registrar consumo</button></div>
+</div></div>
+
+<!-- ═══ Ventana: la OT completa, abierta en el cierre (WorkOrderModal) ═══ -->
+<div class="scrim" id="mClose"><div class="modal wide">
+  <div class="mh"><div><h2 id="clWo">—</h2><p id="clAsset">—</p></div><button class="xbtn" data-close aria-label="Cerrar">✕</button></div>
+  <div class="mb">
+    <p class="hint" style="margin:0 0 10px">Representación simplificada: en la app se abre la <b>misma ventana de la OT</b> que en Órdenes de Trabajo, desplazada hasta el cierre. Todo lo que el cierre exige hoy sigue igual.</p>
+    <details class="sec"><summary>Datos de la OT <span class="muted">▸</span></summary><div class="inner hint">Buque, equipo, prioridad, tipo…</div></details>
+    <details class="sec"><summary>Tarea a realizar <span class="muted">▸</span></summary><div class="inner hint" id="clTask">—</div></details>
+    <details class="sec"><summary>Avances <span class="muted" id="clAv">▸</span></summary><div class="inner hint">Lista de avances cargados.</div></details>
+    <details class="sec"><summary>Repuestos / Materiales <span class="muted" id="clSp">▸</span></summary><div class="inner hint">Consumo registrado.</div></details>
+    <details class="sec focus" open><summary>Resultado de la Orden de Trabajo <span style="color:var(--success)">▾</span></summary>
+      <div class="inner">
+        <div class="grid2">
+          <div><label class="lbl">Resultado <span class="req">*</span></label>
+            <div class="seg" id="clResult"><button data-r="ok">Satisfactorio</button><button data-r="def">Con deficiencias</button></div></div>
+          <div><label class="lbl" for="clWho">Responsable <span class="req">*</span></label><input class="field need" id="clWho" placeholder="Nombre del responsable"></div>
+        </div>
+        <div id="clDefBox" style="display:none">
+          <label class="lbl" for="clDef">Deficiencias encontradas <span class="req">*</span></label>
+          <textarea class="field need" id="clDef" placeholder="Descripción detallada de las deficiencias encontradas"></textarea>
+          <p class="hint">Al cerrar se abre el alta del defecto con este texto.</p>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl" for="clDate">Fecha de ejecución <span class="req">*</span></label><input type="date" class="field" id="clDate"></div>
+          <div><label class="lbl" for="clHours">Horas de <span id="clHAsset">—</span> al momento de ejecución <span class="req">*</span></label>
+            <input type="number" class="field need" id="clHours" placeholder="ej. 3500"><p class="hint" id="clLast">—</p></div>
+        </div>
+        <label class="lbl" for="clObs">Observaciones</label><textarea class="field" id="clObs" style="min-height:60px"></textarea>
+      </div>
+    </details>
+  </div>
+  <div class="mf"><button class="ghost" data-close>Cancelar</button><button class="primary close" id="clDo">✓ Cerrar OT</button></div>
+</div></div>
+
+<!-- <AlertDialog>: avisos en ventanita con OK -->
+<div class="scrim" id="mAlert" style="z-index:60"><div class="modal alert">
+  <div class="mh"><h2>Aviso</h2></div>
+  <div class="mb"><p id="alertMsg">—</p></div>
+  <div class="mf"><button class="primary" id="alertOk">OK</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══ DATOS DE EJEMPLO ═══════════════════════════════════════════════════════
+   En la app: GET /app/pms/approvals/pending, con una bandeja nueva para las OT
+   autorizadas que siguen abiertas (y cuántos avances/repuestos tienen). */
+const ME = "Admin Mercurio";
+const today = new Date(); const iso = d => d.toISOString().slice(0,10);
+const plus = n => { const d = new Date(today); d.setDate(d.getDate()+n); return iso(d); };
+const fmt = s => s ? s.split("-").reverse().join("/") : "—";
+
+const ROWS = [
+  { vessel:"MAO 02", asset:"Motor Auxiliar Babor", kind:"WO", code:"OT-M02-26-0473", title:"Tomar muestras y analizar el aceite lubricante",
+    extra:"Solicitudes de servicio colgadas: 1", due:null, approved:null, authorized:null, avances:0, spares:0, lastHours:8420 },
+  { vessel:"MAO 02", asset:"Motor Auxiliar Babor", kind:"SR", code:"SS-15-M02-2026", title:"Analisis de Aceite", parent:"OT-M02-26-0473", provider:"CONDOR S.A.C.I",
+    extra:"Cuelga de OT-M02-26-0473 · CONDOR S.A.C.I", due:null, approved:null, authorized:null },
+  { vessel:"MAO 02", asset:"Motor de Lancha", kind:"WO", code:"OT-M02-26-0466", title:"M02-MOTOR-LANCHA-04 · Cambio de aceite pata M02-RADAR-ER-01 · Verificacion de conexiones,limpieza interior de procesador y Led M02-AA-SPLIT-02 · Mantenimiento TRIMESTRAL M02-EB-AP1-32 · Toma de Aislación a Motor Eléctrico",
+    detail:"Cambio de aceite pata · Verificación de conexiones, limpieza interior de procesador y Led · Regulación de sintonía",
+    due:plus(-3), approved:{by:ME,at:"24/09/2026"}, authorized:{by:ME,at:"24/09/2026"}, avances:2, spares:1, lastHours:1240 },
+  { vessel:"MAO 02", asset:"Motor Principal Estribor", kind:"WO", code:"OT-M02-26-0481", title:"Cambio de filtros de combustible",
+    due:plus(4), approved:{by:"Capitán R. Duarte",at:"25/09/2026"}, authorized:null, avances:0, spares:0, lastHours:15230 },
+  { vessel:"DON CHICUETO", asset:"Generador Nº 1", kind:"WO", code:"OT-DCH-26-0120", title:"Inspección de escobillas y limpieza de colectores",
+    due:plus(12), approved:{by:"J. Benítez",at:"22/09/2026"}, authorized:{by:"J. Benítez",at:"22/09/2026"}, avances:0, spares:0, lastHours:6710, noOperate:true },
+  { vessel:"DON CHICUETO", asset:"Bomba de achique", kind:"WO", code:"OT-DCH-26-0133", title:"Revisión de sello mecánico",
+    due:plus(20), approved:{by:"J. Benítez",at:"23/09/2026"}, authorized:{by:"J. Benítez",at:"23/09/2026"}, avances:1, spares:0, lastHours:null },
+];
+const SPARES = [
+  { id:"s1", label:"FLT-0042 — Filtro de aceite Racor 2040", unit:"ud", onHand:6, min:2, reorder:3 },
+  { id:"s2", label:"ACE-15W40 — Aceite 15W40", unit:"L", onHand:18, min:20, reorder:40 },
+  { id:"s3", label:"ORG-0110 — O-ring 110 mm", unit:"ud", onHand:3, min:1, reorder:2 },
+  { id:"s4", label:"ESC-0009 — Escobilla carbón 12x25", unit:"ud", onHand:0, min:4, reorder:6 },
+];
+const usages = { "OT-M02-26-0466":[{spareId:"s2",qty:4}] };
+
+/* ═══ Render ═══ */
+const $ = s => document.querySelector(s);
+const daysTo = d => d ? Math.round((new Date(d) - new Date(iso(today))) / 864e5) : null;
+function tg(cls, word, sub, attrs="") {
+  const tag = cls === "on" ? "button" : "span";
+  return `<${tag} class="tg ${cls}" ${attrs}>${word}${sub ? `<span class="${cls==='ok'?'who':'cnt'}">${sub}</span>` : ""}</${tag}>`;
+}
+function render() {
+  const q = $("#q").value.trim().toLowerCase();
+  const list = ROWS.filter(r => !q || [r.code,r.vessel,r.asset,r.title].join(" ").toLowerCase().includes(q));
+  const toSign = list.filter(r => !r.authorized).length, running = list.length - toSign;
+  $("#sub").textContent = `${list.length} registros`;
+  let html = "", lastVessel = null;
+  list.forEach((r, n) => {
+    const prev = list[n-1];
+    if (r.vessel !== lastVessel) { html += `<tr class="grp"><td colspan="10">${r.vessel}</td></tr>`; lastVessel = r.vessel; }
+    const first = !prev || prev.vessel !== r.vessel || prev.asset !== r.asset;
+    let span = 1; if (first) for (let m=n+1; m<list.length && list[m].vessel===r.vessel && list[m].asset===r.asset; m++) span++;
+    const item = first ? new Set(list.slice(0,n+1).filter(x=>x.vessel===r.vessel).map(x=>x.asset)).size : 0;
+    const dd = daysTo(r.due);
+    const tone = r.closed ? "closed" : r.authorized ? "done" : dd!==null && dd<0 ? "overdue" : dd!==null && dd<=7 ? "soon" : "";
+    const i = ROWS.indexOf(r);
+
+    // Aprobar / Autorizar (sin cambios)
+    const ap = r.approved ? tg("ok","✓ Aprobado",r.approved.by) : tg("on","Aprobar","",`data-sign="ap" data-i="${i}"`);
+    const au = r.authorized ? tg("ok","✓ Autorizado",r.authorized.by)
+      : !r.approved ? tg("wait","Autorizar","falta aprobar") : tg("on","Autorizar","",`data-sign="au" data-i="${i}"`);
+
+    // Las 3 nuevas
+    let exec;
+    if (r.kind === "SR") {
+      exec = `<td colspan="3" class="srnote">Avances, repuestos y cierre van en la ${r.parent}</td>`;
+    } else if (r.closed) {
+      exec = `<td class="act x3">${tg("wait","Avances","OT cerrada")}</td><td class="act x3">${tg("wait","Repuestos","OT cerrada")}</td>
+              <td class="act x3">${tg("ok","✓ Cerrada",r.closed.by)}</td>`;
+    } else if (!r.authorized) {
+      exec = ["Avances","Repuestos","Cerrar OT"].map(w => `<td class="act x3">${tg("wait",w,"falta autorizar")}</td>`).join("");
+    } else if (r.noOperate) {
+      exec = ["Avances","Repuestos","Cerrar OT"].map(w => `<td class="act x3">${tg("no",w,"sin atribución")}</td>`).join("");
+    } else {
+      const nA = r.avances, nS = (usages[r.code]||[]).length;
+      exec = `<td class="act x3">${tg("on","Registrar avance", nA ? `${nA} cargado${nA>1?"s":""}` : "ninguno aún", `data-av="${i}"`)}</td>
+              <td class="act x3">${tg("on","Repuestos", nS ? `${nS} ítem${nS>1?"s":""}` : "ninguno aún", `data-sp="${i}"`)}</td>
+              <td class="act x3">${tg("on","Cerrar OT","",`data-cl="${i}"`)}</td>`;
+    }
+
+    html += `<tr class="${tone}">
+      ${first ? `<td class="it" rowspan="${span}">${item}</td><td class="eq" rowspan="${span}">${r.asset}</td>` : ""}
+      <td class="task tone" title="${[r.title, r.detail, r.extra].filter(Boolean).join(" — ")}"><b>${r.title}</b>${r.kind === "SR" && r.provider ? `<em>Proveedor: ${r.provider}</em>` : ""}</td>
+      <td class="rec tone"><span class="kind ${r.kind==='WO'?'k-ot':'k-ss'}">${r.kind==='WO'?'OT':'SS'}</span><button class="golink" data-go="${i}" title="Abrir ${r.code}">${r.code}</button></td>
+      <td class="due tone">${fmt(r.due)}</td>
+      <td class="act">${ap}</td><td class="act">${au}</td>
+      ${exec}
+    </tr>`;
+  });
+  $("#rows").innerHTML = html || `<tr><td colspan="10" style="padding:40px;text-align:center"><b>No hay nada esperando firma</b></td></tr>`;
+}
+
+/* ═══ Ventanas ═══ */
+let cur = null;
+const open = id => $(id).classList.add("open");
+const closeAll = () => document.querySelectorAll(".scrim").forEach(s => s.id !== "mAlert" && s.classList.remove("open"));
+const alertBox = msg => { $("#alertMsg").textContent = msg; open("#mAlert"); };
+$("#alertOk").onclick = () => $("#mAlert").classList.remove("open");
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = closeAll);
+const toast = msg => { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2600); };
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.sign) {
+    const r = ROWS[b.dataset.i]; const s = { by: ME, at: fmt(iso(today)) };
+    if (b.dataset.sign === "ap") r.approved = s; else r.authorized = s;
+    render(); if (b.dataset.sign === "au") toast("Autorizada. Ya se pueden cargar avances, repuestos y cerrarla.");
+  }
+  if (b.dataset.go) { const r = ROWS[b.dataset.go];
+    toast(r.kind === "WO" ? `Ir a ${r.code}: se abre su ficha en Órdenes de Trabajo` : `Ir a ${r.code}: se abre su ficha en Solicitudes de Servicio`); }
+  if (b.dataset.av) openAvance(ROWS[b.dataset.av]);
+  if (b.dataset.sp) openSpares(ROWS[b.dataset.sp]);
+  if (b.dataset.cl) openClose(ROWS[b.dataset.cl]);
+});
+
+/* Registrar avance */
+const PHRASES = ["Se desarmó","Se cambió la pieza","Se probó y funciona","Falta repuesto","Espera al taller","Trabajo terminado"];
+let avPhotos = 0;
+function openAvance(r) {
+  cur = r; avPhotos = 0;
+  $("#avWo").textContent = `${r.code} — ${r.asset}`;
+  $("#avText").value = ""; $("#avText").classList.add("need"); $("#avFiles").textContent = "";
+  $("#avPhrases").innerHTML = PHRASES.map(p => `<button class="chip" aria-pressed="false">${p}</button>`).join("");
+  document.querySelectorAll("#avFollow .chip").forEach(c => c.setAttribute("aria-pressed","false"));
+  setWhen("now"); open("#mAvance"); $("#avText").focus();
+}
+$("#avText").oninput = e => e.target.classList.toggle("need", !e.target.value.trim() && !avPhotos);
+$("#avPhrases").onclick = e => { const c = e.target.closest(".chip"); if (!c) return;
+  const on = c.getAttribute("aria-pressed") !== "true"; c.setAttribute("aria-pressed", on);
+  if (on) { const t = $("#avText"); t.value = (t.value.trim() ? t.value.trim() + ". " : "") + c.textContent; t.classList.remove("need"); } };
+$("#avFollow").onclick = e => { const c = e.target.closest(".chip"); if (!c) return;
+  const on = c.getAttribute("aria-pressed") !== "true";
+  document.querySelectorAll("#avFollow .chip").forEach(x => x.setAttribute("aria-pressed","false")); c.setAttribute("aria-pressed", on); };
+$("#avPhoto").onclick = () => { avPhotos++; $("#avFiles").textContent = `${avPhotos} adjunto${avPhotos>1?"s":""}`; $("#avText").classList.remove("need"); };
+function setWhen(w) { document.querySelectorAll("#avWhen button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === w));
+  $("#avOther").style.display = w === "other" ? "block" : "none"; }
+$("#avWhen").onclick = e => { const b = e.target.closest("button"); if (b) setWhen(b.dataset.w); };
+$("#avSave").onclick = () => {
+  if (!$("#avText").value.trim() && !avPhotos) return alertBox("Escribí algo o sumá una foto.");
+  const other = $("#avOther");
+  if (other.style.display !== "none" && other.value && new Date(other.value) > new Date()) return alertBox("La fecha no puede ser futura.");
+  cur.avances++; closeAll(); render(); toast(`Avance guardado en ${cur.code}`);
+};
+
+/* Consumo de repuestos */
+let spRows = [];
+function openSpares(r) {
+  cur = r; spRows = (usages[r.code] || []).map(u => ({...u}));
+  $("#spWo").textContent = `${r.code} — ${r.title}`; $("#spAsset").textContent = r.asset;
+  drawSpares(); open("#mSpares");
+}
+function drawSpares() {
+  $("#spEmpty").style.display = spRows.length ? "none" : "block";
+  $("#spRows").innerHTML = spRows.map((u, i) => {
+    const s = SPARES.find(x => x.id === u.spareId);
+    const cls = !s ? "" : s.onHand < s.min ? "s-crit" : s.onHand <= s.reorder ? "s-warn" : "s-ok";
+    const low = s && u.qty > s.onHand;
+    return `<div class="sprow">
+      <select class="field ${u.spareId ? "" : "need"}" data-f="spareId" data-i="${i}"><option value="">Buscar repuesto…</option>
+        ${SPARES.map(x => `<option value="${x.id}" ${x.id===u.spareId?"selected":""}>${x.label}</option>`).join("")}</select>
+      <input type="number" min="0" step="any" class="field ${u.qty>0?"":"need"}" style="text-align:center;${low?"border-color:#F97316;color:#C2410C":""}" data-f="qty" data-i="${i}" value="${u.qty}">
+      <span class="hint" style="margin:0">${s ? s.unit : ""}</span>
+      <span class="stock ${cls}" title="Existencia actual">${s ? `${low?"⚠ ":""}${s.onHand} ${s.unit}` : ""}</span>
+      <button class="trash" data-del="${i}" aria-label="Quitar repuesto">🗑</button></div>`;
+  }).join("");
+}
+$("#spRows").onchange = e => { const el = e.target; if (!el.dataset.f) return;
+  spRows[el.dataset.i][el.dataset.f] = el.dataset.f === "qty" ? Number(el.value) : el.value; drawSpares(); };
+$("#spRows").onclick = e => { const b = e.target.closest("[data-del]"); if (b) { spRows.splice(b.dataset.del, 1); drawSpares(); } };
+$("#spAdd").onclick = () => { spRows.push({ spareId:"", qty:1 }); drawSpares(); };
+$("#spSave").onclick = () => {
+  if (spRows.some(u => !u.spareId)) return alertBox("Elegí el repuesto en todas las filas.");
+  if (spRows.some(u => !(u.qty > 0))) return alertBox("La cantidad tiene que ser mayor que cero.");
+  usages[cur.code] = spRows; closeAll(); render(); toast(`Consumo registrado en ${cur.code} — se descontó del stock`);
+};
+
+/* Cerrar OT (la OT completa, en el cierre) */
+let clResult = "";
+function openClose(r) {
+  cur = r; clResult = "";
+  $("#clWo").textContent = `${r.code} — ${r.title}`; $("#clAsset").textContent = `${r.vessel} · ${r.asset}`;
+  $("#clTask").textContent = r.detail || r.title;
+  $("#clAv").textContent = `${r.avances} cargado${r.avances===1?"":"s"} ▸`;
+  $("#clSp").textContent = `${(usages[r.code]||[]).length} ítem(s) ▸`;
+  document.querySelectorAll("#clResult button").forEach(b => b.setAttribute("aria-pressed","false"));
+  $("#clDefBox").style.display = "none"; $("#clDef").value = ""; $("#clWho").value = ""; $("#clObs").value = "";
+  $("#clDate").value = iso(today); $("#clDate").max = iso(today);
+  $("#clHAsset").textContent = r.asset;
+  const hasHours = r.lastHours != null;
+  $("#clHours").closest("div").style.display = hasHours ? "" : "none";
+  $("#clHours").value = ""; $("#clLast").textContent = hasHours ? `Última lectura: ${r.lastHours.toLocaleString("es")} h` : "";
+  ["#clWho","#clHours"].forEach(s => $(s).classList.add("need"));
+  open("#mClose");
+}
+$("#clResult").onclick = e => { const b = e.target.closest("button"); if (!b) return; clResult = b.dataset.r;
+  document.querySelectorAll("#clResult button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $("#clDefBox").style.display = clResult === "def" ? "block" : "none"; };
+["#clWho","#clHours","#clDef"].forEach(s => $(s).addEventListener("input", e => e.target.classList.toggle("need", !e.target.value.trim())));
+$("#clDo").onclick = () => {
+  if (!clResult) return alertBox("El resultado de la OT es requerido para cerrar.");
+  if (clResult === "def" && !$("#clDef").value.trim()) return alertBox("Describí las deficiencias encontradas.");
+  if (!$("#clWho").value.trim()) return alertBox("Falta el responsable que ejecutó el trabajo.");
+  if (cur.lastHours != null) {
+    const h = Number($("#clHours").value);
+    if (!$("#clHours").value) return alertBox(`Falta la lectura de horas de ${cur.asset}.`);
+    if (h < cur.lastHours) return alertBox(`Las horas de ${cur.asset} no pueden ser menores que la última lectura (${cur.lastHours.toLocaleString("es")} h).`);
+  }
+  cur.closed = { by: ME }; closeAll(); render();
+  toast(clResult === "def" ? `${cur.code} cerrada — se abre el alta del defecto` : `${cur.code} cerrada — se generó el PDF`);
+};
+
+$("#q").oninput = render;
+$("#theme").onclick = () => document.documentElement.classList.toggle("dark");
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#mAlert").classList.contains("open")) $("#mAlert").classList.remove("open"); });
+render();
+</script>
+</body>
+</html>

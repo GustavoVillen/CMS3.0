@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es" class="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avance de OT — Prototipo V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ───────────────────────────────────────────────────────────────────────────
+   Tokens copiados de apps/web-modern/src/index.css para que el prototipo se
+   vea igual que el CMS real (light por defecto, dark con el toggle).
+   ─────────────────────────────────────────────────────────────────────────── */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#F0F1F4; --fg:#1A1D24;
+  --border:#E2E4E9; --accent:#0284C7; --accent-fg:#FFFFFF;
+  --success:#0E9F6E; --warning:#D97706; --danger:#DC2626; --info:#2563EB;
+  --violet:#7C3AED; --muted:#6B7280;
+  color-scheme:light;
+}
+html.dark{
+  --bg:#080D1D; --surface:#1C2541; --surface-2:rgba(255,255,255,.05); --fg:#E0E1DD;
+  --border:rgba(255,255,255,.10); --accent:#38BDF8; --accent-fg:#0B132B;
+  --success:#06D6A0; --warning:#FBBF24; --danger:#F87171; --info:#60A5FA;
+  --violet:#A78BFA; --muted:#9BA3B4;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:"Inter",system-ui,-apple-system,sans-serif; font-size:14px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1500px;margin:0 auto;padding:16px 16px 64px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px}
+html.dark .card{background:rgba(28,37,65,.7)}
+.muted{color:var(--muted)}
+button{font:inherit;cursor:pointer}
+
+/* ── Banda de "datos de ejemplo" ── */
+.demo-banner{
+  display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:8px 12px;
+  border-radius:10px;font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--warning) 14%,transparent);
+  color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent);
+}
+
+/* ── Encabezado ── */
+.pagehead{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.pagehead h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.02em}
+.pagehead p{margin:3px 0 0;font-size:12.5px;color:var(--muted);max-width:62ch}
+.head-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select.ctrl,button.ctrl{
+  background:var(--surface);color:var(--fg);border:1px solid var(--border);
+  border-radius:9px;padding:7px 11px;font-size:13px;font-weight:600;
+}
+button.ctrl:hover,select.ctrl:hover{border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:3px;gap:3px}
+html.dark .seg{background:rgba(255,255,255,.05)}
+.seg button{
+  border:0;background:transparent;color:var(--muted);border-radius:7px;
+  padding:6px 13px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;
+}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+
+/* ── Semáforos de flota ── */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.kpi{
+  text-align:left;padding:12px 14px;border-radius:14px;background:var(--surface);
+  border:1px solid var(--border);display:flex;gap:11px;align-items:center;transition:.15s;
+}
+html.dark .kpi{background:rgba(28,37,65,.7)}
+.kpi:hover{border-color:color-mix(in srgb,var(--accent) 45%,transparent);transform:translateY(-1px)}
+.kpi[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.kpi .n{font-size:26px;font-weight:800;line-height:1;letter-spacing:-.03em}
+.kpi .lb{font-size:12px;font-weight:700;line-height:1.25}
+.kpi .hint{font-size:10.5px;color:var(--muted);font-weight:500;margin-top:2px}
+.kpi .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:17px;flex:0 0 auto}
+.t-danger .n,.t-danger .lb{color:var(--danger)} .t-danger .ico{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.t-warning .n,.t-warning .lb{color:var(--warning)} .t-warning .ico{background:color-mix(in srgb,var(--warning) 16%,transparent);color:var(--warning)}
+.t-violet .n,.t-violet .lb{color:var(--violet)} .t-violet .ico{background:color-mix(in srgb,var(--violet) 14%,transparent);color:var(--violet)}
+.t-success .n,.t-success .lb{color:var(--success)} .t-success .ico{background:color-mix(in srgb,var(--success) 14%,transparent);color:var(--success)}
+
+/* ── Barra por buque ── */
+.fleet{padding:13px 15px;margin-bottom:12px}
+.fleet h2{margin:0 0 10px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.vrow{display:grid;grid-template-columns:190px 1fr 62px;gap:11px;align-items:center;padding:4px 0}
+.vrow .vname{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--surface-2)}
+.bar span{display:block;position:relative}
+.bar span[title]{cursor:help}
+.seg-overdue{background:var(--danger)} .seg-soon{background:var(--warning)}
+.seg-blocked{background:var(--violet)} .seg-ok{background:var(--success)}
+.vrow .vtot{font-size:12px;font-weight:700;text-align:right;color:var(--muted)}
+.barlegend{display:flex;flex-wrap:wrap;gap:13px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-weight:600}
+.barlegend i{display:inline-block;width:9px;height:9px;border-radius:2.5px;margin-right:5px;vertical-align:-1px}
+
+/* ── Pastillas de hitos ── */
+.chain{display:flex;gap:4px}
+.pill{
+  position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+  width:40px;height:34px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface-2);font-size:9.5px;font-weight:800;letter-spacing:.03em;
+  color:var(--muted);line-height:1;gap:2px;padding:0;
+}
+.pill .mk{font-size:10px;line-height:1}
+.pill:hover{border-color:var(--accent);z-index:2}
+.pill.st-done{background:color-mix(in srgb,var(--success) 16%,transparent);border-color:color-mix(in srgb,var(--success) 42%,transparent);color:var(--success)}
+.pill.st-active{background:color-mix(in srgb,var(--warning) 17%,transparent);border-color:color-mix(in srgb,var(--warning) 45%,transparent);color:var(--warning)}
+.pill.st-pending{background:transparent;border-style:dashed;color:var(--muted)}
+.pill.st-na{background:transparent;border-color:var(--border);color:color-mix(in srgb,var(--muted) 55%,transparent)}
+.pill.st-blocked{background:color-mix(in srgb,var(--danger) 17%,transparent);border-color:var(--danger);color:var(--danger);box-shadow:0 0 0 2px color-mix(in srgb,var(--danger) 18%,transparent)}
+
+/* ── Tabla de hitos ── */
+.tablecard{padding:0;overflow:hidden}
+.tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border)}
+.tbar input{
+  background:var(--surface-2);border:1px solid var(--border);color:var(--fg);
+  border-radius:9px;padding:7px 11px;font-size:13px;min-width:190px;
+}
+.chip{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:999px;
+  padding:4px 10px;font-size:11.5px;font-weight:700;color:var(--muted);display:inline-flex;gap:6px;align-items:center;
+}
+.chip button{border:0;background:transparent;color:inherit;padding:0;font-size:13px;line-height:1}
+.scroller{overflow-x:auto;scrollbar-gutter:stable}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{
+  position:sticky;top:0;background:var(--surface);z-index:1;text-align:left;
+  font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+html.dark thead th{background:#1C2541}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.crit{box-shadow:inset 3px 0 0 var(--danger)}
+.code{font-weight:800;font-size:12.5px;white-space:nowrap}
+.vs{font-size:12.5px;font-weight:600;white-space:nowrap}
+.ti{font-size:12.5px;max-width:270px}
+.ti small{display:block;color:var(--muted);font-size:11px;margin-top:1px}
+.due{font-weight:800;font-size:12.5px;white-space:nowrap}
+.due.over{color:var(--danger)} .due.soon{color:var(--warning)}
+.due small{display:block;font-weight:500;font-size:10.5px;color:var(--muted)}
+.waiting{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;white-space:nowrap}
+.waiting .dot{width:7px;height:7px;border-radius:99px;flex:0 0 auto}
+.stall{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+.stall.bad{color:var(--danger)}
+
+/* ── Tablero de trabas ── */
+.board{display:flex;gap:11px;overflow-x:auto;padding-bottom:10px;scrollbar-gutter:stable}
+.col{flex:0 0 232px;display:flex;flex-direction:column;gap:8px}
+.colhead{padding:8px 10px;border-radius:11px;background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--c,var(--border))}
+html.dark .colhead{background:rgba(28,37,65,.7)}
+.colhead .cn{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--c,var(--muted))}
+.colhead .cc{font-size:19px;font-weight:800;line-height:1.1;margin-top:2px}
+.colhead .ch{font-size:10.5px;color:var(--muted);font-weight:500}
+.wo{
+  text-align:left;width:100%;padding:9px 10px;border-radius:11px;background:var(--surface);
+  border:1px solid var(--border);border-left:3px solid var(--c,var(--border));display:block;
+}
+html.dark .wo{background:rgba(28,37,65,.7)}
+.wo:hover{border-color:var(--accent)}
+.wo.crit{border-left-color:var(--danger)}
+.wo .r1{display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+.wo .r1 b{font-size:12px;font-weight:800}
+.wo .vn{font-size:11px;font-weight:700;color:var(--muted);margin-top:1px}
+.wo .tt{font-size:12px;margin-top:5px;line-height:1.35}
+.wo .r3{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:7px}
+.wo .mini{display:flex;gap:2px}
+.wo .mini i{width:7px;height:7px;border-radius:2px;background:var(--border);display:block}
+.wo .mini i.d{background:var(--success)} .wo .mini i.a{background:var(--warning)} .wo .mini i.b{background:var(--danger)}
+.empty{padding:16px 10px;text-align:center;font-size:11.5px;color:var(--muted);border:1px dashed var(--border);border-radius:11px}
+.badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.b-over{background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)}
+.b-soon{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
+.b-ok{background:color-mix(in srgb,var(--success) 15%,transparent);color:var(--success)}
+
+/* ── Leyenda de pastillas ── */
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;padding:12px 15px;margin-top:12px;font-size:11.5px;color:var(--muted);font-weight:600;align-items:center}
+.legend .grp{display:flex;gap:8px;align-items:center}
+.legend .pill{width:30px;height:26px;font-size:8.5px}
+
+/* ── Panel lateral de detalle ── */
+.drawer{
+  position:fixed;top:0;right:0;height:100%;width:400px;max-width:92vw;z-index:50;
+  background:var(--surface);border-left:1px solid var(--border);
+  transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;
+}
+html.dark .drawer{background:#1C2541}
+.drawer.open{transform:none}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:14px 15px;border-bottom:1px solid var(--border)}
+.dhead h3{margin:0;font-size:15px;font-weight:800}
+.dhead p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+/* X de cierre = <ModalCloseButton> del CMS (redonda, roja) */
+.xbtn{width:30px;height:30px;border-radius:999px;border:0;background:var(--danger);color:#fff;font-size:15px;font-weight:800;line-height:1;flex:0 0 auto}
+.dbody{padding:14px 15px;overflow-y:auto;scrollbar-gutter:stable}
+.step{display:grid;grid-template-columns:34px 1fr;gap:11px;padding:9px 0;border-bottom:1px solid var(--border)}
+.step:last-child{border-bottom:0}
+.step .sname{font-size:12.5px;font-weight:800}
+.step .sdet{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.45}
+.step .slink{font-size:11.5px;font-weight:700;color:var(--accent);margin-top:4px;display:inline-block}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.open{opacity:1;pointer-events:auto}
+
+/* ── Responsive ── */
+@media (max-width:1100px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .vrow{grid-template-columns:130px 1fr 54px}
+}
+@media (max-width:760px){
+  .wrap{padding:12px 12px 56px}
+  .pagehead{align-items:stretch}
+  .head-tools{width:100%}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi .n{font-size:22px}
+  .fleet .vrow{grid-template-columns:1fr;gap:3px;padding:7px 0;border-bottom:1px solid var(--border)}
+  .fleet .vtot{text-align:left}
+  /* En celular la tabla se vuelve tarjetas (patrón mobileCards del DataTable) */
+  .scroller{overflow:visible}
+  table,thead,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  tbody tr{border:1px solid var(--border);border-radius:12px;padding:10px;margin:10px 0}
+  tbody td{border:0;padding:3px 0}
+  td[data-l]::before{content:attr(data-l);display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
+  .ti{max-width:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="demo-banner">⚠ PROTOTIPO — datos de ejemplo, no son OT reales. Sirve sólo para evaluar el diseño.</div>
+
+  <div class="pagehead">
+    <div>
+      <h1>Avance de OT</h1>
+      <p>En qué eslabón está esperando cada orden de trabajo y desde cuándo. Se lee de izquierda a derecha: tramitación → permiso → repuestos → servicio externo → muestra → ejecución → cierre.</p>
+    </div>
+    <div class="head-tools">
+      <select class="ctrl" id="vesselSel" aria-label="Buque">
+        <option value="">Toda la flota</option>
+      </select>
+      <div class="seg" role="group" aria-label="Vista">
+        <button id="vTrabas"  aria-pressed="true">▦ Trabas</button>
+        <button id="vHitos"   aria-pressed="false">≡ Cadena de hitos</button>
+      </div>
+      <button class="ctrl" id="themeBtn" title="Claro / oscuro">◐</button>
+    </div>
+  </div>
+
+  <!-- Semáforos de flota -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- Comparación entre buques -->
+  <div class="card fleet">
+    <h2>Por buque — OT abiertas</h2>
+    <div id="fleetRows"></div>
+    <div class="barlegend">
+      <span><i class="seg-overdue"></i>Vencida</span>
+      <span><i class="seg-soon"></i>Vence esta semana</span>
+      <span><i class="seg-blocked"></i>Trabada (espera algo)</span>
+      <span><i class="seg-ok"></i>En fecha / en curso</span>
+    </div>
+  </div>
+
+  <!-- VISTA A — tablero de trabas -->
+  <div id="boardView">
+    <div class="board" id="board"></div>
+  </div>
+
+  <!-- VISTA B — lista con cadena de hitos -->
+  <div id="listView" style="display:none">
+    <div class="card tablecard">
+      <div class="tbar">
+        <input id="q" placeholder="Buscar OT, equipo o tarea…" aria-label="Buscar">
+        <span class="chip" id="activeChip" style="display:none"></span>
+        <span class="muted" id="count" style="margin-left:auto;font-size:12px;font-weight:700"></span>
+      </div>
+      <div class="scroller">
+        <table>
+          <thead><tr>
+            <th>Buque</th><th>OT</th><th>Tarea / Equipo</th><th>Vence</th>
+            <th style="text-align:center">Cadena de hitos</th><th>Esperando</th><th>Sin movimiento</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card legend">
+    <strong style="color:var(--fg);font-size:11.5px">Cómo leer las pastillas:</strong>
+    <span class="grp"><span class="pill st-done"><span class="mk">✓</span>APR</span> listo</span>
+    <span class="grp"><span class="pill st-active"><span class="mk">◐</span>REP</span> en curso</span>
+    <span class="grp"><span class="pill st-pending"><span class="mk">○</span>CIE</span> pendiente</span>
+    <span class="grp"><span class="pill st-na"><span class="mk">–</span>MUE</span> no lo exige el plan</span>
+    <span class="grp"><span class="pill st-blocked"><span class="mk">!</span>PTW</span> acá se trabó</span>
+    <span style="margin-left:auto">APR tramitación · PTW permiso · REP repuestos · SS servicio externo · MUE muestra · EJE ejecución · CIE cierre</span>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dhead">
+    <div><h3 id="dTitle">—</h3><p id="dSub">—</p></div>
+    <button class="xbtn" id="dClose" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATOS DE EJEMPLO. En la app real vienen de GET /app/dashboard/wo-progress,
+   armados a partir de la OT y sus registros hijos (permisos, SS, ítems,
+   movimientos de stock, muestras, novedades de avance).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Los 7 eslabones, en orden fijo. */
+const LINKS = [
+  { k:"apr", code:"APR", name:"Tramitación",        col:"Esperando firma",     c:"var(--info)" },
+  { k:"ptw", code:"PTW", name:"Permiso de trabajo", col:"Esperando permiso",   c:"var(--violet)" },
+  { k:"rep", code:"REP", name:"Repuestos",          col:"Esperando repuesto",  c:"var(--warning)" },
+  { k:"ss",  code:"SS",  name:"Servicio externo",   col:"En taller",           c:"var(--accent)" },
+  { k:"mue", code:"MUE", name:"Muestra de lab.",    col:"Esperando resultado", c:"var(--info)" },
+  { k:"eje", code:"EJE", name:"Ejecución",          col:"En ejecución",        c:"var(--success)" },
+  { k:"cie", code:"CIE", name:"Cierre",             col:"Cerrando",            c:"var(--success)" },
+];
+const MARK = { done:"✓", active:"◐", pending:"○", na:"–", blocked:"!" };
+
+/* d = done · a = active · p = pending · n = no aplica · b = blocked (traba) */
+const OTS = [
+  { v:"DON CHICUETO", code:"OT-0412", asset:"Motor propulsor Br.", title:"Cambio de aceite y filtros — 500 h", due:-11, stall:12,
+    l:{ apr:["d","Autorizada el 02/09 por el Superintendente técnico."],
+        ptw:["d","Aislamiento eléctrico PTW-0188 — cerrado el 03/09."],
+        rep:["b","3 de 5 ítems sin stock. Solicitud SR-0231 enviada a Compras el 04/09, sin respuesta."],
+        ss: ["n","El plan no contrata servicio externo."],
+        mue:["p","El plan exige muestra de aceite: se genera al cerrar la OT."],
+        eje:["p","Sin jornadas cargadas."],
+        cie:["p","—"] } },
+
+  { v:"DON CHICUETO", code:"OT-0389", asset:"Tanque de lastre Nº2", title:"Inspección interna de tanque", due:4, stall:3,
+    l:{ apr:["d","Autorizada el 15/09."],
+        ptw:["b","El plan exige Espacio confinado. PTW-0201 quedó en BORRADOR, nadie lo solicitó."],
+        rep:["n","Sin repuestos previstos."],
+        ss: ["n","Sin servicio externo."],
+        mue:["n","No aplica."],
+        eje:["p","No puede empezar sin el permiso activo."],
+        cie:["p","—"] } },
+
+  { v:"DON CHICUETO", code:"OT-0401", asset:"Caja reductora Er.", title:"Reparación de pérdida por retén", due:9, stall:5,
+    l:{ apr:["d","Autorizada el 12/09."],
+        ptw:["d","Trabajo en frío PTW-0195 — cerrado."],
+        rep:["d","Retén y juntas entregados del pañol el 13/09."],
+        ss: ["b","CONDOR S.A.C.I — SS-0077 en taller desde el 12/09. Sin fecha de devolución."],
+        mue:["n","No aplica."],
+        eje:["a","2 jornadas cargadas, 6 h de 14 h estimadas."],
+        cie:["p","—"] } },
+
+  { v:"DON CHICUETO", code:"OT-0377", asset:"Bomba de incendio EM", title:"Prueba de funcionamiento mensual", due:-3, stall:9,
+    l:{ apr:["b","Enviada a aprobar el 10/09. Aprobada, pero sin autorizar desde hace 9 días."],
+        ptw:["p","El plan exige Trabajo en frío: el permiso se crea al autorizar."],
+        rep:["n","Sin repuestos."],
+        ss: ["n","Sin servicio externo."],
+        mue:["n","No aplica."],
+        eje:["p","—"], cie:["p","—"] } },
+
+  { v:"BARCAZA MGT 1601", code:"OT-0420", asset:"Sistema de gobierno", title:"Calibración de sistema RPM", due:14, stall:1,
+    l:{ apr:["d","Autorizada el 20/09."],
+        ptw:["n","No exige permiso."],
+        rep:["d","Sin faltantes."],
+        ss: ["n","Sin servicio externo."],
+        mue:["n","No aplica."],
+        eje:["a","Empezada ayer. 1 novedad con foto cargada."],
+        cie:["p","—"] } },
+
+  { v:"BARCAZA MGT 1601", code:"OT-0415", asset:"Motor auxiliar Nº1", title:"Análisis de vibraciones anual", due:-6, stall:8,
+    l:{ apr:["d","Autorizada el 08/09."],
+        ptw:["n","No exige permiso."],
+        rep:["n","Sin repuestos."],
+        ss: ["d","CONDOR S.A.C.I — SS-0071 recibida conforme el 14/09."],
+        mue:["b","Muestra VIB-0060 tomada el 14/09, enviada al laboratorio. Resultado pendiente hace 8 días."],
+        eje:["d","Ejecutada, 3 h."],
+        cie:["p","No se cierra hasta tener el resultado."] } },
+
+  { v:"BARCAZA MGT 1602", code:"OT-0418", asset:"Alternador motor propulsor", title:"Cambio de rodamientos", due:-19, stall:21,
+    l:{ apr:["d","Autorizada el 30/08."],
+        ptw:["d","Aislamiento eléctrico PTW-0180 — cerrado."],
+        rep:["b","Rodamiento P/N 6312-2RS: solicitud SR-0219 aprobada, sin recibir hace 21 días."],
+        ss: ["n","Sin servicio externo."],
+        mue:["n","No aplica."],
+        eje:["a","Desarmado, detenido esperando la pieza."],
+        cie:["p","—"] } },
+
+  { v:"BARCAZA MGT 1602", code:"OT-0403", asset:"Aire acondicionado puente", title:"Carga de gas y limpieza", due:7, stall:2,
+    l:{ apr:["d","Autorizada el 17/09."],
+        ptw:["n","No exige permiso."],
+        rep:["a","Gas R-410A pedido, SR-0240 en preparación."],
+        ss: ["a","Servicio técnico externo SS-0080 — autorizada, todavía no concurrió."],
+        mue:["n","No aplica."],
+        eje:["p","—"], cie:["p","—"] } },
+
+  { v:"REMOLCADOR GLT 05", code:"OT-0355", asset:"Balsa salvavidas Br.", title:"Revisión anual certificada", due:2, stall:1,
+    l:{ apr:["d","Autorizada el 05/09."],
+        ptw:["n","No exige permiso."],
+        rep:["n","Sin repuestos."],
+        ss: ["d","Estación de servicio autorizada — SS-0068 recibida el 19/09."],
+        mue:["n","No aplica."],
+        eje:["d","Ejecutada, 4 h. Certificado adjunto."],
+        cie:["a","Lista para cerrar: falta cargar el resultado y la firma."] } },
+
+  { v:"REMOLCADOR GLT 05", code:"OT-0421", asset:"Cajas reductoras Br y Er", title:"Control de nivel y muestra de aceite", due:21, stall:0,
+    l:{ apr:["a","Aprobada el 21/09, esperando autorización de tierra."],
+        ptw:["p","Se crea al autorizar."],
+        rep:["n","Sin repuestos."],
+        ss: ["n","Sin servicio externo."],
+        mue:["p","El plan exige muestra de aceite."],
+        eje:["p","—"], cie:["p","—"] } },
+
+  { v:"REMOLCADOR GLT 05", code:"OT-0398", asset:"Alarmas en general", title:"Prueba de alarmas de máquinas", due:-2, stall:4,
+    l:{ apr:["d","Autorizada el 16/09."],
+        ptw:["n","No exige permiso."],
+        rep:["n","Sin repuestos."],
+        ss: ["n","Sin servicio externo."],
+        mue:["n","No aplica."],
+        eje:["b","Autorizada hace 4 días y sin empezar. Vencida hace 2 días."],
+        cie:["p","—"] } },
+
+  { v:"BARCAZA MGT 1601", code:"OT-0409", asset:"Bomba hidróforo auxiliar", title:"Cambio de sello mecánico", due:11, stall:2,
+    l:{ apr:["d","Autorizada el 19/09."],
+        ptw:["n","No exige permiso."],
+        rep:["d","Sello entregado del pañol."],
+        ss: ["n","Sin servicio externo."],
+        mue:["n","No aplica."],
+        eje:["a","1 jornada cargada, 2 h de 4 h."],
+        cie:["p","—"] } },
+];
+
+/* ── Derivaciones ─────────────────────────────────────────────────────────── */
+const ST = { d:"done", a:"active", p:"pending", n:"na", b:"blocked" };
+const state = (ot,k) => ST[ot.l[k][0]];
+const detail = (ot,k) => ot.l[k][1];
+
+/* El eslabón que traba: el rojo si hay; si no, el primero en curso; si no, el primero pendiente. */
+function blockingLink(ot){
+  const b = LINKS.find(L => state(ot,L.k)==="blocked"); if (b) return b;
+  const a = LINKS.find(L => state(ot,L.k)==="active");  if (a) return a;
+  return LINKS.find(L => state(ot,L.k)==="pending") ?? LINKS[6];
+}
+const isBlocked = ot => LINKS.some(L => state(ot,L.k)==="blocked");
+const dueClass  = d => d < 0 ? "over" : d <= 7 ? "soon" : "";
+const dueText   = d => d < 0 ? `${-d} d vencida` : d === 0 ? "vence hoy" : `en ${d} d`;
+
+let view = "board", vessel = "", kpiFilter = "", query = "";
+const VESSELS = [...new Set(OTS.map(o=>o.v))];
+
+function visible(){
+  return OTS.filter(ot=>{
+    if (vessel && ot.v !== vessel) return false;
+    if (kpiFilter === "overdue" && ot.due >= 0) return false;
+    if (kpiFilter === "soon"    && !(ot.due >= 0 && ot.due <= 7)) return false;
+    if (kpiFilter === "blocked" && !isBlocked(ot)) return false;
+    if (kpiFilter === "running" && state(ot,"eje") !== "active") return false;
+    if (query){
+      const hay = (ot.code+" "+ot.v+" "+ot.asset+" "+ot.title).toLowerCase();
+      if (!hay.includes(query.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
+/* ── Semáforos ── */
+const KPI = [
+  { k:"overdue", lb:"Atrasadas",           hint:"pasaron la fecha de vencimiento", ico:"⏱", tone:"t-danger",  f:o=>o.due<0 },
+  { k:"soon",    lb:"Vencen esta semana",  hint:"próximos 7 días",                 ico:"📅", tone:"t-warning", f:o=>o.due>=0&&o.due<=7 },
+  { k:"blocked", lb:"Trabadas",            hint:"esperando permiso, repuesto o taller", ico:"⛔", tone:"t-violet", f:isBlocked },
+  { k:"running", lb:"En ejecución",        hint:"con jornadas cargadas",           ico:"🔧", tone:"t-success", f:o=>state(o,"eje")==="active" },
+];
+function renderKpis(){
+  const base = OTS.filter(o=>!vessel||o.v===vessel);
+  document.getElementById("kpis").innerHTML = KPI.map(c=>`
+    <button class="kpi ${c.tone}" data-k="${c.k}" aria-pressed="${kpiFilter===c.k}">
+      <span class="ico">${c.ico}</span>
+      <span><span class="n">${base.filter(c.f).length}</span>
+      <span class="lb" style="display:block">${c.lb}</span><span class="hint">${c.hint}</span></span>
+    </button>`).join("");
+  document.querySelectorAll(".kpi").forEach(b=>b.onclick=()=>{
+    kpiFilter = kpiFilter===b.dataset.k ? "" : b.dataset.k; render();
+  });
+}
+
+/* ── Barra por buque ── */
+function renderFleet(){
+  document.getElementById("fleetRows").innerHTML = VESSELS.map(v=>{
+    const g = OTS.filter(o=>o.v===v);
+    const o1 = g.filter(o=>o.due<0).length;
+    const s1 = g.filter(o=>o.due>=0&&o.due<=7).length;
+    const b1 = g.filter(o=>o.due>7&&isBlocked(o)).length;
+    const ok = g.length-o1-s1-b1;
+    const pc = n => (n/g.length*100).toFixed(1)+"%";
+    const bar = [["seg-overdue",o1,"Vencidas"],["seg-soon",s1,"Vencen esta semana"],
+                 ["seg-blocked",b1,"Trabadas"],["seg-ok",ok,"En fecha"]]
+      .filter(([,n])=>n>0)
+      .map(([c,n,t])=>`<span class="${c}" style="width:${pc(n)}" title="${t}: ${n}"></span>`).join("");
+    return `<div class="vrow"><span class="vname" title="${v}">${v}</span>
+      <span class="bar">${bar}</span><span class="vtot">${g.length} OT</span></div>`;
+  }).join("");
+}
+
+/* ── Pastillas ── */
+function chain(ot, blk){
+  return `<span class="chain">` + LINKS.map(L=>{
+    const st = state(ot,L.k);
+    const cls = (st==="blocked"||(L.k===blk.k&&st==="blocked")) ? "st-blocked" : "st-"+st;
+    return `<button class="pill ${cls}" data-ot="${ot.code}" data-l="${L.k}"
+      title="${L.name}: ${detail(ot,L.k).replace(/"/g,"&quot;")}">
+      <span class="mk">${MARK[st]}</span>${L.code}</button>`;
+  }).join("") + `</span>`;
+}
+
+/* ── VISTA A: tablero de trabas ── */
+function renderBoard(){
+  const items = visible();
+  document.getElementById("board").innerHTML = LINKS.map(L=>{
+    const g = items.filter(ot=>blockingLink(ot).k===L.k);
+    const cards = g.length ? g.sort((a,b)=>a.due-b.due).map(ot=>{
+      const mini = LINKS.map(x=>{const s=state(ot,x.k);
+        return `<i class="${s==="done"?"d":s==="active"?"a":s==="blocked"?"b":""}"></i>`;}).join("");
+      return `<button class="wo ${ot.due<0?"crit":""}" style="--c:${L.c}" data-ot="${ot.code}">
+        <span class="r1"><b>${ot.code}</b>
+          <span class="badge ${ot.due<0?"b-over":ot.due<=7?"b-soon":"b-ok"}">${dueText(ot.due)}</span></span>
+        <span class="vn">${ot.v}</span>
+        <span class="tt">${ot.title}</span>
+        <span class="r3"><span class="mini">${mini}</span>
+          <span class="stall ${ot.stall>=7?"bad":""}">${ot.stall===0?"hoy":ot.stall+" d sin mov."}</span></span>
+      </button>`;
+    }).join("") : `<div class="empty">Ninguna OT esperando acá.</div>`;
+    return `<div class="col"><div class="colhead" style="--c:${L.c}">
+        <div class="cn">${L.col}</div><div class="cc">${g.length}</div>
+        <div class="ch">${L.code} · ${L.name}</div></div>${cards}</div>`;
+  }).join("");
+  document.querySelectorAll(".wo").forEach(b=>b.onclick=()=>openDrawer(b.dataset.ot));
+}
+
+/* ── VISTA B: lista con cadena de hitos ── */
+function renderList(){
+  const items = visible().sort((a,b)=>a.due-b.due);
+  document.getElementById("count").textContent = `${items.length} OT`;
+  document.getElementById("rows").innerHTML = items.length ? items.map(ot=>{
+    const blk = blockingLink(ot);
+    const bad = isBlocked(ot);
+    return `<tr class="${ot.due<0?"crit":""}" data-ot="${ot.code}">
+      <td data-l="Buque"><span class="vs">${ot.v}</span></td>
+      <td data-l="OT"><span class="code">${ot.code}</span></td>
+      <td data-l="Tarea"><span class="ti">${ot.title}<small>${ot.asset}</small></span></td>
+      <td data-l="Vence"><span class="due ${dueClass(ot.due)}">${dueText(ot.due)}</span></td>
+      <td data-l="Hitos" style="text-align:center">${chain(ot,blk)}</td>
+      <td data-l="Esperando"><span class="waiting" style="color:${bad?"var(--danger)":blk.c}">
+        <span class="dot" style="background:${bad?"var(--danger)":blk.c}"></span>${blk.col}</span></td>
+      <td data-l="Sin movimiento"><span class="stall ${ot.stall>=7?"bad":""}">${ot.stall===0?"hoy":ot.stall+" d"}</span></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7"><div class="empty" style="margin:16px">
+      No hay OT que cumplan el filtro. Probá quitar el filtro o elegir otro buque.</div></td></tr>`;
+  document.querySelectorAll("#rows .pill").forEach(b=>b.onclick=e=>{e.stopPropagation();openDrawer(b.dataset.ot,b.dataset.l);});
+  document.querySelectorAll("#rows tr[data-ot]").forEach(r=>r.onclick=()=>openDrawer(r.dataset.ot));
+}
+
+/* ── Panel de detalle ── */
+function openDrawer(code, focus){
+  const ot = OTS.find(o=>o.code===code); if(!ot) return;
+  document.getElementById("dTitle").textContent = `${ot.code} — ${ot.title}`;
+  document.getElementById("dSub").innerHTML = `${ot.v} · ${ot.asset} · <b class="due ${dueClass(ot.due)}">${dueText(ot.due)}</b>`;
+  document.getElementById("dBody").innerHTML = LINKS.map(L=>{
+    const st = state(ot,L.k);
+    return `<div class="step" style="${focus===L.k?"background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:9px":""}">
+      <span class="pill st-${st}"><span class="mk">${MARK[st]}</span>${L.code}</span>
+      <div><div class="sname">${L.name}</div><div class="sdet">${detail(ot,L.k)}</div>
+      ${st==="na"?"":`<a class="slink" href="#">Abrir en ${L.name} →</a>`}</div></div>`;
+  }).join("");
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("drawer").setAttribute("aria-hidden","false");
+  document.getElementById("scrim").classList.add("open");
+}
+function closeDrawer(){
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("drawer").setAttribute("aria-hidden","true");
+  document.getElementById("scrim").classList.remove("open");
+}
+
+/* ── Orquestación ── */
+function render(){
+  renderKpis(); renderFleet();
+  const chipEl = document.getElementById("activeChip");
+  const act = KPI.find(c=>c.k===kpiFilter);
+  chipEl.style.display = act ? "inline-flex" : "none";
+  if (act) chipEl.innerHTML = `${act.lb}<button id="clearChip" aria-label="Quitar filtro">✕</button>`;
+  if (act) setTimeout(()=>document.getElementById("clearChip").onclick=()=>{kpiFilter="";render();},0);
+  document.getElementById("boardView").style.display = view==="board" ? "" : "none";
+  document.getElementById("listView").style.display  = view==="list"  ? "" : "none";
+  document.getElementById("vTrabas").setAttribute("aria-pressed", view==="board");
+  document.getElementById("vHitos").setAttribute("aria-pressed",  view==="list");
+  view==="board" ? renderBoard() : renderList();
+}
+
+const vs = document.getElementById("vesselSel");
+VESSELS.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;vs.appendChild(o);});
+vs.onchange = e => { vessel = e.target.value; render(); };
+document.getElementById("vTrabas").onclick = ()=>{view="board";render();};
+document.getElementById("vHitos").onclick  = ()=>{view="list";render();};
+document.getElementById("q").oninput = e => { query = e.target.value; renderList(); };
+document.getElementById("dClose").onclick = closeDrawer;
+document.getElementById("scrim").onclick  = closeDrawer;
+document.addEventListener("keydown", e => { if(e.key==="Escape") closeDrawer(); });
+document.getElementById("themeBtn").onclick = ()=>document.documentElement.classList.toggle("dark");
+render();
+</script>
+</body>
+</html>

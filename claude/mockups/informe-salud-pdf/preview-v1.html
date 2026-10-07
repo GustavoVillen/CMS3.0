@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe de salud del equipo — Prototipo V1</title>
+<style>
+  :root {
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --soft:#f1f5f9; --navy:#1e3a5f; --blue:#1d4ed8;
+    --good:#166534; --good-bg:#ecfdf5; --good-line:#86efac;
+    --warn:#92400e; --warn-bg:#fffbeb; --warn-line:#fcd34d;
+    --bad:#991b1b;  --bad-bg:#fef2f2;  --bad-line:#fca5a5;
+    --neutral:#475569;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#cbd5e1; font-family:Helvetica, Arial, sans-serif; color:var(--ink); }
+  .bar { position:sticky; top:0; z-index:5; background:#0f172a; color:#e2e8f0; padding:10px 16px; display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; font-size:13px; }
+  .bar b { color:#fff; }
+  .bar .tag { background:#f59e0b; color:#1f1300; font-weight:700; padding:2px 8px; border-radius:4px; font-size:11px; }
+  .seg { display:inline-flex; border:1px solid #475569; border-radius:6px; overflow:hidden; }
+  .seg button { background:transparent; color:#cbd5e1; border:0; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .seg button[aria-pressed="true"] { background:#e2e8f0; color:#0f172a; font-weight:700; }
+  .bar label { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
+  .stage { padding:20px 12px 40px; display:flex; flex-direction:column; align-items:center; gap:22px; }
+  .page { width:794px; height:1123px; background:#fff; box-shadow:0 2px 14px rgba(15,23,42,.25); position:relative; padding:0 48px; overflow:hidden; transform-origin:top center; }
+  .gray .page { filter:grayscale(1); }
+
+  /* Documento controlado (se mantiene tal cual el chrome actual) */
+  .chrome { margin-top:48px; border:1px solid #94a3b8; display:grid; grid-template-columns:150px 1fr 190px; height:100px; }
+  .chrome .logo { border-right:1px solid #94a3b8; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#1e3a5f; font-weight:700; letter-spacing:1px; font-size:12px; }
+  .chrome .logo i { font-size:30px; font-style:normal; line-height:1; }
+  .chrome .title { display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--navy); font-size:15px; }
+  .chrome .rev { border-left:1px solid #94a3b8; font-size:9px; color:var(--muted); display:grid; grid-template-rows:1fr 1fr 1fr 1fr; }
+  .chrome .rev div { display:grid; grid-template-columns:1fr 1fr; align-items:center; padding:0 8px; border-bottom:1px solid #cbd5e1; }
+  .chrome .rev div:last-child { border-bottom:0; grid-template-columns:1fr; text-align:center; color:var(--blue); font-weight:700; }
+  .chrome .rev b { color:var(--ink); text-align:center; }
+  .foot { position:absolute; left:48px; right:48px; bottom:34px; font-size:9px; color:var(--muted); }
+  .foot .sign { display:grid; grid-template-columns:1fr 1fr 1fr; border-top:1px solid #cbd5e1; padding-top:6px; text-align:center; }
+  .foot .sign span + span { border-left:1px solid #cbd5e1; }
+  .foot .row { display:flex; justify-content:space-between; margin-top:8px; border-top:1px solid #cbd5e1; padding-top:6px; }
+
+  /* Ficha */
+  .ficha { margin-top:10px; display:grid; grid-template-columns:1.3fr 1.6fr 1fr; gap:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; font-size:10px; }
+  .ficha div { padding:6px 10px; border-right:1px solid var(--line); }
+  .ficha div:last-child { border-right:0; }
+  .ficha small { display:block; color:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.6px; margin-bottom:1px; }
+  .ficha b { font-size:11px; }
+  .ficha .code { color:var(--blue); }
+
+  /* Hero de estado */
+  .hero { margin-top:12px; border-radius:8px; border:1.5px solid var(--st-line); background:var(--st-bg); display:grid; grid-template-columns:150px 1fr; overflow:hidden; }
+  .hero .state { padding:14px 10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; border-right:1.5px solid var(--st-line); text-align:center; }
+  .hero .state small { font-size:8px; letter-spacing:.8px; color:var(--muted); text-transform:uppercase; }
+  .hero .state strong { font-size:21px; color:var(--st); letter-spacing:.5px; line-height:1; }
+  .hero .body { padding:12px 16px; }
+  .hero .body small { font-size:8px; letter-spacing:.8px; color:var(--muted); text-transform:uppercase; }
+  .hero .body p { margin:4px 0 0; font-size:10.5px; line-height:1.5; }
+  .scale { margin:10px 0 0; display:grid; grid-template-columns:repeat(3,1fr); gap:3px; font-size:8px; text-align:center; color:var(--muted); }
+  .scale span { height:6px; border-radius:3px; background:var(--line); display:block; }
+  .scale .s-good { background:#86efac; } .scale .s-warn { background:#fcd34d; } .scale .s-bad { background:#fca5a5; }
+  .scale .on.s-good { background:var(--good); } .scale .on.s-warn { background:#d97706; } .scale .on.s-bad { background:var(--bad); }
+  .scale-lbl { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; font-size:8px; text-align:center; color:var(--muted); margin-top:2px; }
+  .scale-lbl .on { color:var(--st); font-weight:700; }
+
+  /* Tablero */
+  h3.sec { margin:14px 0 6px; font-size:10px; letter-spacing:.9px; text-transform:uppercase; color:var(--navy); display:flex; align-items:center; gap:8px; }
+  h3.sec::after { content:""; flex:1; height:1px; background:var(--line); }
+  h3.sec em { font-style:normal; font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted); font-size:8.5px; }
+  .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .tile { border:1px solid var(--line); border-radius:7px; padding:8px 10px 7px; display:flex; flex-direction:column; min-height:104px; }
+  .tile .t { font-size:8px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); font-weight:700; }
+  .tile .v { font-size:22px; font-weight:700; line-height:1.1; margin:3px 0 1px; }
+  .tile .v small { font-size:10px; font-weight:400; color:var(--muted); margin-left:3px; }
+  .tile .sub { font-size:8.5px; color:var(--muted); }
+  .tile .viz { margin-top:auto; padding-top:6px; }
+  .stack { display:flex; height:9px; border-radius:5px; overflow:hidden; background:var(--soft); gap:1px; }
+  .stack i { display:block; }
+  .c-ok { background:#16a34a; } .c-warn { background:#f59e0b; } .c-bad { background:#dc2626; } .c-neu { background:#94a3b8; } .c-blue { background:#3b82f6; }
+  .leg { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; font-size:8px; color:var(--neutral); }
+  .leg span::before { content:""; display:inline-block; width:7px; height:7px; border-radius:2px; margin-right:3px; background:var(--c,#94a3b8); vertical-align:-0.5px; }
+  .pill { display:inline-flex; align-items:center; gap:4px; font-size:8.5px; font-weight:700; padding:1px 7px 1px 3px; border-radius:10px; border:1px solid var(--pl); color:var(--pc); background:var(--pb); }
+  .pill.good { --pl:var(--good-line); --pc:var(--good); --pb:var(--good-bg); }
+  .pill.warn { --pl:var(--warn-line); --pc:var(--warn); --pb:var(--warn-bg); }
+  .pill.bad  { --pl:var(--bad-line);  --pc:var(--bad);  --pb:var(--bad-bg); }
+  .pill.neu  { --pl:var(--line);      --pc:var(--neutral); --pb:var(--soft); }
+  .ico { width:13px; height:13px; flex:none; }
+  .tile .st { margin-top:5px; }
+
+  /* Recomendaciones */
+  .recs { border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .rec { display:grid; grid-template-columns:34px 1fr; padding:7px 10px 7px 0; border-bottom:1px solid var(--line); font-size:9.5px; line-height:1.45; align-items:start; }
+  .rec:last-child { border-bottom:0; }
+  .rec .n { width:20px; height:20px; border-radius:50%; background:var(--navy); color:#fff; font-weight:700; font-size:10px; display:flex; align-items:center; justify-content:center; margin:1px auto 0; }
+  .rec.first { background:var(--st-bg); }
+  .recnote { font-size:8.5px; color:var(--muted); margin-top:4px; font-style:italic; }
+
+  /* Detalle por área */
+  .area { margin-top:10px; border:1px solid var(--line); border-left:4px solid var(--al); border-radius:6px; padding:8px 12px 9px; }
+  .area header { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+  .area header .ic { width:20px; height:20px; border-radius:50%; background:var(--ab); color:var(--ac); display:flex; align-items:center; justify-content:center; }
+  .area header h4 { margin:0; font-size:11px; }
+  .area header .pill { margin-left:auto; }
+  .area ul { margin:0; padding:0; list-style:none; }
+  .area li { position:relative; padding-left:13px; font-size:9.5px; line-height:1.5; margin-bottom:3px; }
+  .area li::before { content:""; position:absolute; left:2px; top:6px; width:5px; height:5px; border-radius:50%; background:var(--al); }
+  .area.good { --al:#16a34a; --ab:var(--good-bg); --ac:var(--good); }
+  .area.warn { --al:#f59e0b; --ab:var(--warn-bg); --ac:var(--warn); }
+  .area.bad  { --al:#dc2626; --ab:var(--bad-bg);  --ac:var(--bad); }
+  .note { margin-top:12px; background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:8px 12px; display:grid; grid-template-columns:22px 1fr; gap:6px; font-size:9.5px; line-height:1.5; }
+  .note .i { width:16px; height:16px; border-radius:50%; background:var(--neutral); color:#fff; font-weight:700; font-size:10px; display:flex; align-items:center; justify-content:center; font-style:italic; margin-top:1px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+  .chip { font-size:8.5px; border:1px solid var(--line); background:#fff; border-radius:10px; padding:2px 8px; color:var(--ink); }
+  .chip b { margin-right:3px; }
+  .chip.zero { color:#94a3b8; background:var(--soft); }
+  .disclaimer { margin-top:10px; font-size:8.5px; font-style:italic; color:var(--navy); }
+  .legend-help { position:absolute; right:48px; top:20px; font-size:9px; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="tag">PROTOTIPO V1 · datos de ejemplo</span>
+  <b>Informe de salud del equipo (PDF)</b>
+  <span>Estado:
+    <span class="seg" id="seg">
+      <button data-s="RISK" aria-pressed="true">Riesgo</button>
+      <button data-s="ATTENTION" aria-pressed="false">Atención</button>
+      <button data-s="GOOD" aria-pressed="false">Bueno</button>
+    </span>
+  </span>
+  <label><input type="checkbox" id="gray"> Ver en escala de grises (impresión B/N)</label>
+  <span style="opacity:.7">Las páginas 1 y 2 son las dos hojas A4 del PDF.</span>
+</div>
+
+<div class="stage" id="stage"></div>
+
+<script>
+/* ───────────── Datos de EJEMPLO (basados en el informe real de la caja reductora Estribor de MAO 02) ───────────── */
+const SCENARIOS = {
+  RISK: {
+    label:"RIESGO", kind:"bad",
+    metrics:{ plansActive:5, plansOverdue:0, plansDueSoon:2, wo:14, woOpen:0, woCorr:0, defOpen:3, defPeriod:4, lab:1, labBad:1, labCaution:0, deferrals:0, hours:"8.424", hoursDate:"20/09/2026" },
+    summary:"La Caja reductora Estribor del remolcador MAO 02 se encuentra en estado de riesgo debido a un reporte de laboratorio crítico por contaminación severa con agua y un desgaste alarmante de cobre. Presenta tres defectos abiertos relacionados con esta condición sin acciones correctivas registradas.",
+    maintenance:["El plan preventivo está al día: 0 tareas vencidas y 2 próximas a vencer en el corto plazo.","Se cerraron 14 órdenes de trabajo preventivas en el período, incluyendo limpiezas de venteo y controles de ánodos de zinc.","Discrepancia operativa: la OT-M02-26-0459 (toma de muestra de aceite) se cerró 'Con deficiencias' y no se generó una OT correctiva para resolver el problema de fondo."],
+    lab:["Un único análisis en el período (muestra FA-M02-0012, 18/06/2026) con veredicto 'Crítico'.","Cobre alto (692 ppm) y contaminación por agua mayor al 0,05 %: sugiere desgaste severo y contaminación externa.","Sin historial previo de vibraciones en las ejecuciones de este período."],
+    defects:["3 defectos abiertos: DEF-M02-0005 (Alta), DEF-M02-26-0006 (Media) y DEF-M02-26-0004 (Media).","Alerta automática de falla repetida con prioridad Alta: 4 defectos en el mismo activo en los últimos 90 días."],
+    recs:["Programar con urgencia una parada para inspeccionar el intercambiador de calor de la caja y verificar la estanqueidad de los sellos de agua.","Cambio completo de aceite y filtros de descarga; limpiar el filtro de aspiración para retirar residuos de desgaste.","Realizar un lavado interno (flushing) del sistema de lubricación antes de rellenar con aceite nuevo.","Tomar una muestra de seguimiento a las 50 h de marcha posteriores al cambio para controlar la tendencia del cobre.","Adelantar el análisis de vibraciones previsto para marzo de 2027."],
+    limits:"Hay un único análisis de lubricante en el período: no permite establecer una tendencia histórica de los metales de desgaste. La falta de mediciones de vibraciones recientes limita la evaluación de daños mecánicos.",
+    sources:{planes:5, "órdenes de trabajo":14, "ejecuciones sin OT":0, "análisis de laboratorio":1, defectos:4, postergaciones:0, inspecciones:0, MOC:0, "lecturas de horas":2, "alertas automáticas":1}
+  },
+  ATTENTION: {
+    label:"ATENCIÓN", kind:"warn",
+    metrics:{ plansActive:12, plansOverdue:1, plansDueSoon:3, wo:9, woOpen:2, woCorr:2, defOpen:1, defPeriod:2, lab:3, labBad:0, labCaution:1, deferrals:1, hours:"12.310", hoursDate:"20/09/2026" },
+    summary:"El Motor Auxiliar Estribor funciona con normalidad, pero tiene una tarea del plan vencida, una postergación activa y un análisis de aceite en precaución por viscosidad. Conviene resolver estos puntos antes de la próxima campaña.",
+    maintenance:["1 tarea vencida de 12 y 3 próximas a vencer.","9 órdenes de trabajo en el período: 7 preventivas y 2 correctivas; 2 siguen abiertas.","Hay 1 postergación activa aprobada."],
+    lab:["3 análisis en el período: 2 normales y 1 en precaución (viscosidad fuera de rango).","No se detectan metales de desgaste fuera de límites."],
+    defects:["1 defecto abierto de severidad Media, sin repetición en los últimos 90 días."],
+    recs:["Ejecutar la tarea vencida del plan antes de la próxima campaña.","Repetir el análisis de aceite a las 100 h de marcha para confirmar la viscosidad.","Revisar la postergación activa y fijar fecha de cierre."],
+    limits:"", sources:{planes:12, "órdenes de trabajo":9, "ejecuciones sin OT":1, "análisis de laboratorio":3, defectos:2, postergaciones:1, inspecciones:1, MOC:0, "lecturas de horas":8, "alertas automáticas":0}
+  },
+  GOOD: {
+    label:"BUENO", kind:"good",
+    metrics:{ plansActive:8, plansOverdue:0, plansDueSoon:0, wo:6, woOpen:0, woCorr:0, defOpen:0, defPeriod:0, lab:2, labBad:0, labCaution:0, deferrals:0, hours:"21.090", hoursDate:"20/09/2026" },
+    summary:"La Línea de eje Estribor no muestra vencimientos, defectos ni análisis fuera de rango en los últimos 12 meses. Todo el mantenimiento planificado se ejecutó en fecha.",
+    maintenance:["Plan al día: 0 tareas vencidas y ninguna próxima a vencer.","6 órdenes de trabajo preventivas cerradas en el período."],
+    lab:["2 análisis en el período, ambos dentro de los límites."],
+    defects:["Sin defectos registrados en el período."],
+    recs:["Mantener el plan vigente; no hay acciones sugeridas."],
+    limits:"", sources:{planes:8, "órdenes de trabajo":6, "ejecuciones sin OT":0, "análisis de laboratorio":2, defectos:0, postergaciones:0, inspecciones:0, MOC:0, "lecturas de horas":5, "alertas automáticas":0}
+  }
+};
+const EQUIP = { vessel:"MAO 02", name:"Caja reductora Estribor", code:"M02-CR-ER", period:"20/09/2025 – 20/09/2026", by:"Admin Mercurio · 20/09/2026 02:30" };
+
+/* ───────────── Íconos (vectoriales simples: en el PDF real se dibujan con líneas y círculos) ───────────── */
+const ICON = {
+  good:'<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="#16a34a"/><path d="M4.5 8.4l2.4 2.4 4.6-5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  warn:'<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="#d97706"/><path d="M8 4.2v4.6" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1.05" fill="#fff"/></svg>',
+  bad:'<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="#dc2626"/><path d="M5.3 5.3l5.4 5.4M10.7 5.3l-5.4 5.4" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  neu:'<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="#64748b"/><path d="M8 7.2v4.2" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1.05" fill="#fff"/></svg>'
+};
+const BIG = {
+  good:'<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" fill="#fff" stroke="#16a34a" stroke-width="5"/><path d="M19 33l9 9 17-19" fill="none" stroke="#16a34a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  warn:'<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" fill="#fff" stroke="#d97706" stroke-width="5"/><path d="M32 16v20" stroke="#d97706" stroke-width="6" stroke-linecap="round"/><circle cx="32" cy="45.5" r="3.6" fill="#d97706"/></svg>',
+  bad:'<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" fill="#fff" stroke="#dc2626" stroke-width="5"/><path d="M22 22l20 20M42 22L22 42" stroke="#dc2626" stroke-width="6" stroke-linecap="round"/></svg>'
+};
+const pill = (k, txt) => `<span class="pill ${k}">${ICON[k]}${txt}</span>`;
+const stack = parts => `<div class="stack">${parts.filter(p=>p[0]>0).map(p=>`<i class="${p[1]}" style="flex:${p[0]}"></i>`).join("")}</div>`;
+const leg = items => `<div class="leg">${items.map(([c,t])=>`<span style="--c:${c}">${t}</span>`).join("")}</div>`;
+const fmt = n => n.toLocaleString("es-AR");
+
+function tiles(m){
+  const planOk = Math.max(0, m.plansActive - m.plansOverdue - m.plansDueSoon);
+  const woPrev = Math.max(0, m.wo - m.woCorr);
+  const labOk = Math.max(0, m.lab - m.labBad - m.labCaution);
+  const planK = m.plansOverdue>0 ? ["bad","Vencidas"] : m.plansDueSoon>0 ? ["warn","Por vencer"] : ["good","Al día"];
+  const labK  = m.labBad>0 ? ["bad","Crítico"] : m.labCaution>0 ? ["warn","Precaución"] : ["good","Sin alertas"];
+  const defK  = m.defOpen>0 ? ["warn","Con abiertos"] : ["good","Sin abiertos"];
+  const depK  = m.deferrals>0 ? ["warn","Activas"] : ["good","Ninguna"];
+  const woK   = m.woOpen>0 ? ["neu",`${m.woOpen} abiertas`] : ["neu","Informativo"];
+  return `
+  <div class="tile"><div class="t">Plan de mantenimiento</div>
+    <div class="v">${m.plansOverdue}<small>de ${m.plansActive} tareas vencidas</small></div>
+    <div class="viz">${stack([[planOk,"c-ok"],[m.plansDueSoon,"c-warn"],[m.plansOverdue,"c-bad"]])}
+      ${leg([["#16a34a",`${planOk} al día`],["#f59e0b",`${m.plansDueSoon} por vencer`],["#dc2626",`${m.plansOverdue} vencidas`]])}</div>
+    <div class="st">${pill(...planK)}</div></div>
+
+  <div class="tile"><div class="t">Órdenes de trabajo (12 meses)</div>
+    <div class="v">${m.wo}<small>ejecutadas</small></div>
+    <div class="viz">${stack([[woPrev,"c-blue"],[m.woCorr,"c-warn"]])}
+      ${leg([["#3b82f6",`${woPrev} preventivas`],["#f59e0b",`${m.woCorr} correctivas`]])}</div>
+    <div class="st">${pill(...woK)}</div></div>
+
+  <div class="tile"><div class="t">Análisis de laboratorio</div>
+    <div class="v">${m.lab}<small>en el período</small></div>
+    <div class="viz">${stack([[labOk,"c-ok"],[m.labCaution,"c-warn"],[m.labBad,"c-bad"]])}
+      ${leg([["#16a34a",`${labOk} normal`],["#f59e0b",`${m.labCaution} precaución`],["#dc2626",`${m.labBad} crítico`]])}</div>
+    <div class="st">${pill(...labK)}</div></div>
+
+  <div class="tile"><div class="t">Defectos</div>
+    <div class="v">${m.defOpen}<small>abiertos</small></div>
+    <div class="sub">${m.defPeriod} registrados en el período</div>
+    <div class="viz">${m.defPeriod>0 && m.defOpen<=m.defPeriod ? stack([[m.defOpen,"c-warn"],[m.defPeriod-m.defOpen,"c-neu"]]) + leg([["#f59e0b","abiertos"],["#94a3b8","cerrados"]]) : ""}</div>
+    <div class="st">${pill(...defK)}</div></div>
+
+  <div class="tile"><div class="t">Postergaciones activas</div>
+    <div class="v">${m.deferrals}<small>${m.deferrals===1?"tarea diferida":"tareas diferidas"}</small></div>
+    <div class="sub">Tareas del plan con fecha corrida</div>
+    <div class="st" style="margin-top:auto">${pill(...depK)}</div></div>
+
+  <div class="tile"><div class="t">Horas de marcha</div>
+    <div class="v">${m.hours}<small>h</small></div>
+    <div class="sub">Última lectura al ${m.hoursDate}</div>
+    <div class="st" style="margin-top:auto">${pill("neu","Dato del horómetro")}</div></div>`;
+}
+
+const ICONS_AREA = {
+  maint:'<svg width="12" height="12" viewBox="0 0 16 16"><path d="M10.5 2.5a3.5 3.5 0 0 0-3.2 4.9L2.5 12.2l1.3 1.3 4.8-4.8a3.5 3.5 0 0 0 4.9-3.2l-2 2-1.6-.4-.4-1.6z" fill="currentColor"/></svg>',
+  lab:'<svg width="12" height="12" viewBox="0 0 16 16"><path d="M6 2h4v1.2l-.8.8v3.3l3.6 6a1 1 0 0 1-.9 1.5H4.1a1 1 0 0 1-.9-1.5l3.6-6V4L6 3.2z" fill="currentColor"/></svg>',
+  def:'<svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" fill="currentColor"/><path d="M8 6v4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="11.9" r=".9" fill="#fff"/></svg>'
+};
+const area = (kind, ic, title, pl, items) => `
+  <div class="area ${kind}"><header><span class="ic">${ic}</span><h4>${title}</h4>${pl}</header>
+  <ul>${items.map(i=>`<li>${i}</li>`).join("")}</ul></div>`;
+
+function render(key){
+  const S = SCENARIOS[key], m = S.metrics, k = S.kind;
+  const vars = {good:["#166534","#ecfdf5","#86efac"], warn:["#92400e","#fffbeb","#fcd34d"], bad:["#991b1b","#fef2f2","#fca5a5"]}[k];
+  const st = `--st:${vars[0]};--st-bg:${vars[1]};--st-line:${vars[2]}`;
+  const planK = m.plansOverdue>0 ? "bad" : m.plansDueSoon>0 ? "warn" : "good";
+  const labK = m.labBad>0 ? "bad" : m.labCaution>0 ? "warn" : "good";
+  const defK = m.defOpen>0 ? (k==="bad"?"bad":"warn") : "good";
+  const txt = {good:"Sin novedades", warn:"Requiere atención", bad:"Requiere acción"};
+  const chrome = (p) => `<div class="chrome"><div class="logo"><i>◣◥</i>MERCURIO<span style="font-weight:400;font-size:9px">NAVIERA</span></div>
+    <div class="title">INFORME DE SALUD DEL EQUIPO</div>
+    <div class="rev"><div>Revisión N° <b>1</b></div><div>Desde: <b>01.05.2025</b></div><div>Página: <b>${p}</b></div><div>Documento Controlado</div></div></div>`;
+  const foot = (p) => `<div class="foot"><div class="sign"><span>Elaborado: Departamento Técnico Mercurio</span><span>Revisado: Gerente Mantenimiento</span><span>Aprobado: Gerencia General</span></div>
+    <div class="row"><span><b>Copilot Management System</b></span><span>${EQUIP.code} — ${EQUIP.vessel} — Página ${p} — 20/09/2026</span></div></div>`;
+
+  const p1 = `<section class="page" style="${st}">
+    ${chrome(1)}
+    <div class="ficha">
+      <div><small>Embarcación</small><b>${EQUIP.vessel}</b></div>
+      <div><small>Equipo</small><b>${EQUIP.name}</b> <span class="code">· ${EQUIP.code}</span></div>
+      <div><small>Período analizado</small><b>${EQUIP.period}</b></div>
+    </div>
+
+    <div class="hero">
+      <div class="state">${BIG[k]}<small>Estado del equipo</small><strong>${S.label}</strong></div>
+      <div class="body"><small>Lectura de la IA · ${txt[k]}</small><p>${S.summary}</p>
+        <div class="scale"><span class="s-good ${k==="good"?"on":""}"></span><span class="s-warn ${k==="warn"?"on":""}"></span><span class="s-bad ${k==="bad"?"on":""}"></span></div>
+        <div class="scale-lbl"><span class="${k==="good"?"on":""}">Bueno</span><span class="${k==="warn"?"on":""}">Atención</span><span class="${k==="bad"?"on":""}">Riesgo</span></div>
+      </div>
+    </div>
+
+    <h3 class="sec">Los números del equipo <em>· los calcula el sistema</em></h3>
+    <div class="tiles">${tiles(m)}</div>
+
+    <h3 class="sec">Qué conviene revisar <em>· sugerencias de la IA</em></h3>
+    <div class="recs">${S.recs.map((r,i)=>`<div class="rec ${i===0&&k!=="good"?"first":""}"><span class="n">${i+1}</span><span>${r}</span></div>`).join("")}</div>
+    <div class="recnote">Ordenadas por la IA de mayor a menor urgencia. La decisión técnica es del Superintendente.</div>
+    ${foot(1)}
+  </section>`;
+
+  const p2 = `<section class="page" style="${st}">
+    ${chrome(2)}
+    <h3 class="sec" style="margin-top:14px">Detalle por área</h3>
+    ${area(planK, ICONS_AREA.maint, "Mantenimiento planificado", pill(planK, planK==="bad"?"Vencidas":planK==="warn"?"Por vencer":"Al día"), S.maintenance)}
+    ${area(labK, ICONS_AREA.lab, "Análisis de laboratorio", pill(labK, labK==="bad"?"Crítico":labK==="warn"?"Precaución":"Sin alertas"), S.lab)}
+    ${area(defK, ICONS_AREA.def, "Defectos y fallas repetidas", pill(defK, m.defOpen>0 ? m.defOpen+" abiertos":"Sin abiertos"), S.defects)}
+    ${S.limits ? `<div class="note"><span class="i">i</span><span><b>Limitaciones de la lectura.</b> ${S.limits}</span></div>` : ""}
+
+    <h3 class="sec">Qué se tuvo en cuenta <em>· evidencia usada por la IA</em></h3>
+    <div class="chips">${Object.entries(S.sources).map(([n,v])=>`<span class="chip ${v===0?"zero":""}"><b>${v}</b>${n}</span>`).join("")}</div>
+    <div class="disclaimer">La IA sugiere; el diagnóstico y las decisiones técnicas son del Superintendente.</div>
+    ${foot(2)}
+  </section>`;
+  document.getElementById("stage").innerHTML = p1 + p2;
+  fit();
+}
+function fit(){
+  const z = Math.min(1, (window.innerWidth - 24) / 794);
+  document.querySelectorAll(".page").forEach(p => { p.style.zoom = z; });
+}
+document.getElementById("seg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  document.querySelectorAll("#seg button").forEach(x => x.setAttribute("aria-pressed", x===b));
+  render(b.dataset.s);
+});
+document.getElementById("gray").addEventListener("change", e => document.body.classList.toggle("gray", e.target.checked));
+window.addEventListener("resize", fit);
+render("RISK");
+</script>
+</body>
+</html>

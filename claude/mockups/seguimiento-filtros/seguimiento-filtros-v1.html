@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seguimiento — Filtros V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Colores de la pantalla real (Approvals.tsx + MaintenancePlans.tsx). */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --border:#E2E4E9;
+  --accent:#0284C7; --accent-fg:#FFF; --success:#16A34A; --warning:#D97706;
+  --danger:#DC2626; --muted:#6B7280; --navy:#1F3864; --peach:#F8CBAD; --thead:#D9E2E3;
+  color-scheme:light;
+}
+html.dark{
+  --bg:#080D1D; --surface:#1C2541; --fg:#E0E1DD; --border:rgba(255,255,255,.10);
+  --accent:#38BDF8; --accent-fg:#0B132B; --success:#22C55E; --warning:#FBBF24;
+  --danger:#F87171; --muted:#9BA3B4; --thead:#243B61;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Inter",system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1640px;margin:0 auto;padding:14px 16px 60px}
+button{font:inherit;cursor:pointer;color:inherit}
+.muted{color:var(--muted)}
+
+.demo{display:flex;gap:8px;align-items:center;margin-bottom:12px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--warning) 14%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent)}
+
+/* ── Encabezado (PageHeader) ── */
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head .l{display:flex;gap:12px;align-items:center}
+.ico{width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);display:grid;place-items:center;font-size:18px}
+.head h1{margin:0;font-size:19px;font-weight:800;letter-spacing:-.01em;display:flex;gap:8px;align-items:center}
+.total{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--fg) 7%,transparent);color:var(--muted)}
+.iconbtn{border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:6px 9px;font-size:13px}
+
+/* ── Tarjetas (sin cambios) ── */
+.cards{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.card{display:flex;align-items:center;gap:8px;border:1.5px solid var(--border);border-left-width:4px;border-radius:12px;background:var(--surface);padding:4px 12px;text-align:left}
+.card.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.card b{font-size:18px;font-weight:800;min-width:1.25rem}
+.card span{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+
+/* ── LA BARRA NUEVA: mismo molde que Planes de Mantenimiento ── */
+.bar{border:1px solid var(--border);background:var(--surface);border-radius:16px;padding:8px 12px;margin-bottom:10px}
+.bar .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.lab{margin-right:4px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pill{border:1.5px solid var(--border);background:var(--surface);color:var(--muted);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;min-width:2.4rem}
+.pill:hover{color:var(--fg)}
+.pill[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-fg)}
+.pill:disabled{opacity:.35;cursor:default}
+.tool{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 5%,transparent);border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--muted)}
+.tool[aria-pressed="true"]{border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent)}
+.tool.sq{padding:6px 8px}
+.search{display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--fg) 5%,transparent);border-radius:9px;padding:6px 10px;margin-left:auto}
+.search input{border:0;background:transparent;outline:0;width:260px;font-size:12px;color:var(--fg);font-family:inherit}
+.search .x{border:0;background:transparent;color:var(--muted);font-size:12px;padding:0}
+.new{outline:2px dashed color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:4px;border-radius:16px}
+
+/* ── Planilla (igual que hoy) ── */
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.scroller{overflow:auto;max-height:calc(100vh - 19rem);scrollbar-gutter:stable}
+table{width:100%;min-width:1250px;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;z-index:2;background:var(--thead);color:var(--navy);font-size:10px;font-weight:800;
+  padding:7px 6px;border:1px solid var(--border);text-align:center}
+html.dark thead th{color:#DCE6F5}
+td{border:1px solid var(--border);padding:2px 7px;font-size:11px;line-height:1.25;vertical-align:middle}
+.grp td{background:var(--navy);color:#fff;font-weight:700;font-size:11px;padding:4px 12px;border-color:var(--navy)}
+.eq{background:var(--peach);color:var(--navy);font-weight:700;text-align:center}
+.eqbtn{border:0;background:transparent;color:inherit;font-weight:700;font-size:11px;display:flex;gap:4px;align-items:center;justify-content:center;width:100%;padding:2px 0}
+.eqbtn .car{font-size:9px;opacity:.7}
+.eq.flat{font-weight:600;background:color-mix(in srgb,var(--peach) 45%,transparent)}
+.it{text-align:center;font-weight:700}
+.task{vertical-align:top;padding-top:4px;padding-bottom:4px}
+.task b{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.task em{display:block;font-style:normal;font-size:10px;font-weight:600;opacity:.8}
+.task.child{padding-left:26px;position:relative}
+.task.child::before{content:"";position:absolute;left:12px;top:0;height:.75rem;width:12px;border-left:1px solid currentColor;border-bottom:1px solid currentColor;opacity:.4}
+.rec{text-align:center;vertical-align:top;padding-top:4px}
+.kind{display:inline-block;font-size:8.5px;font-weight:800;padding:1px 6px;border-radius:999px}
+.k-ot{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
+.k-ss{background:color-mix(in srgb,var(--warning) 25%,transparent);color:var(--warning)}
+.golink{display:block;margin:2px auto 0;font-family:ui-monospace,monospace;font-weight:700;font-size:10.5px;white-space:nowrap;text-decoration:underline dotted;text-underline-offset:2px}
+tr.overdue td.tone{background:#DC2626;color:#fff;border-color:rgba(255,255,255,.35)}
+tr.soon td.tone{background:#FDE047;color:#422006}
+tr.done td.tone{background:color-mix(in srgb,var(--success) 10%,transparent)}
+.act{padding:4px;background:var(--surface)}
+.na{background:color-mix(in srgb,var(--fg) 4%,transparent)}
+.folded td.sum{font-size:11px;color:var(--muted);font-weight:600;background:color-mix(in srgb,var(--fg) 3%,transparent)}
+.folded .red{color:var(--danger);font-weight:800}
+
+.tg{width:100%;min-height:34px;border-radius:8px;border:1.5px solid;font-size:10.5px;font-weight:800;text-transform:uppercase;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:2px 6px;background:transparent}
+.tg small{font-size:9px;font-weight:600;text-transform:none;opacity:.88;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg.on{background:var(--surface);border-color:var(--accent);color:var(--accent)}
+.tg.ok{background:var(--success);border-color:var(--success);color:#fff}
+.tg.wait{border-color:color-mix(in srgb,var(--fg) 20%,transparent);border-style:dashed;color:color-mix(in srgb,var(--fg) 38%,transparent)}
+
+.empty{padding:44px;text-align:center}
+.empty b{display:block;font-size:14px}
+.empty button{margin-top:8px;border:0;background:transparent;color:var(--accent);font-weight:700;font-size:12px}
+
+.note{margin-top:14px;padding:12px 16px;border-radius:14px;border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);
+  background:color-mix(in srgb,var(--accent) 5%,transparent);font-size:12px;line-height:1.55}
+.note h3{margin:0 0 6px;font-size:13px}
+.note ul{margin:0;padding-left:18px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:9px 16px;border-radius:12px;font-size:12.5px;font-weight:600;display:none;z-index:70}
+.toast.show{display:block}
+
+@media (max-width:760px){
+  .search{margin-left:0;width:100%}
+  .search input{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="demo">⚠ PROTOTIPO V1 — datos de ejemplo, no son OT reales. Probá los botones G0–G9, «Agrupar por equipo», el plegado y el buscador.</div>
+
+  <div class="head">
+    <div class="l">
+      <div class="ico">📋</div>
+      <h1>Seguimiento <span class="total" id="total">—</span></h1>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="iconbtn" title="Recargar">⟳</button>
+      <button class="iconbtn" id="theme" title="Claro / oscuro (sólo del prototipo)">◐</button>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <!-- ═══ Barra nueva: GRUPO + Agrupar por equipo + plegar + Buscar, en UNA fila ═══ -->
+  <div class="bar new">
+    <div class="row">
+      <span class="lab">Grupo</span>
+      <div id="groups" style="display:contents"></div>
+      <button class="tool" id="byAsset" aria-pressed="true">☰ Agrupar por equipo</button>
+      <button class="tool sq" id="foldAll" title="Colapsar todo">⇕</button>
+      <button class="tool" id="clear" style="display:none">Limpiar</button>
+      <label class="search">🔍
+        <input id="q" placeholder="Buscar por código, tarea, equipo, proveedor…">
+        <button class="x" id="qx" style="display:none" aria-label="Borrar búsqueda">✕</button>
+      </label>
+    </div>
+  </div>
+
+  <div class="sheet"><div class="scroller">
+    <table>
+      <colgroup>
+        <col style="width:40px"><col style="width:130px"><col style="width:110px"><col style="width:25%">
+        <col><col><col><col><col><col><col>
+      </colgroup>
+      <thead><tr>
+        <th>Ítem</th><th>Equipo</th><th>Registro</th><th>Tarea</th><th>Aprobar</th><th>Autorizar</th>
+        <th>Enviar al proveedor</th><th>Avances</th><th>Permisos de trabajo</th><th>Repuestos</th><th>Cerrar OT / SS</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div></div>
+
+  <div class="note">
+    <h3>Qué cambia (esta caja no va en la app)</h3>
+    <ul>
+      <li><b>Barra de filtros nueva</b> debajo de las tarjetas, igual a la de Planes de Mantenimiento: <b>GRUPO</b> (Sin filtro, G0 a G9), <b>Agrupar por equipo</b> y el botón de <b>plegar / desplegar todo</b>.</li>
+      <li><b>El buscador pasa a esa misma fila</b>, a la derecha (hoy está arriba, al lado del título). En el celular baja a una línea propia y ocupa todo el ancho.</li>
+      <li><b>G0 a G9</b> muestran sólo las OT y SS de ese grupo del sistema. El grupo sale del plan que originó la OT y, si es una correctiva sin plan, del código SFI del equipo (el mismo criterio de los tableros de OT y SS). <b>La SS va siempre con el grupo de su OT.</b> Los grupos sin registros quedan apagados. Volver a tocar el grupo activo lo saca.</li>
+      <li>Los filtros se suman: <b>tarjeta + grupo + búsqueda</b>. Ej.: «Vencidas» + G6 = las vencidas de propulsión. Aparece <b>Limpiar</b> cuando hay un grupo o una búsqueda puestos.</li>
+      <li><b>Agrupar por equipo encendido (como entra hoy):</b> la planilla de siempre, con el equipo en la celda combinada. Ahora el nombre del equipo se puede tocar para <b>plegar</b> sus filas: queda una sola línea con cuántos registros tiene y cuántos están vencidos. El botón ⇕ pliega o despliega todos juntos.</li>
+      <li><b>Agrupar por equipo apagado:</b> dentro de cada buque, las filas van <b>por vencimiento</b> (lo más urgente arriba) en vez de por equipo, con el equipo escrito en cada fila. Las SS siguen debajo de su OT.</li>
+      <li>No cambia quién ve ni quién firma: los filtros sólo esconden filas de lo que cada uno ya ve.</li>
+    </ul>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══ DATOS DE EJEMPLO ═══ */
+const today = new Date(); const iso = d => d.toISOString().slice(0,10);
+const plus = n => { const d = new Date(today); d.setDate(d.getDate()+n); return iso(d); };
+const SFI = ["Inspecciones y Pruebas","Casco y Estructuras","Sistemas de Carga","LCI y Salvamento","Sistemas de Navegación",
+  "Sistemas de Habitabilidad","Sistemas de Propulsión y Generación","Sistemas Auxiliares","Sistemas Eléctricos","Sistemas de Automatización y Control"];
+
+// stage: ap = falta aprobar · au = falta autorizar · ex = autorizada (en ejecución)
+const ROWS = [
+  { v:"MAO 01", a:"Motor Principal Babor",   k:"WO", c:"OT-M01-26-0586", t:"Inspección de Sociedad Clasificadora", g:0, due:plus(-16), s:"ex" },
+  { v:"MAO 01", a:"Motor Principal Babor",   k:"WO", c:"OT-M01-26-0601", t:"Cambio de filtros de combustible", g:6, due:plus(3), s:"au" },
+  { v:"MAO 01", a:"Motor Principal Babor",   k:"WO", c:"OT-M01-26-0612", t:"Tomar muestras y analizar el aceite lubricante", g:6, due:plus(25), s:"ex" },
+  { v:"MAO 01", a:"Motor Principal Babor",   k:"SR", c:"SS-22-M01-2026", t:"Análisis de aceite", g:6, parent:"OT-M01-26-0612", prov:"CONDOR S.A.C.I", s:"ex" },
+  { v:"MAO 01", a:"Bomba contra incendio",   k:"WO", c:"OT-M01-26-0590", t:"Prueba de funcionamiento y presión", g:3, due:plus(-2), s:"ap" },
+  { v:"MAO 01", a:"Generador Nº 1",          k:"WO", c:"OT-M01-26-0597", t:"Inspección de escobillas y limpieza de colectores", g:6, due:plus(12), s:"ex" },
+  { v:"MAO 01", a:"Tablero principal",       k:"WO", c:"OT-M01-26-0603", t:"Termografía de guardamotores", g:8, due:plus(6), s:"ap" },
+  { v:"MAO 01", a:"Tablero principal",       k:"SR", c:"SS-23-M01-2026", t:"Termografía", g:8, parent:"OT-M01-26-0603", prov:"TERMOTEC S.R.L.", s:"ap" },
+  { v:"MAO 01", a:"Compresor de aire",       k:"WO", c:"OT-M01-26-0607", t:"Cambio de válvulas de descarga", g:7, due:plus(40), s:"au" },
+  { v:"DON CHICUETO", a:"Radar",             k:"WO", c:"OT-DCH-26-0141", t:"Verificación de conexiones y limpieza del procesador", g:4, due:plus(-5), s:"ex" },
+  { v:"DON CHICUETO", a:"Motor Auxiliar Estribor", k:"WO", c:"OT-DCH-26-0150", t:"Cambio de aceite y filtros", g:6, due:plus(1), s:"au" },
+  { v:"DON CHICUETO", a:"Motor Auxiliar Estribor", k:"WO", c:"OT-DCH-26-0152", t:"Toma de aislación del alternador", g:8, due:plus(15), s:"ap" },
+  { v:"DON CHICUETO", a:"Bomba de achique",  k:"WO", c:"OT-DCH-26-0133", t:"Revisión de sello mecánico", g:7, due:plus(20), s:"ex", deferred:true },
+  { v:"DON CHICUETO", a:"Separadora de sentina", k:"WO", c:"OT-DCH-26-0155", t:"Limpieza del separador y prueba del 15 ppm", g:7, due:plus(9), s:"au" },
+];
+
+/* ═══ Estado ═══ */
+let group = "ALL", byAsset = true, card = "", folded = new Set();
+const $ = s => document.querySelector(s);
+const daysTo = d => d ? Math.round((new Date(d) - new Date(iso(today))) / 864e5) : null;
+const fmt = s => s ? s.split("-").reverse().join("/") : "—";
+const dueOf = r => r.due ?? ROWS.find(x => x.c === r.parent)?.due ?? null;
+const assetKey = r => r.v + "|" + r.a;
+
+const CARDS = [
+  { key:"overdue", label:"Vencidas", color:"#DC2626", m:r => !r.deferred && (daysTo(dueOf(r)) ?? 0) < 0 },
+  { key:"mine",    label:"Esperando mi firma", color:"#2563EB", m:r => r.s !== "ex" },
+  { key:"woRun",   label:"OT en ejecución", color:"#059669", m:r => r.k === "WO" && r.s === "ex" },
+  { key:"srRun",   label:"SS en ejecución", color:"#0891B2", m:r => r.k === "SR" && r.s === "ex" },
+  { key:"def",     label:"Diferidas", color:"#CA8A04", m:r => !!r.deferred },
+];
+
+function filtered(skipGroup) {
+  const q = $("#q").value.trim().toLowerCase();
+  const c = CARDS.find(x => x.key === card);
+  return ROWS.filter(r =>
+    (!c || c.m(r)) &&
+    (skipGroup || group === "ALL" || r.g === group) &&
+    (!q || [r.c, r.v, r.a, r.t, r.parent, r.prov].filter(Boolean).join(" ").toLowerCase().includes(q)));
+}
+
+/* Orden: buque → (equipo si está agrupado) → vencimiento; la SS debajo de su OT. */
+function ordered(list) {
+  const sorted = [...list].sort((a, b) =>
+    a.v.localeCompare(b.v) || (byAsset ? a.a.localeCompare(b.a) : 0)
+    || ((daysTo(dueOf(a)) ?? 9e9) - (daysTo(dueOf(b)) ?? 9e9)));
+  const wo = new Set(sorted.filter(r => r.k === "WO").map(r => r.c));
+  const kids = {}; const roots = [];
+  for (const r of sorted) {
+    if (r.k === "SR" && r.parent && wo.has(r.parent)) (kids[r.parent] ??= []).push(r);
+    else roots.push(r);
+  }
+  return roots.flatMap(r => r.k === "WO" ? [r, ...(kids[r.c] ?? [])] : [r]);
+}
+
+function tg(cls, word, sub) { return `<span class="tg ${cls}">${word}${sub ? `<small>${sub}</small>` : ""}</span>`; }
+function cells(r) {
+  const ap = r.s === "ap" ? tg("on","Aprobar","Tu firma") : tg("ok","✓ Aprobado","J. Benítez");
+  const au = r.s === "ex" ? tg("ok","✓ Autorizado","Admin Mercurio") : r.s === "au" ? tg("on","Autorizar","Tu firma") : tg("wait","Autorizar","Falta aprobar");
+  const run = r.s === "ex";
+  if (r.k === "SR") return `<td class="act">${ap}</td><td class="act">${au}</td>
+    <td class="act">${run ? tg("on","Enviar",r.prov) : tg("wait","Enviar al proveedor","Falta autorizar")}</td>
+    <td class="act">${run ? tg("on","Hoja de ruta","Ninguna") : tg("wait","Hoja de ruta","Falta autorizar")}</td>
+    <td class="na"></td><td class="na"></td>
+    <td class="act">${tg("wait","Cerrar SS", run ? "Enviar primero" : "Falta autorizar")}</td>`;
+  const w = run ? "on" : "wait", sub = run ? "Ninguno" : "Falta autorizar";
+  return `<td class="act">${ap}</td><td class="act">${au}</td><td class="na"></td>
+    <td class="act">${tg(w,"Avances",sub)}</td><td class="act">${tg(w,"Permisos de trabajo",sub)}</td>
+    <td class="act">${tg(w,"Repuestos",sub)}</td><td class="act">${tg(w,"Cerrar OT", run ? "Falta el cierre" : sub)}</td>`;
+}
+
+function render() {
+  // Tarjetas
+  $("#cards").innerHTML = CARDS.map(c => {
+    const n = ROWS.filter(c.m).length;
+    return `<button class="card ${card===c.key?"on":""}" data-card="${c.key}" style="border-left-color:${c.color}">
+      <b style="color:${c.color}">${n}</b><span>${c.label}</span></button>`;
+  }).join("");
+
+  // Grupos: apagados los que no tienen filas con los demás filtros puestos
+  const base = filtered(true);
+  $("#groups").innerHTML =
+    `<button class="pill" data-g="ALL" aria-pressed="${group==="ALL"}">Sin filtro</button>` +
+    SFI.map((name, g) => {
+      const has = base.some(r => r.g === g), on = group === g;
+      return `<button class="pill" data-g="${g}" aria-pressed="${on}" ${!has && !on ? "disabled" : ""} title="G${g} · ${name}">G${g}</button>`;
+    }).join("");
+
+  $("#byAsset").setAttribute("aria-pressed", byAsset);
+  $("#foldAll").style.display = byAsset ? "" : "none";
+  const q = $("#q").value.trim();
+  $("#qx").style.display = q ? "" : "none";
+  $("#clear").style.display = group !== "ALL" || q ? "" : "none";
+
+  const list = ordered(filtered(false));
+  $("#total").textContent = list.length;
+  const assetKeys = [...new Set(list.map(assetKey))];
+  const allFolded = assetKeys.length > 0 && assetKeys.every(k => folded.has(k));
+  $("#foldAll").textContent = allFolded ? "⇕" : "⇳";
+  $("#foldAll").title = allFolded ? "Expandir todo" : "Colapsar todo";
+
+  let html = "", lastV = null, item = 0, seq = 0;
+  list.forEach((r, n) => {
+    const prev = list[n-1];
+    if (r.v !== lastV) { html += `<tr class="grp"><td colspan="11">${r.v}</td></tr>`; lastV = r.v; item = 0; seq = 0; }
+    const dd = daysTo(dueOf(r));
+    const tone = r.s === "ex" ? "done" : dd !== null && dd < 0 ? "overdue" : dd !== null && dd <= 7 ? "soon" : "";
+    const isChild = r.k === "SR" && prev && (prev.c === r.parent || prev.parent === r.parent);
+    const recCell = `<td class="rec tone"><span class="kind ${r.k==="WO"?"k-ot":"k-ss"}">${r.k==="WO"?"OT":"SS"}</span><span class="golink">${r.c}</span></td>`;
+    const taskCell = `<td class="task tone ${isChild ? "child" : ""}" title="Vence: ${fmt(dueOf(r))}"><b>${r.t}</b>${r.prov ? `<em>Proveedor: ${r.prov}</em>` : ""}</td>`;
+
+    if (!byAsset) {
+      seq++;
+      html += `<tr class="${tone}"><td class="it">${seq}</td><td class="eq flat">${r.a}</td>${recCell}${taskCell}${cells(r)}</tr>`;
+      return;
+    }
+    const first = !prev || prev.v !== r.v || prev.a !== r.a;
+    const key = assetKey(r);
+    if (first) {
+      item++;
+      const same = list.filter(x => assetKey(x) === key);
+      if (folded.has(key)) {
+        const late = same.filter(x => !x.deferred && (daysTo(dueOf(x)) ?? 0) < 0).length;
+        html += `<tr class="folded"><td class="it">${item}</td>
+          <td class="eq"><button class="eqbtn" data-fold="${key}" title="Desplegar"><span class="car">▸</span>${r.a}</button></td>
+          <td class="sum" colspan="9">${same.length} registro${same.length>1?"s":""}${late ? ` · <span class="red">${late} vencida${late>1?"s":""}</span>` : ""} — tocá el equipo para desplegar</td></tr>`;
+        return;
+      }
+      html += `<tr class="${tone}"><td class="it" rowspan="${same.length}">${item}</td>
+        <td class="eq" rowspan="${same.length}"><button class="eqbtn" data-fold="${key}" title="Plegar"><span class="car">▾</span>${r.a}</button></td>
+        ${recCell}${taskCell}${cells(r)}</tr>`;
+      return;
+    }
+    if (folded.has(key)) return;
+    html += `<tr class="${tone}">${recCell}${taskCell}${cells(r)}</tr>`;
+  });
+
+  $("#rows").innerHTML = html || `<tr><td colspan="11" class="empty"><b>Ningún registro coincide con el filtro</b>
+    <button id="clearAll">Quitar los filtros</button></td></tr>`;
+}
+
+/* ═══ Eventos ═══ */
+const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2400); };
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.card) { card = card === b.dataset.card ? "" : b.dataset.card; render(); }
+  if (b.dataset.g !== undefined) { const g = b.dataset.g === "ALL" ? "ALL" : Number(b.dataset.g); group = group === g ? "ALL" : g; render(); }
+  if (b.dataset.fold) { folded.has(b.dataset.fold) ? folded.delete(b.dataset.fold) : folded.add(b.dataset.fold); render(); }
+  if (b.id === "byAsset") { byAsset = !byAsset; render(); }
+  if (b.id === "foldAll") {
+    const keys = [...new Set(ordered(filtered(false)).map(assetKey))];
+    folded = keys.every(k => folded.has(k)) ? new Set() : new Set(keys); render();
+  }
+  if (b.id === "clear") { group = "ALL"; $("#q").value = ""; render(); }
+  if (b.id === "clearAll") { group = "ALL"; card = ""; $("#q").value = ""; render(); }
+  if (b.id === "qx") { $("#q").value = ""; render(); $("#q").focus(); }
+  if (b.id === "theme") document.documentElement.classList.toggle("dark");
+});
+$("#q").oninput = render;
+render();
+</script>
+</body>
+</html>

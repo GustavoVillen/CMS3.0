@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Superadmin en el celular — Preview V1</title>
+<style>
+  :root{
+    --bg:#F4F5F7;--surface:#FFFFFF;--surface2:#F0F1F4;--fg:#1A1D24;--muted:#6B7280;--border:#E2E4E9;
+    --accent:#0284C7;--success:#0E9F6E;--warning:#D97706;--danger:#DC2626;--red:#B91C1C;--redbg:rgba(239,68,68,.10);--redbd:rgba(239,68,68,.25);
+  }
+  .dark{
+    --bg:#080D1D;--surface:#1C2541;--surface2:rgba(255,255,255,.05);--fg:#E0E1DD;--muted:#94A3B8;--border:rgba(255,255,255,.10);
+    --accent:#38BDF8;--success:#06D6A0;--warning:#FBBF24;--danger:#F87171;--red:#F87171;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#d9dde3;color:var(--fg);display:flex;align-items:flex-start;justify-content:center;gap:28px;padding:24px}
+  body.dark{background:#02050d}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,select,textarea{font:inherit;color:var(--fg)}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+
+  /* ── Panel de explicación (sólo en escritorio) ── */
+  .notes{width:340px;font-size:13px;line-height:1.5;color:#1A1D24;background:#fff;border-radius:14px;padding:18px;border:1px solid #cfd4db}
+  body.dark .notes{background:#111a30;color:#E0E1DD;border-color:#223}
+  .notes h1{font-size:16px;margin-bottom:6px}
+  .notes h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#6B7280;margin:14px 0 6px}
+  .notes ul{padding-left:18px}.notes li{margin:4px 0}
+  .notes .tag{display:inline-block;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:700}
+  .notes button.tgl{margin-top:12px;border:1px solid #cfd4db;border-radius:8px;padding:6px 10px;font-size:12px}
+
+  /* ── Marco de teléfono ── */
+  .device{width:390px;height:820px;border-radius:44px;border:10px solid #111;background:var(--bg);overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+  @media (max-width:760px){
+    body{padding:0;display:block;background:var(--bg)}
+    .notes{display:none}
+    .device{width:100%;height:100dvh;border:0;border-radius:0;box-shadow:none}
+  }
+
+  .demo{background:#FEF3C7;color:#92400E;font-size:10px;font-weight:700;text-align:center;padding:3px;letter-spacing:.05em}
+  .top{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--redbd);background:var(--surface)}
+  .top .ttl{flex:1;min-width:0}
+  .top .ttl b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top .ttl small{font-size:10px;color:var(--red);font-weight:700;letter-spacing:.08em}
+  .ib{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .ib:active{background:var(--surface2)}
+  .shield{width:34px;height:34px;border-radius:10px;background:var(--redbg);border:1px solid var(--redbd);display:flex;align-items:center;justify-content:center;color:var(--red)}
+  svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  svg.s{width:15px;height:15px}
+
+  main{flex:1;overflow-y:auto;padding:12px;scrollbar-gutter:stable}
+  .row{display:flex;gap:8px;align-items:center}
+  .between{justify-content:space-between}
+  .wrap{flex-wrap:wrap}
+  .stack>*+*{margin-top:10px}
+  .sub{font-size:11px;color:var(--muted)}
+  .sec{font-size:13px;font-weight:700;margin:18px 0 8px;display:flex;align-items:center;gap:6px}
+  .sec .sub{font-weight:400}
+
+  /* Botones */
+  .btn{min-height:40px;padding:0 14px;border-radius:12px;font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);background:var(--surface)}
+  .btn.primary{background:var(--redbg);border-color:var(--redbd);color:var(--red)}
+  .btn.solid{background:#EF4444;color:#fff;border-color:#EF4444;width:100%;min-height:46px}
+  .btn.full{width:100%}
+  .btn.ok{color:var(--success);border-color:color-mix(in srgb,var(--success) 30%,transparent);background:color-mix(in srgb,var(--success) 10%,transparent)}
+  .btn.warn{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 30%,transparent);background:color-mix(in srgb,var(--warning) 10%,transparent)}
+  .btn.ghost{background:transparent}
+  .seg{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:3px;gap:3px}
+  .seg button{flex:1;min-height:34px;border-radius:9px;font-size:12px;color:var(--muted);white-space:nowrap}
+  .seg button.on{background:var(--surface);color:var(--accent);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+  .chip{flex:none;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--muted);background:var(--surface)}
+  .chip.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);font-weight:700}
+
+  /* Tarjetas (reemplazan filas de tabla) */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px}
+  .card.tap:active{background:var(--surface2)}
+  .card h3{font-size:14px;font-weight:700}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;margin-top:8px}
+  .kv dt{color:var(--muted)}
+  .kv dd{text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid}
+  .b-ok{color:var(--success);border-color:color-mix(in srgb,var(--success) 30%,transparent);background:color-mix(in srgb,var(--success) 10%,transparent)}
+  .b-warn{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 30%,transparent);background:color-mix(in srgb,var(--warning) 10%,transparent)}
+  .b-bad{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent);background:color-mix(in srgb,var(--danger) 10%,transparent)}
+  .b-neu{color:var(--muted);border-color:var(--border);background:var(--surface2)}
+  .b-acc{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+  .actions{display:flex;gap:8px;margin-top:10px}
+  .actions .btn{flex:1}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tile{border-radius:12px;border:1px solid var(--border);background:var(--surface);padding:10px}
+  .tile small{font-size:11px;color:var(--muted);display:flex;gap:4px;align-items:center}
+  .tile b{display:block;font-size:22px;margin-top:2px;font-variant-numeric:tabular-nums}
+  .tile.warn{border-color:color-mix(in srgb,var(--warning) 40%,transparent);background:color-mix(in srgb,var(--warning) 8%,transparent)}
+  .tile.warn b,.tile.warn small{color:var(--warning)}
+  .tile.bad{border-color:color-mix(in srgb,var(--danger) 40%,transparent);background:color-mix(in srgb,var(--danger) 8%,transparent)}
+  .tile.bad b,.tile.bad small{color:var(--danger)}
+  .sortbar{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:10px 0}
+  .sortbar select{flex:1;min-height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);padding:0 8px;font-size:12px}
+  .field{display:block}
+  .field span{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:5px}
+  .field span i{color:var(--danger);font-style:normal}
+  .inp{width:100%;min-height:44px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);padding:0 12px;font-size:15px}
+  textarea.inp{padding:10px 12px;min-height:220px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5}
+  .search{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:0 12px;min-height:44px}
+  .search input{flex:1;border:0;background:transparent;font-size:15px;outline:none}
+  .map{height:240px;border-radius:14px;border:1px solid var(--border);position:relative;overflow:hidden;background:linear-gradient(160deg,#cfe3ef,#e8eef2)}
+  .dark .map{background:linear-gradient(160deg,#16324a,#0d1c2c)}
+  .map .land{position:absolute;background:#d7dcc9;border-radius:40% 55% 45% 50%}
+  .dark .map .land{background:#2a3a33}
+  .pin{position:absolute;width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563EB;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .map .lbl{position:absolute;right:8px;bottom:6px;font-size:9px;color:#555}
+  .empty{text-align:center;padding:40px 12px;color:var(--muted);font-size:13px}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px}
+  .collapse{border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+  .collapse>button{width:100%;min-height:42px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600}
+  .collapse .body{padding:0 12px 12px;display:none}
+  .collapse.open .body{display:block}
+  .collapse .body .field+.field{margin-top:10px}
+
+  /* Barra inferior */
+  .bottom{display:flex;border-top:1px solid var(--border);background:var(--surface);padding-bottom:env(safe-area-inset-bottom)}
+  .bottom button{flex:1;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;color:var(--muted)}
+  .bottom button.on{color:var(--red);font-weight:700}
+
+  /* Hoja inferior (modales) y pantalla completa */
+  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;z-index:40}
+  .scrim.show{display:block}
+  .sheet{position:absolute;left:0;right:0;bottom:0;max-height:92%;background:var(--surface);border-radius:20px 20px 0 0;z-index:50;display:flex;flex-direction:column;transform:translateY(105%);transition:transform .22s ease}
+  .sheet.show{transform:none}
+  .sheet .hd,.full .hd{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
+  .sheet .hd b,.full .hd b{flex:1;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grab{width:40px;height:4px;border-radius:4px;background:var(--border);margin:8px auto 0}
+  .sheet .bd{overflow-y:auto;padding:14px}
+  .sheet .ft{padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
+  .xbtn{width:32px;height:32px;border-radius:999px;background:#EF4444;color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+  .xbtn svg{width:16px;height:16px;stroke-width:3}
+  .full{position:absolute;inset:0;background:var(--bg);z-index:45;display:none;flex-direction:column}
+  .full.show{display:flex}
+  .full .tabs{display:flex;border-bottom:1px solid var(--border);background:var(--surface)}
+  .full .tabs button{flex:1;min-height:46px;font-size:12px;font-weight:700;color:var(--muted);border-bottom:2px solid transparent}
+  .full .tabs button.on{color:var(--red);border-color:#EF4444}
+  .full .bd{flex:1;overflow-y:auto;padding:12px}
+
+  .drawer{position:absolute;top:0;bottom:0;left:0;width:82%;background:var(--surface);z-index:50;transform:translateX(-102%);transition:transform .22s ease;display:flex;flex-direction:column}
+  .drawer.show{transform:none}
+  .drawer nav{flex:1;overflow-y:auto;padding:8px}
+  .drawer nav button{width:100%;min-height:48px;display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:12px;font-size:14px;color:var(--fg)}
+  .drawer nav button.on{background:var(--redbg);color:var(--red);font-weight:700}
+  .drawer .who{padding:14px;border-top:1px solid var(--border);font-size:12px}
+  .toast{position:absolute;left:12px;right:12px;bottom:72px;background:#111827;color:#fff;border-radius:12px;padding:12px;font-size:13px;z-index:60;display:none}
+  .toast.show{display:block}
+  .alert{position:absolute;inset:0;z-index:70;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:24px}
+  .alert.show{display:flex}
+  .alert .box{background:var(--surface);border-radius:16px;padding:18px;width:100%}
+  .alert .box p{font-size:14px;margin:6px 0 16px}
+</style>
+</head>
+<body>
+
+<aside class="notes">
+  <h1>Consola Superadmin en el celular</h1>
+  <span class="tag">PREVIEW V1 · DATOS DE EJEMPLO</span>
+  <h2>Cómo probarlo</h2>
+  <ul>
+    <li>Tocá las pestañas de abajo y "Más" para recorrer las 9 pantallas.</li>
+    <li>En Empresas: "Editar" y "Dominios y usuarios".</li>
+    <li>Abrilo en el celular: se ve a pantalla completa, sin el marco.</li>
+  </ul>
+  <h2>Qué cambia (sólo en pantallas chicas)</h2>
+  <ul>
+    <li>El menú lateral se va: queda una barra abajo con 4 accesos + "Más".</li>
+    <li>Las tablas pasan a tarjetas, con "Ordenar por".</li>
+    <li>Las ventanas suben desde abajo y se pueden desplazar (hoy "Crear Tenant" se corta y no se llega al botón).</li>
+    <li>El detalle de la empresa ocupa toda la pantalla (hoy queda corrido y cortado).</li>
+    <li>Filtros plegados en "Filtros", campos a lo ancho, botones más grandes para el dedo.</li>
+  </ul>
+  <h2>Qué NO cambia</h2>
+  <ul>
+    <li>La computadora se ve igual que hoy.</li>
+    <li>Misma dirección (/platform), mismas funciones, mismos permisos (sólo SUPERADMIN).</li>
+    <li>No se toca la base ni el servidor.</li>
+  </ul>
+  <button class="tgl" onclick="toggleTheme()">Cambiar claro / oscuro</button>
+</aside>
+
+<div class="device" id="dev">
+  <div class="demo">DATOS DE EJEMPLO — PREVIEW V1</div>
+  <header class="top">
+    <button class="ib" onclick="openDrawer()" aria-label="Menú"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <div class="ttl"><small>SUPER ADMIN</small><b id="title">Tenants</b></div>
+    <button class="ib" onclick="toast('Actualizado')" aria-label="Actualizar"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+  </header>
+  <main id="main"></main>
+  <nav class="bottom" id="bottom"></nav>
+
+  <div class="scrim" id="scrim" onclick="closeAll()"></div>
+  <div class="drawer" id="drawer">
+    <div class="row" style="padding:14px;border-bottom:1px solid var(--border)">
+      <div class="shield"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+      <div><b style="font-size:14px">Super Admin</b><div class="sub">CMS3.0 Platform</div></div>
+    </div>
+    <nav id="drawerNav"></nav>
+    <div class="who">
+      <div class="sub mono">admin@cms3.cloud</div>
+      <div style="color:var(--red);font-weight:700;font-size:11px;margin:2px 0 10px">SUPERADMIN</div>
+      <button class="btn full" style="color:var(--red)" onclick="toast('Sesión cerrada (demo)')"><svg class="s" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Cerrar sesión</button>
+    </div>
+  </div>
+
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <div class="hd"><b id="sheetTitle"></b><button class="xbtn" onclick="closeAll()" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="bd" id="sheetBody"></div>
+    <div class="ft" id="sheetFoot"></div>
+  </div>
+
+  <div class="full" id="full">
+    <div class="hd" style="background:var(--surface)">
+      <div style="flex:1;min-width:0"><div class="sub mono" id="fullSlug"></div><b id="fullTitle"></b></div>
+      <button class="xbtn" onclick="closeFull()" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="tabs" id="fullTabs"></div>
+    <div class="bd" id="fullBody"></div>
+  </div>
+
+  <div class="alert" id="alert"><div class="box"><b id="alertTitle"></b><p id="alertMsg"></p><div class="row" id="alertBtns"></div></div></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const I = {
+  building:'<path d="M3 21h18M5 21V5l7-2v18M19 21V9l-7-2"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6M16 4a3.5 3.5 0 0 1 0 7M22 20c0-3-2-5-4.5-5.7"/>',
+  radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
+  finger:'<path d="M12 11v4M8 9a4 4 0 0 1 8 0v6M5 12a7 7 0 0 1 14 0v3M9 20c1-2 1-4 1-6"/>',
+  scroll:'<path d="M8 3h11v15a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-2h11v2a3 3 0 0 0 3 3M8 3a3 3 0 0 0-3 3v10"/>',
+  activity:'<path d="M3 12h4l3 8 4-16 3 8h4"/>',
+  question:'<path d="M21 12a9 9 0 1 1-4-7.5L21 3v5h-5"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7M12 17h.01"/>',
+  map:'<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  more:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>', pencil:'<path d="M4 20h4L20 8l-4-4L4 16z"/>', chev:'<path d="M9 6l6 6-6 6"/>',
+  filter:'<path d="M3 5h18l-7 9v5l-4 2v-7z"/>', search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  star:'<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17l-5.5 3 1-6.2L3 9.6l6.2-.9z"/>', trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  download:'<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>', chart:'<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>',
+  send:'<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>', undo:'<path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7L3 9"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>', globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  wifi:'<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/>', phone:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+  alert:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
+};
+const ic = (n, cls='') => `<svg class="${cls}" viewBox="0 0 24 24">${I[n]}</svg>`;
+
+const SCREENS = [
+  { id:'tenants', label:'Tenants', short:'Empresas', icon:'building' },
+  { id:'users', label:'Platform Users', short:'Usuarios', icon:'users' },
+  { id:'access', label:'Accesos', short:'Accesos', icon:'radar' },
+  { id:'activity', label:'Auditoría usuario', short:'Auditoría', icon:'finger' },
+  { id:'audit', label:'Audit Events', short:'Eventos', icon:'scroll' },
+  { id:'usage', label:'Consumo IA + Sat', short:'Consumo', icon:'activity' },
+  { id:'questions', label:'Preguntas Copiloto', short:'Preguntas', icon:'question' },
+  { id:'vessels', label:'Mapa Buques', short:'Mapa', icon:'map' },
+  { id:'prompts', label:'Prompts', short:'Prompts', icon:'msg' },
+];
+const BOTTOM = ['tenants','access','activity','usage'];
+let current = 'tenants';
+
+// ── Datos de ejemplo ──
+const TENANTS = [
+  { slug:'mercurio', name:'Mercurio Group S.A.', status:'ACTIVE', locale:'es', cur:'PYG', created:'12/03/2026', users:48 },
+  { slug:'demo', name:'Demo CMS3', status:'ACTIVE', locale:'es', cur:'USD', created:'02/09/2026', users:9 },
+  { slug:'naviera-sur', name:'Naviera del Sur', status:'SUSPENDED', locale:'pt', cur:'BRL', created:'20/06/2026', users:3 },
+];
+const PUSERS = [
+  { email:'admin@cms3.cloud', name:'Gustavo Villén', role:'SUPERADMIN', status:'ACTIVE', created:'01/02/2026' },
+  { email:'soporte@cms3.cloud', name:'Mesa de ayuda', role:'SUPPORT', status:'ACTIVE', created:'14/05/2026' },
+];
+const ACTIVE = [
+  { user:'Carlos Arrascaeta', email:'carrascaeta@mercurio.com', tenant:'mercurio', role:'MAINTENANCE_MANAGER', vessel:'DON CHICUETO', loc:'🇵🇾 Asunción', gps:true, ip:'181.94.12.3 · Tigo', dev:'Android · Chrome', screen:'/abordo', acts:34, seen:'hace 2 min', x:44, y:62 },
+  { user:'Superintendente', email:'super@mercurio.com', tenant:'mercurio', role:'FLEET_SUPERINTENDENT', vessel:null, loc:'🇦🇷 Buenos Aires', gps:false, ip:'190.2.44.8 · Telecom', dev:'Windows · Edge', screen:'/work-orders', acts:112, seen:'hace 6 min', x:52, y:74 },
+];
+const LOGINS = [
+  { ok:true, when:'19/09 08:14', user:'Carlos Arrascaeta', email:'carrascaeta@mercurio.com', tenant:'mercurio', loc:'🇵🇾 Asunción', dev:'Android · Chrome' },
+  { ok:false, why:'Contraseña incorrecta', when:'19/09 07:52', user:'🔒 a41f…c09', tenant:'mercurio', loc:'🇧🇷 São Paulo', dev:'Linux · curl' },
+  { ok:true, when:'19/09 07:30', user:'admin@cms3.cloud', tenant:null, loc:'🇦🇷 Córdoba', dev:'iPhone · Safari' },
+];
+const AUDIT = [
+  { when:'19/09 08:20', tenant:'mercurio', actor:'TENANT_USER', action:'work_order.approve', entity:'WorkOrder', id:'wo_8f2a…' },
+  { when:'19/09 08:02', tenant:null, actor:'PLATFORM_USER', action:'tenant.update', entity:'Tenant', id:'demo' },
+  { when:'18/09 19:44', tenant:'mercurio', actor:'TENANT_USER', action:'spare.issue', entity:'StockMovement', id:'sm_31c0…' },
+];
+const USAGE = [
+  { min:'19/09 08:21', tenant:'mercurio', user:'Carlos Arrascaeta', feature:'copiloto', model:'claude-haiku-4-5', reqs:3, inp:'18.2k', out:'1.4k', cost:'$0.0231', lat:'2140ms', err:false },
+  { min:'19/09 08:05', tenant:'mercurio', user:'Superintendente', feature:'fluid_analyses', model:'claude-sonnet-5', reqs:1, inp:'42.0k', out:'3.1k', cost:'$0.1725', lat:'8810ms', err:true },
+];
+const QUESTIONS = [
+  { when:'19/09 08:21', tenant:'mercurio', user:'carrascaeta@mercurio.com', role:'MAINTENANCE_MANAGER', screen:'Planes', vessel:'DON CHICUETO', q:'¿Cada cuántas horas se cambia el filtro de gasoil del motor principal babor?', att:false },
+  { when:'18/09 16:10', tenant:'mercurio', user:'super@mercurio.com', role:'FLEET_SUPERINTENDENT', screen:'Análisis de fluidos', vessel:'LA TERESA', q:'Adjunto el informe de CONDOR. ¿Qué valores están fuera de rango?', att:true },
+];
+const VESSELS = [
+  { name:'DON CHICUETO', tenant:'mercurio', user:'marinero1@mercurio.com', lat:'-25.28012', lng:'-57.63510', seen:'hace 4 min', x:42, y:60 },
+  { name:'LA TERESA', tenant:'mercurio', user:'marinero2@mercurio.com', lat:'-27.46920', lng:'-58.83060', seen:'hace 1 h', x:38, y:70 },
+];
+const PROMPTS = [
+  { cap:'knowledge_assistant', loc:'ES', v:4, status:'PUBLISHED', title:'Copiloto naval — base', content:'Eres un asistente especializado en gestión de mantenimiento naval. Respondé en forma breve y con referencias al manual…', upd:'10/09/2026', pub:'10/09/2026' },
+  { cap:'defect_assistant', loc:'ES', v:2, status:'DRAFT', title:'Asistente de defectos', content:'Ayudás a la tripulación a describir un defecto con los datos mínimos: equipo, síntoma, desde cuándo…', upd:'17/09/2026', pub:null },
+];
+
+const badge = (s) => {
+  const m = { ACTIVE:'b-ok', PUBLISHED:'b-ok', SUSPENDED:'b-warn', DRAFT:'b-warn', DISABLED:'b-neu', REVOKED:'b-bad', PENDING:'b-neu', ACCEPTED:'b-ok' };
+  return `<span class="badge ${m[s]||'b-neu'}">${s}</span>`;
+};
+const pageHead = (sub, btn='') => `<div class="row between" style="margin-bottom:10px"><div class="sub">${sub}</div>${btn}</div>`;
+const sortBar = (opts) => `<div class="sortbar">Ordenar por <select>${opts.map(o=>`<option>${o}</option>`).join('')}</select></div>`;
+const mapBox = (pins, h=240) => `<div class="map" style="height:${h}px">
+  <div class="land" style="left:30%;top:35%;width:34%;height:60%"></div><div class="land" style="left:-10%;top:5%;width:30%;height:35%"></div>
+  ${pins.map(p=>`<div class="pin" style="left:${p.x}%;top:${p.y}%" title="${p.t}"></div>`).join('')}
+  <span class="lbl">© OpenStreetMap</span></div>`;
+
+// ── Pantallas ──
+const R = {
+  tenants: () => pageHead(`${TENANTS.length} registros`, `<button class="btn primary" onclick="sheetTenant()">${ic('plus','s')}Nuevo Tenant</button>`)
+    + sortBar(['Nombre','Slug','Estado','Creado'])
+    + `<div class="stack">${TENANTS.map((t,i)=>`<div class="card">
+        <div class="row between"><div style="min-width:0"><h3>${t.name}</h3><div class="sub mono">${t.slug}</div></div>${badge(t.status)}</div>
+        <dl class="kv"><dt>Idioma</dt><dd>${t.locale}</dd><dt>Moneda</dt><dd>${t.cur}</dd><dt>Creado</dt><dd>${t.created}</dd></dl>
+        <div class="actions"><button class="btn" onclick="sheetTenant(${i})">${ic('pencil','s')}Editar</button><button class="btn primary" onclick="openTenant(${i})">Usuarios y más ${ic('chev','s')}</button></div>
+      </div>`).join('')}</div>`,
+
+  users: () => pageHead(`${PUSERS.length} registros`, `<button class="btn primary" onclick="sheetPUser()">${ic('plus','s')}Nuevo Usuario</button>`)
+    + `<div class="stack">${PUSERS.map((u,i)=>`<button class="card tap" style="width:100%;text-align:left" onclick="sheetPUser(${i})">
+        <div class="row between"><div style="min-width:0"><h3>${u.name}</h3><div class="sub mono">${u.email}</div></div>${badge(u.status)}</div>
+        <dl class="kv"><dt>Rol</dt><dd style="color:var(--red);font-weight:700">${u.role}</dd><dt>Creado</dt><dd>${u.created}</dd></dl>
+      </button>`).join('')}</div>`,
+
+  access: () => `<div class="seg" style="margin-bottom:6px">${['15 min','1 hora','8 horas','24 horas'].map((l,i)=>`<button class="${i===0?'on':''}" onclick="segOn(this)">${l}</button>`).join('')}</div>
+    <div class="hint" style="margin-bottom:10px">Se actualiza solo cada 60 s · última lectura 08:23:10</div>
+    ${mapBox(ACTIVE.map(a=>({x:a.x,y:a.y,t:a.user})))}
+    <div class="sec">${ic('wifi','s')} Conectados ahora <span class="sub">(${ACTIVE.length}) · tocá uno para verlo en el mapa</span></div>
+    <div class="stack">${ACTIVE.map(a=>`<button class="card tap" style="width:100%;text-align:left" onclick="toast('Mapa centrado en ${a.user}')">
+      <div class="row between"><div style="min-width:0"><h3>${a.user}</h3><div class="sub">${a.role}</div></div><span class="sub">${a.seen}</span></div>
+      <dl class="kv"><dt>Empresa</dt><dd class="mono" style="color:var(--accent)">${a.tenant}</dd><dt>Buque</dt><dd>${a.vessel??'—'}</dd>
+      <dt>Ubicación</dt><dd>${a.loc} ${a.gps?'<span class="badge b-ok">GPS</span>':''}</dd><dt>IP</dt><dd class="mono">${a.ip}</dd>
+      <dt>Dispositivo</dt><dd>${a.dev}</dd><dt>Pantalla</dt><dd class="mono">${a.screen}</dd><dt>Acciones</dt><dd>${a.acts}</dd></dl></button>`).join('')}</div>
+    <div class="sec">${ic('phone','s')} Historial de ingresos <span class="sub">(${LOGINS.length})</span></div>
+    <div class="collapse" id="fAcc"><button onclick="this.parentElement.classList.toggle('open')"><span class="row">${ic('filter','s')} Filtros</span><span class="sub">Todos</span></button>
+      <div class="body"><label class="field"><span>Empresa (slug)</span><input class="inp"></label><label class="field"><span>Usuario</span><input class="inp"></label>
+      <label class="field"><span>Resultado</span><select class="inp"><option>Todos</option><option>Solo ingresos</option><option>Solo rechazados</option></select></label></div></div>
+    <div class="stack" style="margin-top:10px">${LOGINS.map(l=>`<div class="card">
+      <div class="row between"><span class="badge ${l.ok?'b-ok':'b-bad'}">${l.ok?'✓ INGRESÓ':'✕ RECHAZADO'}</span><span class="sub mono">${l.when}</span></div>
+      <h3 style="margin-top:6px">${l.user}</h3>${l.why?`<div style="font-size:11px;color:var(--danger)">${l.why}</div>`:''}
+      <dl class="kv"><dt>Empresa</dt><dd class="mono" style="color:${l.tenant?'var(--accent)':'var(--red)'}">${l.tenant??'consola admin'}</dd><dt>Ubicación</dt><dd>${l.loc}</dd><dt>Dispositivo</dt><dd>${l.dev}</dd></dl></div>`).join('')}</div>`,
+
+  activity: () => `<div class="search">${ic('search','s')}<input placeholder="Buscar usuario por nombre o email…"></div>
+    <div class="seg" style="margin-top:10px">${['24 h','7 días','30 días','90 días'].map((l,i)=>`<button class="${i===2?'on':''}" onclick="segOn(this)">${l}</button>`).join('')}</div>
+    <div class="card" style="margin-top:10px"><h3>Carlos Arrascaeta</h3><div class="sub mono">usuario: CARRASCAETA · carrascaeta@mercurio.com</div>
+      <div class="row wrap" style="margin-top:8px;gap:6px"><span class="badge b-acc">mercurio · MAINTENANCE_MANAGER</span>${badge('ACTIVE')}</div>
+      <dl class="kv"><dt>Última señal</dt><dd>19/09/2026 08:21</dd><dt>Última IP</dt><dd class="mono">181.94.12.3</dd><dt>Alta</dt><dd>12/03/2026</dd></dl></div>
+    <div class="sec" style="color:var(--danger)">${ic('alert','s')} <span style="color:var(--fg)">Señales de riesgo</span> <span class="sub">· 1.284 acciones en 30 días</span></div>
+    <div class="tiles"><div class="tile"><small>Exportaciones</small><b>6</b></div><div class="tile warn"><small>⚠ Datos descargados</small><b>184 MB</b></div>
+      <div class="tile"><small>Pantallas distintas</small><b>22</b></div><div class="tile bad"><small>⛔ Madrugada</small><b>41</b></div></div>
+    <div class="hint">Ámbar = mirar, rojo = revisar. No es una acusación.</div>
+    <div class="sec">Todo lo que hizo</div>
+    <div class="chips">${['Acciones','Pantallas','Exportaciones','Copiloto IA','Ingresos'].map(c=>`<button class="chip on" onclick="this.classList.toggle('on')">${c}</button>`).join('')}</div>
+    <div class="stack" style="margin-top:10px">${[
+      ['Exportación','b-bad','Descargó Excel de repuestos','19/09 02:14','GET /spares.xlsx'],
+      ['Acción','b-ok','Aprobó OT-2026-0412','19/09 08:20','POST /work-orders/…/approve'],
+      ['Copiloto','b-acc','Preguntó al copiloto','19/09 08:21','copiloto · Planes'],
+    ].map(e=>`<div class="card"><div class="row between"><span class="badge ${e[1]}">${e[0]}</span><span class="sub mono">${e[3]}</span></div>
+      <div style="font-size:13px;margin-top:6px">${e[2]}</div><div class="sub mono" style="margin-top:2px">${e[4]} · mercurio · DON CHICUETO</div></div>`).join('')}</div>`,
+
+  audit: () => pageHead(`${AUDIT.length} registros`) + sortBar(['Fecha','Tenant','Acción','Entidad'])
+    + `<div class="stack">${AUDIT.map(a=>`<div class="card"><div class="row between"><span class="mono" style="font-size:13px;font-weight:700">${a.action}</span><span class="sub mono">${a.when}</span></div>
+      <dl class="kv"><dt>Tenant</dt><dd class="mono" style="color:${a.tenant?'var(--accent)':'var(--muted)'}">${a.tenant??'platform'}</dd><dt>Actor</dt><dd>${a.actor}</dd><dt>Entidad</dt><dd>${a.entity}</dd><dt>ID</dt><dd class="mono">${a.id}</dd></dl></div>`).join('')}</div>`,
+
+  usage: () => `<div class="row" style="margin-bottom:10px"><button class="btn" style="flex:1" onclick="toggleChart()">${ic('chart','s')}Gráfico</button><button class="btn" style="flex:1" onclick="toast('Descargando usage-2026-09-19.xlsx')">${ic('download','s')}Excel</button></div>
+    <div class="seg">${['Tokens IA','Bytes Satelital'].map((l,i)=>`<button class="${i===0?'on':''}" onclick="segOn(this)">${l}</button>`).join('')}</div>
+    <div class="row" style="margin-top:8px"><span class="sub">Agrupar:</span><div class="seg" style="flex:1">${['Por minuto','Sin agrupar'].map((l,i)=>`<button class="${i===0?'on':''}" onclick="segOn(this)">${l}</button>`).join('')}</div></div>
+    <div class="collapse" style="margin-top:10px"><button onclick="this.parentElement.classList.toggle('open')"><span class="row">${ic('filter','s')} Filtros</span><span class="sub">Sin filtros</span></button>
+      <div class="body"><label class="field"><span>Tenant</span><input class="inp" placeholder="slug"></label><label class="field"><span>Email contiene</span><input class="inp"></label>
+      <label class="field"><span>Feature</span><select class="inp"><option>Toda feature</option><option>copiloto</option><option>fluid_analyses</option></select></label>
+      <div class="row" style="margin-top:10px"><label class="field" style="flex:1"><span>Desde</span><input type="date" class="inp"></label><label class="field" style="flex:1"><span>Hasta</span><input type="date" class="inp"></label></div>
+      <button class="btn primary full" style="margin-top:12px" onclick="toast('Filtros aplicados')">Aplicar</button></div></div>
+    <div class="tiles" style="margin-top:10px"><div class="tile"><small>Eventos</small><b>312</b></div><div class="tile"><small>Costo</small><b style="color:var(--warning)">$4.18</b></div>
+      <div class="tile"><small>Input</small><b>1.2M</b></div><div class="tile"><small>Output</small><b>88k</b></div></div>
+    <div id="chart" style="display:none;margin-top:10px" class="card"><div class="sub">Tokens por usuario · agrupado por hora</div>
+      <svg viewBox="0 0 300 140" style="width:100%;height:160px;margin-top:6px"><path d="M0 120 L40 90 L80 100 L120 50 L160 70 L200 30 L240 60 L300 40" stroke="#fbbf24" stroke-width="2.5"/><path d="M0 130 L40 125 L80 110 L120 115 L160 95 L200 100 L240 80 L300 85" stroke="#60a5fa" stroke-width="2.5"/></svg>
+      <div class="row sub" style="gap:14px"><span style="color:#d4a017">● Carlos Arrascaeta</span><span style="color:#3b82f6">● Superintendente</span></div></div>
+    ${sortBar(['Minuto','Costo','Input','Usuario'])}
+    <div class="stack">${USAGE.map(u=>`<div class="card"><div class="row between"><h3>${u.user}</h3><span class="sub mono">${u.min}</span></div>
+      <div class="sub">${u.feature} · <span class="mono">${u.model}</span> ${u.err?'<span class="badge b-bad">error</span>':''}</div>
+      <dl class="kv"><dt>Tenant</dt><dd class="mono" style="color:var(--accent)">${u.tenant}</dd><dt>Pedidos</dt><dd>${u.reqs}</dd><dt>Input / Output</dt><dd class="mono">${u.inp} / ${u.out}</dd><dt>Costo</dt><dd class="mono" style="color:var(--warning)">${u.cost}</dd><dt>Latencia</dt><dd class="mono">${u.lat}</dd></dl></div>`).join('')}</div>`,
+
+  questions: () => `<div class="search">${ic('search','s')}<input placeholder="Buscar en preguntas…"></div>
+    <div class="sub" style="margin:10px 0">${QUESTIONS.length} registros</div>
+    <div class="stack">${QUESTIONS.map(q=>`<div class="card"><div class="row between"><span class="mono" style="font-size:12px;color:var(--accent)">${q.tenant}</span><span class="sub mono">${q.when}</span></div>
+      <div style="font-size:14px;margin:8px 0;line-height:1.45">${q.att?'📎 ':''}${q.q}</div>
+      <dl class="kv"><dt>Usuario</dt><dd>${q.user}</dd><dt>Rol</dt><dd>${q.role}</dd><dt>Pantalla</dt><dd>${q.screen}</dd><dt>Buque</dt><dd>${q.vessel}</dd></dl></div>`).join('')}</div>`,
+
+  vessels: () => `<div class="row between" style="margin-bottom:8px"><span class="badge b-acc">● ${VESSELS.length} embarcaciones</span><span class="sub">Actualiza cada 60 s</span></div>
+    ${mapBox(VESSELS.map(v=>({x:v.x,y:v.y,t:v.name})), 330)}
+    <div class="hint">Sólo usuarios Técnico/Operador a bordo que compartieron la ubicación.</div>
+    <div class="stack" style="margin-top:10px">${VESSELS.map(v=>`<div class="card"><div class="row between"><h3>🚢 ${v.name}</h3><span class="sub">${v.seen}</span></div>
+      <dl class="kv"><dt>Tenant</dt><dd>${v.tenant}</dd><dt>Usuario</dt><dd>${v.user}</dd><dt>Lat / Long</dt><dd class="mono">${v.lat}, ${v.lng}</dd></dl></div>`).join('')}</div>`,
+
+  prompts: () => pageHead(`${PROMPTS.length} registros`, `<button class="btn primary" onclick="sheetPrompt()">${ic('plus','s')}Nuevo Prompt</button>`)
+    + `<div class="stack">${PROMPTS.map((p,i)=>`<div class="card">
+      <div class="row between"><div style="min-width:0"><div class="sub" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:10px">${p.cap} · ${p.loc} · v${p.v}</div><h3>${p.title}</h3></div>${badge(p.status)}</div>
+      <p class="mono" style="font-size:11px;color:var(--muted);background:var(--surface2);border-radius:10px;padding:8px;margin-top:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${p.content}</p>
+      <div class="row between sub" style="margin-top:8px"><span>Actualizado: ${p.upd}</span>${p.pub?`<span>Publicado: ${p.pub}</span>`:''}</div>
+      <div class="actions"><button class="btn" onclick="sheetPrompt(${i})">${ic('pencil','s')}Editar</button>
+      ${p.status==='PUBLISHED'?`<button class="btn warn" onclick="toast('Revertido correctamente')">${ic('undo','s')}Revertir</button>`:`<button class="btn ok" onclick="toast('Publicado correctamente')">${ic('send','s')}Publicar</button>`}</div></div>`).join('')}</div>`,
+};
+
+// ── Navegación ──
+function go(id){ current=id; closeAll(); closeFull(); render(); document.getElementById('main').scrollTop=0; }
+function render(){
+  const s = SCREENS.find(x=>x.id===current);
+  document.getElementById('title').textContent = s.label;
+  document.getElementById('main').innerHTML = R[current]();
+  const inBottom = BOTTOM.includes(current);
+  document.getElementById('bottom').innerHTML = BOTTOM.map(id=>{const x=SCREENS.find(s=>s.id===id);return `<button class="${current===id?'on':''}" onclick="go('${id}')">${ic(x.icon)}${x.short}</button>`}).join('')
+    + `<button class="${!inBottom?'on':''}" onclick="openDrawer()">${ic('more')}Más</button>`;
+  document.getElementById('drawerNav').innerHTML = SCREENS.map(x=>`<button class="${current===x.id?'on':''}" onclick="go('${x.id}')">${ic(x.icon)}${x.label}</button>`).join('');
+}
+function segOn(b){ [...b.parentElement.children].forEach(c=>c.classList.remove('on')); b.classList.add('on'); }
+function toggleChart(){ const c=document.getElementById('chart'); c.style.display=c.style.display==='none'?'block':'none'; }
+function openDrawer(){ document.getElementById('scrim').classList.add('show'); document.getElementById('drawer').classList.add('show'); }
+function closeAll(){ ['scrim','drawer','sheet'].forEach(i=>document.getElementById(i).classList.remove('show')); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+function toggleTheme(){ document.body.classList.toggle('dark'); document.getElementById('dev').classList.toggle('dark'); }
+
+// ── Hoja inferior (reemplaza la ventana centrada en el celular) ──
+const F = (label, input, req=false) => `<label class="field" style="margin-bottom:12px"><span>${label}${req?' <i>*</i>':''}</span>${input}</label>`;
+const sel = (opts, v) => `<select class="inp">${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select>`;
+function openSheet(title, body, foot){
+  document.getElementById('sheetTitle').textContent=title;
+  document.getElementById('sheetBody').innerHTML=body;
+  document.getElementById('sheetFoot').innerHTML=foot;
+  document.getElementById('scrim').classList.add('show'); document.getElementById('sheet').classList.add('show');
+  document.getElementById('sheetBody').scrollTop=0;
+}
+function saveBtn(label, msg){ return `<button class="btn solid" onclick="closeAll();toast('${msg}')">${label}</button>`; }
+function sheetTenant(i){
+  const t = i===undefined ? null : TENANTS[i];
+  openSheet(t?`Editar — ${t.slug}`:'Crear Tenant',
+    F('Logo de la empresa', `<div class="row"><div class="card" style="flex:1;height:60px;display:flex;align-items:center;justify-content:center;background:#fff" ><span class="sub">Sin imagen</span></div><div class="card" style="flex:1;height:60px;display:flex;align-items:center;justify-content:center;background:#0D1526"><span class="sub">Sin imagen</span></div></div><button class="btn full" style="margin-top:8px;border-style:dashed">Seleccionar imagen</button>`)
+    + (t?'':F('Slug (único, minúsculas y guiones)', `<input class="inp mono" placeholder="mi-empresa">`, true))
+    + F('Nombre para mostrar', `<input class="inp" value="${t?t.name:''}">`, true)
+    + F('Email de soporte', `<input class="inp" type="email" placeholder="soporte@empresa.com">`, true)
+    + (t?F('Estado', sel(['ACTIVE','SUSPENDED','PROVISIONING','DISABLED'], t.status)):'')
+    + `<div class="row"><div style="flex:1">${F('Locale', sel(['es','en','pt'], t?.locale))}</div><div style="flex:1">${F('Moneda', sel(['ARS','PYG','BRL','USD','EUR'], t?.cur))}</div></div>`
+    + F('Timezone', sel(['Buenos Aires','Asuncion','Sao Paulo','New York','Madrid','UTC']))
+    + F('Plantilla PDF de Orden de Trabajo', sel(['Estándar (genérico)','Mercurio Group (formulario anterior)'])),
+    saveBtn(t?'Guardar':'Crear Tenant', t?'Guardado':'Tenant creado'));
+}
+function sheetPUser(i){
+  const u = i===undefined ? null : PUSERS[i];
+  openSheet(u?`Editar — ${u.email}`:'Crear Usuario de Plataforma',
+    (u?'':F('Email', `<input class="inp" type="email" placeholder="usuario@plataforma.com">`, true) + F('Contraseña', `<input class="inp" type="password" placeholder="••••••••">`, true))
+    + `<div class="row"><div style="flex:1">${F('Nombre', `<input class="inp" value="${u?u.name.split(' ')[0]:''}">`)}</div><div style="flex:1">${F('Apellido', `<input class="inp" value="${u?u.name.split(' ').slice(1).join(' '):''}">`)}</div></div>`
+    + `<div class="row"><div style="flex:1">${F('Rol', sel(['SUPERADMIN','SUPPORT'], u?.role))}</div><div style="flex:1">${F('Estado', sel(['ACTIVE','SUSPENDED','DISABLED'], u?.status))}</div></div>`
+    + (u?F('Nueva contraseña (vacío = no cambiar)', `<input class="inp" type="password">`):''),
+    saveBtn(u?'Guardar':'Crear Usuario', u?'Guardado':'Usuario creado'));
+}
+function sheetPrompt(i){
+  const p = i===undefined ? null : PROMPTS[i];
+  openSheet(p?`Editar — ${p.cap} · ${p.loc} · v${p.v}`:'Crear Prompt',
+    (p?'':`<div class="row"><div style="flex:1">${F('Capability', sel(['knowledge_assistant','defect_assistant','deferral_analysis','maintenance_insights']))}</div><div style="width:90px">${F('Locale', sel(['es','en','pt']))}</div></div>`)
+    + F('Título', `<input class="inp" value="${p?p.title:''}">`, true)
+    + F('Contenido del prompt', `<textarea class="inp">${p?p.content:''}</textarea>`, true),
+    saveBtn(p?'Guardar':'Crear Prompt', p?'Guardado':'Prompt creado'));
+}
+
+// ── Detalle del tenant: pantalla completa en el celular ──
+let tenantIdx=0, tenantTab='users';
+function openTenant(i){ tenantIdx=i; tenantTab='users'; document.getElementById('full').classList.add('show'); renderTenant(); }
+function closeFull(){ document.getElementById('full').classList.remove('show'); }
+function renderTenant(){
+  const t=TENANTS[tenantIdx];
+  document.getElementById('fullSlug').textContent=t.slug; document.getElementById('fullTitle').textContent=t.name;
+  const tabs=[['domains','Dominios','globe'],['users','Usuarios','users'],['invitations','Invitaciones','mail']];
+  document.getElementById('fullTabs').innerHTML=tabs.map(x=>`<button class="${tenantTab===x[0]?'on':''}" onclick="tenantTab='${x[0]}';renderTenant()">${x[1]}</button>`).join('');
+  let b='';
+  if(tenantTab==='domains') b = pageHead('Dominios registrados', `<button class="btn primary" onclick="openSheet('Agregar Dominio', F('Host (sin protocolo)', '<input class=inp placeholder=empresa.com>', true)+'<label class=row style=font-size:14px><input type=checkbox style=width:20px;height:20px> Marcar como dominio primario</label>', saveBtn('Agregar','Dominio agregado'))">${ic('plus','s')}Agregar</button>`)
+    + `<div class="stack"><div class="card row between"><div><div class="mono" style="font-size:14px">${t.slug}.cms3.shipcms.cloud</div><div class="sub">12/03/2026</div></div><span class="badge b-warn">★ Primario</span></div>
+       <div class="card row between"><div><div class="mono" style="font-size:14px">pms.${t.slug}.com</div><div class="sub">01/07/2026</div></div><button class="btn ghost" style="font-size:11px" onclick="toast('Ahora es el primario')">☆ Hacer primario</button></div></div>`;
+  if(tenantTab==='users') b = pageHead(`${t.users} usuarios`, `<button class="btn primary" onclick="openSheet('Crear Usuario de Tenant', F('Email','<input class=inp type=email>',true)+F('Contraseña','<input class=inp type=password>',true)+F('Usuario','<input class=inp placeholder=SUPER_REM>')+F('Rol', sel(['Capitán / Jefe de Máquinas','DPA / Director de Operaciones','Superintendente técnico','Tripulante operativo','Inspector / Auditor interno','Compras / Logística','Auditor externo'])), saveBtn('Crear Usuario','Usuario creado'))">${ic('plus','s')}Crear usuario</button>`)
+    + `<div class="stack">${[['CARRASCAETA','carrascaeta@mercurio.com','Capitán / Jefe de Máquinas','ACTIVE'],['SUPER_REM','super@mercurio.com','Superintendente técnico','ACTIVE'],['EXJM','exjm@mercurio.com','Capitán / Jefe de Máquinas','REVOKED']].map(u=>`<div class="card">
+        <div class="row between"><div style="min-width:0"><h3>${u[0]}</h3><div class="sub">${u[1]}</div></div>${badge(u[3])}</div>
+        <div style="font-size:12px;color:var(--accent);font-weight:700;margin-top:6px">${u[2]}</div>
+        <div class="actions"><button class="btn" onclick="openSheet('Editar usuario — ${u[0]}', F('Usuario','<input class=inp value=${u[0]}>')+F('Email','<input class=inp value=${u[1]}>')+F('Rol', sel(['${u[2]}','Superintendente técnico','Tripulante operativo']))+F('Nueva contraseña (opcional)','<input class=inp type=password placeholder=&quot;Dejar vacío para no cambiar&quot;>'), saveBtn('Guardar cambios','Usuario actualizado'))">${ic('pencil','s')}Editar</button>
+        ${u[3]!=='REVOKED'?`<button class="btn" style="color:var(--danger)" onclick="confirmRevoke('${u[0]}')">${ic('trash','s')}Revocar acceso</button>`:''}</div></div>`).join('')}</div>`;
+  if(tenantTab==='invitations') b = pageHead('Invitaciones enviadas', `<button class="btn primary" onclick="openSheet('Crear Invitación', F('Email','<input class=inp type=email>',true)+F('Rol', sel(['Tripulante operativo','Capitán / Jefe de Máquinas','Superintendente técnico']))+F('Locale', sel(['es','en','pt'])), saveBtn('Crear Invitación','Invitación creada'))">${ic('plus','s')}Invitar</button>`)
+    + `<div class="card"><div class="row between"><div style="min-width:0"><h3 style="font-weight:500">nuevo.jm@mercurio.com</h3><div class="sub">Expira: 26/09/2026</div></div>${badge('PENDING')}</div><div style="font-size:12px;color:var(--accent);font-weight:700;margin-top:6px">Capitán / Jefe de Máquinas</div></div>`;
+  document.getElementById('fullBody').innerHTML=b;
+}
+function confirmRevoke(name){
+  const a=document.getElementById('alert');
+  document.getElementById('alertTitle').textContent='¿Revocar el acceso de '+name+'?';
+  document.getElementById('alertMsg').textContent='Perderá la posibilidad de ingresar, pero el historial se mantiene. Podés reactivarlo después editando el usuario.';
+  document.getElementById('alertBtns').innerHTML=`<button class="btn" style="flex:1" onclick="document.getElementById('alert').classList.remove('show')">Cancelar</button><button class="btn" style="flex:1;background:#DC2626;color:#fff;border-color:#DC2626" onclick="document.getElementById('alert').classList.remove('show');toast('Acceso revocado')">Revocar</button>`;
+  a.classList.add('show');
+}
+render();
+</script>
+</body>
+</html>

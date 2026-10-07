@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V2 — Asesor técnico (simple)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --fg:#0f172a; --muted:#64748b; --soft:#94a3b8; --line:#e2e8f0; --bg:#f1f5f9; --card:#fff;
+    --red:#dc2626; --redbg:#fef2f2; --amber:#d97706; --amberbg:#fffbeb; --blue:#2563eb; --bluebg:#eff6ff;
+    --green:#059669; --greenbg:#ecfdf5; --gray:#64748b; --graybg:#f8fafc; --violet:#6d28d9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);padding:20px 16px 80px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .tag{display:inline-block;background:#fef3c7;color:#92400e;font-size:11px;font-weight:800;padding:3px 8px;border-radius:6px}
+  .lead{color:var(--muted);font-size:13px;margin:6px 0 18px;line-height:1.5;max-width:860px}
+  button{font-family:inherit;cursor:pointer}
+  a{color:inherit}
+
+  /* ── Encabezado ── */
+  .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .top h1{font-size:22px;margin:0;font-weight:900}
+  .top .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .top .sub button{border:0;background:none;color:var(--blue);font-size:12.5px;font-weight:700;padding:0}
+  .grow{flex:1;min-width:200px}
+  .btn-main{display:inline-flex;align-items:center;gap:8px;background:var(--violet);color:#fff;border:0;border-radius:12px;padding:11px 18px;font-size:14px;font-weight:800}
+  .btn-main:hover{background:#5b21b6}
+
+  /* ── Resumen de un vistazo ── */
+  .hero{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+  @media(max-width:980px){.hero{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+  .card h2{margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .today{display:flex;flex-direction:column;gap:10px}
+  .today .big{font-size:17px;font-weight:800;line-height:1.35}
+  .today .big b{color:var(--red)}
+  .buckets{display:flex;gap:8px;flex-wrap:wrap}
+  .bk{display:flex;align-items:center;gap:8px;border-radius:12px;padding:8px 12px;border:1.5px solid;font-weight:800;font-size:13px;background:#fff}
+  .bk .n{font-size:22px;font-weight:900;line-height:1}
+  .bk.r{border-color:#fecaca;color:var(--red);background:var(--redbg)}
+  .bk.a{border-color:#fde68a;color:#b45309;background:var(--amberbg)}
+  .bk.b{border-color:#bfdbfe;color:var(--blue);background:var(--bluebg)}
+  .ai{font-size:10px;font-weight:800;color:var(--violet);background:#f5f3ff;border:1px solid #ddd6fe;border-radius:99px;padding:1px 7px;vertical-align:middle}
+
+  /* salud */
+  .health{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .hc{display:flex;gap:10px;align-items:center;border-radius:12px;padding:10px;border:1px solid var(--line);background:#fff;text-align:left;width:100%}
+  .hc:hover{border-color:#cbd5e1;background:#fcfcfd}
+  .dot{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+  .hc .t{font-size:12.5px;font-weight:800;line-height:1.2}
+  .hc .s{font-size:11.5px;color:var(--muted);line-height:1.25;margin-top:2px}
+  .st-bad .dot{background:var(--redbg)} .st-bad .w{color:var(--red)}
+  .st-warn .dot{background:var(--amberbg)} .st-warn .w{color:#b45309}
+  .st-ok .dot{background:var(--greenbg)} .st-ok .w{color:var(--green)}
+  .st-nodata .dot{background:var(--graybg)} .st-nodata .w{color:var(--gray)}
+  .w{font-weight:900}
+
+  /* buques */
+  .bars{display:flex;flex-direction:column;gap:9px}
+  .bar{display:grid;grid-template-columns:110px 1fr 22px;gap:8px;align-items:center;font-size:12.5px;background:none;border:0;padding:2px 0;text-align:left;width:100%}
+  .bar .nm{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .tr{height:14px;background:#f1f5f9;border-radius:99px;display:flex;overflow:hidden}
+  .bar .tr i{display:block;height:100%}
+  .bar .c{font-weight:800;text-align:right;color:var(--muted)}
+  .legend{display:flex;gap:12px;font-size:11px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
+  .legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px;background:var(--c)}
+
+  /* ── Lista de tareas ── */
+  .seg{display:inline-flex;background:#e2e8f0;border-radius:12px;padding:3px;gap:3px;margin-bottom:12px}
+  .seg button{border:0;background:none;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:800;color:var(--muted)}
+  .seg button.on{background:#fff;color:var(--fg);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+  .seg .n{font-size:11px;background:#f1f5f9;border-radius:99px;padding:0 7px;margin-left:5px}
+  .filter-note{display:none;align-items:center;gap:8px;font-size:12.5px;margin:-4px 0 10px;color:var(--muted)}
+  .filter-note.on{display:flex}
+  .filter-note button{border:1px solid var(--line);background:#fff;border-radius:99px;font-size:12px;font-weight:700;padding:3px 10px}
+  .group{margin-bottom:16px}
+  .gh{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:900;margin:0 0 8px}
+  .gh .pill{font-size:11px;font-weight:800;border-radius:99px;padding:2px 9px}
+  .gh.r .pill{background:var(--redbg);color:var(--red)} .gh.a .pill{background:var(--amberbg);color:#b45309} .gh.b .pill{background:var(--bluebg);color:var(--blue)}
+  .row{background:#fff;border:1px solid var(--line);border-left:5px solid;border-radius:14px;margin-bottom:8px}
+  .row.r{border-left-color:var(--red)} .row.a{border-left-color:#f59e0b} .row.b{border-left-color:#60a5fa}
+  .rh{display:flex;align-items:center;gap:12px;padding:12px 14px;flex-wrap:wrap}
+  .rh .ttl{font-size:14.5px;font-weight:800;line-height:1.35}
+  .rh .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;font-size:12px;color:var(--muted)}
+  .chip{font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;background:#f1f5f9;color:#334155}
+  .chip.follow{background:var(--greenbg);color:var(--green)}
+  .chip.warn{background:#fff7ed;color:#c2410c}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:800;color:var(--fg)}
+  .btn:hover{background:#f8fafc}
+  .btn.pri{background:var(--fg);color:#fff;border-color:var(--fg)}
+  .btn.pri:hover{background:#1e293b}
+
+  /* detalle: 3 pasos */
+  .rb{display:none;border-top:1px solid #f1f5f9;padding:14px}
+  .row.open .rb{display:block}
+  .row.open .rh .btn.pri{background:#fff;color:var(--fg);border-color:var(--line)}
+  .steps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  @media(max-width:900px){.steps{grid-template-columns:1fr}}
+  .step{border-radius:12px;padding:12px;background:#f8fafc;border:1px solid #eef2f7}
+  .step h3{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13.5px;font-weight:900}
+  .step h3 .num{width:22px;height:22px;border-radius:99px;background:var(--fg);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .step p{margin:0 0 8px;font-size:13px;line-height:1.5;color:#1e293b}
+  .ev{display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin-bottom:6px;font-size:12px}
+  .ev .i{font-size:14px}
+  .ev b{display:block;font-size:12.5px}
+  .ev span{color:var(--muted)}
+  .ev a{margin-left:auto;font-weight:800;color:var(--blue);text-decoration:none;white-space:nowrap}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px;margin-bottom:8px}
+  .kv dt{color:var(--muted);font-weight:700}
+  .kv dd{margin:0;font-weight:700}
+  details{font-size:12.5px;margin-top:6px}
+  details summary{cursor:pointer;font-weight:800;color:var(--violet)}
+  details p{margin:6px 0 0;color:#334155}
+  .acts{display:flex;flex-direction:column;gap:8px}
+  .act{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px}
+  .act:hover{border-color:#94a3b8}
+  .act .ic{font-size:20px}
+  .act b{display:block;font-size:13.5px}
+  .act small{display:block;font-size:11.5px;color:var(--muted)}
+  .inline{display:none;margin-top:10px;background:#fff;border:1.5px solid #c4b5fd;border-radius:12px;padding:12px}
+  .inline.on{display:block}
+  .inline label{display:block;font-size:11.5px;font-weight:800;color:#334155;margin:8px 0 4px}
+  .req::after{content:" *";color:var(--red)}
+  .inline input,.inline textarea,.inline select{width:100%;font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  .inline textarea{min-height:150px;line-height:1.45}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips button{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 12px;font-size:12.5px;font-weight:800}
+  .chips button.on{border-color:var(--fg);background:var(--fg);color:#fff}
+  .inline .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
+  .ok{color:var(--green);font-weight:800;font-size:12.5px;display:none}
+  .ok.on{display:inline}
+
+  /* seguimiento */
+  .fu{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .fu .when{font-size:12px;font-weight:900;border-radius:10px;padding:6px 10px;text-align:center;min-width:92px}
+  .when.late{background:var(--redbg);color:var(--red)} .when.soon{background:var(--amberbg);color:#b45309} .when.fine{background:#f1f5f9;color:#334155}
+  .fu .ttl{font-size:14px;font-weight:800}
+  .fu .meta{font-size:12px;color:var(--muted);margin-top:3px}
+
+  .cant{margin-top:18px;font-size:12.5px;color:var(--muted);background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:10px 14px}
+  .cant b{color:#334155}
+  .hidden{display:none}
+  .note{font-size:11.5px;color:#475569;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:8px 10px;margin-top:10px;line-height:1.5}
+  .history{display:none;position:absolute;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.15);padding:6px;z-index:5;margin-top:6px;min-width:260px}
+  .history.on{display:block}
+  .history div{padding:8px 10px;border-radius:8px;font-size:12.5px;cursor:pointer}
+  .history div:hover{background:#f1f5f9}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">PREVIEW V2 · NO ES LA APP · DATOS DE EJEMPLO</span>
+  <p class="lead">
+    Versión simple: <b>arriba se entiende todo de un vistazo</b> (qué es urgente, cómo está la flota, qué buques preocupan);
+    <b>abajo, una lista de cosas para resolver</b> ordenada por “para cuándo”. Cada tema se abre con un solo botón y muestra
+    <b>3 pasos: Qué pasa → Qué hacer → Actuar</b>. Tocá los recuadros, las barras y los botones.
+  </p>
+
+  <!-- ═══ Encabezado del sistema (el de siempre) ═══ -->
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:14px;font-size:12.5px">
+    <span style="color:var(--muted)">Encabezado del sistema →</span>
+    <select id="hdrVessel" onchange="setVessel(this.value)" style="font-family:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);border-radius:99px;padding:6px 12px">
+      <option value="">🚢 Todos los buques</option><option>LATERE</option><option>DON CHICUETO</option><option>Barcazas MGT</option><option>MAO 01</option>
+    </select>
+    <span style="font-weight:800">Juan Pérez</span><span style="font-size:11px;color:var(--violet);font-weight:800">Director de Mantenimiento</span>
+  </div>
+
+  <!-- ═══ Encabezado ═══ -->
+  <div class="top">
+    <div class="grow" style="position:relative">
+      <h1>🧭 Asesor técnico</h1>
+      <div class="sub"><span id="scopeName">Toda la flota</span> · análisis de hoy 12:44 · <button onclick="document.getElementById('hist').classList.toggle('on')">ver análisis anteriores ▾</button></div>
+      <div class="history" id="hist">
+        <div onclick="this.parentElement.classList.remove('on')"><b>Hoy 12:44</b> · 5 temas</div>
+        <div onclick="this.parentElement.classList.remove('on')">Hoy 12:24 · 5 temas</div>
+        <div onclick="this.parentElement.classList.remove('on')">12/09 09:10 · 7 temas</div>
+      </div>
+    </div>
+    <button class="btn-main" onclick="alert('Vuelve a analizar ' + (document.getElementById('hdrVessel').value || 'toda la flota') + ' (1–2 minutos). Mientras tanto se puede seguir trabajando.')">↻ Actualizar análisis</button>
+  </div>
+
+  <!-- ═══ De un vistazo ═══ -->
+  <div class="hero">
+    <div class="card today">
+      <h2>Lo más importante hoy <span class="ai">IA</span></h2>
+      <div class="big">LATERE tiene <b>pruebas de seguridad de los motores vencidas hace más de un año</b>. Es lo primero a resolver.</div>
+      <div class="buckets">
+        <div class="bk r"><span class="n">2</span> para hoy</div>
+        <div class="bk a"><span class="n">2</span> esta semana</div>
+        <div class="bk b"><span class="n">1</span> este mes</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Cómo está la flota</h2>
+      <div class="health">
+        <button class="hc st-bad" onclick="filterBy('Plan de mantenimiento')"><span class="dot">📅</span><span><span class="t">Plan de mantenimiento</span><span class="s"><span class="w">Mal</span> · 213 vencidos en equipos críticos</span></span></button>
+        <button class="hc st-warn" onclick="filterBy('Fallas repetidas')"><span class="dot">🔁</span><span><span class="t">Fallas repetidas</span><span class="s"><span class="w">Atención</span> · 17 equipos</span></span></button>
+        <button class="hc st-nodata" onclick="filterBy('Repuestos')"><span class="dot">📦</span><span><span class="t">Repuestos críticos</span><span class="s"><span class="w">Sin datos</span> · stock nunca cargado</span></span></button>
+        <button class="hc st-ok"><span class="dot">✅</span><span><span class="t">Cierre de OT</span><span class="s"><span class="w">Bien</span> · todas con evidencia</span></span></button>
+      </div>
+    </div>
+
+    <div class="card" id="shipsCard">
+      <h2>Buques que necesitan atención</h2>
+      <div class="bars">
+        <button class="bar" onclick="pickVessel('LATERE')"><span class="nm">LATERE</span><span class="tr"><i style="width:40%;background:var(--red)"></i><i style="width:20%;background:#f59e0b"></i></span><span class="c">3</span></button>
+        <button class="bar" onclick="pickVessel('DON CHICUETO')"><span class="nm">DON CHICUETO</span><span class="tr"><i style="width:20%;background:var(--red)"></i><i style="width:20%;background:#f59e0b"></i></span><span class="c">2</span></button>
+        <button class="bar" onclick="pickVessel('Barcazas MGT')"><span class="nm">Barcazas MGT</span><span class="tr"><i style="width:20%;background:#f59e0b"></i></span><span class="c">1</span></button>
+        <button class="bar" onclick="pickVessel('MAO 01')"><span class="nm">MAO 01</span><span class="tr"><i style="width:20%;background:#60a5fa"></i></span><span class="c">1</span></button>
+      </div>
+      <div class="legend"><span style="--c:var(--red)">para hoy</span><span style="--c:#f59e0b">esta semana</span><span style="--c:#60a5fa">este mes</span></div>
+    </div>
+  </div>
+
+  <!-- ═══ Lista ═══ -->
+  <div class="seg">
+    <button class="on" id="tabTodo" onclick="tab('todo')">Por resolver <span class="n">5</span></button>
+    <button id="tabFu" onclick="tab('fu')">En seguimiento <span class="n">2</span></button>
+  </div>
+  <div class="filter-note" id="fnote">Mostrando sólo: <b id="fname"></b> <button onclick="clearFilter()">✕ ver todo</button></div>
+
+  <section id="todo">
+    <div class="group">
+      <div class="gh r">🔴 Para hoy <span class="pill">2</span></div>
+
+      <div class="row r open" data-tags="LATERE Plan de mantenimiento">
+        <div class="rh">
+          <div class="grow">
+            <div class="ttl">Pruebas de sobrevelocidad de los motores principales vencidas hace más de un año</div>
+            <div class="meta"><span class="chip">🚢 LATERE</span><span class="chip">👤 Jefe de Máquinas</span><span class="chip">⏱ 3 días</span></div>
+          </div>
+          <button class="btn pri" onclick="tog(this)">Resolver ›</button>
+        </div>
+        <div class="rb">
+          <div class="steps">
+            <div class="step">
+              <h3><span class="num">1</span> Qué pasa</h3>
+              <p>La protección que corta el motor si se acelera de más no se probó en más de un año. Si falla, el motor se puede destruir y el buque queda sin propulsión.</p>
+              <div class="ev"><span class="i">📅</span><div><b>Motor Principal #3 — prueba vencida</b><span>hace 450 días · plan LTE-MP-#3-21</span></div><a href="#">Abrir</a></div>
+              <div class="ev"><span class="i">📅</span><div><b>Motor Principal #1 — prueba vencida</b><span>hace 368 días · plan LTE-MP-#1-21</span></div><a href="#">Abrir</a></div>
+            </div>
+            <div class="step">
+              <h3><span class="num">2</span> Qué hacer</h3>
+              <p>Hacer y registrar las dos pruebas en la próxima parada del buque.</p>
+              <dl class="kv"><dt>Quién</dt><dd>Jefe de Máquinas de LATERE</dd><dt>Para cuándo</dt><dd>3 días</dd><dt>Se cierra con</dt><dd>OT con el valor de disparo medido y firmada</dd></dl>
+              <details><summary>💡 Cómo manejarlo con la gente</summary><p>Planteá el tema como falta de ventana operativa, no como incumplimiento: preguntá qué necesita y ofrecé coordinar la parada con Operaciones. Si se vuelve a postergar, escalalo al DPA.</p></details>
+              <details><summary>🧠 Por qué lo dice el asesor</summary><p>Dos protecciones de seguridad del mismo buque vencidas a la vez sugiere que la programación no reserva tiempo para pruebas, no un olvido puntual.</p></details>
+            </div>
+            <div class="step">
+              <h3><span class="num">3</span> Actuar</h3>
+              <div class="acts">
+                <button class="act" onclick="show(this,'mail')"><span class="ic">✉️</span><span><b>Pedirle al Jefe de Máquinas</b><small>Te escribo el correo listo para mandar</small></span></button>
+                <button class="act" onclick="alert('Abre el formulario de OT de siempre, con LATERE y el título ya cargados.')"><span class="ic">🛠️</span><span><b>Crear la OT</b><small>Con el buque y el título ya cargados</small></span></button>
+                <button class="act" onclick="show(this,'follow')"><span class="ic">📌</span><span><b>Hacer seguimiento</b><small>Te lo recuerdo hasta que se cierre</small></span></button>
+              </div>
+
+              <div class="inline" data-k="mail">
+                <label>Para</label>
+                <select><option>Jefe de Máquinas — LATERE</option><option>Capitán — LATERE</option><option>Superintendente técnico</option></select>
+                <label>Correo <span class="ai">IA · lo podés editar</span></label>
+                <textarea>Asunto: LATERE – Pruebas de sobrevelocidad de motores principales
+
+Hola,
+Las pruebas de sobrevelocidad de los motores principales #3 (plan LTE-MP-#3-21) y #1 (LTE-MP-#1-21) están vencidas hace 450 y 368 días.
+Te pido para el lunes: estado de las protecciones, qué necesitás para hacerlas y en qué parada podés.
+Para cerrarlo necesito la OT con el valor de disparo medido y firmada.
+Gracias.</textarea>
+                <div class="foot"><span class="ok">✔ Copiado</span><button class="btn" onclick="this.previousElementSibling.classList.add('on')">📋 Copiar</button><button class="btn pri" onclick="alert('Abre tu correo con el texto ya puesto.')">Abrir en mi correo</button></div>
+              </div>
+
+              <div class="inline" data-k="follow">
+                <label class="req">Quién</label>
+                <input value="Jefe de Máquinas — LATERE">
+                <label class="req">¿Cuándo lo reviso?</label>
+                <div class="chips"><button class="on" onclick="pick(this)">En 3 días</button><button onclick="pick(this)">En 1 semana</button><button onclick="pick(this)">En 1 mes</button></div>
+                <div class="foot"><button class="btn pri" onclick="followed(this)">📌 Listo, hacer seguimiento</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row r" data-tags="DON CHICUETO Fallas repetidas">
+        <div class="rh">
+          <div class="grow">
+            <div class="ttl">El mismo defecto vuelve en los motores auxiliares de DON CHICUETO</div>
+            <div class="meta"><span class="chip">🚢 DON CHICUETO</span><span class="chip">👤 Superintendente técnico</span><span class="chip">⏱ 5 días</span></div>
+          </div>
+          <button class="btn pri" onclick="tog(this)">Resolver ›</button>
+        </div>
+        <div class="rb"><p style="margin:0;font-size:13px;color:var(--muted)">(Mismos 3 pasos que el tema de arriba.)</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gh a">🟠 Esta semana <span class="pill">2</span></div>
+      <div class="row a" data-tags="Barcazas MGT">
+        <div class="rh">
+          <div class="grow">
+            <div class="ttl">Certificados vencidos o por vencer en barcazas MGT</div>
+            <div class="meta"><span class="chip">🚢 Barcazas MGT</span><span class="chip">👤 Superintendente técnico</span><span class="chip">⏱ 7 días</span><span class="chip follow">📌 En seguimiento</span></div>
+          </div>
+          <button class="btn pri" onclick="tog(this)">Resolver ›</button>
+        </div>
+        <div class="rb"><p style="margin:0;font-size:13px;color:var(--muted)">(Mismos 3 pasos.)</p></div>
+      </div>
+      <div class="row a" data-tags="LATERE Plan de mantenimiento">
+        <div class="rh">
+          <div class="grow">
+            <div class="ttl">Cambio de refrigerante atrasado en 5 motores de LATERE</div>
+            <div class="meta"><span class="chip">🚢 LATERE</span><span class="chip">👤 Jefe de Máquinas</span><span class="chip">⏱ 15 días</span></div>
+          </div>
+          <button class="btn pri" onclick="tog(this)">Resolver ›</button>
+        </div>
+        <div class="rb"><p style="margin:0;font-size:13px;color:var(--muted)">(Mismos 3 pasos.)</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gh b">🔵 Este mes <span class="pill">1</span></div>
+      <div class="row b" data-tags="Repuestos MAO 01">
+        <div class="rh">
+          <div class="grow">
+            <div class="ttl">El stock de los repuestos críticos nunca se cargó en el sistema</div>
+            <div class="meta"><span class="chip">🚢 Toda la flota</span><span class="chip">👤 Compras</span><span class="chip">⏱ 30 días</span><span class="chip warn">⚠ Falta cargar datos</span></div>
+          </div>
+          <button class="btn pri" onclick="tog(this)">Resolver ›</button>
+        </div>
+        <div class="rb"><p style="margin:0;font-size:13px;color:var(--muted)">(Mismos 3 pasos.)</p></div>
+      </div>
+    </div>
+
+    <div class="cant">ℹ️ <b>El asesor no puede opinar sobre:</b> costos · órdenes de compra · plazos reales de entrega — el sistema no los registra.</div>
+  </section>
+
+  <!-- ═══ Seguimiento ═══ -->
+  <section id="fu" class="hidden">
+    <div class="fu">
+      <div class="when late">Vencido<br>hace 2 días</div>
+      <div class="grow"><div class="ttl">Causa raíz de la fuga del Generador #2</div><div class="meta">🚢 DON CHICUETO · 👤 Superintendente técnico</div></div>
+      <button class="btn" onclick="alert('Abre el correo de recordatorio, ya redactado.')">✉️ Recordar</button>
+      <button class="btn pri" onclick="verify(this)">✔ Ya está resuelto</button>
+    </div>
+    <div class="fu">
+      <div class="when soon">En 3 días</div>
+      <div class="grow"><div class="ttl">Certificados de barcazas MGT</div><div class="meta">🚢 Barcazas MGT · 👤 Superintendente técnico</div></div>
+      <button class="btn" onclick="alert('Abre el correo de recordatorio, ya redactado.')">✉️ Recordar</button>
+      <button class="btn pri" onclick="verify(this)">✔ Ya está resuelto</button>
+    </div>
+    <div class="note">“Ya está resuelto” pide una sola línea: <b>qué evidencia viste</b> (ej. “OT 0234 cerrada con fotos”). Sin eso no se cierra.</div>
+  </section>
+
+  <div class="note" style="margin-top:22px">
+    <b>Qué cambia respecto de V1:</b> de 8 números sueltos a 4 semáforos con palabras (Bien / Atención / Mal / Sin datos) ·
+    los 4 párrafos de la IA se reducen a una frase · “Crítica/Alta/Media” pasa a “Para hoy / Esta semana / Este mes” ·
+    5 botones por tema pasan a 1 (“Resolver”) · la evidencia se ve adentro, sin ventana aparte · el correo y el seguimiento se hacen
+    en el mismo lugar · 3 pestañas pasan a 2 (el historial queda en “ver análisis anteriores”).
+    <b>El buque es el del encabezado</b>: con “Todos los buques” se ve la flota; al elegir uno (arriba, o tocando su barra) la pantalla muestra sólo ese buque
+    y “Actualizar análisis” analiza sólo ese buque. Tocar un semáforo filtra la lista. El copiloto sigue a la derecha, igual que siempre.
+  </div>
+</div>
+
+<script>
+  function tog(b){const row=b.closest('.row');const was=row.classList.contains('open');document.querySelectorAll('.row.open').forEach(r=>r.classList.remove('open'));if(!was)row.classList.add('open');b.textContent=row.classList.contains('open')?'Cerrar ‹':'Resolver ›';}
+  function show(b,k){const step=b.closest('.step');step.querySelectorAll('.inline').forEach(x=>x.classList.toggle('on',x.dataset.k===k&&!x.classList.contains('on')));}
+  function pick(b){b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');}
+  function followed(b){const row=b.closest('.row');row.querySelector('.meta').insertAdjacentHTML('beforeend','<span class="chip follow">📌 En seguimiento</span>');b.closest('.inline').classList.remove('on');}
+  function tab(t){document.getElementById('todo').classList.toggle('hidden',t!=='todo');document.getElementById('fu').classList.toggle('hidden',t!=='fu');document.getElementById('tabTodo').classList.toggle('on',t==='todo');document.getElementById('tabFu').classList.toggle('on',t==='fu');}
+  function filterBy(tag){tab('todo');document.getElementById('fnote').classList.add('on');document.getElementById('fname').textContent=tag;document.querySelectorAll('#todo .row').forEach(r=>r.classList.toggle('hidden',!r.dataset.tags.includes(tag)));document.querySelectorAll('#todo .group').forEach(g=>g.classList.toggle('hidden',!g.querySelector('.row:not(.hidden)')));}
+  function clearFilter(){document.getElementById('fnote').classList.remove('on');document.querySelectorAll('#todo .row,#todo .group').forEach(r=>r.classList.remove('hidden'));}
+  // El buque es el del encabezado: la pantalla lo sigue, como el resto del sistema.
+  function pickVessel(v){const s=document.getElementById('hdrVessel');s.value=v;setVessel(v);}
+  function setVessel(v){
+    clearFilter();
+    document.getElementById('scopeName').textContent=v||'Toda la flota';
+    document.getElementById('shipsCard').style.display=v?'none':'';
+    document.querySelector('.hero').style.gridTemplateColumns=v?'1.1fr 1fr':'';
+    document.querySelectorAll('#todo .row').forEach(r=>r.classList.toggle('hidden',!!v&&!r.dataset.tags.includes(v)));
+    document.querySelectorAll('#todo .group').forEach(g=>g.classList.toggle('hidden',!g.querySelector('.row:not(.hidden)')));
+    const n={r:0,a:0,b:0};document.querySelectorAll('#todo .row:not(.hidden)').forEach(r=>['r','a','b'].forEach(k=>{if(r.classList.contains(k))n[k]++;}));
+    const bk=document.querySelectorAll('.bk .n');bk[0].textContent=n.r;bk[1].textContent=n.a;bk[2].textContent=n.b;
+    document.querySelector('#tabTodo .n').textContent=n.r+n.a+n.b;
+  }
+  function verify(b){const n=prompt('¿Qué evidencia viste? (obligatorio)');if(n&&n.trim()){b.closest('.fu').style.opacity=.45;b.textContent='✔ Verificado';b.disabled=true;}else if(n!==null){alert('Escribí qué evidencia viste para poder cerrarlo.');}}
+</script>
+</body>
+</html>

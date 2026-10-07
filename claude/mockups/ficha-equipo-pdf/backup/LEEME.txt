@@ -1,0 +1,4 @@
+Respaldo previo a implementar la ficha V2 (PROCEDER 30/09/2026).
+Estado inicial: commit 180c6ad (archivo sin cambios locales).
+Archivos a modificar: apps/api/src/tenant/pms/asset-pdf-service.ts
+VOLVER: cp backup/asset-pdf-service.ts.antes-v2 apps/api/src/tenant/pms/asset-pdf-service.ts (o git revert del commit de la V2).

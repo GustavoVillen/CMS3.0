@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V55 — Flujo rápido de análisis</title>
+<style>
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --surface2:#f8f9fb; --fg:#111827; --muted:#5b6474; --faint:#8a93a3;
+  --line:#e2e5ea; --accent:#6d28d9; --accent-fg:#fff; --accent-soft:#f3eefe;
+  --ok:#15803d; --ok-bg:#ecfdf3; --ok-line:#a7e3bd;
+  --warn:#a16207; --warn-bg:#fefbe8; --warn-line:#f1d77a;
+  --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#f5b5b5;
+  --rev:#475569; --rev-bg:#f1f5f9; --rev-line:#cbd5e1;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1220; --surface:#111a2b; --surface2:#0e1627; --fg:#e8ecf3; --muted:#a3adbd; --faint:#7b8698;
+    --line:#223049; --accent:#8b5cf6; --accent-fg:#fff; --accent-soft:#1e1838;
+    --ok:#4ade80; --ok-bg:#0f2a1c; --ok-line:#1f5a39;
+    --warn:#facc15; --warn-bg:#2a2410; --warn-line:#5c4c12;
+    --bad:#f87171; --bad-bg:#2d1414; --bad-line:#6b2424;
+    --rev:#cbd5e1; --rev-bg:#1a2335; --rev-line:#334155;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* ── Encabezado de la preview ── */
+.top{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1280px;margin:0 auto;padding:12px 16px 0}
+.top h1{margin:0;font-size:18px;font-weight:800}
+.top .sub{color:var(--muted);font-size:13px;margin:2px 0 10px}
+.demo-tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:#fff3cd;color:#7a5a00;font-size:11px;font-weight:800;vertical-align:middle;border:1px solid #f1d77a}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:thin}
+.tab{border:0;background:none;padding:10px 12px;font-size:13.5px;font-weight:700;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.page{max-width:1280px;margin:0 auto;padding:20px 16px 60px}
+.panel{display:none}.panel.on{display:block}
+
+/* ── Prototipo: layout ── */
+.proto{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.proto{grid-template-columns:1fr}}
+.side{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.scn{display:flex;flex-direction:column;gap:6px}
+.scn button{text-align:left;border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:8px 10px;font-size:13.5px;font-weight:600;cursor:pointer}
+.scn button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.notes p{margin:0 0 6px;font-size:13px}
+.notes ul{margin:0 0 8px;padding-left:18px;font-size:13px}
+.notes li{margin:2px 0}
+.notes .lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-top:8px}
+.stage{display:flex;justify-content:center}
+
+/* ── El "dispositivo" ── */
+.device{width:100%;max-width:440px;min-height:720px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.dv-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);min-height:56px}
+.dv-back{border:0;background:none;font-size:15px;font-weight:700;color:var(--accent);cursor:pointer;padding:6px 4px;min-height:40px}
+.dv-title{flex:1;font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:center}
+.xbtn{width:32px;height:32px;border-radius:999px;border:0;background:#dc2626;color:#fff;font-size:16px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.dots{display:flex;gap:6px;justify-content:center;padding:10px 14px 0;flex-wrap:wrap}
+.dot{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:var(--faint)}
+.dot i{width:9px;height:9px;border-radius:999px;background:var(--line);display:inline-block}
+.dot.done i{background:var(--ok)} .dot.cur{color:var(--fg)} .dot.cur i{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.dot + .dot::before{content:"";width:12px;height:2px;background:var(--line);display:inline-block;margin-right:1px}
+.dv-body{flex:1;display:flex;flex-direction:column;padding:22px 20px 20px;gap:16px}
+.dv-foot{padding:14px 20px 20px;display:flex;flex-direction:column;gap:10px}
+
+.big-title{font-size:24px;font-weight:900;margin:0;line-height:1.15;letter-spacing:-.01em}
+.lead{font-size:17px;margin:0;color:var(--fg)}
+.soft{font-size:14px;color:var(--muted);margin:0}
+.center{text-align:center;align-items:center}
+.grow{flex:1}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:60px;border-radius:14px;border:2px solid transparent;font-size:17px;font-weight:900;letter-spacing:.02em;cursor:pointer;padding:10px 16px;text-transform:uppercase}
+.btn svg{width:24px;height:24px;flex-shrink:0}
+.btn-primary{background:var(--accent);color:var(--accent-fg)}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-primary[disabled]{opacity:.6;cursor:progress}
+.btn-sec{background:var(--surface);border-color:var(--line);color:var(--fg)}
+.btn-sec:hover{border-color:var(--faint)}
+.btn-tile{min-height:112px;flex-direction:column;font-size:18px}
+.btn-tile svg{width:38px;height:38px}
+.btn-link{border:0;background:none;color:var(--accent);font-weight:700;font-size:14.5px;cursor:pointer;padding:10px;min-height:44px;text-decoration:underline;text-underline-offset:3px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
+
+/* Equipo */
+.eq{display:flex;gap:14px;align-items:center;border:2px solid var(--line);border-radius:16px;padding:16px;background:var(--surface2)}
+.eq .ic{width:64px;height:64px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.eq .ic svg{width:36px;height:36px}
+.eq b{display:block;font-size:19px;line-height:1.2}
+.eq small{display:block;color:var(--muted);font-size:13.5px;margin-top:3px}
+.says{border-left:4px solid var(--line);padding:6px 12px;font-size:14px;color:var(--muted)}
+.says q{color:var(--fg);font-weight:700;quotes:"“" "”"}
+.tiles{display:flex;flex-direction:column;gap:8px}
+.tile{display:flex;gap:12px;align-items:center;width:100%;text-align:left;border:2px solid var(--line);border-radius:14px;padding:12px;background:var(--surface);cursor:pointer;min-height:64px}
+.tile:hover{border-color:var(--accent)}
+.tile .ic{width:44px;height:44px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tile .ic svg{width:26px;height:26px}
+.tile b{display:block;font-size:16px}.tile small{color:var(--muted);font-size:13px}
+.search{display:flex;align-items:center;gap:8px;border:2px solid var(--line);border-radius:14px;padding:0 12px;min-height:56px;background:var(--surface)}
+.search:focus-within{border-color:var(--accent)}
+.search input{border:0;outline:0;background:none;font:inherit;font-size:17px;flex:1;color:var(--fg);min-width:0}
+.search svg{width:22px;height:22px;color:var(--faint)}
+.grp{font-size:12px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+
+/* Estados */
+.status{border-radius:18px;border:2px solid;padding:22px 18px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.status .sico{width:76px;height:76px;border-radius:999px;display:flex;align-items:center;justify-content:center;color:#fff}
+.status .sico svg{width:44px;height:44px}
+.status .stitle{font-size:24px;font-weight:900;letter-spacing:.01em;margin:0}
+.status p{margin:0;font-size:17px}
+.st-ok{background:var(--ok-bg);border-color:var(--ok-line)} .st-ok .sico{background:var(--ok)} .st-ok .stitle{color:var(--ok)}
+.st-warn{background:var(--warn-bg);border-color:var(--warn-line)} .st-warn .sico{background:#ca8a04} .st-warn .stitle{color:var(--warn)}
+.st-bad{background:var(--bad-bg);border-color:var(--bad-line)} .st-bad .sico{background:#dc2626} .st-bad .stitle{color:var(--bad)}
+.st-rev{background:var(--rev-bg);border-color:var(--rev-line)} .st-rev .sico{background:#64748b} .st-rev .stitle{color:var(--rev)}
+.basis{border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
+.basis summary{cursor:pointer;padding:12px 14px;font-weight:700;font-size:14.5px;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px}
+.basis summary::-webkit-details-marker{display:none}
+.basis summary::after{content:"▾";margin-left:auto;color:var(--faint)}
+.basis[open] summary::after{content:"▴"}
+.basis ul{margin:0;padding:0 14px 12px 32px;font-size:14px;color:var(--muted)}
+.basis li{margin:3px 0}
+
+.explain h2{margin:0;font-size:22px;font-weight:900;display:flex;align-items:center;gap:10px;color:var(--bad)}
+.explain h2 .mini{width:34px;height:34px;border-radius:999px;background:#dc2626;color:#fff;display:flex;align-items:center;justify-content:center}
+.explain h2 .mini svg{width:20px;height:20px}
+.explain p{margin:6px 0 0;font-size:17px}
+.action{border:2px solid var(--accent);border-radius:16px;padding:14px;background:var(--accent-soft)}
+.action .k{font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+.action .t{font-size:18px;font-weight:800;margin-top:4px;display:flex;gap:8px}
+.action .t svg{width:24px;height:24px;flex-shrink:0;color:var(--accent);margin-top:1px}
+
+/* OT */
+.ot{border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.ot .oh{background:var(--surface2);padding:10px 14px;font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--line)}
+.ot dl{margin:0;padding:6px 14px}
+.ot dt{font-size:12px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:10px}
+.ot dd{margin:2px 0 0;font-size:16.5px;font-weight:700}
+.ot dd ol{margin:4px 0 0;padding-left:20px;font-weight:500;font-size:15px}
+.ot textarea{width:100%;font:inherit;font-size:16px;font-weight:600;border:2px solid var(--accent);border-radius:10px;padding:8px;background:var(--surface);color:var(--fg);resize:vertical}
+.prio{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:14px;font-weight:900}
+.prio-high{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+.why{font-size:13px;color:var(--muted);font-weight:500}
+.more{border-top:1px solid var(--line);background:var(--surface2);padding:4px 14px 12px}
+.more dt{font-size:11.5px}.more dd{font-size:14px;font-weight:600}
+.edited{font-size:12px;color:var(--warn);font-weight:700}
+
+.q{font-size:18px;font-weight:800;margin:0}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;align-items:center;gap:12px;border:2px solid var(--line);border-radius:14px;padding:12px 14px;min-height:60px;background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.opt[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.opt .radio{width:22px;height:22px;border-radius:999px;border:2px solid var(--faint);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.opt[aria-checked="true"] .radio{border-color:var(--accent)}
+.opt[aria-checked="true"] .radio::after{content:"";width:11px;height:11px;border-radius:999px;background:var(--accent)}
+.opt b{font-size:16.5px;display:block}.opt small{color:var(--muted);font-size:13px}
+.sug{margin-left:auto;font-size:11px;font-weight:900;color:var(--accent);background:var(--surface);border:1px solid var(--accent);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.inline-input{width:100%;min-height:52px;border:2px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:17px;background:var(--surface);color:var(--fg)}
+.hint-warn{font-size:14px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;padding:8px 10px}
+
+.summary{border:1px solid var(--line);border-radius:16px;padding:6px 16px 12px;background:var(--surface2)}
+.summary dt{font-size:12px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:10px}
+.summary dd{margin:2px 0 0;font-size:17px;font-weight:800}
+
+.bigicon{width:96px;height:96px;border-radius:999px;display:flex;align-items:center;justify-content:center;margin:10px auto 0;color:#fff}
+.bigicon svg{width:54px;height:54px}
+.code{font-family:ui-monospace,Consolas,monospace;font-size:26px;font-weight:900;color:var(--accent)}
+
+.spin{width:72px;height:72px;border-radius:999px;border:7px solid var(--accent-soft);border-top-color:var(--accent);animation:sp 1s linear infinite;margin:40px auto 10px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+.bar{height:8px;border-radius:999px;background:var(--accent-soft);overflow:hidden;max-width:260px;margin:14px auto 0}
+.bar i{display:block;height:100%;width:0;background:var(--accent);animation:fill 2.1s ease-out forwards}
+@keyframes fill{to{width:100%}}
+
+/* Hoja de detalles técnicos y diálogos */
+.sheet-bg{position:absolute;inset:0;background:rgba(15,23,42,.45);display:none;z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:88%;background:var(--surface);border-radius:20px 20px 0 0;box-shadow:var(--shadow);display:none;flex-direction:column;z-index:6}
+.sheet.on,.sheet-bg.on{display:flex}
+.sheet .sh{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.sheet .sh b{flex:1;font-size:16px}
+.sheet .sb{overflow:auto;padding:12px 16px 18px;font-size:14px}
+.ptab{width:100%;border-collapse:collapse;font-size:13.5px}
+.ptab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);padding:6px 4px;border-bottom:1px solid var(--line)}
+.ptab td{padding:8px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+.ptab td small{display:block;color:var(--muted);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:800;border-radius:999px;padding:1px 8px;border:1px solid;white-space:nowrap}
+.p-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-line)}
+.p-warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-line)}
+.p-bad{color:var(--bad);background:var(--bad-bg);border-color:var(--bad-line)}
+.p-rev{color:var(--rev);background:var(--rev-bg);border-color:var(--rev-line)}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:4px 10px;font-size:13.5px;margin:6px 0 12px}
+.kv span:nth-child(odd){color:var(--faint);font-weight:700}
+.dlg{position:absolute;left:18px;right:18px;top:50%;transform:translateY(-50%);background:var(--surface);border-radius:18px;box-shadow:var(--shadow);border:1px solid var(--line);padding:20px;display:none;flex-direction:column;gap:12px;z-index:7}
+.dlg.on{display:flex}
+.dlg h4{margin:0;font-size:19px;font-weight:900}
+.dlg p{margin:0;font-size:16px}
+
+/* ── Entrada: tarjeta del Inicio y mosaico de la app a bordo ── */
+.dash-card{display:flex;align-items:center;border-radius:12px;background:var(--ok-bg);border:1px solid var(--ok-line)}
+.dash-main{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:14px 8px 14px 14px;border:0;background:none;cursor:pointer;text-align:left;font-size:13.5px}
+.dash-ic.flask{width:22px;height:22px;flex-shrink:0;background:var(--ok);-webkit-mask:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.3L4.2 19a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3L14 9.3V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>') center/contain no-repeat;mask:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.3L4.2 19a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3L14 9.3V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>') center/contain no-repeat}
+.dash-fast,.dash-grid{border:0;background:none;cursor:pointer;border-radius:8px;padding:5px;margin-right:6px;color:var(--faint);font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;min-width:40px;min-height:40px}
+.dash-fast{color:var(--fg)}
+.dash-fast:hover,.dash-grid:hover{background:var(--surface);color:var(--accent)}
+.dash-fast[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:1px}
+.runner{display:inline-block;width:30px;height:24px;background:currentColor;-webkit-mask:var(--runner) center/contain no-repeat;mask:var(--runner) center/contain no-repeat}
+:root{--runner:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 24"><g stroke="black" stroke-width="2.4" stroke-linecap="round" fill="none"><path d="M1 6h9"/><path d="M3 10.5h7"/><path d="M1 15h6"/><path d="M13.5 9.5l4-2.5 3.5 1.5 2.5 3.5"/><path d="M20.5 8l-3 6.5 3.5 2.5-1.5 5"/><path d="M17.5 14.5l-3 3.5h-4"/></g><circle cx="23" cy="3.6" r="2.6" fill="black"/></svg>')}
+.ob-tile{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:16px;padding:10px;background:var(--surface)}
+.ob-ic{width:38px;height:38px;border-radius:11px;background:var(--surface2);color:var(--muted);display:flex;align-items:center;justify-content:center}
+.ob-ic .runner{width:26px;height:20px}
+.ob-tile b{display:block;font-size:14px}.ob-tile small{font-size:12px;color:var(--faint)}
+
+/* ── Documentación ── */
+.doc{max-width:980px}
+.doc h2{font-size:22px;margin:4px 0 6px}
+.doc h3{font-size:16.5px;margin:22px 0 8px}
+.doc p,.doc li{font-size:15px}
+.doc .intro{color:var(--muted);margin-top:0}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.steps li{counter-increment:s;display:flex;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.steps li::before{content:counter(s);width:28px;height:28px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.steps li b{display:block}
+.steps .mod{font-size:11px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat b{display:block;font-size:26px;font-weight:900;line-height:1.1}
+.stat span{font-size:13px;color:var(--muted)}
+.stat .from{font-size:13px;color:var(--faint);text-decoration:line-through;margin-right:6px}
+.prob{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.prob .card h4{margin:0 0 6px;font-size:14.5px}
+.prob .card ul{margin:0;padding-left:18px;font-size:14px}
+.prob .card li{margin:4px 0}
+.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+.tbl th{background:var(--surface2);text-align:left;padding:9px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl-wrap{overflow-x:auto}
+.scr{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.scr .card h4{margin:0 0 2px;font-size:15.5px}
+.scr .card .obj{font-size:13px;color:var(--muted);margin:0 0 8px}
+.scr .card dl{margin:0;display:grid;grid-template-columns:96px 1fr;gap:4px 8px;font-size:13.5px}
+.scr .card dt{color:var(--faint);font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+.scr .card dd{margin:0}
+.yes{color:var(--ok);font-weight:800}.mid{color:var(--warn);font-weight:800}
+.dec{display:flex;flex-direction:column;gap:10px}
+.dec .card h4{margin:0 0 4px;font-size:15px}
+.dec .card p{margin:4px 0;font-size:14px}
+.tag{display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.tag-b{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+.tag-w{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.tag-o{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+.flow-wrap{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px;overflow-x:auto}
+.flow-wrap svg{display:block;min-width:760px;width:100%;height:auto}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <h1>Preview V55 — Flujo rápido: del informe de laboratorio a la OT <span class="demo-tag">DATOS DE EJEMPLO · NO CONECTADO</span></h1>
+    <p class="sub">Se entra por el botón del corredor dentro de «Cargar análisis de laboratorio» del Inicio (y en la app a bordo). Va en paralelo al flujo normal, que queda igual, y deja el mismo resultado: mismos servicios, mismo orden, mismos datos.</p>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="proto" aria-selected="true">5 · Prototipo</button>
+      <button class="tab" role="tab" data-tab="same" aria-selected="false">Mismo resultado</button>
+      <button class="tab" role="tab" data-tab="hoy" aria-selected="false">1 · Cómo funciona hoy</button>
+      <button class="tab" role="tab" data-tab="prob" aria-selected="false">2 · Problemas</button>
+      <button class="tab" role="tab" data-tab="prop" aria-selected="false">3 · Flujo propuesto</button>
+      <button class="tab" role="tab" data-tab="flow" aria-selected="false">4 · Flujograma</button>
+      <button class="tab" role="tab" data-tab="audit" aria-selected="false">6 · Auditoría de simplicidad</button>
+      <button class="tab" role="tab" data-tab="dec" aria-selected="false">Decisiones</button>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+
+<!-- ═════════════ PROTOTIPO ═════════════ -->
+<section class="panel on" id="p-proto">
+  <div class="proto">
+    <aside class="side">
+      <div class="card">
+        <h3>Elegí qué informe probar</h3>
+        <div class="scn" id="scenarios"></div>
+      </div>
+      <div class="card notes" id="notes"></div>
+      <div class="card notes">
+        <h3>Dónde se entra</h3>
+        <div class="lbl">Inicio (tablero) · la tarjeta de siempre</div>
+        <div class="dash-card">
+          <button class="dash-main" data-entry="batch"><span class="dash-ic flask"></span><b>Cargar análisis de laboratorio</b></button>
+          <button class="dash-fast" data-entry="fast" title="Flujo rápido" aria-label="Flujo rápido"><span class="runner"></span></button>
+          <button class="dash-grid" data-entry="list" title="Ver Muestreos y Análisis" aria-label="Ver Muestreos y Análisis">▦</button>
+        </div>
+        <p style="margin-top:8px">El cuerpo sigue abriendo la carga normal; la cuadrícula, el listado. El <b>corredor</b> (nuevo) abre el flujo rápido. Al pasar el mouse dice «Flujo rápido».</p>
+        <div class="lbl">App a bordo (celular)</div>
+        <div class="ob-tile"><span class="ob-ic"><span class="runner"></span></span><span><b>Análisis de laboratorio</b><small>Rápido: foto del informe</small></span></div>
+        <p style="margin-top:8px">Un mosaico más en «Lo demás», para el Capitán y el JM. Abre este mismo flujo.</p>
+      </div>
+    </aside>
+    <div class="stage">
+      <div class="device" id="device" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ MISMO RESULTADO ═════════════ -->
+<section class="panel doc" id="p-same" style="max-width:1180px">
+  <h2>Mismo resultado que el flujo normal</h2>
+  <p class="intro">Otra puerta, la misma casa. El flujo rápido no tiene servicios propios. Para el análisis usa los mismos que la carga normal de la tarjeta «Cargar análisis de laboratorio» (leer → guardar → OT de la rutina). Para la OT correctiva usa los mismos que Defectos → Nueva OT. Todo en el mismo orden, así que las reglas, los permisos, la auditoría y los PDF son los mismos, y cualquier cambio futuro en el flujo normal le llega solo al rápido.</p>
+
+  <div class="stats">
+    <div class="stat"><b>= 1</b><span>análisis con su resultado y el PDF del análisis guardado</span></div>
+    <div class="stat"><b>= 1</b><span>defecto completo, cerrado en la OT y con su PDF guardado</span></div>
+    <div class="stat"><b>= 1</b><span>OT correctiva «En preparación», unida al defecto</span></div>
+    <div class="stat"><b>0</b><span>reglas salteadas</span></div>
+  </div>
+
+  <h3>Paso por paso</h3>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>#</th><th>Qué queda en el sistema</th><th>Flujo normal: quién lo pone</th><th>Flujo rápido: quién lo pone</th><th>Servicio</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Informe original guardado y leído (buque, equipo, n.º de muestra, valores, gravedad)</td><td>Carga normal: se sube y se lee</td><td>Se sube en la primera pantalla y se lee con el mismo lector</td><td>El mismo</td></tr>
+      <tr><td>2</td><td>Control de repetidos por n.º de muestra</td><td>La carga normal lo descarta y avisa</td><td>Igual: pantalla «Este informe ya fue cargado»</td><td>El mismo</td></tr>
+      <tr><td>3</td><td>Muestra: si se mandó con una OT, se completa <b>esa</b>; si no, se crea una nueva</td><td>Automático (la planilla lo muestra)</td><td>Automático (se ve en la pantalla del equipo)</td><td>El mismo</td></tr>
+      <tr><td>4</td><td>Resultado (valores, conclusión, informe adjunto) + PDF del análisis en el Drive</td><td>El usuario revisa la planilla y confirma</td><td>El usuario sólo confirma el equipo; la gravedad es la que leyó la IA, sin tocar</td><td>El mismo</td></tr>
+      <tr><td>5</td><td>Defecto (si es grave): Alta o Crítica, clasificación «Análisis de fluidos», descripción con el resultado</td><td>Automático</td><td>Automático</td><td>El mismo</td></tr>
+      <tr><td>5b</td><td>OT de la rutina con su pedido al laboratorio (si la muestra no vino de una OT)</td><td>Pregunta al final: «¿Abrir una sola OT con su pedido al laboratorio?»</td><td>La misma pregunta, en una pantalla con SÍ / AHORA NO</td><td>El mismo</td></tr>
+      <tr><td colspan="5" style="background:var(--surface2);font-weight:800">De acá en adelante, sólo si el resultado es grave (camino normal: ficha del análisis → Defectos → Nueva OT)</td></tr>
+      <tr><td>6</td><td>Defecto completo: acción inmediata y análisis de causa (método, causa inmediata, causa raíz, acciones)</td><td>El usuario en Defectos, a mano o con los botones «Sugerir con IA» y «Analizar con IA»</td><td>Los mismos dos servicios de IA; el usuario los ve en «Ver más detalles» y confirma</td><td>El mismo</td></tr>
+      <tr><td>7</td><td>OT correctiva: Correctivo no programado, prioridad = gravedad del defecto, criticidad B, tarea armada desde el defecto</td><td>Precargado desde el defecto</td><td>Precargado desde el defecto</td><td>El mismo</td></tr>
+      <tr><td>8</td><td>Título de la OT</td><td>Lo escribe el usuario</td><td>Lo arma el sistema («problema — equipo»); se puede corregir</td><td>El mismo</td></tr>
+      <tr><td>9</td><td>Responsable y fecha límite</td><td>Los elige el usuario (opcionales)</td><td>Los elige el usuario, con sugerencia ya marcada</td><td>El mismo</td></tr>
+      <tr><td>10</td><td>Recuadros del formulario de OT: solicitado por, asignado a, sistema</td><td>El usuario o el asistente del formulario</td><td>Los propone el sistema según el equipo (Máquinas / Tripulación / Máquinas); se ven en «Ver más detalles»</td><td>El mismo</td></tr>
+      <tr><td>11</td><td>Condición del buque, ubicación, viaje, criterios de aceptación, LOTO, riesgo</td><td>Opcionales al crear; se completan en la OT antes de enviarla a aprobar</td><td>Igual: quedan para completar en la OT</td><td>El mismo</td></tr>
+      <tr><td>12</td><td>Defecto unido a la OT nueva</td><td>Automático al guardar la OT</td><td>Automático al crear la OT</td><td>El mismo</td></tr>
+      <tr><td>13</td><td>Defecto cerrado: «Reparación permanente derivada a una orden de trabajo nueva» + verificación de eficacia a 30 días</td><td>Automático</td><td>Automático</td><td>El mismo</td></tr>
+      <tr><td>14</td><td>PDF del defecto en el Drive</td><td>Automático al cerrarlo</td><td>Automático al cerrarlo</td><td>El mismo</td></tr>
+      <tr><td>15</td><td>OT de origen del defecto</td><td>No hay (el defecto nace del análisis): no se cierra nada</td><td>Igual</td><td>—</td></tr>
+      <tr><td>16</td><td>OT en «En preparación»; enviar a aprobar → aprobar → autorizar</td><td>A mano, como toda OT</td><td>Igual</td><td>El mismo</td></tr>
+      <tr><td>17</td><td>Auditoría: quién, cuándo, qué</td><td>Mismos eventos</td><td>Mismos eventos</td><td>El mismo</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Lo único que cambia</h3>
+  <ul>
+    <li><b>Las pantallas</b>: un paso por pantalla, sin cambiar de módulo.</li>
+    <li><b>Quién escribe los textos</b>: en el rápido los propone el sistema (con los mismos servicios de IA que ya tiene el flujo normal) y el usuario los aprueba o corrige.</li>
+    <li><b>Un aviso de más</b>: si el equipo ya tiene una OT abierta, el rápido la muestra antes de crear otra. Si el usuario sigue, el resultado es el mismo.</li>
+  </ul>
+
+  <h3>Lo que saqué del V53 porque daba un resultado distinto</h3>
+  <ul>
+    <li><s>Análisis de causa al cerrar la OT</s> → el rápido lo completa antes, como exige hoy el defecto.</li>
+    <li><s>«Sumar el análisis a la OT abierta»</s> → sólo avisa y deja ver esa OT.</li>
+    <li><s>Enviar la OT a aprobar al crearla</s> → queda «En preparación», como hoy.</li>
+    <li><s>Unir la rutina de muestreo sin preguntar</s> → se pregunta, como hoy.</li>
+    <li><b>Corregido:</b> en Mercurio la prioridad Alta es «dentro de las 24 hs» (no «esta semana»). La fecha sugerida ahora respeta el plazo del formulario.</li>
+  </ul>
+
+  <h3>Cómo se comprueba antes de entregarlo</h3>
+  <p>Prueba de igualdad en la base local: el mismo informe se carga por el flujo normal y por el rápido. Después se comparan, campo por campo, el análisis, el defecto, la OT, la auditoría y los PDF archivados. Si hay una diferencia que no sea texto escrito por la persona o por la IA, no se entrega.</p>
+</section>
+
+<!-- ═════════════ 1 · HOY ═════════════ -->
+<section class="panel doc" id="p-hoy">
+  <h2>Cómo funciona hoy</h2>
+  <p class="intro">Leído del código actual: el asistente «Escanear reporte» de Análisis, la ficha del análisis, Defectos y la ventana Nueva OT. Caso de un resultado grave (el más largo).</p>
+  <ol class="steps">
+    <li><div><span class="mod">Análisis</span><b>Botón «Escanear reporte»</b>Hay además «Nueva muestra» y «Carga masiva» al lado: tres entradas para cosas parecidas.</div></li>
+    <li><div><span class="mod">Análisis · ventana</span><b>Elegir el buque antes de subir nada</b>La lista muestra códigos (DCH, LTE), no nombres. El recuadro para subir queda apagado hasta elegirlo. Debajo, un campo opcional «Número de muestra» con una explicación.</div></li>
+    <li><div><span class="mod">Análisis · ventana</span><b>Subir foto o PDF</b>La IA lee el informe (esto ya funciona bien y traduce la escala del laboratorio sin reinterpretarla).</div></li>
+    <li><div><span class="mod">Análisis · ventana</span><b>Formulario de revisión: 10 campos</b>Equipo, tipo de fluido, producto, fecha de muestra, horas, fecha de recepción, laboratorio, referencia, <b>veredicto</b> (lista con NORMAL / CAUTION / CRITICAL / ACTION_REQUIRED, en inglés) y resumen. Cada uno con su insignia de confianza alta/media/baja. Los errores salen en texto rojo al pie.</div></li>
+    <li><div><span class="mod">Servidor</span><b>Guardar</b>Se crea el análisis. Si el veredicto es grave, el sistema crea solo un <b>Defecto</b> (Alta o Crítica).</div></li>
+    <li><div><span class="mod">Análisis · otra ventana</span><b>«¿Corresponde a este ítem del plan?»</b>Si el equipo tiene rutina de toma de muestra, pregunta si vincularla y abre la OT <i>de la rutina de muestreo</i> — no la de la reparación.</div></li>
+    <li><div><span class="mod">Análisis · ventana</span><b>«Listo»</b> y se abre la ficha del análisis.</div></li>
+    <li><div><span class="mod">Análisis · ficha</span><b>Guía «¿Qué hacer con este resultado?»</b>Cinco pasos; el botón «Ir a crear la OT» lleva a Defectos.</div></li>
+    <li><div><span class="mod">Defectos</span><b>El defecto exige 6 datos antes de dejar abrir la OT</b>Descripción, clasificación, acción inmediata y —por ser Alta/Crítica— metodología de RCA, causa inmediata y causa raíz. Todo esto <b>antes</b> de haber revisado el equipo.</div></li>
+    <li><div><span class="mod">Nueva OT</span><b>Formulario general de OT</b>Viene precargado (buque, equipo, correctiva, prioridad, tarea), pero muestra ~15 campos: título, fechas, horas estimadas, responsable, ubicación, condición operativa, viaje, etc.</div></li>
+    <li><div><span class="mod">Servidor</span><b>Al guardar la OT</b>Une el defecto con la OT nueva, lo pasa a Resuelto y lo <b>cierra</b> con la nota «Reparación permanente derivada a una orden de trabajo nueva», le pone fecha de verificación de eficacia (30 días) y <b>guarda el PDF del defecto</b> en el Drive. Si el defecto hubiera nacido de otra OT, la cierra y guarda su PDF; un defecto de laboratorio no tiene OT de origen, así que ahí no cierra nada.</div></li>
+    <li><div><span class="mod">Órdenes de trabajo</span><b>La OT nace «En preparación»</b>Después: Envía a aprobar → Aprueba → Autoriza (tierra).</div></li>
+  </ol>
+  <div class="stats">
+    <div class="stat"><b>3</b><span>pantallas del sistema (Análisis, Defectos, OT)</span></div>
+    <div class="stat"><b>~7</b><span>ventanas distintas</span></div>
+    <div class="stat"><b>~30</b><span>campos a la vista</span></div>
+    <div class="stat"><b>15+</b><span>decisiones del usuario, varias técnicas</span></div>
+  </div>
+  <h3>Lo que ya está bien y se conserva</h3>
+  <ul>
+    <li>La IA ya lee el informe y toma la conclusión <i>del laboratorio</i> sin inventar otra.</li>
+    <li>El informe original queda guardado y el análisis alimenta la tendencia del equipo.</li>
+    <li>El defecto se crea solo cuando el resultado es grave, y la OT correctiva nace <i>desde el defecto</i> (decisión V46): la cadena Análisis → Defecto → OT queda igual.</li>
+    <li>La IA sólo sugiere equipos que existen en el buque (no inventa).</li>
+    <li>El análisis de IA con historial y OTs previas ya existe (hoy se genera aparte, en segundo plano).</li>
+  </ul>
+</section>
+
+<!-- ═════════════ 2 · PROBLEMAS ═════════════ -->
+<section class="panel doc" id="p-prob">
+  <h2>Problemas</h2>
+  <p class="intro">Sólo los que afectan de verdad a alguien que usa poco la computadora.</p>
+  <div class="prob">
+    <div class="card"><h4>Pasos que sobran</h4><ul>
+      <li>Elegir el buque antes de subir el informe (a bordo, el usuario tiene un solo buque).</li>
+      <li>«Número de muestra» antes de ver el informe: se pide algo que el sistema puede leer.</li>
+      <li>Ventana de vínculo al plan de muestreo: una decisión administrativa que el tripulante no entiende.</li>
+      <li>Salto a Defectos y después a Nueva OT: dos pantallas más, con otra lógica.</li>
+      <li>«Listo» a mitad de camino: en un resultado grave, el trabajo recién empieza.</li>
+    </ul></div>
+    <div class="card"><h4>Decisiones demasiado complejas</h4><ul>
+      <li><b>El usuario elige el veredicto</b> (la gravedad), con códigos en inglés.</li>
+      <li>Tipo de fluido en una lista técnica.</li>
+      <li>RCA (metodología, causa inmediata, causa raíz) antes de inspeccionar el equipo.</li>
+      <li>Tipo de OT y prioridad visibles y editables en el formulario general.</li>
+    </ul></div>
+    <div class="card"><h4>Campos que deberían salir de la vista</h4><ul>
+      <li>Fecha de recepción, referencia, laboratorio, producto, horas: se guardan igual, se ven en «Detalles».</li>
+      <li>Insignias de confianza alta/media/baja: al usuario no le dicen qué hacer.</li>
+      <li>En la OT: viaje, ubicación, condición operativa, horas estimadas, fecha de apertura.</li>
+    </ul></div>
+    <div class="card"><h4>Lo que debería completarse solo</h4><ul>
+      <li>Buque (del usuario) y equipo (del informe).</li>
+      <li>Clasificación y acción inmediata del defecto.</li>
+      <li>Título, tarea, prioridad y fecha límite de la OT.</li>
+      <li>Responsable sugerido.</li>
+    </ul></div>
+    <div class="card"><h4>Riesgos de error</h4><ul>
+      <li>La carga de a uno <b>no controla informes repetidos</b> (la masiva sí).</li>
+      <li>Si el laboratorio dice «normal», <b>los límites de la empresa no se miran</b>: un valor fuera de límite puede pasar sin aviso.</li>
+      <li>Se puede elegir un equipo distinto al del informe sin ninguna advertencia.</li>
+      <li>Se puede abrir una OT nueva aunque ya haya una abierta por lo mismo.</li>
+      <li>El veredicto se cambia a mano sin dejar constancia del por qué.</li>
+      <li>Errores del servidor mostrados tal cual, en rojo al pie.</li>
+    </ul></div>
+    <div class="card"><h4>Puntos de confusión</h4><ul>
+      <li>Muestra, análisis, resultado, reporte: cuatro palabras para lo mismo.</li>
+      <li>«Defecto» aparece como paso obligatorio sin que nadie explique por qué.</li>
+      <li>La OT que ofrece el paso 6 es la de la rutina, no la del arreglo.</li>
+      <li>Qué hacer con un resultado grave aparece recién en la ficha, después de «Listo».</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ═════════════ 3 · PROPUESTA ═════════════ -->
+<section class="panel doc" id="p-prop">
+  <h2>Flujo propuesto</h2>
+  <p class="intro">Flujo rápido, en paralelo al normal: cargar informe → confirmar equipo → ver resultado → confirmar acción → terminado. Todo lo demás lo hace el sistema con los mismos servicios del flujo normal. El Defecto se sigue creando, completando y cerrando igual; el usuario no tiene que ir a buscarlo.</p>
+  <div class="stats">
+    <div class="stat"><span class="from">3</span><b>1</b><span>pantalla del sistema (todo en el asistente)</span></div>
+    <div class="stat"><span class="from">~30</span><b>0–2</b><span>campos para escribir (sólo si algo falta)</span></div>
+    <div class="stat"><span class="from">15+</span><b>4</b><span>decisiones: equipo, acción, responsable/fecha, confirmar</span></div>
+    <div class="stat"><span class="from">~20</span><b>7</b><span>toques en el caso grave; <b>3</b> en el normal</span></div>
+  </div>
+
+  <h3>Pantalla por pantalla</h3>
+  <div class="scr" id="screenSpecs"></div>
+
+  <h3>Cambios principales</h3>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Hoy</th><th>Propuesta</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td>Elegir buque y n.º de muestra antes de subir.</td><td>Primero el informe. El buque sale del usuario; el n.º de muestra, del informe.</td><td>Nada de formularios antes del documento.</td></tr>
+      <tr><td>Formulario de 10 campos para revisar lo que leyó la IA.</td><td>Sólo se confirma el equipo. Lo demás se guarda y se ve en «Detalles técnicos».</td><td>El usuario no puede validar viscosidades; sí puede reconocer su equipo.</td></tr>
+      <tr><td>El usuario elige el veredicto.</td><td>Se usa la gravedad que leyó la IA del informe (la misma que el flujo normal le propone al usuario). Si el informe no la trae, no se adivina: el análisis queda para la oficina.</td><td>Decisión técnica fuera del usuario, con criterio visible.</td></tr>
+      <tr><td>Ventana «¿corresponde a este ítem del plan?».</td><td>La misma pregunta, en una pantalla con SÍ / NO y el nombre de la rutina.</td><td>Mismo resultado, más fácil de entender.</td></tr>
+      <tr><td>Ir a Defectos, completar 6 datos, ir a Nueva OT, completar ~15.</td><td>Borrador de OT armado solo (defecto incluido). El usuario lo mira, elige responsable y fecha, y confirma.</td><td>Mismo resultado en la base, sin cambiar de pantalla.</td></tr>
+      <tr><td>«Listo» a mitad del caso grave.</td><td>«Listo» sólo cuando la OT existe.</td><td>El usuario no cree que terminó cuando no terminó.</td></tr>
+      <tr><td>Sin control de repetidos en la carga de a uno.</td><td>Mismo control que la carga masiva (n.º de muestra; en vibraciones buque + equipo + fecha).</td><td>Evita análisis y defectos duplicados.</td></tr>
+      <tr><td>Se puede abrir otra OT por lo mismo sin enterarse.</td><td>Si el equipo ya tiene una OT abierta, se muestra antes y se pregunta si es el mismo problema. Sólo avisa.</td><td>Evita trabajo repetido sin cambiar el resultado.</td></tr>
+      <tr><td>Errores en rojo al pie, con el texto del servidor.</td><td>Pantalla o ventanita con qué pasó + qué hacer + un botón.</td><td>Regla del CMS (AlertDialog) y lenguaje simple.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Qué NO cambia</h3>
+  <ul>
+    <li><b>El flujo normal</b> («Escanear reporte» → ficha → Defectos → Nueva OT) queda igual y sigue disponible.</li>
+    <li>La cadena Análisis → Defecto → OT correctiva (la OT sigue naciendo desde el defecto, y el defecto se cierra dentro de ella con su PDF).</li>
+    <li>La aprobación y autorización de la OT en tierra.</li>
+    <li>Quién puede hacer qué (ver «Decisiones pendientes» → Permisos).</li>
+    <li>La ficha del análisis, la carga masiva y la carga manual siguen como están (para la oficina).</li>
+  </ul>
+</section>
+
+<!-- ═════════════ 4 · FLUJOGRAMA ═════════════ -->
+<section class="panel doc" id="p-flow" style="max-width:none">
+  <h2>Flujograma</h2>
+  <p class="intro">Flujo rápido. Recuadro gris con borde punteado = lo hace una persona de la oficina. Todo lo demás lo hace el sistema (con los mismos servicios del flujo normal) o el usuario de a bordo con un toque.</p>
+  <div class="flow-wrap"><svg id="flowSvg" viewBox="0 0 980 1420" role="img" aria-label="Flujograma del análisis de laboratorio guiado"></svg></div>
+</section>
+
+<!-- ═════════════ 6 · AUDITORÍA ═════════════ -->
+<section class="panel doc" id="p-audit" style="max-width:1180px">
+  <h2>Auditoría de simplicidad</h2>
+  <p class="intro">Cada pantalla contra las 7 preguntas. <span class="yes">✔</span> = cumple · <span class="mid">▲</span> = cumple con reserva (explicada).</p>
+  <div class="tbl-wrap"><table class="tbl" id="auditTbl"></table></div>
+  <h3>Rediseños que salieron de esta auditoría (ya aplicados en el prototipo)</h3>
+  <ol>
+    <li><b>«Explicar el problema» y «Acción recomendada» quedaron en una sola pantalla.</b> Separadas, la primera no tenía ninguna decisión: era un toque de más.</li>
+    <li><b>«Análisis automático» se fundió con una espera corta</b> («Revisando los resultados…»). No hay nada que el usuario tenga que hacer ahí.</li>
+    <li><b>Responsable y fecha van juntos y ya elegidos</b> según la prioridad. Si están bien, es un solo toque; separarlos duplicaba pantallas sin agregar control.</li>
+    <li><b>Se sacaron de la primera pantalla el buque y el número de muestra.</b></li>
+    <li><b>«No, es otro» abre un buscador con los equipos que llevan análisis</b>, no el árbol de equipos. Si el elegido no coincide con lo que dice el informe (marca/modelo), avisa antes de seguir.</li>
+    <li><b>Resultado amarillo sin OT</b>: en lugar de preguntar «¿querés abrir una OT?», el sistema dice qué hacer y deja una salida («reportar un defecto») que abre el formulario de siempre. La decisión técnica no queda en el usuario.</li>
+    <li><b>V54 · Mismo resultado</b>: se volvieron a poner la pregunta de la rutina (P3d) y el análisis de causa antes de la OT, y se sacaron «sumar a la OT abierta» y «enviar a aprobar solo». Cuesta una pantalla más cuando hay rutina, a cambio de que el rápido deje lo mismo que el normal.</li>
+  </ol>
+</section>
+
+<!-- ═════════════ DECISIONES ═════════════ -->
+<section class="panel doc" id="p-dec">
+  <h2>Decisiones</h2>
+  <p class="intro">Respuestas del 18/09. Con la regla «mismo resultado que el flujo normal», lo que el rápido agrega es sólo control: cuando duda, no decide y deja el caso para la oficina, que lo termina por el flujo normal.</p>
+  <div class="dec">
+    <div class="card"><h4>A · El informe no trae la gravedad <span class="tag tag-o">✔ decidido</span></h4>
+      <p>El rápido guarda el análisis <b>sin resultado</b> (pendiente) y la oficina lo termina por el flujo normal. Al implementar verifico dónde queda el informe mientras tanto: hoy el archivo se guarda junto con el resultado.</p></div>
+    <div class="card"><h4>B · Informe repetido <span class="tag tag-o">✔ decidido · los dos flujos</span></h4>
+      <p>La carga del Inicio ya lo controla y el rápido usa ese mismo control. Se agrega también a «Escanear reporte» de Análisis, que hoy no lo tiene.</p></div>
+    <div class="card"><h4>C · Laboratorio y límites de la empresa <span class="tag tag-o">✔ decidido · sólo el rápido</span></h4>
+      <p>El rápido mira las dos cosas. Si coinciden, guarda lo mismo que guardaría el flujo normal. Si no coinciden, no elige: lo deja pendiente para la oficina, igual que en A. El cálculo del flujo normal no cambia, y el resultado final sigue siendo el mismo porque el caso dudoso lo termina una persona por el flujo normal.</p></div>
+    <div class="card"><h4>D · Dónde se entra <span class="tag tag-o">✔ decidido</span></h4>
+      <p><b>Inicio:</b> botón con el ícono del corredor dentro de la tarjeta «Cargar análisis de laboratorio», entre el texto y la cuadrícula. <b>App a bordo:</b> un mosaico «Análisis de laboratorio» en «Lo demás». El ícono del corredor se dibuja aparte, porque la librería de íconos del sistema no trae uno de persona corriendo.</p></div>
+    <div class="card"><h4>E · Informe de varios equipos (vibraciones) <span class="tag tag-w">lo resolví así — avisame si no</span></h4>
+      <p>Un PDF de vibraciones trae varios equipos. El rápido es de un equipo por vez, así que pasa a la carga normal con el archivo ya leído (una fila por equipo). Así no se duplica la lógica y el resultado es el mismo.</p></div>
+    <div class="card"><h4>A tener en cuenta · Análisis de causa escrito por la IA</h4>
+      <p>En el rápido, la acción inmediata y el análisis de causa los escribe la IA (los mismos servicios que los botones de Defectos) y el usuario los confirma. Queda firmado por quien confirma, igual que si apretara esos botones en el flujo normal. La OT después pasa por aprobación y autorización en tierra.</p></div>
+    <div class="card"><h4>Problema que ya existe (fuera de este cambio)</h4>
+      <p>Cuando «Escanear reporte» (en Análisis) une el informe a una rutina del plan, abre una OT de muestreo sin pedido al laboratorio que queda abierta y nadie la cierra, así que su PDF no se guarda. El rápido no usa ese camino: sigue a la carga del Inicio. Conviene arreglarlo aparte.</p></div>
+    <div class="card"><h4>Idea no incluida · Amarillo: adelantar la próxima muestra</h4>
+      <p>Hoy el amarillo sólo muestra la fecha de la próxima muestra del plan. Adelantarla sería algo nuevo sobre el plan y cambiaría el resultado respecto del flujo normal.</p></div>
+    <div class="card"><h4>Permisos — sin cambios</h4>
+      <p><b>Quién ve:</b> igual que hoy, quien entra a Análisis. <b>Quién carga:</b> quien tiene el tilde «Análisis de laboratorio» (hoy: tripulante, JM, Superintendente). <b>Quién crea la OT:</b> cualquiera menos el Auditor; el defecto necesita el tilde «Defectos». Si alguien puede cargar análisis pero no tiene «Defectos», el rápido termina en el resultado y no muestra «Crear OT»; el defecto queda abierto, como le pasaría hoy a esa persona. <b>Quién aprueba / autoriza:</b> tierra, como hoy.</p></div>
+  </div>
+</section>
+</main>
+
+<script>
+/* ═══════════════ Íconos ═══════════════ */
+const I = {
+  camera:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+  stop:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9z"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>',
+  help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
+  wrench:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  engine:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h2V7h4V5h4v2h3l2 3h2v5h-2l-2 3H8l-2-2H4z"/><path d="M2 11v4"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+  bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  crane:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V5l12 3"/><path d="M18 8v6"/><path d="M16 14h4v2h-4z"/><path d="M3 21h8"/></svg>',
+  clip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 11h6M9 15h4"/></svg>',
+  link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+};
+
+/* ═══════════════ Datos de ejemplo ═══════════════ */
+const VESSEL = "DON CHICUETO";
+const EQ = {
+  meBabor:{id:"meBabor", name:"Motor principal babor", sub:"Caterpillar 3512 · Serie 67Z01234", brand:"Caterpillar 3512", icon:"engine", fluid:"Aceite de motor"},
+  meEstr:{id:"meEstr", name:"Motor principal estribor", sub:"Caterpillar 3512 · Serie 67Z01288", brand:"Caterpillar 3512", icon:"engine", fluid:"Aceite de motor"},
+  gen1:{id:"gen1", name:"Generador 1", sub:"Cummins 6BT", brand:"Cummins 6BT", icon:"bolt", fluid:"Aceite de motor"},
+  gen2:{id:"gen2", name:"Generador 2", sub:"Cummins 6BT", brand:"Cummins 6BT", icon:"bolt", fluid:"Aceite de motor"},
+  redBabor:{id:"redBabor", name:"Caja reductora babor", sub:"Twin Disc MG-540", brand:"Twin Disc MG-540", icon:"gear", fluid:"Aceite de caja"},
+  redEstr:{id:"redEstr", name:"Caja reductora estribor", sub:"Twin Disc MG-540", brand:"Twin Disc MG-540", icon:"gear", fluid:"Aceite de caja"},
+  grua:{id:"grua", name:"Grúa de cubierta", sub:"Hidráulica · Palfinger PK 23500", brand:"Palfinger PK 23500", icon:"crane", fluid:"Aceite hidráulico"},
+};
+const RECENT = ["meBabor","meEstr","gen1"];
+const LAB = {name:"Laboratorio CONDOR", report:"CN-26-04412", sample:"M-118903", date:"10/09/2026", hours:"18.420 h"};
+
+const P_OK = [
+  {n:"Agua", s:"En el aceite no debería haber agua", v:"0,03 %", lim:"máx. 0,2 %", src:"Empresa", prev:"0,04 %", st:"ok"},
+  {n:"Hierro", s:"Muestra cuánto se gastan las piezas", v:"38 ppm", lim:"máx. 80 ppm", src:"Empresa", prev:"35 ppm", st:"ok"},
+  {n:"Silicio", s:"Tierra o polvo que entró", v:"7 ppm", lim:"máx. 15 ppm", src:"Empresa", prev:"8 ppm", st:"ok"},
+  {n:"Viscosidad a 100 °C", s:"Qué tan espeso está el aceite", v:"14,1 cSt", lim:"12 – 16 cSt", src:"Empresa", prev:"14,3 cSt", st:"ok"},
+  {n:"TBN", s:"Cuánta protección le queda al aceite", v:"8,2", lim:"mín. 5", src:"Empresa", prev:"8,6", st:"ok"},
+];
+const SCN = {
+  bad:{ label:"🔴 Problema: agua en el aceite", eq:"meBabor", verdict:"bad", labVerdict:"Crítico",
+    says:"M/E PORT — CAT 3512 — S/N 67Z01234",
+    problemTitle:"AGUA EN EL ACEITE",
+    headline:"El análisis indica posible presencia de agua en el aceite.",
+    explain:["El laboratorio encontró más agua de la permitida en el aceite.","Esto puede indicar que entra agua o refrigerante al sistema.","Se recomienda revisar el equipo."],
+    action:"Revisar por dónde entra agua o refrigerante al aceite.",
+    basis:["Conclusión del laboratorio: <b>Crítico</b>","Agua: <b>0,8 %</b> — el límite de la empresa es 0,5 %","En el análisis anterior (12/06/2026) era 0,05 %: subió mucho","El sodio también subió (62 ppm, antes 8): suele acompañar al refrigerante"],
+    labComment:"Presencia de agua y sodio compatible con ingreso de refrigerante. Verificar enfriador de aceite.",
+    params:[
+      {n:"Agua", s:"En el aceite no debería haber agua", v:"0,8 %", lim:"máx. 0,5 %", src:"Empresa", prev:"0,05 %", st:"bad"},
+      {n:"Sodio", s:"Suele venir del refrigerante", v:"62 ppm", lim:"sin límite cargado", src:"—", prev:"8 ppm", st:"rev"},
+      ...P_OK.slice(1)],
+  },
+  badOpen:{ label:"🔴 Problema, pero ya hay OT abierta", inherit:"bad", openWo:true },
+  warn:{ label:"🟡 Requiere seguimiento", eq:"meBabor", verdict:"warn", labVerdict:"Precaución",
+    says:"M/E PORT — CAT 3512 — S/N 67Z01234",
+    headline:"El análisis detectó valores que conviene controlar.",
+    warnWhat:"El desgaste del motor está un poco más alto que la vez anterior.",
+    basis:["Conclusión del laboratorio: <b>Precaución</b>","Hierro: <b>86 ppm</b> — pasa el límite de atención (80) pero no el crítico (150)","En el análisis anterior era 52 ppm"],
+    labComment:"Hierro en aumento. Se sugiere acortar el intervalo de muestreo.",
+    params:[P_OK[0],{n:"Hierro", s:"Muestra cuánto se gastan las piezas", v:"86 ppm", lim:"atención 80 · crítico 150", src:"Empresa", prev:"52 ppm", st:"warn"},...P_OK.slice(2)],
+  },
+  ok:{ label:"🟢 Todo normal", eq:"meBabor", verdict:"ok", labVerdict:"Normal",
+    says:"M/E PORT — CAT 3512 — S/N 67Z01234",
+    basis:["Conclusión del laboratorio: <b>Normal</b>","Los 5 valores están dentro de los límites de la empresa","Parecido al análisis anterior (12/06/2026)"],
+    labComment:"Aceite apto para continuar en servicio.",
+    params:P_OK,
+  },
+  unknown:{ label:"⚪ El informe no dice la gravedad", eq:"grua", verdict:"rev", labVerdict:"(el informe no trae conclusión)",
+    says:"CRANE — PALFINGER PK23500",
+    revReason:"El informe no dice qué tan grave es.",
+    basis:["El informe <b>no trae conclusión</b> del laboratorio","Para estos valores <b>no hay límites cargados</b> en el sistema","Es el primer análisis de este equipo: no hay con qué comparar"],
+    labComment:"—",
+    params:[
+      {n:"Índice PQ", s:"Partículas de hierro sueltas", v:"34", lim:"sin límite cargado", src:"—", prev:"—", st:"rev"},
+      {n:"Limpieza (NAS 1638)", s:"Qué tan sucio está el aceite", v:"clase 9", lim:"sin límite cargado", src:"—", prev:"—", st:"rev"},
+    ],
+  },
+  mismatch:{ label:"⚖️ Lab dice normal, pero un valor pasa el límite", eq:"meBabor", verdict:"rev", labVerdict:"Normal",
+    says:"M/E PORT — CAT 3512 — S/N 67Z01234",
+    revReason:"El laboratorio y los límites de la empresa no coinciden.",
+    basis:["Conclusión del laboratorio: <b>Normal</b>","Pero el agua (<b>0,3 %</b>) pasa el límite de atención de la empresa (0,2 %)","Cuando no coinciden, el sistema no elige: lo termina la oficina"],
+    labComment:"Aceite apto para continuar en servicio.",
+    params:[{n:"Agua", s:"En el aceite no debería haber agua", v:"0,3 %", lim:"atención 0,2 % · crítico 0,5 %", src:"Empresa", prev:"0,04 %", st:"warn"},...P_OK.slice(1)],
+  },
+  attached:{ label:"📦 Muestra que se mandó con una OT", inherit:"ok", attachedWo:"OT-DCH-0198" },
+  routine:{ label:"🔗 Sin OT de rutina (ofrece abrirla)", inherit:"ok", routine:true },
+  multi:{ label:"🎚️ Vibraciones: varios equipos en un PDF", inherit:"ok", multi:true },
+  unsure:{ label:"❓ Equipo dudoso (elegir entre dos)", inherit:"ok", eqUnsure:["meBabor","meEstr"], says:"M/E — CAT 3512" },
+  dup:{ label:"🔁 Informe ya cargado", inherit:"ok", duplicate:true },
+  err:{ label:"⚠️ Foto que no se puede leer", inherit:"ok", readError:true },
+};
+const scnOf = k => { const s = SCN[k]; return s.inherit ? {...SCN[s.inherit], ...s} : s; };
+const SCN_ORDER = ["bad","warn","ok","unknown","mismatch","badOpen","attached","routine","multi","unsure","dup","err"];
+const afterAsset = () => S().routine ? "routine" : "analyzing";
+
+/* ═══════════════ Estado ═══════════════ */
+let st;
+function reset(k){
+  st = { k: k ?? (st ? st.k : "bad"), screen:"upload", hist:[], eq:null, who:"jm", when:"tomorrow", whenDate:"", otherWho:"",
+         editing:false, edited:false, problem:"Agua en el aceite del motor", action:SCN.bad.action,
+         creating:false, sheet:false, dlg:null, more:false, q:"" };
+  render();
+}
+const S = () => scnOf(st.k);
+function go(screen){ st.hist.push(st.screen); st.screen = screen; st.sheet=false; st.dlg=null; render(); window.scrollTo({top:0}); }
+function back(){ if(!st.hist.length) return; st.screen = st.hist.pop(); st.sheet=false; st.dlg=null; render(); }
+let timer=null;
+function auto(ms, fn){ clearTimeout(timer); timer = setTimeout(fn, ms); }
+
+/* Pasos del indicador superior */
+function dotsFor(screen){
+  const red = S().verdict==="bad";
+  const groups = [
+    ["Informe",["upload","reading","readError","duplicate","multi"]],
+    ["Equipo",["asset","assetChoose","assetSearch","routine","analyzing"]],
+    ["Resultado",["result","warnWhat","badWhat","sentReview"]],
+    ...(red?[["Orden",["woExists","woDraft","woWho","woConfirm"]]]:[]),
+    ["Listo",["woDone","closed"]],
+  ];
+  const idx = groups.findIndex(g=>g[1].includes(screen));
+  return '<div class="dots" aria-label="Avance">'+groups.map((g,i)=>`<span class="dot ${i<idx?'done':i===idx?'cur':''}"><i></i>${g[0]}</span>`).join("")+'</div>';
+}
+
+/* ═══════════════ Pantallas ═══════════════ */
+const V = {};
+V.upload = () => ({
+  body:`<div class="center" style="display:flex;flex-direction:column;gap:14px;margin-top:10px">
+      <h2 class="big-title">ANÁLISIS DE LABORATORIO</h2>
+      <p class="lead">Cargá el informe del laboratorio.</p>
+      <span class="chip">🚢 ${VESSEL}</span>
+    </div>
+    <div class="grow"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <button class="btn btn-primary btn-tile" data-act="pick">${I.camera}SACAR FOTO</button>
+      <button class="btn btn-sec btn-tile" data-act="pick">${I.file}CARGAR ARCHIVO</button>
+      <p class="soft center" style="text-align:center">Sirve PDF, o foto JPG / PNG del celular o la tablet.</p>
+    </div>`,
+  noBack:true,
+});
+V.reading = () => { auto(2300, ()=>{ const s=S(); go(s.readError?"readError":s.duplicate?"duplicate":s.multi?"multi":s.eqUnsure?"assetChoose":"asset"); });
+  return {body:`<div class="center" style="display:flex;flex-direction:column;margin:auto 0">
+    <div class="spin" role="progressbar" aria-label="Leyendo"></div>
+    <p class="lead" style="font-weight:800">Estamos leyendo el informe…</p>
+    <p class="soft">Tarda unos segundos.</p>
+    <div class="bar"><i></i></div></div>`, noBack:true}; };
+V.readError = () => ({
+  body:`<div class="status st-warn" style="margin-top:8px"><div class="sico">${I.warn}</div>
+      <p class="stitle">NO PUDIMOS LEER BIEN EL INFORME</p>
+      <p>Probá sacando otra foto o cargando el PDF original.</p></div>
+    <ul class="soft" style="margin:0;padding-left:20px">
+      <li>Que se vea la hoja entera.</li><li>Con buena luz, sin sombra.</li><li>La hoja derecha, no torcida.</li>
+    </ul>`,
+  foot:`<button class="btn btn-primary" data-act="retry">INTENTAR DE NUEVO</button>
+    <button class="btn-link" data-act="toast" data-msg="Abriría «Escanear reporte» (el flujo normal), donde los datos se pueden cargar a mano.">Cargarlo con el flujo normal</button>`,
+});
+V.duplicate = () => ({
+  body:`<div class="status st-rev" style="margin-top:8px"><div class="sico">${I.clip}</div>
+      <p class="stitle">ESTE INFORME YA FUE CARGADO</p>
+      <p>Lo cargó el Jefe de Máquinas el 12/09/2026.</p>
+      <p class="soft">No hace falta cargarlo de nuevo.</p></div>`,
+  foot:`<button class="btn btn-primary" data-act="toast" data-msg="Abriría la ficha del análisis existente (M-118903).">VER EL ANÁLISIS</button>
+    <button class="btn btn-sec" data-act="finish">TERMINAR</button>`,
+});
+V.multi = () => ({
+  body:`<div class="status st-rev" style="margin-top:8px"><div class="sico">${I.clip}</div>
+      <p class="stitle">ESTE INFORME TRAE 4 EQUIPOS</p>
+      <p>Los informes de varios equipos se cargan con la carga normal.</p>
+      <p class="soft">Ya lo leímos: no hace falta subirlo de nuevo.</p></div>`,
+  foot:`<button class="btn btn-primary" data-act="toast" data-msg="Abriría «Cargar análisis de laboratorio» (la carga normal) con este informe ya leído: una fila por equipo.">SEGUIR EN LA CARGA NORMAL</button>`,
+});
+V.asset = () => { const e = EQ[S().eq];
+  return {body:`<p class="q" style="font-size:21px">¿Este análisis corresponde a este equipo?</p>
+    <div class="eq"><div class="ic">${I[e.icon]}</div><div><b>${e.name}</b><small>${e.sub}</small><small>🚢 ${VESSEL}</small></div></div>
+    <p class="says">El informe dice: <q>${S().says}</q></p>
+    ${S().attachedWo?`<p class="chip" style="align-self:flex-start">📦 Es la muestra que se mandó con la ${S().attachedWo}</p>`:''}`,
+  foot:`<div class="row2"><button class="btn btn-primary" data-act="eqYes">${I.check}SÍ</button>
+    <button class="btn btn-sec" data-go="assetSearch">NO</button></div>`}; };
+V.assetChoose = () => ({
+  body:`<p class="q" style="font-size:21px">No pudimos saber cuál equipo es.</p>
+    <p class="says">El informe dice: <q>${S().says}</q></p>
+    <p class="lead" style="font-weight:700">Elegí cuál es:</p>
+    <div class="tiles">${S().eqUnsure.map(id=>tile(EQ[id])).join("")}
+      <button class="tile" data-go="assetSearch"><span class="ic">${I.search}</span><span><b>Buscar otro</b></span></button></div>`,
+});
+function tile(e){ return `<button class="tile" data-eq="${e.id}"><span class="ic">${I[e.icon]}</span><span><b>${e.name}</b><small>${e.sub}</small></span></button>`; }
+V.assetSearch = () => {
+  const q = st.q.trim().toLowerCase();
+  const all = Object.values(EQ);
+  const list = q ? all.filter(e=>(e.name+" "+e.sub).toLowerCase().includes(q)) : null;
+  return {body:`<p class="q" style="font-size:21px">¿Cuál es el equipo?</p>
+    <label class="search">${I.search}<input id="q" placeholder="Escribí el nombre: motor, generador…" value="${st.q}" aria-label="Buscar equipo" autocomplete="off"></label>
+    ${list ? (list.length ? `<div class="tiles">${list.map(tile).join("")}</div>` : `<p class="soft">No encontramos «${st.q}». Probá con otra palabra, por ejemplo «motor».</p>`)
+      : `<p class="grp">Usados hace poco</p><div class="tiles">${RECENT.map(id=>tile(EQ[id])).join("")}</div>
+         <p class="grp">Otros equipos de este buque que llevan análisis</p><div class="tiles">${all.filter(e=>!RECENT.includes(e.id)).map(tile).join("")}</div>`}`};
+};
+V.routine = () => ({
+  body:`<p class="q" style="font-size:21px">Esta muestra no tiene orden de trabajo. ¿Abrimos la de la rutina, con su pedido al laboratorio?</p>
+    <div class="eq"><div class="ic">${I.clip}</div><div><b>Muestra de aceite — cada 500 h</b><small>${EQ[st.eq||S().eq].name}</small><small>Laboratorio: CONDOR S.A.C.I</small></div></div>
+    <p class="soft">Es la misma pregunta que hace la carga normal al terminar.</p>`,
+  foot:`<div class="row2"><button class="btn btn-primary" data-act="routineYes">${I.check}SÍ, ABRIRLA</button>
+    <button class="btn btn-sec" data-go="analyzing">AHORA NO</button></div>`,
+});
+V.analyzing = () => { auto(1700, ()=>go("result"));
+  return {body:`<div class="center" style="display:flex;flex-direction:column;margin:auto 0">
+    <div class="spin" role="progressbar" aria-label="Revisando"></div>
+    <p class="lead" style="font-weight:800">Revisando los resultados…</p>
+    <p class="soft">Comparamos con los límites y con los análisis anteriores de este equipo.</p></div>`, noBack:true}; };
+function basisBlock(){ return `<details class="basis"><summary>${I.help.replace('<svg','<svg width="18" height="18"')} ¿En qué nos basamos?</summary><ul>${S().basis.map(b=>`<li>${b}</li>`).join("")}</ul></details>`; }
+const techLink = `<button class="btn-link" data-act="sheet">Ver detalles técnicos</button>`;
+V.result = () => { const s = S(); const eqName = EQ[st.eq||s.eq].name;
+  if (s.verdict==="ok") return {body:`<div class="status st-ok"><div class="sico">${I.check}</div><p class="stitle">TODO NORMAL</p>
+      <p>No se detectaron problemas que requieran acción.</p><p class="soft">${eqName}</p></div>${basisBlock()}
+      <p class="soft">Próximo análisis según el plan: <b>octubre 2026</b>.</p>`,
+    foot:`<button class="btn btn-primary" data-act="finish">TERMINAR</button>${techLink}`};
+  if (s.verdict==="warn") return {body:`<div class="status st-warn"><div class="sico">${I.warn}</div><p class="stitle">REQUIERE SEGUIMIENTO</p>
+      <p>${s.headline}</p><p class="soft">${eqName}</p></div>${basisBlock()}`,
+    foot:`<button class="btn btn-primary" data-go="warnWhat">VER ACCIÓN RECOMENDADA</button>${techLink}`};
+  if (s.verdict==="bad") return {body:`<div class="status st-bad"><div class="sico">${I.stop}</div><p class="stitle">SE DETECTÓ UN PROBLEMA</p>
+      <p>${s.headline}</p><p class="soft">${eqName}</p></div>${basisBlock()}`,
+    foot:`<button class="btn btn-primary" data-go="badWhat">VER QUÉ HACER</button>${techLink}`};
+  return {body:`<div class="status st-rev"><div class="sico">${I.help}</div><p class="stitle" style="font-size:20px">NO SE PUEDE DETERMINAR EL RESULTADO AUTOMÁTICAMENTE</p>
+      <p>${s.revReason}</p><p>Lo termina de cargar la oficina técnica.</p><p class="soft">${eqName}</p></div>${basisBlock()}
+      <p class="soft">El análisis queda guardado como pendiente. No tenés que hacer nada más.</p>`,
+    foot:`<button class="btn btn-primary" data-go="sentReview">ENVIAR A LA OFICINA</button>${techLink}`};
+};
+V.warnWhat = () => ({
+  body:`<div class="explain"><h2 style="color:var(--warn)"><span class="mini" style="background:#ca8a04">${I.warn}</span> DESGASTE EN AUMENTO</h2>
+      <p>${S().warnWhat}</p><p class="soft" style="margin-top:6px">Todavía no es un problema, pero hay que seguirlo.</p></div>
+    <div class="action"><div class="k">Qué hacer</div>
+      <div class="t">${I.check}<span>Seguir usando el equipo normalmente.</span></div>
+      <div class="t">${I.clip}<span>Sacar la próxima muestra en la fecha del plan: <u>15/10/2026</u>.</span></div></div>
+    <p class="soft">No hace falta una Orden de Trabajo. Queda marcado para seguimiento en Análisis.</p>`,
+  foot:`<button class="btn btn-primary" data-act="finish">ENTENDIDO, TERMINAR</button>
+    <button class="btn-link" data-act="toast" data-msg="Abriría «Nuevo defecto» (el mismo formulario de siempre), con el equipo ya elegido.">Veo algo raro en el equipo: reportar un defecto</button>`,
+});
+V.badWhat = () => { const s = S();
+  return {body:`<div class="explain"><h2><span class="mini">${I.stop}</span> ${s.problemTitle}</h2>
+      ${s.explain.map((p,i)=>`<p ${i?'class="soft" style="font-size:16px"':''}>${p}</p>`).join("")}</div>
+    <div class="action"><div class="k">Acción recomendada</div><div class="t">${I.wrench}<span>${s.action}</span></div></div>
+    <p class="lead" style="font-weight:700">Recomendamos crear una Orden de Trabajo.</p>`,
+  foot:`<button class="btn btn-primary" data-go="${s.openWo?'woExists':'woDraft'}">${I.wrench}CREAR ORDEN DE TRABAJO</button>${techLink}`}; };
+V.woExists = () => ({
+  body:`<div class="status st-rev"><div class="sico">${I.link}</div><p class="stitle" style="font-size:20px">ESTE EQUIPO YA TIENE UNA ORDEN ABIERTA</p></div>
+    <div class="ot"><div class="oh">OT-DCH-0219 · En curso</div><dl><dt>Trabajo</dt><dd>Revisar pérdida de refrigerante</dd><dt>Equipo</dt><dd>Motor principal babor</dd><dt>Abierta</dt><dd>02/09/2026</dd></dl></div>
+    <p class="lead" style="font-weight:700">¿Es el mismo problema?</p>
+    <p class="soft">Si es el mismo, no hace falta otra orden: mirá esa. Si es otro, seguimos y creamos la nueva.</p>`,
+  foot:`<div class="row2"><button class="btn btn-sec" data-act="toast" data-msg="Abriría OT-DCH-0219. El análisis y su defecto quedan guardados, igual que si el usuario dejara el flujo normal en este punto.">SÍ, VER ESA</button>
+    <button class="btn btn-primary" data-go="woDraft">NO, ES OTRO</button></div>`,
+});
+V.woDraft = () => { const s = S();
+  const prob = st.editing ? `<textarea id="edProb" rows="2">${st.problem}</textarea>` : st.problem;
+  const act  = st.editing ? `<textarea id="edAct" rows="2">${st.action}</textarea>` : st.action;
+  return {body:`<p class="q" style="font-size:21px">¿Está bien esta Orden de Trabajo?</p>
+    <div class="ot"><div class="oh">Nueva orden de trabajo ${st.edited?'<span class="edited">· corregida por vos</span>':''}</div><dl>
+      <dt>Equipo</dt><dd>${EQ[st.eq||s.eq].name}</dd>
+      <dt>Problema</dt><dd>${prob}</dd>
+      <dt>Acción</dt><dd>${act}
+        <ol><li>Revisar el enfriador de aceite por pérdidas.</li><li>Controlar si baja el nivel del tanque de refrigerante.</li><li>Cuando se encuentre la causa, cambiar aceite y filtros.</li><li>Sacar una muestra nueva después del arreglo.</li></ol></dd>
+      <dt>Prioridad</dt><dd><span class="prio prio-high">${I.warn.replace('<svg','<svg width="16" height="16"')} Alta · dentro de las 24 hs</span> <span class="why">porque el laboratorio lo marcó como Crítico</span></dd>
+      <dt>Origen</dt><dd>Análisis de laboratorio · ${LAB.date}</dd></dl>
+      ${st.more?`<div class="more"><dl>
+        <dt>Título de la OT</dt><dd>Agua en el aceite — Motor principal babor</dd>
+        <dt>Tipo de mantenimiento</dt><dd>Correctivo no programado · criticidad B</dd>
+        <dt>Buque</dt><dd>${VESSEL}</dd>
+        <dt>Solicitado por · Asignado a · Sistema</dt><dd>Máquinas · Tripulación · Máquinas</dd>
+        <dt>Defecto</dt><dd>DEF-DCH-0043 · Alta · Análisis de fluidos (se creó solo con el resultado)</dd>
+        <dt>Acción inmediata (IA — mismo botón que en Defectos)</dt><dd>Controlar nivel de aceite y de refrigerante en cada guardia hasta el arreglo</dd>
+        <dt>Análisis de causa (IA — mismo botón «Analizar con IA» de Defectos)</dt><dd>Método: 5 porqués<br>Causa inmediata: agua en el aceite lubricante<br>Causa raíz presunta: pérdida en el enfriador de aceite<br><span class="why">La propone la IA, igual que el botón del flujo normal. Revisala antes de confirmar.</span></dd>
+        <dt>Informe adjunto</dt><dd>${LAB.report}.pdf · muestra ${LAB.sample}</dd>
+        <dt>Horas del equipo</dt><dd>${LAB.hours}</dd>
+        <dt>Queda para completar en la OT (como hoy)</dt><dd>Condición del buque, ubicación, viaje, criterios de aceptación, LOTO y riesgo</dd></dl></div>`:''}
+    </div>
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn-link" data-act="more">${st.more?'Ver menos':'Ver más detalles'}</button>
+      <button class="btn-link" data-act="edit">${st.editing?'Listo, guardar cambios':'Corregir el texto'}</button></div>`,
+  foot:`<button class="btn btn-primary" data-act="draftOk">SÍ, ESTÁ BIEN</button>`}; };
+function dueFor(w){ return w==="today"?"Hoy, 18/09/2026":w==="tomorrow"?"Mañana, 19/09/2026":(st.whenDate? st.whenDate.split("-").reverse().join("/"):"—"); }
+const WHO = {jm:"Jefe de Máquinas", of1:"Primer Oficial de Máquinas", other:"Otra persona"};
+V.woWho = () => {
+  const late = st.when==="date" && st.whenDate && st.whenDate > "2026-09-19";
+  const opt = (grp,val,label,small,sug) => `<button class="opt" role="radio" aria-checked="${st[grp]===val}" data-set="${grp}:${val}"><span class="radio"></span><span><b>${label}</b>${small?`<small>${small}</small>`:''}</span>${sug?'<span class="sug">SUGERIDO</span>':''}</button>`;
+  return {body:`<p class="q">¿Quién realizará el trabajo?</p>
+    <div class="opts" role="radiogroup">${opt("who","jm","Jefe de Máquinas","Tiene a cargo este equipo",true)}${opt("who","of1","Primer Oficial de Máquinas","",false)}${opt("who","other","Otra persona…","",false)}</div>
+    ${st.who==="other"?`<label class="search">${I.search}<input id="otherWho" placeholder="Escribí el nombre" value="${st.otherWho}" aria-label="Nombre del responsable"></label>`:''}
+    <p class="q" style="margin-top:6px">¿Cuándo debería realizarse?</p>
+    <div class="opts" role="radiogroup">${opt("when","today","HOY","",false)}${opt("when","tomorrow","MAÑANA","Prioridad Alta: dentro de las 24 hs",true)}${opt("when","date","ELEGIR FECHA","",false)}</div>
+    ${st.when==="date"?`<input type="date" class="inline-input" id="whenDate" value="${st.whenDate}" min="2026-09-18" aria-label="Fecha">`:''}
+    ${late?`<p class="hint-warn">La prioridad Alta pide hacerlo dentro de las 24 hs. Podés seguir igual.</p>`:''}`,
+  foot:`<button class="btn btn-primary" data-act="whoOk">CONTINUAR</button>`};
+};
+V.woConfirm = () => ({
+  body:`<h2 class="big-title">TODO LISTO</h2><p class="lead">Se creará una Orden de Trabajo para:</p>
+    <dl class="summary"><dt>Equipo</dt><dd>${EQ[st.eq||S().eq].name}</dd><dt>Problema</dt><dd>${st.problem}</dd>
+      <dt>Prioridad</dt><dd><span class="prio prio-high">Alta · 24 hs</span></dd><dt>Responsable</dt><dd>${st.who==="other"?(st.otherWho||"Otra persona"):WHO[st.who]}</dd>
+      <dt>Para</dt><dd>${dueFor(st.when)}</dd></dl>
+    <p class="soft">Al crearla, el defecto queda cerrado dentro de la orden y se guarda su PDF, igual que en el flujo normal.</p>`,
+  foot:`<button class="btn btn-primary" data-act="create" ${st.creating?'disabled':''}>${st.creating?'CREANDO…':I.wrench+'CREAR OT'}</button>
+    <button class="btn btn-sec" data-act="back" ${st.creating?'disabled':''}>VOLVER</button>`,
+});
+V.woDone = () => ({
+  body:`<div class="center" style="display:flex;flex-direction:column;gap:10px;margin:auto 0">
+    <div class="bigicon" style="background:var(--ok)">${I.check}</div>
+    <h2 class="big-title">ORDEN DE TRABAJO CREADA</h2><div class="code">OT-DCH-0231</div>
+    <p class="soft">Queda en preparación. El paso que sigue es enviarla a aprobar, como cualquier orden.</p></div>
+    <details class="basis"><summary>${I.check.replace('<svg','<svg width="18" height="18"')} Qué quedó guardado</summary><ul>
+      <li>Análisis ${LAB.sample} con su resultado · PDF guardado</li>
+      ${S().attachedWo?`<li>Completada la muestra que se mandó con la ${S().attachedWo}</li>`:''}
+      ${st.routineLinked?'<li>OT de la rutina «Muestra de aceite — cada 500 h» con su pedido a CONDOR</li>':''}
+      <li>Defecto DEF-DCH-0043 completo y cerrado dentro de la OT · PDF guardado</li>
+      <li>OT-DCH-0231 unida al defecto y al análisis · En preparación</li>
+      <li>Todo en la historia del ${EQ[st.eq||S().eq].name}</li></ul></details>`,
+  foot:`<button class="btn btn-primary" data-act="toast" data-msg="Abriría OT-DCH-0231 en Órdenes de trabajo, con el aviso «¡Orden de trabajo abierta!» y los pasos que siguen (el mismo que muestra el flujo normal).">VER ORDEN DE TRABAJO</button>
+    <button class="btn btn-sec" data-act="finish">TERMINAR</button>`, noBack:true,
+});
+V.sentReview = () => ({
+  body:`<div class="center" style="display:flex;flex-direction:column;gap:10px;margin:auto 0">
+    <div class="bigicon" style="background:#64748b">${I.clip}</div>
+    <h2 class="big-title">ENVIADO A LA OFICINA</h2>
+    <p class="lead">La oficina técnica lo termina de cargar.</p><p class="soft">Queda en Análisis como pendiente de resultado.</p></div>`,
+  foot:`<button class="btn btn-primary" data-act="finish">TERMINAR</button>`, noBack:true,
+});
+V.closed = () => ({
+  body:`<div class="center" style="display:flex;flex-direction:column;gap:10px;margin:auto 0">
+    <div class="bigicon" style="background:var(--ok)">${I.check}</div>
+    <h2 class="big-title">LISTO</h2>
+    <p class="soft">El informe quedó guardado en la historia del equipo.</p>
+    <p class="soft" style="margin-top:20px;font-size:12px">(Demo: acá la ventana se cierra.)</p></div>`,
+  foot:`<button class="btn btn-sec" data-act="restart">PROBAR DE NUEVO</button>`, noBack:true,
+});
+
+/* Hoja de detalles técnicos (nivel 3) */
+function sheetHtml(){ const s=S();
+  const cls = {ok:"p-ok",warn:"p-warn",bad:"p-bad",rev:"p-rev"}, txt={ok:"✓ Bien",warn:"! Atención",bad:"✕ Fuera",rev:"? Sin límite"};
+  return `<div class="sh"><b>Detalles técnicos</b><button class="xbtn" data-act="sheetClose" aria-label="Cerrar">✕</button></div>
+  <div class="sb">
+    <div class="kv"><span>Laboratorio</span><span>${LAB.name}</span><span>N.º de informe</span><span>${LAB.report}</span><span>N.º de muestra</span><span>${LAB.sample}</span>
+      <span>Fecha de muestra</span><span>${LAB.date}</span><span>Horas del equipo</span><span>${LAB.hours}</span><span>Fluido</span><span>${EQ[st.eq||s.eq].fluid}</span>
+      <span>Conclusión del lab</span><span>${s.labVerdict}</span><span>Comentario del lab</span><span>${s.labComment}</span></div>
+    <table class="ptab"><thead><tr><th>Valor</th><th>Resultado</th><th>Límite</th><th>Antes</th><th></th></tr></thead><tbody>
+      ${s.params.map(p=>`<tr><td><b>${p.n}</b><small>${p.s}</small></td><td><b>${p.v}</b></td><td>${p.lim}<small>${p.src!=="—"?"Límite: "+p.src:""}</small></td><td>${p.prev}</td><td><span class="pill ${cls[p.st]}">${txt[p.st]}</span></td></tr>`).join("")}
+    </tbody></table>
+    <p class="soft" style="margin-top:10px">Los límites son los cargados en el sistema para este tipo de fluido. Si un valor no tiene límite, no se usa para decidir.</p>
+    <button class="btn-link" data-act="toast" data-msg="Abriría el PDF original ${LAB.report}.pdf.">Ver el informe original</button>
+  </div>`; }
+
+/* ═══════════════ Render ═══════════════ */
+function render(){
+  const v = V[st.screen]();
+  const showBack = !v.noBack && st.hist.length && !st.creating;
+  document.getElementById("device").innerHTML = `
+    <div class="dv-head">${showBack?'<button class="dv-back" data-act="back">‹ Volver</button>':'<span style="width:64px"></span>'}
+      <span class="dv-title"><span class="runner" style="width:24px;height:18px;vertical-align:-4px"></span> Flujo rápido · Análisis</span><button class="xbtn" data-act="close" aria-label="Cerrar">✕</button></div>
+    ${dotsFor(st.screen)}
+    <div class="dv-body">${v.body}</div>
+    ${v.foot?`<div class="dv-foot">${v.foot}</div>`:''}
+    <div class="sheet-bg ${st.sheet||st.dlg?'on':''}" data-act="sheetClose"></div>
+    <div class="sheet ${st.sheet?'on':''}">${st.sheet?sheetHtml():''}</div>
+    <div class="dlg ${st.dlg?'on':''}">${st.dlg||''}</div>`;
+  renderSide();
+  const q = document.getElementById("q");
+  if (q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); q.oninput = e=>{ st.q=e.target.value; render(); }; }
+  const ow = document.getElementById("otherWho"); if (ow) ow.oninput = e=>{ st.otherWho=e.target.value; };
+  const wd = document.getElementById("whenDate"); if (wd) wd.onchange = e=>{ st.whenDate=e.target.value; render(); };
+}
+function dialog(title, text, primary, primaryAct, secondary, secondaryAct){
+  st.dlg = `<h4>${title}</h4><p>${text}</p><button class="btn btn-primary" data-act="${primaryAct}">${primary}</button><button class="btn btn-sec" data-act="${secondaryAct}">${secondary}</button>`;
+  render();
+}
+
+document.getElementById("device").addEventListener("click", e=>{
+  const b = e.target.closest("[data-act],[data-go],[data-eq],[data-set]"); if(!b) return;
+  if (b.dataset.go) return go(b.dataset.go);
+  if (b.dataset.set){ const [k,v]=b.dataset.set.split(":"); st[k]=v; render(); return; }
+  if (b.dataset.eq){
+    const want = EQ[S().eq], got = EQ[b.dataset.eq];
+    if (!S().eqUnsure && want && got.brand!==want.brand){
+      st._pending = got.id;
+      return dialog("¿Seguro que es este equipo?", `El informe dice <b>${want.brand}</b> y ${got.name} es <b>${got.brand}</b>.`, "SÍ, ES ESTE", "eqForce", "ELEGIR OTRO", "dlgClose");
+    }
+    st.eq = got.id; return go(afterAsset());
+  }
+  const a = b.dataset.act;
+  if (a==="pick") go("reading");
+  else if (a==="retry"){ st.hist=[]; st.screen="upload"; render(); }
+  else if (a==="eqYes"){ st.eq = S().eq; go(afterAsset()); }
+  else if (a==="eqForce"){ st.eq=st._pending; st.dlg=null; go(afterAsset()); }
+  else if (a==="routineYes"){ st.routineLinked=true; go("analyzing"); }
+  else if (a==="dlgClose"){ st.dlg=null; render(); }
+  else if (a==="back") back();
+  else if (a==="sheet"){ st.sheet=true; render(); }
+  else if (a==="sheetClose"){ st.sheet=false; if(!st.dlg||b.classList.contains("sheet-bg")===false) st.dlg=null; render(); }
+  else if (a==="more"){ st.more=!st.more; render(); }
+  else if (a==="edit"){
+    if (st.editing){ const p=document.getElementById("edProb").value.trim(), ac=document.getElementById("edAct").value.trim();
+      if (p!==st.problem||ac!==st.action) st.edited=true; st.problem=p||st.problem; st.action=ac||st.action; }
+    st.editing=!st.editing; render(); }
+  else if (a==="draftOk"){ if(st.editing){ document.querySelector('[data-act="edit"]').click(); } go("woWho"); }
+  else if (a==="whoOk"){
+    if (st.who==="other" && !st.otherWho.trim()) return dialog("Falta el responsable", "Escribí el nombre de quién va a hacer el trabajo.", "OK", "dlgClose", "Elegir el sugerido", "whoDefault");
+    if (st.when==="date" && !st.whenDate) return dialog("Falta la fecha", "Elegí el día en el calendario, o tocá «Mañana».", "OK", "dlgClose", "Usar «Mañana»", "whenDefault");
+    go("woConfirm"); }
+  else if (a==="whoDefault"){ st.who="jm"; st.dlg=null; render(); }
+  else if (a==="whenDefault"){ st.when="tomorrow"; st.dlg=null; render(); }
+  else if (a==="create"){ if(st.creating) return; st.creating=true; render(); auto(1300, ()=>{ st.creating=false; st.hist=[]; go("woDone"); }); }
+  else if (a==="finish"){ st.hist=[]; go("closed"); }
+  else if (a==="restart") reset();
+  else if (a==="toast"){ dialog("Demo", b.dataset.msg, "OK", "dlgClose", "Cerrar", "dlgClose"); }
+  else if (a==="close"){
+    if (["upload","closed","woDone","sentReview"].includes(st.screen)) return reset();
+    dialog("¿Salir ahora?", "El informe ya quedó guardado. Podés terminar después desde Análisis.", "SEGUIR ACÁ", "dlgClose", "SALIR", "restart");
+  }
+});
+
+/* ═══════════════ Panel lateral: escenarios + notas ═══════════════ */
+const NOTES = {
+  upload:{auto:["El buque sale del usuario (a bordo tiene uno solo). Si tiene varios, lo deduce del informe; sólo pregunta si no puede."],user:"Nada que decidir: sólo elegir cómo traer el informe.",trace:"Nada todavía."},
+  reading:{auto:["El informe original se guarda <b>antes</b> de leerlo: no se pierde pase lo que pase.","Lee laboratorio, n.º de informe y de muestra, fecha, equipo, marca/modelo/serie, fluido, horas, valores, unidades, límites, comentarios y conclusión del lab.","Controla si el n.º de muestra ya existe (repetido — decisión B).","Si trae varias muestras del mismo equipo, toma la de fecha más nueva; si hay dudas, lo pregunta con botones."],user:"Esperar.",trace:"Archivo original · quién lo subió · fecha y hora · datos extraídos."},
+  readError:{auto:["No se guarda nada todavía: no hay datos que guardar."],user:"Probar de nuevo, o pasar al flujo normal y cargarlo a mano.",trace:"Intento fallido."},
+  duplicate:{auto:["Mismo n.º de muestra del laboratorio que un análisis ya cargado (en vibraciones: buque + equipo + fecha)."],user:"Ver el que ya existe o terminar.",trace:"Intento de carga repetida (no crea nada nuevo)."},
+  asset:{auto:["Sugiere <b>sólo equipos que existen</b> en el buque (la IA no inventa).","Muestra lo que dice el informe para que el usuario compare con su equipo.","Si el n.º de muestra es de una muestra que se mandó con una OT, completa <b>esa</b> muestra en vez de crear otra (igual que la carga normal)."],user:"Sí / No. Una sola decisión.",trace:"Equipo sugerido y si el usuario lo confirmó o lo cambió."},
+  assetChoose:{auto:["La IA encontró 2 equipos posibles y no pregunta con porcentajes: muestra los dos."],user:"Tocar el equipo correcto.",trace:"Opciones ofrecidas y elegida."},
+  assetSearch:{auto:["Muestra primero los usados hace poco y los que llevan análisis de laboratorio.","Si el elegido no coincide con la marca/modelo del informe, avisa antes de seguir."],user:"Buscar y tocar el equipo.",trace:"Equipo elegido a mano (queda marcado como cambio del usuario)."},
+  routine:{auto:["Sólo aparece si la muestra no vino de una OT y el equipo tiene una rutina de muestreo: es la pregunta que hace la carga normal al terminar («¿Abrir una sola OT con su pedido al laboratorio?»).","Si dice SÍ: el mismo servicio abre la OT de la rutina con su SS al laboratorio y la une a la muestra (se hace al guardar)."],user:"SÍ, ABRIRLA / AHORA NO.",trace:"OT de la rutina + SS al laboratorio + vínculo con la muestra."},
+  multi:{auto:["Mismo lector que la carga normal: detecta que el PDF trae varios equipos (vibraciones).","El rápido no los separa: pasa a la carga normal con el archivo ya leído."],user:"Seguir en la carga normal.",trace:"Nada todavía: se guarda en la carga normal."},
+  analyzing:{auto:["Compara con la conclusión del laboratorio, con los límites de la empresa y con el análisis anterior (tendencia).","Si el informe no trae la gravedad y no hay límites con qué calcularla → queda para la oficina (decisión A). Mirar lab y límites juntos es la decisión C."],user:"Esperar.",trace:"Criterios usados y valores comparados."},
+  result:{auto:["Guarda el análisis y su resultado con los mismos servicios del flujo normal; se guarda el PDF del análisis.","Clasifica en 🟢 / 🟡 / 🔴 / ⚪ según la gravedad que ya guarda el sistema.","Resultado grave → crea solo el Defecto (como hoy)."],user:"Leer y tocar el botón. Nada técnico a la vista (nivel 1). «¿En qué nos basamos?» = nivel 2. «Ver detalles técnicos» = nivel 3.",trace:"Conclusión + en qué se basó + defecto generado."},
+  warnWhat:{auto:["Muestra la fecha de la próxima muestra del plan.","Queda como «Precaución» en Análisis, igual que en el flujo normal (no se crea defecto)."],user:"Terminar, o reportar un defecto si ve algo raro (abre el formulario de siempre).",trace:"Resultado de atención."},
+  badWhat:{auto:["Explica en palabras simples, con el criterio que lo sostiene.","Arma la acción recomendada (IA, nivel tripulación, dentro del alcance).","Mira si el equipo ya tiene una OT abierta."],user:"Crear la OT.",trace:"Explicación y acción propuestas."},
+  woExists:{auto:["Sólo avisa: no suma ni cambia nada.","Si el usuario sigue, el resultado es el mismo que en el flujo normal."],user:"¿Es el mismo problema? Ver esa OT, o seguir y crear la nueva.",trace:"Nada nuevo si mira la existente (el análisis y el defecto ya estaban guardados)."},
+  woDraft:{auto:["Completa el defecto con los <b>mismos servicios de IA</b> que los botones de Defectos: acción inmediata y análisis de causa.","Arma la OT como la precarga hoy el defecto: correctivo no programado, prioridad = gravedad, criticidad B, tarea desde el defecto.","Título «problema — equipo» y recuadros del formulario según el equipo."],user:"Mirar y confirmar. Puede corregir el texto.",trace:"Lo que propuso la IA + lo que corrigió el usuario."},
+  woWho:{auto:["Responsable sugerido: quien tiene a cargo el equipo.","Fecha sugerida según el plazo del formulario: Crítica = inmediato, Alta = 24 hs, Media = semana, Baja = mes."],user:"Si lo sugerido está bien: un toque.",trace:"Responsable y fecha límite."},
+  woConfirm:{auto:["El botón se bloquea al tocarlo: no se puede crear dos veces."],user:"Crear.",trace:"—"},
+  woDone:{auto:["Mismos pasos que al guardar la OT desde Defectos: guarda el defecto completo, crea la OT, une el defecto, lo cierra «derivado a una OT nueva» (verificación de eficacia a 30 días) y guarda el PDF del defecto.","La OT queda «En preparación», como toda OT nueva."],user:"Ver la OT o terminar.",trace:"Análisis → Defecto → OT, con los mismos eventos de auditoría que el flujo normal."},
+  sentReview:{auto:["Guarda el análisis sin resultado (pendiente), igual que una muestra esperando informe. La oficina lo completa por el flujo normal (ver decisión A)."],user:"Terminar.",trace:"Muestra pendiente + motivo: el informe no trae la gravedad."},
+  closed:{auto:["Análisis archivado en la historia del equipo."],user:"—",trace:"Cierre."},
+};
+function renderSide(){
+  document.getElementById("scenarios").innerHTML = SCN_ORDER.map(k=>`<button aria-pressed="${st.k===k}" data-k="${k}">${SCN[k].label}</button>`).join("");
+  const n = NOTES[st.screen];
+  document.getElementById("notes").innerHTML = `<h3>En esta pantalla</h3>
+    <div class="lbl">Lo hace el sistema solo</div><ul>${n.auto.map(x=>`<li>${x}</li>`).join("")}</ul>
+    <div class="lbl">Lo decide el usuario</div><p>${n.user}</p>
+    <div class="lbl">Queda registrado</div><p>${n.trace}</p>`;
+}
+document.getElementById("scenarios").addEventListener("click", e=>{ const b=e.target.closest("[data-k]"); if(b){ clearTimeout(timer); reset(b.dataset.k);} });
+document.querySelector(".dash-card").addEventListener("click", e=>{
+  const b = e.target.closest("[data-entry]"); if(!b) return;
+  clearTimeout(timer);
+  if (b.dataset.entry==="fast") { reset(); return; }
+  reset(); dialog("Demo", b.dataset.entry==="batch" ? "El cuerpo de la tarjeta sigue abriendo la carga normal (varios PDF, planilla de revisión). No cambia." : "La cuadrícula sigue yendo al listado de Muestreos y Análisis. No cambia.", "OK", "dlgClose", "Cerrar", "dlgClose");
+});
+
+/* ═══════════════ Tabs ═══════════════ */
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x===t));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on", p.id==="p-"+t.dataset.tab));
+}));
+
+/* ═══════════════ Especificación por pantalla ═══════════════ */
+const SPECS = [
+  ["P1 · Cargar análisis","Traer el informe al sistema.","ANÁLISIS DE LABORATORIO","«Cargá el informe del laboratorio.»","Ninguno.","SACAR FOTO · CARGAR ARCHIVO","Buque del usuario. Guarda el archivo original apenas llega.","Pasa a la lectura."],
+  ["P2 · Leyendo","Esperar sin ver nada técnico.","—","«Estamos leyendo el informe…»","Ninguno.","Ninguno.","Extrae todos los datos del informe. Controla repetidos.","Equipo · o error de lectura · o «ya cargado»."],
+  ["P2b · No se pudo leer","Salir del error sabiendo qué hacer.","NO PUDIMOS LEER BIEN EL INFORME","«Probá sacando otra foto o cargando el PDF original.» + 3 consejos.","Ninguno.","INTENTAR DE NUEVO · (enlace) cargarlo con el flujo normal","—","Vuelve a P1, o abre el flujo normal."],
+  ["P2c · Ya cargado","Evitar el doble registro.","ESTE INFORME YA FUE CARGADO","Quién y cuándo lo cargó.","Ninguno.","VER EL ANÁLISIS · TERMINAR","Compara n.º de muestra.","Abre el existente o cierra."],
+  ["P3 · Confirmar equipo","Asegurar que el análisis va al equipo correcto.","¿Este análisis corresponde a este equipo?","Tarjeta del equipo + «El informe dice: …».","Ninguno.","SÍ · NO","Sugiere sólo equipos reales del buque.","SÍ → P4. NO → P3b."],
+  ["P3b · Buscar equipo","Encontrar el equipo sin árbol.","¿Cuál es el equipo?","Usados hace poco + los que llevan análisis.","Un buscador.","Tocar el equipo.","Avisa si no coincide con la marca/modelo del informe.","P4."],
+  ["P3c · Equipo dudoso","Resolver la duda con botones.","No pudimos saber cuál equipo es.","«Elegí cuál es:» + lo que dice el informe.","Ninguno.","2–3 equipos · Buscar otro","Muestra sólo los candidatos reales.","P4."],
+  ["P2d · Varios equipos","No duplicar la carga de vibraciones.","ESTE INFORME TRAE 4 EQUIPOS","«Se cargan con la carga normal. Ya lo leímos.»","Ninguno.","SEGUIR EN LA CARGA NORMAL","Pasa el archivo ya leído.","Carga normal, una fila por equipo."],
+  ["P3d · OT de la rutina","Hacer la misma pregunta que la carga normal.","¿Abrimos la OT de la rutina, con su pedido al laboratorio?","Rutina + laboratorio.","Ninguno.","SÍ, ABRIRLA · AHORA NO","Sólo si la muestra no vino de una OT y hay rutina. Mismo servicio que la carga normal.","P4."],
+  ["P4 · Revisando","Decisión técnica fuera del usuario.","—","«Revisando los resultados…»","Ninguno.","Ninguno.","Lab + límites + análisis anterior. Crea el Defecto si es grave.","P5."],
+  ["P5 · Resultado","Entender en 2 segundos cómo salió.","TODO NORMAL / REQUIERE SEGUIMIENTO / SE DETECTÓ UN PROBLEMA / NO SE PUEDE DETERMINAR","Una frase + nombre del equipo. «¿En qué nos basamos?» plegado.","Ninguno.","Uno solo según el color · Ver detalles técnicos","Color + ícono + texto, nunca sólo color.","🟢 cierra · 🟡 P5y · 🔴 P6 · ⚪ queda para la oficina."],
+  ["P5y · Seguimiento","Saber qué hacer sin abrir OT.","DESGASTE EN AUMENTO","Qué pasa + qué hacer + fecha de la próxima muestra.","Ninguno.","ENTENDIDO, TERMINAR · (enlace) reportar un defecto","Toma la fecha del plan.","Cierra, o abre «Nuevo defecto» (el de siempre)."],
+  ["P6 · Qué pasa y qué hacer","Entender el problema y aceptar la acción.","AGUA EN EL ACEITE","3 frases cortas + acción recomendada.","Ninguno.","CREAR ORDEN DE TRABAJO · Ver detalles técnicos","Explicación y acción por IA, con criterio.","OT ya abierta → P6b. Si no → P7."],
+  ["P6b · El equipo ya tiene OT","Evitar una OT repetida sin cambiar el resultado.","ESTE EQUIPO YA TIENE UNA ORDEN ABIERTA","Datos de la OT existente + «¿Es el mismo problema?».","Ninguno.","SÍ, VER ESA · NO, ES OTRO","Busca OT abierta del mismo equipo. Sólo avisa.","Ver esa OT, o P7."],
+  ["P7 · OT precompletada","Revisar la orden armada.","¿Está bien esta Orden de Trabajo?","Equipo, problema, acción + tareas, prioridad con su plazo y su porqué, origen.","Ninguno (texto corregible si hace falta).","SÍ, ESTÁ BIEN · Ver más detalles · Corregir el texto","Defecto completo con los servicios de IA de Defectos; OT precargada como desde el defecto.","P8."],
+  ["P8 · Responsable y fecha","Completar lo único que falta.","¿Quién? · ¿Cuándo?","Opciones con la sugerida ya marcada.","Nombre sólo si elige «Otra persona»; fecha sólo si elige «Elegir fecha».","CONTINUAR","Fecha según el plazo del formulario (Alta = 24 hs).","P9."],
+  ["P9 · Todo listo","Última mirada antes de crear.","TODO LISTO","Resumen de 5 líneas + «el defecto queda cerrado dentro de la orden».","Ninguno.","CREAR OT · VOLVER","Bloquea el doble toque.","P10."],
+  ["P10 · OT creada","Cerrar con certeza.","ORDEN DE TRABAJO CREADA","Código + «queda en preparación». «Qué quedó guardado» plegado.","Ninguno.","VER ORDEN DE TRABAJO · TERMINAR","Mismos pasos que al guardar la OT desde Defectos: une y cierra el defecto, guarda su PDF.","Fin."],
+];
+document.getElementById("screenSpecs").innerHTML = SPECS.map(s=>`<div class="card"><h4>${s[0]}</h4><p class="obj">${s[1]}</p><dl>
+  <dt>Título</dt><dd>${s[2]}</dd><dt>Texto</dt><dd>${s[3]}</dd><dt>Campos</dt><dd>${s[4]}</dd><dt>Botones</dt><dd>${s[5]}</dd><dt>Automático</dt><dd>${s[6]}</dd><dt>Después</dt><dd>${s[7]}</dd></dl></div>`).join("");
+
+/* ═══════════════ Auditoría ═══════════════ */
+const Y='<span class="yes">✔</span>', M='<span class="mid">▲</span>';
+const AUD = [
+  ["P1 Cargar",Y,Y,Y+" no queda nada",Y+" se sacaron buque y n.º de muestra",Y,Y,Y],
+  ["P2 Leyendo",Y+" esperar",Y+" (ninguna)",Y,Y,Y,Y,Y],
+  ["P2b No se pudo leer",Y,Y,Y,Y,Y,Y,Y],
+  ["P3 Confirmar equipo",Y,Y+" SÍ / NO",Y+" sólo lo necesario para reconocerlo",Y,M+" no del todo: confirmar el equipo es la única garantía contra el error más caro",M+" que diga SÍ sin mirar; por eso se muestra «El informe dice…»",Y],
+  ["P3b Buscar equipo",Y,Y,Y,Y,Y,M+" elegir mal; se avisa si la marca/modelo no coincide",Y],
+  ["P3d Rutina de muestreo",Y,Y+" SÍ / NO",Y,Y,M+" no: automatizarla daría otro resultado que el flujo normal",M+" que diga SÍ sin mirar; se muestra cuándo tocaba la rutina y de cuántas horas es la muestra",Y],
+  ["P5 Resultado",Y,Y+" un botón por color",Y+" técnico plegado en 2 niveles",Y,Y+" la gravedad la decide el sistema",Y,Y],
+  ["P5y Seguimiento",Y,Y,Y,Y,Y,M+" que ignore algo que ve; tiene la salida «reportar un defecto»",Y],
+  ["P6b El equipo ya tiene OT",Y,Y+" una pregunta, dos botones",Y,Y,M+" no: decidir si es el mismo problema es del que conoce el equipo",M+" que cree una OT repetida; por eso se muestra la existente",Y],
+  ["P6 Qué pasa y qué hacer",Y,Y,Y,Y,Y+" tipo y prioridad los pone el sistema",Y,Y],
+  ["P7 OT precompletada",Y,Y+" «Sí, está bien»",M+" 4 tareas a la vista: se dejan porque es lo que el que ejecuta va a hacer",Y,Y,M+" que apruebe sin leer las tareas y el análisis de causa de la IA; se marcan como propuestos por la IA, y la OT pasa por aprobación en tierra",Y],
+  ["P8 Responsable y fecha",Y,Y+" CONTINUAR",Y,Y+" sólo aparece un campo si elige «otra»",M+" responsable: se sugiere, no se impone (lo sabe el de a bordo)",M+" fecha lejana para prioridad Alta: aviso suave",Y],
+  ["P9 Todo listo",Y,Y,Y,Y,Y,Y+" doble toque bloqueado",Y],
+  ["P10 OT creada",Y,Y,Y,Y,Y,Y,Y],
+];
+document.getElementById("auditTbl").innerHTML = `<thead><tr><th>Pantalla</th><th>¿Sabe qué hacer ya?</th><th>¿Una sola acción principal?</th><th>¿Algo más para ocultar?</th><th>¿Algún campo para sacar?</th><th>¿Algo más para automatizar?</th><th>¿Riesgo de error humano?</th><th>¿Sin capacitación?</th></tr></thead>
+<tbody>${AUD.map(r=>`<tr>${r.map((c,i)=>i?`<td>${c}</td>`:`<td><b>${c}</b></td>`).join("")}</tr>`).join("")}</tbody>`;
+
+/* ═══════════════ Flujograma (SVG) ═══════════════ */
+(function(){
+  const svg = document.getElementById("flowSvg"); let out = "";
+  const css = getComputedStyle(document.documentElement);
+  const c = n => css.getPropertyValue(n).trim();
+  out += `<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${c('--muted')}"/></marker></defs>`;
+  const box = (x,y,w,h,t,sub,fill,stroke,tc,dash) => {
+    out += `<rect x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="12" fill="${fill}" stroke="${stroke}" stroke-width="2" ${dash?'stroke-dasharray="6 5"':''}/>`;
+    out += `<text x="${x}" y="${sub?y-4:y+5}" text-anchor="middle" font-size="14.5" font-weight="800" fill="${tc||c('--fg')}">${t}</text>`;
+    if (sub) out += `<text x="${x}" y="${y+14}" text-anchor="middle" font-size="12" fill="${c('--muted')}">${sub}</text>`;
+  };
+  const dia = (x,y,w,h,t) => { out += `<path d="M${x} ${y-h/2}L${x+w/2} ${y}L${x} ${y+h/2}L${x-w/2} ${y}z" fill="${c('--surface2')}" stroke="${c('--faint')}" stroke-width="2"/><text x="${x}" y="${y+5}" text-anchor="middle" font-size="13" font-weight="800" fill="${c('--fg')}">${t}</text>`; };
+  const line = (d,dash,lab,lx,ly) => { out += `<path d="${d}" fill="none" stroke="${c('--muted')}" stroke-width="2" marker-end="url(#ar)" ${dash?'stroke-dasharray="6 5"':''}/>`; if(lab) out += `<text x="${lx}" y="${ly}" font-size="12" font-weight="800" fill="${c('--muted')}">${lab}</text>`; };
+  const fin = (x,y,t,w=88) => { out += `<rect x="${x-w/2}" y="${y-16}" width="${w}" height="32" rx="16" fill="${c('--fg')}"/><text x="${x}" y="${y+5}" text-anchor="middle" font-size="13" font-weight="900" fill="${c('--surface')}">${t||'FIN'}</text>`; };
+  const A = [c('--accent-soft'), c('--accent')];
+  const W=260, H=54;
+  // Tronco
+  box(490,50,W,H,"📄 CARGAR INFORME","foto o archivo · se guarda el original",...A);
+  line("M490 77V113");
+  box(490,140,W,H,"LA IA LEE EL INFORME","extrae datos, valores y conclusión del lab",c('--surface'),c('--line'));
+  line("M490 167V193");
+  dia(490,235,210,84,"¿Se pudo leer?");
+  line("M595 235H695",0,"No",620,226);
+  box(800,235,210,H,"NO SE PUDO LEER","«Probá otra foto o el PDF»",c('--warn-bg'),c('--warn-line'),c('--warn'));
+  line("M800 208V50H622",0,"Intentar de nuevo",660,42);
+  line("M490 277V303",0,"Sí",498,294);
+  dia(490,345,230,84,"¿Ya estaba cargado?");
+  line("M605 345H695",0,"Sí",636,336);
+  box(800,345,210,H,"MOSTRAR EL EXISTENTE","no se carga dos veces",c('--rev-bg'),c('--rev-line'),c('--rev'));
+  line("M800 372V400"); fin(800,418);
+  out += `<text x="180" y="340" text-anchor="middle" font-size="12" fill="${c('--muted')}">PDF de varios equipos</text><text x="180" y="355" text-anchor="middle" font-size="12" fill="${c('--muted')}">→ pasa a la carga normal</text>`;
+  line("M375 345H290",1);
+  line("M490 387V423",0,"No",498,410);
+  box(490,450,W,H,"CONFIRMAR EQUIPO","SÍ / NO → buscar",...A);
+  box(180,450,230,H,"Si hay duda:","elegir entre 2–3 · o buscar",c('--surface'),c('--line'),null,true);
+  line("M295 450H358",1);
+  line("M490 477V518");
+  box(800,497,250,H,"Si la muestra no tiene OT:","¿abrir la de la rutina? SÍ / AHORA NO",...A);
+  line("M685 497H495",1);
+  box(490,545,W,H,"GUARDAR + ANÁLISIS AUTOMÁTICO","mismos servicios · PDF del análisis",c('--surface'),c('--line'));
+  line("M490 572V608");
+  dia(490,650,190,84,"¿Resultado?");
+  // Ramas
+  const BY=790;
+  out += `<path d="M490 692V725M100 725H820" fill="none" stroke="${c('--muted')}" stroke-width="2"/>`;
+  line("M100 725V760"); line("M290 725V760"); line("M490 725V760"); line("M820 725V760");
+  box(100,BY,170,H,"🟢 NORMAL","",c('--ok-bg'),c('--ok-line'),c('--ok'));
+  box(290,BY,170,H,"🟡 ATENCIÓN","",c('--warn-bg'),c('--warn-line'),c('--warn'));
+  box(490,BY,190,H,"🔴 ACCIÓN NECESARIA","",c('--bad-bg'),c('--bad-line'),c('--bad'));
+  box(820,BY,260,H,"⚪ NO SE PUEDE DETERMINAR","sin gravedad · o lab y límites no coinciden",c('--rev-bg'),c('--rev-line'),c('--rev'));
+  line("M100 817V858"); box(100,885,170,H,"ARCHIVAR","historia del equipo",c('--surface'),c('--line')); line("M100 912V948"); fin(100,966);
+  line("M290 817V858"); box(290,885,170,H,"SEGUIMIENTO","próxima muestra del plan",c('--surface'),c('--line')); line("M290 912V948"); fin(290,966);
+  out += `<text x="290" y="1004" text-anchor="middle" font-size="12" fill="${c('--muted')}">o «reportar un defecto»</text><text x="290" y="1019" text-anchor="middle" font-size="12" fill="${c('--muted')}">→ formulario de siempre</text>`;
+  line("M820 817V858"); box(820,885,220,H,"👤 LA OFICINA LO TERMINA","→ sigue por el flujo normal",c('--rev-bg'),c('--rev'),c('--rev'),true);
+  line("M490 817V858"); box(490,885,230,H,"EXPLICAR + PROPONER","qué pasa y qué hacer, con su criterio",c('--surface'),c('--line'));
+  line("M490 912V948");
+  dia(490,1000,260,84,"¿El equipo ya tiene OT?");
+  line("M620 1000H688",0,"Sí",640,991);
+  box(795,1000,210,H,"¿ES EL MISMO PROBLEMA?","lo decide el usuario",...A);
+  line("M795 1027V1054",0,"Sí",803,1045); fin(795,1072,"VER ESA OT",120);
+  line("M900 1000H940V1110H652",0,"No, es otro",880,1128);
+  line("M490 1042V1083",0,"No",498,1068);
+  box(490,1110,320,H,"DEFECTO COMPLETO + OT ARMADA","mismos servicios de IA que Defectos",...A);
+  line("M490 1137V1173");
+  box(490,1200,340,H,"RESPONSABLE Y FECHA → CONFIRMAR","ya sugeridos · un toque",...A);
+  line("M490 1227V1263");
+  box(490,1290,390,H,"CREAR OT = MISMOS PASOS QUE EL NORMAL","une y cierra el defecto · guarda su PDF",c('--surface'),c('--line'));
+  line("M490 1317V1353");
+  box(490,1380,260,H,"✅ OT EN PREPARACIÓN","igual que el flujo normal",c('--ok-bg'),c('--ok-line'),c('--ok'));
+  // Leyenda
+  out += `<g font-size="12" fill="${c('--muted')}"><rect x="20" y="1310" width="16" height="16" rx="4" fill="${A[0]}" stroke="${A[1]}" stroke-width="2"/><text x="44" y="1323">toca el usuario</text>
+    <rect x="20" y="1336" width="16" height="16" rx="4" fill="${c('--surface')}" stroke="${c('--line')}" stroke-width="2"/><text x="44" y="1349">lo hace el sistema</text>
+    <rect x="20" y="1362" width="16" height="16" rx="4" fill="${c('--rev-bg')}" stroke="${c('--rev')}" stroke-width="2" stroke-dasharray="4 3"/><text x="44" y="1375">lo hace una persona de la oficina</text></g>`;
+  svg.innerHTML = out;
+})();
+
+reset("bad");
+</script>
+</body>
+</html>

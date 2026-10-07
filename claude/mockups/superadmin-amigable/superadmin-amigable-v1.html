@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Consola de administración — Prototipo V1</title>
+<style>
+  :root{
+    --bg:#F4F5F7;--surface:#FFFFFF;--surface2:#F7F8FA;--fg:#1A1D24;--muted:#6B7280;--faint:#9CA3AF;--border:#E2E4E9;
+    --accent:#0284C7;--accentbg:rgba(2,132,199,.08);--accentbd:rgba(2,132,199,.25);
+    --ok:#0E9F6E;--okbg:rgba(14,159,110,.10);--warn:#B45309;--warnbg:rgba(217,119,6,.12);--bad:#DC2626;--badbg:rgba(220,38,38,.09);
+  }
+  body.dark{
+    --bg:#080D1D;--surface:#111A30;--surface2:#16203A;--fg:#E0E1DD;--muted:#94A3B8;--faint:#64748B;--border:rgba(255,255,255,.10);
+    --accent:#38BDF8;--accentbg:rgba(56,189,248,.10);--accentbd:rgba(56,189,248,.30);
+    --ok:#34D399;--okbg:rgba(52,211,153,.12);--warn:#FBBF24;--warnbg:rgba(251,191,36,.12);--bad:#F87171;--badbg:rgba(248,113,113,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);font-size:14px;line-height:1.45}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px}
+  input:focus,select:focus,button:focus-visible{outline:2px solid var(--accentbd);outline-offset:1px}
+
+  .demo{background:#FEF3C7;color:#92400E;font-size:11px;font-weight:600;text-align:center;padding:4px}
+  .app{display:flex;min-height:calc(100vh - 24px)}
+
+  /* Menú */
+  aside{width:236px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+  .brand{display:flex;gap:10px;align-items:center;padding:18px 16px;border-bottom:1px solid var(--border)}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:var(--accentbg);border:1px solid var(--accentbd);display:grid;place-items:center;color:var(--accent);font-weight:800}
+  .brand b{display:block;font-size:14px}.brand span{font-size:11px;color:var(--muted)}
+  nav{padding:10px 8px;flex:1;overflow:auto}
+  .grp{font-size:11px;color:var(--faint);font-weight:600;padding:12px 10px 4px}
+  .nav{display:flex;gap:10px;align-items:center;width:100%;padding:8px 10px;border-radius:8px;color:var(--muted);font-size:13px;text-align:left}
+  .nav:hover{background:var(--surface2);color:var(--fg)}
+  .nav.on{background:var(--accentbg);color:var(--accent);font-weight:600}
+  .nav .ic{width:18px;text-align:center}
+  .nav .cnt{margin-left:auto;font-size:11px;background:var(--badbg);color:var(--bad);border-radius:10px;padding:0 7px;font-weight:700}
+  .me{border-top:1px solid var(--border);padding:12px 16px;font-size:12px}
+  .me b{display:block;font-size:13px}.me span{color:var(--muted)}
+  .me button{margin-top:8px;color:var(--muted);font-size:12px}
+
+  main{flex:1;min-width:0;padding:24px 28px 80px}
+  .head{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+  .head h1{font-size:20px}.head p{color:var(--muted);font-size:13px;max-width:640px;margin-top:2px}
+  .head .act{margin-left:auto;display:flex;gap:8px}
+  .btn{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:7px 12px;font-size:13px}
+  .btn:hover{background:var(--surface2)}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  body.dark .btn.pri{color:#04111f}
+  .btn.danger{color:var(--bad)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px}
+  .card h2{font-size:14px;padding:14px 16px 0}
+  .card .sub{color:var(--muted);font-size:12px;padding:2px 16px 0}
+
+  /* Tarjetas resumen */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{padding:14px 16px;cursor:pointer}
+  .kpi:hover{border-color:var(--accentbd)}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  .kpi .v{font-size:24px;font-weight:700;margin-top:2px}
+  .kpi .h{font-size:12px;color:var(--muted);margin-top:2px}
+  .kpi.alert .v{color:var(--bad)}
+
+  /* Filtros */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+  .filters label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);font-weight:600}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+  .seg button{padding:7px 12px;font-size:13px;color:var(--muted)}
+  .seg button.on{background:var(--accentbg);color:var(--accent);font-weight:600}
+
+  /* Tablas */
+  .tw{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:var(--surface2)}
+  tr.click{cursor:pointer}
+  .s{color:var(--muted);font-size:12px}
+  .who b{display:block;font-weight:600}
+  .tech{display:none}
+  body.showtech .tech{display:table-cell}
+  body.showtech span.tech,body.showtech div.tech{display:block}
+
+  .pill{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+  .pill.ok{background:var(--okbg);color:var(--ok)}
+  .pill.bad{background:var(--badbg);color:var(--bad)}
+  .pill.warn{background:var(--warnbg);color:var(--warn)}
+  .pill.mut{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+  .pill.acc{background:var(--accentbg);color:var(--accent)}
+
+  .note{background:var(--accentbg);border:1px solid var(--accentbd);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+  .note.warn{background:var(--warnbg);border-color:transparent;color:var(--warn)}
+  .empty{padding:36px 16px;text-align:center;color:var(--muted)}
+  .empty b{display:block;color:var(--fg);font-size:15px;margin-bottom:4px}
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+  .map{height:260px;margin:12px 16px 16px;border-radius:10px;background:linear-gradient(160deg,#dbeafe,#e0f2fe 60%,#ecfccb);position:relative;overflow:hidden;border:1px solid var(--border)}
+  body.dark .map{background:linear-gradient(160deg,#0b2545,#0f3057 60%,#163d2c)}
+  .map .river{position:absolute;left:38%;top:-10%;width:30px;height:130%;background:rgba(2,132,199,.25);transform:rotate(14deg);border-radius:20px}
+  .dot{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer}
+  .dot .tip{display:none;position:absolute;left:16px;top:-6px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:12px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+  .dot:hover .tip{display:block}
+
+  .bar{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+  .rank{padding:8px 16px 14px}
+  .rank .r{display:grid;grid-template-columns:1fr 70px;gap:4px 10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .rank .r:last-child{border-bottom:0}
+  .rank .r .bar{grid-column:1 / -1}
+
+  /* Panel lateral y ventanas */
+  .shade{position:fixed;inset:0;background:rgba(10,15,30,.45);display:none;z-index:20}
+  .shade.on{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(620px,100%);background:var(--surface);z-index:21;transform:translateX(100%);transition:transform .2s;display:flex;flex-direction:column}
+  .drawer.on{transform:none}
+  .dh{display:flex;gap:12px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border)}
+  .dh h3{font-size:16px}
+  .x{margin-left:auto;width:30px;height:30px;border-radius:50%;background:#DC2626;color:#fff;font-weight:700;font-size:15px;flex-shrink:0}
+  .tabs{display:flex;gap:4px;padding:0 18px;border-bottom:1px solid var(--border)}
+  .tabs button{padding:10px 12px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent}
+  .tabs button.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+  .db{padding:16px 18px;overflow:auto;flex:1}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:8px 12px;font-size:13px;margin-bottom:16px}
+  .kv span{color:var(--muted)}
+  .dlg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,92vw);background:var(--surface);border-radius:12px;z-index:31;display:none;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+  .dlg.on{display:block}
+  .dlg .db{padding:16px 18px}
+  .dlg .ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
+  .shade.top{z-index:30}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;display:none;z-index:40}
+
+  /* Panel de notas del prototipo */
+  .notes{position:fixed;right:16px;bottom:16px;width:330px;max-height:70vh;overflow:auto;background:#FFFBEB;color:#78350F;border:1px solid #FCD34D;border-radius:12px;padding:14px 16px;font-size:12.5px;z-index:15;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .notes h4{font-size:13px;margin-bottom:6px}
+  .notes p{margin:4px 0}.notes .c{color:#92400E;font-weight:700}
+  .notes .tg{position:absolute;top:8px;right:10px;font-size:12px;color:#92400E}
+  .notes.min{width:auto;height:auto}.notes.min .nb{display:none}
+
+  .mbar{display:none}
+  @media (max-width:860px){
+    aside{display:none}
+    main{padding:16px 16px 90px}
+    .grid2{grid-template-columns:1fr}
+    .head .act{margin-left:0}
+    .mbar{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:10}
+    .mbar button{flex:1;padding:8px 2px 10px;font-size:11px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+    .mbar button.on{color:var(--accent);font-weight:600}
+    .mbar .ic{font-size:17px}
+    .notes{display:none}
+    .hide-m{display:none}
+    .kv{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="demo">PROTOTIPO V1 · DATOS DE EJEMPLO · no está conectado al sistema</div>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="logo">C3</div><div><b>Administración</b><span>Consola general del sistema</span></div></div>
+    <nav id="nav"></nav>
+    <div class="me"><b>Gustavo Villen</b><span>Administrador general</span><br>
+      <button onclick="document.body.classList.toggle('dark')">Cambiar a modo claro/oscuro</button><br>
+      <button>Cerrar sesión</button></div>
+  </aside>
+  <main id="main"></main>
+</div>
+<div class="mbar" id="mbar"></div>
+
+<div class="shade" id="shade" onclick="closeAll()"></div>
+<div class="drawer" id="drawer"></div>
+<div class="shade top" id="shade2" onclick="closeDlg()"></div>
+<div class="dlg" id="dlg"></div>
+<div class="toast" id="toast"></div>
+
+<div class="notes" id="notes"><button class="tg" onclick="this.parentNode.classList.toggle('min')">ocultar / ver</button>
+  <h4>Qué cambia en esta pantalla</h4><div class="nb" id="nb"></div></div>
+
+<script>
+// ─── Datos de ejemplo ───────────────────────────────────────────────────────
+const EMP = [
+  {n:"Mercurio Group",estado:"ok",idioma:"Español",moneda:"Guaraní (PYG)",zona:"Asunción",buques:31,usuarios:25,creada:"12/03/2026",web:["mercurio.cms3.shipcms.cloud"]},
+  {n:"Empresa de práctica",estado:"ok",idioma:"Español",moneda:"Peso argentino (ARS)",zona:"Buenos Aires",buques:0,usuarios:1,creada:"02/02/2026",web:["demo.cms3.shipcms.cloud"]},
+];
+const USERS = [
+  {n:"Walter García",rol:"Jefe de Mantenimiento",usu:"GARCIA",mail:null,estado:"ok",ult:"hoy 08:27"},
+  {n:"Jorge Bael",rol:"Jefe de Mantenimiento",usu:"BAEL",mail:"maquinas.donchicueto@mercuriogroup.com",estado:"ok",ult:"hoy 07:50"},
+  {n:"Admin Mercurio",rol:"Administrador de la empresa",usu:"ADMIN",mail:"admin@mercurio.com",estado:"ok",ult:"hoy 01:58"},
+  {n:"Carlos Arrascaeta",rol:"Capitán / Jefe de Máquinas",usu:"ARRASCAETA",mail:null,estado:"off",ult:"hace 12 días"},
+];
+const CONN = [
+  {n:"Admin Mercurio",rol:"Administrador de la empresa",emp:"Mercurio Group",buque:"DON CHICUETO",donde:"Buenos Aires, Argentina",gps:false,red:"Internet satelital",disp:"Computadora (Chrome)",pant:"Planes de mantenimiento",hace:"hace 1 min",x:62,y:72},
+  {n:"Walter García",rol:"Jefe de Mantenimiento",emp:"Mercurio Group",buque:"LA TEREZA",donde:"Asunción, Paraguay",gps:true,red:"Internet satelital",disp:"Celular (Android)",pant:"Órdenes de trabajo",hace:"hace 3 min",x:46,y:30},
+  {n:"Jorge Bael",rol:"Jefe de Mantenimiento",emp:"Mercurio Group",buque:"DON CHICUETO",donde:"Rosario, Argentina",gps:true,red:"Internet de tierra",disp:"Computadora (Chrome)",pant:"Seguimiento",hace:"hace 6 min",x:55,y:58},
+  {n:"Héctor Benítez",rol:"Jefe de Mantenimiento",emp:"Mercurio Group",buque:null,donde:"Asunción, Paraguay",gps:true,red:"Internet satelital",disp:"Celular (Android)",pant:"Inicio",hace:"hace 11 min",x:43,y:26},
+];
+const LOGS = [
+  {f:"hoy 08:27",ok:true,n:"Walter García",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Computadora"},
+  {f:"hoy 08:19",ok:true,n:"Walter García",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Computadora"},
+  {f:"hoy 08:12",ok:false,n:"Walter García",mot:"Contraseña incorrecta",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Computadora"},
+  {f:"hoy 08:11",ok:false,n:"«GARCIA-WALTER»",mot:"Ese usuario no existe",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Computadora"},
+  {f:"hoy 07:37",ok:true,n:"Walter García",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Celular"},
+  {f:"hoy 07:37",ok:false,n:"Walter García",mot:"Contraseña incorrecta",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Celular"},
+  {f:"ayer 11:01",ok:false,n:"Intento anterior al cambio",mot:"Usuario o contraseña incorrectos (no se registró cuál)",emp:"Mercurio Group",donde:"Buenos Aires",disp:"Computadora",viejo:true},
+];
+const IA = [
+  {fn:"OT: revisión al cerrar",usos:126,cost:1.12,user:"Walter García"},
+  {fn:"Copiloto (pregunta)",usos:88,cost:0.74},
+  {fn:"SS: revisión al completar",usos:41,cost:0.39},
+  {fn:"OT: sugerir criterios de aceptación",usos:65,cost:0.21},
+  {fn:"Laboratorio: leer informe",usos:12,cost:0.28},
+  {fn:"Vetting: sugerir evaluación",usos:9,cost:0.10},
+  {fn:"OT: sugerir tarea del plan",usos:70,cost:0.06},
+  {fn:"Otras (14 funciones)",usos:44,cost:0.10},
+];
+const IA_ROWS = [
+  {f:"05/10 01:58",n:"Admin Mercurio",buque:"DON CHICUETO",fn:"Vetting: sugerir evaluación",veces:2,cost:"US$ 0,0004",mod:"gemini-3.1-flash-lite",tin:"2.600",tout:"410"},
+  {f:"05/10 01:57",n:"Admin Mercurio",buque:"DON CHICUETO",fn:"Copiloto (pregunta)",veces:1,cost:"US$ 0,0026",mod:"gemini-3.1-flash-lite",tin:"25.100",tout:"190"},
+  {f:"03/10 10:17",n:"Walter García",buque:"LA TEREZA",fn:"SS: revisión al completar",veces:1,cost:"US$ 0,0012",mod:"gemini-3.5-flash",tin:"3.200",tout:"990"},
+  {f:"03/10 09:55",n:"Walter García",buque:null,fn:"OT: sugerir criterios de aceptación",veces:1,cost:"US$ 0,0002",mod:"gemini-3.1-flash-lite",tin:"1.000",tout:"141"},
+  {f:"03/10 09:28",n:"Walter García",buque:"LA TEREZA",fn:"OT: revisión al cerrar",veces:1,cost:"US$ 0,0011",mod:"gemini-3.5-flash",tin:"4.700",tout:"562"},
+  {f:"02/10 17:48",n:"Jorge Bael",buque:"DON CHICUETO",fn:"OT: resumen de varias tareas",veces:1,cost:"US$ 0,0001",mod:"gemini-3.1-flash-lite",tin:"980",tout:"103"},
+];
+const PREG = [
+  {f:"05/10 01:57",n:"Admin Mercurio",rol:"Administrador de la empresa",pant:"Planes de mantenimiento",buque:"DON CHICUETO",q:"¿Qué tareas del motor principal babor vencen este mes?",adj:false},
+  {f:"03/10 09:40",n:"Walter García",rol:"Jefe de Mantenimiento",pant:"Órdenes de trabajo",buque:"LA TEREZA",q:"¿Qué repuestos uso para el cambio de filtros del generador 2?",adj:true},
+  {f:"02/10 16:10",n:"Jorge Bael",rol:"Jefe de Mantenimiento",pant:"Defectos",buque:"DON CHICUETO",q:"Redactame la descripción del defecto de la bomba de achique",adj:false},
+];
+const EVT = [
+  {f:"hoy 08:27",quien:"Walter García",emp:"Mercurio Group",que:"Ingresó al sistema",sobre:"—",tipo:"acc"},
+  {f:"hoy 08:12",quien:"Walter García",emp:"Mercurio Group",que:"Intento de ingreso rechazado",sobre:"Contraseña incorrecta",tipo:"bad"},
+  {f:"ayer 16:40",quien:"Admin Mercurio",emp:"Mercurio Group",que:"Modificó un plan de mantenimiento",sobre:"Cambio de aceite MCP Br · DON CHICUETO",tipo:"mut"},
+  {f:"ayer 15:02",quien:"Gustavo Villen",emp:"Consola",que:"Creó un usuario",sobre:"Héctor Benítez · Mercurio Group",tipo:"mut"},
+  {f:"01/10 10:15",quien:"Gustavo Villen",emp:"Consola",que:"Publicó instrucciones de IA",sobre:"Asistente de defectos · Español",tipo:"warn"},
+];
+const PROMPTS = [
+  {fn:"Asistente de consultas (copiloto)",id:"Español",v:4,est:"pub",act:"28/09/2026",txt:"Sos un asistente especializado en mantenimiento naval. Respondé con precisión y citá la fuente…"},
+  {fn:"Asistente de defectos",id:"Español",v:2,est:"draft",act:"04/10/2026",txt:"Ayudá a redactar la descripción del defecto con lo observado, sin decidir la criticidad…"},
+  {fn:"Análisis de diferimientos",id:"Español",v:1,est:"pub",act:"15/08/2026",txt:"Analizá el riesgo de postergar la tarea y proponé medidas compensatorias…"},
+  {fn:"Resumen ejecutivo diario",id:"Inglés",v:1,est:"pub",act:"15/08/2026",txt:"Summarize the day's maintenance activity for the fleet superintendent…"},
+];
+const ROL_HELP = {
+  "Administrador general":"Puede todo: crear empresas, usuarios, cambiar instrucciones de la IA y ver toda la actividad.",
+  "Soporte":"Puede mirar todo para ayudar a los clientes, pero no crear empresas ni cambiar instrucciones de la IA."
+};
+
+// ─── Navegación ─────────────────────────────────────────────────────────────
+const PAGES = [
+  {g:"",id:"inicio",ic:"⌂",l:"Inicio",m:"Inicio"},
+  {g:"Clientes",id:"empresas",ic:"▦",l:"Empresas",m:"Empresas"},
+  {g:"Clientes",id:"equipo",ic:"☺",l:"Equipo de la consola"},
+  {g:"Seguridad",id:"accesos",ic:"◉",l:"Conectados e ingresos",m:"Accesos",cnt:2},
+  {g:"Seguridad",id:"persona",ic:"☷",l:"Actividad por persona"},
+  {g:"Seguridad",id:"registro",ic:"≡",l:"Registro de cambios"},
+  {g:"Uso del sistema",id:"ia",ic:"✦",l:"Consumo de IA",m:"Consumo"},
+  {g:"Uso del sistema",id:"preguntas",ic:"?",l:"Preguntas al copiloto"},
+  {g:"Uso del sistema",id:"mapa",ic:"⚓",l:"Ubicación de los buques"},
+  {g:"Configuración",id:"prompts",ic:"✎",l:"Instrucciones de la IA"},
+];
+let cur = "inicio";
+function renderNav(){
+  let h="",g=null;
+  for(const p of PAGES){
+    if(p.g!==g){ g=p.g; if(g) h+=`<div class="grp">${g}</div>`; }
+    h+=`<button class="nav ${p.id===cur?"on":""}" onclick="go('${p.id}')"><span class="ic">${p.ic}</span>${p.l}${p.cnt?`<span class="cnt" title="Ingresos rechazados hoy">${p.cnt}</span>`:""}</button>`;
+  }
+  document.getElementById("nav").innerHTML=h;
+  const mb = PAGES.filter(p=>p.m);
+  document.getElementById("mbar").innerHTML = mb.map(p=>`<button class="${p.id===cur?"on":""}" onclick="go('${p.id}')"><span class="ic">${p.ic}</span>${p.m}</button>`).join("")
+    + `<button onclick="moreMenu()"><span class="ic">⋯</span>Más</button>`;
+}
+function moreMenu(){
+  const rest = PAGES.filter(p=>!p.m);
+  openDlg("Más secciones", rest.map(p=>`<button class="nav" onclick="closeDlg();go('${p.id}')"><span class="ic">${p.ic}</span>${p.l}</button>`).join(""), "");
+}
+function go(id){ cur=id; renderNav(); closeAll(); document.body.classList.remove("showtech"); VIEWS[id](); window.scrollTo(0,0); }
+const $m = () => document.getElementById("main");
+function notes(list){ document.getElementById("nb").innerHTML = list.map(([c,p,r])=>`<p><span class="c">Antes:</span> ${c}</p><p><span class="c">Ahora:</span> ${p}</p><p style="margin-bottom:10px"><i>${r}</i></p>`).join(""); }
+function head(t,d,act=""){ return `<div class="head"><div><h1>${t}</h1><p>${d}</p></div><div class="act">${act}</div></div>`; }
+function pillEstado(e){ return e==="ok"?`<span class="pill ok">● Activa</span>`:e==="off"?`<span class="pill mut">○ Dada de baja</span>`:`<span class="pill warn">❚❚ Suspendida</span>`; }
+function techBtn(){ return `<button class="btn" onclick="document.body.classList.toggle('showtech')">Ver / ocultar detalle técnico</button>`; }
+
+// ─── Pantallas ──────────────────────────────────────────────────────────────
+const VIEWS = {
+inicio(){
+  $m().innerHTML = head("Inicio","Lo más importante del día, en una mirada. Tocá cualquier tarjeta para ver el detalle.")+`
+  <div class="kpis">
+    <div class="card kpi" onclick="go('accesos')"><div class="l">Conectados ahora</div><div class="v">4</div><div class="h">3 en buques, 1 en oficina</div></div>
+    <div class="card kpi alert" onclick="go('accesos')"><div class="l">Ingresos rechazados hoy</div><div class="v">2</div><div class="h">Walter García se equivocó de contraseña</div></div>
+    <div class="card kpi" onclick="go('ia')"><div class="l">Gasto de IA este mes</div><div class="v">US$ 3,00</div><div class="h">455 usos · dentro del presupuesto</div></div>
+    <div class="card kpi" onclick="go('empresas')"><div class="l">Empresas activas</div><div class="v">2</div><div class="h">26 usuarios en total</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Últimos ingresos</h2><div class="sub">Quién entró al sistema hoy</div>
+      <div class="tw"><table><tbody>${LOGS.slice(0,5).map(r=>`<tr><td class="s">${r.f}</td><td><b>${r.n}</b></td><td>${r.ok?'<span class="pill ok">✓ Entró</span>':'<span class="pill bad">✕ Rechazado</span>'}</td></tr>`).join("")}</tbody></table></div></div>
+    <div class="card"><h2>En qué se usó la IA este mes</h2><div class="sub">Las funciones que más gastaron</div>
+      <div class="rank">${IA.slice(0,4).map(r=>`<div class="r"><span>${r.fn}</span><b style="text-align:right">US$ ${r.cost.toFixed(2).replace(".",",")}</b><div class="bar"><i style="width:${r.cost/1.12*100}%"></i></div></div>`).join("")}</div></div>
+  </div>`;
+  notes([["Al entrar se abría directo la lista de empresas (Tenants).","Pantalla de inicio con lo que importa hoy: conectados, rechazos, gasto de IA y empresas.","Es nueva, pero usa sólo datos que el sistema ya tiene. Es OPCIONAL: si no la querés, se saca y se sigue entrando a Empresas."]]);
+},
+empresas(){
+  $m().innerHTML = head("Empresas","Las empresas clientes que usan el sistema. Tocá una para ver sus usuarios, invitaciones y datos.",`<button class="btn pri" onclick="nuevaEmpresa()">+ Nueva empresa</button>`)+`
+  <div class="card"><div class="tw"><table><thead><tr><th>Empresa</th><th>Estado</th><th class="hide-m">Buques</th><th class="hide-m">Usuarios</th><th class="hide-m">Idioma</th><th class="hide-m">Cliente desde</th></tr></thead><tbody>
+  ${EMP.map((e,i)=>`<tr class="click" onclick="empresa(${i})"><td><b>${e.n}</b><div class="s">${e.web[0]}</div></td><td>${pillEstado(e.estado)}</td><td class="hide-m">${e.buques}</td><td class="hide-m">${e.usuarios}</td><td class="hide-m">${e.idioma}</td><td class="hide-m">${e.creada}</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+  notes([
+    ["Título «Tenants», columnas «Slug», «Locale», estado ACTIVE/SUSPENDED.","«Empresas», con su nombre, la dirección web debajo, cuántos buques y usuarios tiene, idioma en castellano y estado con color, ícono y texto.","Se reconoce la empresa por su nombre, no por un código interno."],
+    ["El detalle mezclaba dominios, usuarios e invitaciones con nombres técnicos («Host», «Token»).","Panel al costado con pestañas Datos · Usuarios · Invitaciones · Direcciones web. La invitación se entrega como un enlace listo para copiar y mandar.","Antes había que copiar un «token» y explicarle a la persona qué hacer con él."]]);
+},
+equipo(){
+  $m().innerHTML = head("Equipo de la consola","Las personas que pueden entrar a esta consola de administración. No son usuarios de las empresas clientes.",`<button class="btn pri" onclick="openDlg('Nueva persona en la consola',formPersona(),btnsGuardar())">+ Agregar persona</button>`)+`
+  <div class="card"><div class="tw"><table><thead><tr><th>Persona</th><th>Qué puede hacer</th><th>Estado</th><th class="hide-m">Desde</th></tr></thead><tbody>
+    <tr><td class="who"><b>Gustavo Villen</b><span class="s">gustavovillen@gmail.com</span></td><td><span class="pill acc">Administrador general</span><div class="s">${ROL_HELP["Administrador general"]}</div></td><td>${pillEstado("ok")}</td><td class="hide-m">01/2026</td></tr>
+    <tr><td class="who"><b>Soporte técnico</b><span class="s">soporte@shipcms.cloud</span></td><td><span class="pill mut">Soporte</span><div class="s">${ROL_HELP["Soporte"]}</div></td><td>${pillEstado("ok")}</td><td class="hide-m">03/2026</td></tr>
+  </tbody></table></div></div>`;
+  notes([["«Platform Users», roles SUPERADMIN / SUPPORT sin explicación.","«Equipo de la consola», con el rol en castellano y una frase que dice qué puede hacer cada uno.","Al dar de alta a alguien se entiende qué permiso se le está dando. Los permisos no cambian."]]);
+},
+accesos(){
+  $m().innerHTML = head("Conectados e ingresos","Quién está usando el sistema ahora y quién intentó entrar.")+`
+  <div class="card" style="margin-bottom:16px"><h2>Conectados ahora · 4 personas</h2><div class="sub">Se actualiza solo cada minuto. Pasá el mouse por un punto del mapa para ver quién es.</div>
+    <div class="map"><div class="river"></div>${CONN.map(c=>`<div class="dot" style="left:${c.x}%;top:${c.y}%"><div class="tip"><b>${c.n}</b><br>${c.buque?"A bordo del "+c.buque:"En oficina"}<br>${c.donde}${c.gps?" · ubicación del celular":""}</div></div>`).join("")}</div>
+    <div class="tw"><table><thead><tr><th>Persona</th><th>Empresa y buque</th><th class="hide-m">Dónde está</th><th class="hide-m">Desde qué equipo</th><th class="hide-m">Qué está mirando</th><th>Última actividad</th></tr></thead><tbody>
+    ${CONN.map(c=>`<tr><td class="who"><b>${c.n}</b><span class="s">${c.rol}</span></td><td>${c.emp}<div class="s">${c.buque?c.buque:"Sin buque asignado"}</div></td><td class="hide-m">${c.donde}<div class="s">${c.red}${c.gps?" · ubicación exacta del celular":" · ubicación aproximada"}</div></td><td class="hide-m">${c.disp}</td><td class="hide-m">${c.pant}</td><td class="s">${c.hace}</td></tr>`).join("")}
+    </tbody></table></div></div>
+
+  <div class="card"><h2>Historial de ingresos</h2><div class="sub">Cada vez que alguien entró o intentó entrar.</div>
+    <div class="filters" style="padding:12px 16px 0">
+      <label>Empresa<select><option>Todas</option>${EMP.map(e=>`<option>${e.n}</option>`)}</select></label>
+      <label>Persona<input placeholder="Nombre o usuario" oninput="fLog(this.value)"></label>
+      <label>Resultado<div class="seg" id="segR"><button class="on" onclick="segR(this,'')">Todos</button><button onclick="segR(this,'ok')">Entró</button><button onclick="segR(this,'bad')">Rechazado</button></div></label>
+    </div>
+    <div class="tw"><table><thead><tr><th>Cuándo</th><th>Resultado</th><th>Persona</th><th class="hide-m">Empresa</th><th class="hide-m">Desde dónde</th></tr></thead><tbody id="logs"></tbody></table></div></div>`;
+  window.logF={q:"",r:""}; drawLogs();
+  notes([
+    ["Arriba se veía el correo de relleno «named-1788…@internal», el rol en inglés (MAINTENANCE_MANAGER) y el código del buque (DCH).","Nombre de la persona, su rol en castellano y el nombre del buque.","Para mostrar el nombre del buque hay que hacer un ajuste chico del lado del servidor: hoy sólo llega el código."],
+    ["Columnas «Pantalla» con la dirección técnica (/work-orders/…) y «Acciones» con un número de pedidos internos.","«Qué está mirando» dice el nombre de la pantalla. El número de pedidos se saca: no le dice nada a nadie.",""],
+    ["Rechazos con «invalid» y «Credenciales inválidas».","Dice quién fue y por qué: «Contraseña incorrecta» o «Ese usuario no existe» con lo que escribió. Los rechazos viejos se explican en una frase.","Esto ya se hizo hoy en el sistema real; acá se ve integrado al diseño nuevo."],
+    ["Filtro de empresa escribiendo el código («Empresa (slug)»).","Lista desplegable con el nombre de cada empresa.",""]]);
+},
+persona(){
+  $m().innerHTML = head("Actividad por persona","Elegí a una persona para ver todo lo que hizo en el sistema y si hay algo fuera de lo común.")+`
+  <div class="filters"><label>Persona<select id="selP" onchange="persona(this.value)"><option value="">Elegí una persona…</option>${USERS.map((u,i)=>`<option value="${i}">${u.n} · Mercurio Group</option>`)}</select></label>
+    <label>Período<div class="seg"><button>Últimas 24 horas</button><button class="on">Últimos 7 días</button><button>Últimos 30 días</button></div></label></div>
+  <div id="pbox" class="card"><div class="empty"><b>Todavía no elegiste a nadie</b>Elegí una persona en la lista de arriba para ver su actividad.</div></div>`;
+  notes([
+    ["Al abrir, la pantalla ya mostraba a una persona fija (ARRASCAETA) puesta a mano en el programa.","Arranca vacía y pide elegir a alguien. La lista muestra nombre y empresa, no «usuario · correo · código · ROL».","Nadie se encuentra con los datos de una persona sin haberla buscado."],
+    ["«Empresa / Buque» con códigos e IP en letra de computadora.","Empresa y buque por nombre. La IP queda dentro del detalle técnico.",""]]);
+},
+registro(){
+  $m().innerHTML = head("Registro de cambios","Todo lo que se creó, modificó o borró en el sistema, con quién lo hizo y cuándo.",techBtn())+`
+  <div class="filters"><label>Empresa<select><option>Todas</option><option>Mercurio Group</option><option>Consola</option></select></label>
+    <label>Tipo<select><option>Todo</option><option>Ingresos</option><option>Cambios en datos</option><option>Configuración</option></select></label>
+    <label>Desde<input type="date"></label><label>Hasta<input type="date"></label></div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué hizo</th><th class="hide-m">Sobre qué</th><th class="tech">Código interno</th></tr></thead><tbody>
+  ${EVT.map(e=>`<tr><td class="s">${e.f}</td><td class="who"><b>${e.quien}</b><span class="s">${e.emp}</span></td><td><span class="pill ${e.tipo}">${e.que}</span></td><td class="hide-m">${e.sobre}</td><td class="tech s">TENANT_LOGIN… · cuid</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+  notes([["«Audit Events»: columnas Tenant, Actor (SYSTEM/USER), Acción (TENANT_LOGIN_FAILED), Entidad, ID Entidad. No decía quién.","Quién (nombre), qué hizo (frase en castellano) y sobre qué (el registro por su nombre). Filtros por empresa, tipo y fechas. El código interno queda en «detalle técnico».","Es la pantalla que más cambia: hoy no la puede leer nadie que no programe. Necesita un ajuste del lado del servidor para traer los nombres."]]);
+},
+ia(){
+  $m().innerHTML = head("Consumo de IA","Cuánto se usó la inteligencia artificial, en qué y cuánto costó.",`<button class="btn">Descargar Excel</button>${techBtn()}`)+`
+  <div class="filters">
+    <div class="seg" id="segK"><button class="on" onclick="segK(this,0)">Inteligencia artificial</button><button onclick="segK(this,1)">Datos por satélite</button></div>
+    <label>Período<select><option>Este mes</option><option>Mes pasado</option><option>Últimos 7 días</option><option>Elegir fechas…</option></select></label>
+    <label>Empresa<select><option>Todas</option>${EMP.map(e=>`<option>${e.n}</option>`)}</select></label>
+    <label>Persona<select><option>Todas</option>${USERS.map(u=>`<option>${u.n}</option>`)}</select></label>
+  </div>
+  <div id="iabox"></div>`;
+  drawIA(0);
+  notes([
+    ["«Tokens IA / Bytes Satelital», «Input», «Output», «Reqs», «Cache↓», «Lat. avg», modelo gemini-3.1-flash-lite, costo $0.00012.","Arriba, tres números claros: gasto, cantidad de usos y la función que más gastó. Después un ranking por función y la lista con persona, buque, función, veces y costo. Los datos técnicos (modelo, volumen de texto, demora) se ven sólo con «Ver detalle técnico».","Alguien que no conoce el sistema entiende en qué se va la plata sin saber qué es un token."],
+    ["Filtros de empresa y correo escribiendo a mano, dos fechas sin título y un botón «Aplicar».","Desplegables de período, empresa y persona que filtran solos.",""],
+    ["«Agrupar: Por minuto / Sin agrupar».","Se saca. Se muestra agrupado por día y función, que es lo que se lee.","Si lo usás para algo, se deja dentro del detalle técnico."]]);
+},
+preguntas(){
+  $m().innerHTML = head("Preguntas al copiloto","Lo que la gente le pregunta al copiloto. Sirve para ver qué dudas tienen y mejorar las respuestas.")+`
+  <div class="filters"><label>Buscar<input placeholder="Palabra de la pregunta" style="width:240px"></label>
+    <label>Empresa<select><option>Todas</option><option>Mercurio Group</option></select></label>
+    <label>Buque<select><option>Todos</option><option>DON CHICUETO</option><option>LA TEREZA</option></select></label>
+    <label>Período<select><option>Este mes</option><option>Últimos 7 días</option></select></label></div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Cuándo</th><th>Persona</th><th>Pregunta</th><th class="hide-m">Desde qué pantalla</th><th class="hide-m">Buque</th></tr></thead><tbody>
+  ${PREG.map(p=>`<tr><td class="s">${p.f}</td><td class="who"><b>${p.n}</b><span class="s">${p.rol}</span></td><td>${p.q}${p.adj?`<div class="s">📎 adjuntó un archivo</div>`:""}</td><td class="hide-m">${p.pant}</td><td class="hide-m">${p.buque}</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+  notes([["Correo en vez de nombre, rol en inglés, «Pantalla» con la dirección técnica, código de buque, buscador que sólo funciona apretando Enter.","Nombre y rol en castellano, la pantalla por su nombre, el buque por su nombre. Filtros por empresa, buque y período. El buscador filtra mientras escribís.",""]]);
+},
+mapa(){
+  $m().innerHTML = head("Ubicación de los buques","Dónde está cada buque según el último celular a bordo que compartió su ubicación.",`<button class="btn">Actualizar</button>`)+`
+  <div class="card"><div class="map" style="height:320px"><div class="river"></div>
+    <div class="dot" style="left:46%;top:30%"><div class="tip"><b>LA TEREZA</b><br>Mercurio Group · hace 3 min<br>Cerca de Asunción</div></div>
+    <div class="dot" style="left:55%;top:58%"><div class="tip"><b>DON CHICUETO</b><br>Mercurio Group · hace 6 min<br>Cerca de Rosario</div></div></div>
+    <div class="tw"><table><thead><tr><th>Buque</th><th>Empresa</th><th class="hide-m">Informado por</th><th>Última posición</th></tr></thead><tbody>
+      <tr><td><b>LA TEREZA</b></td><td>Mercurio Group</td><td class="hide-m">Walter García</td><td>hace 3 min <span class="pill ok">● Al día</span></td></tr>
+      <tr><td><b>DON CHICUETO</b></td><td>Mercurio Group</td><td class="hide-m">Jorge Bael</td><td>hace 6 min <span class="pill ok">● Al día</span></td></tr>
+      <tr><td><b>CAPITÁN MIGUEL</b></td><td>Mercurio Group</td><td class="hide-m">Héctor Benítez</td><td>hace 3 días <span class="pill warn">⚠ Sin señal reciente</span></td></tr>
+    </tbody></table></div></div>`;
+  notes([["Código del buque, correo de quien informó, latitud/longitud con 5 decimales.","Nombre del buque, nombre de la persona y hace cuánto se supo la posición, con aviso si no hay señal reciente. Las coordenadas se ven tocando el punto del mapa.","Necesita el mismo ajuste chico del servidor para traer el nombre del buque."]]);
+},
+prompts(){
+  $m().innerHTML = head("Instrucciones de la IA","El texto de base que recibe la inteligencia artificial en cada función. Un cambio publicado afecta enseguida a todas las empresas.",`<button class="btn pri">+ Nuevas instrucciones</button>`)+`
+  <div class="note warn">Los cambios se guardan como borrador. Recién se usan cuando apretás «Publicar», y el sistema te pide confirmarlo.</div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Función</th><th>Idioma</th><th>Estado</th><th class="hide-m">Última modificación</th><th></th></tr></thead><tbody>
+  ${PROMPTS.map((p,i)=>`<tr><td><b>${p.fn}</b><div class="s">${p.txt}</div></td><td>${p.id}</td><td>${p.est==="pub"?`<span class="pill ok">✓ En uso · versión ${p.v}</span>`:`<span class="pill warn">✎ Borrador · versión ${p.v}</span>`}</td><td class="hide-m">${p.act}</td><td style="white-space:nowrap"><button class="btn">Editar</button> ${p.est==="draft"?`<button class="btn pri" onclick="publicar(${i})">Publicar</button>`:`<button class="btn" onclick="volverAtras(${i})">Volver a la anterior</button>`}</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+  notes([
+    ["«Platform Prompts»: tarjetas con «knowledge_assistant · ES · v4», estado PUBLISHED / DRAFT, texto en letra de computadora.","Tabla con la función por su nombre, idioma, estado claro («En uso» / «Borrador») y botones Editar / Publicar / Volver a la anterior.",""],
+    ["«Publicar» y «Revertir» actuaban de una, sin preguntar.","Ventanita de confirmación que explica que el cambio llega a todas las empresas.","Un clic de más podía cambiar cómo responde la IA a todos los clientes."]]);
+},
+};
+
+// ─── Comportamiento ─────────────────────────────────────────────────────────
+function segR(b,r){ [...b.parentNode.children].forEach(x=>x.classList.remove("on")); b.classList.add("on"); logF.r=r; drawLogs(); }
+function fLog(q){ logF.q=q.toLowerCase(); drawLogs(); }
+function drawLogs(){
+  const rows = LOGS.filter(r=>(!logF.r||(logF.r==="ok"?r.ok:!r.ok)) && r.n.toLowerCase().includes(logF.q));
+  document.getElementById("logs").innerHTML = rows.length ? rows.map(r=>`<tr><td class="s">${r.f}</td><td>${r.ok?'<span class="pill ok">✓ Entró</span>':'<span class="pill bad">✕ Rechazado</span>'}</td><td class="who"><b>${r.n}</b>${r.ok?"":`<span class="s">${r.mot}</span>`}</td><td class="hide-m">${r.emp}</td><td class="hide-m">${r.donde} · ${r.disp}</td></tr>`).join("")
+    : `<tr><td colspan="5"><div class="empty"><b>No hay ingresos con esos filtros</b>Probá con otra persona o elegí «Todos».</div></td></tr>`;
+}
+function persona(i){
+  const box=document.getElementById("pbox");
+  if(i===""){ box.innerHTML=`<div class="empty"><b>Todavía no elegiste a nadie</b>Elegí una persona en la lista de arriba para ver su actividad.</div>`; return; }
+  const u=USERS[i];
+  box.innerHTML = `<div style="padding:16px"><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"><div><h2 style="padding:0;font-size:17px">${u.n}</h2><div class="s">${u.rol} · Mercurio Group · usuario ${u.usu}${u.mail?" · "+u.mail:" · sin correo cargado"}</div></div><div style="margin-left:auto">${pillEstado(u.estado)}</div></div></div>
+  <div class="kpis" style="padding:0 16px">
+    <div class="card kpi"><div class="l">Descargas a Excel</div><div class="v">3</div><div class="h">Normal para su rol</div></div>
+    <div class="card kpi"><div class="l">Datos descargados</div><div class="v">2 MB</div><div class="h">Normal</div></div>
+    <div class="card kpi"><div class="l">Uso de madrugada</div><div class="v">0</div><div class="h">Sin actividad entre 0 y 5 h</div></div>
+  </div>
+  <div class="tw"><table><thead><tr><th>Cuándo</th><th>Qué hizo</th><th class="hide-m">Dónde</th></tr></thead><tbody>
+    <tr><td class="s">hoy 08:27</td><td><span class="pill acc">Ingresó</span></td><td class="hide-m">Computadora · Buenos Aires</td></tr>
+    <tr><td class="s">hoy 08:31</td><td>Cerró la OT «Cambio de filtros generador 2»</td><td class="hide-m">LA TEREZA</td></tr>
+    <tr><td class="s">hoy 08:40</td><td>Descargó a Excel la lista de repuestos</td><td class="hide-m">LA TEREZA</td></tr>
+  </tbody></table></div>`;
+}
+function segK(b,k){ [...b.parentNode.children].forEach(x=>x.classList.remove("on")); b.classList.add("on"); drawIA(k); }
+function drawIA(k){
+  const box=document.getElementById("iabox");
+  if(k===1){ box.innerHTML = `<div class="kpis"><div class="card kpi"><div class="l">Datos usados este mes</div><div class="v">1,8 GB</div><div class="h">entre todos los buques</div></div><div class="card kpi"><div class="l">Buque que más usó</div><div class="v" style="font-size:18px">DON CHICUETO</div><div class="h">640 MB</div></div></div>
+    <div class="card"><h2>Por buque</h2><div class="sub">Cuántos datos usó cada buque al conectarse por satélite</div><div class="rank">
+    ${[["DON CHICUETO",640],["LA TEREZA",420],["CAPITÁN MIGUEL",310],["Oficina",430]].map(([b,v])=>`<div class="r"><span>${b}</span><b style="text-align:right">${v} MB</b><div class="bar"><i style="width:${v/6.4}%"></i></div></div>`).join("")}</div></div>`; return; }
+  box.innerHTML = `<div class="kpis">
+    <div class="card kpi"><div class="l">Gasto del período</div><div class="v">US$ 3,00</div><div class="h">Presupuesto mensual: US$ 50</div></div>
+    <div class="card kpi"><div class="l">Veces que se usó</div><div class="v">455</div><div class="h">por 6 personas</div></div>
+    <div class="card kpi"><div class="l">Lo que más gastó</div><div class="v" style="font-size:16px">OT: revisión al cerrar</div><div class="h">US$ 1,12 · 37% del total</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Detalle de usos</h2><div class="sub">Cada vez que alguien usó una función de IA</div><div class="tw"><table><thead><tr><th>Cuándo</th><th>Persona</th><th>Función</th><th class="hide-m">Buque</th><th>Costo</th><th class="tech">Modelo</th><th class="tech">Texto enviado / recibido</th></tr></thead><tbody>
+    ${IA_ROWS.map(r=>`<tr><td class="s">${r.f}</td><td><b>${r.n}</b></td><td>${r.fn}${r.veces>1?`<div class="s">${r.veces} veces</div>`:""}</td><td class="hide-m">${r.buque??"—"}</td><td>${r.cost}</td><td class="tech s">${r.mod}</td><td class="tech s">${r.tin} / ${r.tout}</td></tr>`).join("")}
+    </tbody></table></div></div>
+    <div class="card"><h2>Gasto por función</h2><div class="sub">En qué se fue la plata</div><div class="rank">
+    ${IA.map(r=>`<div class="r"><span>${r.fn} <span class="s">· ${r.usos} usos</span></span><b style="text-align:right">US$ ${r.cost.toFixed(2).replace(".",",")}</b><div class="bar"><i style="width:${r.cost/1.12*100}%"></i></div></div>`).join("")}</div></div>
+  </div>`;
+}
+function empresa(i){
+  const e=EMP[i];
+  const d=document.getElementById("drawer");
+  d.innerHTML = `<div class="dh"><div><h3>${e.n}</h3><div class="s">${e.buques} buques · ${e.usuarios} usuarios</div></div>${pillEstado(e.estado)}<button class="x" title="Cerrar" onclick="closeAll()">✕</button></div>
+  <div class="tabs" id="etabs">${["Datos","Usuarios","Invitaciones","Direcciones web"].map((t,k)=>`<button class="${k===1?"on":""}" onclick="etab(${i},${k},this)">${t}</button>`).join("")}</div>
+  <div class="db" id="ebody"></div>`;
+  document.getElementById("shade").classList.add("on"); d.classList.add("on"); etab(i,1,document.querySelectorAll("#etabs button")[1]);
+}
+function etab(i,k,b){
+  [...b.parentNode.children].forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  const e=EMP[i], el=document.getElementById("ebody");
+  if(k===0) el.innerHTML = `<div class="kv"><span>Nombre</span><b>${e.n}</b><span>Estado</span><div>${pillEstado(e.estado)}<div class="s">Si se suspende, nadie de la empresa puede entrar hasta reactivarla.</div></div><span>Idioma del sistema</span><div>${e.idioma}</div><span>Moneda</span><div>${e.moneda}</div><span>Hora local</span><div>${e.zona}</div><span>Formato de la OT en PDF</span><div>Formulario propio de la empresa</div></div><button class="btn pri">Editar datos</button>`;
+  if(k===1) el.innerHTML = `<div style="display:flex;gap:8px;margin-bottom:12px"><input placeholder="Buscar persona" style="flex:1"><button class="btn pri" onclick="openDlg('Nuevo usuario de ${e.n}',formUsuario(),btnsGuardar())">+ Nuevo usuario</button></div>
+    <table><thead><tr><th>Persona</th><th>Rol</th><th>Estado</th></tr></thead><tbody>${USERS.map(u=>`<tr class="click"><td class="who"><b>${u.n}</b><span class="s">Usuario ${u.usu}${u.mail?" · "+u.mail:""}</span>${u.mail?"":`<span class="pill warn" style="margin-top:3px">⚠ Sin correo cargado</span>`}</td><td>${u.rol}</td><td>${u.estado==="ok"?'<span class="pill ok">● Puede entrar</span>':'<span class="pill mut">○ Sin acceso</span>'}<div class="s">Último ingreso: ${u.ult}</div></td></tr>`).join("")}</tbody></table>`;
+  if(k===2) el.innerHTML = `<p class="s" style="margin-bottom:12px">Una invitación es un enlace que le mandás a la persona para que cree su propia contraseña. Vence a los 7 días.</p><button class="btn pri" onclick="invitar()">+ Invitar a alguien</button><div class="empty"><b>No hay invitaciones pendientes</b>Cuando invites a alguien va a aparecer acá hasta que la acepte.</div>`;
+  if(k===3) el.innerHTML = `<p class="s" style="margin-bottom:12px">Las direcciones de internet con las que la gente de ${e.n} entra al sistema.</p><table><tbody>${e.web.map(w=>`<tr><td><b>${w}</b></td><td><span class="pill acc">★ Principal</span></td></tr>`).join("")}</tbody></table><button class="btn" style="margin-top:12px">+ Agregar dirección</button>`;
+}
+function invitar(){
+  openDlg("Invitar a alguien",`<div class="kv" style="grid-template-columns:1fr"><label style="font-size:12px;color:var(--muted)">Correo de la persona *<input style="width:100%;margin-top:3px" placeholder="nombre@empresa.com"></label><label style="font-size:12px;color:var(--muted)">Rol *<select style="width:100%;margin-top:3px">${["Administrador de la empresa","Superintendente","Jefe de Mantenimiento","Capitán / Jefe de Máquinas","Inspector","Compras y depósito","Sólo lectura (auditor)"].map(r=>`<option>${r}</option>`)}</select></label></div>`,
+  `<button class="btn" onclick="closeDlg()">Cancelar</button><button class="btn pri" onclick="invitacionLista()">Crear invitación</button>`);
+}
+function invitacionLista(){
+  openDlg("Invitación lista",`<p style="margin-bottom:10px">Mandale este enlace a la persona. Con él crea su contraseña y entra.</p><div style="display:flex;gap:8px"><input style="flex:1" readonly value="https://mercurio.cms3.shipcms.cloud/invitacion/8F3K…"><button class="btn pri" onclick="toast('Enlace copiado')">Copiar enlace</button></div><p class="s" style="margin-top:8px">Vence el 12/10/2026.</p>`,`<button class="btn pri" onclick="closeDlg()">Listo</button>`);
+}
+function formPersona(){ return `<div class="kv" style="grid-template-columns:1fr">
+  <label style="font-size:12px;color:var(--muted)">Nombre y apellido *<input style="width:100%;margin-top:3px"></label>
+  <label style="font-size:12px;color:var(--muted)">Correo *<input style="width:100%;margin-top:3px"></label>
+  <label style="font-size:12px;color:var(--muted)">Qué puede hacer *<select style="width:100%;margin-top:3px" onchange="this.nextElementSibling.textContent=ROL_HELP[this.value]"><option>Soporte</option><option>Administrador general</option></select><span class="s" style="display:block;margin-top:4px">${ROL_HELP["Soporte"]}</span></label></div>`; }
+function formUsuario(){ return `<div class="kv" style="grid-template-columns:1fr">
+  <label style="font-size:12px;color:var(--muted)">Nombre y apellido *<input style="width:100%;margin-top:3px"></label>
+  <label style="font-size:12px;color:var(--muted)">Usuario para entrar *<input style="width:100%;margin-top:3px" placeholder="Ej.: GARCIA"><span class="s">Es lo que la persona escribe al entrar. Sin espacios.</span></label>
+  <label style="font-size:12px;color:var(--muted)">Correo (opcional)<input style="width:100%;margin-top:3px"></label>
+  <label style="font-size:12px;color:var(--muted)">Rol *<select style="width:100%;margin-top:3px"><option>Jefe de Mantenimiento</option><option>Capitán / Jefe de Máquinas</option><option>Superintendente</option></select></label></div>`; }
+function btnsGuardar(){ return `<button class="btn" onclick="closeDlg()">Cancelar</button><button class="btn pri" onclick="closeDlg();toast('Guardado')">Guardar</button>`; }
+function nuevaEmpresa(){ openDlg("Nueva empresa",`<div class="kv" style="grid-template-columns:1fr">
+  <label style="font-size:12px;color:var(--muted)">Nombre de la empresa *<input style="width:100%;margin-top:3px" oninput="this.parentNode.nextElementSibling.querySelector('b').textContent=(this.value||'empresa').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.cms3.shipcms.cloud'"></label>
+  <div class="s">Dirección para entrar: <b>empresa.cms3.shipcms.cloud</b> (se arma sola con el nombre; se puede cambiar)</div>
+  <label style="font-size:12px;color:var(--muted)">Idioma *<select style="width:100%;margin-top:3px"><option>Español</option><option>Inglés</option><option>Portugués</option></select></label>
+  <label style="font-size:12px;color:var(--muted)">Moneda *<select style="width:100%;margin-top:3px"><option>Guaraní (PYG)</option><option>Peso argentino (ARS)</option><option>Real (BRL)</option><option>Dólar (USD)</option></select></label></div>`, btnsGuardar()); }
+function publicar(i){ openDlg("¿Publicar estas instrucciones?",`<p>Desde ahora la IA va a usar la versión ${PROMPTS[i].v} de <b>${PROMPTS[i].fn}</b> en <b>todas las empresas</b>.</p><p class="s" style="margin-top:8px">Si algo sale mal, podés volver a la versión anterior.</p>`,`<button class="btn" onclick="closeDlg()">Cancelar</button><button class="btn pri" onclick="closeDlg();toast('Publicado. Ya está en uso.')">Sí, publicar</button>`); }
+function volverAtras(i){ openDlg("¿Volver a la versión anterior?",`<p>La IA va a dejar de usar la versión ${PROMPTS[i].v} de <b>${PROMPTS[i].fn}</b> y vuelve a la anterior, en todas las empresas.</p>`,`<button class="btn" onclick="closeDlg()">Cancelar</button><button class="btn danger" onclick="closeDlg();toast('Listo, se volvió a la versión anterior')">Sí, volver</button>`); }
+
+function openDlg(t,body,ft){ const d=document.getElementById("dlg"); d.innerHTML=`<div class="dh"><h3>${t}</h3><button class="x" title="Cerrar" onclick="closeDlg()">✕</button></div><div class="db">${body}</div>${ft?`<div class="ft">${ft}</div>`:""}`; d.classList.add("on"); document.getElementById("shade2").classList.add("on"); }
+function closeDlg(){ document.getElementById("dlg").classList.remove("on"); document.getElementById("shade2").classList.remove("on"); }
+function closeAll(){ closeDlg(); document.getElementById("drawer").classList.remove("on"); document.getElementById("shade").classList.remove("on"); }
+function toast(t){ const el=document.getElementById("toast"); el.textContent="✓ "+t; el.style.display="block"; clearTimeout(window._tt); window._tt=setTimeout(()=>el.style.display="none",2200); }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeAll(); });
+go("inicio");
+</script>
+</body>
+</html>

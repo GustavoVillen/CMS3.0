@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ficha de equipo — propuesta V1</title>
+<style>
+  :root {
+    --navy: #0c2461; --ink: #0f172a; --muted: #64748b; --line: #dbe2ea; --soft: #f5f7fa;
+    --ok: #15803d; --ok-bg: #e8f5ec; --warn: #b45309; --warn-bg: #fdf3e3; --bad: #b91c1c; --bad-bg: #fcebeb;
+    --info: #0369a1; --info-bg: #e7f2f9; --violet: #6d28d9; --violet-bg: #f1ebfd;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9edf2; font-family: Helvetica, Arial, sans-serif; color: var(--ink); }
+  .bar { position: sticky; top: 0; z-index: 5; background: #0f172a; color: #fff; padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .bar b { margin-right: 6px; }
+  .bar button { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .bar button.on { background: #fff; color: #0f172a; font-weight: 700; }
+  .bar .note { margin-left: auto; color: #94a3b8; font-size: 11px; }
+  .pages { padding: 24px 12px 60px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+  .page { width: 210mm; min-height: 297mm; background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.12); padding: 14mm 14mm 12mm; position: relative; display: flex; flex-direction: column; }
+  @media (max-width: 820px) { .page { width: 100%; min-height: auto; padding: 16px; } }
+
+  /* Encabezado (mismo marco que los demás documentos Mercurio) */
+  .hdr { display: grid; grid-template-columns: 120px 1fr 150px; border: 1px solid var(--line); }
+  .hdr > div { padding: 8px 10px; display: flex; align-items: center; }
+  .hdr .logo { border-right: 1px solid var(--line); justify-content: center; font-weight: 700; color: var(--navy); font-size: 12px; text-align: center; }
+  .hdr .ttl { justify-content: center; font-weight: 700; color: var(--navy); font-size: 16px; letter-spacing: .5px; }
+  .hdr .meta { border-left: 1px solid var(--line); flex-direction: column; align-items: stretch; padding: 0; font-size: 9px; }
+  .hdr .meta span { display: flex; justify-content: space-between; padding: 5px 8px; border-bottom: 1px solid var(--line); color: var(--muted); }
+  .hdr .meta span:last-child { border-bottom: 0; }
+  .hdr .meta b { color: var(--ink); }
+
+  /* Aviso crítico */
+  .alert { margin-top: 10px; border-radius: 6px; padding: 8px 12px; display: flex; gap: 10px; align-items: center; font-size: 11px; font-weight: 700; }
+  .alert.bad { background: var(--bad); color: #fff; }
+  .alert.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #f3d6a8; }
+  .alert small { font-weight: 400; opacity: .9; }
+
+  /* Identidad */
+  .hero { margin-top: 12px; display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; padding-bottom: 12px; border-bottom: 2px solid var(--navy); }
+  .hero h1 { margin: 0; font-size: 22px; line-height: 1.15; }
+  .hero .sub { margin-top: 5px; font-size: 10.5px; color: var(--muted); }
+  .hero .sub .code { font-family: "Courier New", monospace; color: var(--ink); font-weight: 700; }
+  .chips { display: flex; flex-direction: column; gap: 5px; min-width: 190px; }
+  .chip { display: flex; align-items: center; gap: 8px; border-radius: 6px; padding: 5px 9px; font-size: 10.5px; font-weight: 700; border: 1px solid transparent; }
+  .chip .k { font-weight: 400; font-size: 8.5px; text-transform: uppercase; letter-spacing: .4px; opacity: .8; width: 62px; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); }
+  .chip.violet { background: var(--violet-bg); color: var(--violet); }
+  .chip.muted { background: var(--soft); color: var(--muted); }
+  .scale { display: inline-flex; gap: 2px; margin-left: auto; }
+  .scale i { font-style: normal; width: 15px; height: 15px; border-radius: 3px; display: grid; place-items: center; font-size: 8.5px; background: #fff; color: #94a3b8; border: 1px solid var(--line); }
+  .scale i.on { color: #fff; border-color: transparent; }
+  .ic { width: 13px; height: 13px; flex: none; }
+
+  /* Tarjetas de resumen */
+  .kpis { margin-top: 12px; display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 8px; }
+  .kpi { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; }
+  .kpi .k { font-size: 8px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; }
+  .kpi .v { margin-top: 3px; font-size: 16px; font-weight: 700; }
+  .kpi .d { margin-top: 2px; font-size: 9px; color: var(--muted); line-height: 1.3; }
+  .kpi.bad { border-color: #f1b8b8; background: #fff8f8; } .kpi.bad .v { color: var(--bad); }
+  .stack { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; background: var(--soft); }
+  .stack span { display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; font-size: 8.5px; color: var(--muted); }
+  .legend b { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 3px; vertical-align: 0; }
+
+  /* Secciones */
+  .sec { margin-top: 14px; }
+  .sec h2 { margin: 0 0 6px; background: var(--navy); color: #fff; font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; padding: 5px 9px; border-radius: 3px; display: flex; justify-content: space-between; }
+  .sec h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: .85; }
+  .kv { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 4px; }
+  .kv div { padding: 6px 9px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .kv div:nth-child(3n) { border-right: 0; }
+  .kv div:nth-last-child(-n+3) { border-bottom: 0; }
+  .kv .k { font-size: 7.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; }
+  .kv .v { font-size: 10.5px; font-weight: 700; margin-top: 2px; }
+  .kv .v.empty { color: #b8c2cf; font-weight: 400; }
+  .why { border-left: 4px solid var(--c, var(--warn)); background: var(--soft); padding: 8px 12px; font-size: 9.5px; line-height: 1.5; border-radius: 0 4px 4px 0; }
+  .why .t { font-weight: 700; font-size: 10px; margin-bottom: 3px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9px; }
+  th { text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: #eef2f6; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.hot td { background: #fff5f5; }
+  tr.group td { background: #f8fafc; font-weight: 700; font-size: 8.5px; color: var(--navy); text-transform: uppercase; letter-spacing: .6px; padding: 5px 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 10px; padding: 2px 7px; font-weight: 700; font-size: 8.5px; white-space: nowrap; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.info { background: var(--info-bg); color: var(--info); }
+  .pill.violet { background: var(--violet-bg); color: var(--violet); } .pill.muted { background: var(--soft); color: var(--muted); }
+  .t1 { font-weight: 700; } .t2 { color: var(--muted); font-family: "Courier New", monospace; font-size: 8px; margin-top: 1px; }
+  .rel { display: block; font-size: 8px; margin-top: 1px; }
+  .rel.bad { color: var(--bad); font-weight: 700; } .rel.warn { color: var(--warn); } .rel.muted { color: var(--muted); }
+  .empty-row td { color: var(--muted); font-style: italic; text-align: center; padding: 12px; }
+
+  .foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; font-size: 8px; color: var(--muted); }
+  .tag { position: absolute; top: 4mm; right: 14mm; font-size: 8px; color: #a16207; background: #fef9c3; border: 1px solid #fde68a; padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Ficha de equipo · propuesta V1</b>
+  <button data-ex="M02-MP-BR" class="on">Motor Principal Babor (con vencidas)</button>
+  <button data-ex="M02-AIS">AIS (el de tu captura)</button>
+  <span class="note">Datos de ejemplo tomados de la base local (MAO 02). Así se vería el PDF impreso en A4.</span>
+</div>
+<div class="pages" id="pages"></div>
+
+<script>
+const DATA = {"M02-AIS": {"asset": {"assetCode": "M02-AIS", "name": "AIS", "sfiCode": "400", "criticality": "B", "criticalityRationale": "Criticidad B porque el AIS es vital para la navegación y la gestión del tráfico marítimo, pero su falla no detiene la propulsión ni impide la maniobrabilidad básica del buque de forma inmediata. Es ISM-crítico porque, bajo el Código ISM 10.3, el AIS es un sistema de seguridad de la navegación obligatorio que permite la identificación del buque y la prevención de colisiones en tiempo real. Requiere plan de mantenimiento: SÍ — se requiere verificar la integridad de los datos, el estado de la antena, la conexión GPS y realizar pruebas periódicas de transmisión para asegurar el cumplimiento regulatorio (SOLAS Cap. V). Revisar criticidad: Se sugiere reclasificar a A, ya que el AIS es un equipo de seguridad de la navegación esencial bajo normativas internacionales, cuya operatividad es requerida para el despacho y la seguridad del buque.", "isSafetyCritical": true, "status": "OPERATIONAL", "trackDailyReport": false, "manufacturer": "Samyung", "model": "SI-30", "serialNumber": null, "installationDate": null, "lastOverhaulDate": null, "replacementDate": null, "currentHours": null}, "plans": [{"taskCode": "M02-AIS-01", "taskType": "INSPECTION", "title": "Prueba de transmision y Recepcion (TX/RX)", "triggerType": "MONTHS", "frequencyHours": null, "frequencyMonths": 12, "nextDueDate": "2027-04-29T00:00:00.000Z", "nextDueHours": null, "executionStatus": "FUTURE"}], "wos": [{"workOrderCode": "OT-M02-25-0078", "type": "PREVENTIVE", "status": "CLOSED", "title": "AIS Prueba de transmisión y recepción (TX/RX). Verificación de datos de configuración estáticos y con VTS / sistema internacional de AIS", "openDate": "2025-11-20T12:00:00.000Z", "completedDate": "2025-11-20T12:00:00.000Z"}]}, "M02-MP-BR": {"asset": {"assetCode": "M02-MP-BR", "name": "Motor Principal Babor", "sfiCode": "600", "criticality": "A", "criticalityRationale": "Criticidad A porque el motor principal es la fuente de propulsión primaria del buque; su falla compromete directamente la capacidad de navegación, maniobra y cumplimiento de rutas, y expone el buque a situaciones de riesgo (abordajes, encalladura, a la deriva). Requiere redundancia operativa y mantenimiento preventivo riguroso. ISM-crítico porque la falla súbita del motor principal puede provocar pérdida de gobierno, pérdida de potencia de emergencia (si es el único motor o babor es crítico en propulsión dual) y situaciones peligrosas para la seguridad de la vida en el mar. SFI 600 (propulsión principal) está clasificado como sistema cuya disponibilidad es esencial para operación segura y está sometido a inspección y certificación ISM 10.3.", "isSafetyCritical": true, "status": "OUT_OF_SERVICE", "trackDailyReport": true, "manufacturer": "Caterpillar", "model": "3412D", "serialNumber": null, "installationDate": null, "lastOverhaulDate": null, "replacementDate": null, "currentHours": 8688}, "plans": [{"taskCode": "M02-MP-BR-32", "taskType": "INSPECTION", "title": "Pruebas de alarmas P° L.O., Nivel aceite.,T° Agua, Sobrevelocidad", "triggerType": "MONTHS", "frequencyHours": null, "frequencyMonths": 3, "nextDueDate": "2026-09-16T00:00:00.000Z", "nextDueHours": null, "executionStatus": "OVERDUE"}, {"taskCode": "M02-MP-BR-20", "taskType": "MAINTENANCE", "title": "BATERIAS: Renovacion", "triggerType": "MONTHS", "frequencyHours": null, "frequencyMonths": 18, "nextDueDate": "2027-05-20T00:00:00.000Z", "nextDueHours": null, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-01", "taskType": "MAINTENANCE", "title": "Cambio de aceite y filtros de aceite/by pass", "triggerType": "HOURS", "frequencyHours": 300, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 8762, "executionStatus": "UPCOMING"}, {"taskCode": "M02-MP-BR-18", "taskType": "INSPECTION", "title": "Tomar muestras y analizar el aceite lubricante", "triggerType": "HOURS", "frequencyHours": 300, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 8762, "executionStatus": "IN_WINDOW"}, {"taskCode": "M02-MP-BR-31", "taskType": "MAINTENANCE", "title": "Cambio de filtro de Gas Oil (primario/secundario)", "triggerType": "HOURS", "frequencyHours": 300, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 8762, "executionStatus": "UPCOMING"}, {"taskCode": "M02-MP-BR-05", "taskType": "INSPECTION", "title": "Controlar Luz de válvulas", "triggerType": "HOURS", "frequencyHours": 1000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 9038, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-24", "taskType": "INSPECTION", "title": "Control de rotor de bomba de agua", "triggerType": "HOURS", "frequencyHours": 1000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 9038, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-33", "taskType": "INSPECTION", "title": "Control del Turbocompresor", "triggerType": "HOURS", "frequencyHours": 1000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 9038, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-07", "taskType": "MAINTENANCE", "title": "Cambio de filtro de aire", "triggerType": "HOURS", "frequencyHours": 1000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 9462, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-08", "taskType": "MAINTENANCE", "title": "Cambio de liquido refrigerante", "triggerType": "HOURS", "frequencyHours": 2000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 10038, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-10", "taskType": "MAINTENANCE", "title": "INYECTORES: Recorrido N°1 a N°12", "triggerType": "HOURS", "frequencyHours": 4000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": 12038, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-16", "taskType": "MAINTENANCE", "title": "Full Overhaul", "triggerType": "HOURS", "frequencyHours": 30000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": null, "executionStatus": "OVERDUE"}, {"taskCode": "M02-MP-BR-30", "taskType": "INSPECTION", "title": "Control correas de transmisión", "triggerType": "HOURS", "frequencyHours": 600, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": null, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-34", "taskType": "MAINTENANCE", "title": "Cambio de Inyectores", "triggerType": "HOURS", "frequencyHours": 10000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": null, "executionStatus": "FUTURE"}, {"taskCode": "M02-MP-BR-35", "taskType": "MAINTENANCE", "title": "Recorrido general", "triggerType": "HOURS", "frequencyHours": 10000, "frequencyMonths": null, "nextDueDate": null, "nextDueHours": null, "executionStatus": "FUTURE"}], "wos": [{"workOrderCode": "OT-M02-26-0427", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-06-23T12:00:00.000Z", "completedDate": "2026-06-23T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0436", "type": "CORRECTIVE", "status": "PLANNED", "title": "REEMPLAZAR MOTOR PROPULSOR DE BABOR", "openDate": "2026-06-23T00:00:00.000Z", "completedDate": null}, {"workOrderCode": "OT-M02-26-0440", "type": "PREVENTIVE", "status": "CLOSED", "title": "TOMA DE MUESTRAS: Aceite Lubricante", "openDate": "2026-06-18T00:00:00.000Z", "completedDate": "2026-07-09T00:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0438", "type": "PREVENTIVE", "status": "CANCELLED", "title": "TOMA DE MUESTRAS: Aceite Lubricante", "openDate": "2026-06-18T00:00:00.000Z", "completedDate": null}, {"workOrderCode": "OT-M02-26-0421", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-06-16T12:00:00.000Z", "completedDate": "2026-06-16T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0411", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2026-06-10T12:00:00.000Z", "completedDate": "2026-06-10T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0392", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-06-09T12:00:00.000Z", "completedDate": "2026-06-09T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0386", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-06-02T12:00:00.000Z", "completedDate": "2026-06-02T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0380", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-05-26T12:00:00.000Z", "completedDate": "2026-05-26T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0374", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-05-19T12:00:00.000Z", "completedDate": "2026-05-19T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0368", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-05-12T12:00:00.000Z", "completedDate": "2026-05-12T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0329", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2026-05-11T12:00:00.000Z", "completedDate": "2026-05-11T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0358", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento CADA 6 MESES", "openDate": "2026-05-11T12:00:00.000Z", "completedDate": "2026-05-11T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0310", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-05-05T12:00:00.000Z", "completedDate": "2026-05-05T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0304", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-04-28T12:00:00.000Z", "completedDate": "2026-04-28T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0298", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-04-21T12:00:00.000Z", "completedDate": "2026-04-21T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0292", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-04-14T12:00:00.000Z", "completedDate": "2026-04-14T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0282", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2026-04-13T12:00:00.000Z", "completedDate": "2026-04-13T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0263", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-04-07T12:00:00.000Z", "completedDate": "2026-04-07T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0257", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-03-31T12:00:00.000Z", "completedDate": "2026-03-31T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0251", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-03-24T12:00:00.000Z", "completedDate": "2026-03-24T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0245", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-03-17T12:00:00.000Z", "completedDate": "2026-03-17T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0231", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2026-03-10T12:00:00.000Z", "completedDate": "2026-03-10T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0239", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-03-10T12:00:00.000Z", "completedDate": "2026-03-10T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0210", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-03-03T12:00:00.000Z", "completedDate": "2026-03-03T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0204", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-02-24T12:00:00.000Z", "completedDate": "2026-02-24T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0198", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-02-17T12:00:00.000Z", "completedDate": "2026-02-17T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0192", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-02-10T12:00:00.000Z", "completedDate": "2026-02-10T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0173", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2026-02-09T12:00:00.000Z", "completedDate": "2026-02-09T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0154", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-02-03T12:00:00.000Z", "completedDate": "2026-02-03T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0148", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-01-27T12:00:00.000Z", "completedDate": "2026-01-27T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0142", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-01-20T12:00:00.000Z", "completedDate": "2026-01-20T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0136", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-01-13T12:00:00.000Z", "completedDate": "2026-01-13T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0126", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2026-01-12T12:00:00.000Z", "completedDate": "2026-01-12T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0107", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2026-01-06T12:00:00.000Z", "completedDate": "2026-01-06T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0430", "type": "CORRECTIVE", "status": "CLOSED", "title": "Cambio de ECU D-MH con reprogramacion de Software", "openDate": "2026-01-05T00:00:00.000Z", "completedDate": "2026-01-05T00:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0429", "type": "CORRECTIVE", "status": "CLOSED", "title": "Falla en el Sistema de Combustible", "openDate": "2026-01-05T00:00:00.000Z", "completedDate": "2026-06-22T03:59:49.296Z"}, {"workOrderCode": "OT-M02-25-0195", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2025-12-30T12:00:00.000Z", "completedDate": "2025-12-30T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0189", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2025-12-23T12:00:00.000Z", "completedDate": "2025-12-23T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0183", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2025-12-16T12:00:00.000Z", "completedDate": "2025-12-16T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0177", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2025-12-09T12:00:00.000Z", "completedDate": "2025-12-09T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0167", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2025-12-08T12:00:00.000Z", "completedDate": "2025-12-08T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0148", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2025-12-02T12:00:00.000Z", "completedDate": "2025-12-02T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0142", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento SEMANAL", "openDate": "2025-11-25T12:00:00.000Z", "completedDate": "2025-11-25T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0072", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento CADA 6 MESES", "openDate": "2025-11-20T12:00:00.000Z", "completedDate": "2025-11-20T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0115", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento CADA 18 MESES", "openDate": "2025-11-20T12:00:00.000Z", "completedDate": "2025-11-20T12:00:00.000Z"}, {"workOrderCode": "OT-M02-25-0043", "type": "PREVENTIVE", "status": "CLOSED", "title": "Motor Principal Babor Mantenimiento MENSUAL", "openDate": "2025-11-20T12:00:00.000Z", "completedDate": "2025-11-20T12:00:00.000Z"}, {"workOrderCode": "OT-M02-26-0439", "type": "PREVENTIVE", "status": "CLOSED", "title": "TOMA DE MUESTRAS: Aceite Lubricante", "openDate": "2025-09-17T00:00:00.000Z", "completedDate": "2025-09-26T00:00:00.000Z"}]}};
+const TODAY = new Date("2026-09-30T12:00:00");
+const SFI = { "0": "Inspecciones y Pruebas", "1": "Casco y Estructuras", "2": "Equipamiento", "3": "LCI y Salvamento", "4": "Sistemas de Navegación",
+  "5": "Sistemas de Habitabilidad", "6": "Sistemas de Propulsión y Generación", "7": "Sistemas Auxiliares", "8": "Sistemas Eléctricos" };
+const CRIT = { A: ["Crítico", "#b91c1c"], B: ["Importante", "#b45309"], C: ["Rutinario", "#15803d"] };
+const STATUS = { OPERATIONAL: ["Operativo", "ok", "check"], DEGRADED: ["Degradado", "warn", "warn"], OUT_OF_SERVICE: ["Fuera de servicio", "bad", "stop"] };
+const PLAN = { OVERDUE: ["Vencida", "bad", "warn", 0], DUE: ["Vence hoy", "bad", "warn", 1], IN_WINDOW: ["En ventana", "violet", "clock", 2],
+  UPCOMING: ["Próxima", "info", "clock", 3], FUTURE: ["Al día", "ok", "check", 4], COMPLETED: ["Completada", "ok", "check", 5], NEVER_EXECUTED: ["Sin ejecutar", "muted", "dot", 6] };
+const WOT = { PREVENTIVE: "Preventiva", CORRECTIVE: "Correctiva", INSPECTION: "Inspección" };
+const WOS = { PLANNED: ["Planificada", "info"], IN_PROGRESS: ["En curso", "warn"], ON_HOLD: ["En espera", "violet"], DEFERRED: ["Diferida", "muted"], CLOSED: ["Cerrada", "ok"], CANCELLED: ["Cancelada", "muted"] };
+const ICON = {
+  check: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" opacity=".18"/><path d="M4.5 8.3l2.2 2.2 4.8-4.8" stroke="currentColor" stroke-width="1.8" fill="none"/></svg>',
+  warn: '<svg class="ic" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" fill="currentColor" opacity=".18"/><path d="M8 6v4M8 11.8v.4" stroke="currentColor" stroke-width="1.8"/></svg>',
+  stop: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" opacity=".18"/><path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.8"/></svg>',
+  clock: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>',
+  shield: '<svg class="ic" viewBox="0 0 16 16"><path d="M8 1.5l5.5 2v4.2c0 3.3-2.3 5.8-5.5 6.8-3.2-1-5.5-3.5-5.5-6.8V3.5z" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="1.3"/></svg>',
+  dot: '<svg class="ic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="currentColor"/></svg>',
+};
+const fmt = d => d ? new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }) : "—";
+const num = n => Number(n).toLocaleString("es-AR");
+const days = d => Math.round((new Date(d) - TODAY) / 86400000);
+function freq(p) {
+  if (p.frequencyHours) return `Cada ${num(p.frequencyHours)} h`;
+  if (p.frequencyMonths) return p.frequencyMonths === 1 ? "Cada mes" : `Cada ${p.frequencyMonths} meses`;
+  return "—";
+}
+function next(p, hours) {
+  if (p.nextDueHours != null) {
+    const left = hours != null ? p.nextDueHours - hours : null;
+    const rel = left == null ? "" : left < 0 ? `<span class="rel bad">pasada por ${num(-left)} h</span>` : `<span class="rel ${left <= 100 ? "warn" : "muted"}">faltan ${num(left)} h</span>`;
+    return `${num(p.nextDueHours)} h${rel}`;
+  }
+  if (p.nextDueDate) {
+    const n = days(p.nextDueDate);
+    const rel = n < 0 ? `<span class="rel bad">vencida hace ${-n} días</span>` : n <= 30 ? `<span class="rel warn">en ${n} días</span>` : `<span class="rel muted">en ${Math.round(n / 30)} meses</span>`;
+    return `${fmt(p.nextDueDate)}${rel}`;
+  }
+  return `<span class="rel muted">Sin fecha ni horas de referencia</span>`;
+}
+
+function render(code) {
+  const { asset: a, plans, wos } = DATA[code];
+  const vessel = "MAO 02";
+  const sfiTab = (a.sfiCode || "")[0];
+  const [critTxt, critColor] = CRIT[a.criticality] || ["", "#64748b"];
+  const [stTxt, stTone, stIcon] = STATUS[a.status] || [a.status, "muted", "dot"];
+  const counts = {};
+  plans.forEach(p => counts[p.executionStatus] = (counts[p.executionStatus] || 0) + 1);
+  const overdue = (counts.OVERDUE || 0) + (counts.DUE || 0);
+  const sorted = [...plans].sort((x, y) => (PLAN[x.executionStatus]?.[3] ?? 9) - (PLAN[y.executionStatus]?.[3] ?? 9)
+    || (x.nextDueHours ?? 1e9) - (y.nextDueHours ?? 1e9) || String(x.nextDueDate).localeCompare(String(y.nextDueDate)));
+  const nextTask = sorted.find(p => p.executionStatus !== "OVERDUE" && p.executionStatus !== "DUE" && (p.nextDueHours != null || p.nextDueDate));
+  const open = wos.filter(w => !["CLOSED", "CANCELLED"].includes(w.status));
+  const closed = wos.filter(w => w.status === "CLOSED").sort((x, y) => String(y.completedDate).localeCompare(String(x.completedDate)));
+  const last = closed[0];
+  const others = wos.filter(w => w.status === "CANCELLED");
+
+  const alerts = [];
+  if (a.status === "OUT_OF_SERVICE") alerts.push(`<div class="alert bad">${ICON.stop} Equipo fuera de servicio <small>· ${open.length ? `OT abierta: ${open[0].workOrderCode} — ${open[0].title}` : "sin OT abierta"}</small></div>`);
+  if (overdue) alerts.push(`<div class="alert warn">${ICON.warn} ${overdue === 1 ? "1 tarea del plan vencida" : `${overdue} tareas del plan vencidas`} <small>· se detallan primero en el plan de mantenimiento</small></div>`);
+
+  const seg = [["OVERDUE", "#b91c1c"], ["IN_WINDOW", "#6d28d9"], ["UPCOMING", "#0369a1"], ["FUTURE", "#15803d"]];
+  const kpis = [];
+  if (a.currentHours != null) kpis.push(`<div class="kpi"><div class="k">Horas acumuladas</div><div class="v">${num(a.currentHours)} h</div><div class="d">Última lectura cargada</div></div>`);
+  kpis.push(`<div class="kpi ${overdue ? "bad" : ""}"><div class="k">Plan de mantenimiento</div><div class="v">${plans.length} ${plans.length === 1 ? "tarea" : "tareas"}</div>
+    <div class="stack">${seg.map(([k, c]) => counts[k] ? `<span style="flex:${counts[k]};background:${c}"></span>` : "").join("")}</div>
+    <div class="legend">${seg.filter(([k]) => counts[k]).map(([k, c]) => `<span><b style="background:${c}"></b>${counts[k]} ${PLAN[k][0].toLowerCase()}</span>`).join("")}</div></div>`);
+  kpis.push(`<div class="kpi"><div class="k">Próximo vencimiento</div><div class="v" style="font-size:13px">${nextTask ? next(nextTask, a.currentHours).replace(/<span[^>]*>.*<\/span>/, "") : "—"}</div><div class="d">${nextTask ? nextTask.title : "Sin tareas programadas"}</div></div>`);
+  kpis.push(`<div class="kpi"><div class="k">Última intervención</div><div class="v" style="font-size:13px">${last ? fmt(last.completedDate) : "—"}</div><div class="d">${last ? `${last.workOrderCode} · ${last.title}` : "Sin OT cerradas"}</div></div>`);
+  kpis.push(`<div class="kpi ${open.some(w => w.type === "CORRECTIVE") ? "bad" : ""}"><div class="k">OT abiertas</div><div class="v">${open.length}</div><div class="d">${open.length ? open.map(w => `${WOT[w.type]}: ${w.workOrderCode}`).join("<br>") : "Ninguna pendiente"}</div></div>`);
+
+  const kv = [["Fabricante", a.manufacturer], ["Modelo", a.model], ["N° de serie", a.serialNumber], ["Instalación", a.installationDate && fmt(a.installationDate)],
+    ["Última reparación mayor", a.lastOverhaulDate && fmt(a.lastOverhaulDate)], ["Reemplazo previsto", a.replacementDate && fmt(a.replacementDate)]];
+
+  const planRows = sorted.map(p => {
+    const [lbl, tone, ic] = PLAN[p.executionStatus] || [p.executionStatus, "muted", "dot"];
+    return `<tr class="${p.executionStatus === "OVERDUE" ? "hot" : ""}"><td><span class="pill ${tone}">${ICON[ic]}${lbl}</span></td>
+      <td><div class="t1">${p.title}</div><div class="t2">${p.taskCode}</div></td><td>${p.taskType === "INSPECTION" ? "Inspección" : "Mantenimiento"}</td>
+      <td>${freq(p)}</td><td>${next(p, a.currentHours)}</td></tr>`;
+  }).join("") || `<tr class="empty-row"><td colspan="5">Este equipo todavía no tiene tareas en el plan de mantenimiento.</td></tr>`;
+
+  const woRow = w => `<tr class="${w.type === "CORRECTIVE" && !["CLOSED", "CANCELLED"].includes(w.status) ? "hot" : ""}"><td class="t1" style="font-family:'Courier New',monospace;font-size:8.5px">${w.workOrderCode}</td>
+    <td>${WOT[w.type] || w.type}</td><td>${w.title || "—"}</td><td>${fmt(w.openDate)}</td><td>${fmt(w.completedDate)}</td>
+    <td><span class="pill ${(WOS[w.status] || ["", "muted"])[1]}">${(WOS[w.status] || [w.status])[0]}</span></td></tr>`;
+  const histRows = wos.length === 0 ? `<tr class="empty-row"><td colspan="6">Este equipo todavía no tiene órdenes de trabajo.</td></tr>` :
+    (open.length ? `<tr class="group"><td colspan="6">Abiertas (${open.length})</td></tr>${open.map(woRow).join("")}` : "") +
+    `<tr class="group"><td colspan="6">Realizadas (${closed.length}) · de la más reciente a la más antigua</td></tr>${closed.map(woRow).join("")}` +
+    (others.length ? `<tr class="group"><td colspan="6">Canceladas (${others.length})</td></tr>${others.map(woRow).join("")}` : "");
+
+  const correctives = wos.filter(w => w.type === "CORRECTIVE").length;
+  document.getElementById("pages").innerHTML = `
+  <div class="page">
+    <span class="tag">DATOS DE EJEMPLO</span>
+    <div class="hdr"><div class="logo">Mercurio<br>Naviera</div><div class="ttl">FICHA DE EQUIPO</div>
+      <div class="meta"><span>Generado <b>30/09/2026 15:10</b></span><span>Página <b>1 de 2</b></span></div></div>
+    ${alerts.join("")}
+    <div class="hero">
+      <div><h1>${a.name}</h1>
+        <div class="sub"><span class="code">${a.assetCode}</span> · ${vessel} · ${sfiTab ? `${sfiTab} · ${SFI[sfiTab]}` : "Sin grupo SFI"} (SFI ${a.sfiCode || "—"})</div></div>
+      <div class="chips">
+        <div class="chip ${stTone}"><span class="k">Estado</span>${ICON[stIcon]}${stTxt}</div>
+        <div class="chip" style="background:${critColor}14;color:${critColor}"><span class="k">Criticidad</span>${a.criticality} · ${critTxt}
+          <span class="scale">${["A", "B", "C"].map(c => `<i class="${c === a.criticality ? "on" : ""}" style="${c === a.criticality ? `background:${CRIT[c][1]}` : ""}">${c}</i>`).join("")}</span></div>
+        <div class="chip ${a.isSafetyCritical ? "violet" : "muted"}"><span class="k">ISM 10.3</span>${a.isSafetyCritical ? ICON.shield + "Crítico para la seguridad" : "No crítico"}</div>
+        <div class="chip muted"><span class="k">Reporte diario</span>${a.trackDailyReport ? ICON.check + "Carga horas" : "No carga horas"}</div>
+      </div>
+    </div>
+    <div class="kpis" style="--n:${kpis.length}">${kpis.join("")}</div>
+    <div class="sec"><h2>Datos técnicos</h2>
+      <div class="kv">${kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v ${v ? "" : "empty"}">${v || "Sin dato"}</div></div>`).join("")}</div></div>
+    <div class="sec"><h2>Fundamento de la criticidad</h2>
+      <div class="why" style="--c:${critColor}"><div class="t" style="color:${critColor}">Por qué es criticidad ${a.criticality} · ${critTxt}</div>${a.criticalityRationale || "Sin fundamento cargado."}</div></div>
+    <div class="sec"><h2>Plan de mantenimiento <small>${plans.length} ${plans.length === 1 ? "tarea" : "tareas"} · primero lo vencido</small></h2>
+      <table><thead><tr><th style="width:92px">Estado</th><th>Tarea</th><th style="width:78px">Tipo</th><th style="width:82px">Frecuencia</th><th style="width:108px">Próximo</th></tr></thead><tbody>${planRows}</tbody></table></div>
+    <div class="foot"><span>Copilot Management System · Ficha de equipo · ${a.name} · ${vessel}</span><span>Página 1 de 2</span></div>
+  </div>
+  <div class="page">
+    <div class="sec" style="margin-top:0"><h2>Historial de mantenimientos e inspecciones <small>${wos.length} OT · ${closed.length} realizadas · ${open.length} abiertas${correctives ? ` · ${correctives} correctivas` : ""}</small></h2>
+      <table><thead><tr><th style="width:92px">OT</th><th style="width:66px">Tipo</th><th>Descripción</th><th style="width:60px">Apertura</th><th style="width:62px">Realización</th><th style="width:70px">Estado</th></tr></thead><tbody>${histRows}</tbody></table></div>
+    <div class="foot"><span>Copilot Management System · Ficha de equipo · ${a.name} · ${vessel}</span><span>Página 2 de 2</span></div>
+  </div>`;
+}
+document.querySelectorAll(".bar button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".bar button").forEach(x => x.classList.toggle("on", x === b));
+  render(b.dataset.ex);
+}));
+render("M02-MP-BR");
+</script>
+</body>
+</html>

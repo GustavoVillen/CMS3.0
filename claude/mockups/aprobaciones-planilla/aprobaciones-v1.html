@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aprobaciones — Prototipo V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Tokens y colores de la Planilla a Bordo (apps/web-modern/src/index.css +
+   MaintenanceSheet.tsx): navy #1F3864 en las bandas de grupo, durazno #F8CBAD
+   en la celda del equipo, rojo/amarillo del semáforo de vencimiento. */
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#F0F1F4; --fg:#1A1D24;
+  --border:#E2E4E9; --accent:#0284C7; --accent-fg:#FFF;
+  --success:#0E9F6E; --warning:#D97706; --danger:#DC2626; --muted:#6B7280;
+  --navy:#1F3864; --peach:#F8CBAD; --violet:#7C3AED;
+  color-scheme:light;
+}
+html.dark{
+  --bg:#080D1D; --surface:#1C2541; --surface-2:rgba(255,255,255,.05); --fg:#E0E1DD;
+  --border:rgba(255,255,255,.10); --accent:#38BDF8; --accent-fg:#0B132B;
+  --success:#06D6A0; --warning:#FBBF24; --danger:#F87171; --muted:#9BA3B4;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Inter",system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1420px;margin:0 auto;padding:14px 14px 60px}
+button{font:inherit;cursor:pointer}
+.muted{color:var(--muted)}
+
+.demo{display:flex;gap:8px;align-items:center;margin-bottom:12px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;
+  background:color-mix(in srgb,var(--warning) 14%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent)}
+
+/* ── Encabezado, igual al de la Planilla ── */
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head .l{display:flex;gap:11px;align-items:center}
+.ico{width:42px;height:42px;border-radius:12px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;font-size:19px}
+.head h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+.head .sub{font-size:12px;color:var(--muted);margin-top:1px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctrl{background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:9px;padding:7px 11px;font-size:13px;font-weight:600}
+.ctrl:hover{border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
+.ctrl[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+/* Con qué nombre se firma: se imprime en el PDF, tiene que estar a la vista. */
+.signas{display:flex;gap:8px;align-items:center;padding:8px 12px;border-radius:10px;margin-bottom:10px;font-size:12.5px;
+  background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent)}
+.signas b{font-weight:800}
+
+/* ── Contadores ── */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}
+.kpi{display:flex;gap:10px;align-items:center;padding:10px 13px;border-radius:12px;background:var(--surface);border:1px solid var(--border);text-align:left}
+.kpi:hover{border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.kpi[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.kpi .n{font-size:23px;font-weight:800;line-height:1}
+.kpi .lb{font-size:11.5px;font-weight:700;display:block}
+.kpi .hint{font-size:10.5px;color:var(--muted);font-weight:500}
+.k-blue .n,.k-blue .lb{color:var(--accent)}
+.k-violet .n,.k-violet .lb{color:var(--violet)}
+.k-green .n,.k-green .lb{color:var(--success)}
+
+/* ── Tabla, calcada de la Planilla a Bordo ── */
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.scroller{overflow:auto;max-height:calc(100vh - 20rem);scrollbar-gutter:stable}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{position:sticky;top:0;z-index:2;background:#DDE3EA;color:#1F3864;font-size:11px;font-weight:800;
+  padding:9px 6px;border:1px solid var(--border);text-align:center}
+html.dark thead th{background:#243B61;color:#DCE6F5}
+td{border:1px solid var(--border);padding:4px 6px;font-size:12.5px;vertical-align:middle}
+.grp td{background:var(--navy);color:#fff;font-weight:700;font-size:11.5px;padding:5px 10px;border-color:var(--navy)}
+.eq{background:var(--peach);color:var(--navy);font-weight:700;text-align:center;font-size:12px}
+.eq small{display:block;font-weight:500;font-size:10px;opacity:.85}
+.it{text-align:center;font-weight:800;background:var(--surface)}
+.task{line-height:1.3}
+.task small{display:block;color:var(--muted);font-size:10.5px;margin-top:1px}
+.code{text-align:center;font-family:ui-monospace,monospace;font-size:11.5px;font-weight:700;white-space:nowrap}
+.kind{display:inline-block;font-size:9px;font-weight:800;padding:1px 5px;border-radius:999px;margin-right:4px;vertical-align:1px}
+.k-ot{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.k-ss{background:color-mix(in srgb,var(--warning) 20%,transparent);color:var(--warning)}
+.due{text-align:center;font-family:ui-monospace,monospace;font-size:11.5px;white-space:nowrap}
+/* Semáforo de la planilla: rojo vencida, amarillo por vencer. */
+tr.overdue td:not(.eq):not(.grp){background:#DC2626;color:#fff}
+tr.soon    td:not(.eq):not(.grp){background:#FDE047;color:#422006}
+tr.done    td:not(.eq):not(.grp){background:color-mix(in srgb,var(--success) 9%,transparent)}
+tr:hover td:not(.eq):not(.grp){filter:brightness(.98)}
+
+/* ── Los dos botones ── */
+.act{text-align:center;padding:3px 5px}
+.tg{width:100%;min-height:29px;border-radius:8px;border:1.5px solid;font-size:11px;font-weight:800;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.15;padding:3px 6px;transition:.12s}
+.tg .who{font-size:9px;font-weight:600;opacity:.85}
+/* pendiente: se puede firmar */
+.tg.on{background:var(--surface);border-color:var(--accent);color:var(--accent)}
+.tg.on:hover{background:var(--accent);color:var(--accent-fg)}
+/* firmado: verde y FIJO (no se des-aprueba) */
+.tg.ok{background:var(--success);border-color:var(--success);color:#fff;cursor:default}
+/* todavía no le toca (autorizar antes de aprobar) */
+.tg.wait{background:transparent;border-color:var(--border);border-style:dashed;color:var(--muted);cursor:not-allowed}
+/* sin atribución */
+.tg.no{background:transparent;border-color:var(--border);color:var(--muted);opacity:.55;cursor:not-allowed}
+.tg:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+
+.empty{padding:40px 16px;text-align:center;color:var(--muted);font-size:13px}
+.empty b{display:block;font-size:15px;color:var(--fg);margin-bottom:5px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:11px 14px;margin-top:11px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;font-size:11.5px;color:var(--muted);font-weight:600}
+.legend .tg{width:96px;min-height:25px;font-size:10px}
+
+/* Aviso en ventanita (<AlertDialog>), nunca recuadro rojo al pie */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;place-items:center;z-index:60;padding:16px}
+.scrim.open{display:grid}
+.dlg{background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:390px;width:100%;padding:18px}
+.dlg h3{margin:0 0 7px;font-size:15px;font-weight:800}
+.dlg p{margin:0 0 15px;font-size:13px;color:var(--muted);line-height:1.5}
+.dlg .row{display:flex;justify-content:flex-end;gap:8px}
+.btn-primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700}
+
+@media (max-width:900px){
+  .kpis{grid-template-columns:1fr}
+  .scroller{max-height:none;overflow:visible}
+  table,thead,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  tr.grp td{border-radius:9px;margin:12px 0 6px}
+  tr:not(.grp){border:1px solid var(--border);border-radius:12px;padding:9px;margin:8px 0;background:var(--surface)}
+  tr:not(.grp) td{border:0;padding:2px 0;background:transparent!important;color:inherit!important}
+  tr.overdue{border-left:4px solid var(--danger)} tr.soon{border-left:4px solid var(--warning)}
+  td.eq{background:transparent!important;color:var(--navy)!important;text-align:left;font-size:13px}
+  html.dark td.eq{color:var(--peach)!important}
+  td.it{display:none}
+  td.act{display:inline-block;width:49%;padding:6px 2px 0}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="demo">⚠ PROTOTIPO — datos de ejemplo, no son OT reales. Sirve sólo para evaluar el diseño.</div>
+
+  <div class="head">
+    <div class="l">
+      <div class="ico">✍️</div>
+      <div>
+        <h1>Aprobaciones — Flota</h1>
+        <div class="sub" id="sub">— registros esperando firma</div>
+      </div>
+    </div>
+    <div class="tools">
+      <select class="ctrl" id="vesselSel" aria-label="Buque"><option value="">Todos los buques</option></select>
+      <button class="ctrl" id="onlyMine" aria-pressed="false">Sólo lo que puedo firmar</button>
+      <button class="ctrl" id="theme" title="Claro / oscuro">◐</button>
+    </div>
+  </div>
+
+  <div class="signas">
+    ✍️ <span>Firmás como <b>Jorge Alberto Benítez</b> — Superintendente técnico. Ese nombre es el que se imprime en el PDF de la OT.</span>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="sheet">
+    <div class="scroller">
+      <table>
+        <colgroup>
+          <col style="width:46px"><col style="width:190px"><col><col style="width:104px">
+          <col style="width:92px"><col style="width:132px"><col style="width:132px">
+        </colgroup>
+        <thead><tr>
+          <th>Ítem</th><th>Equipo</th><th>Tarea a realizar</th><th>Registro</th>
+          <th>Vence</th><th>Aprobar</th><th>Autorizar</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong style="color:var(--fg)">Botones:</strong>
+    <span style="display:flex;gap:7px;align-items:center"><span class="tg on">Aprobar</span> se puede firmar</span>
+    <span style="display:flex;gap:7px;align-items:center"><span class="tg ok">✓ Aprobado</span> ya firmado (queda fijo)</span>
+    <span style="display:flex;gap:7px;align-items:center"><span class="tg wait">Autorizar</span> falta el paso anterior</span>
+    <span style="display:flex;gap:7px;align-items:center"><span class="tg no">Autorizar</span> sin atribución</span>
+    <span style="margin-left:auto">Fila roja = vencida · amarilla = vence esta semana</span>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"><div class="dlg">
+  <h3 id="dlgT">Aviso</h3><p id="dlgB">—</p>
+  <div class="row"><button class="btn-primary" id="dlgOk">Aceptar</button></div>
+</div></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATOS DE EJEMPLO. En la app real salen de GET /app/pms/approvals/pending,
+   que ya devuelve las 4 bandejas (OT aprobar / OT autorizar / SS aprobar /
+   SS autorizar) y los permisos del usuario en `can`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Permisos del usuario conectado (en la app vienen en `can`). */
+const CAN = { woApprove:true, woAuthorize:true, srApprove:true, srAuthorize:false };
+const SIGNER = "Jorge Alberto Benítez";
+
+/* approved / authorized: null = pendiente, o { by, at } ya firmado. */
+const DATA = [
+  { v:"DON CHICUETO", eq:"Casco, Cubierta y Espacios", kind:"OT", code:"OT-0412",
+    task:"Inspección SEMANAL", note:"Preventivo · Cubierta", due:-4, approved:null, authorized:null },
+  { v:"DON CHICUETO", eq:"Casco, Cubierta y Espacios", kind:"OT", code:"OT-0418",
+    task:"Inspección y Pruebas MENSUALES", note:"Preventivo · Cubierta", due:6,
+    approved:{by:"Ramón Ferreira", at:"22/09"}, authorized:null },
+  { v:"DON CHICUETO", eq:"Motor propulsor Br.", kind:"OT", code:"OT-0421",
+    task:"Cambio de aceite y filtros — 500 h", note:"Preventivo · Máquinas", due:12, approved:null, authorized:null },
+  { v:"DON CHICUETO", eq:"Motor propulsor Br.", kind:"SS", code:"SS-0077",
+    task:"Rectificado de tapa de cilindro", note:"Cuelga de OT-0421 · CONDOR S.A.C.I", due:12,
+    approved:{by:"Ramón Ferreira", at:"21/09"}, authorized:null },
+  { v:"DON CHICUETO", eq:"Caja reductora Er.", kind:"OT", code:"OT-0401",
+    task:"Reparación de pérdida por retén", note:"Correctivo · Máquinas", due:-1,
+    approved:{by:"Ramón Ferreira", at:"20/09"}, authorized:null },
+  { v:"DON CHICUETO", eq:"Sistema de Deteccion de Incendio", kind:"OT", code:"OT-0430",
+    task:"Inspección ANUAL", note:"Preventivo · Cubierta", due:24, approved:null, authorized:null },
+
+  { v:"BARCAZA MGT 1601", eq:"Malacate eléctrico de pluma de lancha", kind:"OT", code:"OT-0389",
+    task:"Motor eléctrico: verificar ajustes y estanqueidad bornera", note:"Preventivo · Máquinas", due:3, approved:null, authorized:null },
+  { v:"BARCAZA MGT 1601", eq:"Malacate eléctrico de pluma de lancha", kind:"SS", code:"SS-0081",
+    task:"Rebobinado de motor eléctrico", note:"Cuelga de OT-0389 · Taller Paraná", due:3, approved:null, authorized:null },
+  { v:"BARCAZA MGT 1601", eq:"Elementos de Elevación de Pesos", kind:"OT", code:"OT-0392",
+    task:"Certificación de SWL de monorrieles, aparejos, fajas y eslingas", note:"Inspección · Proveedor", due:19,
+    approved:{by:"Luis Ayala", at:"19/09"}, authorized:null },
+
+  { v:"REMOLCADOR GLT 05", eq:"Sistema de gobierno", kind:"OT", code:"OT-0420",
+    task:"Calibración de sistema RPM", note:"Preventivo · Máquinas", due:9,
+    approved:{by:"Luis Ayala", at:"22/09"}, authorized:null },
+  { v:"REMOLCADOR GLT 05", eq:"Balsa salvavidas Br.", kind:"OT", code:"OT-0355",
+    task:"Revisión anual certificada", note:"Inspección · Proveedor", due:-8, approved:null, authorized:null },
+  { v:"REMOLCADOR GLT 05", eq:"Compás Magnético", kind:"OT", code:"OT-0399",
+    task:"Verificación de curvas de desvíos de compás patrón. Certificación", note:"Inspección · Proveedor", due:31, approved:null, authorized:null },
+];
+
+/* ── Estado ── */
+let vessel = "", onlyMine = false, filter = "";
+const VESSELS = [...new Set(DATA.map(d=>d.v))];
+const canAppr = r => r.kind==="OT" ? CAN.woApprove   : CAN.srApprove;
+const canAuth = r => r.kind==="OT" ? CAN.woAuthorize : CAN.srAuthorize;
+const signable = r => (!r.approved && canAppr(r)) || (r.approved && !r.authorized && canAuth(r));
+
+function visible(){
+  return DATA.filter(r=>{
+    if (vessel && r.v!==vessel) return false;
+    if (onlyMine && !signable(r)) return false;
+    if (filter==="appr" && r.approved) return false;
+    if (filter==="auth" && (!r.approved || r.authorized)) return false;
+    if (filter==="done" && !r.authorized) return false;
+    return true;
+  });
+}
+
+function dlg(title, body){
+  document.getElementById("dlgT").textContent = title;
+  document.getElementById("dlgB").textContent = body;
+  document.getElementById("scrim").classList.add("open");
+}
+document.getElementById("dlgOk").onclick = ()=>document.getElementById("scrim").classList.remove("open");
+document.getElementById("scrim").onclick = e=>{ if(e.target.id==="scrim") e.currentTarget.classList.remove("open"); };
+
+/* ── Firmar ── */
+function sign(code, step){
+  const r = DATA.find(x=>x.code===code); if(!r) return;
+  const hoy = "25/09";
+  if (step==="APRUEBA"){
+    if (r.approved) return;                       // verde = fijo, no se des-aprueba
+    if (!canAppr(r)) return dlg("No tenés atribución", `Tu rol no puede aprobar ${r.kind==="OT"?"órdenes de trabajo":"solicitudes de servicio"}. Pedíselo a quien tenga esa firma.`);
+    r.approved = { by:SIGNER, at:hoy };
+  } else {
+    if (r.authorized) return;
+    if (!r.approved)  return dlg("Falta aprobar primero", `${r.code} tiene que estar aprobada antes de autorizarla. Es el orden que exige el sistema y no se puede saltear.`);
+    if (!canAuth(r))  return dlg("No tenés atribución", `Autorizar ${r.kind==="OT"?"una OT":"una SS"} es firma de tierra. Tu rol no la tiene.`);
+    r.authorized = { by:SIGNER, at:hoy };
+  }
+  render();
+}
+
+/* ── Contadores ── */
+const KPIS = [
+  { k:"appr", lb:"Esperando tu aprobación", hint:"paso 1 de la firma", cls:"k-blue",   f:r=>!r.approved },
+  { k:"auth", lb:"Esperando autorización",  hint:"ya aprobadas",       cls:"k-violet", f:r=>r.approved&&!r.authorized },
+  { k:"done", lb:"Firmadas en esta tanda",  hint:"quedan a la vista",  cls:"k-green",  f:r=>!!r.authorized },
+];
+
+function renderKpis(){
+  const base = DATA.filter(r=>!vessel||r.v===vessel);
+  document.getElementById("kpis").innerHTML = KPIS.map(c=>`
+    <button class="kpi ${c.cls}" data-k="${c.k}" aria-pressed="${filter===c.k}">
+      <span class="n">${base.filter(c.f).length}</span>
+      <span><span class="lb">${c.lb}</span><span class="hint">${c.hint}</span></span>
+    </button>`).join("");
+  document.querySelectorAll(".kpi").forEach(b=>b.onclick=()=>{ filter = filter===b.dataset.k?"":b.dataset.k; render(); });
+}
+
+/* ── Un botón ── */
+function btn(r, step){
+  const done = step==="APRUEBA" ? r.approved : r.authorized;
+  const can  = step==="APRUEBA" ? canAppr(r) : canAuth(r);
+  const word = step==="APRUEBA" ? "Aprobar"  : "Autorizar";
+  const past = step==="APRUEBA" ? "Aprobado" : "Autorizado";
+  if (done) return `<button class="tg ok" disabled aria-label="${past} por ${done.by}">✓ ${past}<span class="who">${done.by} · ${done.at}</span></button>`;
+  if (!can) return `<button class="tg no" disabled title="Tu rol no tiene esta firma">${word}<span class="who">sin atribución</span></button>`;
+  if (step==="AUTORIZA" && !r.approved)
+    return `<button class="tg wait" disabled title="Primero tiene que estar aprobada">${word}<span class="who">falta aprobar</span></button>`;
+  return `<button class="tg on" data-c="${r.code}" data-s="${step}">${word}</button>`;
+}
+
+/* ── Tabla ── */
+function render(){
+  renderKpis();
+  const items = visible();
+  document.getElementById("sub").textContent =
+    `${items.length} ${items.length===1?"registro":"registros"} · ${DATA.filter(r=>!r.authorized).length} sin terminar de firmar`;
+
+  let html = "", lastV = null, i = 0;
+  for (let n=0; n<items.length; n++){
+    const r = items[n];
+    if (r.v !== lastV){ html += `<tr class="grp"><td colspan="7">${r.v}</td></tr>`; lastV = r.v; i = 0; }
+    // Celda del equipo combinada, como en la planilla de papel.
+    const first = n===0 || items[n-1].v!==r.v || items[n-1].eq!==r.eq;
+    let span = 0; if (first){ span = 1; for (let m=n+1; m<items.length && items[m].v===r.v && items[m].eq===r.eq; m++) span++; i++; }
+    const sev = r.authorized ? "done" : r.due<0 ? "overdue" : r.due<=7 ? "soon" : "";
+    const dueTxt = r.due<0 ? `${-r.due} d vencida` : r.due===0 ? "hoy" : `en ${r.due} d`;
+    html += `<tr class="${sev}">
+      ${first?`<td class="it" rowspan="${span}">${i}</td>`:""}
+      ${first?`<td class="eq" rowspan="${span}">${r.eq}</td>`:""}
+      <td class="task">${r.task}<small>${r.note}</small></td>
+      <td class="code"><span class="kind k-${r.kind.toLowerCase()}">${r.kind}</span>${r.code}</td>
+      <td class="due">${dueTxt}</td>
+      <td class="act">${btn(r,"APRUEBA")}</td>
+      <td class="act">${btn(r,"AUTORIZA")}</td>
+    </tr>`;
+  }
+  document.getElementById("rows").innerHTML = html ||
+    `<tr><td colspan="7"><div class="empty"><b>No hay nada esperando tu firma.</b>
+      Cuando el buque mande una OT o una SS a aprobar, aparece acá.</div></td></tr>`;
+  document.querySelectorAll(".tg.on").forEach(b=>b.onclick=()=>sign(b.dataset.c,b.dataset.s));
+}
+
+const vs = document.getElementById("vesselSel");
+VESSELS.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;vs.appendChild(o);});
+vs.onchange = e=>{ vessel = e.target.value; render(); };
+document.getElementById("onlyMine").onclick = e=>{ onlyMine=!onlyMine; e.currentTarget.setAttribute("aria-pressed",onlyMine); render(); };
+document.getElementById("theme").onclick = ()=>document.documentElement.classList.toggle("dark");
+render();
+</script>
+</body>
+</html>

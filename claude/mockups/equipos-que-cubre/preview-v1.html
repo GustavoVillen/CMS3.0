@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview V1 — Equipos que cubre la ronda</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fg:#0f172a; --muted:#64748b; --soft:#94a3b8; --line:#e2e8f0; --line2:#cbd5e1;
+    --bg:#f1f5f9; --card:#fff; --field:#f1f5f9;
+    --ac:#0f766e; --ac2:#14b8a6; --acbg:#ccfbf1; --acsoft:rgba(20,184,166,.10);
+    --warn:#b45309; --warnbg:#fffbeb; --warnline:#fcd34d;
+    --ok:#047857; --okbg:#ecfdf5; --okline:#a7f3d0;
+    --bad:#b91c1c; --badbg:#fef2f2; --badline:#fecaca;
+    --blue:#1d4ed8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg); color:var(--fg); font-size:14px; }
+  .page { max-width:1180px; margin:0 auto; padding:22px 16px 60px; }
+  .tag { display:inline-block; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 8px; border-radius:6px; letter-spacing:.04em; }
+  h1 { font-size:20px; margin:10px 0 4px; }
+  .lead { color:var(--muted); font-size:13px; margin:0 0 18px; max-width:820px; line-height:1.55; }
+
+  /* pasos */
+  .steps { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .steps button { font:inherit; font-size:13px; font-weight:700; border:1px solid var(--line); background:#fff; color:var(--muted); padding:8px 14px; border-radius:12px; cursor:pointer; }
+  .steps button.on { border-color:var(--ac2); color:var(--ac); background:var(--acsoft); }
+  .steps button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--ac2); outline-offset:2px; }
+
+  /* ventana (mismo esqueleto que el modal real) */
+  .win { background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 1px 2px rgba(15,23,42,.05); }
+  .win-top { height:4px; background:var(--ac2); }
+  .whead { display:flex; gap:12px; padding:14px 20px 12px; border-bottom:1px solid var(--line); }
+  .back { color:var(--soft); font-size:18px; padding-top:2px; }
+  .eyebrow { color:var(--ac); font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+  .wtitle { font-size:19px; font-weight:800; margin:2px 0; }
+  .wsub { color:var(--muted); font-size:12.5px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .chip { font-size:11px; font-weight:700; border:1px solid var(--line2); background:#f8fafc; border-radius:8px; padding:3px 8px; color:#334155; }
+  .chip.mono { font-family:ui-monospace,Consolas,monospace; }
+  .chip.amber { background:#fef3c7; border-color:#fcd34d; color:#92400e; }
+  .closex { margin-left:auto; width:30px; height:30px; border-radius:999px; background:#ef4444; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0; }
+
+  .wbody { display:grid; grid-template-columns:200px 1fr; min-height:420px; }
+  .nav { border-right:1px solid var(--line); background:#fafafa; padding:12px 10px; }
+  .nav div { padding:9px 10px; border-radius:10px; font-size:13px; color:#475569; font-weight:600; margin-bottom:2px; }
+  .nav .on { background:var(--acbg); color:var(--ac); }
+  .nav .navnote { font-size:10.5px; color:var(--soft); font-weight:500; margin-top:12px; line-height:1.45; }
+  .content { padding:16px 20px 20px; min-width:0; }
+
+  .lbl { font-size:12px; font-weight:700; color:#334155; margin:12px 0 5px; display:block; }
+  .req { color:#dc2626; }
+  .fieldfake { background:var(--field); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13.5px; }
+  .tasks { background:var(--field); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:12.5px; line-height:1.6; color:#334155; max-height:150px; overflow:hidden; position:relative; }
+  .tasks::after { content:""; position:absolute; left:0; right:0; bottom:0; height:46px; background:linear-gradient(transparent,var(--field)); }
+  .tasks b { color:var(--fg); }
+
+  /* pregunta Sí/No (mismo patrón que permisos V41 y repuestos V42) */
+  .q { margin-top:16px; border:2px dashed var(--line2); border-radius:16px; padding:12px 14px; }
+  .q.on { border:2px solid rgba(20,184,166,.35); background:linear-gradient(#f0fdfa,#fff 120px); }
+  .qrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .ico { width:36px; height:36px; border-radius:12px; background:#f1f5f9; color:var(--soft); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+  .q.on .ico { background:var(--acsoft); color:var(--ac); }
+  .grow { flex:1; min-width:200px; }
+  .qt { font-weight:800; font-size:14px; display:block; }
+  .qh { font-size:11.5px; color:var(--muted); display:block; margin-top:1px; }
+  .seg { display:inline-flex; border:1px solid var(--line); background:#f1f5f9; border-radius:12px; padding:2px; }
+  .seg button { font:inherit; font-size:12px; font-weight:800; border:0; background:transparent; color:var(--muted); padding:6px 14px; border-radius:9px; cursor:pointer; }
+  .seg button.sel { background:#fff; color:var(--fg); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .seg button.selac { background:var(--ac); color:#fff; }
+  .seg button.selok { background:var(--ok); color:#fff; }
+  .seg button.selwarn { background:#d97706; color:#fff; }
+
+  .summary { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 8px; }
+  .pill { font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:999px; border:1px solid; }
+  .pill.ok { background:var(--okbg); border-color:var(--okline); color:var(--ok); }
+  .pill.warn { background:var(--warnbg); border-color:var(--warnline); color:var(--warn); }
+  .pill.n { background:#f8fafc; border-color:var(--line); color:#475569; }
+  .hint { font-size:11.5px; color:var(--muted); margin:0 0 8px; }
+
+  .secs { border:1px solid var(--line); border-radius:12px; background:#fff; }
+  .sec { display:grid; grid-template-columns:22px minmax(170px,280px) 1fr; gap:10px; align-items:start; padding:9px 12px; border-top:1px solid var(--line); }
+  .sec:first-child { border-top:0; }
+  .sec.nope { background:var(--warnbg); }
+  .st { font-size:13px; padding-top:3px; text-align:center; }
+  .st.ok { color:var(--ok); } .st.warn { color:var(--warn); }
+  .sname { font-size:11.5px; font-weight:800; letter-spacing:.02em; color:#334155; padding-top:4px; }
+  .sname small { display:block; font-weight:500; letter-spacing:0; color:var(--soft); font-size:11px; margin-top:1px; }
+  .eqs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; position:relative; }
+  .eq { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; background:#f0fdfa; border:1px solid #99f6e4; color:#134e4a; border-radius:8px; padding:3px 4px 3px 9px; }
+  .eq button { border:0; background:transparent; color:#5eead4; cursor:pointer; font-size:13px; padding:0 4px; line-height:1; }
+  .eq button:hover { color:var(--bad); }
+  .addeq { font:inherit; font-size:11.5px; font-weight:700; color:var(--blue); background:rgba(37,99,235,.07); border:1px solid rgba(37,99,235,.2); border-radius:8px; padding:3px 9px; cursor:pointer; }
+  .noeq { font-size:12px; color:var(--warn); }
+  .picker { position:absolute; top:100%; left:0; margin-top:4px; z-index:20; width:320px; max-width:calc(100vw - 48px); background:#fff; border:1px solid var(--line2); border-radius:12px; box-shadow:0 10px 30px rgba(15,23,42,.15); padding:6px; }
+  .picker input { width:100%; font:inherit; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:7px 9px; }
+  .picker ul { list-style:none; margin:6px 0 0; padding:0; max-height:220px; overflow:auto; }
+  .picker li { font-size:12.5px; padding:6px 8px; border-radius:7px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; }
+  .picker li:hover, .picker li.hl { background:var(--acsoft); }
+  .picker li small { color:var(--soft); font-family:ui-monospace,monospace; }
+  .picker .none { font-size:12px; color:var(--soft); padding:8px; }
+
+  .wfoot { display:flex; justify-content:flex-end; gap:8px; padding:12px 20px; border-top:1px solid var(--line); background:#fafafa; align-items:center; }
+  .wfoot .status { margin-right:auto; font-size:12px; color:var(--muted); }
+  .btn { font:inherit; font-size:13px; font-weight:700; border-radius:10px; padding:9px 16px; border:1px solid var(--line2); background:#fff; color:#334155; cursor:pointer; }
+  .btn.pri { background:var(--ac); border-color:var(--ac); color:#fff; }
+  .btn.pri:hover { background:#115e59; }
+
+  /* cierre de OT */
+  .box { border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:4px; }
+  .boxh { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .eqhead { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:16px 0 8px; }
+  .eqhead .t { font-weight:800; font-size:14px; }
+  .eqlist { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .eqrow { border:1px solid var(--line); border-radius:12px; padding:8px 10px; background:#fff; }
+  .eqrow.nov { border-color:#fcd34d; background:var(--warnbg); }
+  .eqrow .top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .eqrow .top .grow { min-width:150px; }
+  .eqrow .nm { font-size:13px; font-weight:700; }
+  .eqrow .sx { font-size:11px; color:var(--soft); }
+  .eqrow .seg button { padding:5px 10px; font-size:11.5px; }
+  .eqrow textarea { width:100%; margin-top:8px; font:inherit; font-size:12.5px; border:1px solid #fcd34d; border-radius:8px; padding:7px 9px; resize:vertical; min-height:52px; background:#fff; }
+  .eqrow textarea.missing { border-color:#dc2626; box-shadow:0 0 0 2px rgba(220,38,38,.15); }
+  .eqrow .nl { font-size:11.5px; font-weight:700; color:var(--warn); margin-top:8px; display:block; }
+  .resfixed { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .auto { font-size:11px; color:var(--muted); }
+  .defi { background:var(--field); border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:12.5px; min-height:44px; white-space:pre-line; color:#334155; }
+  .defi.empty { color:var(--soft); }
+
+  .done { text-align:center; padding:50px 20px; }
+  .done .big { width:56px; height:56px; border-radius:999px; background:var(--okbg); color:var(--ok); display:inline-flex; align-items:center; justify-content:center; font-size:28px; border:1px solid var(--okline); }
+  .done h3 { margin:12px 0 4px; }
+  .done p { color:var(--muted); margin:0 0 16px; font-size:13px; }
+
+  /* ficha */
+  .fichahead { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--line); }
+  .fichahead select { font:inherit; font-size:13px; border:1px solid var(--line2); border-radius:10px; padding:7px 10px; background:#fff; max-width:100%; }
+  .histh { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .histh h3 { font-size:11.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.06em; margin:0; }
+  .fb { font:inherit; font-size:11px; font-weight:700; border:1px solid var(--line); background:#f8fafc; color:#475569; border-radius:8px; padding:4px 10px; cursor:pointer; }
+  .fb.on { background:var(--acsoft); border-color:rgba(20,184,166,.35); color:var(--ac); }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .tbl { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  th { text-align:left; font-weight:600; color:#64748b; background:#f8fafc; padding:8px 12px; white-space:nowrap; font-size:12px; }
+  td { padding:8px 12px; border-top:1px solid #f1f5f9; vertical-align:top; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:#f8fafc; }
+  tr.newrow td { background:#f0fdfa; }
+  .code { font-family:ui-monospace,Consolas,monospace; font-weight:700; color:var(--ac); white-space:nowrap; }
+  .tb { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; border:1px solid; }
+  .tb.insp { background:rgba(20,184,166,.1); color:#0f766e; border-color:rgba(20,184,166,.25); }
+  .tb.prev { background:rgba(59,130,246,.1); color:#1d4ed8; border-color:rgba(59,130,246,.25); }
+  .tb.corr { background:rgba(239,68,68,.08); color:#b91c1c; border-color:rgba(239,68,68,.25); }
+  .tb.closed { background:#f1f5f9; color:#334155; border-color:var(--line2); }
+  .res { font-size:11px; font-weight:800; margin-left:6px; white-space:nowrap; }
+  .res.ok { color:var(--ok); } .res.nov { color:var(--warn); }
+  .ronda { display:block; font-size:11px; color:var(--soft); margin-top:2px; }
+  .novtxt { display:block; font-size:11.5px; color:var(--warn); margin-top:3px; }
+  .muted { color:var(--muted); }
+
+  /* explicación */
+  .rules { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 18px; font-size:13px; line-height:1.6; margin-top:18px; }
+  .rules h4 { margin:0 0 6px; font-size:13px; }
+  .rules ul { margin:0; padding-left:20px; }
+  .rules li { margin:3px 0; }
+  .ask { margin-top:12px; background:var(--warnbg); border:1px solid var(--warnline); border-radius:14px; padding:12px 16px; font-size:13px; line-height:1.55; }
+  .ask b { color:#92400e; }
+
+  /* ventanita (AlertDialog) */
+  .ovl { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:50; }
+  .ovl.show { display:flex; }
+  .dlg { background:#fff; border-radius:16px; max-width:440px; width:100%; padding:18px 20px; box-shadow:0 20px 50px rgba(15,23,42,.3); }
+  .dlg h4 { margin:0 0 8px; font-size:15px; display:flex; gap:8px; align-items:center; }
+  .dlg p { margin:0 0 6px; font-size:13px; color:#334155; line-height:1.55; }
+  .dlg ul { margin:4px 0 8px; padding-left:20px; font-size:13px; }
+  .dlg .acts { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; font-size:13px; font-weight:600; padding:10px 16px; border-radius:12px; display:none; z-index:60; }
+  .toast.show { display:block; }
+
+  .hide { display:none !important; }
+
+  @media (max-width:820px) {
+    .wbody { grid-template-columns:1fr; }
+    .nav { display:none; }
+    .sec { grid-template-columns:22px 1fr; }
+    .sec .eqs { grid-column:2; }
+    .eqlist, .grid2 { grid-template-columns:1fr; }
+    .content { padding:14px; }
+    .whead { padding:12px 14px; }
+    table thead { display:none; }
+    table, tbody, tr, td { display:block; width:100%; }
+    tr { border-top:1px solid var(--line); padding:6px 0; }
+    td { border:0; padding:3px 12px; }
+    td[data-l]::before { content:attr(data-l) ": "; color:var(--soft); font-size:11px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <span class="tag">PREVIEW V1 · DATOS DE EJEMPLO · MAO 01</span>
+  <h1>Ronda mensual de máquinas: que quede en el historial de cada equipo</h1>
+  <p class="lead">El plan sigue siendo uno solo (una OT por mes, un formulario, una firma). Lo nuevo es que el plan sabe <b>qué equipos revisa</b>, y al cerrar la OT cada uno de esos equipos recibe su fila en el historial. Recorré los tres pasos: los cambios que hagas en uno se ven en el siguiente.</p>
+
+  <div class="steps" role="tablist">
+    <button class="on" data-step="1" role="tab">1 · Cargar el plan</button>
+    <button data-step="2" role="tab">2 · Cerrar la OT del mes</button>
+    <button data-step="3" role="tab">3 · Ficha del equipo</button>
+  </div>
+
+  <!-- ═════════════ PASO 1: PLAN ═════════════ -->
+  <section id="v1" class="win">
+    <div class="win-top"></div>
+    <div class="whead">
+      <span class="back">←</span>
+      <div class="grow">
+        <div class="eyebrow">Plan de mantenimiento</div>
+        <div class="wtitle">Inspeccion y Pruebas MENSUALES (MAQUINAS)</div>
+        <div class="wsub">Inspecciones MENSUALES · 0 – Inspecciones y Pruebas</div>
+        <div class="chips">
+          <span class="chip mono">M01-6-002</span><span class="chip">MAO 01</span><span class="chip amber">◷ PRÓXIMO</span><span class="chip">Inspección</span>
+        </div>
+      </div>
+      <span class="closex" aria-hidden="true">✕</span>
+    </div>
+    <div class="wbody">
+      <nav class="nav">
+        <div class="on">☰ Qué se hace</div>
+        <div>▦ Cuándo</div>
+        <div>👥 Quién y con qué</div>
+        <div>⛉ Seguridad</div>
+        <div>📎 Documentos</div>
+        <div class="navnote">Los números naranjas son datos recomendados que faltan. Tocá una sección para ir.</div>
+      </nav>
+      <div class="content">
+        <span class="lbl">Equipo del plan <span class="req">*</span></span>
+        <div class="fieldfake">Equipos de Maquinas en General <span class="muted" style="font-size:11.5px">· SFI 600 (sin cambios)</span></div>
+        <span class="lbl">Título <span class="req">*</span></span>
+        <div class="fieldfake">Inspeccion y Pruebas MENSUALES (MAQUINAS)</div>
+        <span class="lbl">Tareas a realizar</span>
+        <div class="tasks">
+          <b>## MOTORES PRINCIPALES</b><br>[ ] Seguridades: prueba de funcionamiento de alarmas LED de presión, temperatura y parada EGA.<br>[ ] Pruebas de alarmas de presión de aceite lubricante, nivel de aceite, temperatura de agua y sobrevelocidad.<br><br><b>## CAJAS REDUCTORAS</b><br>[ ] Control de estado y limpieza del venteo/respirador: [ ] Babor [ ] Estribor<br><b>## ALARMAS</b> …
+        </div>
+
+        <div id="q" class="q on">
+          <div class="qrow">
+            <span class="ico">⛭</span>
+            <span class="grow">
+              <span class="qt" id="qt">Esta tarea revisa varios equipos</span>
+              <span class="qh" id="qh">Cada equipo de la lista recibe su fila en el historial cuando se cierra la OT.</span>
+            </span>
+            <div class="seg" role="group" aria-label="¿Esta tarea revisa varios equipos?">
+              <button type="button" id="qNo">No</button>
+              <button type="button" id="qSi" class="selac">Sí</button>
+            </div>
+          </div>
+          <div id="qBody">
+            <div class="summary" id="summary"></div>
+            <p class="hint">El sistema propuso los equipos leyendo el nombre de cada sección de «Tareas a realizar». Revisalos: sacá con ✕ lo que no corresponde y sumá con «+ Equipo».</p>
+            <div class="secs" id="secs"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="wfoot">
+      <span class="status" id="saveStatus">Cambios sin guardar</span>
+      <button class="btn">Cancelar</button>
+      <button class="btn pri" id="savePlan">Guardar</button>
+    </div>
+  </section>
+
+  <!-- ═════════════ PASO 2: CIERRE DE OT ═════════════ -->
+  <section id="v2" class="win hide">
+    <div class="win-top"></div>
+    <div class="whead">
+      <span class="back">←</span>
+      <div class="grow">
+        <div class="eyebrow">Orden de trabajo</div>
+        <div class="wtitle">Inspeccion y Pruebas MENSUALES (MAQUINAS)</div>
+        <div class="wsub">MAO 01 · Equipos de Maquinas en General · Plan M01-6-002</div>
+        <div class="chips"><span class="chip mono">OT-M01-26-0551</span><span class="chip">Inspección</span><span class="chip">En ejecución</span></div>
+      </div>
+      <span class="closex" aria-hidden="true">✕</span>
+    </div>
+    <div id="closeForm" class="content">
+      <div class="box">
+        <div class="boxh">Tarea concluida y resultado</div>
+        <div class="grid2">
+          <div>
+            <span class="lbl" style="margin-top:0">¿Tarea concluida? <span class="req">*</span></span>
+            <div class="seg"><button class="selac">Sí</button><button>No</button></div>
+          </div>
+          <div>
+            <span class="lbl" style="margin-top:0">Resultado <span class="req">*</span></span>
+            <div class="resfixed">
+              <div class="seg"><button id="rOk" class="selok">Satisfactorio</button><button id="rDef">Con deficiencias</button></div>
+              <span class="auto" id="rAuto">Sale de la lista de equipos</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="eqhead">
+          <span class="t">Equipos revisados</span>
+          <span class="summary" style="margin:0" id="closeSummary"></span>
+          <span class="grow"></span>
+          <button class="btn" id="allOk" style="padding:5px 12px;font-size:12px">Marcar todos OK</button>
+        </div>
+        <p class="hint">Todos arrancan en OK. Tocá «Con novedad» sólo en el equipo que tuvo un problema y escribí qué se encontró.</p>
+        <div class="eqlist" id="eqlist"></div>
+
+        <span class="lbl">Deficiencias encontradas</span>
+        <div class="defi empty" id="defi">Se completa sola con las novedades de la lista.</div>
+
+        <div class="grid2" style="margin-top:4px">
+          <div><span class="lbl">Responsable <span class="req">*</span></span><div class="fieldfake">Jefe de Máquinas (ejemplo)</div></div>
+          <div><span class="lbl">Fecha de ejecución <span class="req">*</span></span><div class="fieldfake">28/10/2026</div></div>
+        </div>
+      </div>
+    </div>
+    <div id="closeDone" class="done hide">
+      <div class="big">✓</div>
+      <h3>OT cerrada</h3>
+      <p id="doneTxt"></p>
+      <button class="btn pri" id="goFicha">Ver la ficha de un equipo →</button>
+    </div>
+    <div class="wfoot" id="closeFoot">
+      <span class="status">Firma y aprobación: igual que hoy</span>
+      <button class="btn">Guardar sin cerrar</button>
+      <button class="btn pri" id="closeOt">Cerrar OT</button>
+    </div>
+  </section>
+
+  <!-- ═════════════ PASO 3: FICHA DEL EQUIPO ═════════════ -->
+  <section id="v3" class="win hide">
+    <div class="win-top"></div>
+    <div class="fichahead">
+      <div class="grow">
+        <div class="eyebrow">Ficha del equipo · MAO 01</div>
+        <div class="wtitle" id="fichaName"></div>
+      </div>
+      <label class="muted" style="font-size:12px" for="fichaSel">Ver otro equipo</label>
+      <select id="fichaSel"></select>
+    </div>
+    <div class="content">
+      <div class="histh">
+        <h3>Historial de mantenimientos e inspecciones</h3>
+        <div>
+          <button class="fb on" data-f="ALL">Todos</button>
+          <button class="fb" data-f="MAINT">Mantenimientos</button>
+          <button class="fb" data-f="INSP">Inspecciones</button>
+        </div>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>OT ↕</th><th>Tipo ↕</th><th>Descripción ↕</th><th>F. Apertura ↕</th><th>F. Realización ↕</th><th>Estado ↕</th></tr></thead>
+          <tbody id="hist"></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px">Las filas de la ronda llevan debajo «Ronda M01-6-002» y abren la misma OT. Lo mismo aparece en el PDF «Estado de mantenimiento» y en el Informe de salud del equipo.</p>
+    </div>
+  </section>
+
+  <div class="rules">
+    <h4>Cómo funciona</h4>
+    <ul>
+      <li><b>Un solo vencimiento y una sola OT por mes</b>, como hoy. El equipo del plan sigue siendo «Equipos de Maquinas en General»: la ronda completa también queda en su historial.</li>
+      <li><b>Un equipo, una fila por OT.</b> Si un equipo aparece en varias secciones (las bombas N.º 1 y N.º 2 están en refrigeración, achique y servicios generales), al cerrar figura una sola vez con sus secciones debajo.</li>
+      <li><b>Sección sin equipo:</b> se permite (Intercomunicador no está cargado como equipo). Al guardar avisa cuáles quedan así; esas pruebas sólo constan en «Equipos de Maquinas en General».</li>
+      <li><b>Con novedad sin explicar no cierra:</b> sale la ventanita con OK diciendo qué equipo falta. Con una novedad, el resultado de la OT pasa solo a «Con deficiencias».</li>
+      <li><b>Permisos sin cambios:</b> la lista la carga quien hoy edita planes; el cierre lo hace quien hoy cierra la OT; el historial lo ve quien hoy ve la ficha de ese buque. No hay aprobación nueva.</li>
+      <li>Si la OT se reabre y se vuelve a cerrar, las filas de cada equipo se reemplazan, no se duplican.</li>
+    </ul>
+  </div>
+  <div class="ask">
+    <b>A decidir:</b> (1) ¿«Guinche de maniobra» va a Cabrestante Babor/Estribor o a Sistema de Amarre? ¿Y el corte remoto de combustible a «Tanque de Combustible»? (2) La sección «Líneas de ejes» habla sólo de babor: en la vista previa propuse las dos líneas de eje. (3) ¿Una novedad debería además abrir un defecto del equipo, o alcanza con que quede escrita en la OT y en el historial? En esta vista previa <b>no abre defecto</b>.
+  </div>
+</div>
+
+<div class="ovl" id="ovl"><div class="dlg" role="alertdialog" aria-modal="true"><h4 id="dlgT"></h4><div id="dlgB"></div><div class="acts" id="dlgA"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// Equipos reales del buque MAO 01 (copia local). Datos de ejemplo para la vista previa.
+const ASSETS = ["Achique de Cuarto de Timón","Aire Acondicionado Split","Alternador Babor","Alternador Estribor","Alternador N°3 Puerto","Baterías y Sistemas de Emergencia EGA","Bomba Achique de Sentina","Bomba Agua Potable N°1","Bomba Agua Potable N°2","Bomba Agua Refrigeración MMAA, Achique y Serv. Grales N°1","Bomba Agua Refrigeración MMAA, Achique y Serv. Grales N°2","Bomba de Incendio de Emergencia (acoplada a MP)","Bomba de Incendio Principal","Bomba de Prelubricación Motor Principal Br y Er","Bomba Trasvase de Combustible","Botellones de Aire Auxiliares N°1 y N°2","Botellones de Aire Principales N°1 y N°2","Cabrestante Babor","Cabrestante Estribor","Caja reductora Babor","Caja reductora Estribor","Central Hidráulica","Compresor a tornillo NK40","Compresor Aire Pito","Control de Ajustes Generales (instalación eléctrica)","ElectroBomba de Descarga de Lodos","ElectroBomba de Lastre","ElectroBomba de Refrigeración de Bocinas","ElectroBomba de Sanidad","Filtros de Achique Sentina","Filtros tomas de mar","Línea de eje Babor","Línea de eje Estribor","Motor Auxiliar Babor","Motor Auxiliar Estribor","Motor Auxiliar Puerto","Motor Principal Babor","Motor Principal Estribor","Purificadora de combustible","Sistema de Amarre","Sistema de Deteccion de Incendio","Sistema de Gobierno y Maniobra","Tablero Eléctrico Principal","Tanque de Combustible","Ventiladores y Extractores"];
+const B1 = "Bomba Agua Refrigeración MMAA, Achique y Serv. Grales N°1", B2 = "Bomba Agua Refrigeración MMAA, Achique y Serv. Grales N°2";
+// Secciones de «Tareas a realizar» (## …) con el equipo que el sistema propone por nombre.
+const SECTIONS = [
+  { n:"MOTORES PRINCIPALES", k:2, eq:["Motor Principal Babor","Motor Principal Estribor"] },
+  { n:"CAJAS REDUCTORAS", k:1, eq:["Caja reductora Babor","Caja reductora Estribor"] },
+  { n:"ALARMAS", k:4, eq:["Motor Auxiliar Babor","Motor Auxiliar Estribor"] },
+  { n:"GUINCHE DE MANIOBRA", k:1, eq:[] },
+  { n:"SISTEMA DE TRANSMISIÓN ANTAGÓNICO DE TIMONES", k:1, eq:["Sistema de Gobierno y Maniobra"] },
+  { n:"SISTEMA DE GOBIERNO", k:1, eq:["Sistema de Gobierno y Maniobra"] },
+  { n:"ELECTROCOMPRESOR CETEK NK40", k:3, eq:["Compresor a tornillo NK40"] },
+  { n:"PURIFICADORA DE COMBUSTIBLE", k:1, eq:["Purificadora de combustible"] },
+  { n:"BOMBA DE TRASBASE DE COMBUSTIBLE", k:1, eq:["Bomba Trasvase de Combustible"] },
+  { n:"ELECTROBOMBAS DE AGUA DE REFRIGERACIÓN DE MMAA", k:1, eq:[B1,B2] },
+  { n:"ELECTROBOMBAS DE AGUA DE ACHIQUE", k:1, eq:[B1,B2] },
+  { n:"ELECTROBOMBAS DE AGUA DE SERVICIOS GENERALES", k:1, eq:[B1,B2] },
+  { n:"ELECTROBOMBA DE AGUA POTABLE", k:1, eq:["Bomba Agua Potable N°1","Bomba Agua Potable N°2"] },
+  { n:"BOMBA DE INCENDIO PRINCIPAL", k:1, eq:["Bomba de Incendio Principal"] },
+  { n:"BOMBA DE INCENDIO DE EMERGENCIA", k:3, eq:["Bomba de Incendio de Emergencia (acoplada a MP)"] },
+  { n:"INTERCOMUNICADOR", k:1, eq:[] },
+  { n:"TABLERO ELÉCTRICO PRINCIPAL", k:1, eq:["Tablero Eléctrico Principal"] },
+  { n:"SISTEMA DE ILUMINACIÓN DE EMERGENCIA", k:2, eq:["Baterías y Sistemas de Emergencia EGA"] },
+  { n:"SISTEMA ELÉCTRICO", k:1, eq:["Control de Ajustes Generales (instalación eléctrica)"] },
+  { n:"VENTILADORES Y EXTRACTORES", k:10, eq:["Ventiladores y Extractores"] },
+  { n:"CORTE REMOTO DE VÁLVULAS Y BOMBAS DE COMBUSTIBLE", k:2, eq:["Tanque de Combustible"] },
+  { n:"LÍNEAS DE EJES PORTAHÉLICE", k:5, eq:["Línea de eje Babor","Línea de eje Estribor"] },
+];
+
+let multi = true;           // respuesta a «¿revisa varios equipos?»
+let openPicker = null;      // índice de sección con el buscador abierto
+const nov = {};             // equipo → texto de la novedad (si está «Con novedad»)
+let otClosed = false;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+function coveredEquipment() {
+  // Un equipo una sola vez, con las secciones donde aparece.
+  const map = new Map();
+  if (!multi) return map;
+  for (const s of SECTIONS) for (const e of s.eq) {
+    if (!map.has(e)) map.set(e, []);
+    map.get(e).push(s.n);
+  }
+  return map;
+}
+// «MOTORES PRINCIPALES» → «Motores principales», sin achicar las siglas.
+const KEEP = new Set(["MMAA", "CETEK", "NK40", "EGA", "G.O."]);
+const pretty = (s) => s.split(" ").map((w, i) => KEEP.has(w) ? w : (i === 0 ? w.charAt(0) + w.slice(1).toLowerCase() : w.toLowerCase())).join(" ");
+
+// ─── Paso 1 ───────────────────────────────────────────────
+function renderPlan() {
+  $("q").classList.toggle("on", multi);
+  $("qNo").className = multi ? "" : "sel";
+  $("qSi").className = multi ? "selac" : "";
+  $("qt").textContent = multi ? "Esta tarea revisa varios equipos" : "¿Esta tarea revisa varios equipos?";
+  $("qh").textContent = multi ? "Cada equipo de la lista recibe su fila en el historial cuando se cierra la OT." : "Rondas de inspección y pruebas que pasan por muchos equipos del buque.";
+  $("qBody").classList.toggle("hide", !multi);
+  if (!multi) return;
+  const eqs = coveredEquipment();
+  const without = SECTIONS.filter(s => s.eq.length === 0).length;
+  $("summary").innerHTML =
+    `<span class="pill n">${SECTIONS.length} secciones</span>` +
+    `<span class="pill ok">✓ ${eqs.size} equipos vinculados</span>` +
+    (without ? `<span class="pill warn">⚠ ${without} ${without === 1 ? "sección" : "secciones"} sin equipo</span>` : "");
+  $("secs").innerHTML = SECTIONS.map((s, i) => {
+    const has = s.eq.length > 0;
+    const chips = s.eq.map((e, j) => `<span class="eq">${esc(e)}<button type="button" title="Sacar" aria-label="Sacar ${esc(e)}" data-rm="${i}:${j}">✕</button></span>`).join("");
+    const picker = openPicker === i ? `
+      <div class="picker" data-picker="${i}">
+        <input type="text" id="pk" placeholder="Buscar equipo del buque…" autocomplete="off">
+        <ul id="pkList"></ul>
+      </div>` : "";
+    return `<div class="sec ${has ? "" : "nope"}">
+      <span class="st ${has ? "ok" : "warn"}">${has ? "✓" : "⚠"}</span>
+      <span class="sname">${esc(s.n)}<small>${s.k} ${s.k === 1 ? "tarea" : "tareas"}</small></span>
+      <span class="eqs">${chips}${has ? "" : `<span class="noeq">Sin equipo: queda sólo en «Equipos de Maquinas en General»</span>`}
+        <button type="button" class="addeq" data-add="${i}">+ Equipo</button>${picker}</span>
+    </div>`;
+  }).join("");
+  if (openPicker !== null) { renderPickerList(""); const inp = $("pk"); inp.focus(); inp.addEventListener("input", () => renderPickerList(inp.value)); inp.addEventListener("keydown", pickerKeys); }
+}
+function renderPickerList(q) {
+  const s = SECTIONS[openPicker];
+  const norm = (x) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const items = ASSETS.filter(a => !s.eq.includes(a) && norm(a).includes(norm(q)));
+  $("pkList").innerHTML = items.length
+    ? items.map((a, i) => `<li data-pick="${esc(a)}" class="${i === 0 ? "hl" : ""}">${esc(a)}</li>`).join("")
+    : `<li class="none">No hay equipos con ese nombre en MAO 01.</li>`;
+}
+function pickerKeys(ev) {
+  if (ev.key === "Escape") { openPicker = null; renderPlan(); }
+  if (ev.key === "Enter") { const first = document.querySelector("#pkList li[data-pick]"); if (first) addEq(first.dataset.pick); }
+}
+function addEq(name) { SECTIONS[openPicker].eq.push(name); openPicker = null; dirty(); renderPlan(); }
+function dirty() { $("saveStatus").textContent = "Cambios sin guardar"; }
+
+$("qNo").onclick = () => { multi = false; openPicker = null; dirty(); renderPlan(); };
+$("qSi").onclick = () => { multi = true; dirty(); renderPlan(); };
+$("secs").addEventListener("click", (ev) => {
+  const rm = ev.target.closest("[data-rm]"), add = ev.target.closest("[data-add]"), pick = ev.target.closest("[data-pick]");
+  if (rm) { const [i, j] = rm.dataset.rm.split(":").map(Number); SECTIONS[i].eq.splice(j, 1); dirty(); renderPlan(); }
+  else if (add) { const i = Number(add.dataset.add); openPicker = openPicker === i ? null : i; renderPlan(); }
+  else if (pick) addEq(pick.dataset.pick);
+});
+document.addEventListener("mousedown", (ev) => {
+  if (openPicker !== null && !ev.target.closest(".picker") && !ev.target.closest("[data-add]")) { openPicker = null; renderPlan(); }
+});
+$("savePlan").onclick = () => {
+  const without = multi ? SECTIONS.filter(s => s.eq.length === 0) : [];
+  const done = () => { $("saveStatus").textContent = "✓ Guardado"; toast("Plan guardado"); renderClose(); };
+  if (without.length) {
+    dialog("⚠ Hay secciones sin equipo",
+      `<p>Estas pruebas van a constar sólo en el historial de «Equipos de Maquinas en General»:</p><ul>${without.map(s => `<li>${esc(pretty(s.n))}</li>`).join("")}</ul><p>Podés guardar igual o volver y elegirles un equipo.</p>`,
+      [["Volver", null], ["Guardar igual", done, true]]);
+  } else done();
+};
+
+// ─── Paso 2 ───────────────────────────────────────────────
+function renderClose() {
+  const eqs = coveredEquipment();
+  for (const k of Object.keys(nov)) if (!eqs.has(k)) delete nov[k];
+  const nNov = Object.keys(nov).length;
+  $("closeSummary").innerHTML = eqs.size
+    ? `<span class="pill ok">✓ ${eqs.size - nNov} OK</span>` + (nNov ? `<span class="pill warn">⚠ ${nNov} con novedad</span>` : "")
+    : `<span class="pill n">El plan no tiene equipos vinculados</span>`;
+  $("eqlist").innerHTML = eqs.size ? [...eqs].map(([e, secs]) => {
+    const isNov = e in nov;
+    return `<div class="eqrow ${isNov ? "nov" : ""}">
+      <div class="top">
+        <span class="grow"><span class="nm">${esc(e)}</span><br><span class="sx">${secs.map(pretty).map(esc).join(" · ")}</span></span>
+        <div class="seg"><button type="button" data-ok="${esc(e)}" class="${isNov ? "" : "selok"}">OK</button><button type="button" data-nov="${esc(e)}" class="${isNov ? "selwarn" : ""}">Con novedad</button></div>
+      </div>
+      ${isNov ? `<span class="nl">¿Qué se encontró? <span class="req">*</span></span><textarea data-txt="${esc(e)}" placeholder="Ej.: no arranca desde el puente; arranca en local.">${esc(nov[e])}</textarea>` : ""}
+    </div>`;
+  }).join("") : `<p class="hint">Volvé al paso 1 y respondé «Sí» para ver la lista.</p>`;
+  renderResult();
+}
+function renderResult() {
+  const entries = Object.entries(nov);
+  $("rOk").className = entries.length ? "" : "selok";
+  $("rDef").className = entries.length ? "selwarn" : "";
+  $("rAuto").textContent = entries.length ? `Por ${entries.length} ${entries.length === 1 ? "equipo" : "equipos"} con novedad` : "Sale de la lista de equipos";
+  const lines = entries.map(([e, t]) => `${e}: ${t.trim() || "(falta explicar)"}`);
+  $("defi").textContent = lines.length ? lines.join("\n") : "Se completa sola con las novedades de la lista.";
+  $("defi").classList.toggle("empty", !lines.length);
+}
+$("eqlist").addEventListener("click", (ev) => {
+  const ok = ev.target.closest("[data-ok]"), nv = ev.target.closest("[data-nov]");
+  if (ok) { delete nov[ok.dataset.ok]; renderClose(); }
+  if (nv && !(nv.dataset.nov in nov)) { nov[nv.dataset.nov] = ""; renderClose(); const ta = document.querySelector(`textarea[data-txt="${CSS.escape(nv.dataset.nov)}"]`); if (ta) ta.focus(); }
+});
+$("eqlist").addEventListener("input", (ev) => {
+  const ta = ev.target.closest("[data-txt]");
+  if (ta) { nov[ta.dataset.txt] = ta.value; ta.classList.remove("missing"); renderResult(); }
+});
+$("allOk").onclick = () => { for (const k of Object.keys(nov)) delete nov[k]; renderClose(); };
+$("closeOt").onclick = () => {
+  const missing = Object.entries(nov).filter(([, t]) => !t.trim()).map(([e]) => e);
+  if (missing.length) {
+    document.querySelectorAll("textarea[data-txt]").forEach(ta => { if (!ta.value.trim()) ta.classList.add("missing"); });
+    dialog("Falta completar", `<p>Explicá qué se encontró en:</p><ul>${missing.map(e => `<li>${esc(e)}</li>`).join("")}</ul>`, [["OK", null, true]]);
+    return;
+  }
+  otClosed = true;
+  const n = coveredEquipment().size, nNov = Object.keys(nov).length;
+  $("doneTxt").textContent = `Quedó registrada en el historial de ${n} equipos` + (nNov ? ` (${nNov} con novedad)` : "") + ` y en «Equipos de Maquinas en General».`;
+  $("closeForm").classList.add("hide"); $("closeFoot").classList.add("hide"); $("closeDone").classList.remove("hide");
+  renderFicha();
+};
+$("goFicha").onclick = () => go(3);
+
+// ─── Paso 3 ───────────────────────────────────────────────
+// Historial propio de algunos equipos (ejemplo) para que la ronda se vea mezclada con el resto.
+const OWN = {
+  "Bomba de Incendio Principal": [
+    { code:"OT-M01-26-0412", type:"corr", title:"Cambio de sello mecánico por pérdida", open:"14/08/2026", done:"18/08/2026" },
+    { code:"OT-M01-26-0388", type:"prev", title:"Inspección y Mantenimiento ANUAL — bomba de incendio", open:"02/07/2026", done:"05/07/2026" },
+  ],
+  "Motor Principal Babor": [
+    { code:"OT-M01-26-0530", type:"prev", title:"Cambio de aceite y filtros — 500 h", open:"20/09/2026", done:"22/09/2026" },
+  ],
+};
+let fichaFilter = "ALL";
+function renderFicha() {
+  const eqs = [...coveredEquipment().keys()];
+  const sel = $("fichaSel");
+  const current = eqs.includes(sel.value) ? sel.value : (eqs.includes("Bomba de Incendio Principal") ? "Bomba de Incendio Principal" : eqs[0]);
+  sel.innerHTML = eqs.map(e => `<option ${e === current ? "selected" : ""}>${esc(e)}</option>`).join("");
+  $("fichaName").textContent = current || "—";
+  const rows = [];
+  if (current && otClosed) {
+    const isNov = current in nov;
+    rows.push({ code:"OT-M01-26-0551", type:"insp", ronda:true, isNew:true, open:"01/10/2026", done:"28/10/2026", nov: isNov ? nov[current] : null });
+  }
+  if (current) rows.push({ code:"OT-M01-26-0497", type:"insp", ronda:true, open:"01/09/2026", done:"30/09/2026", nov:null });
+  for (const r of (OWN[current] || [])) rows.push(r);
+  const vis = rows.filter(r => fichaFilter === "ALL" || (fichaFilter === "INSP" ? r.type === "insp" : r.type !== "insp"));
+  const typeLbl = { insp:"Inspección", prev:"Preventivo", corr:"Correctivo" };
+  $("hist").innerHTML = vis.length ? vis.map(r => `<tr class="click ${r.isNew ? "newrow" : ""}" title="Abrir esta orden de trabajo">
+      <td data-l="OT" class="code">${r.code}</td>
+      <td data-l="Tipo"><span class="tb ${r.type}">${typeLbl[r.type]}</span></td>
+      <td data-l="Descripción">${r.ronda
+        ? `Inspeccion y Pruebas MENSUALES (MAQUINAS)<span class="ronda">Ronda M01-6-002 · ${esc((coveredEquipment().get(current) || []).map(pretty).join(" · "))}</span>${r.nov ? `<span class="novtxt">⚠ ${esc(r.nov)}</span>` : ""}`
+        : esc(r.title)}</td>
+      <td data-l="F. Apertura" class="muted">${r.open}</td>
+      <td data-l="F. Realización" class="muted">${r.done}</td>
+      <td data-l="Estado"><span class="tb closed">Cerrada</span>${r.ronda ? (r.nov ? `<span class="res nov">⚠ Con novedad</span>` : `<span class="res ok">✓ OK</span>`) : ""}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="6" class="muted" style="padding:14px">Este equipo aún no tiene órdenes de trabajo registradas.</td></tr>`;
+}
+$("fichaSel").onchange = renderFicha;
+document.querySelectorAll(".fb").forEach(b => b.onclick = () => {
+  fichaFilter = b.dataset.f;
+  document.querySelectorAll(".fb").forEach(x => x.classList.toggle("on", x === b));
+  renderFicha();
+});
+
+// ─── Navegación, ventanita y aviso ────────────────────────
+function go(n) {
+  document.querySelectorAll(".steps button").forEach(b => b.classList.toggle("on", b.dataset.step == n));
+  [1, 2, 3].forEach(i => $("v" + i).classList.toggle("hide", i !== n));
+  if (n === 2) renderClose();
+  if (n === 3) renderFicha();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+document.querySelectorAll(".steps button").forEach(b => b.onclick = () => go(Number(b.dataset.step)));
+function dialog(title, body, actions) {
+  $("dlgT").textContent = title; $("dlgB").innerHTML = body;
+  $("dlgA").innerHTML = "";
+  for (const [label, fn, primary] of actions) {
+    const b = document.createElement("button"); b.className = "btn" + (primary ? " pri" : ""); b.textContent = label;
+    b.onclick = () => { $("ovl").classList.remove("show"); if (fn) fn(); };
+    $("dlgA").appendChild(b);
+  }
+  $("ovl").classList.add("show"); $("dlgA").lastChild.focus();
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
+
+renderPlan(); renderClose(); renderFicha();
+</script>
+</body>
+</html>
