@@ -38,7 +38,7 @@ import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
 import { archivePdf } from "../settings/pdf-archive-service";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
-import { buildHojaRuta, HITO_FIELDS, type HojaRutaHito } from "./hoja-ruta";
+import { buildHojaRuta, HITO_FIELDS, type HojaRutaHito, type HojaRutaHitosExtra } from "./hoja-ruta";
 import { dayKey, resolveTenantTime } from "../../common/tenant-time";
 import { resolveServiceRequestSignatures } from "./signatures";
 import { isMailConfigured, sendMail } from "../../common/mailer";
@@ -132,6 +132,40 @@ const SIGNATURE_STEPS = [
   { step: "APRUEBA",  label: "aprueba",  nameField: "aprobadoByName",   idField: "aprobadoByUserId",   done: (sr: any) => !!sr.aprobadoAt },
   { step: "AUTORIZA", label: "autoriza", nameField: "autorizadoByName", idField: "autorizadoByUserId", done: (sr: any) => !!sr.autorizadoAt },
 ] as const;
+
+/**
+ * Corrección del firmante de un paso (nombre + usuario): valida y devuelve los
+ * campos a guardar, o {} si no cambia nada. La usan la tramitación y la hoja de
+ * ruta, para que corregir desde cualquiera de las dos siga las mismas reglas.
+ * El gate de rol (sólo admin) lo pone quien la llama.
+ */
+async function signatureChange(
+  session: TenantAccessSession,
+  current: Record<string, any>,
+  step: "SOLICITA" | "APRUEBA" | "AUTORIZA",
+  nameRaw: unknown,
+  userIdRaw: unknown,
+): Promise<Record<string, string | null>> {
+  const rule = SIGNATURE_STEPS.find(r => r.step === step)!;
+  const nombre = normalizeOptionalText(nameRaw);
+  // El usuario acompaña al nombre. Si el cliente manda sólo el nombre, el
+  // usuario queda en null a propósito: mejor una línea en blanco para firmar a
+  // mano que la firma de otra persona.
+  const userId = normalizeOptionalText(userIdRaw);
+  const mismoNombre = nombre === (current[rule.nameField] ?? null);
+  const mismoUserId = userId === (current[rule.idField] ?? null);
+  if (mismoNombre && mismoUserId) return {};
+
+  if (!rule.done(current)) {
+    throw new RouteError(
+      409,
+      "STEP_NOT_REACHED",
+      `No se puede asentar quién ${rule.label} una solicitud que todavía no llegó a ese paso.`,
+    );
+  }
+  if (userId) await assertSignerEligible(session, current, rule.step, userId);
+  return { [rule.nameField]: nombre, [rule.idField]: userId };
+}
 
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 // No hay sistema de permisos en el proyecto: son checks ad-hoc por servicio
@@ -622,25 +656,8 @@ export async function updateServiceRequest(session: TenantAccessSession, id: str
   const signatures: Record<string, string | null> = {};
   for (const rule of SIGNATURE_STEPS) {
     if (body[rule.nameField] === undefined) continue;
-    const nombre = normalizeOptionalText(body[rule.nameField]);
-    // El usuario acompaña al nombre. Si el cliente manda sólo el nombre, el
-    // usuario queda en null a propósito: mejor una línea en blanco para firmar a
-    // mano que la firma de otra persona.
-    const userId = normalizeOptionalText(body[rule.idField]);
-    const mismoNombre = nombre === ((current as any)[rule.nameField] ?? null);
-    const mismoUserId = userId === ((current as any)[rule.idField] ?? null);
-    if (mismoNombre && mismoUserId) continue;
-
-    if (!rule.done(current)) {
-      throw new RouteError(
-        409,
-        "STEP_NOT_REACHED",
-        `No se puede asentar quién ${rule.label} una solicitud que todavía no llegó a ese paso.`,
-      );
-    }
-    if (userId) await assertSignerEligible(session, current, rule.step, userId);
-    signatures[rule.nameField] = nombre;
-    signatures[rule.idField] = userId;
+    Object.assign(signatures,
+      await signatureChange(session, current, rule.step, body[rule.nameField], body[rule.idField]));
   }
 
   const updated = await (prisma as any).serviceRequest.update({
@@ -1899,6 +1916,15 @@ export interface HojaRutaEntryInput {
  * únicas borrables); el resto son hitos que el sistema deriva.
  */
 export async function listHojaRuta(session: TenantAccessSession, id: string) {
+  return (await getHojaRutaView(session, id)).items;
+}
+
+/**
+ * La hoja de ruta para la pantalla: las filas y el buque de la SS, que la
+ * ventana de corrección del admin necesita para ofrecer sólo a los firmantes
+ * habilitados en ese buque.
+ */
+export async function getHojaRutaView(session: TenantAccessSession, id: string) {
   const prisma = getPrismaClient()!;
   const sr = await getRequestOrThrow(session, id); // tenant + vessel scope + 404
   const [hojaRuta, provider, creador] = await Promise.all([
@@ -1922,7 +1948,10 @@ export async function listHojaRuta(session: TenantAccessSession, id: string) {
   const creadorName = creador
     ? (creador.formName?.trim() || `${creador.firstName ?? ""} ${creador.lastName ?? ""}`.trim() || null)
     : null;
-  return buildHojaRuta({ ...sr, hojaRuta }, provider?.name ?? null, creadorName);
+  return {
+    items: buildHojaRuta({ ...sr, hojaRuta }, provider?.name ?? null, creadorName),
+    vesselCode: sr.vesselCode as string,
+  };
 }
 
 export interface WorkOrderHojaRutaRow {
@@ -2068,18 +2097,28 @@ const ORDEN_HITOS: HojaRutaHito[] = ["CREADA", "APROBADA", "AUTORIZADA", "ENVIAD
  * Enviada al taller…). El hito no es una fila: se corrige el campo de la SS del
  * que sale (ver HITO_FIELDS), así la tramitación y la hoja de ruta siguen
  * diciendo lo mismo. Sólo el admin, auditado con el antes y el después, igual
- * que corregir una novedad a mano.
+ * que corregir una novedad a mano. Se corrigen la fecha, quién asienta y un
+ * detalle que se suma al texto del sistema ("Aprobada — por mail del…").
  *
  * La fecha se puede mover pero no sacar de orden con los pasos vecinos (una SS
  * no se aprueba antes de pedirse ni se recibe antes de mandarse al taller), ni
  * llevar a un día que todavía no pasó. La de "Solicitud creada" no cambia de
  * año: el número de la SS lleva el año.
  */
+export interface HojaRutaHitoInput {
+  entryDate?: string | null;
+  /** Quién asienta. En los pasos con firma viaja junto con su usuario. */
+  asientaByName?: string | null;
+  asientaUserId?: string | null;
+  /** Detalle que se suma al texto del sistema ("" lo quita). */
+  detalle?: string | null;
+}
+
 export async function updateHojaRutaHito(
   session: TenantAccessSession,
   id: string,
   hito: string,
-  payload: HojaRutaEntryInput,
+  payload: HojaRutaHitoInput,
 ) {
   if (session.user.role !== "TENANT_ADMIN") {
     throw new RouteError(403, "FORBIDDEN", "Sólo un administrador puede corregir un paso de la hoja de ruta.");
@@ -2132,14 +2171,42 @@ export async function updateHojaRutaHito(
       data[campos.dateField] = d;
     }
   }
+  // Lo que se guarda aparte (detalle, nombre de "Enviada al taller").
+  const extra = { ...((current as any).hojaRutaHitos ?? {}) } as HojaRutaHitosExtra;
+  const extraHito = { ...(extra[hito as HojaRutaHito] ?? {}) };
+  let extraCambio = false;
+
+  // Quién asienta. En los pasos con firma es el firmante de la tramitación: cambia
+  // en toda la SS, con las mismas reglas que corregirlo desde la tramitación.
+  let firmaCambio: Record<string, string | null> = {};
   if (payload.asientaByName !== undefined) {
-    if (!campos.nameField) {
-      throw new RouteError(409, "NAME_GOES_WITH_SIGNATURE",
-        "El nombre de este paso va con la firma: se corrige en la tramitación de la solicitud.");
-    }
     const quien = normalizeOptionalText(payload.asientaByName);
     if (!quien) throw new RouteError(400, "VALIDATION_ERROR", "Indicá quién asienta el paso.");
-    if (quien !== ((current as any)[campos.nameField] ?? null)) data[campos.nameField] = quien;
+    if (campos.firma) {
+      firmaCambio = await signatureChange(session, current, campos.firma, quien, payload.asientaUserId);
+      Object.assign(data, firmaCambio);
+    } else if (campos.nameField) {
+      if (quien !== ((current as any)[campos.nameField] ?? null)) data[campos.nameField] = quien;
+    } else if (quien !== (extraHito.asienta ?? null)) {
+      extraHito.asienta = quien;
+      extraCambio = true;
+    }
+  }
+
+  // Detalle que se suma al texto del sistema. Vacío = se quita.
+  if (payload.detalle !== undefined) {
+    const detalle = normalizeOptionalText(payload.detalle);
+    if (campos.detailField) {
+      if (detalle !== ((current as any)[campos.detailField] ?? null)) data[campos.detailField] = detalle;
+    } else if (detalle !== (extraHito.detalle ?? null)) {
+      if (detalle) extraHito.detalle = detalle; else delete extraHito.detalle;
+      extraCambio = true;
+    }
+  }
+  if (extraCambio) {
+    if (Object.keys(extraHito).length) extra[hito as HojaRutaHito] = extraHito;
+    else delete extra[hito as HojaRutaHito];
+    data.hojaRutaHitos = extra;
   }
   if (Object.keys(data).length === 0) return current;
 
@@ -2160,6 +2227,23 @@ export async function updateHojaRutaHito(
       after: Object.fromEntries(Object.keys(data).map(f => [f, updated[f] ?? null])),
     },
   });
+  // Cambiar el firmante es reescribir una firma: queda además con la misma marca
+  // que cuando se corrige desde la tramitación.
+  if (Object.keys(firmaCambio).length > 0) {
+    void publishAudit(prisma as any, {
+      tenantId: current.tenantId,
+      actorUserId: session.user.id,
+      action: "SERVICE_REQUEST_SIGNATURES_EDITED",
+      entityType: "ServiceRequest",
+      entityId: id,
+      metadata: {
+        serviceRequestCode: current.serviceRequestCode,
+        changes: Object.fromEntries(
+          Object.entries(firmaCambio).map(([f, to]) => [f, { from: (current as any)[f] ?? null, to }]),
+        ),
+      },
+    });
+  }
   return updated;
 }
 

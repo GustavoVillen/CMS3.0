@@ -2095,6 +2095,11 @@ model ServiceRequest {
   rechazadoByName     String?
   rechazadoAt         DateTime?
   rechazoReason       String?
+  // Lo que el admin le agrega a los hitos de la HOJA DE RUTA, por paso:
+  // { APROBADA: { detalle: "por mail del Superintendente" }, ENVIADA: { asienta } }.
+  // El hito sigue saliendo de las fechas y firmas de arriba; esto sólo suma el
+  // detalle al texto, y el nombre de "Enviada al taller", que no es una firma.
+  hojaRutaHitos       Json?
   createdAt           DateTime             @default(now())
   createdByUserId     String
   updatedAt           DateTime             @updatedAt

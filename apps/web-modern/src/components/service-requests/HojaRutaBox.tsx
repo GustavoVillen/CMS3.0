@@ -21,14 +21,19 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { AlertDialog } from "../AlertDialog";
 import { AutoTextArea } from "../AutoTextArea";
 import { RequiredMark } from "../GuideKit";
+import { CrewNameSelect } from "../CrewNameSelect";
+import { useRoleHasPermission } from "../../lib/role-permissions";
+import { eligibleSigners, SignerSelect, type TeamMember } from "./signers";
 
 /** Recuadro de cada celda, igual que las filas de Avances. */
 const cellCls = "w-full bg-transparent border border-fg/10 rounded-md px-1.5 py-0.5 text-[11px] leading-tight text-fg";
+/** Campos de la ventana de corrección. */
+const modalInputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50";
 
 /**
  * Fila de la HOJA DE RUTA DEL PEDIDO, tal como se imprime. Con `logId` = novedad
- * asentada a mano (editable); con `hito` = paso que el sistema deriva de la SS
- * (el admin corrige su fecha, y el nombre sólo si `asientaEditable`).
+ * asentada a mano; con `hito` = paso que el sistema deriva de la SS. El admin
+ * corrige las dos (ver buildHojaRuta en el backend).
  */
 export interface HojaRutaRow {
   fecha: string;
@@ -36,7 +41,13 @@ export interface HojaRutaRow {
   asienta: string;
   logId?: string;
   hito?: string;
-  asientaEditable?: boolean;
+  /** Texto del sistema sin el detalle ("Aprobada"). */
+  hitoTexto?: string;
+  detalle?: string | null;
+  /** "firma" = firmante de la tramitación (lista del personal); "texto" = nombre suelto; sin valor = fijo. */
+  asientaModo?: "firma" | "texto";
+  firma?: "SOLICITA" | "APRUEBA" | "AUTORIZA";
+  asientaUserId?: string | null;
 }
 
 /** La fecha tal como se ve en la fila (DD/MM/AAAA), en el formato del calendario. */
@@ -50,9 +61,10 @@ function fechaDeLaFila(fecha: string): string {
  *
  * Muestra la hoja tal como se imprime: los hitos que el sistema asienta solo
  * (creada, aprobada, autorizada, enviada al taller, recibida) mezclados por
- * fecha con las novedades que carga la gente. El admin corrige las dos: en un
- * hito corrige la fecha del paso en la SS (la tramitación se entera sola); el
- * nombre que va con una firma se corrige en la tramitación, no acá.
+ * fecha con las novedades que carga la gente. El admin corrige las dos. En un
+ * hito corrige la fecha y quién asienta en la propia SS (en Solicita, Aprueba y
+ * Autoriza es el firmante, elegido de la lista del personal), y le puede sumar
+ * un detalle al texto del sistema.
  */
 export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChanged }: {
   srId: string;
@@ -67,7 +79,7 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
   // `reload()` (no un contador en las deps): useFetch cachea por 30 s, así que
   // volver a pedir la misma URL devolvía la lista vieja y la novedad recién
   // asentada tardaba en aparecer. reload() siempre trae la del servidor.
-  const { data, loading, reload } = useFetch<{ items: HojaRutaRow[] }>(
+  const { data, loading, reload } = useFetch<{ items: HojaRutaRow[]; vesselCode?: string }>(
     `/app/pms/service-requests/${srId}/hoja-ruta`,
     [srId],
   );
@@ -82,27 +94,39 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
   // Ventanita de "Registrar novedad" (variante lista).
   const [adding, setAdding] = useState(false);
   // Corrección de una fila (sólo admin). Novedad a mano: fecha, quién asienta y
-  // texto. Paso del sistema: la fecha, y quién asienta sólo donde el nombre no va
-  // con una firma (el resto se corrige en la tramitación).
+  // texto. Paso del sistema: fecha, quién asienta (el firmante, si el paso lleva
+  // firma) y un detalle que se suma al texto del sistema.
   const [editRow, setEditRow] = useState<HojaRutaRow | null>(null);
   const [eFecha, setEFecha] = useState("");
   const [eAsienta, setEAsienta] = useState("");
+  const [eFirma, setEFirma] = useState({ name: "", userId: "" });
   const [eNovedad, setENovedad] = useState("");
   // Error de la corrección: en ventanita con OK, encima de la ventana abierta.
   const [editError, setEditError] = useState<string | null>(null);
+  const asientaActual = (f: HojaRutaRow) => (f.asienta === "—" ? "" : f.asienta);
   const abrirEdicion = (f: HojaRutaRow) => {
     setEditRow(f);
     setEFecha(f.fecha ? fechaDeLaFila(f.fecha) : "");
-    setEAsienta(f.asienta === "—" ? "" : f.asienta);
-    setENovedad(f.novedad);
+    setEAsienta(asientaActual(f));
+    setEFirma({ name: asientaActual(f), userId: f.asientaUserId ?? "" });
+    setENovedad(f.hito ? f.detalle ?? "" : f.novedad);
   };
   const esHito = !!editRow?.hito;
-  const asientaEditable = !esHito || !!editRow?.asientaEditable;
+  const modo = esHito ? editRow?.asientaModo : "texto";
+  // Firmantes elegibles: sólo se piden al corregir un paso con firma.
+  const conFirma = modo === "firma";
+  const { data: teamData } = useFetch<TeamMember[]>(conFirma ? "/app/team/members" : null, [conFirma]);
+  const roleHas = useRoleHasPermission(conFirma);
+  const firmantes = conFirma && editRow?.firma
+    ? eligibleSigners(Array.isArray(teamData) ? teamData : [], editRow.firma, data?.vesselCode ?? "", roleHas)
+    : [];
   const guardarEdicion = async () => {
     if (!editRow?.logId && !editRow?.hito) return;
     if (esHito) {
       if (!eFecha) { setEditError(t("hr.step.dateRequired")); return; }
-      if (asientaEditable && !eAsienta.trim()) { setEditError(t("hr.step.byRequired")); return; }
+      if ((modo === "firma" && !eFirma.name) || (modo === "texto" && !eAsienta.trim())) {
+        setEditError(t("hr.step.byRequired")); return;
+      }
     } else if (!eFecha || !eAsienta.trim() || !eNovedad.trim()) {
       setEditError(t("wo.ssLog.required")); return;
     }
@@ -110,8 +134,15 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
     setEditError(null);
     try {
       if (editRow.hito) {
+        // Quién asienta viaja sólo si cambió: en un paso con firma, cambiarlo es
+        // cambiar el firmante de la SS.
+        const asienta = modo === "firma" && eFirma.userId !== (editRow.asientaUserId ?? "")
+          ? { asientaByName: eFirma.name, asientaUserId: eFirma.userId }
+          : modo === "texto" && eAsienta.trim() !== asientaActual(editRow)
+            ? { asientaByName: eAsienta.trim() }
+            : {};
         await api.patch(`/app/pms/service-requests/${srId}/hoja-ruta/hito/${editRow.hito}`, {
-          entryDate: eFecha, ...(asientaEditable ? { asientaByName: eAsienta.trim() } : {}),
+          entryDate: eFecha, detalle: eNovedad.trim(), ...asienta,
         });
       } else {
         await api.patch(`/app/pms/service-requests/${srId}/hoja-ruta/${editRow.logId}`, {
@@ -146,20 +177,30 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
             className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.by")}{asientaEditable && <RequiredMark />}</label>
-          {asientaEditable ? (
-            <input value={eAsienta} onChange={e => setEAsienta(e.target.value)}
-              className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
+          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.by")}{modo && <RequiredMark />}</label>
+          {modo === "firma" ? (<>
+            <SignerSelect value={eFirma} onChange={setEFirma} options={firmantes} className={modalInputCls} />
+            <p className="text-[10px] text-text-industrial/40">{t("hr.step.signerHint")}</p>
+          </>) : modo === "texto" && esHito ? (
+            <CrewNameSelect crew="any" value={eAsienta} onChange={setEAsienta} className={modalInputCls} />
+          ) : modo === "texto" ? (
+            <input value={eAsienta} onChange={e => setEAsienta(e.target.value)} className={modalInputCls} />
           ) : (<>
             <p className="w-full bg-fg/[0.03] border border-fg/10 rounded-lg px-3 py-2 text-sm text-text-industrial/70">{editRow.asienta}</p>
-            <p className="text-[10px] text-text-industrial/40">{t("hr.step.byHint")}</p>
+            <p className="text-[10px] text-text-industrial/40">{t("hr.step.byLocked")}</p>
           </>)}
         </div>
         <div className="space-y-1.5">
           <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.entry")}{!esHito && <RequiredMark />}</label>
-          {esHito ? (
-            <p className="w-full bg-fg/[0.03] border border-fg/10 rounded-lg px-3 py-2 text-sm italic text-text-industrial/70">{editRow.novedad}</p>
-          ) : (
+          {esHito ? (<>
+            {/* El texto del sistema queda; lo que se escribe se le suma detrás. */}
+            <div className="flex items-start gap-2">
+              <span className="shrink-0 py-2 text-sm italic text-text-industrial/70">{editRow.hitoTexto} —</span>
+              <AutoTextArea rows={1} value={eNovedad} onChange={e => setENovedad(e.target.value)}
+                placeholder={t("hr.step.detailPh")}
+                className={`${modalInputCls} placeholder-text-industrial/30 resize-y`} />
+            </div>
+          </>) : (
             <AutoTextArea rows={3} value={eNovedad} onChange={e => setENovedad(e.target.value)}
               className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 resize-y" />
           )}

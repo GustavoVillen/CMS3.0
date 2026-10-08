@@ -31,7 +31,7 @@ import {
   getServiceRequest,
   getServiceRequestSignatures,
   sendServiceRequestToProvider,
-  listHojaRuta,
+  getHojaRutaView,
   listServiceRequestLabSamples,
   listServiceRequests,
   rejectServiceRequest,
@@ -148,7 +148,7 @@ export async function handleServiceRequestsRoutes(
   // Los hitos del sistema no se cargan: el PDF los deriva de las fechas de la SS.
   if (/^\/app\/pms\/service-requests\/[^/]+\/hoja-ruta$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
-    if (method === "GET")  { sendJson(response, 200, { items: await listHojaRuta(session, id) }); return true; }
+    if (method === "GET")  { sendJson(response, 200, await getHojaRutaView(session, id)); return true; }
     if (method === "POST") {
       const body = await readJsonBody(request) as Parameters<typeof addHojaRutaEntry>[2];
       sendJson(response, 201, await addHojaRutaEntry(session, id, body ?? {}));

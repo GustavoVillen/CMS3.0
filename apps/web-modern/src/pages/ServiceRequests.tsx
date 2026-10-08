@@ -32,6 +32,7 @@ import {
 import { downloadDocx } from "../lib/download-docx";
 import { BlankFormButton } from "../components/BlankFormButton";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
+import { eligibleSigners, memberLabel, SignerSelect, type TeamMember } from "../components/service-requests/signers";
 import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark, firstMissingOnScreen, focusGuideField } from "../components/GuideKit";
 import { WizardStepper } from "../components/NewWorkOrderWizard";
 import { NewServiceRequestWizard } from "../components/NewServiceRequestWizard";
@@ -149,51 +150,6 @@ const srServicio = (sr: { title: string | null; description: string | null }) =>
 
 /** Los tres pasos del recuadro TRAMITACION DE LA SOLICITUD, en el orden del papel. */
 const TRAMITA_STEPS = ["SOLICITA", "APRUEBA", "AUTORIZA"] as const;
-
-interface TeamMember {
-  userId: string;
-  firstName: string | null;
-  lastName: string | null;
-  formName: string | null;
-  role: string;
-  /** Cargo cargado en Equipo (se muestra al lado del nombre; si no hay, el rol). */
-  jobTitle?: string | null;
-  hasSignature: boolean;
-  /** Para ofrecer sólo a los que están a cargo del buque de la SS. */
-  assignedVesselCodes?: string[];
-}
-
-
-/** Nombre a estampar en el formulario: el configurado para documentos, si tiene. */
-const memberLabel = (m: TeamMember) =>
-  m.formName?.trim() || `${m.firstName ?? ""} ${m.lastName ?? ""}`.trim() || "(sin nombre)";
-
-/**
- * Quién puede figurar en cada paso de la tramitación. Un ADMIN siempre; el
- * SUPERINTENDENTE sólo si está a cargo del buque de la SS; el JEFE DE MÁQUINAS
- * sólo para APROBAR — autorizar es atribución de tierra. Solicitar no es una
- * firma: el pedido lo puede originar cualquiera del buque.
- *
- * Misma regla que valida el backend en resolveSigner. Se comparte entre el modal
- * de firma y la corrección de nombres del admin: dos copias divergiendo serían
- * un desplegable ofreciendo gente que el backend después rechaza.
- */
-function eligibleSigners(
-  members: TeamMember[],
-  step: "SOLICITA" | "APRUEBA" | "AUTORIZA",
-  vesselCode: string,
-  /** Matriz de Equipo → Permisos ("Aprobar SS" / "Autorizar SS"), la misma que valida el backend. */
-  roleHas: (role: string, key: string) => boolean,
-): TeamMember[] {
-  return members.filter(m => {
-    if (m.role === "AUDITOR_READONLY") return false; // solo-lectura: no pide ni firma
-    if (m.role === "TENANT_ADMIN") return true;
-    const enElBuque = (m.assignedVesselCodes ?? []).includes(vesselCode);
-    if (step === "SOLICITA") return enElBuque;
-    return enElBuque && roleHas(m.role, step === "APRUEBA" ? "sr.approve" : "sr.authorize");
-  });
-}
-
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
@@ -2883,53 +2839,5 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
         </FormModal>
       )}
     </div>
-  );
-}
-
-/**
- * Nombre de un paso de la tramitacion, dentro de su columna de firma del papel.
- * Sólo lo ve el admin y sólo sobre un paso YA CUMPLIDO (ver `done` en el modal).
- *
- * Es un desplegable, no texto libre: el que figura firmando tiene que ser
- * alguien del equipo habilitado para ese paso. Si el nombre guardado no está
- * entre los elegibles (cargó una SS de papel, o esa persona ya no está en la
- * empresa) se conserva como opción propia para no borrarlo sin querer.
- *
- * La FECHA no se edita a propósito: la estampa el paso real
- * (Solicitar / Aprobar / Autorizar), no se escribe a mano acá.
- */
-function SignerSelect({ value, onChange, options }: {
-  /** Nombre y usuario van juntos: el usuario es el que le da la firma al PDF. */
-  value: { name: string; userId: string };
-  onChange: (v: { name: string; userId: string }) => void;
-  options: TeamMember[];
-}) {
-  // El select se maneja por userId, no por nombre: dos personas pueden llamarse
-  // igual, y el nombre suelto no alcanza para saber de quién es la firma.
-  const HUERFANO = "__HUERFANO__";
-  const t = useT();
-  const enLista = options.some(m => m.userId === value.userId);
-  const huerfano = !enLista && value.name ? value.name : null;
-  return (
-    <PersonSelect
-      className="w-full bg-transparent text-[11px] text-fg outline-none"
-      value={enLista ? value.userId : (huerfano ? HUERFANO : "")}
-      onChange={uid => {
-        if (uid === HUERFANO) return; // no se re-elige: es el nombre que ya estaba
-        const m = options.find(x => x.userId === uid);
-        onChange(m ? { name: memberLabel(m), userId: m.userId } : { name: "", userId: "" });
-      }}
-      emptyLabel={t("person.unassigned")}
-      options={[
-        // Nombre viejo sin usuario (SS de papel, o alguien que ya no está en la
-        // empresa). Se ofrece para no borrarlo sin querer, pero el PDF no le
-        // pone firma: no hay a quién buscársela.
-        ...(huerfano ? [{ value: HUERFANO, name: huerfano, note: t("person.noSignature") }] : []),
-        ...options.map(m => ({
-          value: m.userId, name: memberLabel(m), role: m.role, jobTitle: m.jobTitle,
-          note: m.hasSignature ? null : t("person.noSignature"),
-        })),
-      ]}
-    />
   );
 }

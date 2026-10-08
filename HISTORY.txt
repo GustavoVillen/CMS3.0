@@ -1,5 +1,18 @@
 HISTORY.txt
 
+[2026-10-08] SS: el admin corrige los pasos de la hoja de ruta
+Agent: Claude Opus 5.5
+- Las filas que pone el sistema (Solicitud creada, Aprobada, Autorizada, No aprobada, Enviada al
+  taller, Servicio recibido) tienen lapiz para el admin: fecha, quien asienta y un detalle que se
+  suma al texto ("Aprobada — por mail del Superintendente").
+- En Solicita/Aprueba/Autoriza quien asienta es el firmante: se elige de la lista del personal y
+  cambia en toda la SS (tramitacion y PDF), con las mismas reglas que la tramitacion. En "No
+  aprobada" el detalle es el motivo del rechazo.
+- Fechas: no a futuro, no fuera de orden con los pasos vecinos, "Solicitud creada" no cambia de ano.
+  Todo auditado (HOJA_RUTA_UPDATED; SIGNATURES_EDITED si cambia el firmante).
+- Schema: ServiceRequest.hojaRutaHitos (Json?, opcional) guarda detalle y nombre de "Enviada".
+  Pasos: pull + db push + prisma generate + build web + restart. Demo: ademas rehacer la plantilla.
+
 [2026-10-07] Avances: fotos .jfif y .heic al adjuntar
 Agent: Claude Opus 5.5
 - En OT-M02-26-0478 el servidor rechazo 6 veces una foto del celular adjuntada con "Archivo"
