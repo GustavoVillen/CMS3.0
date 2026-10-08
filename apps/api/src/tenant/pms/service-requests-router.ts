@@ -41,6 +41,7 @@ import {
   unsubmitServiceRequest,
   updateServiceRequest,
   updateHojaRutaEntry,
+  updateHojaRutaHito,
 } from "../service-requests/service-requests-service";
 import { auditServiceRequestComplete } from "../service-requests/service-request-complete-audit";
 
@@ -153,6 +154,15 @@ export async function handleServiceRequestsRoutes(
       sendJson(response, 201, await addHojaRutaEntry(session, id, body ?? {}));
       return true;
     }
+  }
+
+  // Corregir un hito que asienta el sistema (Aprobada, Enviada al taller…): se
+  // corrige la fecha del paso en la SS. Sólo TENANT_ADMIN, auditado.
+  if (method === "PATCH" && /^\/app\/pms\/service-requests\/[^/]+\/hoja-ruta\/hito\/[^/]+$/.test(url.pathname)) {
+    const [, , , , id, , , hito] = url.pathname.split("/");
+    const body = await readJsonBody(request) as Parameters<typeof updateHojaRutaHito>[3];
+    sendJson(response, 200, await updateHojaRutaHito(session, id!, hito!, body ?? {}));
+    return true;
   }
 
   // Corregir una novedad (fecha, quién asienta, texto). Sólo TENANT_ADMIN, auditado.

@@ -27,13 +27,22 @@ const cellCls = "w-full bg-transparent border border-fg/10 rounded-md px-1.5 py-
 
 /**
  * Fila de la HOJA DE RUTA DEL PEDIDO, tal como se imprime. Con `logId` = novedad
- * asentada a mano (editable); sin él = hito que el sistema deriva de la SS.
+ * asentada a mano (editable); con `hito` = paso que el sistema deriva de la SS
+ * (el admin corrige su fecha, y el nombre sólo si `asientaEditable`).
  */
 export interface HojaRutaRow {
   fecha: string;
   novedad: string;
   asienta: string;
   logId?: string;
+  hito?: string;
+  asientaEditable?: boolean;
+}
+
+/** La fecha tal como se ve en la fila (DD/MM/AAAA), en el formato del calendario. */
+function fechaDeLaFila(fecha: string): string {
+  const [d, m, y] = fmtDate(fecha).split("/");
+  return y && m && d ? `${y}-${m}-${d}` : "";
 }
 
 /**
@@ -41,8 +50,9 @@ export interface HojaRutaRow {
  *
  * Muestra la hoja tal como se imprime: los hitos que el sistema asienta solo
  * (creada, aprobada, autorizada, enviada al taller, recibida) mezclados por
- * fecha con las novedades que carga la gente. Sólo estas últimas se editan: los
- * hitos salen de la tramitación y no se tocan desde acá.
+ * fecha con las novedades que carga la gente. El admin corrige las dos: en un
+ * hito corrige la fecha del paso en la SS (la tramitación se entera sola); el
+ * nombre que va con una firma se corrige en la tramitación, no acá.
  */
 export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChanged }: {
   srId: string;
@@ -71,37 +81,54 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
   const [confirmando, setConfirmando] = useState<string | null>(null);
   // Ventanita de "Registrar novedad" (variante lista).
   const [adding, setAdding] = useState(false);
-  // Corrección de una novedad a mano (sólo admin): fecha, quién asienta y texto.
+  // Corrección de una fila (sólo admin). Novedad a mano: fecha, quién asienta y
+  // texto. Paso del sistema: la fecha, y quién asienta sólo donde el nombre no va
+  // con una firma (el resto se corrige en la tramitación).
   const [editRow, setEditRow] = useState<HojaRutaRow | null>(null);
   const [eFecha, setEFecha] = useState("");
   const [eAsienta, setEAsienta] = useState("");
   const [eNovedad, setENovedad] = useState("");
+  // Error de la corrección: en ventanita con OK, encima de la ventana abierta.
+  const [editError, setEditError] = useState<string | null>(null);
   const abrirEdicion = (f: HojaRutaRow) => {
     setEditRow(f);
-    setEFecha(f.fecha ? String(f.fecha).slice(0, 10) : "");
+    setEFecha(f.fecha ? fechaDeLaFila(f.fecha) : "");
     setEAsienta(f.asienta === "—" ? "" : f.asienta);
     setENovedad(f.novedad);
   };
+  const esHito = !!editRow?.hito;
+  const asientaEditable = !esHito || !!editRow?.asientaEditable;
   const guardarEdicion = async () => {
-    if (!editRow?.logId) return;
-    if (!eFecha || !eAsienta.trim() || !eNovedad.trim()) { setError(t("wo.ssLog.required")); return; }
+    if (!editRow?.logId && !editRow?.hito) return;
+    if (esHito) {
+      if (!eFecha) { setEditError(t("hr.step.dateRequired")); return; }
+      if (asientaEditable && !eAsienta.trim()) { setEditError(t("hr.step.byRequired")); return; }
+    } else if (!eFecha || !eAsienta.trim() || !eNovedad.trim()) {
+      setEditError(t("wo.ssLog.required")); return;
+    }
     setSaving(true);
-    setError(null);
+    setEditError(null);
     try {
-      await api.patch(`/app/pms/service-requests/${srId}/hoja-ruta/${editRow.logId}`, {
-        entryDate: eFecha, asientaByName: eAsienta.trim(), novedad: eNovedad.trim(),
-      });
+      if (editRow.hito) {
+        await api.patch(`/app/pms/service-requests/${srId}/hoja-ruta/hito/${editRow.hito}`, {
+          entryDate: eFecha, ...(asientaEditable ? { asientaByName: eAsienta.trim() } : {}),
+        });
+      } else {
+        await api.patch(`/app/pms/service-requests/${srId}/hoja-ruta/${editRow.logId}`, {
+          entryDate: eFecha, asientaByName: eAsienta.trim(), novedad: eNovedad.trim(),
+        });
+      }
       setEditRow(null);
       await reload();
       onChanged?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("pn.saveError"));
+      setEditError(e instanceof Error ? e.message : t("pn.saveError"));
     } finally {
       setSaving(false);
     }
   };
   const editModal = editRow && (
-    <FormModal title={t("hr.edit")} onClose={() => setEditRow(null)}
+    <FormModal title={esHito ? t("hr.editStep") : t("hr.edit")} onClose={() => setEditRow(null)}
       footer={<>
         <button type="button" onClick={() => setEditRow(null)}
           className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-text-industrial hover:border-accent/30">
@@ -119,16 +146,26 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
             className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
         </div>
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.by")}<RequiredMark /></label>
-          <input value={eAsienta} onChange={e => setEAsienta(e.target.value)}
-            className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
+          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.by")}{asientaEditable && <RequiredMark />}</label>
+          {asientaEditable ? (
+            <input value={eAsienta} onChange={e => setEAsienta(e.target.value)}
+              className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
+          ) : (<>
+            <p className="w-full bg-fg/[0.03] border border-fg/10 rounded-lg px-3 py-2 text-sm text-text-industrial/70">{editRow.asienta}</p>
+            <p className="text-[10px] text-text-industrial/40">{t("hr.step.byHint")}</p>
+          </>)}
         </div>
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.entry")}<RequiredMark /></label>
-          <AutoTextArea rows={3} value={eNovedad} onChange={e => setENovedad(e.target.value)}
-            className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 resize-y" />
+          <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.entry")}{!esHito && <RequiredMark />}</label>
+          {esHito ? (
+            <p className="w-full bg-fg/[0.03] border border-fg/10 rounded-lg px-3 py-2 text-sm italic text-text-industrial/70">{editRow.novedad}</p>
+          ) : (
+            <AutoTextArea rows={3} value={eNovedad} onChange={e => setENovedad(e.target.value)}
+              className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50 resize-y" />
+          )}
         </div>
       </div>
+      {editError && <AlertDialog message={editError} onClose={() => setEditError(null)} />}
     </FormModal>
   );
 
@@ -219,8 +256,8 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
                       <div className={`${cellCls} truncate text-text-industrial/70`} title={f.asienta}>{f.asienta}</div>
                     </td>
                     <td className="px-1 whitespace-nowrap text-right">
-                      {f.logId && isAdmin && (
-                        <button type="button" onClick={() => abrirEdicion(f)} title={t("hr.edit")}
+                      {(f.logId || f.hito) && isAdmin && (
+                        <button type="button" onClick={() => abrirEdicion(f)} title={f.hito ? t("hr.editStep") : t("hr.edit")}
                           className="p-0.5 text-text-industrial/40 hover:text-accent transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -306,6 +343,15 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
           </div>
           <div className="w-44 shrink-0 px-2 py-1 flex items-center gap-1">
             <span className="flex-1 min-w-0 truncate text-[12px] text-center text-text-industrial">{f.asienta}</span>
+            {/* Los pasos no se borran: el hueco del tacho mantiene los nombres
+                alineados con los de las novedades. */}
+            {f.hito && isAdmin && (<>
+              <button type="button" onClick={() => abrirEdicion(f)}
+                className="shrink-0 text-text-industrial/30 hover:text-accent" title={t("hr.editStep")}>
+                <Pencil className="w-3 h-3" />
+              </button>
+              <span className="w-3 shrink-0" aria-hidden />
+            </>)}
             {f.logId && isAdmin && (
               confirmando === f.logId ? (
                 <span className="shrink-0 flex items-center gap-1 text-[10px]">

@@ -97,6 +97,23 @@ export function fmtDateTime(
   });
 }
 
+/**
+ * Día del almanaque (AAAA-MM-DD) en que cae una fecha, con el mismo criterio que
+ * fmtDate: sirve para comparar días (lo que ve la gente), no instantes.
+ */
+export function dayKey(d: Date | string, tz: string): string {
+  const date = new Date(d);
+  const opts: Intl.DateTimeFormatOptions = { year: "numeric", month: "2-digit", day: "2-digit" };
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", { ...opts, timeZone: isDateOnly(date) ? "UTC" : tz }).formatToParts(date);
+  } catch {
+    parts = new Intl.DateTimeFormat("en-US", { ...opts, timeZone: "UTC" }).formatToParts(date);
+  }
+  const part = (type: string) => parts.find(p => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 /** Solo la hora (HH:MM) de un sello de tiempo, en la hora de la empresa. */
 export function fmtTime(
   d: Date | string | null | undefined,

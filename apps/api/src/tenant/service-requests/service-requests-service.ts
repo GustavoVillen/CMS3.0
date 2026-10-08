@@ -38,7 +38,8 @@ import { withUniqueRetry } from "../../common/unique-retry";
 import { assertNotLocked } from "../../common/record-lock";
 import { archivePdf } from "../settings/pdf-archive-service";
 import { getTenantWorkOrder, requireWorkOrderScope } from "../work-orders/work-orders-service";
-import { buildHojaRuta } from "./hoja-ruta";
+import { buildHojaRuta, HITO_FIELDS, type HojaRutaHito } from "./hoja-ruta";
+import { dayKey, resolveTenantTime } from "../../common/tenant-time";
 import { resolveServiceRequestSignatures } from "./signatures";
 import { isMailConfigured, sendMail } from "../../common/mailer";
 import { readServiceRequestMailConfig } from "../settings/service-request-mail-config-service";
@@ -2054,6 +2055,109 @@ export async function updateHojaRutaEntry(
       serviceRequestCode: current.serviceRequestCode,
       before: { novedad: entry.novedad, entryDate: entry.entryDate, asientaByName: entry.asientaByName },
       after: { novedad: updated.novedad, entryDate: updated.entryDate, asientaByName: updated.asientaByName },
+    },
+  });
+  return updated;
+}
+
+/** Orden en que ocurren los pasos de la SS (el rechazo se valida aparte). */
+const ORDEN_HITOS: HojaRutaHito[] = ["CREADA", "APROBADA", "AUTORIZADA", "ENVIADA", "RECIBIDA"];
+
+/**
+ * Corregir un hito que el sistema asienta solo (Solicitud creada, Aprobada,
+ * Enviada al taller…). El hito no es una fila: se corrige el campo de la SS del
+ * que sale (ver HITO_FIELDS), así la tramitación y la hoja de ruta siguen
+ * diciendo lo mismo. Sólo el admin, auditado con el antes y el después, igual
+ * que corregir una novedad a mano.
+ *
+ * La fecha se puede mover pero no sacar de orden con los pasos vecinos (una SS
+ * no se aprueba antes de pedirse ni se recibe antes de mandarse al taller), ni
+ * llevar a un día que todavía no pasó. La de "Solicitud creada" no cambia de
+ * año: el número de la SS lleva el año.
+ */
+export async function updateHojaRutaHito(
+  session: TenantAccessSession,
+  id: string,
+  hito: string,
+  payload: HojaRutaEntryInput,
+) {
+  if (session.user.role !== "TENANT_ADMIN") {
+    throw new RouteError(403, "FORBIDDEN", "Sólo un administrador puede corregir un paso de la hoja de ruta.");
+  }
+  const campos = HITO_FIELDS[hito as HojaRutaHito];
+  if (!campos) throw new RouteError(404, "NOT_FOUND", "Paso de la hoja de ruta no encontrado.");
+  const prisma = getPrismaClient()!;
+  const current = await getRequestOrThrow(session, id);
+  const fechaActual = (current as any)[campos.dateField] as Date | null;
+  if (!fechaActual) {
+    throw new RouteError(409, "STEP_NOT_REACHED", "Ese paso todavía no ocurrió: no hay nada que corregir.");
+  }
+
+  const data: Record<string, unknown> = {};
+  if (payload.entryDate !== undefined) {
+    const d = parseOptionalDate(payload.entryDate, "entryDate");
+    if (!d) throw new RouteError(400, "VALIDATION_ERROR", "Indicá la fecha del paso.");
+    const { tz } = await resolveTenantTime(session.tenantSlug);
+    // Hay cargas viejas con fechas ilegibles (año 62026): no traban la corrección,
+    // que es justamente lo que las arregla.
+    const diaSeguro = (v: unknown) =>
+      v && !Number.isNaN(new Date(v as string).getTime()) ? dayKey(v as Date, tz) : null;
+    const dia = dayKey(d, tz);
+    const diaActual = diaSeguro(fechaActual);
+    // Mismo día que ya tenía: no se toca, así no se pierde la hora real del paso.
+    if (dia !== diaActual) {
+      if (dia > dayKey(new Date(), tz)) {
+        throw new RouteError(400, "VALIDATION_ERROR", "La fecha no puede ser posterior a hoy.");
+      }
+      if (hito === "CREADA" && diaActual && dia.slice(0, 4) !== diaActual.slice(0, 4)) {
+        throw new RouteError(400, "VALIDATION_ERROR",
+          "La fecha de la solicitud no puede cambiar de año: el número de la SS lleva el año.");
+      }
+      // Sólo contra los pasos vecinos que existen: los que ya estuvieran fuera de
+      // orden entre sí no traban la corrección de otro paso.
+      const diaDe = (h: HojaRutaHito) => diaSeguro((current as any)[HITO_FIELDS[h].dateField]);
+      const pos = ORDEN_HITOS.indexOf(hito as HojaRutaHito);
+      const anteriores = pos >= 0 ? ORDEN_HITOS.slice(0, pos) : ["CREADA", "APROBADA"] as HojaRutaHito[];
+      const posteriores = pos >= 0 ? ORDEN_HITOS.slice(pos + 1) : [];
+      const previo = [...anteriores].reverse().find(h => diaDe(h));
+      const siguiente = posteriores.find(h => diaDe(h));
+      if (previo && dia < diaDe(previo)!) {
+        throw new RouteError(400, "VALIDATION_ERROR",
+          `«${campos.label}» no puede quedar antes de «${HITO_FIELDS[previo].label}» (${diaDe(previo)!.split("-").reverse().join("/")}).`);
+      }
+      if (siguiente && dia > diaDe(siguiente)!) {
+        throw new RouteError(400, "VALIDATION_ERROR",
+          `«${campos.label}» no puede quedar después de «${HITO_FIELDS[siguiente].label}» (${diaDe(siguiente)!.split("-").reverse().join("/")}).`);
+      }
+      data[campos.dateField] = d;
+    }
+  }
+  if (payload.asientaByName !== undefined) {
+    if (!campos.nameField) {
+      throw new RouteError(409, "NAME_GOES_WITH_SIGNATURE",
+        "El nombre de este paso va con la firma: se corrige en la tramitación de la solicitud.");
+    }
+    const quien = normalizeOptionalText(payload.asientaByName);
+    if (!quien) throw new RouteError(400, "VALIDATION_ERROR", "Indicá quién asienta el paso.");
+    if (quien !== ((current as any)[campos.nameField] ?? null)) data[campos.nameField] = quien;
+  }
+  if (Object.keys(data).length === 0) return current;
+
+  const updated = await (prisma as any).serviceRequest.update({
+    where: { id },
+    data: { ...data, updatedByUserId: session.user.id },
+  });
+  void publishAudit(prisma as any, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: "SERVICE_REQUEST_HOJA_RUTA_UPDATED",
+    entityType: "ServiceRequest",
+    entityId: id,
+    metadata: {
+      serviceRequestCode: current.serviceRequestCode,
+      hito: campos.label,
+      before: Object.fromEntries(Object.keys(data).map(f => [f, (current as any)[f] ?? null])),
+      after: Object.fromEntries(Object.keys(data).map(f => [f, updated[f] ?? null])),
     },
   });
   return updated;

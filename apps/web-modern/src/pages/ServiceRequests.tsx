@@ -1748,8 +1748,13 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sr.id]);
 
-  // Sólo para gatear el borrado de novedades de la hoja de ruta.
+  // Sólo para gatear la corrección y el borrado de filas de la hoja de ruta.
   const isAdmin = role === "TENANT_ADMIN";
+  // Corregir un paso de la hoja de ruta cambia fechas de la SS: se trae de nuevo
+  // para que la tramitación muestre lo mismo sin cerrar el formulario.
+  const refrescarSs = () => {
+    api.get<ServiceRequest>(`/app/pms/service-requests/${sr.id}`).then(onSaved).catch(() => { /* queda la que había */ });
+  };
 
   // Si la SS se rechazó, el paso que la frenó: el que seguía sin fecha (mismo
   // criterio que el PDF, para que papel y pantalla marquen la misma columna).
@@ -2392,7 +2397,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
       <GuideSection n={4} title={t("ss.guide.sec.route")} subtitle={t("ss.guide.sec.routeSub")}
         open={secOpen("route")} onToggle={() => toggleSec("route")}
         locked={ssStep < 3} lockedLabel={t("wo.guide.locked")} lockedText={t("ss.guide.lockedShop")}>
-        <HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} />
+        <HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} onChanged={refrescarSs} />
       </GuideSection>
 
       <GuideStageLabel text={t("ss.guide.step.reception")} lockedHint={ssStep < 4 ? t("ss.guide.stage.lockedRecv") : null} />
@@ -2510,7 +2515,7 @@ function ServiceRequestModal({ sr, role, onClose, onChanged, onSaved, onSentToAp
             providers={providers}
             otroTaller={otroTaller}
             onOtroTaller={setOtroTaller}
-            hojaRuta={<HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} />}
+            hojaRuta={<HojaRutaBox srId={sr.id} editable={editable} isAdmin={isAdmin} onChanged={refrescarSs} />}
             tramitacion={
               /* Una columna por paso, como el bloque de firmas del papel. La
                  fecha la estampa el paso real; el admin sólo corrige QUIÉN firmó
