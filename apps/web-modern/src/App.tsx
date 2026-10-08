@@ -35,6 +35,8 @@ const MobileLayout = React.lazy(() => import("./components/MobileLayout").then(m
 const MobileDailyReportsPage = React.lazy(() => import("./mobile/MobileDailyReportsPage").then(m => ({ default: m.MobileDailyReportsPage })));
 // Bandeja de firmas del celular (link directo /m-approvals) para el que aprueba/autoriza.
 const MobileApprovals = React.lazy(() => import("./mobile/MobileApprovals").then(m => ({ default: m.MobileApprovals })));
+// Bandeja de permisos de trabajo del celular (link directo /m-permisos) para el que los autoriza.
+const MobilePermits = React.lazy(() => import("./mobile/MobilePermits").then(m => ({ default: m.MobilePermits })));
 // App a bordo del Capitán / Jefe de Máquinas (Preview V30). Ver onboard/entry.tsx.
 const OnboardApp = React.lazy(() => import("./onboard/OnboardApp").then(m => ({ default: m.OnboardApp })));
 
@@ -252,6 +254,8 @@ export default function App() {
             <Route path="/m-daily-reports" element={<RequireAuth><TenantI18nWrapper><MobileDailyReportsPage /></TenantI18nWrapper></RequireAuth>} />
             {/* Bandeja de firmas: OT/SS para aprobar y para autorizar (Capitán / Jefe de Máquinas / Superintendente / DPA). */}
             <Route path="/m-approvals" element={<RequireAuth><TenantI18nWrapper><MobileApprovals /></TenantI18nWrapper></RequireAuth>} />
+            {/* Permisos de trabajo para aprobar (y activar) desde el celular: quien tiene "Autorizar permisos de trabajo". */}
+            <Route path="/m-permisos" element={<RequireAuth><TenantI18nWrapper><MobilePermits /></TenantI18nWrapper></RequireAuth>} />
             {/* App a bordo: Capitán / Jefe de Máquinas desde el celular. */}
             <Route path="/abordo" element={<RequireAuth><TenantI18nWrapper><OnboardApp /></TenantI18nWrapper></RequireAuth>} />
 

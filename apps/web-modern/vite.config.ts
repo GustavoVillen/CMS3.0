@@ -17,6 +17,7 @@ const SHARE_PAGES: Record<string, string> = {
   'abordo':          'CMS3 - Mob: A bordo',
   'm-approvals':     'CMS3 - Mob: Approvals',
   'm-daily-reports': 'CMS3 - Mob: Daily Reports',
+  'm-permisos':      'CMS3 - Mob: Permisos de trabajo',
 }
 
 function sharePreviews(): Plugin {

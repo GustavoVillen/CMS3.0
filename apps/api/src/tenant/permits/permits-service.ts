@@ -497,6 +497,33 @@ export async function requestPermit(session: TenantAccessSession, id: string) {
   return updated;
 }
 
+/**
+ * Lo que impide activar un permiso, o null si se puede. Hoy es una sola regla:
+ * entrada a espacio confinado exige una prueba de gases PASS de menos de 30
+ * minutos. La usan activatePermit (botón Activar) y approvePermit (que activa
+ * en el mismo momento de aprobar, pedido de Gustavo 08-oct-2026).
+ */
+function activationBlock(current: { type: string; gasTests: { verdict: string; testedAt: Date }[] }): RouteError | null {
+  if (current.type !== "ENCLOSED_SPACE_ENTRY") return null;
+  const latest = current.gasTests[0];
+  if (!latest || latest.verdict !== "PASS") {
+    return new RouteError(
+      400,
+      "GAS_TEST_REQUIRED",
+      "Para entrada a espacio confinado se requiere al menos un gas test con verdict PASS antes de activar.",
+    );
+  }
+  const ageMs = Date.now() - new Date(latest.testedAt).getTime();
+  if (ageMs > 30 * 60 * 1000) {
+    return new RouteError(
+      400,
+      "GAS_TEST_STALE",
+      "El último gas test PASS tiene más de 30 minutos. Realizá uno nuevo antes de activar.",
+    );
+  }
+  return null;
+}
+
 export async function approvePermit(
   session: TenantAccessSession,
   id: string,
@@ -506,7 +533,11 @@ export async function approvePermit(
   const prisma = getPrismaClient();
   if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
 
-  const current = await getPermit(session, id) as unknown as PermitRecord & { plannedStart: Date; plannedEnd: Date };
+  const current = await getPermit(session, id) as unknown as PermitRecord & {
+    plannedStart: Date;
+    plannedEnd: Date;
+    gasTests: { verdict: string; testedAt: Date }[];
+  };
   if (current.status !== "REQUESTED") {
     throw new RouteError(409, "INVALID_STATUS_TRANSITION", `Solo permisos REQUESTED pueden aprobarse (actual: ${current.status}).`);
   }
@@ -517,12 +548,19 @@ export async function approvePermit(
     throw new RouteError(400, "VALIDATION_ERROR", "validTo debe ser posterior a validFrom.");
   }
 
+  // Aprobar deja el permiso ACTIVO en el mismo momento: el paso "Activar"
+  // queda sólo para lo que no se puede activar todavía (espacio confinado sin
+  // prueba de gases vigente), que sigue APROBADO hasta que a bordo la carguen.
+  // Activar es efecto de la aprobación: no pide además "permit.manage".
+  const block = activationBlock(current);
+  const now = new Date();
   const updated = await permitClient(prisma).permitToWork.update({
     where: { id },
     data: {
-      status: "APPROVED",
-      approvedAt: new Date(),
+      status: block ? "APPROVED" : "ACTIVE",
+      approvedAt: now,
       approvedByUserId: session.user.id,
+      ...(block ? {} : { activatedAt: now, activatedByUserId: session.user.id }),
       validFrom,
       validTo,
       updatedByUserId: session.user.id,
@@ -542,7 +580,18 @@ export async function approvePermit(
       validTo: validTo.toISOString(),
     },
   });
-  return updated;
+  if (!block) {
+    void publishAudit(prisma, {
+      tenantId: current.tenantId,
+      actorUserId: session.user.id,
+      action: "Permit.activated",
+      entityType: "Permit",
+      entityId: id,
+      metadata: { permitCode: current.permitCode, vesselCode: current.vesselCode, withApproval: true },
+    });
+  }
+  // activationBlocked: por qué quedó aprobado y no activo (la pantalla lo avisa).
+  return { ...updated, activationBlocked: block ? { code: block.code, message: block.message } : null };
 }
 
 export async function rejectPermit(session: TenantAccessSession, id: string, payload: { reason: string }) {
@@ -590,24 +639,8 @@ export async function activatePermit(session: TenantAccessSession, id: string) {
   }
 
   // ENCLOSED_SPACE_ENTRY: exigir al menos un gas test PASS reciente (< 30 min antes de activar).
-  if (current.type === "ENCLOSED_SPACE_ENTRY") {
-    const latest = current.gasTests[0];
-    if (!latest || latest.verdict !== "PASS") {
-      throw new RouteError(
-        400,
-        "GAS_TEST_REQUIRED",
-        "Para entrada a espacio confinado se requiere al menos un gas test con verdict PASS antes de activar.",
-      );
-    }
-    const ageMs = Date.now() - new Date(latest.testedAt).getTime();
-    if (ageMs > 30 * 60 * 1000) {
-      throw new RouteError(
-        400,
-        "GAS_TEST_STALE",
-        "El último gas test PASS tiene más de 30 minutos. Realizá uno nuevo antes de activar.",
-      );
-    }
-  }
+  const block = activationBlock(current);
+  if (block) throw block;
 
   const updated = await permitClient(prisma).permitToWork.update({
     where: { id },

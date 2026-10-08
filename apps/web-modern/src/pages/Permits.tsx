@@ -12,6 +12,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
+import { downloadPermitFile } from "../lib/permit-files";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
 import { AuthedDocLink, downloadAuthedFile } from "../lib/authed-media";
@@ -480,33 +481,6 @@ interface PermitModalProps {
   initialDialog?: "close" | null;
   /** Refresca el permiso sin cerrar la ventana (equipo de trabajo, gas, cambios de etapa). */
   onReload?: () => void;
-}
-
-/**
- * Baja el permiso como PDF o Word vía fetch + blob: window.open no carga el
- * header X-Tenant-Slug que el SPA usa para resolver el tenant, y devolvería
- * TENANT_UNRESOLVED en una tab nueva. El nombre lo decide el servidor (con
- * documento controlado lleva adelante el código del formulario).
- */
-async function downloadPermitFile(id: string, kind: "pdf" | "doc", fallbackName: string): Promise<void> {
-  const headers: Record<string, string> = {};
-  const token = localStorage.getItem("gpms_token");
-  const slug  = localStorage.getItem("gpms_tenant_slug");
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  if (slug)  headers["X-Tenant-Slug"] = slug;
-  const res = await fetch(`/app/permits/${id}/${kind}`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const disposition = res.headers.get("Content-Disposition") ?? "";
-  const named = /filename="([^"]+)"/.exec(disposition)?.[1];
-  const blob = await res.blob();
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = named || fallbackName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClose, onSaved, onMocTrigger, wizard, initialDialog, onReload }) => {
@@ -1036,9 +1010,11 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
                   <div><label className={fl}>{t("pm.validFrom")}</label><input type="datetime-local" value={approveFrom} onChange={e => setApproveFrom(e.target.value)} className={inputCls} /></div>
                   <div><label className={fl}>{t("pm.validUntil")}</label><input type="datetime-local" value={approveTo} onChange={e => setApproveTo(e.target.value)} className={inputCls} /></div>
+                  {/* Aprobar activa en el mismo momento; espacio confinado sin prueba de gases vigente queda sólo aprobado. */}
+                  {isEnclosed && !gasOk && <p className="sm:col-span-2 text-xs font-semibold text-amber-700 dark:text-amber-300">{t("pm.edit.approveNoActivate")}</p>}
                 </div>,
                 <>
-                  <button type="button" disabled={saving} onClick={approveNow} className={`${btn} bg-emerald-600 text-white hover:brightness-110`}><CheckCircle className="w-3.5 h-3.5" /> {t("common.approve")}</button>
+                  <button type="button" disabled={saving} onClick={approveNow} className={`${btn} bg-emerald-600 text-white hover:brightness-110`}><CheckCircle className="w-3.5 h-3.5" /> {isEnclosed && !gasOk ? t("common.approve") : t("pm.approveActivate")}</button>
                   <button type="button" disabled={saving} onClick={() => { setDlgText(""); setActionDlg("reject"); }} className={`${btn} border border-red-500/35 bg-surface text-red-700 dark:text-red-400 hover:bg-red-500/10`}><XCircle className="w-3.5 h-3.5" /> {t("common.reject")}</button>
                 </>)
             : card("border-yellow-400/70 bg-yellow-500/[0.08]", "bg-yellow-600", Hourglass, t("pm.edit.reqWaitTitle"), t("pm.edit.reqWaitDesc"), null, null);
