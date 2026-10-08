@@ -6,6 +6,7 @@ import { listDevSparesForTenant } from "../../platform/data/dev-domain-store";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { buildChangeDiff } from "../audit/build-change-diff";
 import { getOnHandMap, getReservedMapFromCalc, getAvailableQty } from "../pms/stock-calc-service";
+import { proposeSku } from "./spare-match";
 
 export interface SpareListFilters {
   vesselCode?: string | null;
@@ -16,7 +17,8 @@ export interface SpareListFilters {
 
 export interface CreateSpareInput {
   vesselCode: string;
-  sku: string;
+  /** Vacío: lo asigna el sistema con proposeSku (alta rápida desde la OT). */
+  sku?: string | null;
   name: string;
   category?: string | null;
   criticality?: "A" | "B" | "C";
@@ -277,48 +279,60 @@ export async function createTenantSpare(session: TenantAccessSession, payload: C
   const vesselCode = normalizeText(payload.vesselCode, "vesselCode").toUpperCase();
   applyVesselScope(session, {}, vesselCode, true);
 
-  try {
-    const created = await prisma.spare.create({
-      data: {
+  // Sin código: lo asigna el sistema, con el criterio de la recepción y del
+  // cierre de OT. Los códigos se leen con las fichas borradas (el índice único
+  // las cuenta) y, si otra carga ocupó el mismo justo antes, se vuelve a elegir.
+  const explicitSku = normalizeOptionalText(payload.sku)?.toUpperCase() ?? null;
+  const name = normalizeText(payload.name, "name");
+  for (let attempt = 0; ; attempt++) {
+    const sku = explicitSku ?? proposeSku(name, new Set(
+      (await prisma.spare.findMany({ where: { tenantId, vesselCode }, select: { sku: true } }))
+        .map(s => s.sku.toUpperCase()),
+    ));
+    try {
+      const created = await prisma.spare.create({
+        data: {
+          tenantId,
+          vesselCode,
+          sku,
+          name,
+          category: normalizeOptionalText(payload.category),
+          criticality: payload.criticality ?? "B",
+          manufacturer: normalizeOptionalText(payload.manufacturer),
+          model: normalizeOptionalText(payload.model),
+          unit: normalizeText(payload.unit, "unit"),
+          minStock: payload.minStock ?? 0,
+          reorderPoint: payload.reorderPoint ?? 0,
+          targetStock: payload.targetStock ?? null,
+          status: payload.status ?? "ACTIVE",
+          location: normalizeOptionalText(payload.location),
+          internalPartNumber: normalizeOptionalText(payload.internalPartNumber),
+          manufacturerPartNumber: normalizeOptionalText(payload.manufacturerPartNumber),
+          longDescription: normalizeOptionalText(payload.longDescription),
+          defaultLocationId: payload.defaultLocationId ?? null,
+          sfiCode: normalizeOptionalText(payload.sfiCode),
+          leadTimeDays: payload.leadTimeDays ?? null,
+          isEquivalent: payload.isEquivalent ?? false,
+          createdByUserId: session.user.id,
+          updatedByUserId: session.user.id,
+        },
+      });
+      void publishAudit(prisma, {
         tenantId,
-        vesselCode,
-        sku: normalizeText(payload.sku, "sku").toUpperCase(),
-        name: normalizeText(payload.name, "name"),
-        category: normalizeOptionalText(payload.category),
-        criticality: payload.criticality ?? "B",
-        manufacturer: normalizeOptionalText(payload.manufacturer),
-        model: normalizeOptionalText(payload.model),
-        unit: normalizeText(payload.unit, "unit"),
-        minStock: payload.minStock ?? 0,
-        reorderPoint: payload.reorderPoint ?? 0,
-        targetStock: payload.targetStock ?? null,
-        status: payload.status ?? "ACTIVE",
-        location: normalizeOptionalText(payload.location),
-        internalPartNumber: normalizeOptionalText(payload.internalPartNumber),
-        manufacturerPartNumber: normalizeOptionalText(payload.manufacturerPartNumber),
-        longDescription: normalizeOptionalText(payload.longDescription),
-        defaultLocationId: payload.defaultLocationId ?? null,
-        sfiCode: normalizeOptionalText(payload.sfiCode),
-        leadTimeDays: payload.leadTimeDays ?? null,
-        isEquivalent: payload.isEquivalent ?? false,
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
-      },
-    });
-    void publishAudit(prisma, {
-      tenantId,
-      actorUserId: session.user.id,
-      action: "Spare.created",
-      entityType: "Spare",
-      entityId: created.id,
-      metadata: { sku: created.sku, name: created.name, vesselCode: created.vesselCode },
-    });
-    return conStock(prisma, tenantId, created);
-  } catch (error: unknown) {
-    if (isP2002(error)) {
-      throw new RouteError(409, "DUPLICATE_SKU", "Ya existe un spare con ese SKU para el vessel.");
+        actorUserId: session.user.id,
+        action: "Spare.created",
+        entityType: "Spare",
+        entityId: created.id,
+        metadata: { sku: created.sku, name: created.name, vesselCode: created.vesselCode },
+      });
+      return conStock(prisma, tenantId, created);
+    } catch (error: unknown) {
+      if (isP2002(error)) {
+        if (!explicitSku && attempt < 3) continue;
+        throw new RouteError(409, "DUPLICATE_SKU", "Ya existe un spare con ese SKU para el vessel.");
+      }
+      throw error;
     }
-    throw error;
   }
 }
 

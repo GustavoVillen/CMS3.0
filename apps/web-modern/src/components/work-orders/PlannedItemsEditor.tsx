@@ -1,15 +1,21 @@
-// Editor de REPUESTOS / MATERIALES previstos — dos recuadros lado a lado.
+// Editor de REPUESTOS / MATERIALES previstos — dos recuadros, uno debajo del
+// otro y a todo el ancho, para que el nombre del repuesto se lea entero.
 // Compartido por el modal de OT (WoRegiSections) y el modal de Plan de
 // Mantenimiento: el plan los define y la OT los hereda, con la misma UX.
 //
 //   · REPUESTOS  → desplegable del catálogo /Spares + semáforo de stock.
 //   · MATERIALES → texto libre (grasa, trapos, sellador…), sin stock.
 //
+// Lo que no está en el catálogo se resuelve sin salir de la pantalla: quien
+// puede dar de alta repuestos lo crea desde el buscador (`onCreateSpare`); el
+// resto lo pasa a Materiales (`materialFallback`).
+//
 // Es una lista de PLANIFICACIÓN: no descuenta stock (eso pasa al cerrar la OT).
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { textMatches } from "../../lib/text-search";
+import { useT } from "../../lib/i18n";
 
 export interface WoPlannedItem {
   id?: string;
@@ -27,6 +33,15 @@ export interface WoSpareOption {
   onHand: number; minStock: number; reorderPoint: number;
 }
 
+/** Qué ofrecer debajo del buscador cuando lo escrito no está en el catálogo. */
+export interface SpareNotFoundAction {
+  /** Texto del botón; recibe lo escrito. */
+  label: (typed: string) => string;
+  run: (typed: string) => void;
+  /** Alta en curso: el botón queda deshabilitado. */
+  busy?: boolean;
+}
+
 const cellCls = "bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase tracking-widest mb-1";
 
@@ -40,15 +55,21 @@ function stockCls(s: WoSpareOption): string {
 /**
  * Buscador de repuesto con typeahead (mismo patrón que AssetSearchDropdown):
  * escribir filtra por SKU o nombre, y cada opción muestra su stock con semáforo.
+ * El nombre se muestra entero (baja de renglón si no entra), nunca cortado.
  */
-export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel }: {
+export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbackLabel, notFoundAction, isNew }: {
   spares: WoSpareOption[];
   value: string;
   onChange: (id: string) => void;
   disabled?: boolean;
   /** Texto a mostrar si el value no está en el catálogo (repuesto borrado). */
   fallbackLabel?: string;
+  /** Salida para lo que no está en el catálogo: crearlo o pasarlo a Materiales. */
+  notFoundAction?: SpareNotFoundAction;
+  /** Repuesto recién creado desde esta pantalla: lleva la marca "nuevo". */
+  isNew?: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   // La lista se despliega hacia abajo salvo que no entre: adentro de un modal
@@ -72,6 +93,7 @@ export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbac
   };
 
   const selected = spares.find(s => s.id === value) ?? null;
+  const typed = query.trim();
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -88,6 +110,11 @@ export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbac
   }, []);
 
   const handleSelect = (s: WoSpareOption) => { onChange(s.id); setOpen(false); setQuery(""); };
+  const runNotFound = () => {
+    if (!notFoundAction || typed.length < 2 || notFoundAction.busy) return;
+    notFoundAction.run(typed);
+    setOpen(false); setQuery("");
+  };
 
   return (
     <div ref={containerRef} className="relative flex-1 min-w-0">
@@ -98,13 +125,22 @@ export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbac
         className={`${cellCls} w-full flex items-center gap-2 text-left ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-accent/40"}`}
       >
         {selected ? (
-          <span className="flex-1 truncate"><span className="font-mono text-accent">{selected.sku}</span> — {selected.name}</span>
+          <span className="flex-1 break-words">
+            <span className="font-mono text-accent">{selected.sku}</span> — {selected.name}
+            {isNew && (
+              <span className="ml-1.5 px-1.5 py-px rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 text-[9px] font-bold uppercase align-middle">
+                {t("wo.items.newTag")}
+              </span>
+            )}
+          </span>
         ) : value && fallbackLabel ? (
-          <span className="flex-1 truncate">{fallbackLabel}</span>
+          <span className="flex-1 break-words">{fallbackLabel}</span>
         ) : (
           <span className="flex-1 text-fg/30">Seleccionar repuesto…</span>
         )}
-        <ChevronDown className="w-3.5 h-3.5 text-fg/30 shrink-0" />
+        {notFoundAction?.busy
+          ? <Loader2 className="w-3.5 h-3.5 text-fg/30 shrink-0 animate-spin" />
+          : <ChevronDown className="w-3.5 h-3.5 text-fg/30 shrink-0" />}
       </button>
 
       {open && (
@@ -118,6 +154,8 @@ export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbac
               onKeyDown={e => {
                 if (e.key === "Escape") { setOpen(false); setQuery(""); }
                 if (e.key === "Enter" && filtered.length === 1) handleSelect(filtered[0]!);
+                // Enter sin nada en el catálogo = la salida para "no está".
+                if (e.key === "Enter" && filtered.length === 0) { e.preventDefault(); runNotFound(); }
               }}
               placeholder="Buscar por código o nombre…"
               className="flex-1 bg-transparent text-sm text-fg placeholder-fg/20 outline-none"
@@ -134,31 +172,91 @@ export function SpareSearchDropdown({ spares, value, onChange, disabled, fallbac
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-fg/5 transition-colors ${s.id === value ? "bg-accent/10" : ""}`}
               >
                 <span className="font-mono text-accent text-xs shrink-0">{s.sku}</span>
-                <span className="text-xs text-fg truncate flex-1">{s.name}</span>
+                <span className="text-xs text-fg break-words flex-1">{s.name}</span>
                 <span className={`text-[11px] font-bold shrink-0 ${stockCls(s)}`}>{s.onHand} {s.unit}</span>
               </button>
             ))}
           </div>
+          {/* Fuera de la lista con scroll: siempre a la vista. */}
+          {notFoundAction && typed.length >= 2 && (
+            <button
+              type="button"
+              onClick={runNotFound}
+              disabled={notFoundAction.busy}
+              className="w-full flex items-center gap-1.5 px-3 py-2 border-t border-dashed border-blue-500/30 bg-blue-500/5 text-left text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="break-words">{notFoundAction.label(typed)}</span>
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export function PlannedItemsEditor({ items, onChange, spares = [], disabled }: {
+export function PlannedItemsEditor({ items, onChange, spares = [], disabled, onCreateSpare, materialFallback }: {
   items: WoPlannedItem[];
   onChange: (items: WoPlannedItem[]) => void;
   /** Catálogo de repuestos del buque con stock. Vacío = sin desplegable útil. */
   spares?: WoSpareOption[];
   disabled?: boolean;
+  /**
+   * Alta en el catálogo del buque de lo que no está, sin salir de la pantalla
+   * (quien tiene permiso de alta de repuestos). Devuelve la ficha creada, o
+   * null si falló (el llamador avisa el error).
+   */
+  onCreateSpare?: (name: string) => Promise<WoSpareOption | null>;
+  /** Sin permiso de alta: lo que no está en el catálogo se pasa a Materiales. */
+  materialFallback?: boolean;
 }) {
+  const t = useT();
+  // Fichas creadas desde acá: se suman al catálogo hasta que el llamador lo
+  // recargue, y llevan la marca "nuevo".
+  const [created, setCreated] = useState<WoSpareOption[]>([]);
+  const [creatingIdx, setCreatingIdx] = useState<number | null>(null);
+  // El alta es asíncrona: al volver, se parte de la lista vigente, no de la
+  // que había al tocar el botón (si no, se pierde lo editado mientras tanto).
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const allSpares = useMemo(
+    () => [...spares, ...created.filter(c => !spares.some(s => s.id === c.id))],
+    [spares, created],
+  );
+  const createdIds = useMemo(() => new Set(created.map(c => c.id)), [created]);
+
   const addItem = (kind: "SPARE" | "MATERIAL") =>
     onChange([...items, { kind, spareId: null, description: "", quantity: 1, unit: "ud" }]);
   const patchItem = (idx: number, patch: Partial<WoPlannedItem>) =>
-    onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+    onChange(itemsRef.current.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const removeItem = (idx: number) => onChange(items.filter((_, i) => i !== idx));
 
-  const spareById = new Map(spares.map(s => [s.id, s]));
+  const spareById = new Map(allSpares.map(s => [s.id, s]));
+
+  const notFoundFor = (idx: number): SpareNotFoundAction | undefined => {
+    if (onCreateSpare) {
+      return {
+        label: typed => t("wo.items.createSpare").replace("{name}", typed),
+        busy: creatingIdx === idx,
+        run: typed => {
+          setCreatingIdx(idx);
+          void onCreateSpare(typed).then(s => {
+            if (!s) return;
+            setCreated(prev => [...prev, s]);
+            patchItem(idx, { spareId: s.id, description: `${s.sku} — ${s.name}`, unit: s.unit });
+          }).finally(() => setCreatingIdx(null));
+        },
+      };
+    }
+    if (materialFallback) {
+      return {
+        label: () => t("wo.items.toMaterial"),
+        run: typed => patchItem(idx, { kind: "MATERIAL", spareId: null, description: typed }),
+      };
+    }
+    return undefined;
+  };
 
   // Semáforo del stock en la fila (el detalle también va en cada opción del buscador).
   const stockBadge = (it: WoPlannedItem) => {
@@ -200,10 +298,12 @@ export function PlannedItemsEditor({ items, onChange, spares = [], disabled }: {
                 {isSpare ? (
                   <>
                     <SpareSearchDropdown
-                      spares={spares}
+                      spares={allSpares}
                       value={it.spareId ?? ""}
                       disabled={disabled}
                       fallbackLabel={it.description}
+                      notFoundAction={notFoundFor(i)}
+                      isNew={!!it.spareId && createdIds.has(it.spareId)}
                       onChange={id => {
                         const s = spareById.get(id);
                         if (s) patchItem(i, { spareId: s.id, description: `${s.sku} — ${s.name}`, unit: s.unit });
@@ -254,9 +354,11 @@ export function PlannedItemsEditor({ items, onChange, spares = [], disabled }: {
   };
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-4">
       {itemsTable("SPARE", "Repuestos")}
-      {itemsTable("MATERIAL", "Materiales")}
+      <div className="border-t border-fg/10 pt-3">
+        {itemsTable("MATERIAL", "Materiales")}
+      </div>
     </div>
   );
 }

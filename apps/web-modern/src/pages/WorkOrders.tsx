@@ -26,7 +26,7 @@ import { CopyLinkButton } from "../components/CopyLinkButton";
 // WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
 // la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
 import { type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
-import { PlannedItemsEditor } from "../components/work-orders/PlannedItemsEditor";
+import { PlannedItemsEditor, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
@@ -1529,10 +1529,26 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const closeMemberName = (u: { firstName: string | null; lastName: string | null; formName: string | null }) =>
     (u.formName || [u.firstName, u.lastName].filter(Boolean).join(" ") || "").trim();
 
-  const { data: sparesData } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number; minStock: number; reorderPoint: number }> }>(
+  const { data: sparesData, reload: reloadWoSpares } = useFetch<{ items: Array<{ id: string; sku: string; name: string; unit: string; criticality: string; onHand: number; available: number; minStock: number; reorderPoint: number }> }>(
     workOrder.vesselCode ? `/app/pms/spares?vesselCode=${workOrder.vesselCode}&status=ACTIVE` : null,
   );
   const woSpares = sparesData?.items ?? [];
+
+  // Repuesto previsto que no está en el catálogo del buque: quien puede dar de
+  // alta repuestos lo crea desde la OT (stock 0, código automático); el resto
+  // lo pasa a Materiales. Mismo permiso que el alta en Repuestos.
+  const canCreateSpare = canWo("spare.manage");
+  const [spareCreateErr, setSpareCreateErr] = useState<string | null>(null);
+  const createSpareFromWo = useCallback(async (name: string): Promise<WoSpareOption | null> => {
+    try {
+      const s = await api.post<WoSpareOption>("/app/pms/spares", { vesselCode: workOrder.vesselCode, name, unit: "ud" });
+      reloadWoSpares();
+      return { id: s.id, sku: s.sku, name: s.name, unit: s.unit, onHand: s.onHand ?? 0, minStock: s.minStock ?? 0, reorderPoint: s.reorderPoint ?? 0 };
+    } catch (e) {
+      setSpareCreateErr(e instanceof ApiError ? e.message : t("wo.items.createFailed"));
+      return null;
+    }
+  }, [workOrder.vesselCode, reloadWoSpares, t]);
 
   // Hydrate `available` on existing spareUsages once the spares catalog loads
   useEffect(() => {
@@ -4285,6 +4301,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             onChange={v => { touchRegi(); setPlannedItems(v); }}
             spares={woSpares}
             disabled={!isEditable}
+            onCreateSpare={canCreateSpare && workOrder.vesselCode ? createSpareFromWo : undefined}
+            materialFallback={!canCreateSpare}
           />
         </div>
       </GuideSection>
@@ -5124,6 +5142,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     {isMercurio && err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     {closeBlockMsg && <AlertDialog message={closeBlockMsg} onClose={() => setCloseBlockMsg(null)} />}
     {providerErr && <AlertDialog message={providerErr} onClose={() => setProviderErr(null)} />}
+    {spareCreateErr && <AlertDialog message={spareCreateErr} onClose={() => setSpareCreateErr(null)} />}
 
     {showCreatedIntro && (
       <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
