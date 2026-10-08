@@ -1,5 +1,17 @@
 HISTORY.txt
 
+[2026-10-08] OT de plan: "¿este repuesto se cambia en todos los servicios?" -> al plan
+Agent: Claude Opus 5.5
+- Al cargar un repuesto del catalogo en una OT de plan (Repuestos y materiales previstos, Repuestos
+  utilizados de la OT y Consumo de Repuestos del Dashboard/Seguimiento) se pregunta si es una
+  renovacion de todos los servicios de ese tipo. Si: se suma al plan como repuesto a reemplazar
+  (cantidad editable) y las proximas OT lo heredan. Con varios planes se eligen con casillas.
+- Solo pregunta a quien tiene "plan.manage" (admin, Superintendente, Capitan/JM). No vuelve a
+  preguntar si el plan ya lo tiene o si en esa OT ya se contesto No.
+- POST /app/pms/maintenance-plans/:id/spares (agrega, no reemplaza; mismo buque; auditado como
+  MAINTENANCE_PLAN_SPARE_ADDED). Fuera de alcance: app del celular y auditoria de cierre.
+  Pasos: pull + build web + restart.
+
 [2026-10-08] SS: el admin corrige los pasos de la hoja de ruta
 Agent: Claude Opus 5.5
 - Las filas que pone el sistema (Solicitud creada, Aprobada, Autorizada, No aprobada, Enviada al

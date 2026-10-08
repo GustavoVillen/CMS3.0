@@ -269,6 +269,7 @@ const ACTION_LABELS: Record<string, string> = {
   SERVICE_REQUEST_SIGNATURES_EDITED: "Modificó las firmas de una solicitud de servicio",
   SERVICE_REQUEST_HOJA_RUTA_UPDATED: "Modificó la hoja de ruta de una solicitud de servicio",
   SERVICE_REQUEST_HOJA_RUTA_DELETED: "Borró la hoja de ruta de una solicitud de servicio",
+  MAINTENANCE_PLAN_SPARE_ADDED: "Agregó a un plan un repuesto cargado en una OT",
   DEFECT_REPORTED:        "Reportó un defecto",
   CERTIFICATE_EXPIRED:    "Venció un certificado",
   AI_INSIGHT_CREATED:     "La IA generó un análisis",

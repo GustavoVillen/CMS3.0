@@ -27,6 +27,7 @@ import { CopyLinkButton } from "../components/CopyLinkButton";
 // la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
 import { type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
 import { PlannedItemsEditor, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
+import { usePlanSparePrompt } from "../components/work-orders/PlanSparePrompt";
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
@@ -1355,6 +1356,20 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     });
   }, [plannedItemsData]);
 
+  // "¿Este repuesto se cambia en todos los servicios de este tipo?" al cargar un
+  // repuesto en una OT de plan (ver PlanSparePrompt). Previstos y utilizados.
+  const planSpare = usePlanSparePrompt(workOrder.maintenancePlanId ? workOrder.id : null);
+  const plannedItemsRef = useRef(plannedItems);
+  plannedItemsRef.current = plannedItems;
+  const askNewPlannedSpares = (next: WoPlannedItem[]) => {
+    const antes = new Set(plannedItemsRef.current.filter(i => i.kind === "SPARE" && i.spareId).map(i => i.spareId));
+    for (const i of next) {
+      if (i.kind === "SPARE" && i.spareId && !antes.has(i.spareId)) {
+        planSpare.ask({ spareId: i.spareId, label: i.description, quantity: i.quantity, unit: i.unit });
+      }
+    }
+  };
+
   // Estado del auto-guardado del bloque REGI-MAN-02.3 (ver saveRegiBlock).
   const [regiSaving, setRegiSaving] = useState(false);
   const [regiSaved, setRegiSaved] = useState(false);
@@ -1574,6 +1589,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       available: spare.available,
     }]);
     setUsageSpareId(""); setUsageQty("1"); setUsageSearch(""); setAddingUsage(false);
+    planSpare.ask({ spareId: spare.id, label: `${spare.sku} — ${spare.name}`, quantity: qty, unit: spare.unit });
   };
 
   const removeUsage = (idx: number) => setSpareUsages(prev => prev.filter((_, i) => i !== idx));
@@ -4298,7 +4314,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {guideLabel(t("wo.guide.field.planned"))}
           <PlannedItemsEditor
             items={plannedItems}
-            onChange={v => { touchRegi(); setPlannedItems(v); }}
+            onChange={v => { touchRegi(); askNewPlannedSpares(v); setPlannedItems(v); }}
             spares={woSpares}
             disabled={!isEditable}
             onCreateSpare={canCreateSpare && workOrder.vesselCode ? createSpareFromWo : undefined}
@@ -5143,6 +5159,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     {closeBlockMsg && <AlertDialog message={closeBlockMsg} onClose={() => setCloseBlockMsg(null)} />}
     {providerErr && <AlertDialog message={providerErr} onClose={() => setProviderErr(null)} />}
     {spareCreateErr && <AlertDialog message={spareCreateErr} onClose={() => setSpareCreateErr(null)} />}
+    {planSpare.element}
 
     {showCreatedIntro && (
       <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

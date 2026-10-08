@@ -25,6 +25,8 @@ export interface WoPlanRow {
   lastExecutionHours?: number | null;
   /** Tipo de análisis del plan (FLUID, VIBRATION…): la OT es Predictivo. */
   samplingKind?: string | null;
+  /** Repuestos del catálogo que el plan ya pide reemplazar. */
+  spareIds?: string[];
 }
 
 interface PlanOption { id: string; taskCode: string; title: string; assetName?: string | null; status?: string }

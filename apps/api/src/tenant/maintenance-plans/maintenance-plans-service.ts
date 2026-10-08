@@ -1481,6 +1481,87 @@ export async function updateTenantMaintenancePlan(
   return { ...updated, executionStatus: deriveExecutionStatus(updated as MaintenancePlanRecord, currentHours) };
 }
 
+export interface AddPlanSpareInput {
+  spareId?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  /** OT desde la que se agregó (sólo para la auditoría). */
+  workOrderId?: string | null;
+}
+
+/**
+ * Sumar un repuesto a los "repuestos a reemplazar" del plan, desde una OT: el que
+ * la carga confirma que se cambia en todos los servicios de este tipo, así la
+ * próxima OT del plan ya lo trae (se hereda al abrirla).
+ *
+ * Mismo permiso que editar el plan a mano. Se agrega, no se reemplaza la lista:
+ * dos OT del mismo plan pueden sumar repuestos distintos al mismo tiempo sin
+ * pisarse. Si el plan ya lo tiene no hace nada (tampoco le cambia la cantidad).
+ */
+export async function addSpareToPlan(session: TenantAccessSession, planId: string, payload: AddPlanSpareInput) {
+  ensureCanManagePlans(session);
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const db = prismaRaw as any;
+
+  const tenantId = await getTenantIdOrThrow(session);
+  const where: Record<string, unknown> = { id: planId, tenantId, deletedAt: null };
+  applyVesselScope(session, where);
+  const plan = await db.maintenancePlan.findFirst({ where });
+  if (!plan) throw new RouteError(404, "NOT_FOUND", "Plan de mantenimiento no encontrado.");
+
+  const spareId = normalizeOptionalText(payload.spareId);
+  if (!spareId) throw new RouteError(400, "VALIDATION_ERROR", "Indicá el repuesto.");
+  const spare = await db.spare.findFirst({
+    where: { id: spareId, tenantId, deletedAt: null },
+    select: { id: true, sku: true, name: true, unit: true, vesselCode: true },
+  });
+  if (!spare) throw new RouteError(404, "SPARE_NOT_FOUND", "Repuesto no encontrado.");
+  // El catálogo es por buque: un repuesto de otro buque no tiene stock para este plan.
+  if (spare.vesselCode !== plan.vesselCode) {
+    throw new RouteError(409, "SPARE_OTHER_VESSEL", "El repuesto es del catálogo de otro buque.");
+  }
+
+  const list = resolvePlanSpares(plan);
+  if (list.some(s => s.kind === "SPARE" && s.spareId === spareId)) return { added: false, spares: list };
+
+  const qty = Number(payload.quantity);
+  const item: PlanSpare = {
+    kind: "SPARE",
+    spareId,
+    description: `${spare.sku} — ${spare.name}`,
+    quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+    unit: normalizeOptionalText(payload.unit) ?? spare.unit ?? "ud",
+  };
+  const spares = [...list, item];
+  await db.maintenancePlan.update({
+    where: { id: plan.id },
+    data: { spares, updatedByUserId: session.user.id },
+  });
+
+  const workOrderId = normalizeOptionalText(payload.workOrderId);
+  const wo = workOrderId
+    ? await db.workOrder.findFirst({ where: { id: workOrderId, tenantId }, select: { workOrderCode: true } })
+    : null;
+  void publishAudit(prismaRaw, {
+    tenantId,
+    actorUserId: session.user.id,
+    action: "MAINTENANCE_PLAN_SPARE_ADDED",
+    entityType: "MaintenancePlan",
+    entityId: plan.id,
+    metadata: {
+      taskCode: plan.taskCode,
+      title: plan.title,
+      vesselCode: plan.vesselCode,
+      spare: item.description,
+      quantity: item.quantity,
+      unit: item.unit,
+      workOrderCode: wo?.workOrderCode ?? null,
+    },
+  });
+  return { added: true, spares };
+}
+
 /**
  * ISM 10.1 — asignar el origen normativo a MUCHOS planes de una vez.
  *

@@ -27,6 +27,7 @@ import {
   reportExecution,
   updatePlanExecution,
   updateTenantMaintenancePlan,
+  addSpareToPlan,
 } from "../maintenance-plans/maintenance-plans-service";
 import {
   cancelWorkOrder,
@@ -370,6 +371,14 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof updateTenantMaintenancePlan>[2];
     sendJson(response, 200, await updateTenantMaintenancePlan(session, id, body));
+    return true;
+  }
+
+  // Sumar al plan un repuesto cargado en una OT ("se cambia en todos los servicios").
+  if (method === "POST" && /^\/app\/pms\/maintenance-plans\/[^/]+\/spares$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as Parameters<typeof addSpareToPlan>[2];
+    sendJson(response, 200, await addSpareToPlan(session, id, body ?? {}));
     return true;
   }
 

@@ -21,6 +21,7 @@ import { ModalCloseButton } from "../ModalCloseButton";
 import { AlertDialog } from "../AlertDialog";
 import { OpenWorkOrdersPicker } from "../service-requests/OpenWorkOrdersPicker";
 import { SpareSearchDropdown, type WoSpareOption } from "./PlannedItemsEditor";
+import { usePlanSparePrompt } from "./PlanSparePrompt";
 
 /** Lo que el detalle de la OT devuelve de cada consumo ya registrado. */
 interface WoSpareUsage {
@@ -37,6 +38,8 @@ interface WoDetail {
   title: string | null;
   vesselCode: string;
   assetName: string | null;
+  /** Plan principal: sin plan no hay a qué sumar el repuesto. */
+  maintenancePlanId?: string | null;
   spareUsages?: WoSpareUsage[];
 }
 
@@ -85,6 +88,8 @@ export function SpareConsumptionModal({ woId, onBack, onClose, onSaved }: {
   );
   const spares = sparesData?.items ?? [];
   const spareById = new Map(spares.map(s => [s.id, s]));
+  // "¿Se cambia en todos los servicios de este tipo?" (ver PlanSparePrompt).
+  const planSpare = usePlanSparePrompt(wo?.maintenancePlanId ? woId : null);
 
   const [rows, setRows] = React.useState<UsageRow[] | null>(null);
   const [saving, setSaving] = React.useState(false);
@@ -194,6 +199,10 @@ export function SpareConsumptionModal({ woId, onBack, onClose, onSaved }: {
                         patch(i, s
                           ? { spareId: s.id, unit: s.unit, label: `${s.sku} — ${s.name}` }
                           : { spareId: id });
+                        // Repuesto nuevo en esta OT: ¿va al plan para todos los servicios?
+                        if (s && !filas.some(x => x.spareId === s.id)) {
+                          planSpare.ask({ spareId: s.id, label: `${s.sku} — ${s.name}`, quantity: r.qty, unit: s.unit });
+                        }
                       }}
                     />
                     <input
@@ -257,6 +266,7 @@ export function SpareConsumptionModal({ woId, onBack, onClose, onSaved }: {
       </div>
 
       {aviso && <AlertDialog message={aviso} onClose={() => setAviso(null)} />}
+      {planSpare.element}
     </div>
   );
 }

@@ -17,7 +17,7 @@ import { publishAudit } from "../../platform/audit/audit-publisher";
 import { mergePlanTexts, type PlanTextSource } from "./wo-plan-text";
 import { summarizeMultiPlanFields } from "./wo-plan-summary-ai";
 import { hasPermission } from "../auth/role-permissions";
-import { resolvePlanProviderRequests } from "../maintenance-plans/maintenance-plans-service";
+import { resolvePlanProviderRequests, resolvePlanSpares } from "../maintenance-plans/maintenance-plans-service";
 import { withUniqueRetry } from "../../common/unique-retry";
 
 export interface WorkOrderPlanRow {
@@ -36,6 +36,8 @@ export interface WorkOrderPlanRow {
   lastExecutionHours: number | null;
   /** Tipo de análisis (FLUID, VIBRATION…): con él la OT es de mantenimiento Predictivo. */
   samplingKind: string | null;
+  /** Repuestos del catálogo que el plan ya pide reemplazar (para no volver a preguntar). */
+  spareIds: string[];
 }
 
 type AnyPrisma = NonNullable<ReturnType<typeof getPrismaClient>>;
@@ -105,6 +107,7 @@ export async function listWorkOrderPlans(
     select: {
       id: true, taskCode: true, title: true, assetId: true, requiredPermitTypes: true,
       triggerType: true, frequencyHours: true, lastExecutionHours: true, samplingKind: true,
+      spares: true,
     },
   });
   const assetIds = [...new Set(plans.map((p: any) => p.assetId))] as string[];
@@ -131,6 +134,7 @@ export async function listWorkOrderPlans(
       frequencyHours: p.frequencyHours ?? null,
       lastExecutionHours: p.lastExecutionHours ?? null,
       samplingKind: p.samplingKind ?? null,
+      spareIds: resolvePlanSpares(p).filter(s => s.kind === "SPARE" && s.spareId).map(s => s.spareId!),
     });
   }
   return rows;
