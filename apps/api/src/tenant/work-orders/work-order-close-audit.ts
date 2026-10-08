@@ -28,7 +28,7 @@ import { getTenantAiLocale, localeInstruction, localeUserReminder } from "../ai/
 import { loadWorkOrderPdfContext } from "../pms/work-order-pdf/data-loader";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { loadVesselCatalog } from "../spares/goods-receipts-service";
-import { matchSpare, normalizeText, type SpareCandidate } from "../spares/spare-match";
+import { matchSpare, normalizeText, proposeSku, type SpareCandidate } from "../spares/spare-match";
 import { matchSparesByAi, type AiLineInput } from "../spares/spare-ai-match";
 
 const FEATURE = "wo_close_audit";
@@ -352,26 +352,6 @@ function specsMatch(description: string, spare: SpareCandidate): boolean {
     spare.manufacturerPartNumber, spare.internalPartNumber,
   ].filter(Boolean).join(" ")).replace(/ /g, "");
   return wanted.every(t => have.includes(t));
-}
-
-const SKU_STOPWORDS = new Set(["de", "del", "la", "el", "los", "las", "para", "con", "y", "en", "sae"]);
-
-/**
- * Código para una ficha nueva, con el estilo del catálogo ("ACE-80W90-01",
- * "FIL-COM-01"): tres letras de la primera palabra y la especificación (o tres
- * letras de la segunda), más un número que no esté usado en el buque. Se puede
- * corregir después en Repuestos.
- */
-function proposeSku(description: string, taken: Set<string>): string {
-  const words = normalizeText(description).split(" ").filter(w => w && !SKU_STOPWORDS.has(w));
-  const spec = words.filter(w => /\d/.test(w)).join("").toUpperCase().slice(0, 8);
-  const plain = words.filter(w => !/\d/.test(w)).map(w => w.slice(0, 3).toUpperCase());
-  const base = [plain[0] ?? "REP", spec || plain[1]].filter(Boolean).join("-");
-  for (let n = 1; n < 100; n++) {
-    const sku = `${base}-${String(n).padStart(2, "0")}`;
-    if (!taken.has(sku)) return sku;
-  }
-  return `${base}-${Date.now().toString(36).toUpperCase()}`;
 }
 
 /**

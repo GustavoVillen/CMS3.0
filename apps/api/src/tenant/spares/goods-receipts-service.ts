@@ -30,6 +30,8 @@ import { matchSparesByAi, type AiLineInput } from "./spare-ai-match";
 import {
   matchSpare,
   normalizePartNumber,
+  normalizeText,
+  proposeSku,
   type SpareCandidate,
   MATCH_THRESHOLD,
 } from "./spare-match";
@@ -93,7 +95,8 @@ export interface CommitLineInput {
   spareId?: string | null;
   /** Alta confirmada por el usuario ("ninguno de los parecidos es el mío"). */
   newSpare?: {
-    sku: string;
+    /** Vacío: el código lo asigna el servidor con proposeSku (FIL-ACE-01). */
+    sku?: string | null;
     name: string;
     unit: string;
     criticality?: "A" | "B" | "C";
@@ -449,6 +452,12 @@ export async function commitGoodsReceipt(
 
   const catalog = await loadVesselCatalog(prisma, tenantId, vesselCode);
   const byId = new Map(catalog.map(c => [c.id, c]));
+  // Todos los códigos del buque, también los de fichas borradas: el índice
+  // único (tenant, buque, código) los cuenta y la base rechazaría el alta.
+  const usedSkus = new Set(
+    (await prisma.spare.findMany({ where: { tenantId, vesselCode }, select: { sku: true } }))
+      .map(s => s.sku.toUpperCase()),
+  );
 
   // Resolución de cada línea ANTES de escribir: repuesto existente o alta nueva.
   interface Resolved {
@@ -476,13 +485,14 @@ export async function commitGoodsReceipt(
       throw new RouteError(400, "VALIDATION_ERROR", `La línea ${i + 1} no tiene repuesto asignado.`);
     }
 
-    const sku  = requiredText(line.newSpare.sku, `sku (línea ${i + 1})`).toUpperCase();
+    // Sin código: se asigna al guardar, dentro de la transacción.
+    const sku  = normText(line.newSpare.sku)?.toUpperCase() ?? null;
     const name = requiredText(line.newSpare.name, `nombre (línea ${i + 1})`);
     const unit = requiredText(line.newSpare.unit ?? line.unit, `unidad (línea ${i + 1})`);
 
     // Bloqueos duros contra el duplicado, del lado del servidor: el mismo SKU o
     // el mismo part number en el buque significan que el repuesto ya existe.
-    if (catalog.some(c => c.sku.toUpperCase() === sku)) {
+    if (sku && usedSkus.has(sku)) {
       throw new RouteError(409, "DUPLICATE_SKU", `Ya existe un repuesto con el código ${sku} en este buque (línea ${i + 1}).`);
     }
     const pn = normalizePartNumber(line.newSpare.manufacturerPartNumber ?? line.newSpare.internalPartNumber);
@@ -495,7 +505,7 @@ export async function commitGoodsReceipt(
       }
     }
     // Dos altas nuevas con el mismo SKU dentro del mismo remito.
-    if (resolved.some(r => r.newSpare && r.newSpare.sku.toUpperCase() === sku)) {
+    if (sku && resolved.some(r => r.newSpare?.sku?.toUpperCase() === sku)) {
       throw new RouteError(409, "DUPLICATE_SKU", `El código ${sku} está repetido en dos líneas del remito.`);
     }
 
@@ -508,10 +518,17 @@ export async function commitGoodsReceipt(
     });
   }
 
-  // Dos líneas contra el mismo repuesto: se suman en una sola.
+  // Dos líneas contra el mismo repuesto: se suman en una sola. Vale también
+  // para dos altas sin código con el mismo nombre: si no, el código automático
+  // les daría fichas distintas y el repuesto quedaría repetido.
+  const sameNewSpare = (a: Resolved, b: Resolved) =>
+    !!a.newSpare && !!b.newSpare && !a.newSpare.sku && !b.newSpare.sku &&
+    normalizeText(a.newSpare.name) === normalizeText(b.newSpare.name);
   const merged: Resolved[] = [];
   for (const r of resolved) {
-    const prev = r.spareId ? merged.find(m => m.spareId === r.spareId) : null;
+    const prev = r.spareId
+      ? merged.find(m => m.spareId === r.spareId)
+      : merged.find(m => sameNewSpare(m, r));
     if (prev) {
       prev.quantity += r.quantity;
       if (r.notes) prev.notes = prev.notes ? `${prev.notes} | ${r.notes}` : r.notes;
@@ -536,6 +553,25 @@ export async function commitGoodsReceipt(
   const result = await withUniqueRetry((attempt) => prisma.$transaction(async (tx) => {
     const now = Date.now();
     const receiptCode = await nextReceiptCode(tx, tenantId, vesselCode, attempt);
+
+    // Código de las altas que llegaron sin código. Se calcula acá, detrás del
+    // lock del buque que tomó nextReceiptCode: dos recepciones simultáneas no
+    // eligen el mismo, y si otra pantalla lo ocupó justo, el reintento relee.
+    const autoSkus = new Map<Resolved, string>();
+    if (merged.some(l => l.newSpare && !l.newSpare.sku)) {
+      const taken = new Set(
+        (await tx.spare.findMany({ where: { tenantId, vesselCode }, select: { sku: true } }))
+          .map(s => s.sku.toUpperCase()),
+      );
+      for (const l of merged) if (l.newSpare?.sku) taken.add(l.newSpare.sku);
+      for (const l of merged) {
+        if (!l.newSpare || l.newSpare.sku) continue;
+        const sku = proposeSku(l.newSpare.name, taken);
+        taken.add(sku);
+        autoSkus.set(l, sku);
+      }
+    }
+
     const receipt = await tx.goodsReceipt.create({
       data: {
         tenantId,
@@ -572,7 +608,7 @@ export async function commitGoodsReceipt(
           data: {
             tenantId,
             vesselCode,
-            sku: ns.sku,
+            sku: ns.sku || autoSkus.get(line)!,
             name: ns.name,
             unit: ns.unit,
             criticality: ns.criticality ?? "B",

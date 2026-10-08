@@ -120,6 +120,28 @@ export function normalizePartNumber(value: string | null | undefined): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+const SKU_STOPWORDS = new Set(["de", "del", "la", "el", "los", "las", "para", "con", "y", "en", "sae"]);
+
+/**
+ * Código para una ficha nueva, con el estilo del catálogo ("ACE-80W90-01",
+ * "FIL-COM-01"): tres letras de la primera palabra y la especificación (o tres
+ * letras de la segunda), más un número que no esté usado en el buque. `taken`
+ * va en mayúsculas y tiene que incluir los códigos de fichas borradas: el
+ * índice único de la base también los cuenta. Se puede corregir después en
+ * Repuestos. Lo usan el cierre de OT y la recepción de remitos.
+ */
+export function proposeSku(description: string, taken: Set<string>): string {
+  const words = normalizeText(description).split(" ").filter(w => w && !SKU_STOPWORDS.has(w));
+  const spec = words.filter(w => /\d/.test(w)).join("").toUpperCase().slice(0, 8);
+  const plain = words.filter(w => !/\d/.test(w)).map(w => w.slice(0, 3).toUpperCase());
+  const base = [plain[0] ?? "REP", spec || plain[1]].filter(Boolean).join("-");
+  for (let n = 1; n < 100; n++) {
+    const sku = `${base}-${String(n).padStart(2, "0")}`;
+    if (!taken.has(sku)) return sku;
+  }
+  return `${base}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 function tokenize(value: string): Set<string> {
   const out = new Set<string>();
   for (const raw of normalizeText(value).split(" ")) {

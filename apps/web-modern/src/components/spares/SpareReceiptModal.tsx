@@ -5,8 +5,9 @@
 // al revés del formulario clásico: primero se busca en el stock del buque y
 // recién si ninguno es, se crea. Las líneas que la IA no puede resolver sola
 // quedan en ámbar y no se pueden guardar hasta que el usuario elija; el alta de
-// un repuesto nuevo exige tildar "ninguno de estos es el mío" con los parecidos
-// a la vista.
+// un repuesto nuevo se elige siempre con los parecidos a la vista ("Ninguno:
+// cargarlo como nuevo", o "No es ninguno: cargar «X»" debajo del buscador). El
+// nombre buscado pasa a la ficha y el código, si queda vacío, lo pone el servidor.
 //
 // Tres pasos: datos del remito → revisión → resumen. Nada se escribe en la base
 // hasta el botón de confirmar.
@@ -84,11 +85,13 @@ interface Row {
   spareOnHand: number | null;
   aiReason: string | null;
   candidates: Candidate[];
+  /** Viene del remito leído. Si no, se cargó a mano desde "Agregar un ítem". */
+  fromScan: boolean;
   /** El usuario confirmó que ninguno de los parecidos es el suyo. */
   confirmedNew: boolean;
+  /** Código de la ficha nueva. Vacío: lo asigna el sistema al guardar. */
   newSku: string;
   newName: string;
-  newUnit: string;
   newCriticality: "A" | "B" | "C";
 }
 
@@ -109,21 +112,29 @@ function rowFromScan(l: ScanLine): Row {
     spareOnHand: l.spareOnHand,
     aiReason: l.aiReason,
     candidates: l.candidates,
+    fromScan: true,
     confirmedNew: false,
     newSku: "",
     newName: l.description,
-    newUnit: l.unit ?? "u",
     newCriticality: "B",
   };
 }
 
+/** Qué le falta a la fila para poder guardarse; null si está lista. */
+function rowMissing(r: Row): "qty" | "pick" | "name" | null {
+  const qty = Number(r.quantity);
+  if (!Number.isFinite(qty) || qty <= 0) return "qty";
+  if (r.spareId) return null;
+  if (!r.confirmedNew) return "pick";
+  return r.newName.trim() ? null : "name";
+}
+
 /** Una fila está lista cuando apunta a un repuesto real o a un alta confirmada. */
 function rowReady(r: Row): boolean {
-  const qty = Number(r.quantity);
-  if (!Number.isFinite(qty) || qty <= 0) return false;
-  if (r.spareId) return true;
-  return r.confirmedNew && !!r.newSku.trim() && !!r.newName.trim() && !!r.newUnit.trim();
+  return rowMissing(r) === null;
 }
+
+const MISSING_MSG = { qty: "rcp.pendingQty", pick: "rcp.pendingPick", name: "rcp.pendingName" } as const;
 
 interface Props {
   vessels: Array<{ code: string; name: string | null }>;
@@ -153,6 +164,8 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
   const [saving, setSaving] = useState(false);
   const [results, setResults] = useState<CommitResultLine[]>([]);
   const [receiptCode, setReceiptCode] = useState<string | null>(null);
+  // Línea recién agregada a mano: su cantidad toma el foco.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<{ items: Provider[] }>("/app/providers")
@@ -203,11 +216,15 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
   const markNew = (key: string) =>
     patchRow(key, { status: "new", spareId: null, spareSku: null, spareName: null, spareOnHand: null });
 
-  const addManualRow = (c: Candidate | null) => {
+  /**
+   * Línea cargada a mano: un repuesto del stock (`c`) o un alta nueva con el
+   * nombre que se escribió en el buscador, para no tener que tipearlo dos veces.
+   */
+  const addManualRow = (c: Candidate | null, name = "") => {
     const key = `man-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setRows(prev => [...prev, {
       key,
-      description: c ? c.name : "",
+      description: "",
       partNumber: null,
       quantity: "1",
       unit: c?.unit ?? "u",
@@ -218,12 +235,13 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
       spareOnHand: c?.onHand ?? null,
       aiReason: null,
       candidates: [],
+      fromScan: false,
       confirmedNew: !c,
       newSku: "",
-      newName: "",
-      newUnit: "u",
+      newName: name.trim(),
       newCriticality: "B",
     }]);
+    setFocusKey(key);
   };
 
   const pending = useMemo(() => rows.filter(r => !rowReady(r)), [rows]);
@@ -231,8 +249,14 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
 
   // ── Paso 2 → 3: guardar ────────────────────────────────────────────────────
   const commit = useCallback(async (force = false) => {
-    if (ready.length === 0) { setAlert(t("rcp.noLines")); return; }
-    if (pending.length > 0)  { setAlert(t("rcp.pending")); return; }
+    if (rows.length === 0) { setAlert(t("rcp.noLines")); return; }
+    // El aviso nombra la línea y lo que le falta, no un "hay ítems sin resolver".
+    const firstPending = rows.findIndex(r => !rowReady(r));
+    if (firstPending >= 0) {
+      const missing = rowMissing(rows[firstPending]!)!;
+      setAlert(t(MISSING_MSG[missing]).replace("{n}", String(firstPending + 1)));
+      return;
+    }
     setSaving(true);
     try {
       const res = await api.post<{ id: string; receiptCode: string; lines: CommitResultLine[] }>(
@@ -250,9 +274,9 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
             unit: r.unit.trim() || "u",
             spareId: r.spareId,
             newSpare: r.spareId ? null : {
-              sku: r.newSku.trim().toUpperCase(),
+              sku: r.newSku.trim().toUpperCase() || null,
               name: r.newName.trim(),
-              unit: r.newUnit.trim() || "u",
+              unit: r.unit.trim() || "u",
               criticality: r.newCriticality,
               manufacturerPartNumber: r.partNumber,
               longDescription: r.description || null,
@@ -274,7 +298,7 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
     } finally {
       setSaving(false);
     }
-  }, [ready, pending, vesselCode, docNumber, providerId, providerName, receivedAt, file, allowDuplicate, onSaved, t]);
+  }, [rows, ready, vesselCode, docNumber, providerId, providerName, receivedAt, file, allowDuplicate, onSaved, t]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -319,10 +343,12 @@ export const SpareReceiptModal: React.FC<Props> = ({ vessels, defaultVesselCode,
               duplicateOf={duplicateOf}
               pendingCount={pending.length}
               saving={saving}
+              focusKey={focusKey}
               onPatch={patchRow}
               onPick={pickSpare}
               onMarkNew={markNew}
-              onAdd={addManualRow}
+              onAdd={c => addManualRow(c)}
+              onAddNew={name => addManualRow(null, name)}
               onRemove={key => setRows(prev => prev.filter(r => r.key !== key))}
               onBack={() => setStep("setup")}
               onCommit={() => void commit()}
@@ -424,10 +450,12 @@ const ReviewStep: React.FC<{
   duplicateOf: ScanResult["duplicateOf"];
   pendingCount: number;
   saving: boolean;
+  focusKey: string | null;
   onPatch: (key: string, patch: Partial<Row>) => void;
   onPick: (key: string, c: Candidate) => void;
   onMarkNew: (key: string) => void;
-  onAdd: (c: Candidate | null) => void;
+  onAdd: (c: Candidate) => void;
+  onAddNew: (name: string) => void;
   onRemove: (key: string) => void;
   onBack: () => void;
   onCommit: () => void;
@@ -460,6 +488,7 @@ const ReviewStep: React.FC<{
             key={row.key}
             row={row}
             vesselCode={p.vesselCode}
+            autoFocus={row.key === p.focusKey}
             onPatch={patch => p.onPatch(row.key, patch)}
             onPick={c => p.onPick(row.key, c)}
             onMarkNew={() => p.onMarkNew(row.key)}
@@ -471,7 +500,7 @@ const ReviewStep: React.FC<{
         )}
       </div>
 
-      <AddLine vesselCode={p.vesselCode} onAdd={p.onAdd} />
+      <AddLine vesselCode={p.vesselCode} onAdd={p.onAdd} onAddNew={p.onAddNew} />
 
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-fg/10">
         <button onClick={p.onBack} className="px-4 py-2 rounded-xl border border-fg/10 text-xs font-bold text-fg/60 hover:bg-fg/5">
@@ -483,9 +512,10 @@ const ReviewStep: React.FC<{
               {p.pendingCount} {t("rcp.pendingShort")}
             </span>
           )}
+          {/* Habilitado aunque falte algo: al tocarlo, el aviso dice qué línea y qué falta. */}
           <button
             onClick={p.onCommit}
-            disabled={p.saving || p.rows.length === 0 || p.pendingCount > 0}
+            disabled={p.saving || p.rows.length === 0}
             className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-success-sea/15 border border-success-sea/40 text-success-sea font-bold text-xs hover:bg-success-sea/25 transition-all disabled:opacity-40"
           >
             {p.saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -503,14 +533,19 @@ const STATUS_STYLE: Record<Row["status"], string> = {
   new:       "border-blue-500/30 bg-blue-500/5",
 };
 
+const missCls = "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10";
+const optionCls = "w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-fg/10 bg-fg/2 hover:border-success-sea/40 hover:bg-success-sea/10 text-left";
+const createCls = "w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-blue-500/40 bg-blue-500/5 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-500/10 text-left";
+
 const ReviewRow: React.FC<{
   row: Row;
   vesselCode: string;
+  autoFocus: boolean;
   onPatch: (patch: Partial<Row>) => void;
   onPick: (c: Candidate) => void;
   onMarkNew: () => void;
   onRemove: () => void;
-}> = ({ row, vesselCode, onPatch, onPick, onMarkNew, onRemove }) => {
+}> = ({ row, vesselCode, autoFocus, onPatch, onPick, onMarkNew, onRemove }) => {
   const t = useT();
   const qty = Number(row.quantity);
   const validQty = Number.isFinite(qty) && qty > 0;
@@ -518,14 +553,44 @@ const ReviewRow: React.FC<{
   const needDest = !row.spareId && !row.confirmedNew;
   const need = <GuideNeedTag label={t("mp.guide.missing")} />;
 
+  // Repuesto del stock al que se le suma. En la carga a mano va arriba, en el
+  // lugar del ítem del remito (que no existe); "Cambiar" sólo tiene sentido en
+  // una línea del remito: a mano se borra y se busca de nuevo.
+  const matched = row.spareId ? (
+    <div className="flex items-center gap-3 flex-wrap text-xs">
+      <span className="px-2 py-0.5 rounded-lg bg-success-sea/15 text-success-sea font-bold text-[10px] uppercase tracking-wider">
+        {t("rcp.state.matched")}
+      </span>
+      <span className="font-bold text-fg">{row.spareName}</span>
+      <span className="font-mono text-fg/40">{row.spareSku}</span>
+      {row.spareOnHand != null && validQty && (
+        <span className="text-fg/50">
+          {t("rcp.stock")}: {row.spareOnHand} → <strong className="text-success-sea">{row.spareOnHand + qty}</strong>
+        </span>
+      )}
+      {row.aiReason && <span className="text-fg/30 italic">{row.aiReason}</span>}
+      {row.fromScan && <button onClick={onMarkNew} className="text-fg/40 underline hover:text-fg">{t("rcp.change")}</button>}
+    </div>
+  ) : null;
+
   return (
     <div className={`rounded-xl border p-3 space-y-3 ${STATUS_STYLE[row.status]}`}>
       <div className="flex items-start gap-3 flex-wrap">
-        {/* Lo que dice el remito */}
         <div className="flex-1 min-w-[220px]">
-          <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">{t("rcp.col.item")}</p>
-          <p className="text-sm text-fg font-medium break-words">{row.description || "—"}</p>
-          {row.partNumber && <p className="text-[11px] font-mono text-fg/40">P/N {row.partNumber}</p>}
+          {row.fromScan ? (
+            <>
+              <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">{t("rcp.col.item")}</p>
+              <p className="text-sm text-fg font-medium break-words">{row.description || "—"}</p>
+              {row.partNumber && <p className="text-[11px] font-mono text-fg/40">P/N {row.partNumber}</p>}
+            </>
+          ) : matched ?? (
+            <div className="space-y-1">
+              <span className="px-2 py-0.5 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider">
+                {t("rcp.state.new")}
+              </span>
+              <p className="text-[11px] text-fg/50">{t("rcp.newHint")}</p>
+            </div>
+          )}
         </div>
 
         {/* Cantidad */}
@@ -534,8 +599,10 @@ const ReviewRow: React.FC<{
           <input
             type="number" min="0" step="0.01"
             value={row.quantity}
+            autoFocus={autoFocus}
+            onFocus={e => { if (autoFocus) e.currentTarget.select(); }}
             onChange={e => onPatch({ quantity: e.target.value })}
-            className={`${inputCls} ${validQty ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`}
+            className={`${inputCls} ${validQty ? "" : missCls}`}
           />
           {!validQty && need}
         </div>
@@ -549,34 +616,17 @@ const ReviewRow: React.FC<{
         </button>
       </div>
 
-      {/* Destino: repuesto existente o alta nueva */}
-      {row.spareId ? (
-        <div className="flex items-center gap-3 flex-wrap text-xs">
-          <span className="px-2 py-0.5 rounded-lg bg-success-sea/15 text-success-sea font-bold text-[10px] uppercase tracking-wider">
-            {t("rcp.state.matched")}
-          </span>
-          <span className="font-bold text-fg">{row.spareName}</span>
-          <span className="font-mono text-fg/40">{row.spareSku}</span>
-          {row.spareOnHand != null && validQty && (
-            <span className="text-fg/50">
-              {t("rcp.stock")}: {row.spareOnHand} → <strong className="text-success-sea">{row.spareOnHand + qty}</strong>
-            </span>
-          )}
-          {row.aiReason && <span className="text-fg/30 italic">{row.aiReason}</span>}
-          <button onClick={onMarkNew} className="text-fg/40 underline hover:text-fg">{t("rcp.change")}</button>
-        </div>
-      ) : (
-        <div className={`space-y-2 ${needDest ? "rounded-xl border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10 px-3 py-2" : ""}`}>
-          {needDest && <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300">{t("rcp.v24.pickOrNew")}{need}</p>}
+      {row.fromScan && matched}
+
+      {/* Línea del remito sin repuesto: elegir uno del stock o darlo de alta. */}
+      {needDest && (
+        <div className="space-y-2 rounded-xl border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-500/10 px-3 py-2">
+          <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300">{t("rcp.v24.pickOrNew")}{need}</p>
           {row.candidates.length > 0 && (
             <div className="space-y-1">
               <p className="text-[11px] font-bold text-yellow-700 dark:text-yellow-400">{t("rcp.similar")}</p>
               {row.candidates.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => onPick(c)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-fg/10 bg-fg/2 hover:border-success-sea/40 hover:bg-success-sea/10 text-left"
-                >
+                <button key={c.id} onClick={() => onPick(c)} className={optionCls}>
                   <span className="text-xs text-fg truncate">
                     {c.name} <span className="font-mono text-fg/40">{c.sku}</span>
                   </span>
@@ -585,48 +635,52 @@ const ReviewRow: React.FC<{
               ))}
             </div>
           )}
-
           <SpareFinder vesselCode={vesselCode} onPick={onPick} />
+          <button onClick={() => onPatch({ confirmedNew: true, status: "new" })} className={createCls}>
+            <Plus className="w-3.5 h-3.5 shrink-0" />{t("rcp.confirmNew")}
+          </button>
+        </div>
+      )}
 
-          <label className="flex items-center gap-2 text-xs text-fg/70 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={row.confirmedNew}
-              onChange={e => onPatch({ confirmedNew: e.target.checked })}
-              className="rounded border-fg/20"
-            />
-            {t("rcp.confirmNew")}
-          </label>
-
-          {row.confirmedNew && (
-            <>
-            {/* Segundo control, para el modo manual: el nombre que se está
-                escribiendo se busca contra el stock mientras se tipea. Sin esto
-                el alta a mano seguía siendo una puerta abierta al duplicado. */}
-            <SimilarCheck vesselCode={vesselCode} name={row.newName} onPick={onPick} />
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-              <div>
-                <label className={labelCls}>{t("rcp.newSku")}<RequiredMark />{!row.newSku.trim() && need}</label>
-                <input value={row.newSku} onChange={e => onPatch({ newSku: e.target.value })} placeholder="FIL-COMB-GEN" className={`${inputCls} ${row.newSku.trim() ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelCls}>{t("rcp.newName")}<RequiredMark />{!row.newName.trim() && need}</label>
-                <input value={row.newName} onChange={e => onPatch({ newName: e.target.value })} className={`${inputCls} ${row.newName.trim() ? "" : "border-amber-500 border-2 bg-amber-50 dark:bg-amber-500/10"}`} />
-              </div>
-              <div>
-                <label className={labelCls}>{t("rcp.newCrit")}</label>
-                <select
-                  value={row.newCriticality}
-                  onChange={e => onPatch({ newCriticality: e.target.value as Row["newCriticality"] })}
-                  className={inputCls}
-                >
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                </select>
-              </div>
+      {/* Alta nueva: el nombre ya viene escrito y el código, si no se pone, lo asigna el sistema. */}
+      {!row.spareId && row.confirmedNew && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <div className="sm:col-span-2">
+              <label className={labelCls}>{t("rcp.newName")}<RequiredMark />{!row.newName.trim() && need}</label>
+              <input value={row.newName} onChange={e => onPatch({ newName: e.target.value })} className={`${inputCls} ${row.newName.trim() ? "" : missCls}`} />
             </div>
-            </>
+            <div>
+              <label className={labelCls}>{t("rcp.newSku")}</label>
+              <input
+                value={row.newSku}
+                onChange={e => onPatch({ newSku: e.target.value.toUpperCase() })}
+                placeholder={t("rcp.newSkuAuto")}
+                className={`${inputCls} font-mono`}
+              />
+              {!row.newSku.trim() && <p className="text-[11px] text-fg/40 mt-1">{t("rcp.newSkuHint")}</p>}
+            </div>
+            <div>
+              <label className={labelCls}>{t("rcp.newCrit")}</label>
+              <select
+                value={row.newCriticality}
+                onChange={e => onPatch({ newCriticality: e.target.value as Row["newCriticality"] })}
+                className={inputCls}
+              >
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+              </select>
+            </div>
+          </div>
+          {/* Segundo control contra el duplicado: el nombre se busca contra el
+              stock mientras se tipea. Plegado, porque los parecidos ya se vieron
+              al elegir "cargar como nuevo". */}
+          <SimilarCheck vesselCode={vesselCode} name={row.newName} onPick={onPick} />
+          {row.fromScan && (
+            <button onClick={() => onPatch({ confirmedNew: false })} className="text-[11px] text-fg/40 underline hover:text-fg">
+              {t("rcp.backToPick")}
+            </button>
           )}
         </div>
       )}
@@ -636,12 +690,13 @@ const ReviewRow: React.FC<{
 
 /**
  * Avisa si el nombre que se está escribiendo se parece a un repuesto que ya
- * existe. No bloquea: muestra los parecidos para poder sumarles el stock en vez
- * de crear una ficha repetida.
+ * existe. No bloquea: dice cuántos hay y, al abrirlo, permite sumarle el stock
+ * a uno de ellos en vez de crear una ficha repetida.
  */
 const SimilarCheck: React.FC<{ vesselCode: string; name: string; onPick: (c: Candidate) => void }> = ({ vesselCode, name, onPick }) => {
   const t = useT();
   const [hits, setHits] = useState<Candidate[]>([]);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const term = name.trim();
@@ -659,30 +714,41 @@ const SimilarCheck: React.FC<{ vesselCode: string; name: string; onPick: (c: Can
   return (
     <div className="space-y-1 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
       <p className="text-[11px] font-bold text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
-        <AlertTriangle className="w-3.5 h-3.5" />{t("rcp.similarWarn")}
+        <AlertTriangle className="w-3.5 h-3.5" />{t("rcp.similarWarn").replace("{n}", String(hits.length))}
+        <button type="button" onClick={() => setOpen(o => !o)} className="underline hover:text-fg">
+          {open ? t("rcp.hide") : t("rcp.show")}
+        </button>
       </p>
-      {hits.map(c => (
-        <button
-          key={c.id}
-          onClick={() => onPick(c)}
-          className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-fg/10 bg-fg/2 hover:border-success-sea/40 hover:bg-success-sea/10 text-left"
-        >
+      {open && hits.map(c => (
+        <button key={c.id} onClick={() => onPick(c)} className={optionCls}>
           <span className="text-xs text-fg truncate">
             {c.name} <span className="font-mono text-fg/40">{c.sku}</span>
           </span>
-          <span className="text-[11px] text-fg/40 shrink-0">{t("rcp.stock")} {c.onHand}</span>
+          <span className="text-[11px] shrink-0">
+            <span className="text-fg/40">{t("rcp.stock")} {c.onHand}</span>
+            <span className="ml-2 font-bold text-success-sea">{t("rcp.useThis")}</span>
+          </span>
         </button>
       ))}
     </div>
   );
 };
 
-/** Buscador contra el catálogo del buque: nombre, código, descripción y P/N. */
-const SpareFinder: React.FC<{ vesselCode: string; onPick: (c: Candidate) => void }> = ({ vesselCode, onPick }) => {
+/**
+ * Buscador contra el catálogo del buque: nombre, código, descripción y P/N.
+ * Con `onCreate`, debajo de los resultados ofrece cargar lo escrito como
+ * repuesto nuevo: es la salida cuando ninguno de los que aparecen es.
+ */
+const SpareFinder: React.FC<{
+  vesselCode: string;
+  onPick: (c: Candidate) => void;
+  onCreate?: (name: string) => void;
+}> = ({ vesselCode, onPick, onCreate }) => {
   const t = useT();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(false);
+  const typed = q.trim();
 
   useEffect(() => {
     const term = q.trim();
@@ -698,6 +764,12 @@ const SpareFinder: React.FC<{ vesselCode: string; onPick: (c: Candidate) => void
     return () => { cancelled = true; clearTimeout(timer); };
   }, [q, vesselCode]);
 
+  const create = () => {
+    if (!onCreate || typed.length < 2) return;
+    onCreate(typed);
+    setQ(""); setHits([]);
+  };
+
   return (
     <div className="space-y-1">
       <div className="relative">
@@ -705,6 +777,10 @@ const SpareFinder: React.FC<{ vesselCode: string; onPick: (c: Candidate) => void
         <input
           value={q}
           onChange={e => setQ(e.target.value)}
+          onKeyDown={e => {
+            // Enter sin nada parecido en el stock = cargarlo como nuevo.
+            if (e.key === "Enter" && !loading && hits.length === 0 && onCreate) { e.preventDefault(); create(); }
+          }}
           placeholder={t("rcp.searchPh")}
           className={`${inputCls} pl-8`}
         />
@@ -716,7 +792,7 @@ const SpareFinder: React.FC<{ vesselCode: string; onPick: (c: Candidate) => void
             <button
               key={c.id}
               onClick={() => { onPick(c); setQ(""); setHits([]); }}
-              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-fg/10 bg-fg/2 hover:border-success-sea/40 hover:bg-success-sea/10 text-left"
+              className={optionCls}
             >
               <span className="text-xs text-fg truncate">
                 {c.name} <span className="font-mono text-fg/40">{c.sku}</span>
@@ -726,23 +802,31 @@ const SpareFinder: React.FC<{ vesselCode: string; onPick: (c: Candidate) => void
           ))}
         </div>
       )}
+      {onCreate && typed.length >= 2 && !loading && hits.length === 0 && (
+        <p className="text-[11px] text-fg/40 px-1">{t("rcp.noMatches")}</p>
+      )}
+      {/* Fuera de la lista con scroll: siempre a la vista. */}
+      {onCreate && typed.length >= 2 && (
+        <button onClick={create} className={createCls}>
+          <Plus className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{t("rcp.addNewSpare").replace("{name}", typed)}</span>
+        </button>
+      )}
     </div>
   );
 };
 
 /** Alta de una línea suelta (modo manual, o un ítem que el remito no traía). */
-const AddLine: React.FC<{ vesselCode: string; onAdd: (c: Candidate | null) => void }> = ({ vesselCode, onAdd }) => {
+const AddLine: React.FC<{
+  vesselCode: string;
+  onAdd: (c: Candidate) => void;
+  onAddNew: (name: string) => void;
+}> = ({ vesselCode, onAdd, onAddNew }) => {
   const t = useT();
   return (
     <div className="rounded-xl border border-dashed border-fg/15 p-3 space-y-2">
       <p className="text-[10px] font-bold text-fg/40 uppercase tracking-wider">{t("rcp.addLine")}</p>
-      <SpareFinder vesselCode={vesselCode} onPick={c => onAdd(c)} />
-      <button
-        onClick={() => onAdd(null)}
-        className="flex items-center gap-1.5 text-xs font-bold text-fg/50 hover:text-fg"
-      >
-        <Plus className="w-3.5 h-3.5" />{t("rcp.addNewSpare")}
-      </button>
+      <SpareFinder vesselCode={vesselCode} onPick={onAdd} onCreate={onAddNew} />
     </div>
   );
 };
