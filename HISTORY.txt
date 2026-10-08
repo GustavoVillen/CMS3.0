@@ -6,6 +6,9 @@ Agent: Claude Opus 5.5
   "Varios equipos (2)" y la tarea no se veia). Si la tarea repite el equipo antes de ":" se muestra
   lo que sigue. OT sin plan: equipo + titulo. Mas de 3 equipos: "Ver N mas".
 - Componente nuevo WoWorkSummary.tsx; sin cambios de datos ni permisos.
+- Compactada el mismo dia (Preview V2, variante A): sin titulo y un renglon por equipo
+  ("Equipo — tareas", lo que no entra se lee al pasar el mouse). Respaldo previo:
+  claude/backups/ot-encabezado-equipo-v2a-2026-10-08/.
 - Respaldo previo: claude/backups/ot-encabezado-equipo-2026-10-08/. Prototipo:
   claude/mockups/ot-encabezado-equipo/ot-encabezado-v1.html.
   Pasos: pull + build web.

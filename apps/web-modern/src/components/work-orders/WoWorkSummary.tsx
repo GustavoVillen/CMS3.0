@@ -1,8 +1,9 @@
 // "EQUIPO Y TRABAJO" — franja debajo del encabezado de la OT (Preview V1 aprobada,
-// 08-oct-2026). Al abrir la OT tiene que verse de un vistazo qué máquina y qué
-// trabajo es, sin bajar a "Qué hay que hacer". Antes decía sólo "Varios equipos (2)".
+// 08-oct-2026; compactada con la V2-A). Al abrir la OT tiene que verse de un
+// vistazo qué máquina y qué trabajo es, sin bajar a "Qué hay que hacer". Antes
+// decía sólo "Varios equipos (2)".
 //
-// Una línea por equipo: el nombre en negrita y las tareas de sus planes, juntas.
+// Un renglón por equipo: el nombre en negrita y las tareas de sus planes, juntas.
 // Sale de los planes que ya trae la OT; una OT sin plan muestra el equipo y su título.
 
 import { useState } from "react";
@@ -56,32 +57,25 @@ export function WoWorkSummary({ plans, assetName, title }: {
   const visibles = abierto ? grupos : grupos.slice(0, VISIBLES);
   const ocultos = grupos.length - VISIBLES;
 
+  // Compacta (Preview V2-A): sin título y un renglón por equipo; lo que no entra
+  // termina en "…" y se lee completo al pasar el mouse.
   return (
-    <div className="px-6 pt-2 pb-2.5 bg-fg/[0.03] border-b border-fg/10 shrink-0">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-text-industrial/40 mb-1">
-        {t("wo.header.work")}
-      </p>
-      <div className="divide-y divide-dashed divide-fg/10">
-        {visibles.map((g, i) => (
-          <div key={`${g.asset ?? ""}-${i}`}
-            className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,14rem)_1fr] gap-x-3.5 gap-y-0.5 py-1 items-baseline">
-            {g.asset ? (
-              <div className="flex items-baseline gap-1.5 min-w-0" title={g.asset}>
-                <Cog className="w-3.5 h-3.5 shrink-0 text-accent translate-y-0.5" />
-                <span className="text-sm font-bold text-fg truncate">{g.asset}</span>
-              </div>
-            ) : <div className="hidden sm:block" />}
-            <p className="text-[13px] leading-snug text-fg/80 line-clamp-2" title={g.tasks.join(" · ")}>
-              {g.tasks.map((tarea, j) => (
-                <span key={j}>
-                  {j > 0 && <span className="px-1 text-text-industrial/40">·</span>}
-                  {tarea}
-                </span>
-              ))}
-            </p>
-          </div>
-        ))}
-      </div>
+    <div className="px-6 py-1.5 bg-fg/[0.03] border-b border-fg/10 shrink-0" aria-label={t("wo.header.work")}>
+      {visibles.map((g, i) => (
+        <div key={`${g.asset ?? ""}-${i}`} className="flex items-center gap-1.5 min-w-0 text-[12.5px] leading-5"
+          title={[g.asset, g.tasks.join(" · ")].filter(Boolean).join(": ")}>
+          <Cog className="w-3 h-3 shrink-0 text-accent" />
+          <p className="truncate min-w-0">
+            {g.asset && <><b className="font-bold text-fg">{g.asset}</b> <span className="text-text-industrial/50">—</span> </>}
+            {g.tasks.map((tarea, j) => (
+              <span key={j} className="text-fg/80">
+                {j > 0 && <span className="px-1 text-text-industrial/40">·</span>}
+                {tarea}
+              </span>
+            ))}
+          </p>
+        </div>
+      ))}
       {ocultos > 0 && (
         <button type="button" onClick={() => setAbierto(v => !v)}
           className="mt-0.5 text-xs font-bold text-accent hover:underline">
