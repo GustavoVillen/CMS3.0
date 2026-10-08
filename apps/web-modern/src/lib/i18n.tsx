@@ -2906,6 +2906,9 @@ const dict = {
   "wo.col.equipmentTask":      { es: "Equipo / Tarea",         en: "Equipment / Task",     pt: "Equipamento / Tarefa" },
   // OT que ejecuta ítems del PDM de equipos distintos (parada de astillero).
   "wo.multiAsset":             { es: "Varios equipos ({n})",   en: "Multiple equipment ({n})", pt: "Vários equipamentos ({n})" },
+  "wo.header.work":            { es: "Equipo y trabajo",       en: "Equipment and work",       pt: "Equipamento e trabalho" },
+  "wo.header.more":            { es: "Ver {n} más",            en: "Show {n} more",            pt: "Ver mais {n}" },
+  "wo.header.less":            { es: "Ver menos",              en: "Show less",                pt: "Ver menos" },
   "wo.openError":              { es: "No se pudo abrir la orden de trabajo {code}.", en: "Could not open work order {code}.", pt: "Não foi possível abrir a ordem de serviço {code}." },
   "wo.multiAsset.group":       { es: "Varios equipos",         en: "Multiple equipment",   pt: "Vários equipamentos" },
   "wo.multiAsset.count":       { es: "{n} equipos",            en: "{n} equipment",        pt: "{n} equipamentos" },

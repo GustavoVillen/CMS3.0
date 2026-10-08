@@ -28,6 +28,7 @@ import { CopyLinkButton } from "../components/CopyLinkButton";
 import { type WoRegiForm, type WoPlannedItem } from "../components/work-orders/WoRegiSections";
 import { PlannedItemsEditor, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
 import { usePlanSparePrompt } from "../components/work-orders/PlanSparePrompt";
+import { WoWorkSummary } from "../components/work-orders/WoWorkSummary";
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
@@ -4431,20 +4432,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <Wrench className={`w-4 h-4 shrink-0 ${RECORD_IDENTITY.workOrder.text}`} />
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40">{t("wo.entityLabel")}</p>
-              {/* El equipo va SIEMPRE junto al código: sin él hay que bajar hasta
-                  el cuerpo del formulario para saber de qué máquina se trata.
-                  Se muestra el NOMBRE, nunca el id interno: si el nombre no está
-                  resuelto, se omite (un cuid no le dice nada a nadie). */}
-              <div className="flex items-baseline gap-1.5 min-w-0">
-                <h2 className={`text-sm font-bold font-mono shrink-0 ${RECORD_IDENTITY.workOrder.text}`}>{workOrder.workOrderCode}</h2>
-                {detailAssetNames.length > 0 && (
-                  <span className="text-sm text-text-industrial/70 truncate" title={detailAssetNames.join(", ")}>
-                    · {detailAssetNames.length > 1
-                        ? t("wo.multiAsset").replace("{n}", String(detailAssetNames.length))
-                        : detailAssetNames[0]}
-                  </span>
-                )}
-              </div>
+              {/* El equipo y el trabajo van en la franja de abajo (WoWorkSummary). */}
+              <h2 className={`text-sm font-bold font-mono ${RECORD_IDENTITY.workOrder.text}`}>{workOrder.workOrderCode}</h2>
             </div>
             <WoStatusBadge status={workOrder.status} dueDate={workOrder.dueDate} deferralStatus={deferralStatus} toNextDrydock={deferralToDrydock} />
             {/* VENCIMIENTO, a la derecha del badge de estado. Es su único lugar:
@@ -4487,6 +4476,9 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
             <ModalCloseButton onClose={handleCloseClick} />
           </div>
         </div>
+
+        {/* Qué máquina y qué trabajo, a la vista apenas se abre la OT. */}
+        <WoWorkSummary plans={workOrder.plans} assetName={workOrder.assetName} title={workOrder.title} />
 
         {/* Vista guiada: buque, etapa de la OT y el cambio a la hoja del papel. */}
         {isMercurio && (

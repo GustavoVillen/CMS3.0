@@ -1,5 +1,15 @@
 HISTORY.txt
 
+[2026-10-08] OT: franja "Equipo y trabajo" en el encabezado (Preview V1 aprobada)
+Agent: Claude Opus 5.5
+- Debajo del numero de la OT, una linea por equipo con sus tareas del plan (antes decia
+  "Varios equipos (2)" y la tarea no se veia). Si la tarea repite el equipo antes de ":" se muestra
+  lo que sigue. OT sin plan: equipo + titulo. Mas de 3 equipos: "Ver N mas".
+- Componente nuevo WoWorkSummary.tsx; sin cambios de datos ni permisos.
+- Respaldo previo: claude/backups/ot-encabezado-equipo-2026-10-08/. Prototipo:
+  claude/mockups/ot-encabezado-equipo/ot-encabezado-v1.html.
+  Pasos: pull + build web.
+
 [2026-10-08] OT de plan: "¿este repuesto se cambia en todos los servicios?" -> al plan
 Agent: Claude Opus 5.5
 - Al cargar un repuesto del catalogo en una OT de plan (Repuestos y materiales previstos, Repuestos
