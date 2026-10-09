@@ -91,6 +91,8 @@ interface PendingItem {
   routeManualCount?: number;
   /** Sólo las OT autorizadas: permisos de trabajo vinculados. */
   permitCount?: number;
+  /** Los mismos, sin el borrador vacío que el sistema crea al autorizar la OT. */
+  permitWorkedCount?: number;
   /** Grupo SFI (filtro G0…G9). La SS trae el de su OT. */
   sfiGroupNumber?: number | null;
 }
@@ -194,7 +196,7 @@ function daysToDue(iso: string | null): number | null {
 const BTN_BASE = "w-full min-h-[34px] px-1.5 py-0.5 rounded-lg border-[1.5px] text-[10.5px] font-extrabold leading-tight flex flex-col items-center justify-center transition-all";
 const BTN_ON   = `${BTN_BASE} bg-surface border-accent text-accent hover:bg-accent hover:text-accent-fg disabled:opacity-50`;
 const BTN_DONE = `${BTN_BASE} bg-success/90 border-success text-white`;
-/** Avances / hoja de ruta con novedades cargadas por la gente: verde claro, se sigue abriendo. */
+/** Avances / hoja de ruta / permisos / repuestos con algo cargado por la gente: verde claro, se sigue abriendo. */
 const BTN_HAS  = `${BTN_BASE} bg-success/15 border-success text-success hover:bg-success hover:text-white`;
 /** Paso firmado de una OT / SS ya cerrada: gris, se ve pero ya no se toca. */
 const BTN_LOCKED = `${BTN_BASE} bg-fg/10 border-fg/20 text-fg/55`;
@@ -780,7 +782,7 @@ export const ApprovalsPage: React.FC = () => {
         </td>
         {/* Permisos se abre siempre: crear uno pide permit.manage (lo resuelve la ventana). */}
         <td className={cell}>
-          <button type="button" className={BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "permits", row: r }); }}>
+          <button type="button" className={(r.permitWorkedCount ?? 0) > 0 ? BTN_HAS : BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "permits", row: r }); }}>
             {btnBody(wPermits, permits === 0 ? t("approvals.exec.none")
               : permits === 1 ? t("approvals.exec.permitsOne")
               : t("approvals.exec.permitsMany").replace("{n}", String(permits)))}
@@ -788,7 +790,7 @@ export const ApprovalsPage: React.FC = () => {
         </td>
         <td className={cell}>
           {can?.woManage ? (
-            <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "spares", row: r })}>
+            <button type="button" className={spares > 0 ? BTN_HAS : BTN_ON} onClick={() => setExec({ kind: "spares", row: r })}>
               {btnBody(wSpares, spares === 0 ? t("approvals.exec.none")
                 : spares === 1 ? t("approvals.exec.sparesOne")
                 : t("approvals.exec.sparesMany").replace("{n}", String(spares)))}
