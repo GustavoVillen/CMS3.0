@@ -82,6 +82,7 @@ interface AssetForPdf {
 }
 interface WoRow { workOrderCode: string; type: string; status: string; title: string | null; openDate: string | Date; completedDate: string | Date | null }
 interface PlanRow {
+  assetId: string;
   taskCode: string; taskType: string; title: string; status?: string | null; triggerType: string;
   frequencyHours: number | null; frequencyMonths: number | null; nextDueDate: string | Date | null; nextDueHours: number | null;
   executionStatus?: string | null; spares?: Array<{ spareId?: string | null; quantity?: number | null }> | null;
@@ -119,7 +120,8 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
   const asset = (await getTenantAsset(session, id)) as unknown as AssetForPdf;
   const [wos, plans, defects, samplesRes] = await Promise.all([
     listTenantWorkOrders(session, { assetId: asset.id }) as unknown as Promise<WoRow[]>,
-    listTenantMaintenancePlans(session, { assetId: asset.id }) as unknown as Promise<PlanRow[]>,
+    // Incluye el checklist consolidado que revisa al equipo (rutina general).
+    listTenantMaintenancePlans(session, { assetId: asset.id, includeCovering: true }) as unknown as Promise<PlanRow[]>,
     listDefects(session, { assetId: asset.id }) as unknown as Promise<DefectRow[]>,
     listFluidSamples(session, { assetId: asset.id }) as unknown as Promise<{ items: SampleRow[] }>,
   ]);
@@ -519,7 +521,7 @@ export async function buildAssetPdf(session: TenantAccessSession, id: string): P
             hot: p.executionStatus === "OVERDUE" || p.executionStatus === "DUE",
             cells: [
               { pill: [st[0], st[1], st[2]] },
-              { text: txt(p.title), bold: true, sub: p.taskCode, subMono: true },
+              { text: p.assetId === asset.id ? txt(p.title) : `${txt(p.title)} (rutina general)`, bold: true, sub: p.taskCode, subMono: true },
               { text: p.taskType === "INSPECTION" ? "Inspección" : "Mantenimiento" },
               { text: freqText(p) },
               { text: nx.text, sub: nx.sub, subColor: nx.subColor, color: nx.sub ? INK : GRAY },

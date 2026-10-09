@@ -12,6 +12,7 @@ import { loadCurrentHoursNumberByAsset, loadCurrentHoursForAsset } from "../asse
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "../work-orders/wo-inspection-flow";
 import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
 import { resolveWoFormDefaults, maintenanceKindFromPlans } from "../work-orders/wo-form-defaults";
+import { listCoveredAssetsByPlan, replaceCoveredAssets, resolveCoveredAssetIds } from "./plan-coverage";
 
 /**
  * ISM 10.1 — origen normativo de la tarea. Mismo enum que usan los ítems de
@@ -35,11 +36,17 @@ export interface MaintenancePlanListFilters {
   executionStatus?: string | null;
   taskMasterId?: string | null;
   assetId?: string | null;
+  /** Con assetId: suma las tareas que REVISAN al equipo sin ser suyas (checklist
+   *  consolidado, ver plan-coverage). Opcional para no cambiar a los que filtran
+   *  por equipo principal (Seguimiento, alta de OT, filtro de Planes). */
+  includeCovering?: boolean | null;
 }
 
 export interface CreateMaintenancePlanInput {
   vesselCode: string;
   assetId: string;
+  /** Equipos que la tarea revisa además del principal (mismo buque). */
+  coveredAssetIds?: string[] | null;
   /** Leave empty to auto-generate. Format: {VESSEL}-{SFI}-{SEQ} or {VESSEL}-PM-{SEQ}. */
   taskCode?: string | null;
   title: string;
@@ -112,6 +119,8 @@ export interface UpdateMaintenancePlanInput {
   /** ISM 10.1 — de qué regla nace la tarea. Ver PlanCriteriaSource. */
   criteriaSource?: PlanCriteriaSource | null;
   assetId?: string;
+  /** Equipos que la tarea revisa además del principal. undefined = no se toca. */
+  coveredAssetIds?: string[] | null;
   taskCode?: string;
   title?: string;
   description?: string | null;
@@ -763,7 +772,14 @@ export async function listTenantMaintenancePlans(
   else if (filters.triggerTypeNot) where.triggerType = { not: filters.triggerTypeNot };
   if (filters.executionStatus) where.executionStatus = filters.executionStatus;
   if (filters.taskMasterId) where.taskMasterId = filters.taskMasterId;
-  if (assetFilterIds.length > 0) where.assetId = assetFilterIds.length === 1 ? assetFilterIds[0] : { in: assetFilterIds };
+  if (assetFilterIds.length > 0) {
+    const assetMatch = assetFilterIds.length === 1 ? assetFilterIds[0] : { in: assetFilterIds };
+    if (filters.includeCovering) {
+      where.OR = [{ assetId: assetMatch }, { coveredAssets: { some: { assetId: assetMatch } } }];
+    } else {
+      where.assetId = assetMatch;
+    }
+  }
 
   // Omit heavy AI-generated text fields from the list response — they are
   // refetched on demand via getTenantMaintenancePlan when the user opens a row.
@@ -783,8 +799,8 @@ export async function listTenantMaintenancePlans(
   const planIds = plans.map((p) => p.id);
   const assetIds = [...new Set(plans.map((p) => p.assetId))];
 
-  // Fetch asset names, current hours, and active WO codes in parallel
-  const [assetRows, assetCurrentHoursMap, activeWos] = await Promise.all([
+  // Fetch asset names, current hours, active WO codes and covered assets in parallel
+  const [assetRows, assetCurrentHoursMap, activeWos, coveredAssetsMap] = await Promise.all([
     assetIds.length > 0
       ? (prismaRaw as unknown as { asset: { findMany: (args: unknown) => Promise<{ id: string; name: string | null }[]> } }).asset.findMany({
           where: { id: { in: assetIds }, tenantId },
@@ -810,6 +826,7 @@ export async function listTenantMaintenancePlans(
           orderBy: { createdAt: "desc" as const },
         })
       : Promise.resolve([] as { maintenancePlanId: string; workOrder: { workOrderCode: string; status: string; aprobadoAt: Date | null; autorizadoAt: Date | null } | null }[]),
+    listCoveredAssetsByPlan(prismaRaw, tenantId, planIds),
   ]);
 
   const assetNameMap = new Map(assetRows.map((a) => [a.id, a.name ?? null]));
@@ -866,6 +883,8 @@ export async function listTenantMaintenancePlans(
     return {
       ...p,
       assetName: assetNameMap.get(p.assetId) ?? null,
+      // Equipos que la tarea revisa además del principal (checklist consolidado).
+      coveredAssets: coveredAssetsMap.get(p.id) ?? [],
       assetCurrentHours: currentHours,
       activeWorkOrderCode: activeWoMap.get(p.id) ?? null,
       activeWorkOrderSign: activeWoSignMap.get(p.id) ?? null,
@@ -1080,7 +1099,9 @@ export async function getTenantMaintenancePlan(session: TenantAccessSession, id:
   const providerName = recProviderId ? (nameMap.get(recProviderId) ?? null) : null;
   const providerRequestsResolved = requests.map((r) => ({ ...r, providerName: nameMap.get(r.providerId) ?? null }));
 
-  return { ...record, providerName, providerRequests: providerRequestsResolved, workLogs };
+  const coveredAssets = (await listCoveredAssetsByPlan(prismaRaw, tenantId, [record.id])).get(record.id) ?? [];
+
+  return { ...record, providerName, providerRequests: providerRequestsResolved, workLogs, coveredAssets };
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,6 +1203,10 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
     }
   }
 
+  const coveredAssetIds = payload.coveredAssetIds
+    ? await resolveCoveredAssetIds(prismaRaw, { tenantId, vesselCode, mainAssetId: assetId, ids: payload.coveredAssetIds })
+    : [];
+
   // Auto-generate taskCode if not provided
   const sfiGroupNumber = normalizeOptionalNumber(payload.sfiGroupNumber, "sfiGroupNumber");
   const resolvedTaskCode = payload.taskCode?.trim()
@@ -1261,13 +1286,19 @@ export async function createTenantMaintenancePlan(session: TenantAccessSession, 
 
   try {
     const created = await prisma.maintenancePlan.create({ data });
+    if (coveredAssetIds.length > 0) {
+      await replaceCoveredAssets(prismaRaw, { tenantId, planId: created.id, assetIds: coveredAssetIds, userId: session.user.id });
+    }
     void publishAudit(prismaRaw, {
       tenantId: created.tenantId,
       actorUserId: session.user.id,
       action: "MaintenancePlan.created",
       entityType: "MaintenancePlan",
       entityId: created.id,
-      metadata: { title: created.title, taskCode: created.taskCode, vesselCode: created.vesselCode },
+      metadata: {
+        title: created.title, taskCode: created.taskCode, vesselCode: created.vesselCode,
+        ...(coveredAssetIds.length > 0 ? { coveredAssets: { added: coveredAssetIds, removed: [] } } : {}),
+      },
     });
     return created;
   } catch (error: unknown) {
@@ -1335,6 +1366,14 @@ export async function updateTenantMaintenancePlan(
     }
     data.assetId = assetId;
   }
+  // Equipos que revisa: se valida ANTES de escribir nada (mismo buque, sin el
+  // principal). undefined = el cliente no los manda (Vista Planilla) y no se tocan.
+  const mainAssetAfter = (data.assetId as string | undefined) ?? current.assetId;
+  const coveredAssetIdsAfter = payload.coveredAssetIds !== undefined
+    ? await resolveCoveredAssetIds(prismaRaw, {
+        tenantId: current.tenantId, vesselCode: current.vesselCode, mainAssetId: mainAssetAfter, ids: payload.coveredAssetIds ?? [],
+      })
+    : null;
   if (payload.taskCode !== undefined) data.taskCode = normalizeRequiredText(payload.taskCode, "taskCode").toUpperCase();
   if (payload.title !== undefined) data.title = normalizeRequiredText(payload.title, "title");
   if (payload.description !== undefined) data.description = normalizeOptionalText(payload.description);
@@ -1459,13 +1498,29 @@ export async function updateTenantMaintenancePlan(
       executedAt: updated.lastExecutionDate, nextDueDate: updated.nextDueDate, actorUserId: session.user.id,
     });
   }
+  // Si el equipo principal pasó a ser uno de los cubiertos, deja de figurar como
+  // cubierto (sería el mismo equipo dos veces).
+  const coveredChange = coveredAssetIdsAfter
+    ? await replaceCoveredAssets(prismaRaw, {
+        tenantId: current.tenantId, planId: current.id, assetIds: coveredAssetIdsAfter, userId: session.user.id,
+      })
+    : data.assetId
+      ? await replaceCoveredAssets(prismaRaw, {
+          tenantId: current.tenantId, planId: current.id,
+          assetIds: current.coveredAssets.map(a => a.id).filter(id => id !== mainAssetAfter),
+          userId: session.user.id,
+        })
+      : null;
   void publishAudit(prismaRaw, {
     tenantId: current.tenantId,
     actorUserId: session.user.id,
     action: "MaintenancePlan.updated",
     entityType: "MaintenancePlan",
     entityId: current.id,
-    metadata: { title: current.title, taskCode: current.taskCode, vesselCode: current.vesselCode },
+    metadata: {
+      title: current.title, taskCode: current.taskCode, vesselCode: current.vesselCode,
+      ...(coveredChange && (coveredChange.added.length > 0 || coveredChange.removed.length > 0) ? { coveredAssets: coveredChange } : {}),
+    },
   });
 
   // El semáforo (vencido / por vencer / al día) NO se lee de la columna: se

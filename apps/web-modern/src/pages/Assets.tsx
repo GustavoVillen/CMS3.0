@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  AlertOctagon, AlertTriangle, CalendarCheck, CalendarPlus, CalendarX, ChevronRight, Clock, FileDown, FileMinus, FileSpreadsheet, FlaskConical, Gauge, LayoutGrid, List, ListTree,
+  AlertOctagon, AlertTriangle, CalendarCheck, CalendarPlus, CalendarX, ChevronRight, Clock, FileDown, FileMinus, FileSpreadsheet, FlaskConical, Gauge, LayoutGrid, List, ListChecks, ListTree,
   Loader2, Package, Plus, PowerOff, Save, Search, Settings, ShieldAlert, Ship, Sparkles, Trash2, X,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -601,6 +601,27 @@ function fmtPlanFreq(plan: MaintenancePlan): string {
   return tt;
 }
 
+// Rutina = tarea de OTRO equipo que revisa a éste (checklist semanal/mensual
+// consolidado, "Equipos que revisa" en la tarea). Se nombra por la más seguida.
+const ROUTINE_KINDS = ["week", "month", "quarter", "semester", "year", "other"] as const;
+type RoutinePlan = { triggerType: string; frequencyMonths?: number | null };
+function routineKind(p: RoutinePlan): typeof ROUTINE_KINDS[number] {
+  if (p.triggerType === "WEEK" && (p.frequencyMonths ?? 1) === 1) return "week";
+  if (p.triggerType === "MONTHS" || p.triggerType === "CALENDAR") {
+    switch (p.frequencyMonths) {
+      case 1: return "month";
+      case 3: return "quarter";
+      case 6: return "semester";
+      case 12: return "year";
+    }
+  }
+  return "other";
+}
+function routineLabelKey(plans: RoutinePlan[]): TranslationKey {
+  const best = plans.map(routineKind).sort((a, b) => ROUTINE_KINDS.indexOf(a) - ROUTINE_KINDS.indexOf(b))[0] ?? "other";
+  return `asset.v23.inRoutine.${best}` as TranslationKey;
+}
+
 function fmtPlanNextDue(plan: MaintenancePlan): string {
   if (plan.nextDueHours != null) return `${plan.nextDueHours.toLocaleString()} h`;
   if (plan.nextDueDate) return fmtHistoryDate(plan.nextDueDate);
@@ -625,10 +646,11 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset; newRequestKey?: number; on
   const canManage = can("asset.manage");
 
   const { data, loading, error, reload } = useFetch<{ items: MaintenancePlan[] }>(
-    `/app/pms/maintenance-plans?assetId=${encodeURIComponent(asset.id)}`,
+    `/app/pms/maintenance-plans?assetId=${encodeURIComponent(asset.id)}&includeCovering=1`,
     [asset.id],
   );
-  const items = useMemo(() => {
+  // Propias arriba; abajo, las rutinas de otro equipo que también lo revisan.
+  const [items, routines] = useMemo(() => {
     const raw = data?.items ?? [];
     const freqKey = (p: MaintenancePlan): number => {
       const tt = p.triggerType;
@@ -638,8 +660,12 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset; newRequestKey?: number; on
       if (tt === "WEEK" && p.frequencyMonths) return p.frequencyMonths * 168;
       return Infinity;
     };
-    return [...raw].sort((a, b) => freqKey(a) - freqKey(b));
-  }, [data]);
+    const sorted = [...raw].sort((a, b) => freqKey(a) - freqKey(b));
+    return [
+      sorted.filter(p => p.assetId === asset.id),
+      sorted.filter(p => p.assetId !== asset.id && p.status !== "INACTIVE"),
+    ];
+  }, [data, asset.id]);
 
   // undefined = cerrado | null = nueva tarea | objeto = edición
   const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null | undefined>(undefined);
@@ -665,6 +691,42 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset; newRequestKey?: number; on
     }
   }, []);
 
+  const planTable = (rows: MaintenancePlan[]) => (
+    <div className="overflow-x-auto rounded-xl border border-fg/10">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-fg/5 text-text-industrial/50">
+            <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("mp.taskCode")}</th>
+            <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("mp.taskType")}</th>
+            <th className="text-left font-semibold px-3 py-2">{t("col.name")}</th>
+            <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.plans.col.freq")}</th>
+            <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.plans.col.nextDue")}</th>
+            <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("col.status")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(plan => (
+            <tr
+              key={plan.id}
+              onClick={() => { void openPlan(plan); }}
+              className="border-t border-fg/5 cursor-pointer hover:bg-fg/5 transition-colors"
+              title={t("asset.plans.openTask")}
+            >
+              <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">
+                {loadingDetailId === plan.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : plan.taskCode}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap"><PlanTaskTypeBadge type={plan.taskType} /></td>
+              <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{plan.title}</span></td>
+              <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtPlanFreq(plan)}</td>
+              <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtPlanNextDue(plan)}</td>
+              <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={plan.executionStatus} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className="space-y-2 pt-2 border-t border-fg/10">
       <div className="flex items-center justify-between">
@@ -683,42 +745,21 @@ const AssetMaintenancePlans: React.FC<{ asset: Asset; newRequestKey?: number; on
         <div className="flex items-center gap-2 text-xs text-text-industrial/60"><Loader2 className="w-4 h-4 animate-spin text-accent" /></div>
       ) : error ? (
         <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{t("asset.plans.loadError")}</p>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && routines.length === 0 ? (
         <p className="text-xs text-text-industrial/50 bg-fg/3 border border-fg/8 rounded-xl px-3 py-3">{t("asset.plans.empty")}</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-fg/10">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-fg/5 text-text-industrial/50">
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("mp.taskCode")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("mp.taskType")}</th>
-                <th className="text-left font-semibold px-3 py-2">{t("col.name")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.plans.col.freq")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("asset.plans.col.nextDue")}</th>
-                <th className="text-left font-semibold px-3 py-2 whitespace-nowrap">{t("col.status")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(plan => (
-                <tr
-                  key={plan.id}
-                  onClick={() => { void openPlan(plan); }}
-                  className="border-t border-fg/5 cursor-pointer hover:bg-fg/5 transition-colors"
-                  title={t("asset.plans.openTask")}
-                >
-                  <td className="px-3 py-2 font-mono font-bold text-accent whitespace-nowrap">
-                    {loadingDetailId === plan.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : plan.taskCode}
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap"><PlanTaskTypeBadge type={plan.taskType} /></td>
-                  <td className="px-3 py-2 text-text-industrial/80"><span className="line-clamp-1">{plan.title}</span></td>
-                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtPlanFreq(plan)}</td>
-                  <td className="px-3 py-2 text-text-industrial/60 whitespace-nowrap">{fmtPlanNextDue(plan)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap"><StatusBadge status={plan.executionStatus} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {items.length > 0 && planTable(items)}
+          {routines.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <h4 className="flex items-center gap-1.5 text-[11px] font-semibold text-text-industrial/60">
+                <ListChecks className="w-3.5 h-3.5" /> {t("asset.plans.coveringTitle")}
+              </h4>
+              <p className="text-[11px] text-text-industrial/45">{t("asset.plans.coveringHint")}</p>
+              {planTable(routines)}
+            </div>
+          )}
+        </>
       )}
 
       {editingPlan !== undefined && (
@@ -862,10 +903,12 @@ const AssetModal: React.FC<AssetModalProps> = ({
   }, [isSafetyCritical, isStandby]);
 
   // Tareas del equipo, para elegir cuál es la prueba periódica. Sólo se piden
-  // cuando hacen falta: equipo ya existente marcado como de reserva.
+  // cuando hacen falta: equipo ya existente marcado como de reserva. Incluye la
+  // rutina de otro equipo que lo revisa (la motobomba portátil se prueba en el
+  // checklist mensual).
   const standbyPlansFetch = useFetch<{ items: MaintenancePlan[] }>(
     isEdit && initial?.id && isSafetyCritical && isStandby
-      ? `/app/pms/maintenance-plans?assetId=${encodeURIComponent(initial.id)}`
+      ? `/app/pms/maintenance-plans?assetId=${encodeURIComponent(initial.id)}&includeCovering=1`
       : null,
     [initial?.id, isEdit, isSafetyCritical, isStandby],
   );
@@ -1207,10 +1250,12 @@ const AssetModal: React.FC<AssetModalProps> = ({
   // Nexos del equipo: tareas (para el aviso de "sin plan" y los repuestos),
   // defectos abiertos y la última muestra de fluidos. Sólo en edición.
   const [plansNewKey, setPlansNewKey] = useState(0);
-  const relPlans = useFetch<{ items: MaintenancePlan[] }>(initial?.id ? `/app/pms/maintenance-plans?assetId=${encodeURIComponent(initial.id)}` : null, [initial?.id]);
+  const relPlans = useFetch<{ items: MaintenancePlan[] }>(initial?.id ? `/app/pms/maintenance-plans?assetId=${encodeURIComponent(initial.id)}&includeCovering=1` : null, [initial?.id]);
   const relDefects = useFetch<{ items: AssetDefectLite[] }>(initial?.id ? `/app/pms/defects?assetId=${encodeURIComponent(initial.id)}` : null, [initial?.id]);
   const relFluids = useFetch<{ items: AssetFluidLite[] }>(initial?.id ? `/app/fluid-analyses?assetId=${encodeURIComponent(initial.id)}` : null, [initial?.id]);
-  const activePlans = useMemo(() => (relPlans.data?.items ?? []).filter(p => p.status !== "INACTIVE"), [relPlans.data]);
+  // Propias del equipo vs. rutinas de otro equipo que lo revisan (checklist consolidado).
+  const activePlans = useMemo(() => (relPlans.data?.items ?? []).filter(p => p.status !== "INACTIVE" && p.assetId === initial?.id), [relPlans.data, initial?.id]);
+  const routinePlans = useMemo(() => (relPlans.data?.items ?? []).filter(p => p.status !== "INACTIVE" && p.assetId !== initial?.id), [relPlans.data, initial?.id]);
   const overduePlans = activePlans.filter(p => p.status === "OVERDUE").length;
   const openDefects = (relDefects.data?.items ?? []).filter(d => d.status !== "RESOLVED" && d.status !== "CLOSED");
   const lastSample = [...(relFluids.data?.items ?? [])].sort((a, b) => b.sampledAt.localeCompare(a.sampledAt))[0] ?? null;
@@ -1229,7 +1274,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
     }
     return [...m.values()];
   }, [activePlans]);
-  const noPlanGap = isEdit && !relPlans.loading && relPlans.data != null && activePlans.length === 0 && criticality !== "C" && !planNotRequired;
+  const noPlanGap = isEdit && !relPlans.loading && relPlans.data != null && activePlans.length === 0 && routinePlans.length === 0 && criticality !== "C" && !planNotRequired;
   const canManageAsset = can("asset.manage");
   // Obligatorios (preview V24): lo mismo que valida onSave.
   const missReq = {
@@ -1522,11 +1567,14 @@ const AssetModal: React.FC<AssetModalProps> = ({
               <div className="space-y-3 min-w-0">
                 {box(<CalendarCheck className="w-4 h-4" />, t("asset.plans.title"),
                   relPlans.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> : null,
-                  planNotRequired && activePlans.length === 0 ? empty(t("asset.v23.planExempt"))
-                    : activePlans.length === 0 ? empty(t("asset.plans.empty"))
+                  planNotRequired && activePlans.length === 0 && routinePlans.length === 0 ? empty(t("asset.v23.planExempt"))
+                    : activePlans.length === 0 && routinePlans.length === 0 ? empty(t("asset.plans.empty"))
                     : (
                       <button type="button" className={rel} onClick={() => document.getElementById("asset-plans")?.scrollIntoView({ behavior: "smooth" })}>
-                        <b className="text-fg">{t("asset.v23.tasksN").replace("{n}", String(activePlans.length))}</b>
+                        {activePlans.length > 0
+                          ? <b className="text-fg">{t("asset.v23.tasksN").replace("{n}", String(activePlans.length))}</b>
+                          : <b className="text-fg">{t(routineLabelKey(routinePlans))}</b>}
+                        {activePlans.length > 0 && routinePlans.length > 0 && <span className="text-text-industrial/60">{t("asset.v23.plusRoutine")}</span>}
                         {overduePlans > 0 && <span className="font-bold text-red-700 dark:text-red-400">{t("asset.v23.overdueN").replace("{n}", String(overduePlans))}</span>}
                         <ChevronRight className="ml-auto w-3.5 h-3.5 text-text-industrial/40" />
                       </button>
@@ -1731,16 +1779,26 @@ export const AssetsPage: React.FC = () => {
   const { data: tenantAssetsData, reload: reloadTenantAssets } = useFetch<ListResponse>("/app/pms/assets", ["/app/pms/assets"]);
   // ── Listado (preview V23) ──────────────────────────────────────────────────
   // Plan y defectos por equipo: se cargan aparte y no frenan la lista.
-  const plansFetch = useFetch<{ items: { id: string; assetId: string | null; status: string }[] }>("/app/pms/maintenance-plans", []);
+  const plansFetch = useFetch<{ items: { id: string; assetId: string | null; status: string; taskCode: string; title: string; triggerType: string; frequencyMonths: number | null; coveredAssets?: { id: string }[] }[] }>("/app/pms/maintenance-plans", []);
   const defectsFetch = useFetch<{ items: AssetDefectLite[] }>("/app/pms/defects", []);
   const linksLoading = plansFetch.loading || defectsFetch.loading;
+  // Por equipo: tareas propias activas y rutinas de otro equipo que lo revisan
+  // (checklist consolidado con "Equipos que revisa"). Las dos cuentan como plan.
   const planStats = useMemo(() => {
-    const m = new Map<string, { active: number; overdue: number }>();
+    type PlanLite = NonNullable<typeof plansFetch.data>["items"][number];
+    const m = new Map<string, { active: number; overdue: number; routines: PlanLite[] }>();
+    const statsOf = (assetId: string) => {
+      let cur = m.get(assetId);
+      if (!cur) { cur = { active: 0, overdue: 0, routines: [] }; m.set(assetId, cur); }
+      return cur;
+    };
     for (const p of plansFetch.data?.items ?? []) {
-      if (!p.assetId || p.status === "INACTIVE") continue;
-      const cur = m.get(p.assetId) ?? { active: 0, overdue: 0 };
-      cur.active += 1; if (p.status === "OVERDUE") cur.overdue += 1;
-      m.set(p.assetId, cur);
+      if (p.status === "INACTIVE") continue;
+      if (p.assetId) {
+        const cur = statsOf(p.assetId);
+        cur.active += 1; if (p.status === "OVERDUE") cur.overdue += 1;
+      }
+      for (const c of p.coveredAssets ?? []) statsOf(c.id).routines.push(p);
     }
     return m;
   }, [plansFetch.data]);
@@ -1801,7 +1859,10 @@ export const AssetsPage: React.FC = () => {
   }, [reload, reloadTenantAssets]);
 
   /** Crítico (A/B) sin tareas activas y sin la exención escrita: brecha de cobertura. */
-  const isNoPlan = useCallback((a: Asset) => a.criticality !== "C" && !a.planNotRequired && !(planStats.get(a.id)?.active), [planStats]);
+  const isNoPlan = useCallback((a: Asset) => {
+    const s = planStats.get(a.id);
+    return a.criticality !== "C" && !a.planNotRequired && !s?.active && !s?.routines.length;
+  }, [planStats]);
 
   const tmsaItems = useMemo(() => applyTmsaFilter(data?.items ?? null, tmsaFilter, a => a.id), [data, tmsaFilter]);
   const filteredAssets = useMemo(() => {
@@ -1871,13 +1932,21 @@ export const AssetsPage: React.FC = () => {
   const planCell = useCallback((a: Asset) => {
     if (linksLoading) return <Loader2 className="w-3.5 h-3.5 animate-spin text-text-industrial/30" />;
     const s = planStats.get(a.id);
+    const routines = s?.routines ?? [];
+    const routineTip = routines.length > 0
+      ? `${t("asset.v23.reviewedIn")}\n${routines.map(r => `${r.taskCode} · ${r.title}`).join("\n")}`
+      : undefined;
     if (s?.active) {
       return (
         <div className="whitespace-nowrap">
           <span className="inline-flex items-center gap-1 text-[11.5px] font-bold text-emerald-700 dark:text-emerald-400"><CalendarCheck className="w-3 h-3" />{t("asset.v23.tasksN").replace("{n}", String(s.active))}</span>
+          {routines.length > 0 && <div title={routineTip} className="text-[10.5px] font-semibold text-emerald-700/75 dark:text-emerald-400/75">{t("asset.v23.plusRoutine")}</div>}
           {s.overdue > 0 && <div className="text-[10.5px] font-bold text-red-700 dark:text-red-400">{t("asset.v23.overdueN").replace("{n}", String(s.overdue))}</div>}
         </div>
       );
+    }
+    if (routines.length > 0) {
+      return <span title={routineTip} className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold text-emerald-700 dark:text-emerald-400"><ListChecks className="w-3 h-3" />{t(routineLabelKey(routines))}</span>;
     }
     if (a.planNotRequired) return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] text-text-industrial/55"><FileMinus className="w-3 h-3" />{t("asset.v23.exempt")}</span>;
     if (a.criticality === "C") return <span className="text-[11.5px] text-text-industrial/40">{t("asset.v23.noPlanC")}</span>;
@@ -1919,7 +1988,7 @@ export const AssetsPage: React.FC = () => {
       render: (row: Asset) => { const tab = sfiTabOfCode(row.sfiCode); return <span className="text-xs text-text-industrial/70 leading-snug">{tab === "NONE" ? "—" : `${tab} · ${t(`sfi.g.${tab}` as TranslationKey)}`}</span>; },
     },
     { key: "criticality", header: t("col.criticality"), sortValue: (r: Asset) => r.criticality, filterValue: (r: Asset) => r.criticality, render: (row: Asset) => <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10.5px] font-black ${ASSET_CRIT_CHIP[row.criticality] ?? ASSET_CRIT_CHIP.C}`}>{row.criticality}</span> },
-    { key: "plan", header: t("asset.plans.title"), sortValue: (r: Asset) => planStats.get(r.id)?.active ?? 0, render: planCell },
+    { key: "plan", header: t("asset.plans.title"), sortValue: (r: Asset) => { const s = planStats.get(r.id); return (s?.active ?? 0) + (s?.routines.length ? 0.5 : 0); }, render: planCell },
     { key: "currentHours", header: t("asset.v23.col.hours"), sortValue: (r: Asset) => r.currentHours ?? -1, render: (row: Asset) => row.currentHours != null ? <span className="text-xs whitespace-nowrap">{Number(row.currentHours).toLocaleString()} h</span> : <span className="text-text-industrial/30">—</span> },
     {
       key: "defects", header: t("asset.v23.col.defects"), sortValue: (r: Asset) => openDefectCount.get(r.id) ?? 0,

@@ -26,6 +26,7 @@ interface Props {
  */
 interface PlanRow extends PlanForStatus {
   id: string;
+  assetId: string;
   taskCode: string;
   title: string;
   nextDueDate: string | null;
@@ -67,7 +68,8 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
     setPlans([]);
     Promise.all([
       api.get<{ name: string | null; assetCode: string; status?: string | null }>(`/app/pms/assets/${encodeURIComponent(assetId)}`),
-      api.get<{ items: PlanRow[] }>(`/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=200`),
+      // Incluye la rutina de otro equipo que también lo revisa (checklist consolidado).
+      api.get<{ items: PlanRow[] }>(`/app/pms/maintenance-plans?assetId=${encodeURIComponent(assetId)}&status=ACTIVE&limit=200&includeCovering=1`),
     ])
       .then(([asset, plansRes]) => {
         if (cancelled) return;
@@ -131,7 +133,10 @@ export const EquipmentMaintenanceStatusModal: React.FC<Props> = ({ assetId, onCl
             >
               <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${style.chip.split(" ")[0]}`} />
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-mono text-text-industrial/40">{p.taskCode}</p>
+                <p className="text-[10px] font-mono text-text-industrial/40">
+                  {p.taskCode}
+                  {p.assetId !== assetId && <span className="ml-1.5 font-sans text-text-industrial/55">· {t("asset.plans.routineTag")}</span>}
+                </p>
                 <p className="text-xs text-fg/85 truncate">{p.title}</p>
               </div>
               <div className="shrink-0 text-right">

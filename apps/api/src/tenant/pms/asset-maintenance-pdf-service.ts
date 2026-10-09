@@ -91,7 +91,9 @@ export async function buildAssetMaintenanceHistoryPdf(
   }>;
   // Plan vigente del equipo: sólo los ACTIVE, que son los que la tripulación
   // tiene que ejecutar. El executionStatus ya viene derivado por el service.
-  const activePlans = await listTenantMaintenancePlans(session, { assetId, status: "ACTIVE" }) as unknown as Array<{
+  // Incluye el checklist consolidado que revisa al equipo (rutina general).
+  const activePlans = await listTenantMaintenancePlans(session, { assetId, status: "ACTIVE", includeCovering: true }) as unknown as Array<{
+    assetId: string;
     taskCode: string; title: string; executionStatus: string; triggerType: string;
     frequencyMonths: number | null; frequencyHours: number | null;
     nextDueDate: string | Date | null; nextDueHours: number | null;
@@ -132,7 +134,7 @@ export async function buildAssetMaintenanceHistoryPdf(
     const nextDueIso = toIso(p.nextDueDate);
     planBuckets[bucket].push({
       taskCode: p.taskCode,
-      title: p.title,
+      title: p.assetId === assetId ? p.title : `${p.title} (rutina general)`,
       frequencyText: frequencyText(p),
       nextDueText: nextDueIso
         ? fmt(nextDueIso)

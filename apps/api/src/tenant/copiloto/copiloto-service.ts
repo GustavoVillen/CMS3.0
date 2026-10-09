@@ -850,7 +850,6 @@ async function executeCopilotTool(
       };
       const scopeResult = applyVesselWhereScope(where, input.vesselCode, scope);
       if (!scopeResult.ok) return scopeResult.reason;
-      if (input.assetId) where.assetId = input.assetId;
       // B-02: `status` es el alta/baja del plan. NO dice si esta vencido: la
       // columna quedo congelada en ACTIVE para toda la flota. El vencimiento se
       // resuelve abajo con resolvePlanDueStatus.
@@ -878,6 +877,13 @@ async function executeCopilotTool(
       // Muestreo de fluidos (análisis de aceite/lubricante/refrigerante) está
       // codificado en samplingFluidType, no siempre en el texto del plan.
       if (input.samplingFluidType) where.samplingFluidType = input.samplingFluidType;
+      // Planes del equipo: los suyos y el checklist consolidado que lo revisa
+      // (las luces portátiles se revisan en el mensual de cubierta). Va en AND
+      // porque textSearch usa su propio OR.
+      if (input.assetId) {
+        const byAsset = { OR: [{ assetId: input.assetId }, { coveredAssets: { some: { assetId: input.assetId } } }] };
+        where.AND = [...(Array.isArray(where.AND) ? where.AND : []), byAsset];
+      }
 
       // Cuando se filtra por estado de vencimiento hay que derivarlo fila por
       // fila, asi que no se puede cortar en la base: se trae una ventana amplia
@@ -911,6 +917,8 @@ async function executeCopilotTool(
           // ISM 10.1: de qué regla nace la tarea. Sin esto el copiloto no puede
           // responder qué planes tienen (o les falta) trazabilidad normativa.
           criteriaSource: true,
+          // Equipos que la tarea revisa además del principal (checklist consolidado).
+          coveredAssets: { where: { asset: { deletedAt: null } }, select: { asset: { select: { name: true } } } },
         },
       });
 
@@ -929,7 +937,11 @@ async function executeCopilotTool(
         locale,
       }).slice(0, requested);
 
-      const namedPlans = await attachAssetNames(prisma, tenantId, withStatus as any[]);
+      const namedPlans = (await attachAssetNames(prisma, tenantId, withStatus as any[])).map((p: any) => {
+        const { coveredAssets, ...rest } = p;
+        const names = (coveredAssets ?? []).map((c: any) => c.asset?.name).filter(Boolean);
+        return names.length > 0 ? { ...rest, alsoReviewsEquipment: names } : rest;
+      });
       if (namedPlans.length > 0) return wrapUntrusted(JSON.stringify(namedPlans));
 
       // B-02: nunca afirmar el negativo. Se devuelve QUE se busco, para que el

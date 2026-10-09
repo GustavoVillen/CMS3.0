@@ -207,7 +207,10 @@ export async function generateAssetHealthReport(session: TenantAccessSession, as
 
   // ── Datos ──
   // Planes: el service deriva el executionStatus vigente (el guardado se queda viejo).
-  const plans = await listTenantMaintenancePlans(session, { assetId, status: "ACTIVE" }) as unknown as Array<{
+  // Incluye el checklist consolidado que revisa al equipo (rutina general); sus OT
+  // no se suman: una rutina semanal llenaría el historial de este equipo.
+  const plans = await listTenantMaintenancePlans(session, { assetId, status: "ACTIVE", includeCovering: true }) as unknown as Array<{
+    assetId: string;
     taskCode: string; title: string; taskType: string | null; triggerType: string | null;
     frequencyMonths: number | null; frequencyHours: number | null; executionStatus: string | null;
     nextDueDate: string | Date | null; nextDueHours: number | null;
@@ -348,6 +351,7 @@ export async function generateAssetHealthReport(session: TenantAccessSession, as
     metricas: metrics,
     planDeMantenimiento: plans.map(p => ({
       tarea: p.taskCode, titulo: p.title, tipo: p.taskType, disparo: p.triggerType,
+      rutinaGeneral: p.assetId !== assetId,
       frecuenciaMeses: p.frequencyMonths, frecuenciaHoras: p.frequencyHours,
       estado: p.executionStatus, proximaFecha: d(p.nextDueDate), proximaHoras: p.nextDueHours,
       ultimaEjecucion: d(p.lastExecutionDate), ultimaEjecucionHoras: p.lastExecutionHours,

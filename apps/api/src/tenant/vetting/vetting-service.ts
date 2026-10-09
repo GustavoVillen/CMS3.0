@@ -28,6 +28,7 @@ import { log } from "../../common/logger";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { getDrillsMatrix, type DrillMatrixCell } from "../drills/drills-service";
 import { isVesselCrewed } from "../ai/vessel-ai-context";
+import { loadPlanAssetOwners } from "../maintenance-plans/plan-coverage";
 import { classCycleLevel, isClassCertificateName, loadClassCycles, type ClassCycleInfo } from "../certificates/class-cycle";
 import { resolveComputedStatus } from "../certificates/certificates-service";
 import {
@@ -180,7 +181,11 @@ interface VesselFacts {
   trbTn: number | null;
 }
 interface AssetRow { id: string; vesselCode: string; assetCode: string; name: string; planNotRequired: boolean; criticality: string; status: string }
-interface PlanRow { id: string; assetId: string; vesselCode: string; taskCode: string; title: string; executionStatus: string | null; nextDueDate: Date | null }
+interface PlanRow {
+  id: string; assetId: string; vesselCode: string; taskCode: string; title: string; executionStatus: string | null; nextDueDate: Date | null;
+  /** Equipos que revisa: el propio + los del checklist consolidado (plan-coverage). */
+  reviewedAssetIds?: string[];
+}
 interface DefectRow { id: string; assetId: string; vesselCode: string; defectCode: string; classification: string | null; status: string; severity: string }
 interface CertRow {
   id: string; vesselCode: string; certificateCode: string; name: string; issuingAuthority: string;
@@ -294,6 +299,9 @@ async function loadVettingData(
     safe(() => getDrillsMatrix(session, { vesselCode: requestedVessel }), { cells: [] as DrillMatrixCell[] }, "drillsMatrix"),
   ]);
 
+  const owners = await safe(() => loadPlanAssetOwners(prisma, tenantId, plans), new Map<string, Set<string>>(), "planOwners");
+  for (const pl of plans) pl.reviewedAssetIds = [...(owners.get(pl.id) ?? [pl.assetId])];
+
   const factsMap = new Map(facts.map(f => [f.code, f]));
   const crewed = new Map(facts.map(f => [f.code, isVesselCrewed(f)]));
   const codeSet = new Set(codes);
@@ -372,8 +380,10 @@ function dockShaftStateOf(cert: CertRow, now: Date): "overdue" | "dueSoon" | "ok
 function topicRows(data: VettingData, s: Slice, topic: VettingTopic) {
   const assets = s.assets.filter(a => assetMatchesTopic(topic, a.name, data.crewed.get(a.vesselCode) ?? null));
   const ids = new Set(assets.map(a => a.id));
-  const plans = s.plans.filter(pl => ids.has(pl.assetId));
-  const planned = new Set(plans.map(pl => pl.assetId));
+  // Una tarea entra al tema si revisa alguno de sus equipos (propio o cubierto).
+  const reviewed = (pl: PlanRow) => pl.reviewedAssetIds ?? [pl.assetId];
+  const plans = s.plans.filter(pl => reviewed(pl).some(id => ids.has(id)));
+  const planned = new Set(plans.flatMap(reviewed));
   return {
     assets,
     // Los exentos ("no requiere plan", decisión escrita) no son ni cubiertos ni brecha.

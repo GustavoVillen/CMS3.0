@@ -19,6 +19,7 @@ import { listVesselsInScope } from "../compliance/compliance-service";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import { resolveComputedStatus } from "../certificates/certificates-service";
 import { RouteError } from "../../http/route-error";
+import { assetsCoveredBy, loadPlanAssetOwners } from "../maintenance-plans/plan-coverage";
 
 /** Los paneles de auditoría (TMSA Elemento 4 e ISM Cap. 10) son sólo del
  *  administrador del tenant. Mismo criterio que la ruta /tmsa y /ism del
@@ -268,10 +269,10 @@ async function computeOne(
     drydockSpecs, engineeringAuditRows, assetsPlanNotRequiredRows,
   ] = await Promise.all([
     safe(() => p.asset.count({ where: { ...base } }), 0),
-    // Activos con ≥1 plan activo (distinct assetId).
+    // Activos con ≥1 plan activo (distinct assetId, más los que la tarea revisa).
     safe(
-      () => p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { assetId: true } }) as Promise<Array<{ assetId: string }>>,
-      [] as Array<{ assetId: string }>,
+      () => p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { id: true, assetId: true } }) as Promise<Array<{ id: string; assetId: string }>>,
+      [] as Array<{ id: string; assetId: string }>,
     ),
     safe(() => p.asset.count({ where: { ...base, criticality: "A" } }), 0),
     safe(() => p.asset.count({ where: { ...base, isSafetyCritical: true } }), 0),
@@ -397,7 +398,12 @@ async function computeOne(
     const exempt = new Set(assetsPlanNotRequiredRows.map(a => a.id));
     const assetsExempt = exempt.size;
     const assetsRequiringPlan = Math.max(0, assetsTotal - assetsExempt);
-    const assetsWithPlan = new Set(plans.map(pl => pl.assetId).filter(id => !exempt.has(id))).size;
+    // Un equipo que revisa el checklist consolidado (sin tarea propia) está cubierto.
+    const owners = await safe(
+      () => loadPlanAssetOwners(prisma, tenantId, plans),
+      new Map(plans.map(pl => [pl.id, new Set([pl.assetId])])),
+    );
+    const assetsWithPlan = [...assetsCoveredBy(owners)].filter(id => !exempt.has(id)).length;
     const assetsWithoutPlan = Math.max(0, assetsRequiringPlan - assetsWithPlan);
     const coverage = assetsRequiringPlan === 0 ? 1 : assetsWithPlan / assetsRequiringPlan;
     const status: TmsaStatus =
@@ -866,8 +872,9 @@ export async function getTmsaMetricDetail(
     }
     case "assetsWithPlan":
     case "assetsWithoutPlan": {
-      const plans = await p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { assetId: true } });
-      const ids = [...new Set(plans.map((pl: any) => pl.assetId))];
+      const plans = await p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { id: true, assetId: true } });
+      // Misma regla que la tarjeta 4.1: cuentan también los equipos que la tarea revisa.
+      const ids = [...assetsCoveredBy(await loadPlanAssetOwners(prisma, tenantId, plans))];
       // Los exentos no figuran en ninguna de las dos listas: ni cubiertos ni brecha.
       const where = metric === "assetsWithPlan"
         ? { ...base, id: { in: ids }, planNotRequired: false }

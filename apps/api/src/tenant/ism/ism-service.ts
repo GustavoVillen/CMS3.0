@@ -33,6 +33,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { log } from "../../common/logger";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { requireAuditPanelAccess } from "../tmsa/tmsa-service";
+import { assetsCoveredBy, loadPlanAssetOwners } from "../maintenance-plans/plan-coverage";
 import {
   getTmsaMaintenanceEvidence,
   type TmsaEvidenceMode,
@@ -572,11 +573,16 @@ async function computeOwnGroups(
 
   // ── 10.3 · Fiabilidad del equipo crítico y pruebas periódicas ──────────────
   {
-    const planned = new Set(activePlans.map(pl => pl.assetId));
-    // planId → assetId de los planes ACTIVE: sirve para verificar que la prueba
-    // designada siga viva Y siga siendo del mismo equipo (el puntero del Asset
+    // planId → equipos que revisa (el propio + los que declara el checklist
+    // consolidado), sólo de planes ACTIVE: sirve para verificar que la prueba
+    // designada siga viva Y siga revisando al mismo equipo (el puntero del Asset
     // no tiene FK; ver schema.prisma · Asset.standbyTestPlanId).
-    const activePlanOwner = new Map(activePlans.map(pl => [pl.id, pl.assetId]));
+    const activePlanOwner = await safe(
+      () => loadPlanAssetOwners(prisma, tenantId, activePlans),
+      new Map(activePlans.map(pl => [pl.id, new Set([pl.assetId])])),
+      "activePlanOwners",
+    );
+    const planned = assetsCoveredBy(activePlanOwner);
     const total = safetyCriticalAssets.length;
     const withPlan = safetyCriticalAssets.filter(a => planned.has(a.id)).length;
     const withoutPlan = total - withPlan;
@@ -586,7 +592,7 @@ async function computeOwnGroups(
     // tareas del propio equipo, designada en su ficha.
     const standby = safetyCriticalAssets.filter(a => a.isStandby);
     const hasTest = (a: { id: string; standbyTestPlanId: string | null }) =>
-      !!a.standbyTestPlanId && activePlanOwner.get(a.standbyTestPlanId) === a.id;
+      !!a.standbyTestPlanId && !!activePlanOwner.get(a.standbyTestPlanId)?.has(a.id);
     const standbyTotal = standby.length;
     const standbyWithTest = standby.filter(hasTest).length;
     const standbyWithoutTest = standbyTotal - standbyWithTest;
@@ -857,9 +863,10 @@ export async function getIsmMetricDetail(
         }),
         p.maintenancePlan.findMany({ where: { ...base, status: "ACTIVE" }, select: { id: true, assetId: true }, take: 5000 }),
       ]);
-      const planned = new Set(plans.map((pl: any) => pl.assetId));
-      const activePlanOwner = new Map(plans.map((pl: any) => [pl.id, pl.assetId]));
-      const hasTest = (a: any) => !!a.standbyTestPlanId && activePlanOwner.get(a.standbyTestPlanId) === a.id;
+      // Misma regla que la tarjeta: cuentan los equipos que la tarea revisa.
+      const activePlanOwner = await loadPlanAssetOwners(prisma, tenantId, plans);
+      const planned = assetsCoveredBy(activePlanOwner);
+      const hasTest = (a: any) => !!a.standbyTestPlanId && !!activePlanOwner.get(a.standbyTestPlanId)?.has(a.id);
       const standby = assets.filter((a: any) => a.isStandby);
       const filtered = metric === "ismSafetyCriticalWithPlan" ? assets.filter((a: any) => planned.has(a.id))
         : metric === "ismSafetyCriticalWithoutPlan" ? assets.filter((a: any) => !planned.has(a.id))

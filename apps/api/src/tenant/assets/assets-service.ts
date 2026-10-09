@@ -107,8 +107,10 @@ function assertNotExemptIfSafetyCritical(): never {
   );
 }
 
-/** ISM 10.3 — la prueba periódica de un equipo de reserva es una tarea DEL
- *  equipo. Apuntar a un plan de otro equipo (o inexistente) haría que el panel
+/** ISM 10.3 — la prueba periódica de un equipo de reserva es una tarea que
+ *  REVISA al equipo: una propia, o el checklist consolidado que lo declara entre
+ *  sus "equipos que revisa" (la motobomba portátil se prueba en el mensual).
+ *  Apuntar a un plan que no lo revisa (o inexistente) haría que el panel
  *  muestre como probado algo que nunca se probó. */
 async function assertPlanBelongsToAsset(
   prisma: NonNullable<ReturnType<typeof getPrismaClient>>,
@@ -120,14 +122,17 @@ async function assertPlanBelongsToAsset(
     // No se exige que esté ACTIVE: si el plan se da de baja más adelante, el
     // panel ya lo lee como "sin prueba periódica", y bloquear el guardado del
     // equipo por eso sería una trampa (no se podría ni editar el nombre).
-    where: { id: planId, tenantId, assetId, deletedAt: null },
+    where: {
+      id: planId, tenantId, deletedAt: null,
+      OR: [{ assetId }, { coveredAssets: { some: { assetId } } }],
+    },
     select: { id: true },
   });
   if (!plan) {
     throw new RouteError(
       400,
       "STANDBY_TEST_PLAN_NOT_FOUND",
-      "La tarea elegida como prueba periódica no pertenece a este equipo.",
+      "La tarea elegida como prueba periódica no revisa este equipo.",
     );
   }
 }

@@ -93,6 +93,7 @@ import { AlertDialog } from "../components/AlertDialog";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { PlanHistoryModal } from "../components/PlanHistoryModal";
 import { AssetSearchDropdown } from "../components/AssetSearchDropdown";
+import { CoveredAssetsField, type CoveredAssetRef } from "../components/CoveredAssetsField";
 import { RichTextArea } from "../components/RichTextArea";
 import { RiskMatrix } from "../components/RiskMatrix";
 import {
@@ -120,6 +121,8 @@ export interface MaintenancePlan {
   vesselCode: string;
   assetId: string;
   assetName?: string | null;
+  /** Equipos que la tarea revisa además del principal (checklist consolidado). */
+  coveredAssets?: CoveredAssetRef[];
   activeWorkOrderCode?: string | null;
   deferredWorkOrderCode?: string | null;
   assetCurrentHours?: number | null;
@@ -1297,6 +1300,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
   const [taskCodeAuto, setTaskCodeAuto] = useState(true);
   const [loadingCode, setLoadingCode] = useState(false);
   const [assetId, setAssetId] = useState(plan ? (plan.assetId ?? "") : (defaultAssetId ?? ""));
+  const [coveredAssets, setCoveredAssets] = useState<CoveredAssetRef[]>(plan?.coveredAssets ?? []);
   const [assets, setAssets] = useState<{ id: string; assetCode: string; name: string | null }[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [vessels, setVessels] = useState<{ code: string; name: string }[]>([]);
@@ -1465,7 +1469,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     // limpiarlo dejaba el campo vacío justo cuando ya se sabía cuál era.
     const vesselChanged = prevVesselRef.current !== null && prevVesselRef.current !== vc;
     prevVesselRef.current = vc;
-    if (isNew && !lockAsset && vesselChanged) { setAssetId(""); setAssets([]); }
+    if (isNew && !lockAsset && vesselChanged) { setAssetId(""); setCoveredAssets([]); setAssets([]); }
     if (vesselDebounce.current) clearTimeout(vesselDebounce.current);
     vesselDebounce.current = setTimeout(async () => {
       setLoadingAssets(true);
@@ -1532,6 +1536,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
     lastSyncedPlanIdRef.current = plan.id;
     if (hydratingSamePlan && planDirtyRef.current) return;
     setAssetId(plan.assetId ?? "");
+    setCoveredAssets(plan.coveredAssets ?? []);
     setTaskCode(plan.taskCode ?? "");
     setTaskType(plan.taskType ?? "MAINTENANCE");
     setCriteriaSource(plan.criteriaSource ?? "");
@@ -1854,6 +1859,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         const created = await api.post<{ id: string }>("/app/pms/maintenance-plans", {
           vesselCode: vesselCode.trim().toUpperCase(),
           assetId,
+          coveredAssetIds: coveredAssets.filter(a => a.id !== assetId).map(a => a.id),
           taskCode: taskCode.trim() || undefined,
           taskType,
           criteriaSource: criteriaSource || null,
@@ -1900,6 +1906,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
         const nextDueHoursChanged = canEditMilestones && nextDueTouched && needsHours(triggerType) && nextDueHoursOverride !== String(plan.nextDueHours ?? "");
         await api.patch(`/app/pms/maintenance-plans/${plan.id}`, {
           ...(assetId ? { assetId } : {}),
+          coveredAssetIds: coveredAssets.filter(a => a.id !== assetId).map(a => a.id),
           ...(isAdmin && taskCode.trim() && taskCode.trim() !== plan.taskCode ? { taskCode: taskCode.trim().toUpperCase() } : {}),
           taskType,
           criteriaSource: criteriaSource || null,
@@ -1989,7 +1996,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   // ESC guard
   const planDirty = useDirtyTracker({
-    vesselCode, taskCode, assetId, taskType, criteriaSource, title, description, responsible, department, providerRequests,
+    vesselCode, taskCode, assetId, coveredAssets, taskType, criteriaSource, title, description, responsible, department, providerRequests,
     acceptanceCriteria, loto, sfiGroupNumber,
     riskLevel, riskProbability, riskConsequence, riskAnalysisResult, status, triggerType,
     frequencyMonths, frequencyHours, triggerResultMode,
@@ -2887,6 +2894,18 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                         </GuideField>
                         {sfiGroupField}
                       </div>
+                    )}
+
+                    {/* Equipos que revisa además del principal (checklist consolidado) */}
+                    {(!readOnly || coveredAssets.length > 0) && vesselCode && !loadingAssets && (
+                      <CoveredAssetsField
+                        assets={assets}
+                        value={coveredAssets}
+                        mainAssetId={assetId}
+                        onChange={setCoveredAssets}
+                        disabled={readOnly}
+                        labelCls={fLabelCls}
+                      />
                     )}
 
                     {/* Tipo de tarea + origen del criterio (ISM 10.1) */}

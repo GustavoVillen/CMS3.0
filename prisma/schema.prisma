@@ -1474,6 +1474,8 @@ model Asset {
   parent           Asset?           @relation("AssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
   children         Asset[]          @relation("AssetHierarchy")
   spareLinks       SpareAsset[]
+  // Tareas de OTRO equipo que lo revisan (checklist semanal/mensual consolidado).
+  coveringPlanLinks MaintenancePlanCoveredAsset[]
   inspectionExecs  InspectionExecution[]
   hoursReadings    AssetHoursReading[]
 
@@ -1783,6 +1785,7 @@ model MaintenancePlan {
   workLogs             WorkLog[]
   certificates         Certificate[]
   workOrderLinks       WorkOrderMaintenancePlan[]
+  coveredAssets        MaintenancePlanCoveredAsset[]
 
   @@unique([tenantId, vesselCode, taskCode])
   @@index([tenantId])
@@ -3129,6 +3132,29 @@ model GoodsReceipt {
 /// Equipos donde se usa un repuesto (uno o varios). Lo carga el usuario desde la
 /// ficha del repuesto. `Spare.linkedAssetId` (un solo equipo) queda como estaba
 /// para no tocar lo ya cargado; esta tabla es la asociación real.
+// Equipos que una tarea revisa ADEMÁS de su equipo principal (MaintenancePlan.assetId).
+// Caso típico: el checklist mensual consolidado de cubierta cuelga de un equipo
+// "Inspecciones MENSUALES" pero revisa las balsas, las luces portátiles, el CO2…
+// Esos equipos cuentan como cubiertos por la tarea (listado de equipos, TMSA 4.1,
+// ISM 10.3, vetting) sin partir el checklist en tareas sueltas. Mismo buque que
+// la tarea (se valida al guardar). Las OT de la tarea NO se suman al historial de
+// cada equipo cubierto: la evidencia es la ejecución de la tarea.
+model MaintenancePlanCoveredAsset {
+  id                String          @id @default(cuid())
+  tenantId          String
+  maintenancePlanId String
+  assetId           String
+  createdAt         DateTime        @default(now())
+  createdByUserId   String
+
+  maintenancePlan   MaintenancePlan @relation(fields: [maintenancePlanId], references: [id], onDelete: Cascade)
+  asset             Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([maintenancePlanId, assetId])
+  @@index([tenantId, maintenancePlanId])
+  @@index([tenantId, assetId])
+}
+
 model SpareAsset {
   id              String   @id @default(cuid())
   tenantId        String

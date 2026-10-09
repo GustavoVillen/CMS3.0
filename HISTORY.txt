@@ -1,5 +1,21 @@
 HISTORY.txt
 
+[2026-10-09] Plan: "Equipos que revisa" — el checklist semanal/mensual cubre a sus equipos
+Agent: Claude Opus 5.5
+- Una tarea del plan puede declarar equipos que revisa ademas del principal (tabla nueva
+  MaintenancePlanCoveredAsset, mismo buque, auditado en MaintenancePlan.updated). Campo nuevo en el
+  formulario de la tarea (chips + buscador), editable con plan.manage.
+- Equipos: un equipo cubierto por una rutina ya no figura "Sin plan" ni pide "Armar plan"; muestra
+  "En rutina semanal/mensual/..." y la ficha lista "Se revisa tambien en". Las OT de la rutina NO se
+  suman al historial del equipo (una semanal sumaria 52 por año).
+- Cuentan las rutinas: TMSA 4.1 (tarjeta y detalle), ISM 10.3 (con plan y prueba periodica de
+  reserva), vetting por tema, ficha PDF y PDF de mantenimiento ("(rutina general)"), informe de salud
+  y copiloto (query_maintenance_plans por equipo). Regla comun en maintenance-plans/plan-coverage.ts.
+- GET /app/pms/maintenance-plans: cada item trae coveredAssets; ?includeCovering=1 (con assetId)
+  suma las rutinas que revisan al equipo. Sin el parametro el filtro por equipo no cambia.
+- Carga inicial: scripts/link-routine-coverage.ts (simula por defecto, --apply graba, idempotente).
+  Pasos: pull + db push (tabla nueva sola) + build web + restart; despues la carga con la lista aprobada.
+
 [2026-10-08] OT: franja "Equipo y trabajo" en el encabezado (Preview V1 aprobada)
 Agent: Claude Opus 5.5
 - Debajo del numero de la OT, una linea por equipo con sus tareas del plan (antes decia

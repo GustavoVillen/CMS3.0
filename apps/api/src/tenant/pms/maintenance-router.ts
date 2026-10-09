@@ -156,6 +156,7 @@ export async function handleMaintenanceRoutes(
       executionStatus: url.searchParams.get("executionStatus"),
       taskMasterId: url.searchParams.get("taskMasterId"),
       assetId: url.searchParams.get("assetId"),
+      includeCovering: url.searchParams.get("includeCovering") === "1",
     });
     // La LISTA no muestra los campos de texto pesados (LOTO, criterios de
     // aceptación, análisis de riesgo, justificación de consecuencia): son ~60%
