@@ -81,6 +81,9 @@ export interface PendingApprovalItem {
   permitCount?: number;
   /** Los mismos, sin el borrador vacío que el sistema crea al autorizar la OT. */
   permitWorkedCount?: number;
+  /** Lista para cerrar: la OT con "¿Tarea concluida?" en Sí; la SS con
+   *  "¿Conforme con el trabajo?" en Sí, todavía sin cerrar. */
+  readyToClose?: boolean;
   /**
    * Grupo SFI para el filtro G0…G9 de Seguimiento. Mismo criterio que los
    * tableros de OT y SS: el del plan (principal o el primero de sus ítems que lo
@@ -158,7 +161,7 @@ const WO_SELECT = {
   openDate: true, dueDate: true, providerId: true, providerOther: true,
   enviadoAprobacionByName: true, enviadoAprobacionAt: true,
   aprobadoByName: true, aprobadoAt: true,
-  autorizadoByName: true, autorizadoAt: true,
+  autorizadoByName: true, autorizadoAt: true, taskCompleted: true,
 } as const;
 
 const SR_SELECT = {
@@ -606,6 +609,7 @@ export async function listPendingApprovals(
       spareUsageCount: sparesByWo.get(r.id)?.size ?? 0,
       permitCount: permitCountByWo.get(r.id) ?? 0,
       permitWorkedCount: permitWorkedByWo.get(r.id) ?? 0,
+      readyToClose: r.taskCompleted === true,
     })),
     srExecute:   (srExecuteRows as any[]).map(r => ({
       ...mapSr(r),
@@ -617,6 +621,7 @@ export async function listPendingApprovals(
       // Recibida (cerrada): la fila queda en gris con la fecha y la conformidad.
       receivedAt: r.status === "COMPLETED" ? iso(r.receivedAt) : null,
       receptionConform: r.status === "COMPLETED" ? (r.receptionConform ?? null) : null,
+      readyToClose: r.status !== "COMPLETED" && r.receptionConform === true,
     })),
   };
 }

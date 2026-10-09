@@ -93,6 +93,8 @@ interface PendingItem {
   permitCount?: number;
   /** Los mismos, sin el borrador vacío que el sistema crea al autorizar la OT. */
   permitWorkedCount?: number;
+  /** OT con la tarea concluida / SS conforme, todavía sin cerrar. */
+  readyToClose?: boolean;
   /** Grupo SFI (filtro G0…G9). La SS trae el de su OT. */
   sfiGroupNumber?: number | null;
 }
@@ -198,6 +200,8 @@ const BTN_ON   = `${BTN_BASE} bg-surface border-accent text-accent hover:bg-acce
 const BTN_DONE = `${BTN_BASE} bg-success/90 border-success text-white`;
 /** Avances / hoja de ruta / permisos / repuestos con algo cargado por la gente: verde claro, se sigue abriendo. */
 const BTN_HAS  = `${BTN_BASE} bg-success/15 border-success text-success hover:bg-success hover:text-white`;
+/** Cerrar OT / SS cuando ya está lista (tarea concluida / conforme): lleno y con aro, para que salte a la vista. */
+const BTN_READY = `${BTN_BASE} bg-accent border-accent text-accent-fg ring-2 ring-accent/35 ring-offset-1 ring-offset-surface shadow-md hover:bg-accent/85`;
 /** Paso firmado de una OT / SS ya cerrada: gris, se ve pero ya no se toca. */
 const BTN_LOCKED = `${BTN_BASE} bg-fg/10 border-fg/20 text-fg/55`;
 const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
@@ -725,8 +729,8 @@ export const ApprovalsPage: React.FC = () => {
               : !sentInfo ? execOff(wClose, t("approvals.exec.sendFirst"), true)
               : !can?.srManage ? execOff(wClose, t("approvals.noPermission"), false)
               : (
-                <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "closeSr", row: r })}>
-                  {btnBody(wClose, t("approvals.exec.needsReception"))}
+                <button type="button" className={r.readyToClose ? BTN_READY : BTN_ON} onClick={() => setExec({ kind: "closeSr", row: r })}>
+                  {btnBody(wClose, t(r.readyToClose ? "approvals.exec.readyToClose" : "approvals.exec.needsReception"))}
                 </button>
               )}
           </td>
@@ -799,8 +803,8 @@ export const ApprovalsPage: React.FC = () => {
         </td>
         <td className={cell}>
           {can?.woOperate ? (
-            <button type="button" className={BTN_ON} onClick={() => setExec({ kind: "close", row: r })}>
-              {btnBody(wClose, t("approvals.exec.needsClose"))}
+            <button type="button" className={r.readyToClose ? BTN_READY : BTN_ON} onClick={() => setExec({ kind: "close", row: r })}>
+              {btnBody(wClose, t(r.readyToClose ? "approvals.exec.readyToClose" : "approvals.exec.needsClose"))}
             </button>
           ) : execOff(wClose, noPerm, false)}
         </td>
