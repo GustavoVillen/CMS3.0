@@ -62,8 +62,8 @@ const EDITS: Edit[] = [
 ];
 
 async function main() {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: "mercurio" } });
-  if (!tenant) throw new Error("No existe el tenant mercurio");
+  const tenant = await prisma.tenant.findUnique({ where: { slug: process.env.TENANT_SLUG ?? "mercurio" } });
+  if (!tenant) throw new Error("No existe el tenant");
   const actor = process.env.ACTOR_EMAIL
     ? await prisma.user.findFirst({ where: { email: process.env.ACTOR_EMAIL, memberships: { some: { tenantId: tenant.id } } } })
     : null;
