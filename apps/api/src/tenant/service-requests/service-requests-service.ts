@@ -1506,6 +1506,11 @@ async function ensureLabSamplesNumbered(
   return { carries: true, missing };
 }
 
+/** Comienzo de las novedades que el sistema asienta solo al mandar la SS al
+ *  taller. Seguimiento las separa de las que carga la gente. */
+export const SR_LOG_SENT_PREFIX = "Enviada por correo a ";
+export const SR_LOG_UNNUMBERED_PREFIX = "Enviada al laboratorio sin los números de muestra";
+
 /** Novedad en la hoja de ruta cuando el envío salió sin numerar. */
 async function logUnnumberedSend(
   prisma: unknown,
@@ -1521,7 +1526,7 @@ async function logUnnumberedSend(
         tenantId: sr.tenantId,
         serviceRequestId: sr.id,
         entryDate: new Date(),
-        novedad: `Enviada al laboratorio sin los números de muestra (${missing} pendiente(s) de numerar)`,
+        novedad: `${SR_LOG_UNNUMBERED_PREFIX} (${missing} pendiente(s) de numerar)`,
         asientaByName,
         asientaByUserId: session.user.id,
         createdByUserId: session.user.id,
@@ -1687,7 +1692,7 @@ export async function sendServiceRequestToProvider(
         tenantId: current.tenantId,
         serviceRequestId: id,
         entryDate: new Date(),
-        novedad: `Enviada por correo a ${result.to.join(", ")} con el formulario adjunto`,
+        novedad: `${SR_LOG_SENT_PREFIX}${result.to.join(", ")} con el formulario adjunto`,
         asientaByName,
         asientaByUserId: session.user.id,
         createdByUserId: session.user.id,

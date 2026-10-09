@@ -87,6 +87,8 @@ interface PendingItem {
   receptionConform?: boolean | null;
   /** Sólo las SS autorizadas: novedades asentadas en su hoja de ruta. */
   routeEntryCount?: number;
+  /** Las mismas, sin las que el sistema asienta solo al enviarla al proveedor. */
+  routeManualCount?: number;
   /** Sólo las OT autorizadas: permisos de trabajo vinculados. */
   permitCount?: number;
   /** Grupo SFI (filtro G0…G9). La SS trae el de su OT. */
@@ -192,6 +194,8 @@ function daysToDue(iso: string | null): number | null {
 const BTN_BASE = "w-full min-h-[34px] px-1.5 py-0.5 rounded-lg border-[1.5px] text-[10.5px] font-extrabold leading-tight flex flex-col items-center justify-center transition-all";
 const BTN_ON   = `${BTN_BASE} bg-surface border-accent text-accent hover:bg-accent hover:text-accent-fg disabled:opacity-50`;
 const BTN_DONE = `${BTN_BASE} bg-success/90 border-success text-white`;
+/** Avances / hoja de ruta con novedades cargadas por la gente: verde claro, se sigue abriendo. */
+const BTN_HAS  = `${BTN_BASE} bg-success/15 border-success text-success hover:bg-success hover:text-white`;
 /** Paso firmado de una OT / SS ya cerrada: gris, se ve pero ya no se toca. */
 const BTN_LOCKED = `${BTN_BASE} bg-fg/10 border-fg/20 text-fg/55`;
 const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
@@ -674,6 +678,8 @@ export const ApprovalsPage: React.FC = () => {
       const waitWhy = t("approvals.pendingAuthorization");
       const sendLabel = r.providers[0] ? t("ss.guide.sendProviderTo").replace("{provider}", r.providers[0]) : wSend;
       const routeCount = r.routeEntryCount ?? 0;
+      // Verde claro sólo con novedades de la gente: la del envío la pone el sistema.
+      const routeClass = closedAt ? `${BTN_LOCKED} hover:bg-fg/15` : (r.routeManualCount ?? 0) > 0 ? BTN_HAS : BTN_ON;
       return (
         <>
           <td className={cell}>
@@ -696,7 +702,7 @@ export const ApprovalsPage: React.FC = () => {
           <td className={cell}>
             {authorized ? (
               // Con la SS cerrada, en gris: se abre para consultar pero no se le agregan novedades.
-              <button type="button" className={closedAt ? `${BTN_LOCKED} hover:bg-fg/15` : BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "route", row: r }); }}>
+              <button type="button" className={routeClass} onClick={() => { setProgressDirty(false); setExec({ kind: "route", row: r }); }}>
                 {btnBody(wRoute, routeCount === 0 ? t("approvals.exec.noneF")
                   : routeCount === 1 ? t("approvals.exec.routeOne")
                   : t("approvals.exec.routeMany").replace("{n}", String(routeCount)))}
@@ -766,7 +772,7 @@ export const ApprovalsPage: React.FC = () => {
       <>
         {/* Avances se abre siempre: sin permiso de operar, la lista es de sólo lectura. */}
         <td className={cell}>
-          <button type="button" className={BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "progress", row: r }); }}>
+          <button type="button" className={notes > 0 ? BTN_HAS : BTN_ON} onClick={() => { setProgressDirty(false); setExec({ kind: "progress", row: r }); }}>
             {btnBody(wProgress, notes === 0 ? t("approvals.exec.none")
               : notes === 1 ? t("approvals.exec.notesOne")
               : t("approvals.exec.notesMany").replace("{n}", String(notes)))}

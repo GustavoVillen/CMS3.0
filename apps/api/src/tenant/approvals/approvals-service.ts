@@ -20,6 +20,7 @@ import { getPrismaClient } from "../../platform/data/prisma-client";
 import { RouteError } from "../../http/route-error";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { hasPermission } from "../auth/role-permissions";
+import { SR_LOG_SENT_PREFIX, SR_LOG_UNNUMBERED_PREFIX } from "../service-requests/service-requests-service";
 
 /** Una fila de cualquiera de las cuatro bandejas. */
 export interface PendingApprovalItem {
@@ -74,6 +75,8 @@ export interface PendingApprovalItem {
   spareUsageCount?: number;
   /** Sólo SS autorizadas: novedades asentadas en su hoja de ruta. */
   routeEntryCount?: number;
+  /** Las mismas, sin las que el sistema asienta solo al enviarla al proveedor. */
+  routeManualCount?: number;
   /** Sólo OT autorizadas: permisos de trabajo vinculados (sin los cancelados). */
   permitCount?: number;
   /**
@@ -297,7 +300,7 @@ export async function listPendingApprovals(
   const srWoIds   = [...new Set(srRows.map(r => r.workOrderId).filter(Boolean))] as string[];
   const vesselCodes = [...new Set([...woRows, ...srRows].map(r => r.vesselCode).filter(Boolean))] as string[];
 
-  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows, routeCountRows, permitCountRows] = await Promise.all([
+  const [srOfWoRows, parentWoRows, vesselRows, noteCountRows, usageRows, routeCountRows, permitCountRows, routeManualRows] = await Promise.all([
     // SS colgadas de las OT listadas: aportan sus talleres al contexto de la OT
     // y el aviso de "esta firma arrastra N solicitudes".
     woIds.length > 0
@@ -352,6 +355,21 @@ export async function listPendingApprovals(
           _count: { _all: true },
         })
       : Promise.resolve([]),
+    // Las novedades que cargó la gente: sin las que asienta el sistema al enviar.
+    srExecIds.length > 0
+      ? (prisma as any).serviceRequestLog.groupBy({
+          by: ["serviceRequestId"],
+          where: {
+            tenantId,
+            serviceRequestId: { in: srExecIds },
+            NOT: [
+              { novedad: { startsWith: SR_LOG_SENT_PREFIX } },
+              { novedad: { startsWith: SR_LOG_UNNUMBERED_PREFIX } },
+            ],
+          },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const noteCountByWo = new Map<string, number>(
@@ -359,6 +377,9 @@ export async function listPendingApprovals(
   );
   const routeCountBySr = new Map<string, number>(
     (routeCountRows as any[]).map(r => [r.serviceRequestId, Number(r._count?._all ?? 0)]),
+  );
+  const routeManualBySr = new Map<string, number>(
+    (routeManualRows as any[]).map(r => [r.serviceRequestId, Number(r._count?._all ?? 0)]),
   );
   const permitCountByWo = new Map<string, number>(
     (permitCountRows as any[]).map(r => [r.workOrderId, Number(r._count?._all ?? 0)]),
@@ -566,6 +587,7 @@ export async function listPendingApprovals(
       authorizedAt: iso(r.autorizadoAt),
       sentAt: r.status === "IN_PROGRESS" || r.status === "COMPLETED" ? iso(r.startedAt) : null,
       routeEntryCount: routeCountBySr.get(r.id) ?? 0,
+      routeManualCount: routeManualBySr.get(r.id) ?? 0,
       // Recibida (cerrada): la fila queda en gris con la fecha y la conformidad.
       receivedAt: r.status === "COMPLETED" ? iso(r.receivedAt) : null,
       receptionConform: r.status === "COMPLETED" ? (r.receptionConform ?? null) : null,
