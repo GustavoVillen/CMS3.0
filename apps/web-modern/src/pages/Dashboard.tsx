@@ -29,6 +29,7 @@ import { SpareConsumptionFlow } from "../components/work-orders/SpareConsumption
 import { ChecklistTemplatePicker } from "../components/checklists/ChecklistTemplatePicker";
 import { FluidBatchUploadModal } from "../components/fluid-analyses/FluidBatchUploadModal";
 import { SpareReceiptModal } from "../components/spares/SpareReceiptModal";
+import { NewPermitFlow } from "./Permits";
 import { type HoursSheet } from "../components/AssetHoursGrid";
 
 // Grupos SFI (0-9) — mismo criterio que la pestañas de Plan de Mantenimiento
@@ -162,6 +163,9 @@ export const Dashboard: React.FC = () => {
   const { theme }    = useTheme();
   const { user }     = useAuth();
   const can          = useCan();
+  // El backend exige `permit.manage` para crear un PTW: si el rol no lo tiene,
+  // el acceso grande no se muestra.
+  const canManagePermits = can("permit.manage");
   // Mismos roles que protegen /tmsa en App.tsx (RequireRole) — se oculta acá
   // para no mostrar un botón que termina en pantalla bloqueada.
   const canSeeTmsaAudit = user?.role === "TENANT_ADMIN";
@@ -208,6 +212,7 @@ export const Dashboard: React.FC = () => {
   const [createWoPreset, setCreateWoPreset] = React.useState<{ maintKind: string; title?: string; classAsset?: boolean } | null>(null);
   // "Nueva Solicitud de Servicio": asistente para qué → buque → OT/equipo → proveedor.
   const [showSsWizard, setShowSsWizard] = React.useState(false);
+  const [showNewPermit, setShowNewPermit] = React.useState(false);
   // Consumo de repuestos sobre una OT abierta: descuenta stock del buque.
   const [showSpareUse, setShowSpareUse] = React.useState(false);
   // Completar un checklist: se elige el template y el alta sigue en /checklists.
@@ -569,6 +574,13 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             // El de OT abre la orden recién creada para completarla.
             navigate(workOrderCode ? `/work-orders/${encodeURIComponent(workOrderCode)}` : "/work-orders", flowState);
           }}
+        />
+      )}
+
+      {showNewPermit && (
+        <NewPermitFlow
+          onClose={() => setShowNewPermit(false)}
+          onSaved={() => navigate("/permits")}
         />
       )}
 
@@ -958,10 +970,20 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             <Handshake className="w-6 h-6 text-success-sea shrink-0" />
             <span className="font-bold text-sm text-fg">{t("dashboard.newServiceRequest")}</span>
           </button>
-          {/* "Nuevo Permiso de Trabajo" y "Registro de Avance" se sacaron del
-              Inicio a pedido del usuario (sep 2026): los permisos y los avances
-              se cargan desde Seguimiento o desde la propia OT. ProgressFlow y
-              el alta de permisos siguen existiendo en esas pantallas. */}
+          {/* "Nuevo Permiso de Trabajo" volvió al Inicio a pedido del usuario
+              (oct 2026), en verde como el resto de las altas. Sólo con
+              `permit.manage`, que es lo que exige el backend para crear el PTW. */}
+          {canManagePermits && (
+            <button
+              onClick={() => setShowNewPermit(true)}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl bg-success-sea/10 border border-success-sea/30 hover:border-success-sea/60 hover:bg-success-sea/20 transition-all text-left"
+            >
+              <ShieldAlert className="w-6 h-6 text-success-sea shrink-0" />
+              <span className="font-bold text-sm text-fg">{t("dashboard.newPermit")}</span>
+            </button>
+          )}
+          {/* "Registro de Avance" se sacó del Inicio a pedido del usuario (sep
+              2026): los avances se cargan desde Seguimiento o desde la propia OT. */}
           {/* Registrar lo que se consumió en una OT. Descuenta stock, así que
               pide el mismo permiso que editar la orden. */}
           {canLogSpareUse && (
