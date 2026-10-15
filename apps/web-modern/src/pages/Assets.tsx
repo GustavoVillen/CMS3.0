@@ -24,6 +24,7 @@ import { GuideSection, GuideField, GuideNeedTag, GuidePill, RequiredMark } from 
 import type { FluidSample } from "../components/fluid-analyses/shared";
 import { AssetHealthReportModal, HEALTH_STATE_STYLE, type HealthReportSummary } from "../components/assets/AssetHealthReportModal";
 import { fmtDate } from "../lib/utils";
+import { buildFormattedAssetCode, buildNamePrefix, nextSequentialAssetCode, toAssetCodeToken } from "../lib/asset-code";
 
 interface Asset {
   id: string;
@@ -255,30 +256,6 @@ function normalizeOptionalText(value: string): string | null {
   return text || null;
 }
 
-function toAssetCodeToken(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function buildNamePrefix(name: string): string {
-  const tokens = toAssetCodeToken(name).split("-").filter(Boolean);
-  if (tokens.length === 0) return "AS";
-  const ignored = new Set(["SYSTEM", "SYSTEMS", "EQUIPMENT", "UNIT", "GENERAL"]);
-  const meaningful = tokens.filter(token => !ignored.has(token));
-  if (meaningful.length >= 2) return `${meaningful[0][0]}${meaningful[1][0]}`.slice(0, 4);
-  if (meaningful.length === 1) return meaningful[0].slice(0, 4);
-  return tokens[0].slice(0, 4) || "AS";
-}
-
 function codePrefixFromExisting(assetCode: string): string {
   const normalized = toAssetCodeToken(assetCode);
   const match = normalized.match(/^([A-Z0-9]{2,8})-(\d{3,4})$/);
@@ -287,42 +264,12 @@ function codePrefixFromExisting(assetCode: string): string {
   return (firstChunk ?? "AS").slice(0, 8);
 }
 
-function nextSequentialAssetCode(prefix: string, existingCodes: Set<string>): string {
-  const normalizedPrefix = toAssetCodeToken(prefix).slice(0, 8) || "AS";
-  const matcher = new RegExp(`^${escapeRegExp(normalizedPrefix)}-(\\d{3,4})$`);
-  let maxSeq = 0;
-
-  for (const code of existingCodes) {
-    const match = code.match(matcher);
-    if (!match) continue;
-    const seq = Number(match[1]);
-    if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq;
-  }
-
-  const next = maxSeq + 1;
-  const width = next >= 1000 ? 4 : 3;
-  return `${normalizedPrefix}-${String(next).padStart(width, "0")}`;
-}
-
 function suggestFromExistingCode(assetCode: string, existingCodes: Set<string>): string {
   return nextSequentialAssetCode(codePrefixFromExisting(assetCode), existingCodes);
 }
 
 function buildSuggestedAssetCode(name: string, existingCodes: Set<string>): string {
   return nextSequentialAssetCode(buildNamePrefix(name), existingCodes);
-}
-
-function buildFormattedAssetCode(
-  vesselCode: string,
-  groupNumber: string,
-  name: string,
-  existingCodes: Set<string>,
-): string {
-  const vc = toAssetCodeToken(vesselCode);
-  const gn = groupNumber.trim();
-  const namePrefix = buildNamePrefix(name);
-  const prefix = vc && gn ? `${vc}-${gn}-${namePrefix}` : namePrefix;
-  return nextSequentialAssetCode(prefix, existingCodes);
 }
 
 async function downloadAssetPdf(asset: { id: string; assetCode: string; vesselCode: string }): Promise<void> {

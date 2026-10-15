@@ -956,7 +956,9 @@ export async function getTenantMaintenancePlansSummary(
   const tenantId = await resolveTenantId(session);
   if (!tenantId) return { counts, total: 0 };
 
-  const where: Record<string, unknown> = { tenantId, deletedAt: null };
+  // Las tareas dadas de baja (o en espera de una OT de instalación) no cuentan,
+  // igual que en la planilla, el ISM y las ventanas de ejecución.
+  const where: Record<string, unknown> = { tenantId, deletedAt: null, status: { not: "INACTIVE" } };
   applyVesselScope(session, where, filters.vesselCode ?? null);
 
   // Minimal select — only the fields needed to compute the dashboard status.

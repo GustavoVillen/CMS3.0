@@ -1632,6 +1632,11 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     }
   }
 
+  // OT de instalación de un equipo nuevo: si el cambio requiere MOC, tiene que
+  // estar aprobado antes de cerrarla (ver asset-install-service).
+  const installation = await import("../assets/asset-install-service");
+  await installation.checkAssetInstallationBeforeClose(prismaRaw, current);
+
   const hoursByAsset = await resolveClosingHoursByAsset(prismaRaw, current, payload);
 
   const completedDate = parseOptionalDate(payload.completedDate, "completedDate") ?? new Date();
@@ -1659,6 +1664,7 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
     }
   }
 
+  let installApplied: Awaited<ReturnType<typeof installation.applyAssetInstallationOnClose>> = null;
   const closedResult = await prisma.$transaction(async (tx) => {
     const startDate = current.status === "PLANNED" ? completedDate : undefined;
     const closed = await tx.workOrder.update({
@@ -1733,8 +1739,15 @@ export async function closeWorkOrder(session: TenantAccessSession, id: string, p
       }
     }
 
+    // OT de instalación: rige el cambio de equipo (tareas nuevas activas, el
+    // reemplazado dado de baja). En la misma transacción que el cierre.
+    installApplied = await installation.applyAssetInstallationOnClose(
+      tx, current, completedDateAnchored, hoursByAsset.get(current.assetId) ?? null, session.user.id,
+    );
+
     return closed;
   });
+  if (installApplied) installation.publishAssetInstallationAudit(prismaRaw, current, installApplied, session.user.id);
   let failedMovements: string[] = [];
   if (payload.spareUsages !== undefined) {
     // La OT ya quedó CLOSED en la transacción de arriba: un fallo acá no debe

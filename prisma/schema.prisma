@@ -1898,6 +1898,12 @@ model WorkOrder {
   rechazadoByName     String?
   rechazadoAt         DateTime?
   rechazoReason       String?
+  // OT de instalación de un equipo nuevo (asistente "Para un Equipo Nuevo"). El
+  // equipo nuevo es `assetId`; sus tareas quedan INACTIVE hasta que esta OT se
+  // cierra, y recién ahí rige el cambio (ver asset-install-service.ts):
+  // { replacesAssetId: string | null, mocRequired: boolean, mocNotRequiredReason: string | null }.
+  // replacesAssetId es puntero suelto, mismo criterio que standbyTestPlanId.
+  assetInstallation   Json?
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]

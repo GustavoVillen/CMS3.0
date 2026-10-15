@@ -161,7 +161,7 @@ export interface MocPrefill {
   sourceLabel?: string;
 }
 
-interface Moc {
+export interface Moc {
   id: string;
   mocCode: string;
   vesselCode: string;
@@ -260,6 +260,12 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
   );
   const regiStr = JSON.stringify(serializeRegi(regi));
   const regiDirty = regiStr !== regiInitialStr;
+  // Vínculos con equipo / OT: los trae el prefill (Defecto, OT, equipo nuevo…).
+  // Sin prefill no se mandan: un MOC ya vinculado los conserva al editarlo (antes
+  // se pisaban con null y la OT de instalación perdía su MOC).
+  const relatedLinks = prefill
+    ? { relatedAssetId: prefill.relatedAssetId ?? null, relatedWorkOrderId: prefill.relatedWorkOrderId ?? null }
+    : {};
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
 
   // Fase 3 — el copiloto arma un BORRADOR del formulario REGI-GES-06.1 a partir
@@ -336,8 +342,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
           riskAssessmentNotes: riskAssessmentNotes.trim() || null,
           mitigationActions: mitigationActions.trim() || null,
           plannedDate: plannedDate || null,
-          relatedAssetId: prefill?.relatedAssetId ?? null,
-          relatedWorkOrderId: prefill?.relatedWorkOrderId ?? null,
+          ...relatedLinks,
           ...serializeRegi(regi),
         };
         await api.patch(`/app/mocs/${moc.id}`, payload);
@@ -411,9 +416,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
         riskAssessmentNotes: riskAssessmentNotes.trim() || null,
         mitigationActions: mitigationActions.trim() || null,
         plannedDate: plannedDate || null,
-        // Vínculos opcionales que vienen del prefill (Defect, OT, etc.).
-        relatedAssetId: prefill?.relatedAssetId ?? null,
-        relatedWorkOrderId: prefill?.relatedWorkOrderId ?? null,
+        ...relatedLinks,
         // Campos del formulario controlado REGI-GES-06.1.
         ...serializeRegi(regi),
       };

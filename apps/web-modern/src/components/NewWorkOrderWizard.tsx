@@ -5,8 +5,9 @@
 // ítem elegido ya heredado (mismo mecanismo "prefill" que usa Plan de
 // Mantenimiento al abrir una OT desde un ítem — ver buildWoPrefillFromPlan).
 import React, { useCallback, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, ChevronRight, ClipboardList, Cog, Container, FilePlus, Loader2, Search, ShieldAlert, Ship, Sparkles, Wrench, Zap } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronRight, ClipboardList, Cog, Container, FilePlus, Loader2, PackagePlus, Search, ShieldAlert, Ship, Sparkles, Wrench, Zap } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { useCan } from "../lib/auth";
 import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
@@ -18,12 +19,14 @@ import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
 import { findClassInspectionAsset } from "../lib/class-inspection-asset";
 import { markJustCreated } from "../lib/just-created";
 import { CopilotFlowProvider, useCopilotAssist, type CopilotAssistSpec } from "../lib/copilot-context";
+import { NewAssetInstallWizard } from "./NewAssetInstallWizard";
 
 /** Valor de la opción "ninguno" del paso del ítem del plan (no es un id real). */
 const NO_PLAN_ITEM = "__none__";
 
-type Category = "MAINTENANCE" | "REPAIR" | "CLASS";
-type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind";
+/** NEW_ASSET = alta o reemplazo de un equipo; sus pasos viven en NewAssetInstallWizard. */
+type Category = "MAINTENANCE" | "REPAIR" | "CLASS" | "NEW_ASSET";
+type Step = "category" | "vessel" | "asset" | "planItem" | "repairKind" | "install";
 /** Mismos valores que WO_MAINTENANCE_KINDS (wo-form-catalog.ts) para el eje
  *  "reparación" del formulario. */
 type RepairKind = "CORRECTIVO_PROGRAMADO" | "CORRECTIVO_NO_PROGRAMADO" | "EMERGENCIA";
@@ -48,10 +51,12 @@ interface PlanItemCandidate {
   nextDueHours?: number | null;
 }
 
-const CATEGORY_OPTIONS: { value: Category; label: TranslationKey; icon: typeof Wrench }[] = [
+const CATEGORY_OPTIONS: { value: Category; label: TranslationKey; icon: typeof Wrench; tone?: keyof typeof TONE_ICON_CLS }[] = [
   { value: "MAINTENANCE", label: "dashboard.ssChooser.maintenance",     icon: ClipboardList },
   { value: "REPAIR",      label: "dashboard.ssChooser.repair",          icon: Wrench },
   { value: "CLASS",       label: "dashboard.ssChooser.classInspection", icon: ShieldAlert },
+  // Sólo con asset.install (Superintendente y DPA por defecto): es decisión de tierra.
+  { value: "NEW_ASSET",   label: "dashboard.ssChooser.newAsset",        icon: PackagePlus, tone: "success" },
 ];
 
 // Mismo texto oficial del formulario (WO_MAINTENANCE_KINDS, wo-form-catalog.ts) — no se traduce.
@@ -63,6 +68,7 @@ const REPAIR_KIND_OPTIONS: { value: RepairKind; label: string; icon: typeof Wren
 
 const TONE_ICON_CLS = {
   accent:  "bg-accent/10 text-accent",
+  success: "bg-success-sea/10 text-success-sea",
   warning: "bg-warning/10 text-warning",
   danger:  "bg-danger/10 text-danger",
   muted:   "bg-fg/5 text-text-industrial/60",
@@ -134,7 +140,12 @@ export const NewWorkOrderWizard: React.FC<NewWorkOrderWizardProps> = (props) => 
 
 const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, onSaved }) => {
   const t = useT();
+  const can = useCan();
   const { vessels, selectedVesselCode, isVesselScoped } = useVesselContext();
+  const categoryOptions = useMemo(
+    () => CATEGORY_OPTIONS.filter(o => o.value !== "NEW_ASSET" || can("asset.install")),
+    [can],
+  );
 
   const [step, setStep] = useState<Step>("category");
   const [category, setCategory] = useState<Category | null>(null);
@@ -201,6 +212,8 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
   // Buque ya resuelto (elegido a mano, o ya venía del contexto): decide el
   // siguiente paso según la categoría.
   const afterVessel = useCallback(async (cat: Category, vc: string) => {
+    // Equipo nuevo: el resto del recorrido es de NewAssetInstallWizard.
+    if (cat === "NEW_ASSET") { setStep("install"); return; }
     // No arrastrar el equipo/ítem de una elección anterior (cambio de
     // categoría o de buque) — arranca limpio cada vez que se entra acá.
     setAssetId("");
@@ -320,7 +333,7 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
   if (!result && step === "category") {
     assist = { ...assistBase, screen: "WO_WIZARD_CATEGORY", fields: [{
       key: "category", label: t("wo.wizard.categoryTitle"), value: category,
-      options: CATEGORY_OPTIONS.map(o => ({ value: o.value, label: t(o.label) })),
+      options: categoryOptions.map(o => ({ value: o.value, label: t(o.label) })),
       set: v => chooseCategory(v as Category),
     }] };
   } else if (!result && step === "vessel") {
@@ -358,6 +371,21 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
   }
   useCopilotAssist(assist);
 
+  if (step === "install" && category === "NEW_ASSET" && vesselCode) {
+    return (
+      <NewAssetInstallWizard
+        vesselCode={vesselCode}
+        vesselName={vesselName}
+        canChangeVessel={!isVesselScoped}
+        onBack={() => setStep(isVesselScoped ? "category" : "vessel")}
+        onChangeCategory={() => setStep("category")}
+        onChangeVessel={() => setStep("vessel")}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+
   if (result) {
     return (
       <CreateWorkOrderModal
@@ -373,12 +401,14 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
   }
 
   // ── Barra de pasos ──
-  const stepKeys: TranslationKey[] = [
-    "wo.wizard.step.category", "wo.wizard.step.vessel", "wo.wizard.step.asset",
-    category === "REPAIR" ? "wo.wizard.step.repairKind" : "wo.wizard.step.planItem",
-    "wo.wizard.step.form",
-  ];
-  const currentIndex = { category: 0, vessel: 1, asset: 2, planItem: 3, repairKind: 3 }[step];
+  const stepKeys: TranslationKey[] = category === "NEW_ASSET"
+    ? ["wo.wizard.step.category", "wo.wizard.step.vessel", "wo.wizard.step.asset", "wo.wizard.step.moc", "wo.wizard.step.tasks", "wo.wizard.step.confirm"]
+    : [
+        "wo.wizard.step.category", "wo.wizard.step.vessel", "wo.wizard.step.asset",
+        category === "REPAIR" ? "wo.wizard.step.repairKind" : "wo.wizard.step.planItem",
+        "wo.wizard.step.form",
+      ];
+  const currentIndex = { category: 0, vessel: 1, asset: 2, planItem: 3, repairKind: 3, install: 2 }[step];
 
   const chipCls = "inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-1 text-[11px] text-fg";
   const changeBtn = (to: Step) => (
@@ -430,8 +460,8 @@ const NewWorkOrderWizardSteps: React.FC<NewWorkOrderWizardProps> = ({ onClose, o
             <>
               {question(t("wo.wizard.categoryTitle"), t("wo.wizard.categorySubtitle"))}
               <div className="space-y-2.5">
-                {CATEGORY_OPTIONS.map(o => (
-                  <OptionCard key={o.value} icon={o.icon} title={t(o.label)}
+                {categoryOptions.map(o => (
+                  <OptionCard key={o.value} icon={o.icon} tone={o.tone} title={t(o.label)}
                     desc={t(`wo.wizard.catDesc.${o.value}` as TranslationKey)}
                     onClick={() => chooseCategory(o.value)} />
                 ))}

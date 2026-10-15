@@ -41,6 +41,10 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "wo.operate",               group: "maintenance", labelKey: "perm.woOperate" },
   { key: "plan.manage",              group: "maintenance", labelKey: "perm.planManage" },
   { key: "asset.manage",             group: "maintenance", labelKey: "perm.assetManage" },
+  // Alta o reemplazo de un equipo con su OT de instalación, MOC y tareas (oct
+  // 2026). Es una decisión de tierra: Superintendente y DPA, no el Capitán/JM,
+  // aunque éste tenga asset.manage y plan.manage para el día a día.
+  { key: "asset.install",            group: "maintenance", labelKey: "perm.assetInstall" },
   { key: "assetHours.write",         group: "maintenance", labelKey: "perm.assetHoursWrite" },
   { key: "defect.write",             group: "maintenance", labelKey: "perm.defectWrite" },
   { key: "defect.delete",            group: "maintenance", labelKey: "perm.defectDelete" },
@@ -117,7 +121,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<TenantRole, readonly string[]> = {
   // Superintendente tecnico (tierra): aprueba OT y SS (autorizar es sólo del
   // DPA desde sep 2026), aprueba MOC y permisos.
   FLEET_SUPERINTENDENT: [
-    "wo.approve", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "assetHours.write",
+    "wo.approve", "wo.manage", "wo.operate", "plan.manage", "asset.manage", "asset.install", "assetHours.write",
     "fluid.manage", "drydock.approve", "assetHealth.generate", "assetHealth.view",
     "sr.approve", "spareRequest.approve", "stock.manage",
     "permit.authorize", "permit.manage", "moc.approve", "externalAudit.manage",

@@ -67,6 +67,14 @@ export async function handleAssetRoutes(
     return true;
   }
 
+  // Asistente "Nueva OT → Para un Equipo Nuevo": equipo + tareas + OT + MOC.
+  if (method === "POST" && url.pathname === "/app/pms/assets/install") {
+    const { createAssetInstallation } = await import("../assets/asset-install-service");
+    const body = await readJsonBody(request) as Parameters<typeof createAssetInstallation>[1];
+    sendJson(response, 201, await createAssetInstallation(session, body));
+    return true;
+  }
+
   if (method === "POST" && url.pathname === "/app/pms/assets/suggest-criticality") {
     enforceRateLimit(request, `ai:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
     const body = await readJsonBody(request) as Parameters<typeof suggestAssetCriticality>[1];
