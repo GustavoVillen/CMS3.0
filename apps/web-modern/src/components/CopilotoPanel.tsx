@@ -20,7 +20,6 @@ import {
   Bot,
   Send,
   Loader2,
-  ChevronRight,
   ChevronLeft,
   Trash2,
   Zap,
@@ -38,6 +37,7 @@ import {
   Maximize2,
   Minimize2,
   Sparkles,
+  Power,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -251,7 +251,8 @@ const CAPABILITIES = [
   { value: "daily_executive_summary", label: "Resumen ejecutivo diario" },
 ];
 
-const LS_EXPANDED = "gpms_copilot_expanded";
+// v2: antes arrancaba encendido por defecto; ahora arranca apagado para todos.
+const LS_EXPANDED = "gpms_copilot_on_v2";
 
 // ---------------------------------------------------------------------------
 // [CAMPOS] block helpers — structured field values emitted by the AI
@@ -725,10 +726,11 @@ export const CopilotoPanel: React.FC = () => {
 
   // Panel state
   // Panel cerrado = copiloto apagado: no arranca solo, no habla, no gasta
-  // tokens y NO se abre solo. Sigue estando para cuando el usuario lo abra.
-  const expandedRef = useRef(true);
+  // tokens y NO se abre solo. Sigue estando para cuando el usuario lo encienda.
+  // Arranca apagado para todos (clave nueva: pisa cualquier preferencia vieja).
+  const expandedRef = useRef(false);
   const [expanded, setExpanded] = useState<boolean>(() => {
-    try { return localStorage.getItem(LS_EXPANDED) !== "false"; } catch { return true; }
+    try { return localStorage.getItem(LS_EXPANDED) === "true"; } catch { return false; }
   });
   expandedRef.current = expanded;
   const [fullscreen, setFullscreen] = useState(false);
@@ -1670,23 +1672,21 @@ export const CopilotoPanel: React.FC = () => {
 
         <button
           onClick={() => setExpanded(true)}
-          title="Abrir Copiloto IA"
-          className="text-accent hover:text-fg transition-colors"
+          title="Encender Copiloto IA (apagado)"
+          className="text-text-industrial/30 hover:text-accent transition-colors"
         >
-          <Bot className="w-5 h-5" />
+          <Power className="w-5 h-5" />
         </button>
+        <span className="text-[8px] font-bold text-text-industrial/30 uppercase tracking-widest [writing-mode:vertical-rl] rotate-180 select-none">
+          Apagado
+        </span>
         {hasSuggestions && (
           <span className="w-2 h-2 rounded-full bg-warning animate-pulse" title={`${suggestions.length} sugerencia(s) activa(s)`} />
-        )}
-        {screenContext && (
-          <span className="text-[8px] font-bold text-accent/40 uppercase tracking-widest [writing-mode:vertical-rl] rotate-180 select-none">
-            {screenContext.module.replace("_", " ")}
-          </span>
         )}
         <div className="flex-1" />
         <button
           onClick={() => setExpanded(true)}
-          title="Expandir"
+          title="Encender Copiloto IA"
           className="text-text-industrial/20 hover:text-fg transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
@@ -1752,8 +1752,8 @@ export const CopilotoPanel: React.FC = () => {
             {fullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
           {!fullscreen && (
-            <button onClick={() => setExpanded(false)} title="Colapsar" className="text-text-industrial/30 hover:text-fg transition-colors">
-              <ChevronRight className="w-3.5 h-3.5" />
+            <button onClick={() => setExpanded(false)} title="Apagar Copiloto IA" className="text-text-industrial/30 hover:text-danger transition-colors">
+              <Power className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
