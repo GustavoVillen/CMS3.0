@@ -71,6 +71,8 @@ export function woViewFilter<T extends WoViewItem>(items: T[], key: string, ctx:
       return ctx.canApprove || ctx.canAuthorize
         ? items.filter(w => (ctx.canApprove && woStage(w) === "SOLICITADA") || (ctx.canAuthorize && woStage(w) === "APROBADA"))
         : items.filter(w => !CLOSED.has(w.status) && !!ctx.userId && w.assignedToUserId === ctx.userId);
+    // Historial (botón del Inicio): abiertas y cerradas juntas.
+    case "all":               return items;
     default:                  return items;
   }
 }

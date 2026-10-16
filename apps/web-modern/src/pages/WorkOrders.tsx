@@ -6630,14 +6630,22 @@ export const WorkOrdersPage: React.FC = () => {
   /** "Abiertas" deja afuera las cerradas, salvo que se esté buscando o se pidan cerradas. */
   const stageFilter = useCallback((items: WorkOrder[], key: string): WorkOrder[] => {
     if (key) return applyViewKey(items, key);
-    if (search.trim() || viewFilter === "closed") return items;
+    if (search.trim() || viewFilter === "closed" || viewFilter === "all") return items;
     return items.filter(w => w.status !== "CLOSED" && w.status !== "CANCELLED");
   }, [applyViewKey, search, viewFilter]);
 
-  const displayItems = useMemo(
-    () => (beforeStage ? stageFilter(beforeStage, stageSel) : beforeStage),
-    [beforeStage, stageFilter, stageSel],
-  );
+  const displayItems = useMemo(() => {
+    const items = beforeStage ? stageFilter(beforeStage, stageSel) : beforeStage;
+    // Historial (view=all): la OT más nueva arriba, por año y número del código
+    // (OT-LTE-26-0135 → 26, 0135), sin importar el buque. Tocar una columna
+    // sigue ordenando por esa columna.
+    if (!items || viewFilter !== "all") return items;
+    const rank = (code: string) => {
+      const m = /-(\d{2,4})-(\d+)$/.exec(code ?? "");
+      return m ? Number(m[1]) * 1_000_000 + Number(m[2]) : -1;
+    };
+    return [...items].sort((a, b) => rank(b.workOrderCode) - rank(a.workOrderCode) || String(b.workOrderCode).localeCompare(String(a.workOrderCode)));
+  }, [beforeStage, stageFilter, stageSel, viewFilter]);
 
   // Al llegar desde el panel TMSA, sólo las OT que contó esa tarjeta. Se aplica
   // al final para que conviva con la vista (vencidas, a aprobar…) y el buscador.
@@ -6878,7 +6886,7 @@ export const WorkOrdersPage: React.FC = () => {
     overdue: t("wo.sum.overdue"), mine: summaryCards[1]!.label, inPreparation: t("wo.sum.notSent"),
     inProgress: t("wo.sum.inProgress"), postponed: t("wo.sum.deferred"), toApprove: t("wo.stageF.toApprove"),
     toAuthorize: t("wo.stageF.toAuthorize"), authorized: t("wo.filter.authorized"), open: t("wo.filter.open"),
-    closed: t("wo.filter.closed"), postponedPending: t("wo.filter.postponedPending"), postponedRejected: t("wo.filter.postponedRejected"),
+    closed: t("wo.filter.closed"), all: t("wo.filter.allHistory"), postponedPending: t("wo.filter.postponedPending"), postponedRejected: t("wo.filter.postponedRejected"),
   };
   const activeFilters: { key: string; label: string; clear: () => void }[] = [
     ...(viewFilter ? [{ key: "view", label: VIEW_LABEL[viewFilter] ?? viewFilter, clear: () => setViewParam("") }] : []),

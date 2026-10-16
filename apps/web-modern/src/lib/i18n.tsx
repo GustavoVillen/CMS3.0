@@ -4215,6 +4215,7 @@ const dict = {
   "wo.filter.postponedPending": { es: "Difer. pendiente", en: "Deferral pending", pt: "Adiam. pendente" },
   "wo.filter.postponedRejected":{ es: "Difer. rechazada", en: "Deferral rejected", pt: "Adiam. rejeitado" },
   "wo.filter.closed":         { es: "Cerradas",          en: "Closed",          pt: "Fechadas" },
+  "wo.filter.allHistory":     { es: "Todas (abiertas y cerradas)", en: "All (open and closed)", pt: "Todas (abertas e fechadas)" },
   // ─── Lista / tablero de SS (preview V13) ───
   "ss.list.new":              { es: "Nueva SS",          en: "New SR",          pt: "Nova SS" },
   "ss.list.search":           { es: "Buscar SS, servicio, equipo, taller u OT…", en: "Search SR, service, equipment, workshop or WO…", pt: "Buscar SS, serviço, equipamento, oficina ou OS…" },

@@ -967,7 +967,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
             </button>
             <button
               type="button"
-              onClick={() => navigate("/work-orders")}
+              onClick={() => navigate("/work-orders?view=all")}
               title={t("dashboard.newWorkOrder.listLink")}
               aria-label={t("dashboard.newWorkOrder.listLink")}
               className="mr-3 p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors shrink-0"
