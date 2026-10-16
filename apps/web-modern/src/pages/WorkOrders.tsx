@@ -6126,6 +6126,7 @@ export const WorkOrderPopup: React.FC<{
       )}
       {wo && woOpen && (
         <WorkOrderModal
+          key={`${wo.id}:${wo.status}`}
           workOrder={wo}
           canManage={can("wo.manage")}
           focusClose={focusClose}
@@ -6147,7 +6148,8 @@ export const WorkOrderPopup: React.FC<{
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); setWoOpen(false); }} />}
       {actionTarget?.type === "cancel" && <CancelModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); setWoOpen(false); }} />}
-      {actionTarget?.type === "reopen" && <ReopenModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); setWoOpen(false); }} />}
+      {/* Reabrir deja la OT abierta para editarla: se recarga y el formulario se rearma (key con el estado). */}
+      {actionTarget?.type === "reopen" && <ReopenModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => { setActionTarget(null); void reload(); }} />}
     </>
   );
 };
@@ -6749,6 +6751,16 @@ export const WorkOrdersPage: React.FC = () => {
     void reload();
   }, [reload, closeLink]);
 
+  // Reabrir es para corregir: la OT queda abierta para editarla, no se vuelve
+  // a la lista. Sin `editing` el efecto del deep-link la vuelve a pedir, así el
+  // formulario arranca con el estado nuevo (ya no cerrada).
+  const onReopenSuccess = useCallback((code: string) => {
+    setActionTarget(null);
+    setEditing(null);
+    if (linkCode !== code) openLink(code);
+    void reload();
+  }, [reload, linkCode, openLink]);
+
   const columns: Column<WorkOrder>[] = useMemo(() => [
     {
       key: "workOrderCode", header: t("wo.col.codeVessel"),
@@ -7136,7 +7148,7 @@ export const WorkOrdersPage: React.FC = () => {
       )}
       {actionTarget?.type === "hold"   && <HoldModal   workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
       {actionTarget?.type === "cancel" && <CancelModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
-      {actionTarget?.type === "reopen" && <ReopenModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={onActionSuccess} />}
+      {actionTarget?.type === "reopen" && <ReopenModal workOrder={actionTarget.workOrder} onClose={() => setActionTarget(null)} onSuccess={() => onReopenSuccess(actionTarget.workOrder.workOrderCode)} />}
       {showExcel && <ExcelPanel module="work_orders" onClose={() => setShowExcel(false)} />}
     </div>
   );
