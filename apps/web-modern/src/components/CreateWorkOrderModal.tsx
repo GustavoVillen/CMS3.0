@@ -1101,7 +1101,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
     // El ítem ya tiene una OT abierta: se pregunta antes de abrir otra.
     let allowDuplicate = allowDuplicateProp ?? false;
     if (prefill?.source === "plan" && allowDuplicateProp === undefined) {
-      const ok = await confirmPlanWoDuplicate([prefill.sourceId, ...(prefill.additionalPlans?.map(p => p.id) ?? [])]);
+      // Fecha vieja (apertura o vencimiento anteriores a hoy) = se regulariza un
+      // trabajo ya hecho: se avisa también si el ítem ya tiene una OT cerrada
+      // ejecutada desde esa fecha.
+      const oldDates = [isAdmin ? openDate : "", dueDate].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < today).sort();
+      const ok = await confirmPlanWoDuplicate([prefill.sourceId, ...(prefill.additionalPlans?.map(p => p.id) ?? [])], oldDates[0] ?? null);
       if (ok === null) return;
       allowDuplicate = ok;
     }
@@ -1252,7 +1256,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       await onSaved(woId, woCode);
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
-  }, [prefill, allowDuplicateProp, vesselCode, assetId, type, priority, criticality, openDate, dueDate,
+  }, [prefill, allowDuplicateProp, vesselCode, assetId, type, priority, criticality, openDate, dueDate, today,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
       checklistDocFile, confirmedPlanIds, providerOverride, planProviders, isAdmin, onBehalfUserId, onSaved, t,

@@ -21,7 +21,7 @@ import { CreateWorkOrderModal, type WoPrefill } from "../components/CreateWorkOr
 import { NewWorkOrderWizard, WizardStepper } from "../components/NewWorkOrderWizard";
 import { isJustCreated, clearJustCreated, markJustCreated } from "../lib/just-created";
 import { GuideSection, GuideField, GuideNeedTag, GuidePill, GuideStageLabel, RequiredMark, firstMissingOnScreen, focusGuideField } from "../components/GuideKit";
-import { hourAssetsOf, hourReadingIssue } from "../lib/wo-hours";
+import { hourAssetsOf, hourReadingIssue, hoursBelowMessage, type HourAsset } from "../lib/wo-hours";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 // WoRegiSections/WoRegiClosure ya no se montan acá: sus recuadros son parte de
 // la hoja del formulario (WoPaperForm). Se siguen usando sus tipos.
@@ -1439,6 +1439,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     if (!executedByName.trim() && tecnicoName) setExecutedByName(tecnicoName);
   }, [tecnicoName, executedByName]);
   const [executionDate, setExecutionDate]   = useState(toDateInputValue(workOrder.completedDate));
+  // Horas menores a la última lectura: el aviso explica de qué OT sale y qué revisar.
+  const [hoursAlert, setHoursAlert] = useState<string | null>(null);
   // FECHA INICIO del recuadro de Programación de trabajo. El sistema la carga
   // sola al pasar la OT a ejecución, pero también se escribe a mano: las OT
   // históricas o las que se cerraron sin pasar por "iniciar" la traían vacía.
@@ -2842,7 +2844,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       const issue = hourReadingIssue(hoursOf(a.assetId), a.lastHours);
       if (issue === "missing") { setErr(t("wo.modal.hoursRequired").replace("{asset}", a.assetName)); return; }
       if (issue === "below") {
-        setErr(t("wo.modal.hoursBelowLast").replace("{asset}", a.assetName).replace("{h}", (a.lastHours ?? 0).toLocaleString()));
+        setHoursAlert(hoursBelowMessage(t, a, opts?.completedDate || executionDate || null));
         return;
       }
     }
@@ -3889,6 +3891,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       ? list.map(a => ({
           assetId: a.assetId,
           lastHours: a.lastHours,
+          source: a as HourAsset | null,
           required: !isClosed,
           label: list.length === 1 && a.assetId === workOrder.assetId
             ? t("wo.modal.runningHours")
@@ -3896,7 +3899,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           assetName: a.assetName,
         }))
       : workOrder.maintenancePlanId
-        ? [{ assetId: workOrder.assetId, lastHours: null, required: false, label: t("wo.modal.runningHours"), assetName: "" }]
+        ? [{ assetId: workOrder.assetId, lastHours: null, source: null, required: false, label: t("wo.modal.runningHours"), assetName: "" }]
         : [];
     if (entries.length === 0) return null;
     return (
@@ -3925,7 +3928,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               {e.lastHours != null && !isClosed && (
                 <p className={`text-[11px] ${below ? "font-semibold text-red-700 dark:text-red-400" : "text-text-industrial/60"}`}>
                   {below
-                    ? t("wo.modal.hoursBelowLast").replace("{asset}", e.assetName).replace("{h}", e.lastHours.toLocaleString())
+                    ? (e.source ? hoursBelowMessage(t, e.source, executionDate || null, true) : t("wo.modal.hoursBelowLast").replace("{asset}", e.assetName).replace("{h}", e.lastHours.toLocaleString()))
                     : t("wo.modal.lastReading").replace("{h}", e.lastHours.toLocaleString())}
                 </p>
               )}
@@ -5036,6 +5039,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
           {closingWarningEl}
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
+          {hoursAlert && <AlertDialog message={hoursAlert} onClose={() => setHoursAlert(null)} />}
           </>)}
         </div>
 

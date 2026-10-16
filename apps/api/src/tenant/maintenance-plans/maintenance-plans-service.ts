@@ -2201,6 +2201,8 @@ export interface OpenPlanWorkOrder {
   workOrderId: string;
   workOrderCode: string;
   status: string;
+  /** Sólo las CERRADAS (consulta con `since`): fecha de ejecución. */
+  completedDate?: string | null;
 }
 
 /**
@@ -2214,6 +2216,12 @@ export interface OpenPlanWorkOrder {
 export async function listOpenWorkOrdersForPlans(
   session: TenantAccessSession,
   planIds: string[],
+  /**
+   * Fecha vieja de la OT que se va a abrir (regularización de trabajos hechos).
+   * Con ella también vuelven las OT CERRADAS del ítem ejecutadas ese día o
+   * después: el trabajo ya figura hecho y abrir otra lo duplica.
+   */
+  since?: Date | null,
 ): Promise<OpenPlanWorkOrder[]> {
   const prismaRaw = getPrismaClient();
   if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
@@ -2234,7 +2242,7 @@ export async function listOpenWorkOrdersForPlans(
       orderBy: { createdAt: "desc" },
     });
 
-  return links
+  const open: OpenPlanWorkOrder[] = links
     .filter((l) => !!l.workOrder)
     .map((l) => ({
       planId: l.maintenancePlanId,
@@ -2243,6 +2251,33 @@ export async function listOpenWorkOrdersForPlans(
       workOrderCode: l.workOrder!.workOrderCode,
       status: l.workOrder!.status,
     }));
+  if (!since) return open;
+
+  const closed: Array<{ id: string; workOrderCode: string; completedDate: Date | null; maintenancePlanId: string | null; planLinks: Array<{ maintenancePlanId: string }> }> =
+    await (prismaRaw as any).workOrder.findMany({
+      where: {
+        tenantId: plans[0]!.tenantId,
+        status: "CLOSED",
+        deletedAt: null,
+        completedDate: { gte: since },
+        OR: [{ maintenancePlanId: { in: ids } }, { planLinks: { some: { maintenancePlanId: { in: ids } } } }],
+      },
+      select: { id: true, workOrderCode: true, completedDate: true, maintenancePlanId: true, planLinks: { select: { maintenancePlanId: true } } },
+      orderBy: { completedDate: "desc" },
+      take: 20,
+    });
+  for (const w of closed) {
+    const planId = [w.maintenancePlanId, ...w.planLinks.map((l) => l.maintenancePlanId)].find((id) => !!id && ids.includes(id))!;
+    open.push({
+      planId,
+      taskCode: taskCodeById.get(planId) ?? "",
+      workOrderId: w.id,
+      workOrderCode: w.workOrderCode,
+      status: "CLOSED",
+      completedDate: w.completedDate ? w.completedDate.toISOString() : null,
+    });
+  }
+  return open;
 }
 
 export async function openFormalWorkOrder(

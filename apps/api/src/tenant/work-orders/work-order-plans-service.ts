@@ -34,6 +34,12 @@ export interface WorkOrderPlanRow {
   frequencyHours: number | null;
   /** Última lectura de horas con la que se ejecutó el plan (referencia y piso al cerrar). */
   lastExecutionHours: number | null;
+  /**
+   * La OT cerrada que dejó esa última lectura (planes por horas). Con ella el
+   * cierre explica de dónde sale el piso de horas y detecta un trabajo cargado
+   * dos veces, en vez de mostrar sólo el número.
+   */
+  lastExecutionWo: { id: string; code: string; completedDate: string | null; hours: number | null } | null;
   /** Tipo de análisis (FLUID, VIBRATION…): con él la OT es de mantenimiento Predictivo. */
   samplingKind: string | null;
   /** Repuestos del catálogo que el plan ya pide reemplazar (para no volver a preguntar). */
@@ -116,6 +122,7 @@ export async function listWorkOrderPlans(
     : [];
   const assetNames = new Map<string, string | null>(assets.map((a: any) => [a.id, a.name ?? null]));
   const byId = new Map<string, any>(plans.map((p: any) => [p.id, p]));
+  const lastWoByPlan = await lastClosedWorkOrderByPlan(prismaRaw, tenantId, workOrder.id, plans);
 
   // Se recorre `ids` (no `plans`) para respetar el orden de los vínculos.
   const rows: WorkOrderPlanRow[] = [];
@@ -133,11 +140,44 @@ export async function listWorkOrderPlans(
       triggerType: p.triggerType,
       frequencyHours: p.frequencyHours ?? null,
       lastExecutionHours: p.lastExecutionHours ?? null,
+      lastExecutionWo: lastWoByPlan.get(p.id) ?? null,
       samplingKind: p.samplingKind ?? null,
       spareIds: resolvePlanSpares(p).filter(s => s.kind === "SPARE" && s.spareId).map(s => s.spareId!),
     });
   }
   return rows;
+}
+
+/** Última OT cerrada (sin contar la propia) de cada plan por horas con lectura registrada. */
+export async function lastClosedWorkOrderByPlan(
+  prismaRaw: AnyPrisma,
+  tenantId: string,
+  currentWoId: string,
+  plans: Array<{ id: string; triggerType: string; lastExecutionHours: number | null }>,
+): Promise<Map<string, WorkOrderPlanRow["lastExecutionWo"]>> {
+  const out = new Map<string, WorkOrderPlanRow["lastExecutionWo"]>();
+  for (const p of plans) {
+    if ((p.triggerType !== "HOURS" && p.triggerType !== "RUNNING_HOURS") || p.lastExecutionHours == null) continue;
+    const wo = await (prismaRaw as any).workOrder.findFirst({
+      where: {
+        tenantId, status: "CLOSED", deletedAt: null, id: { not: currentWoId },
+        OR: [{ maintenancePlanId: p.id }, { planLinks: { some: { maintenancePlanId: p.id } } }],
+      },
+      orderBy: [{ completedDate: "desc" }, { updatedAt: "desc" }],
+      select: { id: true, workOrderCode: true, completedDate: true, runningHoursAtExecution: true },
+    });
+    // Sólo si esa OT dejó justo esa lectura: si el plan se corrigió a mano
+    // después, nombrarla confundiría más que ayudar.
+    if (wo && wo.runningHoursAtExecution === p.lastExecutionHours) {
+      out.set(p.id, {
+        id: wo.id,
+        code: wo.workOrderCode,
+        completedDate: wo.completedDate ? wo.completedDate.toISOString() : null,
+        hours: wo.runningHoursAtExecution ?? null,
+      });
+    }
+  }
+  return out;
 }
 
 // Los vínculos de una OT nacida de un plan se crean dentro de la transacción de

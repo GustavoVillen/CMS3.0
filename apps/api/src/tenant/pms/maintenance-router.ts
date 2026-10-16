@@ -358,7 +358,9 @@ export async function handleMaintenanceRoutes(
   // antes de abrir otra OT del mismo ítem.
   if (method === "GET" && url.pathname === "/app/pms/maintenance-plans/open-work-orders") {
     const ids = (url.searchParams.get("ids") ?? "").split(",").map(s => s.trim()).filter(Boolean);
-    sendJson(response, 200, { items: await listOpenWorkOrdersForPlans(session, ids) });
+    const sinceRaw = url.searchParams.get("since") ?? "";
+    const since = /^\d{4}-\d{2}-\d{2}$/.test(sinceRaw) ? new Date(`${sinceRaw}T00:00:00.000Z`) : null;
+    sendJson(response, 200, { items: await listOpenWorkOrdersForPlans(session, ids, since) });
     return true;
   }
 

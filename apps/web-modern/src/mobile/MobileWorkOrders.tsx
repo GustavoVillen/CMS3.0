@@ -14,7 +14,7 @@ import { ProgressNoteSheet } from "./ProgressNoteSheet";
 import { AuthedImage, AuthedVideo, AuthedAudio, AuthedDocLink } from "../lib/authed-media";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
-import { hourAssetsOf, hourReadingIssue } from "../lib/wo-hours";
+import { hourAssetsOf, hourReadingIssue, hoursBelowMessage } from "../lib/wo-hours";
 
 interface WO {
   id: string;
@@ -49,7 +49,7 @@ interface WO {
   maintenancePlanId: string | null;
   assetId?: string;
   // Sólo en el detalle completo (no en la lista): planes de la OT, con lo que pide el cierre por horas.
-  plans?: Array<{ assetId: string; assetName: string | null; triggerType?: string; lastExecutionHours?: number | null; requiredPermitTypes?: string[] }>;
+  plans?: Array<{ assetId: string; assetName: string | null; triggerType?: string; lastExecutionHours?: number | null; lastExecutionWo?: { id: string; code: string; completedDate: string | null } | null; requiredPermitTypes?: string[] }>;
   executedByName: string | null;
   completedDate: string | null;
   observations: string | null;
@@ -668,7 +668,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
       const issue = hourReadingIssue(hoursOf(a.assetId), a.lastHours);
       if (issue === "missing") { setHoursAlert(t("wo.modal.hoursRequired").replace("{asset}", a.assetName)); return; }
       if (issue === "below") {
-        setHoursAlert(t("wo.modal.hoursBelowLast").replace("{asset}", a.assetName).replace("{h}", (a.lastHours ?? 0).toLocaleString()));
+        setHoursAlert(hoursBelowMessage(t, a, executionDate || null));
         return;
       }
     }

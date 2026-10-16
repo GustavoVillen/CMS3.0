@@ -9,7 +9,11 @@ const STATUS_KEY: Record<string, TranslationKey> = {
   PLANNED: "wo.status.planned",
   IN_PROGRESS: "wo.status.inProgress",
   ON_HOLD: "wo.status.onHold",
+  CLOSED: "wo.status.closed",
 };
+
+/** dd/mm/aaaa de una fecha ISO. */
+const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
 /**
  * Ventana "este ítem del plan ya tiene una OT abierta" (ver lib/plan-wo-guard).
@@ -22,6 +26,9 @@ export const PlanWoDuplicateHost: React.FC = () => {
 
   useEffect(() => subscribePlanWoGuard(setReq), []);
   if (!req) return null;
+  // Con alguna OT ya cerrada (regularización con fecha vieja) el riesgo es cargar
+  // dos veces un trabajo que ya figura hecho: el texto lo dice así.
+  const hasClosed = req.items.some(o => o.status === "CLOSED");
 
   const close = (decision: "duplicate" | "cancel") => { req.resolve(decision); setReq(null); };
   const goTo = (code: string) => {
@@ -35,11 +42,11 @@ export const PlanWoDuplicateHost: React.FC = () => {
       <div className="w-full max-w-md rounded-2xl border border-fg/10 bg-surface dark:bg-[#0D1B2A] shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-fg/10 px-4 py-3">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-          <span className="text-[15px] font-black text-fg">{t("planWoDup.title")}</span>
+          <span className="text-[15px] font-black text-fg">{t(hasClosed ? "planWoDup.titleDone" : "planWoDup.title")}</span>
           <ModalCloseButton onClose={() => close("cancel")} className="ml-auto" />
         </div>
         <div className="space-y-3 p-4">
-          <p className="text-sm text-text-industrial">{t("planWoDup.body")}</p>
+          <p className="text-sm text-text-industrial">{t(hasClosed ? "planWoDup.bodyDone" : "planWoDup.body")}</p>
           <ul className="space-y-1.5">
             {req.items.map(o => (
               <li key={`${o.planId}-${o.workOrderId}`} className="flex items-center gap-2 rounded-lg border border-fg/10 bg-fg/[0.03] px-3 py-2">
@@ -47,6 +54,7 @@ export const PlanWoDuplicateHost: React.FC = () => {
                   <p className="font-mono text-[13px] font-bold text-fg">{o.workOrderCode}</p>
                   <p className="text-[11px] text-text-industrial/60">
                     {t("planWoDup.item").replace("{code}", o.taskCode)} · {STATUS_KEY[o.status] ? t(STATUS_KEY[o.status]!) : o.status}
+                    {o.status === "CLOSED" && o.completedDate && <> · {t("planWoDup.executedOn").replace("{date}", dmy(o.completedDate))}</>}
                   </p>
                 </div>
                 <button type="button" onClick={() => goTo(o.workOrderCode)}
@@ -56,7 +64,7 @@ export const PlanWoDuplicateHost: React.FC = () => {
               </li>
             ))}
           </ul>
-          <p className="text-sm font-semibold text-fg">{t("planWoDup.question")}</p>
+          <p className="text-sm font-semibold text-fg">{t(hasClosed ? "planWoDup.questionDone" : "planWoDup.question")}</p>
         </div>
         <div className="flex justify-end gap-2 border-t border-fg/10 px-4 py-3">
           <button type="button" onClick={() => close("cancel")}

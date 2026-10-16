@@ -23,6 +23,8 @@ export interface WoPlanRow {
   triggerType?: string;
   frequencyHours?: number | null;
   lastExecutionHours?: number | null;
+  /** OT cerrada que dejó esa última lectura (planes por horas). */
+  lastExecutionWo?: { id: string; code: string; completedDate: string | null } | null;
   /** Tipo de análisis del plan (FLUID, VIBRATION…): la OT es Predictivo. */
   samplingKind?: string | null;
   /** Repuestos del catálogo que el plan ya pide reemplazar. */

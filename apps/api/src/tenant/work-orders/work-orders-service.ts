@@ -1548,13 +1548,13 @@ async function resolveClosingHoursByAsset(
     if (!Array.isArray(readings)) {
       throw new RouteError(400, "VALIDATION_ERROR", "runningHoursByAsset debe ser una lista de {assetId, hours}.");
     }
-    const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
+    const { listWorkOrderPlanIds, lastClosedWorkOrderByPlan } = await import("./work-order-plans-service");
     const planIds = await listWorkOrderPlanIds(prismaRaw, wo);
     const plans = planIds.length > 0
       ? await (prismaRaw as any).maintenancePlan.findMany({
           where: { id: { in: planIds }, tenantId: wo.tenantId, deletedAt: null },
-          select: { assetId: true, triggerType: true, lastExecutionHours: true },
-        }) as Array<{ assetId: string; triggerType: string; lastExecutionHours: number | null }>
+          select: { id: true, assetId: true, triggerType: true, lastExecutionHours: true },
+        }) as Array<{ id: string; assetId: string; triggerType: string; lastExecutionHours: number | null }>
       : [];
     const woAssets = new Set([wo.assetId, ...plans.map(p => p.assetId)]);
     for (const r of readings) {
@@ -1567,12 +1567,19 @@ async function resolveClosingHoursByAsset(
         throw new RouteError(400, "VALIDATION_ERROR", "Las horas del equipo deben ser un número mayor o igual a cero.");
       }
       // Piso: no puede ser menor a la última lectura con la que se ejecutó un plan por horas del equipo.
-      const lasts = plans
-        .filter(p => p.assetId === assetId && HOUR_TRIGGERS.has(p.triggerType) && p.lastExecutionHours != null)
-        .map(p => p.lastExecutionHours as number);
-      const floor = lasts.length > 0 ? Math.max(...lasts) : null;
+      const withHours = plans
+        .filter(p => p.assetId === assetId && HOUR_TRIGGERS.has(p.triggerType) && p.lastExecutionHours != null);
+      const floorPlan = withHours.reduce<typeof withHours[number] | null>(
+        (best, p) => (best == null || (p.lastExecutionHours as number) > (best.lastExecutionHours as number) ? p : best), null);
+      const floor = floorPlan?.lastExecutionHours ?? null;
       if (floor !== null && hours < floor) {
-        throw new RouteError(400, "VALIDATION_ERROR", `Las horas informadas (${hours}) son menores a la última lectura del equipo (${floor}).`);
+        // Se dice de qué OT sale la lectura: casi siempre es el mismo trabajo
+        // cargado dos veces o un error de tipeo en una de las dos.
+        const source = (await lastClosedWorkOrderByPlan(prismaRaw, wo.tenantId, wo.id, [floorPlan as any])).get(floorPlan!.id);
+        const from = source
+          ? ` Esa lectura se registró en la ${source.code}${source.completedDate ? `, ejecutada el ${source.completedDate.slice(8, 10)}/${source.completedDate.slice(5, 7)}/${source.completedDate.slice(0, 4)}` : ""}, con la misma tarea. Revisá que no sea el mismo trabajo cargado dos veces o un error de tipeo en el horómetro.`
+          : "";
+        throw new RouteError(400, "VALIDATION_ERROR", `Las horas informadas (${hours}) son menores a la última lectura del equipo (${floor}).${from}`);
       }
       out.set(assetId, hours);
     }

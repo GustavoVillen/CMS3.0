@@ -1,4 +1,5 @@
-// Aviso antes de abrir una OT desde el plan cuando el ítem ya tiene una abierta.
+// Aviso antes de abrir una OT desde el plan cuando el ítem ya tiene una abierta,
+// o cuando se regulariza un trabajo viejo que ya figura hecho en otra OT cerrada.
 //
 // Todas las pantallas que abren una OT desde un ítem del PDM llaman a
 // `confirmPlanWoDuplicate` justo antes del POST /open-work-order. La ventana la
@@ -17,6 +18,8 @@ export interface OpenPlanWorkOrder {
   workOrderId: string;
   workOrderCode: string;
   status: string;
+  /** Sólo las CERRADAS (consulta con fecha vieja): fecha de ejecución. */
+  completedDate?: string | null;
 }
 
 export type PlanWoDecision = "duplicate" | "cancel";
@@ -39,13 +42,17 @@ export function subscribePlanWoGuard(fn: (req: PlanWoGuardRequest) => void): () 
  * - `true`: eligió abrir otra igual → mandar `allowDuplicate: true`.
  * - `false`: no había ninguna abierta (o no se pudo consultar: decide el servidor).
  */
-export async function confirmPlanWoDuplicate(planIds: string[]): Promise<boolean | null> {
+export async function confirmPlanWoDuplicate(planIds: string[], since?: string | null): Promise<boolean | null> {
   const ids = [...new Set(planIds.filter(Boolean))];
   if (ids.length === 0) return false;
   let items: OpenPlanWorkOrder[];
   try {
+    // `since` (aaaa-mm-dd): la OT se abre con una fecha vieja para regularizar un
+    // trabajo ya hecho. También vuelven las OT cerradas del ítem ejecutadas desde
+    // esa fecha: si el trabajo ya figura hecho, abrir otra lo carga dos veces.
+    const sinceQs = since && /^\d{4}-\d{2}-\d{2}$/.test(since) ? `&since=${since}` : "";
     const res = await api.get<{ items: OpenPlanWorkOrder[] }>(
-      `/app/pms/maintenance-plans/open-work-orders?ids=${ids.map(encodeURIComponent).join(",")}`,
+      `/app/pms/maintenance-plans/open-work-orders?ids=${ids.map(encodeURIComponent).join(",")}${sinceQs}`,
     );
     items = res.items ?? [];
   } catch {
