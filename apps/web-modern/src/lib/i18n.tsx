@@ -4288,6 +4288,7 @@ const dict = {
 
   // ─── Dashboard — Export, Crew, Permits ──────────────────────────────────────
   "dashboard.newWorkOrder":       { es: "Nueva Orden de Trabajo", en: "New Work Order",     pt: "Nova Ordem de Trabalho" },
+  "dashboard.newWorkOrder.listLink": { es: "Ver el historial de OT abiertas y cerradas", en: "View the history of open and closed WOs", pt: "Ver o histórico de OS abertas e fechadas" },
   "dashboard.newServiceRequest":  { es: "Nueva Solicitud de Servicio", en: "New Service Request", pt: "Nova Solicitação de Serviço" },
   "dashboard.mpChooser.title": { es: "¿Qué grupo querés ver?", en: "Which group do you want to see?", pt: "Qual grupo você quer ver?" },
   "dashboard.mpChooser.all":   { es: "Todos los grupos", en: "All groups", pt: "Todos os grupos" },
