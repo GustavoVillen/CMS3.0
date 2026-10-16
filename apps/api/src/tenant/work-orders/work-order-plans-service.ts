@@ -122,7 +122,7 @@ export async function listWorkOrderPlans(
     : [];
   const assetNames = new Map<string, string | null>(assets.map((a: any) => [a.id, a.name ?? null]));
   const byId = new Map<string, any>(plans.map((p: any) => [p.id, p]));
-  const lastWoByPlan = await lastClosedWorkOrderByPlan(prismaRaw, tenantId, workOrder.id, plans);
+  const floors = await hourFloorsByPlan(prismaRaw, tenantId, workOrder.id, plans);
 
   // Se recorre `ids` (no `plans`) para respetar el orden de los vínculos.
   const rows: WorkOrderPlanRow[] = [];
@@ -139,8 +139,9 @@ export async function listWorkOrderPlans(
       requiredPermitTypes: p.requiredPermitTypes ?? [],
       triggerType: p.triggerType,
       frequencyHours: p.frequencyHours ?? null,
-      lastExecutionHours: p.lastExecutionHours ?? null,
-      lastExecutionWo: lastWoByPlan.get(p.id) ?? null,
+      // Piso al cerrar: la última lectura ANTERIOR a esta OT (ver hourFloorsByPlan).
+      lastExecutionHours: floors.has(p.id) ? floors.get(p.id)!.floor : (p.lastExecutionHours ?? null),
+      lastExecutionWo: floors.get(p.id)?.source ?? null,
       samplingKind: p.samplingKind ?? null,
       spareIds: resolvePlanSpares(p).filter(s => s.kind === "SPARE" && s.spareId).map(s => s.spareId!),
     });
@@ -148,33 +149,46 @@ export async function listWorkOrderPlans(
   return rows;
 }
 
-/** Última OT cerrada (sin contar la propia) de cada plan por horas con lectura registrada. */
-export async function lastClosedWorkOrderByPlan(
+/**
+ * Piso de horas de cada plan por horas al cerrar esta OT, y la OT que lo dejó.
+ *
+ * El piso es la última lectura del plan. Excepción: una OT reabierta se está
+ * corrigiendo, y la lectura del plan puede ser la que ella misma dejó al
+ * cerrarse (ya no se sabe, porque al guardar se pisa la suya). Para ella vale la
+ * lectura de la última OT cerrada del plan, o ninguno si no hay otra.
+ */
+export async function hourFloorsByPlan(
   prismaRaw: AnyPrisma,
   tenantId: string,
   currentWoId: string,
   plans: Array<{ id: string; triggerType: string; lastExecutionHours: number | null }>,
-): Promise<Map<string, WorkOrderPlanRow["lastExecutionWo"]>> {
-  const out = new Map<string, WorkOrderPlanRow["lastExecutionWo"]>();
-  for (const p of plans) {
-    if ((p.triggerType !== "HOURS" && p.triggerType !== "RUNNING_HOURS") || p.lastExecutionHours == null) continue;
-    const wo = await (prismaRaw as any).workOrder.findFirst({
+): Promise<Map<string, { floor: number | null; source: WorkOrderPlanRow["lastExecutionWo"] }>> {
+  const out = new Map<string, { floor: number | null; source: WorkOrderPlanRow["lastExecutionWo"] }>();
+  const hourPlans = plans.filter(p => (p.triggerType === "HOURS" || p.triggerType === "RUNNING_HOURS") && p.lastExecutionHours != null);
+  if (hourPlans.length === 0) return out;
+  const current = await (prismaRaw as any).workOrder.findFirst({
+    where: { id: currentWoId, tenantId },
+    select: { reopenCount: true },
+  }) as { reopenCount: number | null } | null;
+  const reopened = (current?.reopenCount ?? 0) > 0;
+  for (const p of hourPlans) {
+    const prev = await (prismaRaw as any).workOrder.findFirst({
       where: {
         tenantId, status: "CLOSED", deletedAt: null, id: { not: currentWoId },
         OR: [{ maintenancePlanId: p.id }, { planLinks: { some: { maintenancePlanId: p.id } } }],
       },
       orderBy: [{ completedDate: "desc" }, { updatedAt: "desc" }],
       select: { id: true, workOrderCode: true, completedDate: true, runningHoursAtExecution: true },
-    });
-    // Sólo si esa OT dejó justo esa lectura: si el plan se corrigió a mano
-    // después, nombrarla confundiría más que ayudar.
-    if (wo && wo.runningHoursAtExecution === p.lastExecutionHours) {
-      out.set(p.id, {
-        id: wo.id,
-        code: wo.workOrderCode,
-        completedDate: wo.completedDate ? wo.completedDate.toISOString() : null,
-        hours: wo.runningHoursAtExecution ?? null,
-      });
+    }) as { id: string; workOrderCode: string; completedDate: Date | null; runningHoursAtExecution: number | null } | null;
+    const source = prev && prev.runningHoursAtExecution != null
+      ? { id: prev.id, code: prev.workOrderCode, completedDate: prev.completedDate ? prev.completedDate.toISOString() : null, hours: prev.runningHoursAtExecution }
+      : null;
+    if (reopened) {
+      out.set(p.id, { floor: source?.hours ?? null, source });
+    } else {
+      // Se nombra la OT sólo si dejó justo esa lectura: si el plan se corrigió
+      // a mano después, nombrarla confundiría más que ayudar.
+      out.set(p.id, { floor: p.lastExecutionHours, source: source && source.hours === p.lastExecutionHours ? source : null });
     }
   }
   return out;

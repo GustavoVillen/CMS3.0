@@ -1548,7 +1548,7 @@ async function resolveClosingHoursByAsset(
     if (!Array.isArray(readings)) {
       throw new RouteError(400, "VALIDATION_ERROR", "runningHoursByAsset debe ser una lista de {assetId, hours}.");
     }
-    const { listWorkOrderPlanIds, lastClosedWorkOrderByPlan } = await import("./work-order-plans-service");
+    const { listWorkOrderPlanIds, hourFloorsByPlan } = await import("./work-order-plans-service");
     const planIds = await listWorkOrderPlanIds(prismaRaw, wo);
     const plans = planIds.length > 0
       ? await (prismaRaw as any).maintenancePlan.findMany({
@@ -1557,6 +1557,7 @@ async function resolveClosingHoursByAsset(
         }) as Array<{ id: string; assetId: string; triggerType: string; lastExecutionHours: number | null }>
       : [];
     const woAssets = new Set([wo.assetId, ...plans.map(p => p.assetId)]);
+    const floors = await hourFloorsByPlan(prismaRaw, wo.tenantId, wo.id, plans);
     for (const r of readings) {
       const assetId = String(r?.assetId ?? "").trim();
       const hours = Number(r?.hours);
@@ -1566,16 +1567,17 @@ async function resolveClosingHoursByAsset(
       if (!Number.isFinite(hours) || hours < 0) {
         throw new RouteError(400, "VALIDATION_ERROR", "Las horas del equipo deben ser un número mayor o igual a cero.");
       }
-      // Piso: no puede ser menor a la última lectura con la que se ejecutó un plan por horas del equipo.
-      const withHours = plans
-        .filter(p => p.assetId === assetId && HOUR_TRIGGERS.has(p.triggerType) && p.lastExecutionHours != null);
-      const floorPlan = withHours.reduce<typeof withHours[number] | null>(
-        (best, p) => (best == null || (p.lastExecutionHours as number) > (best.lastExecutionHours as number) ? p : best), null);
-      const floor = floorPlan?.lastExecutionHours ?? null;
+      // Piso: la última lectura con la que se ejecutó un plan por horas del equipo
+      // (sin contar la que dejó esta misma OT antes de reabrirla).
+      let floor: number | null = null;
+      let source: { code: string; completedDate: string | null } | null = null;
+      for (const [planId, f] of floors) {
+        if (plans.find(p => p.id === planId)?.assetId !== assetId || f.floor == null) continue;
+        if (floor == null || f.floor > floor) { floor = f.floor; source = f.source; }
+      }
       if (floor !== null && hours < floor) {
         // Se dice de qué OT sale la lectura: casi siempre es el mismo trabajo
         // cargado dos veces o un error de tipeo en una de las dos.
-        const source = (await lastClosedWorkOrderByPlan(prismaRaw, wo.tenantId, wo.id, [floorPlan as any])).get(floorPlan!.id);
         const from = source
           ? ` Esa lectura se registró en la ${source.code}${source.completedDate ? `, ejecutada el ${source.completedDate.slice(8, 10)}/${source.completedDate.slice(5, 7)}/${source.completedDate.slice(0, 4)}` : ""}, con la misma tarea. Revisá que no sea el mismo trabajo cargado dos veces o un error de tipeo en el horómetro.`
           : "";

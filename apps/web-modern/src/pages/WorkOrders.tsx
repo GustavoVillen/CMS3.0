@@ -1530,6 +1530,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   // hoja de ruta de las SS no (son cambios de estado, no trabajo).
   const [closeBlockMsg, setCloseBlockMsg] = useState<string | null>(null);
   const startClose = useCallback(async () => {
+    // Horas menores a la última lectura: se avisa ya, antes del diálogo y de la
+    // auditoría, con el motivo completo (de qué OT sale la lectura).
+    for (const a of hourAssets) {
+      if (hourReadingIssue(hoursOf(a.assetId), a.lastHours) === "below") {
+        setHoursAlert(hoursBelowMessage(t, a, executionDate || null));
+        return;
+      }
+    }
     try {
       const res = await api.get<{ items?: unknown[] }>(`/app/pms/work-orders/${workOrder.id}/progress-notes`);
       if ((res.items ?? []).length === 0) { setCloseBlockMsg(t("wo.modal.closeNeedsProgress")); return; }
@@ -1537,7 +1545,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     setCloseOnBehalfUserId(user?.id ?? "");
     setCloseDate(executionDate || new Date().toISOString().slice(0, 10));
     setShowCloseDialog(true);
-  }, [workOrder.id, user?.id, executionDate, t]);
+  }, [workOrder.id, user?.id, executionDate, t, hourAssets, hoursOf]);
   useEffect(() => {
     if (!isAdmin) return;
     api.get<typeof closeTeamUsers>("/app/team/members")
@@ -5039,7 +5047,6 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
           {closingWarningEl}
           {err && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{err}</p>}
-          {hoursAlert && <AlertDialog message={hoursAlert} onClose={() => setHoursAlert(null)} />}
           </>)}
         </div>
 
@@ -5153,6 +5160,8 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     {/* ── Vista guiada: avisos ── */}
     {isMercurio && err && <AlertDialog message={err} onClose={() => setErr(null)} />}
     {closeBlockMsg && <AlertDialog message={closeBlockMsg} onClose={() => setCloseBlockMsg(null)} />}
+    {/* Fuera de las vistas: tiene que verse en la guiada, la de papel y la de siempre. */}
+    {hoursAlert && <AlertDialog message={hoursAlert} onClose={() => setHoursAlert(null)} />}
     {providerErr && <AlertDialog message={providerErr} onClose={() => setProviderErr(null)} />}
     {spareCreateErr && <AlertDialog message={spareCreateErr} onClose={() => setSpareCreateErr(null)} />}
     {planSpare.element}
