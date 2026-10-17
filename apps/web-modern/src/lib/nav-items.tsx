@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   Binoculars,
   Compass,
+  Trash2,
   // Waypoints,  // DORMANTE: icono del módulo Modos de Falla (RCM) — reactivar junto con la ruta
   // Activity,   // DORMANTE: icono del módulo Carga de Mantenimiento — reactivar junto con la ruta
   // HeartPulse, // DORMANTE: icono del módulo Confiabilidad — reactivar junto con la ruta
@@ -36,6 +37,8 @@ export type NavItem = {
   roles?: Role[];
   /** Sólo el admin marcado como Director de Mantenimiento (no se oculta desde Configuración). */
   maintenanceDirectorOnly?: boolean;
+  /** Sólo quien tiene este permiso (Equipo → Permisos). */
+  permission?: string;
 };
 
 export type NavSection = {
@@ -166,6 +169,8 @@ export const NAV: NavSection[] = [
         roles: ["TENANT_ADMIN"] },
       { icon: UsersRound,        labelKey: "nav.team",           path: "/team",
         roles: ["TENANT_ADMIN", "FLEET_SUPERINTENDENT"] },
+      { icon: Trash2,            labelKey: "nav.trash",          path: "/trash",
+        permission: "trash.restore" },
     ],
   },
 ];

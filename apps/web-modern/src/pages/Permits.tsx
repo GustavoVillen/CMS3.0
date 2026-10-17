@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker, CopilotChoiceStep, CopilotFlowProvider, useCopilotFlowKey } from "../lib/copilot-context";
 import {
   ShieldAlert, Plus, X, Loader2, AlertTriangle, FileText, Flame, Wind, ArrowUp, Zap, CheckCircle, XCircle, Sparkles,
   Snowflake, Waves, FileDown, Paperclip, Download, Trash2,
@@ -217,6 +219,15 @@ const PermitOriginChooser: React.FC<{
   const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      {/* Copiloto: elegir el origen equivale a tocar la tarjeta. */}
+      <CopilotChoiceStep
+        module="PERMITS" screen="PERMIT_ORIGIN" title={t("pm.newPermit")} label={t("pm.wiz.originQ")}
+        options={[
+          { value: "WORK_ORDER", label: t("pm.origin.fromWo") },
+          { value: "STANDALONE", label: t("pm.origin.standalone") },
+        ]}
+        onChoose={v => { if (v === "WORK_ORDER") onFromWorkOrder(); else onStandalone(); }}
+      />
       <div className="w-full max-w-2xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col border-t-4 border-t-orange-600 overflow-hidden">
         <PermitWizardHeader title={t("pm.newPermit")} onClose={onClose}
           stepper={<WizardStepper labels={[t("pm.wiz.stepOrigin"), t("pm.wiz.stepWo"), t("pm.wiz.stepType"), t("pm.wiz.stepForm")]} current={0} />} />
@@ -313,6 +324,12 @@ const PermitTypeChooser: React.FC<{
   const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      {/* Copiloto: elegir el tipo equivale a tocar la tarjeta. */}
+      <CopilotChoiceStep
+        module="PERMITS" screen="PERMIT_TYPE" title={t("pm.newPermit")} label={t("pm.wiz.typeQ")}
+        options={(Object.keys(TYPE_TKEY) as PermitType[]).map(tp => ({ value: tp, label: t(TYPE_TKEY[tp]) }))}
+        onChoose={v => onPick(v as PermitType)}
+      />
       <div className="w-full max-w-3xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col border-t-4 border-t-orange-600 overflow-hidden">
         <PermitWizardHeader title={t("pm.newPermit")} onClose={onClose} stepper={<WizardStepper labels={stepLabels} current={current} />} />
         <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
@@ -392,6 +409,15 @@ const WorkOrderPicker: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      {/* Copiloto (sólo en el alta): elegir la OT equivale a tocar la fila; el buque sigue siendo el del selector. */}
+      {stepper && !loading && items.length > 0 && (
+        <CopilotChoiceStep
+          module="PERMITS" screen="PERMIT_WORK_ORDER" title={t("pm.newPermit")} label={t("pm.wiz.woQ")}
+          vesselCode={vesselCode || undefined}
+          options={items.map(w => ({ value: w.id, label: `${w.workOrderCode} · ${w.assetName ?? "—"} · ${w.title?.trim() || "—"}` }))}
+          onChoose={id => { const w = items.find(x => x.id === id); if (w) onPick(w); }}
+        />
+      )}
       <div className={`w-full max-w-2xl max-h-[92vh] bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl flex flex-col overflow-hidden ${stepper ? "border-t-4 border-t-orange-600" : ""}`}>
         <PermitWizardHeader title={stepper ? t("pm.newPermit") : t("pm.woPicker.title")} stepper={stepper} onClose={onClose} />
 
@@ -732,6 +758,61 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, type, location, description, plannedStart, plannedEnd, hazards, controls, ppe, alarmOverride, workOrderId: workOrder?.id ?? null });
   const requestClose = useEscapeGuard({ isDirty: isEditable && isDirty, onSave: isEditable ? () => onSave(false) : undefined, onClose });
+
+  // Copiloto: ve el formulario de alta y lo puede completar (el que guarda,
+  // solicita o autoriza es el usuario; esto sólo cambia lo que se ve).
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name || v.code })),
+    type: (Object.keys(TYPE_TKEY) as PermitType[]).map(tp => ({ value: tp, label: t(TYPE_TKEY[tp]) })),
+    alarmOverride: [{ value: "true", label: t("common.yes") }, { value: "false", label: t("common.no") }],
+  };
+  const copilotFlow = useCopilotFlowKey();
+  useCopilotEmitter(isNew ? {
+    module: "PERMITS",
+    screen: "PERMIT_CREATE",
+    vesselCode,
+    workflowStage: "NEW",
+    // Último paso del alta guiada: así el copiloto lo completa al llegar.
+    assist: copilotFlow ? { flow: copilotFlow, title: t("pm.newPermit") } : undefined,
+    canEdit: true,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      type: type || null,
+      location: location.trim() || null,
+      description: description.trim() || null,
+      plannedStart: plannedStart || null,
+      plannedEnd: plannedEnd || null,
+      hazards: hazards.trim() || null,
+      controls: controls.trim() || null,
+      ppe: ppe.trim() || null,
+      alarmOverride: alarmOverride ? "true" : "false",
+    },
+    fieldOptions: copilotOptions,
+  } : null);
+  useCopilotApplyFields(isNew ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const dt = (raw: string) => {
+      if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+      const v = raw.trim().replace(" ", "T");
+      return v.length >= 16 ? v.slice(0, 16) : `${v.slice(0, 10)}T08:00`;
+    };
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc) setVesselCode(vc);
+    const tp = pick("type", fields.type);
+    if (tp) setType(tp as PermitType);
+    const ao = pick("alarmOverride", fields.alarmOverride);
+    if (ao) setAlarmOverride(ao === "true");
+    if (fields.location !== undefined) setLocation(fields.location);
+    if (fields.description !== undefined) setDescription(fields.description);
+    if (fields.hazards !== undefined) setHazards(fields.hazards);
+    if (fields.controls !== undefined) setControls(fields.controls);
+    if (fields.ppe !== undefined) setPpe(fields.ppe);
+    const ps = fields.plannedStart !== undefined ? dt(fields.plannedStart) : null;
+    if (ps) setPlannedStart(ps);
+    const pe = fields.plannedEnd !== undefined ? dt(fields.plannedEnd) : null;
+    if (pe) setPlannedEnd(pe);
+    return result();
+  } : null);
 
   // ── Alta del permiso por bloques (preview V19) ──────────────────────────────
   const [showTypeCards, setShowTypeCards] = useState(false);
@@ -1689,8 +1770,9 @@ export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void
   const woLabels = [t("pm.wiz.stepOrigin"), t("pm.wiz.stepWo"), t("pm.wiz.stepType"), t("pm.wiz.stepForm")];
   const freeLabels = [t("pm.wiz.stepOrigin"), t("pm.wiz.stepType"), t("pm.wiz.stepForm")];
 
+  // Los pasos y el formulario final son un mismo flujo para el copiloto.
   return (
-    <>
+    <CopilotFlowProvider name="new-permit">
       {flow.step === "origin" && (
         <PermitOriginChooser
           onFromWorkOrder={() => setFlow({ step: "workOrder" })}
@@ -1748,7 +1830,7 @@ export const NewPermitFlow: React.FC<{ onClose: () => void; onSaved?: () => void
       )}
 
       <MocTriggerHost controller={mocTrigger} />
-    </>
+    </CopilotFlowProvider>
   );
 };
 
@@ -1769,6 +1851,8 @@ export const PermitsPage: React.FC = () => {
   const [editing, setEditing] = useState<Permit | null>(null);
   const [editingDialog, setEditingDialog] = useState<"close" | null>(null);
   const mocTrigger = useMocTrigger();
+  // Copiloto: ?nuevo=1 abre el alta, igual que el botón "Nuevo".
+  useOpenNewFromUrl(() => setCreating(true));
 
   type Stage = "open" | PermitStatus | "all";
   const [stageSel, setStageSel] = useState<Stage>(initialStatus ?? "open");

@@ -82,6 +82,9 @@ export const PERMISSIONS: readonly PermissionDef[] = [
   { key: "certificate.manage",       group: "crew",        labelKey: "perm.certificateManage" },
   // Sistema
   { key: "team.manage",              group: "system",      labelKey: "perm.teamManage" },
+  // Papelera: ver lo borrado y restaurarlo (oct 2026). Por defecto sólo el
+  // administrador; "Deshacer" lo propio recién borrado no lo necesita.
+  { key: "trash.restore",            group: "system",      labelKey: "perm.trashRestore" },
 ];
 
 export type PermissionKey = string;

@@ -17,8 +17,8 @@
 //     if (match) void openDetail(match);
 //   }, [code, data, editing]);
 
-import { useCallback } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 export interface DeepLink {
   /** Código de la ruta (`:code`) ya decodeado, o null si estamos en la lista. */
@@ -108,4 +108,26 @@ export function useDeepLink(basePath: string): DeepLink {
     try { decoded = decodeURIComponent(code); } catch { decoded = code; }
   }
   return { code: decoded, open, close, closeTo };
+}
+
+/**
+ * Abre el formulario de alta de la página cuando la URL trae `?nuevo=1`.
+ *
+ * Lo usa el copiloto: abre `/moc?nuevo=1` y, apenas el formulario vacío está en
+ * pantalla, lo completa con lo hablado en el chat (el usuario sólo toca
+ * Guardar). El parámetro se borra al abrir, para que un refresh no reabra el
+ * alta. `enabled` = el usuario puede crear en esta pantalla; si no, se ignora.
+ */
+export function useOpenNewFromUrl(openNew: () => void, enabled = true) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantsNew = searchParams.get("nuevo") === "1";
+  const openRef = useRef(openNew);
+  openRef.current = openNew;
+  useEffect(() => {
+    if (!wantsNew) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("nuevo");
+    setSearchParams(next, { replace: true });
+    if (enabled) openRef.current();
+  }, [wantsNew, enabled, searchParams, setSearchParams]);
 }

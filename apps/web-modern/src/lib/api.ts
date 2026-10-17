@@ -1,4 +1,5 @@
 import { clearUndoHistory } from "./undo-manager";
+import { noteDeleted } from "./delete-undo";
 // ---------------------------------------------------------------------------
 // API client — thin fetch wrapper
 // Base URL is empty (Vite proxy handles /auth and /app in dev)
@@ -155,6 +156,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   // Lo guardado no se deshace con Ctrl+Z: el historial de cambios empieza de cero.
   if (method !== "GET" && !(method === "POST" && NON_SAVING_POST.test(path))) clearUndoHistory();
+  // Lo borrado de los módulos con Papelera se puede deshacer unos segundos (aviso + Ctrl+Z).
+  if (method === "DELETE") noteDeleted(path);
 
   if (res.status === 204) return undefined as T;
   return res.json();

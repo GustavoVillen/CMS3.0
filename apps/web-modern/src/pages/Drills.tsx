@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles, FileText, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -884,6 +885,8 @@ export const DrillsPage: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: Drill[]; total: number }>(path, [path]);
   const [showCreate, setShowCreate] = useState(false);
   const [prefill, setPrefill] = useState<DrillPrefill | undefined>(undefined);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => { setPrefill(undefined); setShowCreate(true); });
   const [editing, setEditing] = useState<Drill | null>(null);
   const [showRequirements, setShowRequirements] = useState(false);
 

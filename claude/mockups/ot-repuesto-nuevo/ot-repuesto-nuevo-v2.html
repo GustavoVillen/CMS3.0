@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OT - Repuesto nuevo - V2</title>
+<style>
+  :root {
+    --fg: #0f172a; --fg60: #475569; --fg40: #94a3b8; --fg10: #e2e8f0; --fg5: #f1f5f9;
+    --input: #eef1f6; --accent: #0284c7; --new: #2563eb; --new-bg: #eff5ff;
+    --red: #b91c1c; --amber: #d97706; --green: #047857; --sea: #0f9b8e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Inter, system-ui, sans-serif; color: var(--fg); background: #eef0f4; padding: 16px; }
+  .proto-bar { max-width: 900px; margin: 0 auto 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: var(--fg60); }
+  .proto-bar b { background: #f59e0b; color: #1f2937; padding: 3px 8px; border-radius: 6px; font-size: 11px; }
+  .seg { display: inline-flex; background: #dfe3ea; border-radius: 8px; padding: 2px; }
+  .seg button { border: 0; background: transparent; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; color: var(--fg60); }
+  .seg button.on { background: #fff; color: var(--fg); font-weight: 600; }
+
+  .card { max-width: 900px; margin: 0 auto; background: #fff; border: 1px solid var(--fg10); border-radius: 16px; padding: 18px 18px 22px; }
+  .sec { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
+  .num { width: 22px; height: 22px; border-radius: 50%; background: var(--fg); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; margin-top: 1px; }
+  .sec h3 { margin: 0; font-size: 14px; }
+  .sec p { margin: 2px 0 0; font-size: 11px; color: var(--fg40); }
+  .glabel { font-size: 11px; font-weight: 700; color: var(--fg60); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  /* V2: Repuestos arriba, Materiales abajo, cada uno a todo el ancho. */
+  .cols { display: flex; flex-direction: column; gap: 18px; }
+  .cols > div + div { border-top: 1px solid var(--fg10); padding-top: 14px; }
+  .colhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .lbl { font-size: 10px; font-weight: 700; color: var(--fg40); text-transform: uppercase; letter-spacing: .1em; }
+  .addbtn { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 3px 9px; border-radius: 8px; background: #e0f2fe; border: 1px solid #bae6fd; color: var(--accent); cursor: pointer; }
+  .row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .cell { background: var(--input); border: 1px solid #dfe3ea; border-radius: 9px; padding: 7px 10px; font: inherit; font-size: 13px; color: var(--fg); outline: none; }
+  .cell:focus { border-color: #7dd3fc; }
+  .qty { width: 60px; text-align: center; } .unit { width: 52px; text-align: center; }
+  .dd { position: relative; flex: 1; min-width: 0; }
+  .ddbtn { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer; }
+  .ddbtn .ph { color: #a7b0bf; flex: 1; }
+  /* El nombre del repuesto se ve entero: si no entra, baja de renglón en vez de cortarse. */
+  .ddbtn .val { flex: 1; white-space: normal; word-break: break-word; line-height: 1.35; }
+  .mono { font-family: Consolas, monospace; color: var(--accent); }
+  .panel { position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--fg10); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,.12); overflow: hidden; }
+  .psearch { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--fg10); }
+  .psearch input { border: 0; outline: none; flex: 1; font: inherit; font-size: 13px; background: transparent; }
+  .plist { max-height: 180px; overflow-y: auto; }
+  .opt { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 0; background: #fff; text-align: left; cursor: pointer; font: inherit; font-size: 12px; }
+  .opt:hover { background: var(--fg5); }
+  .opt .nm { flex: 1; white-space: normal; word-break: break-word; }
+  .none { padding: 10px 12px; font-size: 12px; color: var(--fg40); text-align: center; }
+  .create { width: 100%; display: flex; gap: 6px; align-items: center; padding: 9px 12px; border: 0; border-top: 1px dashed #a9c3f7; background: var(--new-bg); color: var(--new); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+  .create:hover { background: #e2ecff; }
+  .create.mat { color: var(--fg60); background: var(--fg5); border-top-color: var(--fg10); }
+  .stock { width: 74px; text-align: right; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .s-red { color: var(--red); } .s-ok { color: var(--green); } .s-warn { color: var(--amber); }
+  .tagnew { font-size: 9px; font-weight: 800; text-transform: uppercase; background: #dbe7fe; color: var(--new); padding: 1px 6px; border-radius: 6px; margin-left: 6px; }
+  .trash { border: 0; background: transparent; color: var(--fg40); cursor: pointer; padding: 5px; border-radius: 7px; }
+  .trash:hover { color: #e11d48; background: #ffe4e6; }
+  .empty { font-size: 11px; color: var(--fg40); font-style: italic; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #0f172a; color: #fff; font-size: 12px; padding: 10px 14px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,.25); display: none; max-width: 92vw; }
+  .toast.on { display: block; }
+  .note { max-width: 900px; margin: 14px auto 0; font-size: 12px; color: var(--fg60); line-height: 1.5; }
+  
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <b>PROTOTIPO V2</b><span>Datos de ejemplo. No guarda nada.</span>
+  <span style="flex:1"></span>
+  <span>Quién carga:</span>
+  <div class="seg">
+    <button id="pYes" class="on" onclick="setPerm(true)">Capitán / JM / Compras</button>
+    <button id="pNo" onclick="setPerm(false)">Tripulante (sin permiso de repuestos)</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec"><div class="num">4</div><div><h3>Repuestos y materiales</h3><p>Lo que se va a necesitar para el trabajo</p></div></div>
+  <div class="glabel">Repuestos y materiales previstos</div>
+  <div class="cols">
+    <div>
+      <div class="colhead"><span class="lbl">Repuestos</span><button class="addbtn" onclick="addRow('SPARE')">+ Agregar</button></div>
+      <div id="spares"></div>
+    </div>
+    <div>
+      <div class="colhead"><span class="lbl">Materiales</span><button class="addbtn" onclick="addRow('MATERIAL')">+ Agregar</button></div>
+      <div id="materials"></div>
+    </div>
+  </div>
+</div>
+
+<p class="note">Probá: tocá «Seleccionar repuesto…» en la segunda fila y escribí «Filtro de aceite Cummins QSK19».</p>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CATALOG = [
+  { id: "s1", sku: "RE 504836", name: "Filtro de aceite para generador John Deere", unit: "ud", onHand: 0, min: 1 },
+  { id: "s2", sku: "FIL-ACE-02", name: "Filtro de aceite by-pass para Volvo Penta D16 MH", unit: "ud", onHand: 2, min: 1 },
+  { id: "s3", sku: "FIL-ACE-01", name: "Filtro de aceite spin-on Volvo Penta D16", unit: "ud", onHand: 4, min: 1 },
+  { id: "s4", sku: "FIL-COM-01", name: "Filtro de combustible primario Racor 2040PM", unit: "ud", onHand: 3, min: 2 },
+  { id: "s5", sku: "COR-ALT-01", name: "Correa de alternador motor principal", unit: "ud", onHand: 1, min: 1 },
+];
+const STOP = new Set(["de","del","la","el","los","las","para","con","y","en","sae"]);
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+function proposeSku(name) {
+  const taken = new Set(CATALOG.map(c => c.sku.toUpperCase()));
+  const words = norm(name).split(" ").filter(w => w && !STOP.has(w));
+  const spec = words.filter(w => /\d/.test(w)).join("").toUpperCase().slice(0, 8);
+  const plain = words.filter(w => !/\d/.test(w)).map(w => w.slice(0, 3).toUpperCase());
+  const base = [plain[0] || "REP", spec || plain[1]].filter(Boolean).join("-");
+  for (let n = 1; n < 100; n++) { const s = `${base}-${String(n).padStart(2, "0")}`; if (!taken.has(s)) return s; }
+}
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+let canCreate = true;
+let items = [
+  { kind: "SPARE", spareId: "s1", qty: 1, unit: "ud" },
+  { kind: "SPARE", spareId: "s2", qty: 2, unit: "ud" },
+  { kind: "SPARE", spareId: "", qty: 1, unit: "ud" },
+  { kind: "MATERIAL", desc: "Grasa marina EP2", qty: 1, unit: "kg" },
+];
+let openIdx = -1, query = "";
+
+function setPerm(v) {
+  canCreate = v;
+  document.getElementById("pYes").classList.toggle("on", v);
+  document.getElementById("pNo").classList.toggle("on", !v);
+  render();
+}
+function addRow(kind) { items.push({ kind, spareId: "", desc: "", qty: 1, unit: "ud" }); if (kind === "SPARE") { openIdx = items.length - 1; query = ""; } render(); }
+function removeRow(i) { items.splice(i, 1); openIdx = -1; render(); }
+function pick(i, id) { const s = CATALOG.find(c => c.id === id); Object.assign(items[i], { spareId: id, unit: s.unit }); openIdx = -1; render(); }
+function createSpare(i) {
+  const name = query.trim();
+  const s = { id: "n" + Date.now(), sku: proposeSku(name), name, unit: "ud", onHand: 0, min: 0, isNew: true };
+  CATALOG.push(s);
+  Object.assign(items[i], { spareId: s.id, unit: s.unit });
+  openIdx = -1; query = "";
+  toast(`Se creó ${s.sku} en Repuestos de DON CHICUETO, con stock 0.`);
+  render();
+}
+function toMaterial(i) {
+  items[i] = { kind: "MATERIAL", desc: query.trim(), qty: items[i].qty, unit: items[i].unit };
+  openIdx = -1; query = "";
+  toast("Anotado en Materiales: no está en el catálogo del buque.");
+  render();
+}
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 3500); }
+
+function stockCls(s) { return s.onHand < s.min || s.onHand === 0 ? "s-red" : s.onHand <= s.min ? "s-warn" : "s-ok"; }
+
+function renderSpareRow(it, i) {
+  const s = CATALOG.find(c => c.id === it.spareId);
+  const hits = query ? CATALOG.filter(c => norm(c.name + " " + c.sku).includes(norm(query)) || norm(query).split(" ").every(w => norm(c.name + " " + c.sku).includes(w))) : CATALOG;
+  const typed = query.trim();
+  const panel = openIdx === i ? `<div class="panel">
+      <div class="psearch">&#128269;<input id="q" placeholder="Buscar por código o nombre…" value="${esc(query)}" oninput="query=this.value;render();const e=document.getElementById('q');e.focus();e.setSelectionRange(e.value.length,e.value.length)"></div>
+      <div class="plist">${hits.length ? hits.map(c => `<button class="opt" onclick="pick(${i},'${c.id}')"><span class="mono">${esc(c.sku)}</span><span class="nm">${esc(c.name)}</span><span class="${stockCls(c)}" style="font-weight:700;font-size:11px">${c.onHand} ${esc(c.unit)}</span></button>`).join("") : `<div class="none">Sin resultados</div>`}</div>
+      ${typed.length >= 2 ? (canCreate
+        ? `<button class="create" onclick="createSpare(${i})">+ No está: crear «${esc(typed)}» como repuesto nuevo del buque</button>`
+        : `<button class="create mat" onclick="toMaterial(${i})">+ No está en el catálogo: anotarlo en Materiales</button>`) : ""}
+    </div>` : "";
+  return `<div class="row">
+    <div class="dd">
+      <button class="cell ddbtn" onclick="openIdx=${openIdx === i ? -1 : i};query='';render();setTimeout(()=>{const e=document.getElementById('q');if(e)e.focus()},0)">
+        ${s ? `<span class="val"><span class="mono">${esc(s.sku)}</span> — ${esc(s.name)}${s.isNew ? '<span class="tagnew">nuevo</span>' : ""}</span>` : `<span class="ph">Seleccionar repuesto…</span>`}
+        <span style="color:var(--fg40)">&#9662;</span>
+      </button>${panel}
+    </div>
+    <span class="stock ${s ? stockCls(s) : ""}">${s ? `${s.onHand === 0 ? "&#9888; " : ""}${s.onHand} ${esc(s.unit)}` : ""}</span>
+    <input class="cell qty" type="number" value="${it.qty}">
+    <input class="cell unit" value="${esc(it.unit)}">
+    <button class="trash" onclick="removeRow(${i})" title="Quitar ítem">&#128465;</button>
+  </div>`;
+}
+function renderMatRow(it, i) {
+  return `<div class="row"><input class="cell" style="flex:1;min-width:0" placeholder="Ej. Grasa marina EP2" value="${esc(it.desc || "")}">
+    <input class="cell qty" type="number" value="${it.qty}"><input class="cell unit" value="${esc(it.unit)}">
+    <button class="trash" onclick="removeRow(${i})">&#128465;</button></div>`;
+}
+function render() {
+  const sp = items.map((it, i) => it.kind === "SPARE" ? renderSpareRow(it, i) : "").join("");
+  const mt = items.map((it, i) => it.kind === "MATERIAL" ? renderMatRow(it, i) : "").join("");
+  document.getElementById("spares").innerHTML = sp || `<p class="empty">Sin repuestos.</p>`;
+  document.getElementById("materials").innerHTML = mt || `<p class="empty">Sin materiales.</p>`;
+}
+document.addEventListener("mousedown", e => { if (openIdx >= 0 && !e.target.closest(".dd")) { openIdx = -1; render(); } });
+render();
+</script>
+</body>
+</html>

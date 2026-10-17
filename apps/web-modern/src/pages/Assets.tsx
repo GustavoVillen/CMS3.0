@@ -5,6 +5,7 @@ import {
   Loader2, Package, Plus, PowerOff, Save, Search, Settings, ShieldAlert, Ship, Sparkles, Trash2, X,
 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
@@ -1684,6 +1685,8 @@ export const AssetsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showExcel, setShowExcel] = useState(false);
   const [editing, setEditing] = useState<Asset | null | undefined>(undefined);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => setEditing(null));
 
   useCopilotEmitter(editing === undefined ? { module: "ASSETS", screen: "ASSET_LIST" } : null);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);

@@ -13,6 +13,8 @@ import { VesselLabel } from "../components/EntityLabels";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 
 // Roles clave de tripulación: cambios en estos dispara popup MOC ORGANIZATIONAL.
 // Basado en SOLAS/ISM: el capitán, jefe de máquinas y primer oficial son los
@@ -235,6 +237,56 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("crew.error.reopen")); }
     finally { setSaving(false); }
   }, [t, crew, onSaved]);
+
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  // El rango va con la misma etiqueta que muestra la lista del formulario.
+  const rankLabelOf = (r: Rank) => {
+    const mapKey = RANK_TKEY[r.code];
+    if (mapKey) return t(mapKey as TranslationKey);
+    const k1 = t(`crew.rank.${r.code}` as TranslationKey);
+    if (!k1.startsWith("[")) return k1;
+    const k2 = t(`crew.rank.${r.code.toLowerCase()}` as TranslationKey);
+    if (!k2.startsWith("[")) return k2;
+    return r.name;
+  };
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    rankId: ranks.map(r => ({ value: r.id, label: rankLabelOf(r) })),
+  };
+  useCopilotEmitter({
+    module: "CREW",
+    screen: isNew ? "CREW_CREATE" : "CREW_EDIT",
+    entityId: crew?.id,
+    entityCode: crew?.crewCode,
+    vesselCode,
+    workflowStage: crew?.status ?? "NEW",
+    canEdit: !isLocked,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      rankId: rankId || null,
+      firstName: firstName.trim() || null,
+      lastName: lastName.trim() || null,
+      nationality: nationality.trim() || null,
+      passportNumber: passportNumber.trim() || null,
+      signOnDate: signOnDate || null,
+      notes: notes.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(!isLocked ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc && isNew) setVesselCode(vc);
+    const rk = pick("rankId", fields.rankId);
+    if (rk) setRankId(rk);
+    if (fields.firstName !== undefined) setFirstName(fields.firstName);
+    if (fields.lastName !== undefined) setLastName(fields.lastName);
+    if (fields.nationality !== undefined) setNationality(fields.nationality);
+    if (fields.passportNumber !== undefined) setPassportNumber(fields.passportNumber);
+    if (fields.signOnDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.signOnDate)) setSignOnDate(fields.signOnDate.slice(0, 10));
+    if (fields.notes !== undefined) setNotes(fields.notes);
+    return result();
+  } : null);
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, firstName, lastName, rankId, nationality, passportNumber, signOnDate, notes });
@@ -517,6 +569,7 @@ export const CrewPage: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Crew | null>(null);
   const mocTrigger = useMocTrigger();
+  useOpenNewFromUrl(() => setShowCreate(true));
 
   return (
     <div className="p-6 space-y-4">

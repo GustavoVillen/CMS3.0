@@ -67,6 +67,7 @@ const WeeklyReportPage = React.lazy(() => import("./pages/WeeklyReport").then(m 
 // const FailureModesPage = React.lazy(() => import("./pages/FailureModes").then(m => ({ default: m.FailureModesPage })));
 const VesselSuperintendentsPage = React.lazy(() => import("./pages/VesselSuperintendents").then(m => ({ default: m.VesselSuperintendentsPage })));
 const TeamPage = React.lazy(() => import("./pages/Team").then(m => ({ default: m.TeamPage })));
+const TrashPage = React.lazy(() => import("./pages/Trash").then(m => ({ default: m.TrashPage })));
 const DailyReportsPage = React.lazy(() => import("./pages/DailyReports").then(m => ({ default: m.DailyReportsPage })));
 const VoyageTankReportsPage = React.lazy(() => import("./pages/VoyageTankReports").then(m => ({ default: m.VoyageTankReportsPage })));
 const AssetHoursPage = React.lazy(() => import("./pages/AssetHours").then(m => ({ default: m.AssetHoursPage })));
@@ -148,6 +149,13 @@ function RequirePlatformAuth({ children }: { children: React.ReactNode }) {
 function RequireRole({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user || !roles.includes(user.role)) return <AccessDenied />;
+  return <>{children}</>;
+}
+
+/** Restringe una ruta a quien tenga el permiso (Equipo → Permisos). */
+function RequirePermission({ permission, children }: { permission: string; children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user?.permissions?.includes(permission)) return <AccessDenied />;
   return <>{children}</>;
 }
 
@@ -266,6 +274,7 @@ export default function App() {
               <Route path="/due-items"         element={<DueItemsPage />} />
               <Route path="/superintendents"   element={<RequireRole roles={["TENANT_ADMIN"]}><VesselSuperintendentsPage /></RequireRole>} />
               <Route path="/team"              element={<RequireRole roles={["TENANT_ADMIN"]}><TeamPage /></RequireRole>} />
+              <Route path="/trash"             element={<RequirePermission permission="trash.restore"><TrashPage /></RequirePermission>} />
               <Route path="/vessels"           element={<VesselsPage />} />
               <Route path="/equipment"         element={<AssetsPage />} />
               {/* Links guardados antes del rename de B-01. La carpeta del build

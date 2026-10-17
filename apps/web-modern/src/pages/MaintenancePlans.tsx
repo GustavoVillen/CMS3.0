@@ -84,7 +84,7 @@ import { MaintenancePlansMatrix } from "../components/MaintenancePlansMatrix";
 import { PlannedItemsEditor, type WoPlannedItem, type WoSpareOption } from "../components/work-orders/PlannedItemsEditor";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { RECORD_IDENTITY, recordHeaderClass } from "../lib/record-identity";
-import { useDeepLink } from "../lib/deep-link";
+import { useDeepLink, useOpenNewFromUrl } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, useCopilotScreenContext } from "../lib/copilot-context";
 import { CreateWorkOrderModal, buildWoPrefillFromPlan } from "../components/CreateWorkOrderModal";
@@ -3724,6 +3724,8 @@ export const MaintenancePlansPage: React.FC = () => {
   const [searchText, setSearchText] = useState("");
   const [editing,       setEditing]       = useState<MaintenancePlan | null>(null);
   const [showModal,     setShowModal]     = useState(false);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => { setEditing(null); setShowModal(true); });
   // `close` no se usa: el cierre del plan es determinista (ver onClose del modal).
   const { code: linkCode, open: openLink } = useDeepLink("/maintenance-plans");
   // "Número de turno" de apertura. La ventana se abre al instante con la fila y

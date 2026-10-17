@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom";
 import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { useFetch } from "../lib/hooks";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { CertificateRenewalDialog } from "../components/CertificateRenewalDialog";
@@ -247,6 +248,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
     workflowStage: derivedStatus,
     canEdit: true,
     fieldValues: {
+      vesselCode:   vesselCode   || null,
       name:         name         || null,
       certCode:     certCode     || null,
       authority:    authority    || null,
@@ -255,6 +257,7 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
       lastInspectionDate: lastInsp || null,
       notes:        notes        || null,
     },
+    fieldOptions: { vesselCode: vesselOptions.map(v => ({ value: v.code, label: v.name })) },
   });
   // El copiloto puede completar la ficha (fechas en YYYY-MM-DD); antes sólo la
   // veía. El archivo, el equipo y el plan los elige la persona.
@@ -266,6 +269,10 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
       const d = asDate(String(v));
       if (d) set(d); else rejected.push(label);
     };
+    if (fields.vesselCode) {
+      const hit = vesselOptions.find(v => v.code === fields.vesselCode || v.name.toLowerCase() === fields.vesselCode!.toLowerCase());
+      if (hit) setVessel(hit.code); else rejected.push(t("col.vessel"));
+    }
     if (fields.name      !== undefined) setName(fields.name);
     if (fields.certCode  !== undefined) setCertCode(fields.certCode);
     if (fields.authority !== undefined) setAuthority(fields.authority);
@@ -655,6 +662,8 @@ export const CertificatesPage: React.FC = () => {
   const [vesselInput, setVesselInput] = useState(vesselFilter);
   const [showExcel, setShowExcel] = useState(false);
   const [formCert, setFormCert] = useState<Certificate | null | undefined>(undefined);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => setFormCert(null), canWrite);
   const [deleteTarget, setDeleteTarget] = useState<Certificate | null>(null);
 
   useCopilotEmitter(formCert === undefined ? { module: "CERTIFICATES", screen: "CERT_LIST" } : null);

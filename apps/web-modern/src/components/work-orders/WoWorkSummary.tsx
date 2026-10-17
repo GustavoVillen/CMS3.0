@@ -31,26 +31,29 @@ function sinEquipo(asset: string | null, title: string): string {
   return repite ? title.slice(i + 1).trim() || title : title;
 }
 
-export function WoWorkSummary({ plans, assetName, title }: {
+export function WoWorkSummary({ plans, assetId, assetName, title, onOpenAsset }: {
   plans?: WoPlanRow[];
   /** Equipo y título de la OT: lo que se muestra cuando no tiene planes. */
+  assetId?: string | null;
   assetName?: string | null;
   title?: string | null;
+  /** Click en el nombre del equipo: abre su ficha. Sin esto el nombre no es link. */
+  onOpenAsset?: (assetId: string) => void;
 }) {
   const t = useT();
   const [abierto, setAbierto] = useState(false);
 
-  const grupos: Array<{ asset: string | null; tasks: string[] }> = [];
+  const grupos: Array<{ asset: string | null; assetId: string | null; tasks: string[] }> = [];
   if (plans && plans.length > 0) {
     for (const p of plans) {
       const asset = p.assetName ?? null;
       let g = grupos.find(x => x.asset === asset);
-      if (!g) { g = { asset, tasks: [] }; grupos.push(g); }
+      if (!g) { g = { asset, assetId: p.assetId ?? null, tasks: [] }; grupos.push(g); }
       const tarea = sinEquipo(asset, p.title);
       if (!g.tasks.includes(tarea)) g.tasks.push(tarea);
     }
   } else if (assetName || title) {
-    grupos.push({ asset: assetName ?? null, tasks: title ? [title] : [] });
+    grupos.push({ asset: assetName ?? null, assetId: assetId ?? null, tasks: title ? [title] : [] });
   }
   if (grupos.length === 0) return null;
 
@@ -66,7 +69,13 @@ export function WoWorkSummary({ plans, assetName, title }: {
           title={[g.asset, g.tasks.join(" · ")].filter(Boolean).join(": ")}>
           <Cog className="w-3 h-3 shrink-0 text-accent" />
           <p className="truncate min-w-0">
-            {g.asset && <><b className="font-bold text-fg">{g.asset}</b> <span className="text-text-industrial/50">—</span> </>}
+            {g.asset && <>
+              {g.assetId && onOpenAsset
+                ? <button type="button" onClick={() => onOpenAsset(g.assetId!)} title={t("wo.header.openAsset")}
+                    className="font-bold text-fg hover:text-accent hover:underline cursor-pointer">{g.asset}</button>
+                : <b className="font-bold text-fg">{g.asset}</b>}
+              {" "}<span className="text-text-industrial/50">—</span>{" "}
+            </>}
             {g.tasks.map((tarea, j) => (
               <span key={j} className="text-fg/80">
                 {j > 0 && <span className="px-1 text-text-industrial/40">·</span>}

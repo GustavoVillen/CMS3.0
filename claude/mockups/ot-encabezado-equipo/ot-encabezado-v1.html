@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encabezado de la OT — Preview V1</title>
+<style>
+  :root {
+    --bg: #eef1f4; --surface: #ffffff; --fg: #0f1b2a; --muted: #5b6878; --faint: #95a1ae;
+    --line: #e3e8ee; --accent: #0b7fc1; --accent-soft: #e8f3fa; --band: #f6f8fa;
+    --ok: #128a5b; --warn: #b7791f; --blue-badge-bg: #e7f0fb; --blue-badge: #1f5fae;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  .mono { font-family: "JetBrains Mono", Consolas, monospace; }
+  header.top { padding: 18px 24px 8px; }
+  header.top h1 { font-size: 18px; margin: 0 0 4px; }
+  header.top p { margin: 0; color: var(--muted); font-size: 13px; max-width: 900px; line-height: 1.5; }
+  .demo { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: #fff4d6; color: #8a5a00; font-size: 11px; font-weight: 700; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 24px 4px; }
+  .seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; font: inherit; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  main { padding: 12px 24px 40px; display: grid; gap: 22px; }
+  .case-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .frame { max-width: 900px; transition: max-width .2s; }
+  .frame.phone { max-width: 390px; }
+
+  /* Modal */
+  .modal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,42,.10); }
+  .stripe { height: 4px; background: var(--accent); }
+  .hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .hdr-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex-wrap: wrap; }
+  .ico { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+  .kicker { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .code { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .asset-old { font-size: 14px; color: var(--muted); }
+  .badge { padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; background: var(--blue-badge-bg); color: var(--blue-badge); border: 1px solid #c9dcf4; }
+  .due { display: flex; align-items: center; gap: 6px; }
+  .due span { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+  .due input { font: inherit; font-size: 12px; border: 1px solid #d5dce4; border-radius: 6px; padding: 2px 6px; }
+  .hdr-right { display: flex; align-items: center; gap: 6px; }
+  .btn-ghost { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11px; color: var(--muted); }
+  .close { width: 30px; height: 30px; border-radius: 50%; background: #e0103a; color: #fff; display: grid; place-items: center; font-weight: 700; }
+
+  /* Banda NUEVA: equipo y trabajo */
+  .work { padding: 10px 22px 12px; background: var(--band); border-bottom: 1px solid var(--line); }
+  .work-title { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+  .row { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 14px; align-items: baseline; padding: 4px 0; }
+  .row + .row { border-top: 1px dashed #dde3ea; }
+  .eq { display: flex; align-items: baseline; gap: 7px; font-size: 14px; font-weight: 700; color: var(--fg); min-width: 0; }
+  .eq svg { width: 13px; height: 13px; color: var(--accent); flex-shrink: 0; transform: translateY(2px); }
+  .eq .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task { font-size: 13px; color: #2b3a4c; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .task .sep { color: var(--faint); padding: 0 4px; }
+  .more { margin-top: 4px; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0; }
+  .phone .row { grid-template-columns: 1fr; }
+  .phone .hdr { flex-wrap: wrap; }
+
+  /* Fila de abajo (ya existe, no cambia) */
+  .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 22px 12px; border-bottom: 1px solid var(--line); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 10px; font-size: 11px; border: 1px solid #cfe3f2; background: var(--accent-soft); }
+  .chip.grey { border-color: var(--line); background: #f3f5f7; }
+  .steps { font-size: 11px; color: var(--ok); font-weight: 700; }
+  .body-ph { padding: 14px 22px; color: var(--faint); font-size: 12px; font-style: italic; }
+
+  .notes { max-width: 900px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 13px; line-height: 1.55; }
+  .notes h3 { font-size: 13px; margin: 10px 0 4px; }
+  .notes h3:first-child { margin-top: 0; }
+  .notes ul { margin: 0; padding-left: 18px; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Encabezado de la OT: equipo y mantenimiento a la vista — Preview V1</h1>
+  <p>Vista previa sin tocar el sistema. Las OT son reales de la base, sólo como ejemplo<span class="demo">DATOS DE EJEMPLO</span>.
+     Arriba de cada caso se puede pasar de <b>Actual</b> a <b>Propuesta</b> y ver cómo queda en el celular.</p>
+</header>
+
+<div class="controls">
+  <div class="seg" id="segMode">
+    <button data-mode="actual">Actual</button>
+    <button data-mode="prop" class="on">Propuesta</button>
+  </div>
+  <div class="seg" id="segWidth">
+    <button data-w="desk" class="on">Escritorio</button>
+    <button data-w="phone">Celular</button>
+  </div>
+</div>
+
+<main id="cases"></main>
+
+<main>
+  <div class="notes">
+    <h3>Qué cambia</h3>
+    <ul>
+      <li><b>ACTUAL:</b> al lado del número dice «Varios equipos (2)» y la tarea no aparece; para saber qué se hace hay que abrir «Qué hay que hacer».</li>
+      <li><b>PROPUESTA:</b> debajo del número, una franja «Equipo y trabajo» con <b>una línea por equipo</b>: el nombre del equipo en negrita y, al lado, las tareas del plan que se hacen sobre él.</li>
+      <li><b>POR QUÉ:</b> al abrir la OT se sabe en un segundo qué máquina y qué trabajo es, sin bajar ni abrir secciones.</li>
+    </ul>
+    <h3>Cómo se arma (sin cargar nada nuevo)</h3>
+    <ul>
+      <li>Sale de los planes que ya tiene la OT: equipo y tarea de cada uno. Las tareas del mismo equipo van juntas, separadas por «·».</li>
+      <li>Si la tarea repite el equipo al principio («RADAR DE BABOR SAMYUNG SMR 3700: Verificación…»), se muestra sólo lo que va después de los dos puntos, porque el equipo ya está en negrita. «SERVICE:», «CONTROL:» o «TOMA DE MUESTRAS:» se dejan, porque dicen qué tipo de trabajo es.</li>
+      <li>OT sin plan (correctiva): el equipo y el título de la OT.</li>
+      <li>Cada línea muestra hasta 2 renglones; si no entra, termina en «…» y el texto completo aparece al pasar el mouse. Con más de 3 equipos se ven 3 y un «Ver N más».</li>
+      <li>Lo demás del encabezado no se mueve: estado, vencimiento, buque, «Abierta por» y las etapas.</li>
+    </ul>
+    <h3>Qué no cambia</h3>
+    <ul>
+      <li>Permisos, datos y PDF: igual que hoy. Es sólo lo que se ve arriba de la ventana de la OT.</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+// Datos de ejemplo tomados de la base local (OT reales).
+const CASES = [
+  { label: "Dos equipos (2 planes)", code: "OT-DCH-26-0313", status: "Planificada", due: "2026-10-14", vessel: "DON CHICUETO", by: "Admin Mercurio",
+    plans: [
+      { asset: "Radar de Babor", title: "RADAR DE BABOR SAMYUNG SMR 3700: Verificacion de conexiones, limpieza interior de procesador y LCD, limpieza de antena, regulacion de sintonia" },
+      { asset: "Radar de Estribor", title: "RADAR DE ESTRIBOR (PPAL) FURUNO FAR 2117BB: Verificacion de conexiones, limpieza interior de procesador y LCD, cambio de magnetron" },
+    ] },
+  { label: "Un equipo, cuatro tareas", code: "OT-DCH-26-0315", status: "Planificada", due: "2026-10-14", vessel: "DON CHICUETO", by: "Admin Mercurio",
+    plans: [
+      { asset: "Termotanque", title: "TERMOTANQUE: Control y/o cambio de anodo" },
+      { asset: "Termotanque", title: "TERMOTANQUE: Control y/o cambio de termostato de corte" },
+      { asset: "Termotanque", title: "TERMOTANQUE: Inspeccion visual" },
+      { asset: "Termotanque", title: "TERMOTANQUE: Extraccion de fondo" },
+    ] },
+  { label: "Dos equipos, seis tareas", code: "OT-LTE-26-0037", status: "Planificada", due: "2026-10-10", vessel: "LATERE", by: "Pedro Pont",
+    plans: [
+      { asset: "Caja reductora #1", title: "TOMA DE MUESTRAS: Aceite lubricante" },
+      { asset: "Caja reductora #1", title: "CONTROL: Medicion de huelgos y axiales - inspeccion general" },
+      { asset: "Caja reductora #1", title: "RECORRIDO GENERAL" },
+      { asset: "Caja reductora #1", title: "INTERCAMBIADOR DE CALOR: Control/ Cambio Anodos" },
+      { asset: "Caja reductora #2", title: "SERVICE: Cambio de aceite, filtro de descarga y limpieza del filtro de aspiracion" },
+      { asset: "Caja reductora #2", title: "TOMA DE MUESTRAS: Aceite lubricante" },
+    ] },
+  { label: "Cuatro equipos: se ven 3 + «Ver 1 más» (la Bomba de achique es inventada para mostrar el caso)", code: "OT-M02-26-0463", status: "Planificada", due: "2026-10-12", vessel: "MAO 02", by: "Pedro Pont",
+    plans: [
+      { asset: "GPS", title: "Limpieza del panel, revision de conectores" },
+      { asset: "Motobomba de Incendio EGA Portátil", title: "SERVICE: Cambiar aceite, combustible y filtros" },
+      { asset: "Motor de Lancha", title: "CABOS, WINCHES,GANCHOS" },
+      { asset: "Motor de Lancha", title: "Control de estado y carga de Batería" },
+      { asset: "Bomba de achique", title: "Inspeccion visual y prueba de funcionamiento" },
+    ] },
+  { label: "Un equipo, una tarea", code: "OT-DCH-26-0307", status: "Planificada", due: "2026-10-07", vessel: "DON CHICUETO", by: "Admin Mercurio",
+    plans: [ { asset: "Motor de Lancha", title: "MOTOR LANCHA DE TRABAJO: Aceite y filtro de aceite de motor – cambiar" } ] },
+  { label: "Correctiva sin plan", code: "OT-M01-26-0560", status: "Planificada", due: "2026-10-15", vessel: "MAO 01", by: "Rene Cano",
+    plans: [], asset: "Motor Principal Babor", title: "Pérdida de agua por la bomba de refrigeración, cambiar sello mecánico" },
+];
+
+const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+// Saca el prefijo "EQUIPO:" cuando repite el nombre del equipo (todas sus palabras).
+function cleanTask(asset, title) {
+  const i = title.indexOf(":");
+  if (i < 0) return title;
+  const pre = fold(title.slice(0, i));
+  const words = fold(asset).split(/[^a-z0-9#]+/).filter(w => w.length > 2);
+  const repite = words.length > 0 && words.every(w => pre.includes(w));
+  return repite ? title.slice(i + 1).trim() : title;
+}
+function groups(c) {
+  if (!c.plans.length) return c.asset ? [{ asset: c.asset, tasks: [c.title] }] : [];
+  const out = [];
+  for (const p of c.plans) {
+    let g = out.find(x => x.asset === p.asset);
+    if (!g) { g = { asset: p.asset, tasks: [] }; out.push(g); }
+    g.tasks.push(cleanTask(p.asset, p.title));
+  }
+  return out;
+}
+const esc = s => s.replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const fmt = d => d.split("-").reverse().join("/");
+const gear = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+const wrench = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+
+let mode = "prop", width = "desk";
+function render() {
+  const root = document.getElementById("cases");
+  root.innerHTML = CASES.map((c, idx) => {
+    const g = groups(c);
+    const assets = g.map(x => x.asset);
+    const oldAsset = assets.length > 1 ? `Varios equipos (${assets.length})` : (assets[0] ?? "");
+    const visibles = g.slice(0, 3), ocultos = g.slice(3);
+    const rowHtml = x => `<div class="row">
+        <div class="eq" title="${esc(x.asset)}">${gear}<span class="name">${esc(x.asset)}</span></div>
+        <div class="task" title="${esc(x.tasks.join(" · "))}">${x.tasks.map(esc).join('<span class="sep">·</span>')}</div>
+      </div>`;
+    const work = mode === "prop" && g.length ? `
+      <div class="work">
+        <div class="work-title">Equipo y trabajo</div>
+        ${visibles.map(rowHtml).join("")}
+        <div id="more-${idx}" class="hide">${ocultos.map(rowHtml).join("")}</div>
+        ${ocultos.length ? `<button class="more" onclick="toggleMore(${idx}, this, ${ocultos.length})">Ver ${ocultos.length} más</button>` : ""}
+      </div>` : "";
+    return `<section>
+      <p class="case-label">${esc(c.label)} · ${c.code}</p>
+      <div class="frame ${width === "phone" ? "phone" : ""}">
+        <div class="modal">
+          <div class="stripe"></div>
+          <div class="hdr">
+            <div class="hdr-left">
+              ${wrench}
+              <div>
+                <div class="kicker">Orden de trabajo</div>
+                <div><span class="code mono">${c.code}</span>${mode === "actual" && oldAsset ? ` <span class="asset-old">· ${esc(oldAsset)}</span>` : ""}</div>
+              </div>
+              <span class="badge">${c.status}</span>
+              <div class="due"><span>F. vencimiento</span><input type="date" value="${c.due}"></div>
+            </div>
+            <div class="hdr-right"><span class="btn-ghost">Copiar link</span><span class="close">×</span></div>
+          </div>
+          ${work}
+          <div class="sub">
+            <span class="chip">⛴ <b>${c.vessel}</b></span>
+            <span class="chip grey">Abierta por <b>${c.by}</b></span>
+            <span class="steps">✓ Preparar — ✓ Aprobación — ③ Ejecución — ④ Cierre</span>
+          </div>
+          <div class="body-ph">(cuerpo de la OT, sin cambios)</div>
+        </div>
+      </div>
+    </section>`;
+  }).join("");
+}
+function toggleMore(idx, btn, n) {
+  const el = document.getElementById(`more-${idx}`);
+  const hidden = el.classList.toggle("hide");
+  btn.textContent = hidden ? `Ver ${n} más` : "Ver menos";
+}
+document.getElementById("segMode").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  mode = b.dataset.mode;
+  document.querySelectorAll("#segMode button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+document.getElementById("segWidth").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  width = b.dataset.w;
+  document.querySelectorAll("#segWidth button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+render();
+</script>
+</body>
+</html>

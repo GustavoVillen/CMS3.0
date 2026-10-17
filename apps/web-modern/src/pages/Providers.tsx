@@ -17,6 +17,8 @@ import { useVesselContext } from "../lib/vessel-context";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { textMatches } from "../lib/text-search";
+import { useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,6 +120,43 @@ const ProviderModal: React.FC<ModalProps> = ({ provider, links, linksLoading, on
       setError(e instanceof ApiError || e instanceof Error ? e.message : t("common.saveError"));
     } finally { setSaving(false); }
   };
+
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  const copilotOptions = {
+    status: [{ value: "ACTIVE", label: t("prov.active") }, { value: "INACTIVE", label: t("prov.inactive") }],
+  };
+  useCopilotEmitter({
+    module: "PROVIDERS",
+    screen: isNew ? "PROVIDERS_CREATE" : "PROVIDERS_EDIT",
+    entityId: provider?.id,
+    entityCode: provider?.providerCode,
+    workflowStage: provider?.status ?? "NEW",
+    canEdit: canManage,
+    fieldValues: {
+      name: name.trim() || null,
+      category: category.trim() || null,
+      status: status || null,
+      location: location.trim() || null,
+      contactName: contactName.trim() || null,
+      contactPhone: contactPhone.trim() || null,
+      contactEmail: contactEmail.trim() || null,
+      notes: notes.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(canManage ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    if (fields.name !== undefined) setName(fields.name);
+    if (fields.category !== undefined) setCategory(fields.category);
+    const st = pick("status", fields.status);
+    if (st) setStatus(st);
+    if (fields.location !== undefined) setLocation(fields.location);
+    if (fields.contactName !== undefined) setContactName(fields.contactName);
+    if (fields.contactPhone !== undefined) setContactPhone(fields.contactPhone);
+    if (fields.contactEmail !== undefined) setContactEmail(fields.contactEmail);
+    if (fields.notes !== undefined) setNotes(fields.notes);
+    return result();
+  } : null);
 
   // ESC guard
   const isDirty = useDirtyTracker({
@@ -332,6 +371,7 @@ export const ProvidersPage: React.FC = () => {
   const [search, setSearch] = useState("");
 
   const handleSaved = (p: Provider) => { reload(); setSelected(p); };
+  useOpenNewFromUrl(() => setSelected("new"), canManage);
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const categories = useMemo(() => [...new Set(items.map(p => p.category).filter(Boolean) as string[])].sort(), [items]);

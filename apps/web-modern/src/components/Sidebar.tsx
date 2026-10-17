@@ -219,6 +219,7 @@ export const Sidebar: React.FC = () => {
             item =>
               (!item.roles || item.roles.includes(user?.role ?? "")) &&
               (!item.maintenanceDirectorOnly || isMaintenanceDirector(user)) &&
+              (!item.permission || !!user?.permissions?.includes(item.permission)) &&
               !hiddenNavPaths.includes(item.path),
           );
           if (visible.length === 0) return null;

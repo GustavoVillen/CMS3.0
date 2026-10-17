@@ -37,7 +37,7 @@ import {
   WoCloseAuditModal, type AuditPendingField, type ConsumptionOfferItem, type ConsumptionRegisterResult,
 } from "../components/work-orders/WoCloseAuditModal";
 import { useTheme } from "../lib/theme";
-import { useDeepLink } from "../lib/deep-link";
+import { useDeepLink, useOpenNewFromUrl } from "../lib/deep-link";
 import { CertificateRenewalDialog, type RenewableCertificate } from "../components/CertificateRenewalDialog";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import {
@@ -2772,10 +2772,11 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
     });
   }, [pushCopilotOffer, workOrder.id, workOrder.workOrderCode, workOrder.status, title, t, tramitaPhase, offerSendToApprove]);
 
-  const saveThenNavigate = async (to: string) => {
+  const saveThenNavigate = async (to: string, extraState?: Record<string, unknown>) => {
     if (isDirty && !(await onSave())) return;
     // El flujo guiado (si lo hay) sigue en la pantalla siguiente.
-    navigate(to, copilotFlow ? { state: { copilotFlow } } : undefined);
+    const state = { ...(copilotFlow ? { copilotFlow } : {}), ...extraState };
+    navigate(to, Object.keys(state).length ? { state } : undefined);
   };
 
   const woClosedReadOnly = workOrder.status === "CLOSED" || workOrder.status === "CANCELLED";
@@ -4489,7 +4490,10 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         </div>
 
         {/* Qué máquina y qué trabajo, a la vista apenas se abre la OT. */}
-        <WoWorkSummary plans={workOrder.plans} assetName={workOrder.assetName} title={workOrder.title} />
+        <WoWorkSummary plans={workOrder.plans} assetId={workOrder.assetId} assetName={workOrder.assetName} title={workOrder.title}
+          // Ficha del equipo; al cerrarla vuelve a esta OT. Guarda antes lo pendiente.
+          onOpenAsset={id => void saveThenNavigate(`/equipment?open=${encodeURIComponent(id)}`,
+            { closeTo: `/work-orders/${encodeURIComponent(workOrder.workOrderCode)}` })} />
 
         {/* Vista guiada: buque, etapa de la OT y el cambio a la hoja del papel. */}
         {isMercurio && (
@@ -6499,6 +6503,8 @@ export const WorkOrdersPage: React.FC = () => {
   // `createPrefill` (deep-link desde un defecto, etc.) sigue abriendo el
   // formulario directo — ya trae su propio origen resuelto.
   const [showNewWoWizard, setShowNewWoWizard] = useState(false);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => setShowNewWoWizard(true), canCreate);
   // Por defecto el tablero. Salvo que se llegue con un filtro puesto (los
   // enlaces del donut del dashboard): ahí conviene la lista, que es la única
   // vista que muestra el chip del filtro y deja sacarlo.

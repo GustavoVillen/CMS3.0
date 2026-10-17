@@ -12,7 +12,8 @@ import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { PageHeader } from "../components/PageHeader";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
@@ -188,6 +189,64 @@ const VoyageTankReportDrawer: React.FC<DrawerProps> = ({ report, onClose, onSave
     liquidHeightMmFinal: "", waterHeightMmFinal: "", volumeTotalLtsFinal: "", volumeWaterLtsFinal: "",
   }]);
   const removeTank = (i: number) => setTanks(rows => rows.filter((_, idx) => idx !== i));
+
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  // Sólo el encabezado y los datos del viaje; las grillas de tanques y horómetros no se exponen.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+  };
+  useCopilotEmitter({
+    module: "VOYAGE_TANK_REPORTS",
+    screen: isNew ? "VOYAGE_TANK_REPORT_CREATE" : "VOYAGE_TANK_REPORT_EDIT",
+    entityId: live?.id,
+    entityCode: live?.voyageCode,
+    vesselCode: isNew ? (newVesselCode || undefined) : live?.vesselCode,
+    workflowStage: live?.status ?? "NEW",
+    canEdit: !isClosed,
+    fieldValues: {
+      vesselCode: (isNew ? newVesselCode : live?.vesselCode) || null,
+      voyageCode: voyageCode.trim() || null,
+      reportDateTime: reportDateTime || null,
+      status: status || null,
+      tramo: tramo.trim() || null,
+      ...(isNew ? {} : {
+        kmStart: kmStart || null,
+        kmEnd: kmEnd || null,
+        daysNav: daysNav || null,
+        dateStart: dateStart || null,
+        dateEnd: dateEnd || null,
+        signatory: signatory.trim() || null,
+        bunkerReceivedLts: bunkerReceived || null,
+        bargeDeliveredLts: bargeDelivered || null,
+        notes: notes.trim() || null,
+      }),
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(!isClosed ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const dt = (raw: string) => /^\d{4}-\d{2}-\d{2}/.test(raw) ? (raw.length > 10 ? raw.slice(0, 16) : `${raw}T00:00`) : null;
+    const num = (raw: string) => (raw.trim() !== "" && Number.isFinite(Number(raw)) ? String(Number(raw)) : null);
+    if (isNew) {
+      const vc = pick("vesselCode", fields.vesselCode);
+      if (vc) setNewVesselCode(vc);
+    }
+    if (fields.voyageCode !== undefined) setVoyageCode(fields.voyageCode);
+    if (fields.tramo !== undefined) setTramo(fields.tramo);
+    if (fields.reportDateTime !== undefined) { const v = dt(fields.reportDateTime); if (v) setReportDateTime(v); }
+    if (!isNew) {
+      if (fields.dateStart !== undefined) { const v = dt(fields.dateStart); if (v) setDateStart(v); }
+      if (fields.dateEnd !== undefined) { const v = dt(fields.dateEnd); if (v) setDateEnd(v); }
+      if (fields.kmStart !== undefined) { const v = num(fields.kmStart); if (v !== null) setKmStart(v); }
+      if (fields.kmEnd !== undefined) { const v = num(fields.kmEnd); if (v !== null) setKmEnd(v); }
+      if (fields.daysNav !== undefined) { const v = num(fields.daysNav); if (v !== null) setDaysNav(v); }
+      if (fields.bunkerReceivedLts !== undefined) { const v = num(fields.bunkerReceivedLts); if (v !== null) setBunkerReceived(v); }
+      if (fields.bargeDeliveredLts !== undefined) { const v = num(fields.bargeDeliveredLts); if (v !== null) setBargeDelivered(v); }
+      if (fields.signatory !== undefined) setSignatory(fields.signatory);
+      if (fields.notes !== undefined) setNotes(fields.notes);
+    }
+    return result();
+  } : null);
 
   const headerPayload = () => ({
     voyageCode: voyageCode.trim(),
@@ -512,19 +571,15 @@ export const VoyageTankReportsPage: React.FC = () => {
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [vesselFilter]);
   const [detail, setDetail] = useState<VoyageTankReport | null | "new">(null);
 
-  useCopilotEmitter(!detail ? { module: "VOYAGE_TANK_REPORTS", screen: "VOYAGE_TANK_REPORT_LIST" } : {
-    module: "VOYAGE_TANK_REPORTS",
-    screen: detail === "new" ? "VOYAGE_TANK_REPORT_CREATE" : "VOYAGE_TANK_REPORT_EDIT",
-    entityId: detail !== "new" ? detail.id : undefined,
-    entityCode: detail !== "new" ? detail.voyageCode : undefined,
-    vesselCode: detail !== "new" ? detail.vesselCode : undefined,
-    workflowStage: detail !== "new" ? detail.status : undefined,
-  });
+  // Con la ventana abierta, el contexto lo emite la propia ventana (con los campos).
+  useCopilotEmitter(!detail ? { module: "VOYAGE_TANK_REPORTS", screen: "VOYAGE_TANK_REPORT_LIST" } : null);
 
   const canManage = user?.role === "TENANT_ADMIN"
     || user?.role === "MAINTENANCE_MANAGER"
     || user?.role === "FLEET_SUPERINTENDENT"
     || user?.role === "TECHNICIAN_OPERATOR";
+
+  useOpenNewFromUrl(() => setDetail("new"), canManage);
 
   const vesselName = useVesselName();
 

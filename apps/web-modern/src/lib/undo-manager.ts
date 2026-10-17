@@ -13,6 +13,11 @@
 // - Lo guardado no se deshace: cualquier escritura exitosa contra la API vacía
 //   el historial (ver `clearUndoHistory` en lib/api.ts).
 // - Las contraseñas y los archivos no se registran.
+// - Excepción: un borrado recién hecho de un módulo con Papelera SÍ se deshace
+//   con Ctrl+Z durante unos segundos (lib/delete-undo.ts), si después no se
+//   tocó ningún campo.
+
+import { hasPendingDelete, undoLastDelete } from "./delete-undo";
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
@@ -222,6 +227,8 @@ function apply(entry: Entry, value: Entry["before"]) {
 export function undo(): void {
   let entry = past.pop();
   while (entry && !entry.el.isConnected) entry = past.pop();
+  // El borrado vació el historial: si no hay campos tocados después, Ctrl+Z trae lo borrado.
+  if (!entry && hasPendingDelete()) { void undoLastDelete(); return; }
   if (!entry) { emit({ type: "nothing-undo" }); return; }
   apply(entry, entry.before);
   future.push(entry);

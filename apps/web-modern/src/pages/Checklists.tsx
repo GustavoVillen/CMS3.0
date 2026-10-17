@@ -18,6 +18,8 @@ import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-fi
 import { AutoTextArea } from "../components/AutoTextArea";
 import { GuideField, GuideNeedTag, RequiredMark } from "../components/GuideKit";
 import { useSearchParams } from "react-router-dom";
+import { useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 
 const TYPE_TKEY: Record<string, TranslationKey> = {
   PRE_ARRIVAL: "cl.type.preArrival",
@@ -258,6 +260,44 @@ const ExecutionModal: React.FC<{
   // ESC: en creación pregunta guardar; en ejecución (respuestas autosave) solo cierra
   const isDirty = useDirtyTracker({ templateId, vesselCode, eventDateTime, port, voyageRef, performedBy, signedByName, notes });
   const requestClose = useEscapeGuard({ isDirty: isCreating && isDirty, onSave: isCreating ? handleCreate : undefined, onClose });
+
+  // Copiloto: ve el alta del checklist y la puede completar (guarda el usuario).
+  // Responder los ítems no entra: eso es la tarea de quien recorre el buque.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: `${v.code} — ${v.name}` })),
+    templateId: (templatesData?.items ?? []).map(tpl => ({ value: tpl.id, label: `${TYPE_TKEY[tpl.type] ? t(TYPE_TKEY[tpl.type]) : tpl.type} — ${tpl.name}` })),
+  };
+  useCopilotEmitter(isCreating ? {
+    module: "CHECKLISTS",
+    screen: "CHECKLIST_CREATE",
+    vesselCode,
+    workflowStage: "NEW",
+    canEdit: true,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      templateId: templateId || null,
+      eventDateTime: eventDateTime || null,
+      port: port.trim() || null,
+      voyageRef: voyageRef.trim() || null,
+      performedBy: performedBy.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  } : null);
+  useCopilotApplyFields(isCreating ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc) setVesselCode(vc);
+    const tpl = pick("templateId", fields.templateId);
+    if (tpl) setTemplateId(tpl);
+    if (fields.eventDateTime !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.eventDateTime)) {
+      const v = fields.eventDateTime.trim().replace(" ", "T");
+      setEventDT(v.length >= 16 ? v.slice(0, 16) : `${v.slice(0, 10)}T08:00`);
+    }
+    if (fields.port !== undefined) setPort(fields.port);
+    if (fields.voyageRef !== undefined) setVoyageRef(fields.voyageRef);
+    if (fields.performedBy !== undefined) setPerformedBy(fields.performedBy);
+    return result();
+  } : null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -730,6 +770,8 @@ export const ChecklistsPage: React.FC = () => {
     next.delete("new");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+  // Copiloto: ?nuevo=1 abre el alta vacía, igual que el botón "Nuevo".
+  useOpenNewFromUrl(() => setShowCreate(true));
   const [showTemplates, setShowTemplates] = useState(false);
   const mocTrigger = useMocTrigger();
 

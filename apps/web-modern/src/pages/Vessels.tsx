@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Ship, FileSpreadsheet, Plus, Trash2, Map } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { api, ApiError } from "../lib/api";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
 import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
@@ -367,6 +368,8 @@ export const VesselsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [showExcel, setShowExcel] = useState(false);
   const [formVessel, setFormVessel] = useState<Vessel | null | undefined>(undefined);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => setFormVessel(null));
   const [deleteTarget, setDeleteTarget] = useState<Vessel | null>(null);
 
   // Con la ficha abierta, el contexto lo emite la propia ficha (VesselForm).

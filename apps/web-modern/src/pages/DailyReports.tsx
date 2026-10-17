@@ -15,7 +15,8 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, toFilterSelectValue } from "../lib/utils";
 import { useT, useWoTerms } from "../lib/i18n";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { AutoTextArea } from "../components/AutoTextArea";
 
 // ─── Base Types ───────────────────────────────────────────────────────────────
@@ -1059,6 +1060,63 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
   const isIntegrated = !isNew && !!liveReport!.integratedAt;
   const isOpDataLocked = isClosed || isIntegrated;
 
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  // Sólo la cabecera; las grillas de horas, consumos y mantenimiento no se exponen.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    maintenanceOpportunity: MAINT_OPPORTUNITIES.map(o => ({ value: o, label: o })),
+    sparesReceiptPossible: SPARES_OPTIONS.map(o => ({ value: o, label: o })),
+  };
+  useCopilotEmitter({
+    module: "DAILY_REPORTS",
+    screen: isNew ? "DAILY_REPORT_CREATE" : "DAILY_REPORT_EDIT",
+    entityId: liveReport?.id,
+    entityCode: liveReport?.reportDate,
+    vesselCode: isNew ? (newVesselCode || undefined) : liveReport?.vesselCode,
+    workflowStage: liveReport?.status ?? "NEW",
+    canEdit: !isClosed,
+    fieldValues: {
+      vesselCode: (isNew ? newVesselCode : liveReport?.vesselCode) || null,
+      reportDate: isNew ? (newReportDate || null) : (liveReport?.reportDate?.slice(0, 10) ?? null),
+      status: status || null,
+      currentPort: currentPort.trim() || null,
+      positionLat: posLat.trim() || null,
+      positionLon: posLon.trim() || null,
+      summary: summary.trim() || null,
+      nextPort: nextPort.trim() || null,
+      etaNextPort: etaNextPort || null,
+      maintenanceOpportunity: maintOpp || null,
+      sparesReceiptPossible: spares || null,
+      operationalRemarks: opRemarks.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(!isClosed ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    if (isNew) {
+      const vc = pick("vesselCode", fields.vesselCode);
+      if (vc) setNewVesselCode(vc);
+      if (fields.reportDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.reportDate)) setNewReportDate(fields.reportDate.slice(0, 10));
+    }
+    const mo = pick("maintenanceOpportunity", fields.maintenanceOpportunity);
+    if (mo) setMaintOpp(mo);
+    const sp = pick("sparesReceiptPossible", fields.sparesReceiptPossible);
+    if (sp) setSpares(sp);
+    if (fields.currentPort !== undefined) setCurrentPort(fields.currentPort);
+    if (fields.nextPort !== undefined) setNextPort(fields.nextPort);
+    if (fields.summary !== undefined) setSummary(fields.summary);
+    if (fields.operationalRemarks !== undefined) setOpRemarks(fields.operationalRemarks);
+    if (fields.etaNextPort !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.etaNextPort)) setEtaNextPort(fields.etaNextPort.slice(0, 10));
+    const lat = fields.positionLat !== undefined ? parseFloat(fields.positionLat) : NaN;
+    const lon = fields.positionLon !== undefined ? parseFloat(fields.positionLon) : NaN;
+    if (Number.isFinite(lat)) setPosLat(String(lat));
+    if (Number.isFinite(lon)) setPosLon(String(lon));
+    const mlat = Number.isFinite(lat) ? lat : parseFloat(posLat);
+    const mlon = Number.isFinite(lon) ? lon : parseFloat(posLon);
+    if ((Number.isFinite(lat) || Number.isFinite(lon)) && Number.isFinite(mlat) && Number.isFinite(mlon)) setMapCoords({ lat: mlat, lon: mlon });
+    return result();
+  } : null);
+
   // Reabrir (solo ADMIN): vuelve el reporte a DRAFT y limpia integratedAt para
   // desbloquear todas las tabs y poder corregir. No revierte la integración aplicada.
   const handleReopen = async () => {
@@ -1454,19 +1512,15 @@ export const DailyReportsPage: React.FC = () => {
   const { data, loading, error, reload } = useFetch<ListResponse>(path, [vesselFilter, statusFilter]);
   const [detailReport, setDetailReport] = useState<DailyReport | null | "new">(null);
 
-  useCopilotEmitter(!detailReport ? { module: "DAILY_REPORTS", screen: "DAILY_REPORT_LIST" } : {
-    module: "DAILY_REPORTS",
-    screen: detailReport === "new" ? "DAILY_REPORT_CREATE" : "DAILY_REPORT_EDIT",
-    entityId: detailReport !== "new" ? detailReport.id : undefined,
-    entityCode: detailReport !== "new" ? detailReport.reportDate : undefined,
-    vesselCode: detailReport !== "new" ? detailReport.vesselCode : undefined,
-    workflowStage: detailReport !== "new" ? detailReport.status : undefined,
-  });
+  // Con la ventana abierta, el contexto lo emite la propia ventana (con los campos).
+  useCopilotEmitter(!detailReport ? { module: "DAILY_REPORTS", screen: "DAILY_REPORT_LIST" } : null);
 
   const canManage = user?.role === "TENANT_ADMIN"
     || user?.role === "MAINTENANCE_MANAGER"
     || user?.role === "FLEET_SUPERINTENDENT"
     || user?.role === "TECHNICIAN_OPERATOR";
+
+  useOpenNewFromUrl(() => setDetailReport("new"), canManage);
 
   const vesselName = useVesselName();
 

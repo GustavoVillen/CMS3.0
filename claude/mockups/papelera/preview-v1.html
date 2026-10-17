@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papelera — Preview V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* Tokens LIGHT reales de apps/web-modern/src/index.css */
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --border:#E2E4E9;
+    --accent:#0284C7; --accent-fg:#fff; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25);
+    --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer}
+  .ic{width:16px;height:16px;flex-shrink:0}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+
+  .pv-bar{position:sticky;top:0;z-index:400;background:#111827;color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:8px}
+  .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px;letter-spacing:.05em}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600}
+  .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sp{flex:1}
+
+  .layout{display:flex;min-height:calc(100vh - 48px)}
+  .side{width:210px;background:var(--surface);border-right:1px solid var(--border);padding:14px 10px;flex-shrink:0}
+  .side .it{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;font-size:13px;color:var(--muted)}
+  .side .it.on{background:rgba(2,132,199,.08);color:var(--accent);font-weight:600}
+  .side .sec{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--faint);margin:14px 10px 4px}
+  .main{flex:1;min-width:0;padding:20px 24px}
+  .copi{width:340px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+
+  .ph{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .ph .pi{width:36px;height:36px;border-radius:10px;background:rgba(2,132,199,.1);color:var(--accent);display:flex;align-items:center;justify-content:center}
+  .ph h1{font-size:18px;margin:0}
+  .ph p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+  .ph .sp{flex:1}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .filters select,.filters input{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:7px 10px;font-size:12px;font-family:inherit;color:var(--fg)}
+  .filters input{flex:1;min-width:180px}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface)}
+  .seg button{border:0;background:none;padding:7px 12px;font-size:12px;color:var(--muted)}
+  .seg button.on{background:rgba(2,132,199,.1);color:var(--accent);font-weight:700}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:11px;font-weight:600;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--border);background:#FAFAFB;white-space:nowrap}
+  td{padding:9px 12px;border-bottom:1px solid var(--fg5);vertical-align:middle}
+  tr.grp td{background:#FAFAFB;font-size:11px;color:var(--muted);font-weight:600;padding:6px 12px}
+  tr:hover td{background:rgba(2,132,199,.03)}
+  tr.grp:hover td{background:#FAFAFB}
+  .tipo{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:99px;padding:2px 8px;white-space:nowrap}
+  .t-plan{background:rgba(2,132,199,.1);color:#0369A1}
+  .t-eq{background:rgba(124,58,237,.1);color:#6D28D9}
+  .t-ot{background:rgba(217,119,6,.12);color:#B45309}
+  .t-rep{background:rgba(14,159,110,.12);color:#047857}
+  .tipo svg{width:12px;height:12px}
+  .nm{font-weight:600}
+  .cd{font-size:11px;color:var(--faint)}
+  .warn{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--warning);margin-top:2px}
+  .warn svg{width:12px;height:12px}
+  .btn-primary{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:700;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+  .btn-out{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--fg)}
+  .btn-out:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-ghost{background:none;border:0;border-radius:10px;padding:8px 12px;font-size:12px}
+  .btn-ghost:hover{background:var(--fg5)}
+  .selbar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(2,132,199,.06);border-bottom:1px solid var(--border);font-size:12px}
+  .empty{padding:48px 16px;text-align:center;color:var(--muted)}
+  .empty .ei{width:44px;height:44px;border-radius:12px;background:var(--fg5);display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px}
+  .note{font-size:11px;color:var(--muted);margin-top:10px;display:flex;gap:6px;align-items:flex-start}
+
+  /* Modal / AlertDialog */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:16px;z-index:350}
+  .overlay.show{display:flex}
+  .dlg{width:100%;max-width:440px;background:var(--surface);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35)}
+  .dlg .h{display:flex;gap:12px;padding:18px 20px 6px}
+  .dlg .h .di{width:36px;height:36px;border-radius:99px;background:rgba(217,119,6,.12);color:var(--warning);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .dlg .h .di.red{background:rgba(220,38,38,.1);color:var(--danger)}
+  .dlg h3{margin:0;font-size:14px}
+  .dlg .b{padding:4px 20px 14px 68px;font-size:13px;color:var(--muted);line-height:1.5}
+  .dlg .b ul{margin:6px 0 0;padding-left:18px;color:var(--fg)}
+  .dlg .f{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--fg10)}
+  .btn-danger{background:var(--danger);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:700;font-size:12px}
+
+  /* Toast (mismo estilo que UndoToastHost) */
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:300;background:#1A1D24;color:#fff;border-radius:12px;padding:9px 12px 9px 14px;font-size:13px;display:none;align-items:center;gap:10px;box-shadow:0 20px 40px rgba(0,0,0,.3);overflow:hidden;max-width:calc(100vw - 32px)}
+  .toast.show{display:flex}
+  .toast button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+  .toast button:hover{background:rgba(255,255,255,.25)}
+  .toast .k{opacity:.6;font-weight:500;margin-left:4px}
+  .toast .bar{position:absolute;left:0;bottom:0;height:3px;background:#38BDF8}
+  .toast .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* Copiloto */
+  .copi .ch{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px}
+  .copi .ch .dotg{width:8px;height:8px;border-radius:99px;background:var(--success)}
+  .msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .m{max-width:92%;font-size:12.5px;line-height:1.5;border-radius:12px;padding:9px 11px}
+  .m.u{align-self:flex-end;background:var(--accent);color:#fff}
+  .m.a{align-self:flex-start;background:var(--fg5)}
+  .m.a ul{margin:6px 0;padding-left:16px}
+  .act{margin-top:8px;border:1px solid rgba(2,132,199,.3);background:var(--surface);border-radius:10px;padding:9px}
+  .act .at{font-size:11px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:5px;margin-bottom:6px}
+  .act .ab{display:flex;gap:6px}
+  .act.done{border-color:rgba(14,159,110,.4)}
+  .act.done .at{color:var(--success)}
+  .cin{border-top:1px solid var(--border);padding:10px;display:flex;gap:6px}
+  .cin input{flex:1;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-family:inherit;font-size:12px}
+  .sugs{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
+  .sug{border:1px solid var(--border);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:11px;color:var(--muted)}
+  .sug:hover{border-color:var(--accent);color:var(--accent)}
+
+  .view{display:none}.view.on{display:block}
+  .iconbtn{border:0;background:none;color:var(--faint);padding:4px;border-radius:8px}
+  .iconbtn:hover{background:rgba(220,38,38,.08);color:var(--danger)}
+  .explain{background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:10px 12px;font-size:12px;color:#78350F;margin-bottom:14px;line-height:1.5}
+
+  @media (max-width:1100px){.copi{display:none}.copi.force{display:flex;position:fixed;right:0;top:48px;bottom:0;z-index:200;box-shadow:-10px 0 30px rgba(0,0,0,.15)}}
+  @media (max-width:760px){
+    .side{display:none}.main{padding:16px}
+    table thead{display:none}
+    table,tbody,tr,td{display:block;width:100%}
+    tr{border-bottom:1px solid var(--border);padding:8px 4px}
+    td{border:0;padding:3px 8px}
+    tr.grp{padding:0}
+    .copi.force{width:100%}
+  }
+</style>
+</head>
+<body>
+
+<div class="pv-bar">
+  <span class="tag">PREVIEW V1</span>
+  <b>Papelera + Deshacer + Copiloto</b>
+  <button data-v="papelera" class="on">1 · Papelera</button>
+  <button data-v="deshacer">2 · Deshacer al borrar</button>
+  <button data-v="copiloto">3 · Copiloto</button>
+  <span class="sp"></span>
+  <button id="reset">Reiniciar demo</button>
+</div>
+
+<div class="layout">
+  <nav class="side">
+    <div class="it"><i data-lucide="home" class="ic"></i>Inicio</div>
+    <div class="it" id="nav-planes"><i data-lucide="calendar-check" class="ic"></i>Plan de mantenimiento</div>
+    <div class="it"><i data-lucide="cog" class="ic"></i>Equipos</div>
+    <div class="it"><i data-lucide="wrench" class="ic"></i>Órdenes de trabajo</div>
+    <div class="sec">ADMINISTRACIÓN</div>
+    <div class="it"><i data-lucide="users" class="ic"></i>Equipo</div>
+    <div class="it"><i data-lucide="settings" class="ic"></i>Configuración</div>
+    <div class="it on" id="nav-pap"><i data-lucide="trash-2" class="ic"></i>Papelera</div>
+  </nav>
+
+  <main class="main">
+    <!-- ============ 1. PAPELERA ============ -->
+    <section class="view on" id="v-papelera">
+      <div class="explain"><b>Datos de ejemplo.</b> Los nombres son los de hoy en MAO 02. Solo la ve el administrador. Probá «Restaurar» en un plan de la Bomba N°3: como el equipo también está borrado, el sistema avisa y ofrece traerlo de vuelta junto con el plan.</div>
+      <div class="ph">
+        <div class="pi"><i data-lucide="trash-2"></i></div>
+        <div><h1>Papelera</h1><p>Lo que se borró en el sistema. Nada se pierde: desde acá se vuelve a poner en su lugar.</p></div>
+      </div>
+
+      <div class="filters">
+        <div class="seg" id="per"><button data-p="7">7 días</button><button data-p="30" class="on">30 días</button><button data-p="all">Todo</button></div>
+        <select id="f-tipo"><option value="">Todos los tipos</option><option>Plan</option><option>Equipo</option><option>OT</option><option>Repuesto</option></select>
+        <select id="f-buque"><option value="">Todos los buques</option><option>MAO 02</option><option>DON CHICUETO</option></select>
+        <input id="f-q" placeholder="Buscar por nombre, código o equipo…">
+      </div>
+
+      <div class="card">
+        <div class="selbar" id="selbar" style="display:none">
+          <b id="selcount">0</b> seleccionados
+          <span style="flex:1"></span>
+          <button class="btn-ghost" id="selclear">Quitar selección</button>
+          <button class="btn-primary" id="selrestore"><i data-lucide="rotate-ccw" class="ic"></i>Restaurar seleccionados</button>
+        </div>
+        <table>
+          <thead><tr><th style="width:28px"><input type="checkbox" id="chkall"></th><th>Tipo</th><th>Qué se borró</th><th>Buque</th><th>Equipo</th><th>Borrado por</th><th>Cuándo</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" style="display:none">
+          <div class="ei"><i data-lucide="check"></i></div>
+          <div style="font-weight:600;color:var(--fg)">La papelera está vacía</div>
+          <div style="font-size:12px;margin-top:4px">No hay registros borrados con estos filtros.</div>
+        </div>
+      </div>
+      <div class="note"><i data-lucide="shield-check" class="ic"></i>Cada restauración queda en la auditoría con quién y cuándo. Lo restaurado vuelve con todos sus datos: código, historial de OT, repuestos y adjuntos.</div>
+    </section>
+
+    <!-- ============ 2. DESHACER ============ -->
+    <section class="view" id="v-deshacer">
+      <div class="explain"><b>Datos de ejemplo.</b> Borrá un plan con el tacho. Abajo aparece el aviso «Deshacer» durante 10 segundos. También funciona con <b>Ctrl+Z</b>, el mismo atajo que ya deshace lo que se escribe en un formulario.</div>
+      <div class="ph">
+        <div class="pi"><i data-lucide="calendar-check"></i></div>
+        <div><h1>Plan de mantenimiento</h1><p>MAO 02 · Bomba Agua Potable N°2</p></div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Código</th><th>Tarea</th><th>Frecuencia</th><th>Próximo</th><th></th></tr></thead>
+          <tbody id="plan-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 3. COPILOTO ============ -->
+    <section class="view" id="v-copiloto">
+      <div class="explain"><b>Datos de ejemplo.</b> Pedile al copiloto (panel de la derecha) que recupere algo. Él busca en la papelera y muestra lo que encontró, pero no restaura solo: el registro vuelve recién cuando tocás <b>Aplicar</b>. Si quien pregunta no es administrador, el copiloto le dice qué encontró y que se lo pida al administrador.</div>
+      <div class="ph">
+        <div class="pi"><i data-lucide="cog"></i></div>
+        <div><h1>Equipos</h1><p>MAO 02</p></div>
+      </div>
+      <div class="card"><table><thead><tr><th>Código</th><th>Equipo</th><th>Planes</th></tr></thead>
+        <tbody>
+          <tr><td>M02-EB-AP1</td><td class="nm">Bomba Agua Potable N°1</td><td>5</td></tr>
+          <tr><td>M02-EB-AP2</td><td class="nm">Bomba Agua Potable N°2</td><td>5</td></tr>
+          <tr id="eq-ap3" style="display:none"><td>M02-EB-AP3</td><td class="nm">Bomba Agua Potable N°3 <span class="tipo t-rep">Restaurado</span></td><td>2</td></tr>
+        </tbody></table></div>
+    </section>
+  </main>
+
+  <aside class="copi" id="copi">
+    <div class="ch"><span class="dotg"></span>Copiloto</div>
+    <div class="msgs" id="msgs">
+      <div class="m a">Hola. ¿En qué te ayudo?</div>
+    </div>
+    <div class="sugs" id="sugs">
+      <button class="sug" data-q="recuperame los últimos registros eliminados de la bomba potable No.3">Recuperá lo borrado de la bomba potable N°3</button>
+      <button class="sug" data-q="¿qué se borró hoy en MAO 02?">¿Qué se borró hoy en MAO 02?</button>
+    </div>
+    <div class="cin"><input id="cq" placeholder="Escribí tu pregunta…"><button class="btn-primary" id="csend"><i data-lucide="send" class="ic"></i></button></div>
+  </aside>
+</div>
+
+<!-- AlertDialog -->
+<div class="overlay" id="ov"><div class="dlg">
+  <div class="h"><div class="di" id="dlg-i"><i data-lucide="alert-triangle"></i></div><h3 id="dlg-t"></h3></div>
+  <div class="b" id="dlg-b"></div>
+  <div class="f" id="dlg-f"></div>
+</div></div>
+
+<div class="toast" id="toast"><i data-lucide="check-circle-2" class="ic" id="toast-i"></i><span class="txt" id="toast-t"></span><span id="toast-a"></span><div class="bar" id="toast-bar"></div></div>
+
+<script>
+const ICON = {Plan:"calendar-check",Equipo:"cog",OT:"wrench",Repuesto:"package"};
+const CLS = {Plan:"t-plan",Equipo:"t-eq",OT:"t-ot",Repuesto:"t-rep"};
+const SEED = [
+  {id:"e3", tipo:"Equipo", nm:"Bomba Agua Potable N°3", cd:"M02-EB-AP3", buque:"MAO 02", eq:"—", por:"Administrador Mercurio", cuando:"Hoy 10:49", dias:0, grp:"Hoy"},
+  {id:"p1", tipo:"Plan", nm:"Toma de aislación a motor eléctrico", cd:"M02-EB-AP3-32", buque:"MAO 02", eq:"Bomba Agua Potable N°3", eqId:"e3", por:"Administrador Mercurio", cuando:"Hoy 10:50", dias:0, grp:"Hoy"},
+  {id:"p2", tipo:"Plan", nm:"Prueba de funcionamiento", cd:"M02-5-002", buque:"MAO 02", eq:"Bomba Agua Potable N°3", eqId:"e3", por:"Administrador Mercurio", cuando:"Hoy 10:49", dias:0, grp:"Hoy"},
+  {id:"o1", tipo:"OT", nm:"Cambio de sello mecánico", cd:"OT-M02-0412", buque:"MAO 02", eq:"Bomba de Sentina N°1", por:"Jefe de Máquinas MAO 02", cuando:"Lun 13-oct 16:20", dias:3, grp:"Esta semana"},
+  {id:"r1", tipo:"Repuesto", nm:"Filtro de gasoil primario", cd:"1R-0750", buque:"DON CHICUETO", eq:"Motor Principal Br", por:"Superintendente", cuando:"02-oct 09:12", dias:14, grp:"Este mes"},
+];
+let data, sel;
+function reset(){ data = SEED.map(x=>({...x})); sel = new Set(); renderPap(); renderPlan(); resetCopi(); document.getElementById('eq-ap3').style.display='none'; }
+
+/* ---------- Papelera ---------- */
+let per="30";
+function renderPap(){
+  const t=document.getElementById('f-tipo').value, b=document.getElementById('f-buque').value, q=document.getElementById('f-q').value.toLowerCase();
+  const rows=data.filter(r=>(!t||r.tipo===t)&&(!b||r.buque===b)&&(per==="all"||r.dias<=+per)&&(!q||(r.nm+r.cd+r.eq).toLowerCase().includes(q)));
+  let html="", last="";
+  rows.forEach(r=>{
+    if(r.grp!==last){ html+=`<tr class="grp"><td colspan="8">${r.grp}</td></tr>`; last=r.grp; }
+    const eqDel = r.eqId && data.some(x=>x.id===r.eqId);
+    html+=`<tr>
+      <td><input type="checkbox" data-s="${r.id}" ${sel.has(r.id)?"checked":""}></td>
+      <td><span class="tipo ${CLS[r.tipo]}"><i data-lucide="${ICON[r.tipo]}"></i>${r.tipo}</span></td>
+      <td><div class="nm">${r.nm}</div><div class="cd">${r.cd}</div>${eqDel?`<div class="warn"><i data-lucide="alert-triangle"></i>Su equipo también está borrado</div>`:""}</td>
+      <td>${r.buque}</td><td>${r.eq}</td><td>${r.por}</td><td style="white-space:nowrap">${r.cuando}</td>
+      <td style="text-align:right"><button class="btn-out" data-r="${r.id}"><i data-lucide="rotate-ccw" class="ic"></i>Restaurar</button></td></tr>`;
+  });
+  document.getElementById('rows').innerHTML=html;
+  document.getElementById('empty').style.display=rows.length?"none":"block";
+  document.getElementById('selbar').style.display=sel.size?"flex":"none";
+  document.getElementById('selcount').textContent=sel.size;
+  lucide.createIcons();
+}
+document.getElementById('per').onclick=e=>{const b=e.target.closest('button'); if(!b)return; per=b.dataset.p; document.querySelectorAll('#per button').forEach(x=>x.classList.toggle('on',x===b)); renderPap();};
+['f-tipo','f-buque','f-q'].forEach(id=>document.getElementById(id).oninput=renderPap);
+document.getElementById('rows').onclick=e=>{
+  const c=e.target.closest('[data-s]'); if(c){ c.checked?sel.add(c.dataset.s):sel.delete(c.dataset.s); renderPap(); return; }
+  const r=e.target.closest('[data-r]'); if(r) askRestore([r.dataset.r]);
+};
+document.getElementById('chkall').onchange=e=>{ sel=e.target.checked?new Set(data.map(x=>x.id)):new Set(); renderPap(); };
+document.getElementById('selclear').onclick=()=>{sel.clear();document.getElementById('chkall').checked=false;renderPap();};
+document.getElementById('selrestore').onclick=()=>askRestore([...sel]);
+
+function askRestore(ids){
+  const items=ids.map(id=>data.find(x=>x.id===id)).filter(Boolean);
+  // equipos borrados que arrastran
+  const needEq=[...new Set(items.filter(i=>i.eqId&&data.some(x=>x.id===i.eqId)&&!ids.includes(i.eqId)).map(i=>i.eqId))].map(id=>data.find(x=>x.id===id));
+  // planes de un equipo que se restaura
+  const childPlans=items.filter(i=>i.tipo==="Equipo").flatMap(e=>data.filter(x=>x.eqId===e.id&&!ids.includes(x.id)));
+  if(needEq.length){
+    dialog("warn","El equipo de este plan también está borrado",
+      `Para que el plan vuelva a aparecer hay que restaurar también su equipo:<ul>${needEq.map(e=>`<li>${e.nm}</li>`).join("")}</ul>`,
+      [["Cancelar","ghost",closeDlg],["Restaurar los dos","primary",()=>{closeDlg();doRestore([...ids,...needEq.map(e=>e.id)]);}]]);
+  } else if(childPlans.length){
+    dialog("warn","Este equipo tiene planes borrados",
+      `Se borraron junto con el equipo. ¿Los restaurás también?<ul>${childPlans.map(p=>`<li>${p.cd} · ${p.nm}</li>`).join("")}</ul>`,
+      [["Solo el equipo","ghost",()=>{closeDlg();doRestore(ids);}],["Equipo y planes","primary",()=>{closeDlg();doRestore([...ids,...childPlans.map(p=>p.id)]);}]]);
+  } else doRestore(ids);
+}
+function doRestore(ids){
+  const n=ids.length; const first=data.find(x=>x.id===ids[0]);
+  data=data.filter(x=>!ids.includes(x.id)); ids.forEach(i=>sel.delete(i));
+  if(ids.includes("e3")) document.getElementById('eq-ap3').style.display='';
+  renderPap();
+  toast(n===1?`${first.tipo} «${first.nm}» restaurado`:`${n} registros restaurados`, `<button>Ver</button>`, 4000, "check-circle-2");
+}
+
+/* ---------- Deshacer ---------- */
+const PLANES=[
+  {cd:"M02-EB-AP2-01",nm:"Recorrido de bomba: verificación aro rendimiento",f:"12 meses",p:"14-mar-2027"},
+  {cd:"M02-EB-AP2-30",nm:"Recorrido motor eléctrico: limpieza, barnizado",f:"24 meses",p:"02-jun-2027"},
+  {cd:"M02-EB-AP2-31",nm:"Toma de aislación a motor eléctrico",f:"6 meses",p:"20-nov-2026"},
+  {cd:"M02-EB-AP2-32",nm:"Motor eléctrico: verificar ajustes y estanqueidad bornera",f:"6 meses",p:"20-nov-2026"},
+];
+let planes, lastDel=null, tTimer=null;
+function renderPlan(){
+  if(!planes) planes=PLANES.map((p,i)=>({...p,i}));
+  document.getElementById('plan-rows').innerHTML=planes.map(p=>`<tr><td class="cd" style="font-size:12px">${p.cd}</td><td class="nm">${p.nm}</td><td>${p.f}</td><td>${p.p}</td>
+    <td style="text-align:right"><button class="iconbtn" data-d="${p.cd}" title="Borrar"><i data-lucide="trash-2" class="ic"></i></button></td></tr>`).join("");
+  lucide.createIcons();
+}
+document.getElementById('plan-rows').onclick=e=>{
+  const b=e.target.closest('[data-d]'); if(!b)return;
+  const p=planes.find(x=>x.cd===b.dataset.d);
+  dialog("red","¿Borrar este plan?",`${p.cd} · ${p.nm}<br><span style="font-size:12px">Queda en la Papelera y se puede recuperar.</span>`,
+    [["Cancelar","ghost",closeDlg],["Borrar","danger",()=>{closeDlg();
+      planes=planes.filter(x=>x!==p); lastDel=p; renderPlan();
+      toast(`Plan ${p.cd} borrado`,`<button id="undo-btn">Deshacer<span class="k">Ctrl+Z</span></button>`,10000,"trash-2");
+      document.getElementById('undo-btn').onclick=undoDel;
+    }]]);
+};
+function undoDel(){
+  if(!lastDel)return; planes.push(lastDel); planes.sort((a,b)=>a.i-b.i); const p=lastDel; lastDel=null; renderPlan();
+  toast(`Plan ${p.cd} recuperado`,"",3000,"rotate-ccw");
+}
+document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"&&lastDel&&document.getElementById('v-deshacer').classList.contains('on')){e.preventDefault();undoDel();}});
+
+/* ---------- Copiloto ---------- */
+function resetCopi(){ document.getElementById('msgs').innerHTML='<div class="m a">Hola. ¿En qué te ayudo?</div>'; }
+function addMsg(cls,html){ const d=document.createElement('div'); d.className="m "+cls; d.innerHTML=html; const m=document.getElementById('msgs'); m.appendChild(d); m.scrollTop=m.scrollHeight; lucide.createIcons(); return d; }
+function ask(q){
+  if(!q.trim())return; addMsg("u",q); document.getElementById('cq').value="";
+  setTimeout(()=>{
+    if(/hoy/i.test(q)&&!/3/.test(q)){
+      addMsg("a",`Hoy en MAO 02 se borraron 3 registros, todos de la <b>Bomba Agua Potable N°3</b>, por el Administrador Mercurio:<ul><li>El equipo Bomba Agua Potable N°3 (10:49)</li><li>Plan M02-5-002 · Prueba de funcionamiento (10:49)</li><li>Plan M02-EB-AP3-32 · Toma de aislación a motor eléctrico (10:50)</li></ul>¿Querés que los recupere?`);
+      return;
+    }
+    const d=addMsg("a",`Encontré 3 registros de la <b>Bomba Agua Potable N°3</b> (MAO 02) borrados hoy por el Administrador Mercurio:<ul><li>El equipo (10:49)</li><li>Plan M02-5-002 · Prueba de funcionamiento</li><li>Plan M02-EB-AP3-32 · Toma de aislación a motor eléctrico</li></ul>
+      <div class="act" id="act"><div class="at"><i data-lucide="rotate-ccw" class="ic"></i>Restaurar 3 registros</div>
+      <div class="ab"><button class="btn-primary" id="apl">Aplicar</button><button class="btn-ghost" id="desc">Descartar</button></div></div>`);
+    d.querySelector('#apl').onclick=()=>{
+      const a=d.querySelector('#act'); a.classList.add('done');
+      a.innerHTML='<div class="at"><i data-lucide="check-circle-2" class="ic"></i>Restaurados: el equipo y sus 2 planes</div><div style="font-size:11px" class="muted">Ya aparecen en Equipos y en el Plan de mantenimiento.</div>';
+      lucide.createIcons();
+      data=data.filter(x=>!["e3","p1","p2"].includes(x.id)); renderPap();
+      document.getElementById('eq-ap3').style.display='';
+      toast("3 registros restaurados","",3000,"check-circle-2");
+    };
+    d.querySelector('#desc').onclick=()=>{ d.querySelector('#act').innerHTML='<div class="muted" style="font-size:11px">Descartado. No se restauró nada.</div>'; };
+  },500);
+}
+document.getElementById('csend').onclick=()=>ask(document.getElementById('cq').value);
+document.getElementById('cq').onkeydown=e=>{if(e.key==="Enter")ask(e.target.value);};
+document.getElementById('sugs').onclick=e=>{const b=e.target.closest('[data-q]'); if(b) ask(b.dataset.q);};
+
+/* ---------- comunes ---------- */
+function dialog(kind,title,body,btns){
+  const i=document.getElementById('dlg-i'); i.className="di"+(kind==="red"?" red":""); i.innerHTML=`<i data-lucide="${kind==="red"?"trash-2":"alert-triangle"}"></i>`;
+  document.getElementById('dlg-t').textContent=title; document.getElementById('dlg-b').innerHTML=body;
+  const f=document.getElementById('dlg-f'); f.innerHTML="";
+  btns.forEach(([l,k,fn])=>{const b=document.createElement('button'); b.textContent=l; b.className=k==="primary"?"btn-primary":k==="danger"?"btn-danger":"btn-ghost"; b.onclick=fn; f.appendChild(b);});
+  document.getElementById('ov').classList.add('show'); lucide.createIcons();
+}
+function closeDlg(){ document.getElementById('ov').classList.remove('show'); }
+function toast(text,actions,ms,icon){
+  const t=document.getElementById('toast'); document.getElementById('toast-t').textContent=text;
+  document.getElementById('toast-a').innerHTML=actions;
+  document.getElementById('toast-i').outerHTML=`<i data-lucide="${icon}" class="ic" id="toast-i"></i>`;
+  t.classList.add('show'); lucide.createIcons();
+  const bar=document.getElementById('toast-bar'); bar.style.transition="none"; bar.style.width="100%";
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{bar.style.transition=`width ${ms}ms linear`; bar.style.width="0%";}));
+  clearTimeout(tTimer); tTimer=setTimeout(()=>{t.classList.remove('show'); lastDel=null;},ms);
+}
+document.querySelectorAll('.pv-bar [data-v]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.pv-bar [data-v]').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==="v-"+b.dataset.v));
+  document.getElementById('nav-pap').classList.toggle('on',b.dataset.v==="papelera");
+  document.getElementById('nav-planes').classList.toggle('on',b.dataset.v==="deshacer");
+  document.getElementById('copi').classList.toggle('force',b.dataset.v==="copiloto");
+});
+document.getElementById('reset').onclick=()=>{planes=null;reset();};
+reset();
+</script>
+</body>
+</html>

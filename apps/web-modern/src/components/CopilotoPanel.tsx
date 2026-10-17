@@ -208,6 +208,11 @@ const AUTO_START_MESSAGE = "[AYUDAR]";
 const SCREEN_CHANGE_MESSAGE = "[CAMBIO EN PANTALLA]";
 /** La OT que la IA abrió con [COMPLETAR] ya está en pantalla: que cargue el cierre desde el parte. */
 const COMPLETE_WO_MESSAGE = "[COMPLETAR OT]";
+/**
+ * El alta que la IA abrió con [ABRIR]/<ruta>?nuevo=1 ya está en pantalla: que la
+ * complete entera con lo hablado, para que el usuario sólo revise y guarde.
+ */
+const FILL_FORM_MESSAGE = "[LLENAR FORMULARIO]";
 
 /** Preferencia por persona (y por navegador) de no recibir ofrecimientos de ayuda en los formularios. */
 function assistOptOutKey(userId: string | undefined): string {
@@ -773,6 +778,15 @@ export const CopilotoPanel: React.FC = () => {
   const pendingCompleteRef = useRef<{ code: string; at: number } | null>(null);
   const completeTimerRef = useRef<number | null>(null);
   const [completeTick, setCompleteTick] = useState(0);
+  /** Alta que la IA abrió con `?nuevo=1` y todavía no recibió el aviso de que está en pantalla. */
+  const pendingFillRef = useRef<{ at: number } | null>(null);
+  const fillTimerRef = useRef<number | null>(null);
+  const [fillTick, setFillTick] = useState(0);
+  /**
+   * Flujos guiados que arrancaron así: en cada paso nuevo la IA vuelve a cargar
+   * todo lo que ya sabe de una vez, en vez de preguntar campo por campo.
+   */
+  const fillFlowsRef = useRef<Set<string>>(new Set());
 
   // File attachment state
   const [pendingFile, setPendingFile]   = useState<FileContent | null>(null);
@@ -1245,6 +1259,10 @@ export const CopilotoPanel: React.FC = () => {
       const openPath = extractOpenScreenBlock(assistantContent);
       if (openPath) {
         navigate(openPath);
+        if (/[?&]nuevo=1(&|$)/.test(openPath)) {
+          pendingFillRef.current = { at: Date.now() };
+          setFillTick(n => n + 1);
+        }
       }
 
       // ── OT a completar desde un parte de a bordo ──
@@ -1426,7 +1444,7 @@ export const CopilotoPanel: React.FC = () => {
     if (!assist || assist.flow !== pending.flow || screenContext?.screen === pending.screen) return;
     pendingStepRef.current = null;
     lastNextStepAtRef.current = Date.now();
-    void sendMessageRef.current(NEXT_STEP_MESSAGE, { hidden: true });
+    void sendMessageRef.current(fillFlowsRef.current.has(pending.flow) ? FILL_FORM_MESSAGE : NEXT_STEP_MESSAGE, { hidden: true });
   }, [screenContext, streaming]);
 
   // El usuario puede contestar desde el chat O desde la pantalla central. Si
@@ -1509,7 +1527,8 @@ export const CopilotoPanel: React.FC = () => {
     const screenChanged = prev.screen !== screenContext!.screen;
     if (screenChanged || prev.closed !== closed) {
       if (screenChanged) lastNextStepAtRef.current = Date.now();
-      continueFromScreen(assist.flow, screenChanged ? NEXT_STEP_MESSAGE : SCREEN_CHANGE_MESSAGE);
+      continueFromScreen(assist.flow, !screenChanged ? SCREEN_CHANGE_MESSAGE
+        : fillFlowsRef.current.has(assist.flow) ? FILL_FORM_MESSAGE : NEXT_STEP_MESSAGE);
       return;
     }
 
@@ -1569,6 +1588,32 @@ export const CopilotoPanel: React.FC = () => {
     }, 1500);
   }, [completeTick, streaming, screenContext, hasApplyFieldsCallback]);
   useEffect(() => () => { if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current); }, []);
+
+  // Alta abierta con `?nuevo=1`: apenas el formulario vacío se registró (ve sus
+  // campos y acepta [CAMPOS]), la IA recibe "[LLENAR FORMULARIO]" y lo completa
+  // con lo hablado. Si en 20 s no apareció (sin permiso, ruta sin alta), se
+  // abandona: el copiloto ya dijo que lo abría y la pantalla quedó a la vista.
+  useEffect(() => {
+    const pending = pendingFillRef.current;
+    if (!pending || streaming) return;
+    if (!expandedRef.current || Date.now() - pending.at > 20_000) { pendingFillRef.current = null; return; }
+    const onScreen = hasApplyFieldsCallback && !!screenContext?.fieldValues && screenContext.canEdit !== false;
+    if (!onScreen || fillTimerRef.current) return;
+    fillTimerRef.current = window.setTimeout(() => {
+      fillTimerRef.current = null;
+      if (pendingFillRef.current !== pending) return;
+      pendingFillRef.current = null;
+      const flow = screenContextRef.current?.assist?.flow;
+      if (flow) {
+        // Flujo guiado: ya no hace falta el "[AYUDAR]" de campo por campo.
+        fillFlowsRef.current.add(flow);
+        setOfferedFlows(prev => prev.has(flow) ? prev : new Set(prev).add(flow));
+        if (pendingSystemMsgRef.current?.flow === flow) pendingSystemMsgRef.current = null;
+      }
+      void sendMessageRef.current(FILL_FORM_MESSAGE, { hidden: true });
+    }, 1200);
+  }, [fillTick, streaming, screenContext, hasApplyFieldsCallback]);
+  useEffect(() => () => { if (fillTimerRef.current) window.clearTimeout(fillTimerRef.current); }, []);
   useEffect(() => {
     if (!requestMessage) return;
     if (!expanded) setExpanded(true);
@@ -1604,6 +1649,8 @@ export const CopilotoPanel: React.FC = () => {
       // arranque con la primera pregunta del formulario (ver efecto de avisos).
       const flow = offer.assistFlow;
       setOfferedFlows(prev => new Set(prev).add(flow));
+      // Lo abrió la IA para completarlo entero: el aviso lo manda el efecto de altas.
+      if (pendingFillRef.current) { fillFlowsRef.current.add(flow); return; }
       pendingSystemMsgRef.current = { flow, text: AUTO_START_MESSAGE };
       setSystemMsgTick(n => n + 1);
       return;

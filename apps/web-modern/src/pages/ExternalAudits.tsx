@@ -17,6 +17,8 @@ import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
 import { useT } from "../lib/i18n";
 import { AutoTextArea } from "../components/AutoTextArea";
+import { useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 
 // "Conditional" o "Fail" habilitan el registro de findings (case-insensitive,
 // tolera datos legados en texto libre).
@@ -191,6 +193,54 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
       setFindings(r.findings ?? []);
     } catch { /* noop */ }
   }, [audit]);
+
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    auditType: Object.entries(AUDIT_TYPE_LABEL).map(([value, label]) => ({ value, label })),
+    overallResult: ["Pass", "Conditional", "Fail"].map(v => ({ value: v, label: v })),
+  };
+  useCopilotEmitter({
+    module: "EXTERNAL_AUDITS",
+    screen: isNew ? "EXTERNAL_AUDITS_CREATE" : "EXTERNAL_AUDITS_EDIT",
+    entityId: audit?.id,
+    entityCode: audit?.auditCode,
+    vesselCode,
+    workflowStage: audit ? (audit.overallResult || "RECORDED") : "NEW",
+    canEdit: true,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      auditType: auditType || null,
+      auditDate: auditDate || null,
+      overallResult: overallResult || null,
+      port: port.trim() || null,
+      country: country.trim() || null,
+      agency: agency.trim() || null,
+      inspectorName: inspectorName.trim() || null,
+      score: score.trim() || null,
+      reportUrl: reportUrl.trim() || null,
+      summary: summary.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields((fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc && isNew) setVesselCode(vc);
+    const at = pick("auditType", fields.auditType);
+    if (at) setAuditType(at);
+    const res = pick("overallResult", fields.overallResult);
+    if (res) setResult(res);
+    if (fields.auditDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.auditDate)) setAuditDate(fields.auditDate.slice(0, 10));
+    if (fields.port !== undefined) setPort(fields.port);
+    if (fields.country !== undefined) setCountry(fields.country);
+    if (fields.agency !== undefined) setAgency(fields.agency);
+    if (fields.inspectorName !== undefined) setInspector(fields.inspectorName);
+    if (fields.score !== undefined) setScore(fields.score);
+    if (fields.reportUrl !== undefined) setReportUrl(fields.reportUrl);
+    if (fields.summary !== undefined) setSummary(fields.summary);
+    return result();
+  });
 
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, auditType, auditDate, port, country, agency, inspectorName, overallResult, summary, score, reportUrl });
@@ -628,6 +678,7 @@ export const ExternalAuditsPage: React.FC = () => {
   const { data, loading, reload } = useFetch<{ items: Audit[]; total: number }>(path, [path]);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Audit | null>(null);
+  useOpenNewFromUrl(() => setShowCreate(true));
 
   const items = useMemo(() => {
     const all = data?.items ?? [];

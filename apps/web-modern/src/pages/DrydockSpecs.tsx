@@ -26,11 +26,11 @@ import { AlertDialog } from "../components/AlertDialog";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { GuideField, GuideNeedTag, GuidePill, GuideSection, RequiredMark } from "../components/GuideKit";
 import { downloadAuthedFile } from "../lib/authed-media";
-import { useDeepLink } from "../lib/deep-link";
+import { useDeepLink, useOpenNewFromUrl } from "../lib/deep-link";
 import { useEscapeGuard } from "../lib/escape-guard";
 import { fmtDate } from "../lib/utils";
 import { useT, type TranslationKey } from "../lib/i18n";
-import { useCopilotEmitter } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import { AutoTextArea } from "../components/AutoTextArea";
 import { textMatches } from "../lib/text-search";
@@ -389,6 +389,45 @@ const DrydockSpecDrawer: React.FC<{
   const header = { title, shipyardName, port, plannedStartDate, plannedEndDate, scopeSummary };
   const [baseline, setBaseline] = useState(() => editableSnapshot(header, []));
   const isDirty = canEdit && (isNew ? !!(newVesselCode || title.trim()) : editableSnapshot(header, rows) !== baseline);
+
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  // Sólo la cabecera; la grilla de trabajos no se expone.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name || v.code })),
+  };
+  useCopilotEmitter({
+    module: "DRYDOCK_SPECS",
+    screen: isNew ? "DRYDOCK_SPEC_CREATE" : "DRYDOCK_SPEC_EDIT",
+    entityId: live?.id,
+    entityCode: live?.specCode,
+    vesselCode: isNew ? (newVesselCode || undefined) : live?.vesselCode,
+    workflowStage: live?.status ?? "NEW",
+    canEdit,
+    fieldValues: {
+      vesselCode: (isNew ? newVesselCode : live?.vesselCode) || null,
+      title: title.trim() || null,
+      shipyardName: shipyardName.trim() || null,
+      port: port.trim() || null,
+      plannedStartDate: plannedStartDate || null,
+      plannedEndDate: plannedEndDate || null,
+      scopeSummary: scopeSummary.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(canEdit ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    if (isNew) {
+      const vc = pick("vesselCode", fields.vesselCode);
+      if (vc) setNewVesselCode(vc);
+    }
+    if (fields.title !== undefined) setTitle(fields.title);
+    if (fields.shipyardName !== undefined) setShipyardName(fields.shipyardName);
+    if (fields.port !== undefined) setPort(fields.port);
+    if (fields.scopeSummary !== undefined) setScopeSummary(fields.scopeSummary);
+    if (fields.plannedStartDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.plannedStartDate)) setPlannedStartDate(fields.plannedStartDate.slice(0, 10));
+    if (fields.plannedEndDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.plannedEndDate)) setPlannedEndDate(fields.plannedEndDate.slice(0, 10));
+    return result();
+  } : null);
 
   const applyFull = (full: FullSpec) => {
     const h = {
@@ -1072,17 +1111,12 @@ export const DrydockSpecsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, data]);
 
-  useCopilotEmitter(!detail ? { module: "DRYDOCK_SPECS", screen: "DRYDOCK_SPEC_LIST" } : {
-    module: "DRYDOCK_SPECS",
-    screen: detail === "new" ? "DRYDOCK_SPEC_CREATE" : "DRYDOCK_SPEC_EDIT",
-    entityId: detail !== "new" ? detail.id : undefined,
-    entityCode: detail !== "new" ? detail.specCode : undefined,
-    vesselCode: detail !== "new" ? detail.vesselCode : undefined,
-    workflowStage: detail !== "new" ? detail.status : undefined,
-  });
+  // Con la ventana abierta, el contexto lo emite la propia ventana (con los campos).
+  useCopilotEmitter(!detail ? { module: "DRYDOCK_SPECS", screen: "DRYDOCK_SPEC_LIST" } : null);
 
   // Armar la spec la puede cualquier rol operativo; el sólo-lectura no.
   const canManage = can("wo.operate") || can("wo.manage") || can("drydock.approve");
+  useOpenNewFromUrl(() => setDetail("new"), canManage);
   const canApprove = can("drydock.approve");
   const vesselName = (c: string) => vessels.find(v => v.code === c)?.name || c;
 

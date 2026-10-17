@@ -212,6 +212,6 @@ export function stripAiBlocks(text: string): string {
     .replace(/\[COMPLETAR\][\s\S]*?\[\/COMPLETAR\]/g, "")
     .replace(/\[(?:RECALCULAR|ABRIR|COMPLETAR)\][\s\S]*$/, "")
     // Avisos internos del panel a la IA: si el modelo los repite, no se muestran.
-    .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA|COMPLETAR OT|COMPLETAR_ANULADO|CAMPOS_ANULADO)\]/g, "")
+    .replace(/\[(?:SIGUIENTE PASO|AYUDAR|CAMBIO EN PANTALLA|COMPLETAR OT|LLENAR FORMULARIO|COMPLETAR_ANULADO|CAMPOS_ANULADO)\]/g, "")
     .trim();
 }

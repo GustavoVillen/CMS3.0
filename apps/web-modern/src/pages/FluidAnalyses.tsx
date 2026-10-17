@@ -18,7 +18,8 @@ import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
 import { textMatches } from "../lib/text-search";
 import { useAuth, useCan } from "../lib/auth";
-import { useCopilotEmitter, useCopilotScreenContext } from "../lib/copilot-context";
+import { useCopilotEmitter, useCopilotScreenContext, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { useVesselContext } from "../lib/vessel-context";
 import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -104,6 +105,8 @@ export const FluidAnalysesPage: React.FC = () => {
   const { key: locationKey } = useLocation();
   const statusParam = (searchParams.get("status") ?? "").trim();
   const [creatingSample, setCreatingSample] = useState(false);
+  // Copiloto: ?nuevo=1 abre el alta de muestra vacía, igual que el botón "Nueva muestra".
+  useOpenNewFromUrl(() => setCreatingSample(true), canManage);
   const [scanningWizard, setScanningWizard] = useState(false);
   const [batchUpload, setBatchUpload] = useState(false);
   const [openDetailId, setOpenDetailId] = useState<string | null>(null);
@@ -579,6 +582,59 @@ function SampleFormModal({
     containerCode, labName, labReference, notes,
   });
   const requestClose = useEscapeGuard({ isDirty, onSave: submit, onClose });
+
+  // Copiloto: ve el formulario de la muestra y lo puede completar (guarda el usuario).
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name || v.code })),
+    assetId: filteredAssets.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: a.assetCode ? [a.assetCode] : [] })),
+    fluidType: FLUID_TYPES.map(f => ({ value: f, label: FLUID_LABELS[f] })),
+  };
+  useCopilotEmitter({
+    module: "FLUID_ANALYSES",
+    screen: mode === "create" ? "FLUID_SAMPLE_CREATE" : "FLUID_SAMPLE_EDIT",
+    entityId: sample?.id,
+    entityCode: sample?.sampleCode,
+    vesselCode,
+    workflowStage: sample?.status ?? "NEW",
+    canEdit: true,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      assetId: assetId || null,
+      fluidType: fluidType || null,
+      fluidProduct: fluidProduct.trim() || null,
+      sampledAt: sampledAt || null,
+      runningHours: runningHours || null,
+      containerCode: containerCode.trim() || null,
+      labName: labName.trim() || null,
+      labReference: labReference.trim() || null,
+      notes: notes.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields((fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc) { if (vc !== vesselCode) setAssetId(""); setVesselCode(vc); }
+    // El equipo es del buque elegido: si llega junto con el buque, se valida contra ese buque.
+    const assetPool = (vc ?? vesselCode) ? assets.filter(a => a.vesselCode === (vc ?? vesselCode)) : assets;
+    const aPick = copilotOptionPicker({ assetId: assetPool.map(a => ({ value: a.id, label: a.name ?? a.assetCode, aliases: a.assetCode ? [a.assetCode] : [] })) }, { assetId: "Equipo" });
+    const as = aPick.pick("assetId", fields.assetId);
+    if (as) setAssetId(as);
+    const ft = pick("fluidType", fields.fluidType);
+    if (ft) setFluidType(ft as FluidType);
+    if (fields.fluidProduct !== undefined) setFluidProduct(fields.fluidProduct);
+    if (fields.sampledAt !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.sampledAt)) setSampledAt(fields.sampledAt.slice(0, 10));
+    if (fields.runningHours !== undefined) {
+      const n = Number(String(fields.runningHours).replace(",", "."));
+      if (fields.runningHours.trim() === "") setRunningHours("");
+      else if (Number.isFinite(n)) setRunningHours(String(n));
+    }
+    if (fields.containerCode !== undefined) setContainerCode(fields.containerCode);
+    if (fields.labName !== undefined) setLabName(fields.labName);
+    if (fields.labReference !== undefined) setLabReference(fields.labReference);
+    if (fields.notes !== undefined) setNotes(fields.notes);
+    return { rejected: [...result().rejected, ...aPick.result().rejected] };
+  });
 
   return (
     <ModalShell title={mode === "create" ? t("fa.newSample") : `${t("fa.editSample")} ${sample?.sampleCode}`} onClose={requestClose}>

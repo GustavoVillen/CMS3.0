@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encabezado de la OT — Preview V2</title>
+<style>
+  :root {
+    --bg: #eef1f4; --surface: #ffffff; --fg: #0f1b2a; --muted: #5b6878; --faint: #95a1ae;
+    --line: #e3e8ee; --accent: #0b7fc1; --accent-soft: #e8f3fa; --band: #f6f8fa; --ok: #128a5b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  .mono { font-family: "JetBrains Mono", Consolas, monospace; }
+  header.top { padding: 18px 24px 8px; }
+  header.top h1 { font-size: 18px; margin: 0 0 4px; }
+  header.top p { margin: 0; color: var(--muted); font-size: 13px; max-width: 980px; line-height: 1.5; }
+  .demo { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: #fff4d6; color: #8a5a00; font-size: 11px; font-weight: 700; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 24px 4px; align-items: center; }
+  .seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; font: inherit; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .desc { font-size: 12.5px; color: var(--muted); padding: 2px 24px 0; max-width: 980px; }
+  main { padding: 12px 24px 40px; display: grid; gap: 20px; }
+  .case-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; display: flex; gap: 10px; align-items: baseline; }
+  .size { font-weight: 700; color: var(--ok); text-transform: none; letter-spacing: 0; }
+  .frame { max-width: 980px; }
+
+  .modal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,42,.10); }
+  .stripe { height: 4px; background: var(--accent); }
+  .hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .hdr-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+  .ico { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+  .kicker { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .code { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .badge { padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; background: #e7f0fb; color: #1f5fae; border: 1px solid #c9dcf4; flex-shrink: 0; }
+  .due { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .due span { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+  .due input { font: inherit; font-size: 12px; border: 1px solid #d5dce4; border-radius: 6px; padding: 2px 6px; }
+  .hdr-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .btn-ghost { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11px; color: var(--muted); }
+  .close { width: 30px; height: 30px; border-radius: 50%; background: #e0103a; color: #fff; display: grid; place-items: center; font-weight: 700; }
+
+  .gear { width: 12px; height: 12px; color: var(--accent); flex-shrink: 0; }
+  .eqn { font-weight: 700; color: var(--fg); white-space: nowrap; }
+  .tk { color: #2b3a4c; }
+  .sep { color: var(--faint); padding: 0 5px; }
+  .more { border: 0; background: none; color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0 0 0 6px; white-space: nowrap; }
+
+  /* V1 (lo que está hoy) */
+  .v1 { padding: 10px 22px 12px; background: var(--band); border-bottom: 1px solid var(--line); }
+  .v1 .t { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+  .v1 .row { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 14px; align-items: baseline; padding: 4px 0; }
+  .v1 .row + .row { border-top: 1px dashed #dde3ea; }
+  .v1 .eq { display: flex; align-items: baseline; gap: 7px; font-size: 14px; font-weight: 700; }
+  .v1 .task { font-size: 13px; color: #2b3a4c; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* A: compacta — sin título, un renglón por equipo */
+  .va { padding: 5px 22px 6px; background: var(--band); border-bottom: 1px solid var(--line); }
+  .va .row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 20px; min-width: 0; }
+  .va .row .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+  /* B: una sola línea para todo */
+  .vb { padding: 5px 22px; background: var(--band); border-bottom: 1px solid var(--line); display: flex; align-items: center; min-width: 0; font-size: 12.5px; line-height: 20px; }
+  .vb .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .vb .tx .eqgroup { display: inline; }
+  .vb.open { align-items: flex-start; }
+  .vb.open .tx { white-space: normal; }
+
+  /* C: dentro del encabezado, debajo del número */
+  .vc-line { display: flex; align-items: center; gap: 5px; font-size: 12.5px; line-height: 18px; margin-top: 2px; min-width: 0; }
+  .vc-line .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .vc-line.open .tx { white-space: normal; }
+  .hdr.c { align-items: flex-start; }
+  .hdr.c .meta { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+
+  .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 22px 12px; border-bottom: 1px solid var(--line); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 10px; font-size: 11px; border: 1px solid #cfe3f2; background: var(--accent-soft); }
+  .chip.grey { border-color: var(--line); background: #f3f5f7; }
+  .steps { font-size: 11px; color: var(--ok); font-weight: 700; }
+  .body-ph { padding: 12px 22px; color: var(--faint); font-size: 12px; font-style: italic; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Encabezado de la OT, más compacto — Preview V2</h1>
+  <p>Tres formas de achicar la franja «Equipo y trabajo». Arriba de cada caso, en verde, cuánto alto ocupa.
+     Las OT son reales de la base, sólo como ejemplo<span class="demo">DATOS DE EJEMPLO</span>.</p>
+</header>
+
+<div class="controls">
+  <div class="seg" id="segV">
+    <button data-v="v1">Hoy (V1)</button>
+    <button data-v="a" class="on">A · Compacta</button>
+    <button data-v="b">B · Una sola línea</button>
+    <button data-v="c">C · Dentro del encabezado</button>
+  </div>
+</div>
+<p class="desc" id="desc"></p>
+
+<main id="cases"></main>
+
+<script>
+const DESC = {
+  v1: "Lo que está hoy: título «Equipo y trabajo», una fila por equipo y hasta 2 renglones de tareas.",
+  a: "Sin el título. Un renglón por equipo: «Equipo — tareas». Si no entra termina en «…» y se lee completo al pasar el mouse. Letra un poco más chica y menos margen. Más de 3 equipos: «Ver N más».",
+  b: "Todo en un solo renglón, los equipos uno detrás del otro. Si no entra, «Ver todo» lo despliega. Es lo que menos ocupa, pero con varios equipos se lee menos de un vistazo.",
+  c: "Sin franja aparte: va en el mismo encabezado, debajo del número de la OT, en un renglón. «Ver todo» lo despliega. El estado y el vencimiento pasan a la misma línea del número.",
+};
+const CASES = [
+  { label: "Dos equipos", code: "OT-DCH-26-0313", due: "2026-10-14", vessel: "DON CHICUETO", by: "Admin Mercurio",
+    g: [ { a: "Radar de Babor", t: ["Verificacion de conexiones, limpieza interior de procesador y LC..."] },
+         { a: "Radar de Estribor", t: ["Verificacion de conexiones, limpieza interior de proc..."] } ] },
+  { label: "Un equipo, cuatro tareas", code: "OT-DCH-26-0315", due: "2026-10-14", vessel: "DON CHICUETO", by: "Admin Mercurio",
+    g: [ { a: "Termotanque", t: ["Control y/o cambio de anodo", "Control y/o cambio de termostato de corte", "Inspeccion visual", "Extraccion de fondo"] } ] },
+  { label: "Dos equipos, seis tareas", code: "OT-LTE-26-0037", due: "2026-09-15", vessel: "LATERE", by: "Pedro Pont",
+    g: [ { a: "Caja reductora #1", t: ["TOMA DE MUESTRAS: Aceite lubricante", "CONTROL: Medicion de huelgos y axiales - inspeccion general", "RECORRIDO GENERAL", "INTERCAMBIADOR DE CALOR: Control/ Cambio Anodos"] },
+         { a: "Caja reductora #2", t: ["SERVICE: Cambio de aceite, filtro de descarga y limpieza del filtro de aspiracion", "TOMA DE MUESTRAS: Aceite lubricante"] } ] },
+  { label: "Tres equipos", code: "OT-M02-26-0463", due: "2026-10-12", vessel: "MAO 02", by: "Pedro Pont",
+    g: [ { a: "GPS", t: ["Limpieza del panel, revision de conectores"] },
+         { a: "Motobomba de Incendio EGA Portátil", t: ["SERVICE: Cambiar aceite, combustible y filtros"] },
+         { a: "Motor de Lancha", t: ["CABOS, WINCHES,GANCHOS", "Control de estado y carga de Batería"] } ] },
+  { label: "Un equipo, una tarea", code: "OT-DCH-26-0307", due: "2026-10-07", vessel: "DON CHICUETO", by: "Admin Mercurio",
+    g: [ { a: "Motor de Lancha", t: ["Aceite y filtro de aceite de motor – cambiar"] } ] },
+];
+const esc = s => s.replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const gear = '<svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>';
+const wrench = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+const tasks = t => t.map(esc).join('<span class="sep">·</span>');
+const inline = g => g.map(x => `<span class="eqgroup">${gear} <span class="eqn">${esc(x.a)}</span> <span class="tk">— ${tasks(x.t)}</span></span>`).join('<span class="sep">|</span>');
+const full = g => g.map(x => `${x.a}: ${x.t.join(" · ")}`).join("  |  ");
+
+let v = "a";
+function band(c, i) {
+  if (v === "v1") return `<div class="v1"><div class="t">Equipo y trabajo</div>${c.g.map(x => `<div class="row"><div class="eq">${gear}${esc(x.a)}</div><div class="task">${tasks(x.t)}</div></div>`).join("")}</div>`;
+  if (v === "a") return `<div class="va">${c.g.map(x => `<div class="row" title="${esc(x.a + ": " + x.t.join(" · "))}">${gear}<span class="tx"><span class="eqn">${esc(x.a)}</span> <span class="tk">— ${tasks(x.t)}</span></span></div>`).join("")}</div>`;
+  if (v === "b") return `<div class="vb" id="b-${i}" title="${esc(full(c.g))}"><span class="tx">${inline(c.g)}</span><button class="more" onclick="toggle('b-${i}', this)">Ver todo</button></div>`;
+  return "";
+}
+function header(c, i) {
+  const right = `<div class="hdr-right"><span class="btn-ghost">Copiar link</span><span class="close">×</span></div>`;
+  if (v === "c") {
+    return `<div class="hdr c"><div class="hdr-left">${wrench}<div style="min-width:0;flex:1">
+        <div class="kicker">Orden de trabajo</div>
+        <div class="meta"><span class="code mono">${c.code}</span><span class="badge">Planificada</span>
+          <div class="due"><span>F. vencimiento</span><input type="date" value="${c.due}"></div></div>
+        <div class="vc-line" id="c-${i}" title="${esc(full(c.g))}"><span class="tx">${inline(c.g)}</span><button class="more" onclick="toggle('c-${i}', this)">Ver todo</button></div>
+      </div></div>${right}</div>`;
+  }
+  return `<div class="hdr"><div class="hdr-left">${wrench}<div><div class="kicker">Orden de trabajo</div><div><span class="code mono">${c.code}</span></div></div>
+      <span class="badge">Planificada</span><div class="due"><span>F. vencimiento</span><input type="date" value="${c.due}"></div></div>${right}</div>`;
+}
+function render() {
+  document.getElementById("desc").textContent = DESC[v];
+  document.getElementById("cases").innerHTML = CASES.map((c, i) => `<section>
+      <p class="case-label">${esc(c.label)} · ${c.code} <span class="size" id="sz-${i}"></span></p>
+      <div class="frame"><div class="modal"><div class="stripe"></div>
+        <div id="hb-${i}">${header(c, i)}${band(c, i)}</div>
+        <div class="sub"><span class="chip">⛴ <b>${c.vessel}</b></span><span class="chip grey">Abierta por <b>${c.by}</b></span>
+          <span class="steps">✓ Preparar — ✓ Aprobación — ③ Ejecución — ④ Cierre</span></div>
+        <div class="body-ph">(cuerpo de la OT, sin cambios)</div>
+      </div></div></section>`).join("");
+  requestAnimationFrame(medir);
+}
+function medir() {
+  CASES.forEach((c, i) => {
+    const h = document.getElementById(`hb-${i}`).getBoundingClientRect().height;
+    document.getElementById(`sz-${i}`).textContent = `encabezado + equipo y trabajo: ${Math.round(h)} px`;
+  });
+}
+function toggle(id, btn) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle("open");
+  btn.textContent = open ? "Ver menos" : "Ver todo";
+  medir();
+}
+document.getElementById("segV").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  v = b.dataset.v;
+  document.querySelectorAll("#segV button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+render();
+</script>
+</body>
+</html>

@@ -10,7 +10,8 @@ import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useDeepLink } from "../lib/deep-link";
+import { useDeepLink, useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
@@ -111,6 +112,61 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
     finally { setSaving(false); }
   }, [isNew, record, vesselCode, category, severity, status, occurredAt, location, description, immediateAction, rootCause, preventiveActions, lessonsLearned, reportedByName, onSaved]);
 
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    category: Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label })),
+    severity: Object.entries(SEVERITY_LABEL).map(([value, label]) => ({ value, label })),
+    status: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+  };
+  useCopilotEmitter({
+    module: "NEAR_MISS",
+    screen: isNew ? "NEAR_MISS_CREATE" : "NEAR_MISS_EDIT",
+    entityId: record?.id,
+    entityCode: record?.nearMissCode,
+    vesselCode,
+    workflowStage: record?.status ?? "NEW",
+    canEdit: true,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      category: category || null,
+      severity: severity || null,
+      status: status || null,
+      occurredAt: occurredAt || null,
+      location: location.trim() || null,
+      reportedByName: reportedByName.trim() || null,
+      description: description.trim() || null,
+      immediateAction: immediateAction.trim() || null,
+      rootCause: rootCause.trim() || null,
+      preventiveActions: preventiveActions.trim() || null,
+      lessonsLearned: lessonsLearned.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields((fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc && isNew) setVesselCode(vc);
+    const cat = pick("category", fields.category);
+    if (cat) setCategory(cat);
+    const sev = pick("severity", fields.severity);
+    if (sev) setSeverity(sev);
+    const st = pick("status", fields.status);
+    if (st) setStatus(st);
+    if (fields.occurredAt !== undefined && /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?/.test(fields.occurredAt)) {
+      const m = fields.occurredAt.match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/);
+      if (m) setOccurred(`${m[1]}T${m[2] ?? occurredAt.slice(11, 16)}`);
+    }
+    if (fields.location !== undefined) setLocation(fields.location);
+    if (fields.reportedByName !== undefined) setRBN(fields.reportedByName);
+    if (fields.description !== undefined) setDescription(fields.description);
+    if (fields.immediateAction !== undefined) setIA(fields.immediateAction);
+    if (fields.rootCause !== undefined) setRoot(fields.rootCause);
+    if (fields.preventiveActions !== undefined) setPA(fields.preventiveActions);
+    if (fields.lessonsLearned !== undefined) setLL(fields.lessonsLearned);
+    return result();
+  });
+
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ vesselCode, category, severity, status, occurredAt, location, description, immediateAction, rootCause, preventiveActions, lessonsLearned, reportedByName });
   // Editando, la ventana vive en su ruta (/near-miss/:code): esa ya es la marca
@@ -204,6 +260,8 @@ export const NearMissPage: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<NearMiss | null>(null);
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/near-miss");
+
+  useOpenNewFromUrl(() => setShowCreate(true));
 
   // Deep-link: la URL `/near-miss/:code` es la fuente de verdad del detalle.
   useEffect(() => {

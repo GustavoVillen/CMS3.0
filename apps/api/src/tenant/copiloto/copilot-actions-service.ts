@@ -21,6 +21,7 @@ import { hasPermission } from "../auth/role-permissions";
 import { getTenantAiLocale, type AiLocale } from "../ai/ai-locale";
 import { log } from "../../common/logger";
 import { sameProgressNoteText } from "./copilot-tool-utils";
+import { parseRestoreRefs, restoreTrash } from "../trash/trash-service";
 
 /**
  * Campos permitidos en el patch del update_plan. Cualquier otro campo
@@ -77,7 +78,7 @@ export interface CopilotAction {
   /**
    * Tipo de acción: "update_plan" | "create_work_order_from_plan" |
    * "create_work_order" | "create_service_request" | "record_asset_hours" |
-   * "create_work_order_from_defect" | "add_progress_note".
+   * "create_work_order_from_defect" | "add_progress_note" | "restore_deleted".
    */
   type: string;
   /**
@@ -139,6 +140,9 @@ export async function applyCopilotAction(
   }
   if (action.type === "add_progress_note") {
     return applyAddProgressNote(session, action);
+  }
+  if (action.type === "restore_deleted") {
+    return applyRestoreDeleted(session, action);
   }
   throw new RouteError(400, "UNSUPPORTED_ACTION_TYPE", `Tipo de acción no soportado: "${action.type}".`);
 }
@@ -628,4 +632,23 @@ async function applyAddProgressNote(
   const note = await createProgressNote(session, workOrder.id, { kind: "TEXT", text, occurredAt });
 
   return { ok: true, applied: { type: action.type, target: workOrderCode, entityId: note.id } };
+}
+
+/**
+ * restore_deleted: vuelve a su lugar registros de la Papelera. patch.items trae
+ * los restoreKey ("tipo:id") que devolvió query_deleted_records. Todo lo valida
+ * restoreTrash: permiso de papelera, tenant, alcance por buque y que ningún
+ * registro quede colgado de un equipo borrado.
+ */
+async function applyRestoreDeleted(
+  session: TenantAccessSession,
+  action: CopilotAction,
+): Promise<ApplyCopilotActionResult> {
+  const refs = parseRestoreRefs((action.patch ?? {}).items);
+  log.info(`[copilot-action] restore_deleted items=${refs.length} user=${session.user.email}`);
+  const { restored } = await restoreTrash(session, refs);
+  return {
+    ok: true,
+    applied: { type: action.type, target: String(action.target ?? ""), entityId: restored[0]?.id ?? "", vesselCode: restored[0]?.vesselCode ?? undefined },
+  };
 }

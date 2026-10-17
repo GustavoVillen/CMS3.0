@@ -174,6 +174,7 @@ import { scanFluidReportForBatch, commitFluidBatch, openWorkOrderForFluidBatch }
 import { buildFluidAnalysisPdf } from "./fluid-analyses/fluid-analyses-pdf-service";
 import { handleSuperintendentRoutes } from "./superintendents/superintendent-router";
 import { handleTeamRoutes } from "./team/team-router";
+import { handleTrashRoutes } from "./trash/trash-router";
 import { handleProfileRoutes } from "./profile/profile-router";
 import { listTenantAuditLog, type AuditLogItem } from "./audit/audit-log-service";
 import ExcelJS from "exceljs";
@@ -402,6 +403,10 @@ export async function handleTenantRoutes(
 
   if (url.pathname.startsWith("/app/team")) {
     if (await handleTeamRoutes(method, url, request, response, env)) return true;
+  }
+
+  if (url.pathname.startsWith("/app/trash")) {
+    if (await handleTrashRoutes(method, url, request, response, env)) return true;
   }
 
   if (url.pathname.startsWith("/app/profile")) {

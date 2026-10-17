@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permisos de trabajo - celular - V1</title>
+<style>
+  :root {
+    --fg: #0f172a; --fg70: #334155; --fg50: #64748b; --fg40: #94a3b8; --fg10: #e2e8f0; --fg5: #f1f5f9;
+    --accent: #0284c7; --green: #059669; --green-bg: #ecfdf5; --red: #dc2626; --red-bg: #fef2f2;
+    --amber: #b45309; --amber-bg: #fffbeb;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: "Segoe UI", Inter, system-ui, sans-serif; color: var(--fg); background: #d9dde4; }
+  .proto { max-width: 420px; margin: 0 auto; padding: 10px 12px 0; font-size: 11px; color: var(--fg50); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .proto b { background: #f59e0b; color: #1f2937; padding: 2px 7px; border-radius: 6px; }
+  .proto select { font-size: 11px; padding: 2px 4px; border-radius: 6px; border: 1px solid #c7ccd5; }
+  .phone { max-width: 420px; margin: 8px auto 24px; background: #fff; min-height: 760px; border-radius: 22px; overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,.18); display: flex; flex-direction: column; position: relative; }
+  @media (max-width: 440px) { .phone { margin: 0; border-radius: 0; min-height: 100vh; box-shadow: none; } .proto { display: none; } }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--fg10); position: sticky; top: 0; background: #fff; z-index: 5; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: #0c4a6e; color: #fff; font-weight: 800; font-size: 11px; display: grid; place-items: center; flex-shrink: 0; }
+  .htitle { flex: 1; min-width: 0; }
+  .htitle .k { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .htitle select { margin-top: 3px; font: inherit; font-size: 12px; border: 1px solid var(--fg10); background: var(--fg5); border-radius: 8px; padding: 3px 6px; max-width: 100%; }
+  .ibtn { border: 0; background: transparent; color: var(--fg40); padding: 6px; cursor: pointer; font-size: 16px; }
+
+  main { flex: 1; overflow-y: auto; padding: 12px; }
+  .count { font-size: 12px; color: var(--fg50); margin: 2px 2px 10px; }
+  .count strong { color: var(--fg); }
+
+  .card { border: 1px solid var(--fg10); border-radius: 18px; padding: 14px; margin-bottom: 12px; background: #fff; cursor: pointer; }
+  .card:active { transform: scale(.99); }
+  .top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .type { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; padding: 4px 9px; border-radius: 10px; }
+  .t-HW { background: #fee2e2; color: #b91c1c; } .t-ES { background: #ffedd5; color: #c2410c; }
+  .t-WA { background: #e0f2fe; color: #0369a1; } .t-EI { background: #fef9c3; color: #a16207; }
+  .t-CW { background: #e0e7ff; color: #4338ca; } .t-UW { background: #cffafe; color: #0e7490; }
+  .when { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .w-late { background: var(--red-bg); color: var(--red); } .w-soon { background: var(--amber-bg); color: var(--amber); } .w-ok { background: var(--fg5); color: var(--fg50); }
+  .code { font-family: Consolas, monospace; font-size: 11px; color: var(--accent); font-weight: 700; margin-top: 8px; }
+  .vessel { font-size: 12px; color: var(--fg50); }
+  .desc { font-size: 15px; font-weight: 700; line-height: 1.35; margin: 6px 0 8px; }
+  .meta { display: grid; gap: 4px; font-size: 13px; color: var(--fg70); }
+  .meta span { color: var(--fg40); display: inline-block; width: 64px; }
+  .gas { margin-top: 8px; font-size: 12px; font-weight: 700; padding: 6px 9px; border-radius: 10px; }
+  .gas-ok { background: var(--green-bg); color: var(--green); } .gas-no { background: var(--amber-bg); color: var(--amber); }
+  .open { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--accent); }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--fg50); }
+  .empty .ok { font-size: 40px; color: var(--green); }
+  .noperm { margin: 40px 6px; padding: 18px; border-radius: 16px; background: var(--fg5); text-align: center; color: var(--fg70); font-size: 14px; line-height: 1.45; }
+
+  /* Detalle */
+  .detail { position: absolute; inset: 0; background: #fff; z-index: 10; display: flex; flex-direction: column; }
+  .dhead { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--fg10); }
+  .back { border: 0; background: var(--fg5); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .dbody { flex: 1; overflow-y: auto; padding: 14px 14px 110px; }
+  .sec { margin-top: 16px; }
+  .sec h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--fg40); }
+  .sec p, .sec li { font-size: 14px; line-height: 1.45; margin: 0; color: var(--fg70); }
+  .sec ul { margin: 0; padding-left: 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; background: var(--fg5); border: 1px solid var(--fg10); border-radius: 999px; padding: 4px 10px; }
+  .pdf { display: block; width: 100%; margin-top: 18px; padding: 12px; border-radius: 12px; border: 1px solid var(--fg10); background: #fff; font: inherit; font-size: 14px; font-weight: 700; color: var(--fg70); cursor: pointer; }
+  .actions { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px; background: #fff; border-top: 1px solid var(--fg10); display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+  .btn { border: 0; border-radius: 14px; padding: 15px; font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
+  .b-rej { background: var(--red-bg); color: var(--red); border: 2px solid #fecaca; }
+  .b-ok { background: var(--green); color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* Hojas */
+  .shade { position: absolute; inset: 0; background: rgba(15,23,42,.45); z-index: 20; display: flex; align-items: flex-end; }
+  .sheet { background: #fff; width: 100%; border-radius: 22px 22px 0 0; padding: 18px 16px 16px; }
+  .sheet h3 { margin: 0 0 4px; font-size: 18px; }
+  .sheet .sub { font-size: 13px; color: var(--fg50); margin-bottom: 14px; }
+  .valid { background: var(--fg5); border-radius: 14px; padding: 12px; font-size: 14px; }
+  .valid b { display: block; font-size: 16px; margin-top: 2px; }
+  .link { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; padding: 8px 0; cursor: pointer; }
+  label.l { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--fg50); margin: 10px 0 4px; }
+  input, textarea { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; border: 1px solid #d5dae2; background: var(--fg5); }
+  textarea { min-height: 90px; resize: vertical; }
+  textarea.miss { border: 2px solid #f59e0b; background: var(--amber-bg); }
+  .req { color: var(--red); }
+  .sugg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .sugg button { border: 1px solid var(--fg10); background: #fff; border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .row2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; margin-top: 16px; }
+  .b-cancel { background: var(--fg5); color: var(--fg70); }
+  .toast { position: absolute; left: 12px; right: 12px; bottom: 16px; z-index: 30; background: #0f172a; color: #fff; font-size: 14px; padding: 12px 14px; border-radius: 14px; }
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <b>PROTOTIPO V1</b> Datos de ejemplo.
+  <span style="flex:1"></span>
+  Ver como:
+  <select onchange="state.canAuthorize = this.value === 'yes'; render()">
+    <option value="yes">Jefe SSMA (autoriza)</option>
+    <option value="no">Usuario sin permiso</option>
+  </select>
+</div>
+
+<div class="phone" id="app"></div>
+
+<script>
+const NOW = new Date("2026-10-08T09:30:00");
+const TYPES = {
+  HW: { name: "Trabajo en caliente", icon: "🔥" }, ES: { name: "Espacio confinado", icon: "💨" },
+  WA: { name: "Trabajo en altura", icon: "⬆" }, EI: { name: "Aislamiento eléctrico", icon: "⚡" },
+  CW: { name: "Trabajo en frío", icon: "❄" }, UW: { name: "Trabajo subacuático", icon: "🌊" },
+};
+const VESSELS = { DCH: "DON CHICUETO", M01: "MAO 01", LTE: "LATERE" };
+const ALL = [
+  { id: 1, t: "HW", code: "PTW-HW-DCH-26-0012", v: "DCH", loc: "Sala de máquinas, banco de trabajo", desc: "Soldadura de soporte de caño de escape del MCP babor",
+    start: "2026-10-08T08:00", end: "2026-10-08T12:00", wo: "OT-DCH-26-0298",
+    hazards: ["Proyección de chispas sobre material combustible", "Humos de soldadura en espacio cerrado", "Quemaduras"],
+    controls: ["Retirar combustibles en radio de 10 m", "Vigía de incendio con extintor de polvo", "Ventilación forzada encendida"],
+    ppe: ["Careta de soldar", "Guantes de cuero", "Delantal ignífugo", "Protección auditiva"],
+    people: [["Ejecutante", "Ramírez, J."], ["Vigía de incendio", "Benítez, C."]] },
+  { id: 2, t: "ES", code: "PTW-ES-M01-26-0004", v: "M01", loc: "Tanque de lastre N.º 3 estribor", desc: "Inspección interna y limpieza de sedimentos del tanque de lastre",
+    start: "2026-10-08T11:00", end: "2026-10-08T16:00", wo: "OT-M01-26-0141", gas: { ok: true, at: "09:05", o2: "20,9 %", lel: "0 %", h2s: "0 ppm" },
+    hazards: ["Atmósfera deficiente en oxígeno", "Gases tóxicos", "Rescate dificultoso"],
+    controls: ["Prueba de gases antes de entrar y cada 2 h", "Vigía permanente en la boca de hombre", "Equipo de rescate al pie"],
+    ppe: ["Detector multigas personal", "Arnés con línea de vida", "Linterna intrínsecamente segura"],
+    people: [["Ejecutante", "Ortiz, M."], ["Vigía", "Acosta, R."]] },
+  { id: 3, t: "WA", code: "PTW-WA-LTE-26-0007", v: "LTE", loc: "Mástil principal", desc: "Cambio de lámpara de luz de tope",
+    start: "2026-10-09T08:00", end: "2026-10-09T10:00", wo: null,
+    hazards: ["Caída de altura", "Caída de objetos"], controls: ["Arnés con doble cabo", "Zona de exclusión en cubierta"], ppe: ["Arnés", "Casco con barbijo"],
+    people: [["Ejecutante", "Gómez, L."]] },
+  { id: 4, t: "ES", code: "PTW-ES-DCH-26-0003", v: "DCH", loc: "Cofferdam de proa", desc: "Medición de espesores de mamparo",
+    start: "2026-10-08T14:00", end: "2026-10-08T18:00", wo: "OT-DCH-26-0301", gas: { ok: false },
+    hazards: ["Atmósfera peligrosa"], controls: ["Prueba de gases antes de entrar", "Vigía permanente"], ppe: ["Detector multigas", "Arnés"],
+    people: [["Ejecutante", "Ramírez, J."]] },
+];
+const state = { canAuthorize: true, vessel: "", list: ALL.slice(), open: null, sheet: null, reason: "", editValid: false, toast: "" };
+
+const fmt = iso => { const d = new Date(iso); const same = d.toDateString() === NOW.toDateString();
+  const tom = new Date(NOW); tom.setDate(tom.getDate() + 1);
+  const day = same ? "Hoy" : d.toDateString() === tom.toDateString() ? "Mañana" : d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+  return `${day} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })}`; };
+const hhmm = iso => new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+function when(p) {
+  const ms = new Date(p.start) - NOW;
+  if (ms <= 0) return `<span class="when w-late">Debía empezar hace ${Math.round(-ms / 3600e3 * 10) / 10} h</span>`;
+  if (ms < 3 * 3600e3) return `<span class="when w-soon">Empieza en ${Math.round(ms / 3600e3 * 10) / 10} h</span>`;
+  return `<span class="when w-ok">${fmt(p.start)}</span>`;
+}
+const gasMin = p => p.gas?.ok ? Math.round((NOW - new Date("2026-10-08T" + p.gas.at)) / 60000) : null;
+const gasValid = p => p.t !== "ES" || (gasMin(p) !== null && gasMin(p) <= 30);
+function gasLine(p) {
+  if (p.t !== "ES") return "";
+  if (!p.gas?.ok) return `<div class="gas gas-no">⚠ Todavía sin prueba de gases</div>`;
+  return gasValid(p)
+    ? `<div class="gas gas-ok">✔ Prueba de gases OK, hace ${gasMin(p)} min</div>`
+    : `<div class="gas gas-no">⚠ La prueba de gases tiene ${gasMin(p)} min (vale 30)</div>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const list = state.list.filter(p => !state.vessel || p.v === state.vessel).sort((a, b) => new Date(a.start) - new Date(b.start));
+  let html = `<header><div class="logo">CMS</div><div class="htitle"><div class="k">Permisos de trabajo</div>
+      <select onchange="state.vessel=this.value;render()"><option value="">— Todos los buques —</option>
+      ${Object.entries(VESSELS).map(([c, n]) => `<option value="${c}" ${state.vessel === c ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <button class="ibtn" title="Actualizar">⟳</button><button class="ibtn" title="Salir">⎋</button></header><main>`;
+  if (!state.canAuthorize) {
+    html += `<div class="noperm">Tu usuario no puede aprobar permisos de trabajo.<br><br>Lo habilita el administrador en <b>Equipo → Permisos</b> («Autorizar permisos de trabajo»).</div>`;
+  } else if (list.length === 0) {
+    html += `<div class="empty"><div class="ok">✔</div><p><b>No hay permisos esperando tu aprobación.</b></p><p>Cuando a bordo pidan uno, aparece acá.</p></div>`;
+  } else {
+    html += `<p class="count"><strong>${list.length}</strong> esperando tu aprobación · los más próximos primero</p>`;
+    html += list.map(p => `<div class="card" onclick="state.open=${p.id};render()">
+      <div class="top"><span class="type t-${p.t}">${TYPES[p.t].icon} ${TYPES[p.t].name}</span>${when(p)}</div>
+      <div class="code">${p.code}</div><div class="vessel">${VESSELS[p.v]}</div>
+      <div class="desc">${p.desc}</div>
+      <div class="meta"><div><span>Dónde</span>${p.loc}</div><div><span>Horario</span>${fmt(p.start)} → ${hhmm(p.end)}</div>${p.wo ? `<div><span>OT</span>${p.wo}</div>` : ""}</div>
+      ${gasLine(p)}
+      <div class="open">Revisar y decidir ›</div></div>`).join("");
+  }
+  html += `</main>`;
+
+  const p = state.list.find(x => x.id === state.open);
+  if (p) {
+    html += `<div class="detail"><div class="dhead"><button class="back" onclick="state.open=null;render()">‹ Volver</button></div>
+      <div class="dbody">
+        <div class="top"><span class="type t-${p.t}">${TYPES[p.t].icon} ${TYPES[p.t].name}</span>${when(p)}</div>
+        <div class="code">${p.code}</div><div class="vessel">${VESSELS[p.v]}${p.wo ? " · " + p.wo : ""}</div>
+        <div class="desc" style="font-size:17px">${p.desc}</div>
+        <div class="meta"><div><span>Dónde</span>${p.loc}</div><div><span>Horario</span>${fmt(p.start)} → ${hhmm(p.end)}</div></div>
+        ${gasLine(p)}${p.gas?.ok ? `<p style="font-size:12px;color:var(--fg50);margin:4px 2px 0">O₂ ${p.gas.o2} · LEL ${p.gas.lel} · H₂S ${p.gas.h2s}</p>` : ""}
+        <div class="sec"><h4>Peligros</h4><ul>${p.hazards.map(h => `<li>${h}</li>`).join("")}</ul></div>
+        <div class="sec"><h4>Medidas de control</h4><ul>${p.controls.map(h => `<li>${h}</li>`).join("")}</ul></div>
+        <div class="sec"><h4>EPP</h4><div class="chips">${p.ppe.map(h => `<span class="chip">${h}</span>`).join("")}</div></div>
+        <div class="sec"><h4>Personal</h4>${p.people.map(([r, n]) => `<p>${n} <span style="color:var(--fg40)">· ${r}</span></p>`).join("")}</div>
+        <button class="pdf">📄 Ver el formulario completo (PDF)</button>
+      </div>
+      <div class="actions"><button class="btn b-rej" onclick="state.sheet='reject';state.reason='';render()">✕ Rechazar</button>
+        <button class="btn b-ok" onclick="state.sheet='approve';state.editValid=false;render()">✔ Aprobar y activar</button></div></div>`;
+  }
+
+  if (p && state.sheet === "approve") {
+    html += `<div class="shade" onclick="if(event.target===this){state.sheet=null;render()}"><div class="sheet">
+      <h3>Aprobar ${p.code}</h3><div class="sub">${TYPES[p.t].name} · ${VESSELS[p.v]}</div>
+      ${gasValid(p)
+        ? `<div class="gas gas-ok" style="margin-bottom:10px">Queda <b>activo</b> en el momento: a bordo pueden empezar el trabajo.</div>`
+        : `<div class="gas gas-no" style="margin-bottom:10px">⚠ Se aprueba pero <b>no se activa</b>: espacio confinado necesita una prueba de gases OK de menos de 30 minutos. Se activa a bordo apenas la carguen.</div>`}
+      <div class="valid">Vale desde / hasta<b>${fmt(p.start)} → ${hhmm(p.end)}</b></div>
+      ${state.editValid ? `<label class="l">Desde</label><input type="datetime-local" value="${p.start}"><label class="l">Hasta</label><input type="datetime-local" value="${p.end}">`
+        : `<button class="link" onclick="state.editValid=true;render()">Cambiar horario</button>`}
+      <div class="row2"><button class="btn b-cancel" onclick="state.sheet=null;render()">Cancelar</button>
+        <button class="btn b-ok" onclick="act(gasValid(p) ? 'aprobado y activo' : 'aprobado. Falta la prueba de gases para activarlo')">✔ ${gasValid(p) ? "Aprobar y activar" : "Aprobar"}</button></div></div></div>`;
+  }
+  if (p && state.sheet === "reject") {
+    const ok = state.reason.trim().length > 0;
+    html += `<div class="shade" onclick="if(event.target===this){state.sheet=null;render()}"><div class="sheet">
+      <h3>Rechazar ${p.code}</h3><div class="sub">A bordo van a ver el motivo para corregirlo.</div>
+      <label class="l">Motivo <span class="req">*</span></label>
+      <textarea id="reason" class="${ok ? "" : "miss"}" placeholder="Qué hay que corregir" oninput="state.reason=this.value;document.getElementById('rejbtn').disabled=!this.value.trim();this.classList.toggle('miss',!this.value.trim())">${state.reason}</textarea>
+      <div class="sugg">${["Falta la prueba de gases", "Faltan medidas de control", "Cambiar el horario", "Falta el personal asignado"].map(s => `<button onclick="state.reason='${s}';render()">${s}</button>`).join("")}</div>
+      <div class="row2"><button class="btn b-cancel" onclick="state.sheet=null;render()">Cancelar</button>
+        <button id="rejbtn" class="btn" style="background:var(--red);color:#fff" ${ok ? "" : "disabled"} onclick="act('rechazado')">✕ Rechazar</button></div></div></div>`;
+  }
+  if (state.toast) html += `<div class="toast">${state.toast}</div>`;
+  app.innerHTML = html;
+}
+function act(what) {
+  const p = state.list.find(x => x.id === state.open);
+  state.list = state.list.filter(x => x.id !== p.id);
+  state.open = null; state.sheet = null;
+  state.toast = `${p.code} ${what}.`;
+  render();
+  setTimeout(() => { state.toast = ""; render(); }, 2500);
+}
+render();
+</script>
+</body>
+</html>

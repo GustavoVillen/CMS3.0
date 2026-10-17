@@ -15,6 +15,8 @@ import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { VesselLabel, useVesselName } from "../components/EntityLabels";
 import { useT } from "../lib/i18n";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { useVesselContext } from "../lib/vessel-context";
 import { AutoTextArea } from "../components/AutoTextArea";
 
@@ -359,6 +361,65 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
 
   const effectiveVesselCode = liveReport?.vesselCode ?? newVesselCode.trim().toUpperCase();
 
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  // El inventario no se expone. Buque, mes y año sólo se eligen al crear.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    reportMonth: MONTH_NAMES.map((n, i) => ({ value: String(i + 1), label: n })),
+    reportYear: yearOptions.map(y => ({ value: String(y), label: String(y) })),
+    operationalStatus: OPERATIONAL_STATUSES.map(s => ({ value: s, label: t(`opStatus.${s}` as never) })),
+  };
+  useCopilotEmitter({
+    module: "MONTHLY_REPORTS",
+    screen: liveReport ? "MONTHLY_REPORT_EDIT" : "MONTHLY_REPORT_CREATE",
+    entityId: liveReport?.id,
+    entityCode: liveReport ? fmtMonth(liveReport.reportYear, liveReport.reportMonth) : undefined,
+    vesselCode: effectiveVesselCode || undefined,
+    workflowStage: liveReport?.status ?? "NEW",
+    canEdit: !isClosed,
+    fieldValues: {
+      vesselCode: effectiveVesselCode || null,
+      reportMonth: String(reportMonth),
+      reportYear: String(reportYear),
+      status: status || null,
+      currentPort: currentPort.trim() || null,
+      operationalStatus: operationalStatus || null,
+      positionLat: posLat.trim() || null,
+      positionLon: posLon.trim() || null,
+      summary: summary.trim() || null,
+      nextPort: nextPort.trim() || null,
+      etaNextPort: etaNextPort || null,
+      notes: notes.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(!isClosed ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    if (!liveReport) {
+      const vc = pick("vesselCode", fields.vesselCode);
+      if (vc) setNewVesselCode(vc);
+      const mo = pick("reportMonth", fields.reportMonth);
+      if (mo) setReportMonth(Number(mo));
+      const yr = pick("reportYear", fields.reportYear);
+      if (yr) setReportYear(Number(yr));
+    }
+    const op = pick("operationalStatus", fields.operationalStatus);
+    if (op) setOperationalStatus(op);
+    if (fields.currentPort !== undefined) setCurrentPort(fields.currentPort);
+    if (fields.nextPort !== undefined) setNextPort(fields.nextPort);
+    if (fields.summary !== undefined) setSummary(fields.summary);
+    if (fields.notes !== undefined) setNotes(fields.notes);
+    if (fields.etaNextPort !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.etaNextPort)) setEtaNextPort(fields.etaNextPort.slice(0, 10));
+    const lat = fields.positionLat !== undefined ? parseFloat(fields.positionLat) : NaN;
+    const lon = fields.positionLon !== undefined ? parseFloat(fields.positionLon) : NaN;
+    if (Number.isFinite(lat)) setPosLat(String(lat));
+    if (Number.isFinite(lon)) setPosLon(String(lon));
+    const mlat = Number.isFinite(lat) ? lat : parseFloat(posLat);
+    const mlon = Number.isFinite(lon) ? lon : parseFloat(posLon);
+    if ((Number.isFinite(lat) || Number.isFinite(lon)) && Number.isFinite(mlat) && Number.isFinite(mlon)) setMapCoords({ lat: mlat, lon: mlon });
+    return result();
+  } : null);
+
   // ESC: cerrar / preguntar guardar si hay cambios
   const isDirty = useDirtyTracker({ newVesselCode, reportYear, reportMonth, status, operationalStatus, currentPort, posLat, posLon, summary, nextPort, etaNextPort, notes });
   useEscapeGuard({ isDirty, onSave: handleSave, onClose });
@@ -648,6 +709,8 @@ export const MonthlyReportsPage: React.FC = () => {
   const items = data?.items ?? [];
 
   const vesselName = useVesselName();
+
+  useOpenNewFromUrl(() => setSelected("new"));
 
   const COLUMNS: Column<MonthlyReport>[] = [
     { key: "period", header: "Período",   render: r => <span className="font-bold text-xs text-fg">{fmtMonth(r.reportYear, r.reportMonth)}</span> },

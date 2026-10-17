@@ -21,7 +21,7 @@ import { fmtDate, FILTER_ALL_VALUE, fromFilterSelectValue, toFilterSelectValue }
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
 import { useT, useWoTerms, type TranslationKey } from "../lib/i18n";
-import { useDeepLink } from "../lib/deep-link";
+import { useDeepLink, useOpenNewFromUrl } from "../lib/deep-link";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { useCopilotEmitter, useCopilotApplyFields, useCopilotFormActions, copilotOptionPicker } from "../lib/copilot-context";
 import { CreateWorkOrderModal } from "../components/CreateWorkOrderModal";
@@ -464,6 +464,8 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
       immediateAction: immediateAction || null,
     },
     fieldOptions: createFieldOptions,
+    // Lo que pide "Crear defecto": el copiloto no lo deja vacío.
+    fieldHints: { assetId: "obligatorio", classification: "obligatorio: tipo de falla (Mecánico, Eléctrico…)", description: "obligatorio" },
     relatedEntities: { assetId: assetId || null },
   });
   useCopilotApplyFields((fields) => {
@@ -472,9 +474,15 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
       severity: t("form.severity"), operationalState: t("form.operationalState"),
     });
     const vessel = pick("vesselCode", fields.vesselCode);
-    if (vessel) setVesselCode(vessel);
-    const asset = pick("assetId", fields.assetId);
-    if (asset) setAssetId(asset);
+    if (vessel && vessel !== vesselCode) {
+      // Otro buque: su lista de equipos todavía no llegó (y el cambio de buque
+      // borra el equipo). El equipo se elige cuando carguen (efecto de abajo).
+      setVesselCode(vessel);
+      if (fields.assetId) pendingCopilotAssetRef.current = fields.assetId;
+    } else {
+      const asset = pick("assetId", fields.assetId);
+      if (asset) setAssetId(asset);
+    }
     if (fields.classification  !== undefined) setClassification(fields.classification);
     if (fields.description     !== undefined) setDescription(fields.description);
     const sev = pick("severity", fields.severity);
@@ -501,6 +509,16 @@ const CreateDefectModal: React.FC<CreateDefectModalProps> = ({ prefill, onClose,
       .catch(() => setAssets([]))
       .finally(() => setLoadingAssets(false));
   }, [vesselCode]);
+
+  // Equipo que mandó el copiloto junto con otro buque: se elige al llegar los equipos de ese buque.
+  const pendingCopilotAssetRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    const wanted = pendingCopilotAssetRef.current;
+    if (!wanted || loadingAssets || assets.length === 0) return;
+    pendingCopilotAssetRef.current = null;
+    const hit = copilotOptionPicker(createFieldOptions).pick("assetId", wanted);
+    if (hit) setAssetId(hit);
+  }, [assets, loadingAssets, createFieldOptions]);
 
   // Re-aplica el equipo del prefill una vez cargados los assets del buque
   // (el efecto de cambio de buque resetea assetId a "").
@@ -2081,6 +2099,8 @@ export const DefectsPage: React.FC = () => {
   const { code: linkCode, open: openLink, close: closeLink } = useDeepLink("/defects");
   const [editing, setEditing] = useState<Defect | null>(null);
   const [creating, setCreating] = useState(false);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => setCreating(true));
   const [createPrefill, setCreatePrefill] = useState<DefectPrefill | undefined>(undefined);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);

@@ -28,7 +28,9 @@ interface MocAiDraft {
 }
 import { PageHeader } from "../components/PageHeader";
 import { ExportExcelButton } from "../components/ExportExcelButton";
-import { useDeepLink } from "../lib/deep-link";
+import { useDeepLink, useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
+import { CHANGE_TYPES } from "../lib/moc-form-catalog";
 import { CopyLinkButton } from "../components/CopyLinkButton";
 import { VesselLabel } from "../components/EntityLabels";
 import { fmtDate } from "../lib/utils";
@@ -450,6 +452,74 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
     catch (e) { setErr(e instanceof ApiError ? e.message : "Error."); }
   };
 
+  // Copiloto: ve el formulario y lo puede completar (el que guarda es el usuario).
+  // Las listas de varias opciones (áreas de impacto, tipo de cambio) van como
+  // valores separados por coma.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name })),
+    category: Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label })),
+    riskLevel: Object.entries(RISK_LABEL).map(([value, label]) => ({ value, label })),
+    impactAreas: IMPACT_AREAS.map(a => ({ value: a, label: a })),
+    changeTypes: CHANGE_TYPES.map(c => ({ value: c.key, label: c.label })),
+    duration: [{ value: "PERMANENT", label: "Permanente" }, { value: "TEMPORARY", label: "Temporal" }],
+  };
+  useCopilotEmitter({
+    module: "MOC",
+    screen: isNew ? "MOC_CREATE" : "MOC_EDIT",
+    entityId: moc?.id,
+    entityCode: moc?.mocCode,
+    vesselCode,
+    workflowStage: moc?.status ?? "NEW",
+    canEdit: !isLocked,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      category: category || null,
+      title: title.trim() || null,
+      reasonForChange: reasonForChange.trim() || null,
+      proposedChange: proposedChange.trim() || null,
+      currentSituation: regi.currentSituation.trim() || null,
+      expectedResult: regi.expectedResult.trim() || null,
+      changeTypes: regi.changeTypes.join(",") || null,
+      duration: regi.duration || null,
+      temporaryUntil: regi.temporaryUntil || null,
+      riskLevel: riskLevel || null,
+      impactAreas: impactAreas.join(",") || null,
+      riskAssessmentNotes: riskAssessmentNotes.trim() || null,
+      mitigationActions: mitigationActions.trim() || null,
+      plannedDate: plannedDate || null,
+    },
+    fieldOptions: copilotOptions,
+    // Los obligatorios del formulario (onSave): el copiloto no los deja vacíos.
+    fieldHints: { vesselCode: "obligatorio", category: "obligatorio", title: "obligatorio", reasonForChange: "obligatorio", proposedChange: "obligatorio: qué se va a hacer" },
+  });
+  useCopilotApplyFields(!isLocked ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    const pickMany = (key: "impactAreas" | "changeTypes", raw: string) =>
+      raw.split(",").map(v => pick(key, v.trim())).filter((v): v is string => !!v);
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc) setVesselCode(vc);
+    const cat = pick("category", fields.category);
+    if (cat) setCategory(cat);
+    const risk = pick("riskLevel", fields.riskLevel);
+    if (risk) setRiskLevel(risk);
+    if (fields.title !== undefined) setTitle(fields.title);
+    if (fields.reasonForChange !== undefined) setReason(fields.reasonForChange);
+    if (fields.proposedChange !== undefined) setProposed(fields.proposedChange);
+    if (fields.riskAssessmentNotes !== undefined) setRAN(fields.riskAssessmentNotes);
+    if (fields.mitigationActions !== undefined) setMA(fields.mitigationActions);
+    if (fields.plannedDate !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.plannedDate)) setPlanned(fields.plannedDate.slice(0, 10));
+    if (fields.impactAreas) setImpactAreas(pickMany("impactAreas", fields.impactAreas));
+    const patch: Partial<RegiForm> = {};
+    if (fields.currentSituation !== undefined) patch.currentSituation = fields.currentSituation;
+    if (fields.expectedResult !== undefined) patch.expectedResult = fields.expectedResult;
+    if (fields.changeTypes) patch.changeTypes = pickMany("changeTypes", fields.changeTypes);
+    const dur = pick("duration", fields.duration);
+    if (dur) patch.duration = dur as RegiForm["duration"];
+    if (fields.temporaryUntil !== undefined && /^\d{4}-\d{2}-\d{2}/.test(fields.temporaryUntil)) patch.temporaryUntil = fields.temporaryUntil.slice(0, 10);
+    if (Object.keys(patch).length) updateRegi(patch);
+    return result();
+  } : null);
+
   // ESC: cerrar / preguntar guardar si hay cambios
   const escDirty = useDirtyTracker({ vesselCode, category, title, reasonForChange, proposedChange, riskLevel, riskAssessmentNotes, mitigationActions, plannedDate, impactAreas, regi: regiStr });
   // Editando, la ventana vive en su ruta (/moc/:code): esa ya es la marca de
@@ -702,6 +772,8 @@ export const MocPage: React.FC = () => {
   // filtra exactamente a ese estado (tiene prioridad sobre el toggle open/all).
   const [searchParams] = useSearchParams();
   const statusParam = (searchParams.get("status") ?? "").trim();
+  // El copiloto abre el alta ya decidida (/moc?nuevo=1): sin la pregunta-filtro.
+  useOpenNewFromUrl(() => { setEditing(null); setShowCreate(true); });
 
   // Filtro que llega desde una métrica del panel TMSA (lib/tmsa-filter.tsx).
   const tmsaFilter = useTmsaFilter();

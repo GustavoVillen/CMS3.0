@@ -13,6 +13,7 @@ import { useSearchParams, useNavigate, useLocation, Link } from "react-router-do
 import { AlertTriangle, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
+import { useOpenNewFromUrl } from "../lib/deep-link";
 import { DataTable, fmtDate, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -546,6 +547,8 @@ export function ServiceRequestsPage() {
   const [prioSel, setPrioSel] = useState("");
   const [groupByAsset, setGroupByAsset] = useState(false);
   const [showNewSs, setShowNewSs] = useState(false);
+  // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
+  useOpenNewFromUrl(() => setShowNewSs(true), canManage);
   // SS recién creada desde "+ Nueva SS": se abre cuando llega en la lista recargada.
   const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
   const [listApproval, setListApproval] = useState<{ sr: ServiceRequest; step: "SOLICITA" | "APRUEBA" | "AUTORIZA" } | null>(null);

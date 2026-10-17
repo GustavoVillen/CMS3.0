@@ -27,6 +27,7 @@ import { getComplianceScores, getSmartAlerts } from "../compliance/compliance-se
 import { getTmsaMaintenanceEvidence } from "../tmsa/tmsa-service";
 import { getIsmChapter10Evidence } from "../ism/ism-service";
 import { getVettingBiqEvidence } from "../vetting/vetting-service";
+import { canUseTrash, listTrash } from "../trash/trash-service";
 import {
   applyVesselWhereScope,
   applyVesselWhereScopeOn,
@@ -439,6 +440,23 @@ export const EXTENDED_COPILOT_TOOLS: Anthropic.Tool[] = [
         level:      { type: "string", description: "Filter by level: TRAINED | CERTIFIED | EXPERT (optional)" },
         crewName:   { type: "string", description: "Filter by crew member first/last name, partial match (optional)" },
         limit:      { type: "number", description: "Max results (default 30, max 80)" },
+      },
+    },
+  },
+
+  // ── Papelera ──────────────────────────────────────────────────────────────
+  {
+    name: "query_deleted_records",
+    description:
+      "Search the recycle bin (Papelera): records that someone DELETED (plans, equipment, spares, defects, certificates, providers, crew, drills, permits, MOC, near misses, external audits, fluid samples, checklists, SS, spare requests, drydock specs, stock locations, log book entries, vessels) with who deleted them and when. Use it when the user asks what was deleted, or asks to recover / restore / bring back something deleted (\"recuperá lo que borré de la bomba 3\", \"¿qué se borró hoy?\"). Work orders are never deleted (they are cancelled), so they are not here. Each row has an assetName: check it, a text search can also match a similar equipment (N°2 vs N°3). Only the tenant administrator (or whoever has the recycle-bin permission) can see it; if the tool answers that, tell the user plainly that only the administrator can see and restore deleted records. To restore, propose the restore_deleted action with the restoreKey values EXACTLY as returned.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        vesselCode: { type: "string", description: "Filter by vessel code (optional)" },
+        textSearch: { type: "string", description: "Words to match against code, name/title, equipment name and vessel name, e.g. \"bomba potable 3\" (optional)" },
+        kind:       { type: "string", description: "Filter by type: plan | asset | spare | defect | certificate | provider | crew | drill | permit | moc | nearMiss | externalAudit | fluidSample | checklist | serviceRequest | spareRequest | drydockSpec | stockLocation | bitacora | vessel (optional)" },
+        sinceDays:  { type: "number", description: "Only records deleted in the last N days (default 30, 0 = all)" },
+        limit:      { type: "number", description: "Max results (default 20, max 60)" },
       },
     },
   },
@@ -1410,6 +1428,37 @@ export async function executeExtendedCopilotTool(
       });
 
       return toolResult(rows, "No provider evaluations found matching the given criteria.");
+    }
+
+    // ── Papelera ───────────────────────────────────────────────────────────
+    // Reusa el service: mismo permiso, mismo alcance por buque y mismos
+    // registros que la pantalla Papelera. restoreKey ("tipo:id") es lo único
+    // interno que sale: la acción restore_deleted lo necesita tal cual.
+    if (name === "query_deleted_records") {
+      if (!session) {
+        return JSON.stringify({ error: "This tool is not available in the current context (no user session)." });
+      }
+      if (!canUseTrash(session)) {
+        return JSON.stringify({ error: "Only the tenant administrator can see and restore deleted records (recycle-bin permission)." });
+      }
+      const limit = cap(input.limit, 20, 60);
+      const sinceDays = typeof input.sinceDays === "number" ? input.sinceDays : 30;
+      const items = await listTrash(session, {
+        days: sinceDays,
+        kind: typeof input.kind === "string" ? input.kind : null,
+        vesselCode: typeof input.vesselCode === "string" && input.vesselCode.trim() ? input.vesselCode.trim() : null,
+        q: typeof input.textSearch === "string" ? input.textSearch : null,
+      });
+      return toolResult(
+        items.slice(0, limit).map(i => ({
+          restoreKey: `${i.kind}:${i.id}`,
+          kind: i.kind, code: i.code, name: i.label,
+          vessel: i.vesselName, assetName: i.assetName,
+          assetAlsoDeleted: i.assetDeleted,
+          deletedAt: i.deletedAt, deletedBy: i.deletedByName,
+        })),
+        "Nothing in the recycle bin matches. Nothing was deleted with those criteria in the period searched.",
+      );
     }
 
     // ── Cumplimiento consolidado y paneles de auditoría ────────────────────

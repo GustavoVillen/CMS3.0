@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OT Equipo Nuevo — Preview V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* Tokens LIGHT reales de apps/web-modern/src/index.css */
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --fg:#1A1D24; --border:#E2E4E9;
+    --accent:#0284C7; --accent-fg:#fff; --success:#0E9F6E; --warning:#D97706; --danger:#DC2626;
+    --fg5:rgba(26,29,36,.05); --fg10:rgba(26,29,36,.10); --fg25:rgba(26,29,36,.25);
+    --muted:rgba(26,29,36,.60); --faint:rgba(26,29,36,.40);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--fg);font-size:14px}
+  button{font-family:inherit;cursor:pointer}
+  button:disabled{cursor:not-allowed}
+
+  .pv-bar{position:sticky;top:0;z-index:100;background:#111827;color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .pv-bar b{font-size:13px;margin-right:8px}
+  .pv-bar .tag{background:#F59E0B;color:#111;font-weight:800;font-size:10px;padding:2px 8px;border-radius:99px;letter-spacing:.05em}
+  .pv-bar button{background:#374151;color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600}
+  .pv-bar button.on{background:var(--accent)}
+  .pv-bar .sp{flex:1}
+  .pv-bar .grp{display:flex;gap:4px;align-items:center;font-size:11px;color:#D1D5DB}
+
+  .app-bg{min-height:calc(100vh - 48px);padding:24px 16px}
+  .fake-page{max-width:1100px;margin:0 auto;opacity:.55}
+  .fake-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .fake-header h1{font-size:18px;margin:0}
+  .fake-row{height:38px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px}
+  .overlay{position:fixed;inset:48px 0 0 0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+
+  .modal{width:100%;max-width:672px;background:var(--surface);border:1px solid var(--fg10);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35);display:flex;flex-direction:column;max-height:calc(100vh - 96px)}
+  .modal.wide{max-width:780px}
+  .m-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 24px;border-bottom:1px solid var(--fg10)}
+  .m-head h2{font-size:14px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}
+  .m-body{padding:20px 24px;overflow-y:auto;flex:1}
+  .m-foot{display:flex;align-items:center;gap:8px;padding:14px 24px;border-top:1px solid var(--fg10)}
+  .close{width:32px;height:32px;border-radius:99px;background:#E11D48;color:#fff;border:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .close:hover{background:#F43F5E}
+  .ic{width:16px;height:16px}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  .btn-primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:12px;padding:9px 18px;font-weight:700;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .btn-primary:hover{filter:brightness(1.1)}
+  .btn-ghost{background:transparent;border:0;border-radius:12px;padding:9px 14px;font-size:12px;color:var(--fg)}
+  .btn-ghost:hover{background:var(--fg5)}
+  .lnk{background:none;border:0;color:var(--accent);font-size:11px;font-weight:600;padding:0}
+
+  .stepper{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .st{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--faint)}
+  .st .dot{width:20px;height:20px;border-radius:99px;border:1.5px solid var(--fg25);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+  .st.done{color:var(--success)} .st.done .dot{background:var(--success);border-color:var(--success);color:#fff}
+  .st.cur{color:var(--accent)} .st.cur .dot{border-color:var(--accent);background:rgba(2,132,199,.1)}
+  .st-line{width:16px;height:1px;background:var(--fg25)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:rgba(2,132,199,.05);border:1px solid rgba(2,132,199,.25);color:var(--fg);border-radius:99px;padding:4px 10px;font-size:11px}
+  .chip svg{width:12px;height:12px}
+  .q{font-size:17px;font-weight:800;margin:4px 0 4px}
+  .q-sub{font-size:12px;color:var(--muted);margin:0 0 16px}
+
+  .opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--fg5);border:1.5px solid var(--fg10);border-radius:16px;padding:14px 16px;margin-bottom:10px;transition:.15s;color:var(--fg)}
+  .opt:hover{border-color:rgba(2,132,199,.5);background:rgba(2,132,199,.05)}
+  .opt.sel{border-color:var(--accent);background:rgba(2,132,199,.06)}
+  .opt .oi{width:40px;height:40px;border-radius:12px;background:rgba(2,132,199,.1);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .opt .oi svg{width:22px;height:22px}
+  .opt .ot{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .opt .od{font-size:12px;color:var(--muted);margin-top:2px}
+  .opt .chev{margin-left:auto;color:var(--faint);width:16px;height:16px;flex-shrink:0}
+  .opt.green .oi{background:rgba(14,159,110,.1);color:var(--success)}
+  .opt.amber .oi{background:rgba(217,119,6,.1);color:var(--warning)}
+  .opt.muted-i .oi{background:var(--fg5);color:var(--muted)}
+  .badge{font-size:10px;font-weight:700;border-radius:99px;padding:2px 8px}
+  .b-new{background:rgba(14,159,110,.12);color:#047857}
+  .b-rec{background:rgba(2,132,199,.12);color:var(--accent)}
+  .b-st{background:var(--fg5);color:var(--muted)}
+  .b-ok{background:rgba(14,159,110,.12);color:#047857}
+  .b-warn{background:rgba(217,119,6,.12);color:#B45309}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr}}
+
+  .search{position:relative}
+  .search input{width:100%;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:11px 12px 11px 38px;font-size:14px;color:var(--fg);font-family:inherit}
+  .search input:focus{outline:none;border-color:rgba(2,132,199,.5)}
+  .search svg{position:absolute;left:12px;top:12px;width:16px;height:16px;color:var(--faint)}
+  .list{margin-top:10px;border:1px solid var(--fg10);border-radius:12px;max-height:300px;overflow:auto}
+  .li{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--fg10);background:var(--surface);padding:10px 12px;font-size:13px;color:var(--fg)}
+  .li:last-child{border-bottom:0}
+  .li:hover{background:rgba(2,132,199,.05)}
+  .li .nm{flex:1;min-width:0;font-weight:600}
+  .li .sub{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+  .li .code{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint)}
+
+  .sec{border:1px solid var(--fg10);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+  .sec-t{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .f{margin-top:12px}
+  .lbl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  .lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .req{color:var(--danger)}
+  .need{font-size:10px;font-weight:700;color:#B45309;background:rgba(217,119,6,.12);border-radius:99px;padding:1px 7px}
+  .in{width:100%;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:8px 12px;font-size:14px;color:var(--fg);font-family:inherit}
+  .in:focus{outline:none;border-color:rgba(2,132,199,.5)}
+  .in.miss{border-color:rgba(217,119,6,.55);background:rgba(217,119,6,.04)}
+  .in.mono{font-family:ui-monospace,monospace;font-size:13px}
+  textarea.in{resize:vertical;min-height:62px;line-height:1.45}
+  .row{display:grid;gap:12px}
+  .c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:640px){.c2,.c3{grid-template-columns:1fr}}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{background:var(--fg5);border:1.5px solid var(--fg10);border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;color:var(--fg)}
+  .seg button.on[data-v="A"]{background:#B91C1C;border-color:#B91C1C;color:#fff}
+  .seg button.on[data-v="B"]{background:#D97706;border-color:#D97706;color:#fff}
+  .seg button.on[data-v="C"]{background:#475569;border-color:#475569;color:#fff}
+  .ai{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--accent);background:rgba(2,132,199,.08);border:1px solid rgba(2,132,199,.25);border-radius:99px;padding:2px 9px}
+  .ai svg{width:12px;height:12px}
+  .tog{display:flex;align-items:flex-start;gap:10px;margin-top:12px;font-size:13px;cursor:pointer}
+  .tog input{width:16px;height:16px;margin-top:2px;accent-color:var(--accent)}
+  .help{font-size:11px;color:var(--muted);margin-top:4px}
+
+  .banner{display:flex;gap:10px;border-radius:12px;padding:10px 12px;font-size:12px;margin-bottom:14px;line-height:1.45}
+  .banner svg{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+  .banner.info{background:rgba(2,132,199,.06);border:1px solid rgba(2,132,199,.22)} .banner.info svg{color:var(--accent)}
+  .banner.ok{background:rgba(14,159,110,.07);border:1px solid rgba(14,159,110,.25)} .banner.ok svg{color:var(--success)}
+  .banner.warn{background:rgba(217,119,6,.07);border:1px solid rgba(217,119,6,.3)} .banner.warn svg{color:var(--warning)}
+  .banner b{font-weight:700}
+
+  .cmp{width:100%;border-collapse:collapse;font-size:12px;margin:-4px 0 14px}
+  .cmp th{text-align:left;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:4px 8px}
+  .cmp td{padding:6px 8px;border-top:1px solid var(--fg10)}
+  .cmp td.diff{color:#B45309;font-weight:700}
+  .cmp td.same{color:#047857;font-weight:700}
+
+  .radio-card{border:1.5px solid var(--fg10);border-radius:14px;margin-bottom:10px;background:var(--surface)}
+  .radio-card.sel{border-color:var(--accent);background:rgba(2,132,199,.04)}
+  .radio-card .rh{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;padding:12px 14px;color:var(--fg)}
+  .radio{width:18px;height:18px;border-radius:99px;border:2px solid var(--fg25);margin-top:1px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .sel .radio{border-color:var(--accent)}
+  .sel .radio::after{content:"";width:8px;height:8px;border-radius:99px;background:var(--accent)}
+  .rt{font-weight:700;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .rd{font-size:12px;color:var(--muted);margin-top:2px}
+  .rb{padding:0 14px 14px 44px}
+
+  .mocli{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:1.5px solid var(--fg10);border-radius:10px;background:var(--surface);padding:8px 10px;margin-top:6px;font-size:12px;color:var(--fg)}
+  .mocli.on{border-color:var(--accent);background:rgba(2,132,199,.05)}
+  .mocli .mc{font-family:ui-monospace,monospace;font-weight:700;font-size:11px}
+
+  .srcs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .srcs button{background:var(--fg5);border:1.5px solid var(--fg10);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+  .srcs button.on{border-color:var(--accent);background:rgba(2,132,199,.08);color:var(--accent)}
+  .srcs button svg{width:14px;height:14px}
+  .tasks{border:1px solid var(--fg10);border-radius:12px;overflow:hidden}
+  .tasks-h{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--fg5);font-size:11px;color:var(--muted);font-weight:600}
+  .task{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-top:1px solid var(--fg10);font-size:13px;cursor:pointer}
+  .task input{width:16px;height:16px;margin-top:2px;accent-color:var(--accent)}
+  .task .tc{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint)}
+  .task .fr{margin-left:auto;font-size:11px;color:var(--muted);white-space:nowrap;padding-left:8px}
+  .task.off{opacity:.5}
+  .empty{border:1.5px dashed var(--fg25);border-radius:12px;padding:18px;text-align:center;font-size:12px;color:var(--muted)}
+
+  .sum{border:1px solid var(--fg10);border-radius:14px;margin-bottom:12px}
+  .sum-r{display:flex;gap:12px;padding:10px 14px;border-top:1px solid var(--fg10);font-size:13px;align-items:flex-start}
+  .sum-r:first-child{border-top:0}
+  .sum-r .k{width:120px;flex-shrink:0;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+  .sum-r .v{flex:1;min-width:0}
+  .sum-r .v small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .when{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.when{grid-template-columns:1fr}}
+  .when > div{border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5}
+  .when h4{margin:0 0 6px;font-size:12px;display:flex;align-items:center;gap:6px}
+  .when h4 svg{width:14px;height:14px}
+  .when ul{margin:0;padding-left:18px}
+  .now{background:rgba(2,132,199,.05);border:1px solid rgba(2,132,199,.2)}
+  .later{background:rgba(14,159,110,.06);border:1px solid rgba(14,159,110,.25)}
+
+  .alert-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .alert{background:var(--surface);border-radius:16px;max-width:420px;width:100%;padding:20px;box-shadow:0 25px 50px -12px rgba(0,0,0,.4)}
+  .alert h3{margin:0 0 8px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .alert p{margin:0 0 6px;font-size:13px;color:var(--muted);white-space:pre-line}
+  .alert .ok{display:flex;justify-content:flex-end;margin-top:14px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#065F46;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;z-index:300;display:flex;gap:8px;align-items:center}
+  .wo-desc{white-space:pre-line;font-size:13px;line-height:1.55;background:var(--fg5);border:1px solid var(--fg10);border-radius:12px;padding:10px 12px}
+</style>
+</head>
+<body>
+
+<div class="pv-bar">
+  <b>Nueva OT · Para un Equipo Nuevo · Preview V1</b><span class="tag">DEMO · DATOS FICTICIOS</span>
+  <span class="grp">Ver como:
+    <button data-role="SUP" class="on">Superintendente</button>
+    <button data-role="CAP">Capitán / JM</button>
+  </span>
+  <span class="sp"></span>
+  <button id="pv-restart">Empezar de nuevo</button>
+  <button id="pv-close">Al cerrar la OT de instalación</button>
+</div>
+
+<div class="app-bg">
+  <div class="fake-page">
+    <div class="fake-header"><i data-lucide="wrench" class="ic" style="color:var(--accent)"></i><h1>Órdenes de Trabajo</h1></div>
+    <div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div><div class="fake-row"></div>
+  </div>
+</div>
+<div class="overlay" id="root"></div>
+<div id="layer"></div>
+
+<script>
+// ───────────── Datos de ejemplo (ficticios) ─────────────
+const VESSELS = [
+  { code:"DCH", name:"DON CHICUETO", type:"Remolcador" },
+  { code:"MAO01", name:"MAO 01", type:"Remolcador" },
+  { code:"MAO02", name:"MAO 02", type:"Remolcador" },
+  { code:"B12", name:"BARCAZA 12", type:"Barcaza" },
+];
+const SFI = {0:"Inspecciones y Pruebas",1:"Casco y Estructuras",2:"Sistemas de Carga",3:"LCI y Salvamento",4:"Sistemas de Navegación",5:"Sistemas de Habitabilidad",6:"Sistemas de Propulsión y Generación",7:"Sistemas Auxiliares",8:"Sistemas Eléctricos",9:"Sistemas de Automatización y Control"};
+const ASSETS = [
+  { id:"a1", vessel:"DCH", code:"DCH-7-CD-001", name:"Compresor de aire de arranque N°1", group:"7", maker:"Sperre", model:"HV2/110", serial:"SP-44120", crit:"A", safety:true },
+  { id:"a2", vessel:"DCH", code:"DCH-7-BD-001", name:"Bomba de achique N°1", group:"7", maker:"Azcue", model:"CA-40", serial:"AZ-9921", crit:"B", safety:true },
+  { id:"a3", vessel:"DCH", code:"DCH-6-GA-001", name:"Generador auxiliar N°1", group:"6", maker:"Caterpillar", model:"C4.4", serial:"CAT-77310", crit:"A", safety:false },
+  { id:"a4", vessel:"DCH", code:"DCH-3-BC-001", name:"Bomba contraincendio", group:"3", maker:"Azcue", model:"CA-65", serial:"AZ-1180", crit:"A", safety:true },
+  { id:"a5", vessel:"DCH", code:"DCH-5-PO-001", name:"Potabilizadora", group:"5", maker:"", model:"", serial:"", crit:"C", safety:false },
+  { id:"f1", vessel:"MAO01", code:"MAO01-7-CD-001", name:"Compresor de aire de arranque N°1", group:"7", maker:"Sperre", model:"HV2/110", crit:"A", safety:true },
+  { id:"f2", vessel:"MAO02", code:"MAO02-7-CD-002", name:"Compresor de aire de arranque N°2", group:"7", maker:"Atlas Copco", model:"LT 5-30", crit:"A", safety:true },
+  { id:"f3", vessel:"B12", code:"B12-5-PO-001", name:"Potabilizadora", group:"5", maker:"Hatenboer", model:"Neptune 3", crit:"C", safety:false },
+];
+const PLANS = {
+  a1: [["DCH-7-014","Drenaje de condensado del separador","Semanal"],["DCH-7-015","Control de nivel y cambio de aceite","Cada 500 h"],["DCH-7-016","Limpieza de válvulas de aspiración y descarga","Cada 1.000 h"],["DCH-7-017","Inspección del filtro de aspiración","Mensual"],["DCH-7-018","Prueba de la válvula de seguridad","Anual"]],
+  a2: [["DCH-7-021","Prueba de funcionamiento y alarma de sentina","Semanal"],["DCH-7-022","Inspección de sello mecánico","Semestral"]],
+  a3: [["DCH-6-030","Cambio de aceite y filtros","Cada 250 h"],["DCH-6-031","Cambio de filtros de combustible","Cada 500 h"],["DCH-6-032","Calibración de válvulas","Cada 2.000 h"]],
+  a4: [["DCH-3-040","Prueba de arranque y presión","Semanal"]],
+  a5: [],
+  f1: [["MAO01-7-008","Drenaje de condensado del separador","Semanal"],["MAO01-7-009","Control de nivel y cambio de aceite","Cada 500 h"],["MAO01-7-010","Limpieza de válvulas de aspiración y descarga","Cada 1.000 h"],["MAO01-7-011","Prueba de la válvula de seguridad","Anual"]],
+  f2: [["MAO02-7-012","Drenaje de condensado","Semanal"],["MAO02-7-013","Cambio de aceite","Cada 1.000 h"],["MAO02-7-014","Cambio de elemento separador aire/aceite","Cada 4.000 h"],["MAO02-7-015","Cambio de filtro de aire","Cada 2.000 h"],["MAO02-7-016","Prueba de la válvula de seguridad","Anual"]],
+  f3: [["B12-5-003","Cambio de membranas","Cada 3 años"],["B12-5-004","Limpieza química","Semestral"]],
+};
+const MOCS = [
+  { id:"m1", vessel:"DCH", code:"MOC-DCH-26-0004", title:"Reemplazo del compresor de arranque N°1", status:"Aprobado", ok:true },
+  { id:"m2", vessel:"DCH", code:"MOC-DCH-26-0003", title:"Nueva bomba de trasvase de combustible", status:"En análisis", ok:false },
+];
+
+// ───────────── Estado ─────────────
+const S0 = () => ({
+  role:"SUP", step:"category", vessel:null, kind:null, oldId:null, oldQuery:"",
+  f:{ group:"", name:"", code:"", codeTouched:false, maker:"", model:"", serial:"", crit:"B", safety:false, rationale:"" },
+  moc:{ mode:null, reason:"", mocId:null, notReq:"" }, mocTouched:false,
+  tsrc:null, tsrcAsset:null, checked:new Set(), created:null,
+});
+let S = S0();
+const root = document.getElementById("root"), layer = document.getElementById("layer");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const norm = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+const vesselName = () => VESSELS.find(v => v.code === S.vessel)?.name ?? "";
+const oldAsset = () => ASSETS.find(a => a.id === S.oldId) ?? null;
+
+// Código sugerido: mismo algoritmo que buildFormattedAssetCode (Assets.tsx)
+function tok(v){ return (v||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/[^A-Z0-9]+/g,"-").replace(/-+/g,"-").replace(/^-+|-+$/g,""); }
+function namePrefix(n){ const t = tok(n).split("-").filter(Boolean); if(!t.length) return "AS"; return t.length>=2 ? (t[0][0]+t[1][0]) : t[0].slice(0,4); }
+function suggestCode(){
+  if (!S.f.group || !S.f.name.trim()) return "";
+  const prefix = `${S.vessel}-${S.f.group}-${namePrefix(S.f.name)}`;
+  let max = 0;
+  for (const a of ASSETS) { const m = a.code.match(new RegExp("^"+prefix+"-(\\d{3,4})$")); if (m) max = Math.max(max, +m[1]); }
+  return `${prefix}-${String(max+1).padStart(3,"0")}`;
+}
+
+// Recomendación de MOC: mismo criterio que la ventana "¿Tu cambio necesita MOC?" (Moc.tsx)
+function mocAdvice(){
+  if (S.kind === "ADD") return { needs:true, why:"Es un equipo que el buque no tenía: cambia lo que hay que operar y mantener." };
+  const o = oldAsset();
+  const same = o && norm(o.maker) && norm(o.maker) === norm(S.f.maker) && norm(o.model) === norm(S.f.model);
+  if (same) return { needs:false, why:`Reemplazo por el mismo modelo (${o.maker} ${o.model}): igual por igual.` };
+  return { needs:true, why:`Cambia marca o modelo respecto del equipo que sale (${o?.maker || "sin marca"} ${o?.model || ""}).` };
+}
+function fleetMatches(){
+  if (!norm(S.f.maker) || !norm(S.f.model)) return [];
+  return ASSETS.filter(a => a.id !== S.oldId && norm(a.maker) === norm(S.f.maker) && norm(a.model) === norm(S.f.model));
+}
+
+// ───────────── Piezas comunes ─────────────
+const ICON = (n, cls="ic") => `<i data-lucide="${n}" class="${cls}"></i>`;
+const STEPS = ["Para qué","Buque","Equipo","MOC","Tareas","Confirmar"];
+const IDX = { category:0, vessel:1, kind:2, pickOld:2, data:2, moc:3, tasks:4, confirm:5 };
+function stepper(){
+  const cur = IDX[S.step];
+  return `<div class="stepper">${STEPS.map((l,i)=>`${i?'<span class="st-line"></span>':""}<span class="st ${i<cur?"done":i===cur?"cur":""}"><span class="dot">${i<cur?"✓":i+1}</span>${l}</span>`).join("")}</div>`;
+}
+function chips(){
+  if (S.step === "category") return "";
+  const c = [`<span class="chip">${ICON("package-plus")} Equipo nuevo <button class="lnk" data-go="category">Cambiar</button></span>`];
+  if (S.vessel && S.step !== "vessel") c.push(`<span class="chip">${ICON("ship")} <b>${esc(vesselName())}</b> <button class="lnk" data-go="vessel">Cambiar</button></span>`);
+  if (S.kind === "REPLACE" && !["kind","pickOld"].includes(S.step)) c.push(`<span class="chip">${ICON("log-out")} Sale <b>${esc(oldAsset()?.name)}</b> <button class="lnk" data-go="kind">Cambiar</button></span>`);
+  if (["moc","tasks","confirm"].includes(S.step) && S.f.name) {
+    const mm = [S.f.maker, S.f.model].filter(Boolean).join(" ");
+    c.push(`<span class="chip">${ICON("log-in")} ${S.kind==="ADD"?"Adicional":"Entra"} <b>${esc(S.f.name)}</b>${mm?` <span class="faint">${esc(mm)}</span>`:""} <button class="lnk" data-go="data">Cambiar</button></span>`);
+  }
+  return `<div class="chips">${c.join("")}</div>`;
+}
+const q = (t, s) => `<p class="q">${t}</p>${s?`<p class="q-sub">${s}</p>`:""}`;
+function opt({ icon, title, desc, tone="", badge="", act, sel=false }){
+  return `<button class="opt ${tone} ${sel?"sel":""}" data-act="${act}"><span class="oi">${ICON(icon)}</span><span style="flex:1;min-width:0"><span class="ot">${title}${badge}</span>${desc?`<span class="od">${desc}</span>`:""}</span>${ICON("chevron-right","chev")}</button>`;
+}
+function frame(body, foot, wide=false){
+  return `<div class="modal ${wide?"wide":""}">
+    <div class="m-head"><div style="min-width:0"><h2>${ICON("wrench","ic")} Nueva Orden de Trabajo</h2>${stepper()}</div><button class="close" data-act="x">${ICON("x")}</button></div>
+    <div class="m-body">${chips()}${body}</div>
+    ${foot?`<div class="m-foot">${foot}</div>`:""}
+  </div>`;
+}
+const back = `<button class="btn-ghost" data-act="back">Atrás</button><span style="flex:1"></span>`;
+
+// ───────────── Pasos ─────────────
+const V = {};
+V.category = () => frame(`${q("¿Para qué es esta Orden de Trabajo?","Elegí una opción. Después te pedimos el buque y el equipo.")}
+  ${opt({icon:"clipboard-list",title:"Para Registrar un Mantenimiento",desc:"Una tarea del plan de mantenimiento del equipo.",act:"noop"})}
+  ${opt({icon:"wrench",title:"Para una Reparación",desc:"Algo se rompió o anda mal y hay que arreglarlo.",act:"noop"})}
+  ${opt({icon:"shield-alert",title:"Para una Inspección de Clase",desc:"Inspección pedida por la sociedad de clasificación.",act:"noop"})}
+  ${S.role==="SUP" ? opt({icon:"package-plus",tone:"green",title:"Para un Equipo Nuevo",badge:' <span class="badge b-new">Nuevo</span>',desc:"Instalar un equipo nuevo o reemplazar uno existente, con su MOC y sus tareas del plan.",act:"cat-new"}) : ""}
+  ${S.role==="CAP" ? `<p class="help" style="margin-top:4px">${ICON("info","ic")} Vista del Capitán/JM: la opción «Para un Equipo Nuevo» no aparece (es del Superintendente y del DPA).</p>` : ""}`);
+
+V.vessel = () => frame(`${q("¿En qué buque?")}<div class="grid2" style="margin-top:14px">${VESSELS.map(v => opt({icon:v.type==="Barcaza"?"container":"ship",title:v.name,desc:v.type,act:"vessel:"+v.code})).join("")}</div>`, back);
+
+V.kind = () => frame(`${q("¿Es un equipo más o reemplaza a otro?","Si reemplaza a otro, al cerrar la OT el equipo que sale se da de baja junto con sus tareas.")}
+  ${opt({icon:"plus",title:"Equipo adicional",desc:"El buque no tenía este equipo. Se suma a los que ya hay.",act:"kind:ADD",sel:S.kind==="ADD"})}
+  ${opt({icon:"repeat",tone:"amber",title:"Reemplaza a un equipo existente",desc:"Sale uno y entra otro en su lugar. Se precargan los datos y las tareas del que sale.",act:"kind:REPLACE",sel:S.kind==="REPLACE"})}`, back);
+
+V.pickOld = () => {
+  const list = ASSETS.filter(a => a.vessel === S.vessel && norm(`${a.name} ${a.code}`).includes(norm(S.oldQuery)));
+  return frame(`${q("¿Qué equipo sale?","Elegí el equipo que se reemplaza.")}
+    <div class="search">${ICON("search")}<input id="oldq" placeholder="Buscar por nombre o código…" value="${esc(S.oldQuery)}" autofocus></div>
+    <div class="list">${list.length ? list.map(a => `<button class="li" data-act="old:${a.id}">${ICON("cog","ic faint")}<span class="nm">${esc(a.name)}<span class="sub">${esc([a.maker,a.model].filter(Boolean).join(" · ") || "Sin marca ni modelo cargados")} · ${PLANS[a.id].length} tareas en el plan</span></span><span class="code">${a.code}</span></button>`).join("") : `<p class="help" style="padding:10px 12px">No hay equipos que coincidan.</p>`}</div>`, back);
+};
+
+function missing(){
+  const m = [];
+  if (!S.f.group) m.push("Grupo SFI"); if (!S.f.name.trim()) m.push("Nombre"); if (!S.f.code.trim()) m.push("Código");
+  return m;
+}
+V.data = () => {
+  const o = oldAsset(), miss = missing();
+  const need = on => on ? ' <span class="need">Falta completar</span>' : "";
+  return frame(`${q("Datos del equipo nuevo", S.kind==="REPLACE" ? "" : "Lo mínimo para darlo de alta. El resto se completa después en su ficha.")}
+    ${S.kind==="REPLACE" ? `<div class="banner info">${ICON("copy")}<span>Precargado desde <b>${esc(o.name)}</b> (${o.code}): grupo, nombre, criticidad y seguridad. Cargá marca, modelo y N° de serie del equipo que entra.</span></div>` : ""}
+    <div class="sec">
+      <p class="sec-t">Identificación ${miss.length?`<span class="need">Faltan ${miss.length}</span>`:`<span class="badge b-ok">Completo</span>`}</p>
+      <div class="row c2">
+        <div class="f"><div class="lbl-row"><span class="lbl">Grupo SFI <span class="req">*</span>${need(!S.f.group)}</span></div>
+          <select class="in ${!S.f.group?"miss":""}" data-f="group"><option value="">Elegí el grupo…</option>${Object.entries(SFI).map(([k,v])=>`<option value="${k}" ${S.f.group===k?"selected":""}>${k} - ${v}</option>`).join("")}</select></div>
+        <div class="f"><div class="lbl-row"><span class="lbl">Código <span class="req">*</span>${need(!S.f.code.trim())}</span>${S.f.code && !S.f.codeTouched?'<span class="help" style="margin:0">Sugerido</span>':""}</div>
+          <input class="in mono ${!S.f.code.trim()?"miss":""}" data-f="code" value="${esc(S.f.code)}" placeholder="Se sugiere solo"></div>
+      </div>
+      <div class="f"><div class="lbl-row"><span class="lbl">Nombre <span class="req">*</span>${need(!S.f.name.trim())}</span></div>
+        <input class="in ${!S.f.name.trim()?"miss":""}" data-f="name" value="${esc(S.f.name)}" placeholder="Ej.: Compresor de aire de arranque N°1"></div>
+      <div class="row c3">
+        <div class="f"><div class="lbl-row"><span class="lbl">Marca</span></div><input class="in" data-f="maker" value="${esc(S.f.maker)}"></div>
+        <div class="f"><div class="lbl-row"><span class="lbl">Modelo</span></div><input class="in" data-f="model" value="${esc(S.f.model)}"></div>
+        <div class="f"><div class="lbl-row"><span class="lbl">N° de serie</span></div><input class="in" data-f="serial" value="${esc(S.f.serial)}"></div>
+      </div>
+      ${S.kind==="REPLACE" && (o.maker||o.model) ? `<p class="help">${ICON("info","ic")} El que sale es <b>${esc(o.maker)} ${esc(o.model)}</b>. <button class="lnk" data-act="same-model">Es el mismo modelo</button></p>` : ""}
+    </div>
+    <div class="sec">
+      <p class="sec-t">Criticidad y seguridad</p>
+      <div class="f"><div class="lbl-row"><span class="lbl">Criticidad</span><button class="ai" data-act="ai-crit">${ICON("sparkles")} Sugerir con IA</button></div>
+        <div class="seg">${["A","B","C"].map(c=>`<button data-crit="${c}" data-v="${c}" class="${S.f.crit===c?"on":""}">${c}</button>`).join("")}</div>
+        ${S.f.rationale?`<p class="help">${esc(S.f.rationale)}</p>`:""}</div>
+      <label class="tog"><input type="checkbox" data-f="safety" ${S.f.safety?"checked":""}><span><b>Crítico para la seguridad</b> (ISM 10.3)<span class="help" style="display:block">Si su falla puede causar una situación peligrosa. Estos equipos siempre llevan plan.</span></span></label>
+    </div>`,
+    `${back}<button class="btn-primary" data-act="data-next">Siguiente ${ICON("chevron-right")}</button>`);
+};
+
+V.moc = () => {
+  const adv = mocAdvice(), o = oldAsset(), m = S.moc;
+  const vesselMocs = MOCS.filter(x => x.vessel === S.vessel);
+  const card = (mode, title, desc, body, badge="") => `<div class="radio-card ${m.mode===mode?"sel":""}">
+    <button class="rh" data-moc="${mode}"><span class="radio"></span><span><span class="rt">${title}${badge}</span><span class="rd">${desc}</span></span></button>
+    ${m.mode===mode && body ? `<div class="rb">${body}</div>` : ""}</div>`;
+  return frame(`${q("¿Este cambio necesita MOC?")}
+    <div class="banner ${adv.needs?"warn":"ok"}">${ICON(adv.needs?"git-branch":"circle-check")}<span><b>${adv.needs?"Requiere MOC.":"No requiere MOC."}</b> ${esc(adv.why)}</span></div>
+    ${S.kind==="REPLACE" ? `<table class="cmp"><tr><th></th><th>Sale</th><th>Entra</th></tr>
+      <tr><td class="muted">Marca</td><td>${esc(o.maker||"—")}</td><td class="${norm(o.maker)===norm(S.f.maker)&&S.f.maker?"same":"diff"}">${esc(S.f.maker||"—")}</td></tr>
+      <tr><td class="muted">Modelo</td><td>${esc(o.model||"—")}</td><td class="${norm(o.model)===norm(S.f.model)&&S.f.model?"same":"diff"}">${esc(S.f.model||"—")}</td></tr></table>` : ""}
+    ${card("NEW","Abrir un MOC nuevo","Se crea ya vinculado al equipo y a la OT. Al terminar se abre para completar el formulario REGI-GES-06.1.",
+      `<div class="lbl-row"><span class="lbl">Motivo del cambio <span class="req">*</span>${!m.reason.trim()?' <span class="need">Falta completar</span>':""}</span></div>
+       <textarea class="in ${!m.reason.trim()?"miss":""}" data-m="reason" placeholder="Ej.: el fabricante discontinuó los repuestos del equipo actual">${esc(m.reason)}</textarea>`,
+      adv.needs?' <span class="badge b-rec">Recomendado</span>':"")}
+    ${card("EXISTING","Ya tiene un MOC","Elegí el MOC de este buque que cubre el cambio.",
+      vesselMocs.length ? vesselMocs.map(x=>`<button class="mocli ${m.mocId===x.id?"on":""}" data-mocid="${x.id}"><span class="mc">${x.code}</span><span style="flex:1">${esc(x.title)}</span><span class="badge ${x.ok?"b-ok":"b-warn"}">${x.status}</span></button>`).join("") + `<p class="help">Si el MOC no está aprobado, la OT no se va a poder cerrar hasta que lo esté.</p>`
+        : `<div class="empty">Este buque no tiene MOC abiertos.</div>`)}
+    ${card("NOT_REQUIRED","No requiere MOC","Queda escrito el motivo en la OT.",
+      `<div class="lbl-row"><span class="lbl">Motivo <span class="req">*</span>${!m.notReq.trim()?' <span class="need">Falta completar</span>':""}</span></div>
+       <textarea class="in ${!m.notReq.trim()?"miss":""}" data-m="notReq">${esc(m.notReq)}</textarea>
+       ${adv.needs?`<div class="banner warn" style="margin:10px 0 0">${ICON("triangle-alert")}<span>El criterio de MOC indica que este cambio lo requiere. Si seguís sin MOC, el motivo queda registrado en la OT.</span></div>`:""}`,
+      !adv.needs?' <span class="badge b-rec">Recomendado</span>':"")}`,
+    `${back}<button class="btn-primary" data-act="moc-next">Siguiente ${ICON("chevron-right")}</button>`);
+};
+
+function srcPlans(){
+  if (S.tsrc === "OLD") return PLANS[S.oldId] ?? [];
+  if (S.tsrc === "FLEET" && S.tsrcAsset) return PLANS[S.tsrcAsset] ?? [];
+  return [];
+}
+V.tasks = () => {
+  const o = oldAsset(), matches = fleetMatches(), plans = srcPlans();
+  const srcAsset = S.tsrc === "FLEET" ? ASSETS.find(a => a.id === S.tsrcAsset) : null;
+  const otherVessel = srcAsset && srcAsset.vessel !== S.vessel;
+  let body = "";
+  if (S.tsrc === "FLEET" && !S.tsrcAsset) {
+    body = matches.length
+      ? `<p class="help" style="margin:0 0 6px">Equipos <b>${esc(S.f.maker)} ${esc(S.f.model)}</b> en la flota:</p><div class="list" style="margin-top:0">${matches.map(a=>`<button class="li" data-act="fsrc:${a.id}">${ICON("ship","ic faint")}<span class="nm">${esc(a.name)}<span class="sub">${esc(VESSELS.find(v=>v.code===a.vessel).name)} · ${PLANS[a.id].length} tareas</span></span><span class="code">${a.code}</span></button>`).join("")}</div>`
+      : `<div class="empty">No hay otro equipo <b>${esc(S.f.maker||"—")} ${esc(S.f.model||"")}</b> en la flota.<br>Elegí otro origen o seguí sin tareas.</div>`;
+  } else if (S.tsrc === "NONE") {
+    body = `<div class="banner warn">${ICON("triangle-alert")}<span>El equipo queda <b>sin tareas</b>. Agregalas desde su ficha en Equipos antes de cerrar la OT de instalación.</span></div>`;
+  } else if (plans.length === 0) {
+    body = `<div class="empty">${S.tsrc==="OLD" ? `${esc(o.name)} no tiene tareas en el plan.` : "Ese equipo no tiene tareas."} Elegí otro origen o seguí sin tareas.</div>`;
+  } else {
+    const n = plans.filter(p => S.checked.has(p[0])).length;
+    body = `${srcAsset?`<p class="help" style="margin:0 0 8px">Desde <b>${esc(srcAsset.name)}</b> de ${esc(VESSELS.find(v=>v.code===srcAsset.vessel).name)} · <button class="lnk" data-act="fsrc-change">Elegir otro</button></p>`:""}
+      <div class="tasks"><div class="tasks-h"><span>${n} de ${plans.length} tareas marcadas</span><span style="flex:1"></span><button class="lnk" data-act="chk-all">Todas</button><button class="lnk" data-act="chk-none">Ninguna</button></div>
+      ${plans.map(p=>`<label class="task ${S.checked.has(p[0])?"":"off"}"><input type="checkbox" data-chk="${p[0]}" ${S.checked.has(p[0])?"checked":""}><span><span class="tc">${p[0]}</span><br>${esc(p[1])}</span><span class="fr">${p[2]}</span></label>`).join("")}</div>
+      ${otherVessel?`<p class="help">${ICON("info","ic")} Proveedor y vínculo al catálogo de repuestos no se copian desde otro buque (son de cada buque); la descripción del repuesto sí.</p>`:""}`;
+  }
+  return frame(`${q("Tareas del plan del equipo nuevo","Se copian con código nuevo. Criterios, bloqueo, riesgo y repuestos vienen con cada tarea.")}
+    <div class="banner info">${ICON("hourglass")}<span>Las tareas quedan <b>en espera</b> y empiezan a contar al <b>cerrar la OT de instalación</b>, desde esa fecha. Más tareas se agregan después desde la ficha del equipo.</span></div>
+    <div class="srcs">
+      ${S.kind==="REPLACE"?`<button class="${S.tsrc==="OLD"?"on":""}" data-src="OLD">${ICON("repeat")} Del equipo que sale (${(PLANS[S.oldId]??[]).length})</button>`:""}
+      <button class="${S.tsrc==="FLEET"?"on":""}" data-src="FLEET">${ICON("ship")} De un equipo igual de la flota (${matches.length})</button>
+      <button class="${S.tsrc==="NONE"?"on":""}" data-src="NONE">${ICON("circle-slash")} Ninguna por ahora</button>
+    </div>${body}`,
+    `${back}<button class="btn-primary" data-act="tasks-next">Siguiente ${ICON("chevron-right")}</button>`);
+};
+
+// Si el que entra se llama igual que el que sale, el título nombra la marca y el modelo nuevos.
+function woTitle(){
+  if (S.kind !== "REPLACE") return `Instalación de ${S.f.name}`;
+  const o = oldAsset(), mm = [S.f.maker, S.f.model].filter(Boolean).join(" ");
+  return `Reemplazo de ${o.name} por ${norm(o.name) === norm(S.f.name) && mm ? mm : S.f.name}`;
+}
+function chosenCount(){ return srcPlans().filter(p => S.checked.has(p[0])).length; }
+function mocLine(){
+  const m = S.moc;
+  if (m.mode==="NEW") return { t:"MOC nuevo (se crea al confirmar)", s:`Motivo: ${m.reason}` };
+  if (m.mode==="EXISTING") { const x = MOCS.find(y=>y.id===m.mocId); return { t:`${x.code} · ${x.title}`, s:`Estado: ${x.status}${x.ok?"":" — la OT no se podrá cerrar hasta que esté aprobado"}` }; }
+  return { t:"No requiere MOC", s:`Motivo: ${m.notReq}` };
+}
+V.confirm = () => {
+  const o = oldAsset(), ml = mocLine(), n = chosenCount();
+  return frame(`${q("Revisá y confirmá")}
+    <div class="sum">
+      <div class="sum-r"><span class="k">Equipo nuevo</span><span class="v"><b>${esc(S.f.name)}</b> <span class="code faint" style="font-family:ui-monospace,monospace;font-size:11px">${esc(S.f.code)}</span><small>${esc([S.f.maker,S.f.model,S.f.serial&&("N° "+S.f.serial)].filter(Boolean).join(" · ") || "Sin marca ni modelo")} · Criticidad ${S.f.crit}${S.f.safety?" · Crítico para la seguridad":""}</small></span></div>
+      ${S.kind==="REPLACE"?`<div class="sum-r"><span class="k">Reemplaza a</span><span class="v"><b>${esc(o.name)}</b><small>${o.code}${o.maker?` · ${esc(o.maker)} ${esc(o.model)}`:""} · ${(PLANS[o.id]??[]).length} tareas que se desactivan al cerrar la OT</small></span></div>`:""}
+      <div class="sum-r"><span class="k">MOC</span><span class="v">${esc(ml.t)}<small>${esc(ml.s)}</small></span></div>
+      <div class="sum-r"><span class="k">Tareas</span><span class="v">${n ? `${n} tareas copiadas, en espera` : "Ninguna por ahora"}</span></div>
+      <div class="sum-r"><span class="k">OT</span><span class="v">${esc(woTitle())}<small>Correctivo programado · Prioridad: Dentro de la semana · ${esc(vesselName())}</small></span></div>
+    </div>
+    <div class="when">
+      <div class="now"><h4>${ICON("circle-play")} Ahora, al confirmar</h4><ul>
+        <li>Se da de alta el equipo nuevo.</li>${n?`<li>Se copian ${n} tareas, en espera.</li>`:""}
+        <li>Se crea la OT y se abre para trabajarla.</li>
+        ${S.moc.mode==="NEW"?"<li>Se crea el MOC y se abre para completarlo.</li>":S.moc.mode==="EXISTING"?"<li>Se vincula el MOC elegido.</li>":""}
+        ${S.kind==="REPLACE"?`<li>${esc(o.name)} sigue con su mantenimiento normal.</li>`:""}</ul></div>
+      <div class="later"><h4>${ICON("flag")} Al cerrar la OT</h4><ul>
+        ${n?"<li>Las tareas nuevas empiezan a contar desde la fecha de cierre.</li>":""}
+        <li>Se registra la fecha de instalación.</li>
+        ${S.kind==="REPLACE"?`<li>${esc(o.name)} se da de baja y sus tareas se desactivan.</li><li>Las rutinas que lo revisaban pasan al equipo nuevo.</li>`:""}
+        ${S.moc.mode!=="NOT_REQUIRED"?"<li>Antes se verifica que el MOC esté aprobado.</li>":""}</ul></div>
+    </div>`,
+    `${back}<button class="btn-primary" data-act="create">${ICON("check")} Crear equipo y OT</button>`, true);
+};
+
+// Después de crear: MOC (ventana existente) y OT en el editor
+function mocAfter(){
+  return `<div class="modal"><div class="m-head"><div><h2>${ICON("git-branch","ic")} MOC-DCH-26-0008 <span class="badge b-st">Solicitado</span></h2><p class="help" style="margin:6px 0 0">Es la ventana de MOC que ya existe, abierta con estos datos cargados.</p></div><button class="close" data-act="moc-done">${ICON("x")}</button></div>
+    <div class="m-body">
+      <div class="row c2"><div><span class="lbl">Tipo</span><p style="margin:4px 0 0">Cambio de equipo</p></div><div><span class="lbl">Buque</span><p style="margin:4px 0 0">${esc(vesselName())}</p></div></div>
+      <div class="f"><span class="lbl">Título</span><p style="margin:4px 0 0">${esc(woTitle())}</p></div>
+      <div class="f"><span class="lbl">Motivo del cambio</span><p style="margin:4px 0 0">${esc(S.moc.reason)}</p></div>
+      <div class="f"><span class="lbl">Cambio propuesto</span><p style="margin:4px 0 0">${S.kind==="REPLACE"?`Reemplazo de ${esc(oldAsset().name)} (${esc(oldAsset().maker)} ${esc(oldAsset().model)}) por ${esc(S.f.name)} (${esc(S.f.maker)} ${esc(S.f.model)}).`:`Instalación de ${esc(S.f.name)} (${esc(S.f.maker)} ${esc(S.f.model)}).`}</p></div>
+      <div class="f"><span class="lbl">Vinculado a</span><p style="margin:4px 0 0">Equipo ${esc(S.f.code)} · ${S.created}</p></div>
+      <div class="banner info" style="margin-top:14px">${ICON("info")}<span>Acá sigue el formulario REGI-GES-06.1 completo (evaluación previa, opinión técnica, plan de acción), igual que hoy.</span></div>
+    </div>
+    <div class="m-foot"><span style="flex:1"></span><button class="btn-primary" data-act="moc-done">Guardar y seguir a la OT</button></div></div>`;
+}
+function otAfter(){
+  const ml = mocLine(), n = chosenCount();
+  const desc = `${S.kind==="REPLACE" ? `${woTitle()} (sale ${oldAsset().code}, entra ${S.f.code}).` : `Instalación de equipo nuevo: ${S.f.name} (${S.f.code}).`}
+Marca/modelo: ${[S.f.maker,S.f.model].filter(Boolean).join(" ") || "—"} · N° de serie: ${S.f.serial || "—"}
+MOC: ${S.moc.mode==="NEW" ? "MOC-DCH-26-0008" : S.moc.mode==="EXISTING" ? MOCS.find(y=>y.id===S.moc.mocId).code : "No requiere — " + S.moc.notReq}
+Tareas del plan copiadas: ${n} (en espera hasta el cierre de esta OT).
+Al cerrar esta OT: las tareas del equipo nuevo empiezan a contar${S.kind==="REPLACE" ? ` y ${oldAsset().name} se da de baja con sus tareas` : ""}.`;
+  return `<div class="modal wide"><div class="m-head"><div><h2>${ICON("wrench","ic")} ${S.created} <span class="badge b-st">Planificada</span></h2><p class="help" style="margin:6px 0 0">Editor de la OT que ya existe (resumido para el preview).</p></div><button class="close" data-act="x">${ICON("x")}</button></div>
+    <div class="m-body">
+      <div class="f" style="margin-top:0"><span class="lbl">Título</span><p style="margin:4px 0 0;font-weight:700">${esc(woTitle())}</p></div>
+      <div class="row c3"><div class="f"><span class="lbl">Equipo</span><p style="margin:4px 0 0">${esc(S.f.name)}</p></div><div class="f"><span class="lbl">Tipo</span><p style="margin:4px 0 0">Correctivo programado</p></div><div class="f"><span class="lbl">Prioridad</span><p style="margin:4px 0 0">Dentro de la semana</p></div></div>
+      <div class="f"><span class="lbl">Descripción (armada sola, editable)</span><div class="wo-desc" style="margin-top:6px">${esc(desc)}</div></div>
+    </div>
+    <div class="m-foot"><span class="help" style="margin:0">Probá «Al cerrar la OT de instalación» en la barra negra.</span></div></div>`;
+}
+
+// ───────────── Render y eventos ─────────────
+function render(){
+  if (S.step === "mocAfter") root.innerHTML = mocAfter();
+  else if (S.step === "otAfter") root.innerHTML = otAfter();
+  else root.innerHTML = V[S.step]();
+  lucide.createIcons();
+  const oq = document.getElementById("oldq");
+  if (oq) { oq.focus(); oq.setSelectionRange(oq.value.length, oq.value.length); }
+}
+function alertBox(title, msg, icon="triangle-alert", color="var(--warning)"){
+  layer.innerHTML = `<div class="alert-ov"><div class="alert"><h3><i data-lucide="${icon}" class="ic" style="color:${color}"></i>${title}</h3><p>${esc(msg)}</p><div class="ok"><button class="btn-primary" id="alert-ok">OK</button></div></div></div>`;
+  lucide.createIcons();
+  document.getElementById("alert-ok").onclick = () => layer.innerHTML = "";
+}
+function toast(msg){
+  const el = document.createElement("div"); el.className = "toast"; el.innerHTML = `<i data-lucide="circle-check" class="ic"></i>${esc(msg)}`;
+  document.body.appendChild(el); lucide.createIcons(); setTimeout(() => el.remove(), 2600);
+}
+function prefillFromOld(){
+  const o = oldAsset();
+  S.f = { group:o.group, name:o.name, code:"", codeTouched:false, maker:"", model:"", serial:"", crit:o.crit, safety:o.safety, rationale:"" };
+  S.f.code = suggestCode();
+}
+function goBack(){
+  const prev = { vessel:"category", kind:"vessel", pickOld:"kind", data: S.kind==="REPLACE"?"pickOld":"kind", moc:"data", tasks:"moc", confirm:"tasks" };
+  if (S.step === "tasks" && S.tsrc === "FLEET" && S.tsrcAsset && S.kind !== "REPLACE") { S.tsrcAsset = null; return render(); }
+  S.step = prev[S.step] ?? "category"; render();
+}
+function enterMoc(){
+  const adv = mocAdvice();
+  if (!S.mocTouched) {
+    S.moc.mode = adv.needs ? "NEW" : "NOT_REQUIRED";
+    if (!adv.needs && !S.moc.notReq) S.moc.notReq = "Reemplazo por el mismo modelo (igual por igual).";
+  }
+  S.step = "moc";
+}
+function enterTasks(){
+  if (!S.tsrc) {
+    // Si entra un modelo distinto y hay uno igual en la flota, sus tareas le corresponden más que las del que sale.
+    const sameAsOld = S.kind === "REPLACE" && !mocAdvice().needs;
+    S.tsrc = sameAsOld ? "OLD" : fleetMatches().length ? "FLEET" : S.kind === "REPLACE" ? "OLD" : "NONE";
+    if (S.tsrc === "FLEET" && fleetMatches().length === 1) S.tsrcAsset = fleetMatches()[0].id;
+    S.checked = new Set(srcPlans().map(p => p[0]));
+  }
+  S.step = "tasks";
+}
+
+root.addEventListener("click", e => {
+  const t = e.target.closest("button,[data-chk]"); if (!t) return;
+  const act = t.dataset.act, go = t.dataset.go;
+  if (go) { if (go==="vessel" || go==="category") { S.step = go; } else if (go==="kind") S.step = "kind"; else if (go==="data") S.step = "data"; return render(); }
+  if (t.dataset.crit) { S.f.crit = t.dataset.crit; return render(); }
+  if (t.dataset.moc) { S.moc.mode = t.dataset.moc; S.mocTouched = true; return render(); }
+  if (t.dataset.mocid) { S.moc.mocId = t.dataset.mocid; return render(); }
+  if (t.dataset.src) { S.tsrc = t.dataset.src; S.tsrcAsset = null;
+    if (S.tsrc === "FLEET" && fleetMatches().length === 1) S.tsrcAsset = fleetMatches()[0].id;
+    S.checked = new Set(srcPlans().map(p => p[0])); return render(); }
+  if (!act) return;
+  if (act === "x") { S = { ...S0(), role:S.role }; return render(); }
+  if (act === "back") return goBack();
+  if (act === "noop") return alertBox("Fuera del preview", "Esta opción funciona como hoy. El preview muestra sólo «Para un Equipo Nuevo».", "info", "var(--accent)");
+  if (act === "cat-new") { S.step = "vessel"; return render(); }
+  if (act.startsWith("vessel:")) { S.vessel = act.split(":")[1]; S.kind = null; S.oldId = null; S.tsrc = null; S.mocTouched = false; S.step = "kind"; return render(); }
+  if (act.startsWith("kind:")) { S.kind = act.split(":")[1]; S.tsrc = null; S.mocTouched = false;
+    if (S.kind === "ADD") { S.oldId = null; S.f = S0().f; S.step = "data"; } else { S.step = "pickOld"; } return render(); }
+  if (act.startsWith("old:")) { S.oldId = act.split(":")[1]; prefillFromOld(); S.tsrc = null; S.mocTouched = false; S.step = "data"; return render(); }
+  if (act === "same-model") { const o = oldAsset(); S.f.maker = o.maker; S.f.model = o.model; S.mocTouched = false; S.tsrc = null; return render(); }
+  if (act === "ai-crit") { S.f.crit = "A"; S.f.safety = true; S.f.rationale = "Sugerencia IA (ejemplo): su falla deja al buque sin arranque de los motores principales; criticidad A y crítico para la seguridad."; return render(); }
+  if (act === "data-next") { const m = missing(); if (m.length) return alertBox("Faltan datos del equipo", "Completá: " + m.join(", ") + "."); enterMoc(); return render(); }
+  if (act === "moc-next") {
+    const m = S.moc;
+    if (m.mode === "NEW" && !m.reason.trim()) return alertBox("Falta el motivo del cambio", "Escribí por qué se hace el cambio: es lo primero que pide el MOC.");
+    if (m.mode === "EXISTING" && !m.mocId) return alertBox("Falta elegir el MOC", "Elegí de la lista el MOC que cubre este cambio.");
+    if (m.mode === "NOT_REQUIRED" && !m.notReq.trim()) return alertBox("Falta el motivo", "Escribí por qué este cambio no requiere MOC. Queda registrado en la OT.");
+    enterTasks(); return render();
+  }
+  if (act.startsWith("fsrc:")) { S.tsrcAsset = act.split(":")[1]; S.checked = new Set(srcPlans().map(p => p[0])); return render(); }
+  if (act === "fsrc-change") { S.tsrcAsset = null; return render(); }
+  if (act === "chk-all") { S.checked = new Set(srcPlans().map(p => p[0])); return render(); }
+  if (act === "chk-none") { S.checked = new Set(); return render(); }
+  if (act === "tasks-next") {
+    if (S.tsrc === "FLEET" && !S.tsrcAsset && fleetMatches().length) return alertBox("Falta elegir el equipo", "Elegí de qué equipo de la flota se copian las tareas, o cambiá a «Ninguna por ahora».");
+    S.step = "confirm"; return render();
+  }
+  if (act === "create") { S.created = "OT-DCH-26-0142"; toast("Equipo DCH y OT-DCH-26-0142 creados"); S.step = S.moc.mode === "NEW" ? "mocAfter" : "otAfter"; return render(); }
+  if (act === "moc-done") { S.step = "otAfter"; return render(); }
+});
+root.addEventListener("input", e => {
+  const el = e.target;
+  if (el.id === "oldq") { S.oldQuery = el.value; return render(); }
+  if (el.dataset.f && el.type !== "checkbox") {
+    S.f[el.dataset.f] = el.value;
+    if (el.dataset.f === "code") S.f.codeTouched = true;
+    if ((el.dataset.f === "name" || el.dataset.f === "group") && !S.f.codeTouched) S.f.code = suggestCode();
+    if (el.dataset.f === "maker" || el.dataset.f === "model") { S.mocTouched = false; S.tsrc = null; }
+    if (el.tagName === "SELECT") render(); else { const pos = el.selectionStart; render(); const again = root.querySelector(`[data-f="${el.dataset.f}"]`); if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch {} } }
+  }
+  if (el.dataset.m) { S.moc[el.dataset.m] = el.value; const pos = el.selectionStart; render(); const again = root.querySelector(`[data-m="${el.dataset.m}"]`); if (again) { again.focus(); again.setSelectionRange(pos, pos); } }
+});
+root.addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset.f === "safety") { S.f.safety = el.checked; render(); }
+  if (el.dataset.chk) { el.checked ? S.checked.add(el.dataset.chk) : S.checked.delete(el.dataset.chk); render(); }
+});
+
+document.querySelectorAll("[data-role]").forEach(b => b.onclick = () => {
+  document.querySelectorAll("[data-role]").forEach(x => x.classList.toggle("on", x === b));
+  S = { ...S0(), role:b.dataset.role }; render();
+});
+document.getElementById("pv-restart").onclick = () => { S = { ...S0(), role:S.role }; render(); };
+document.getElementById("pv-close").onclick = () => {
+  if (!S.created) return alertBox("Primero creá la OT", "Recorré el asistente hasta «Crear equipo y OT» y después probá el cierre.", "info", "var(--accent)");
+  const m = S.moc;
+  const pending = m.mode === "NEW" || (m.mode === "EXISTING" && !MOCS.find(x => x.id === m.mocId).ok);
+  if (pending) {
+    const code = m.mode === "NEW" ? "MOC-DCH-26-0008 (Solicitado)" : `${MOCS.find(x => x.id === m.mocId).code} (${MOCS.find(x => x.id === m.mocId).status})`;
+    return alertBox("No se puede cerrar la OT", `Este cambio requiere MOC y ${code} todavía no está aprobado.\nCuando el Superintendente o el DPA lo aprueben, volvé a cerrar la OT.`, "git-branch", "var(--warning)");
+  }
+  const lines = [`OT ${S.created} cerrada.`, `${S.f.name}: fecha de instalación = hoy.`];
+  if (chosenCount()) lines.push(`${chosenCount()} tareas activas, con vencimiento contado desde hoy.`);
+  if (S.kind === "REPLACE") lines.push(`${oldAsset().name}: dado de baja; sus ${(PLANS[S.oldId]??[]).length} tareas desactivadas; las rutinas que lo revisaban pasan al equipo nuevo.`);
+  alertBox("Cambio aplicado (ejemplo)", lines.join("\n"), "circle-check", "var(--success)");
+};
+// La barra negra del preview crece en celular: el fondo oscuro arranca debajo de ella.
+const fitOverlay = () => { root.style.top = document.querySelector(".pv-bar").offsetHeight + "px"; };
+addEventListener("resize", fitOverlay); fitOverlay();
+render();
+</script>
+</body>
+</html>

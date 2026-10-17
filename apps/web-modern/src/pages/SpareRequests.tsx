@@ -5,6 +5,8 @@
 
 import React, { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useOpenNewFromUrl } from "../lib/deep-link";
+import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker } from "../lib/copilot-context";
 import { Ban, ClipboardList, FileDown, Loader2, Mail, Plus, Save, Send, Trash2, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useFetch } from "../lib/hooks";
@@ -210,6 +212,39 @@ const SpareRequestModal: React.FC<ModalProps> = ({ requestId, onClose, onChanged
   // Lo cargado desde la base y lo recién guardado pasan a ser el estado "limpio".
   const isDirty = useDirtyTracker({ vesselCode, priority, notes }, `${loadedFor}|${savedTick}`);
   const requestClose = useEscapeGuard({ isDirty: editable && isDirty, onSave: async () => { await save(); }, onClose });
+
+  // Copiloto: ve el encabezado de la solicitud y lo puede completar mientras sea
+  // borrador (guardar y enviar a Compras lo hace el usuario). Los renglones se
+  // cargan siempre desde el selector de repuestos, no desde acá.
+  const copilotOptions = {
+    vesselCode: vessels.map(v => ({ value: v.code, label: v.name ?? v.code })),
+    priority: PRIORITIES.map(p => ({ value: p, label: t(`sp.batch.prio.${p}` as TranslationKey) })),
+  };
+  useCopilotEmitter({
+    module: "SPARE_REQUESTS",
+    screen: id ? "SPARE_REQUEST_EDIT" : "SPARE_REQUEST_CREATE",
+    entityId: request?.id,
+    entityCode: request?.requestCode,
+    vesselCode,
+    workflowStage: id ? status : "NEW",
+    canEdit: editable,
+    fieldValues: {
+      vesselCode: vesselCode || null,
+      priority: priority || null,
+      notes: notes.trim() || null,
+    },
+    fieldOptions: copilotOptions,
+  });
+  useCopilotApplyFields(editable ? (fields) => {
+    const { pick, result } = copilotOptionPicker(copilotOptions);
+    // Con renglones cargados el buque queda fijo (igual que el selector).
+    const vc = pick("vesselCode", fields.vesselCode);
+    if (vc && items.length === 0) setVesselCode(vc);
+    const pr = pick("priority", fields.priority);
+    if (pr) setPriority(pr);
+    if (fields.notes !== undefined) setNotes(fields.notes);
+    return result();
+  } : null);
 
   const vesselName = (code: string | null) => (code ? vessels.find(v => v.code === code)?.name ?? code : "—");
   const title = request ? request.requestCode : t("srq.new");
@@ -511,6 +546,8 @@ export const SpareRequestsPage: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState(searchParams.get("priority") ?? "");
   const [searchText, setSearchText] = useState("");
   const [selected, setSelected] = useState<string | "new" | null>(null);
+  // Copiloto: ?nuevo=1 abre la solicitud vacía, igual que el botón "Nueva".
+  useOpenNewFromUrl(() => setSelected("new"), can("spareRequest.manage"));
 
   const path = useMemo(() => {
     const p = new URLSearchParams();
