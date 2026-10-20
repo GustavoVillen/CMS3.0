@@ -126,16 +126,45 @@ export function derivePermitFields(permit: PermitRecord) {
     .filter(p => p.role !== "SUPERVISOR")
     .map(p => (p.role === "PERFORMER" ? p.name : `${p.name} (${PERMIT_ROLE_LABEL[p.role] ?? p.role})`));
 
+  // Quienes entran al espacio confinado: sólo los ejecutantes. Vigía, stand-by
+  // y vigía de fuego se quedan afuera.
+  const entrants = permit.participants.filter(p => p.role === "PERFORMER").map(p => p.name);
+
   const lastGas: PermitGasTest | null = permit.gasTests[0] ?? null; // vienen desc por testedAt
   const gasTesters = Array.from(new Set(permit.gasTests.map(g => g.testedByName).filter(Boolean)));
 
-  /** Lectura del último gas test para una fila del formulario. */
-  const gasReading = (key: "o2" | "lel" | "h2s" | "co" | null): string => {
-    if (!key || !lastGas) return "";
-    const v = key === "o2" ? lastGas.o2Pct : key === "lel" ? lastGas.lelPct : key === "h2s" ? lastGas.h2sPpm : lastGas.coPpm;
+  /** Lectura de un gas test (por defecto el último) para una fila del formulario. */
+  const gasReading = (key: "o2" | "lel" | "h2s" | "co" | null, test: PermitGasTest | null = lastGas): string => {
+    if (!key || !test) return "";
+    const v = key === "o2" ? test.o2Pct : key === "lel" ? test.lelPct : key === "h2s" ? test.h2sPpm : test.coPpm;
     if (v === null || v === undefined) return "";
     return key === "o2" ? v.toFixed(1) : key === "lel" ? v.toFixed(2) : v.toFixed(0);
   };
 
-  return { validFrom, validTo, supervisors, performers, lastGas, gasTesters, gasReading };
+  return { validFrom, validTo, supervisors, performers, entrants, lastGas, gasTesters, gasReading };
+}
+
+/**
+ * Renglones de MEDICIONES DE GAS del 01.4. Cada ubicación del papel toma la
+ * primera medición registrada con ese mismo nombre ("Coff 1 Br" = "COFF 1 BR").
+ * Las que no coinciden con ninguna van, en orden de hora, a los renglones en
+ * blanco del papel y después al final: ninguna medición del sistema queda
+ * fuera del formulario.
+ */
+export function enclosedSpaceGasRows(
+  locations: string[],
+  tests: PermitGasTest[],
+): Array<{ location: string; test: PermitGasTest | null }> {
+  const key = (s: string | null) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const pending = [...tests].sort((a, b) => new Date(a.testedAt).getTime() - new Date(b.testedAt).getTime());
+  const rows = locations.map(location => {
+    const i = location ? pending.findIndex(g => key(g.location) === key(location)) : -1;
+    return { location, test: i >= 0 ? pending.splice(i, 1)[0] : null };
+  });
+  for (const r of rows) {
+    if (r.location || pending.length === 0) continue;
+    r.test = pending.shift()!;
+    r.location = r.test.location ?? "";
+  }
+  return rows.concat(pending.map(g => ({ location: g.location ?? "", test: g })));
 }

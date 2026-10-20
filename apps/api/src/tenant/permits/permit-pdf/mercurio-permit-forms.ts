@@ -211,10 +211,17 @@ const UNDERWATER_CONSIDERATIONS: ChecklistGroup[] = [
   },
 ];
 
-// ── REGI-SYE-01.4 — Ingreso a espacio confinado (formato IMO) ────────────────
+// ── REGI-SYE-01.4 — Ingreso a espacio confinado ──────────────────────────────
+// Papel del 02.10.2026 (sigue diciendo rev 3 / 29.12.2025). Reemplaza al
+// formato IMO anterior: sin notas al pie ni bloque SPAN GAS de 8 gases; suma la
+// verificación con gas patrón y la planilla de mediciones por compartimento.
+//
+// El papel repite las dos últimas preguntas de la Sección 1 y pone dos veces
+// "TK CARGA 1 ER" en las mediciones (ítems 17 y 21): las preguntas van una sola
+// vez y el renglón 21 queda en blanco para anotar otra ubicación.
 
 /** Sección 1 — Preparativo previo a la entrada (Capitán u Oficial responsable). */
-export const ES_SECTION_1_TITLE = "Sección 1.- Preparativo previo a la entrada (Para ser comprobados por el Capitán u Oficial responsable)";
+export const ES_SECTION_1_TITLE = "SECCION 1. Preparativo previo a la entrada (Para ser comprobados por el Capitán u Oficial responsable)";
 export const ES_SECTION_1: string[] = [
   "¿Ha sido aislado el espacio por desconexión o aislamiento de las tuberías en el tanque?",
   "¿Se han asegurado todas las válvulas de las tuberías dentro de este espacio para evitar una apertura accidental?",
@@ -224,55 +231,68 @@ export const ES_SECTION_1: string[] = [
   "¿Se ha dispuesto que el espacio esté continuamente ventilado durante el periodo de ocupación y durante el comienzo de los trabajos?",
   "¿Se tiene iluminación adecuada?",
   "¿Está el equipo de resucitación y rescate disponible para uso inmediato en la entrada del espacio cerrado?",
-  "¿Se ha designado una persona responsable para permanecer en la entrada del espacio cerrado?",
   "¿Ha sido avisado el Of. de Guardia (puente / máquinas / sala control de cargamento) de la entrada planificada?",
   "¿Se ha acordado y comprobado el sistema de comunicación entre el personal en la entrada y aquellos que han entrado en el espacio cerrado?",
   "¿Se han establecido y comprendido los procedimientos de emergencia y evacuación?",
   "¿Hay algún sistema para registrar quien está en el espacio cerrado?",
-  "¿Es el equipo a utilizar de tipo homologado?",
 ];
 
-/** Contraste del multigas — fila con lecturas y sus límites (literal del papel). */
-export const ES_GAS_BLOCK_TITLE = "Contraste de equipo multigas con cilindro SPAN GAS";
-export const ES_GAS_BLOCK_NOTE = "OBSERVACIONES: (en caso de dar lectura normal colocar OK, caso contrario colocar lectura según indica el equipo y enviar a calibración inmediata)";
-export const ES_GAS_READINGS: Array<{ label: string; limit: string; reading: "o2" | "lel" | "h2s" | "co" | null }> = [
-  { label: "Oxigeno",                  limit: "(Entre 20.8 a 21.0 %)", reading: "o2" },
-  { label: "Hidrocarburos (% LFL)",    limit: "(< 1 %)",               reading: "lel" },
-  { label: "Monóxido de carbono (ppm)", limit: "(< 12.5 ppm)",         reading: "co" },
-  { label: "Sulfuro de Hidrógeno H2S (ppm)", limit: "(< 10 ppm)",      reading: "h2s" },
-  { label: "Amoniaco NH3 (ppm)",       limit: "(< 25 ppm)",            reading: null },
-  { label: "Benceno (ppm)",            limit: "(< 1 ppm)",             reading: null },
-  { label: "Tolueno (ppm)",            limit: "(< 100 ppm)",           reading: null },
-  { label: "Xileno (ppm)",             limit: "(< 100 ppm)",           reading: null },
+/** Verificación del medidor con gas patrón (ITEM | SI | NO). */
+export const ES_GAS_CHECK_TITLE = "VERIFICACION PREVIA CON GAS PATRON";
+export const ES_GAS_CHECK: string[] = [
+  "¿Previo al uso del medidor de gas, se utilizó el gas patrón para verificar su uso?",
+  "¿Los resultados fueron satisfactorios?",
+  "¿En caso de no ser satisfactorios, se cambió el medidor de gas?",
+  "¿En caso de un nuevo medidor de gases, se utilizó el gas patrón para verificar los niveles?",
 ];
-export const ES_GAS_BLOCK_FOOTNOTE = "Valores distintos a estos no son permitidos. La normativa ACGIH (American Conference of Governmental Industrial Hygienists) estipula los valores de Monóxido de carbono para ingreso a espacio confinado.";
 
-export const ES_SECTION_2_TITLE = "Sección 2.- Comprobaciones previas a la entrada (para ser llevadas a cabo por la persona autorizada a dirigir el equipo de entrada)";
+/** Gases del contraste y de las mediciones, con el límite impreso bajo cada columna. */
+export const ES_CONTRAST_TITLE = "CONTRASTE GAS PATRON";
+export const ES_GASES: Array<{ gas: string; limit: string; reading: "o2" | "lel" | "co" | "h2s" }> = [
+  { gas: "O2",  limit: "Entre 20.8 y 21.0%", reading: "o2" },
+  { gas: "LEL", limit: "<1%",                reading: "lel" },
+  { gas: "CO",  limit: "<12.5 ppm",          reading: "co" },
+  { gas: "H2S", limit: "<10 ppm",            reading: "h2s" },
+];
+
+/** Renglones de MEDICIONES DE GAS. Vacío = renglón para completar a mano. */
+export const ES_GAS_READINGS_TITLE = "MEDICIONES DE GAS";
+export const ES_GAS_LOCATIONS: string[] = [
+  "P. PROA",
+  "COFF 1 BR", "COFF 2 BR", "COFF 3 BR", "COFF 4 BR", "COFF 5 BR",
+  "P. POPA",
+  "COFF 1 ER", "COFF 2 ER", "COFF 3 ER", "COFF 4 ER", "COFF 5 ER",
+  "TK CARGA 1 BR", "TK CARGA 2 BR", "TK CARGA 3 BR", "TK CARGA 4 BR",
+  "TK CARGA 1 ER", "TK CARGA 2 ER", "TK CARGA 3 ER", "TK CARGA 4 ER",
+  "",
+];
+
+export const ES_SECTION_2_TITLE = "SECCION 2. Comprobaciones previas a la entrada (para ser llevadas a cabo por la persona autorizada a dirigir el equipo de entrada)";
 export const ES_SECTION_2: string[] = [
   "La sección 1 de este permiso ha sido comprobada totalmente",
-  "Estoy enterado de que este espacio debe ser evacuado inmediatamente en el caso de fallo en la ventilación o variaciones en las comprobaciones de la atmósfera que se ha establecido como criterio de seguridad.",
+  "Estoy enterado de que este espacio debe ser evacuado inmediatamente en el caso de fallo en la ventilación o variaciones en las comprobaciones de la atmósfera que se ha establecido como criterio de seguridad",
   "Acepto los procedimientos de comunicación",
-  "Acepto informar cada ............................. minutos.",
-  "Los procedimientos de evacuación y emergencia han sido acordados y comprendidos.",
+  "Acepto informar cada 15 Minutos",
+  "Los procedimientos de evacuación y emergencia han sido acordados y comprendidos",
 ];
 
-export const ES_SIGNERS: string[] = [
-  "Capitán u Oficial responsable",
-  "Persona que dirige el equipo de entrada",
-  "Responsable de supervisar la entrada",
+export const ES_INVALID_WARNING = "ESTE PERMISO SE CONSIDERARÁ INVALIDO SI LA VENTILACIÓN DEL ESPACIO CERRADO SE INTERRUMPE O SI CAMBIARA ALGUNA DE LAS CONDICIONES REGISTRADAS EN LA PRESENTE LISTA";
+
+export const ES_SECTION_3_TITLE = "SECCION 3. Comprobación a la salida";
+export const ES_SECTION_3: string[] = [
+  "Se ha producido el egreso del espacio confinado de todo el personal supervisado a la entrada, no se ha registrado ninguna novedad",
+  "Estoy enterado de que este espacio debe ser evacuado inmediatamente en el caso de fallo en la ventilación o variaciones en las comprobaciones de la atmósfera que se ha establecido como criterio",
 ];
 
-export const ES_SECTION_3_TITLE = "Sección 3.- Comprobación a la salida";
-export const ES_SECTION_3_TEXT = "Se ha producido el egreso del espacio confinado de todo el personal supervisado a la entrada, no se ha registrado ninguna novedad.";
-export const ES_SECTION_3_SIGN = "Firma y aclaración de la persona responsable de supervisar el egreso del personal que realizó el trabajo.";
+/** Los dos recuadros NOMBRE Y FIRMA (PUESTO | NOMBRE | FECHA/HORA | FIRMA). */
+export const ES_EXIT_SIGNERS = ["Supervisor de Trabajo", "Supervisor de Entrada"] as const;
+export const ES_SIGNERS = [
+  "Capitán", "Oficial Responsable", "Supervisor que midió gases",
+  "Supervisor de Entrada", "Operador que entra", "Operador que entra",
+] as const;
 
-export const ES_INVALID_WARNING = "ESTE PERMISO SE CONSIDERARÁ INVALIDO SI LA VENTILACIÓN DEL ESPACIO CERRADO SE INTERRUMPE O SI CAMBIARA ALGUNA DE LAS CONDICIONES REGISTRADAS EN LA PRESENTE LISTA.";
-
-export const ES_NOTES: string[] = [
-  "1.- El permiso de entrada deberá contener una indicación clara de su máximo periodo de validez, el cual en ningún caso excederá de media jornada normal de trabajo en espacios que hayan contenido hidrocarburos, o en espacios adyacentes a ellos, y una jornada normal de trabajo en cualquier otro espacio.",
-  "2.- Para obtener una muestra representativa de la atmósfera en los distintos departamentos, las muestras se tomarán a distintas profundidades y a través de tantas aberturas como sea posible. La ventilación se parará unos 10 minutos antes de que se lleven a cabo las comprobaciones de atmósfera previas a la entrada.",
-  "3.- Se llevarán a cabo test de contaminantes tóxicos específicos, tales como benceno o sulfhídrico si se ha transportado en ese tanque carga con esos componentes.",
-];
+/** Renglones del registro de quienes entraron (12 en la hoja 3 + 3 en la 4). */
+export const ES_ENTRY_LOG_ROWS = 15;
 
 // ── Definición por tipo de permiso ───────────────────────────────────────────
 

@@ -1,5 +1,26 @@
 HISTORY.txt
 
+[2026-10-20] Permiso de espacio confinado: formulario REGI-SYE-01.4 nuevo (papel del 02.10.2026)
+Agent: Claude Opus 5.5
+- Mercurio actualizó el formulario (sigue diciendo rev 3 / 29.12.2025). El PDF y el Word del permiso
+  ENCLOSED_SPACE_ENTRY replican el papel nuevo: General, Validez, Sección 1 (SI/NO | ITEM),
+  Verificación previa con gas patrón + Contraste, Mediciones de gas por compartimento (21 renglones),
+  Sección 2 + advertencia en rojo, Sección 3 + firmas de salida, Nombre y firma por puesto, registro de
+  quienes entraron (15 renglones), Comentarios adicionales, Generado por y Comunicado por
+  (IMPRESO / EMAIL / WHAPP / URUTAU). Salen las notas 1-3, el bloque SPAN GAS de 8 gases y "Para ser
+  firmado por".
+- Del papel: no se repiten las dos preguntas duplicadas de la Sección 1 y el renglón 21 de mediciones
+  ("TK CARGA 1 ER" repetido) queda en blanco para otra ubicación.
+- Las mediciones de gas del sistema caen en el renglón de su ubicación si el nombre coincide
+  ("Coff 1 Br" = COFF 1 BR); las demás ocupan el renglón en blanco y después se agregan al final. El
+  contraste con gas patrón se completa a bordo (antes se llenaba con la última medición del espacio).
+- Nombres que imprime el sistema: supervisor del trabajo, quien midió gases y los ejecutantes (sólo rol
+  Ejecutante; vigías y stand-by no entran al espacio). Las firmas siguen en blanco.
+- Sin cambios de base, permisos ni pantallas. Archivos: permit-pdf/mercurio-permit-forms.ts, shared.ts,
+  template-mercurio.ts, word-permit.ts y pms/tenant-forms-service.ts. Respaldo previo:
+  claude/backups/permiso-espacio-confinado-01.4-2026-10-20/. Papel: Documentos\Formularios-en-blanco.
+  Pasos: pull + restart API.
+
 [2026-10-09] Plan: "Equipos que revisa" — el checklist semanal/mensual cubre a sus equipos
 Agent: Claude Opus 5.5
 - Una tarea del plan puede declarar equipos que revisa ademas del principal (tabla nueva

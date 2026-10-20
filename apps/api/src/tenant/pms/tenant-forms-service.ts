@@ -103,16 +103,19 @@ const EMPTY_CONFIG: FormConfig = {
 // `departments` es la lista del recuadro DEPARTAMENTO del encabezado.
 const PERMIT_DEPARTMENTS = ["CUBIERTA", "MAQUINAS", "SERVICIOS", "OTRO"];
 
-function permitConfig(sections: string[]): FormConfig {
-  return { sections, departments: PERMIT_DEPARTMENTS, distribution: [], communicationMethods: [], purchaseRequest: [], labels: {} };
+function permitConfig(sections: string[], communicationMethods: string[] = []): FormConfig {
+  return { sections, departments: PERMIT_DEPARTMENTS, distribution: [], communicationMethods, purchaseRequest: [], labels: {} };
 }
 
-// REGI-SYE-01.4 — formato distinto al resto: texto tipo IMO con secciones 1/2/3,
-// notas al pie y registro de ingresos, sin recuadro de resolucion ni de EPP.
+// REGI-SYE-01.4 (papel del 02.10.2026) — formato distinto al resto: secciones
+// 1/2/3, verificacion con gas patron, mediciones por compartimento, firmas por
+// puesto y registro de ingresos, sin recuadro de resolucion ni de EPP.
 const PERMIT_ENCLOSED_SPACE_SECTIONS = [
-  "vesselHeader", "esGeneral", "esSection1", "esSection2", "esSignatures",
-  "esSection3", "esNotes", "esEntryLog", "generatedBy",
+  "vesselHeader", "esGeneral", "esValidity", "esSection1", "esGasCheck",
+  "esGasReadings", "esSection2", "esSection3", "esSignatures", "esEntryLog",
+  "additionalComments", "generatedBy", "communicatedBy",
 ];
+const PERMIT_ENCLOSED_SPACE_COMMUNICATION = ["IMPRESO", "EMAIL", "WHAPP", "URUTAU"];
 const PERMIT_HOT_WORK_SECTIONS = [
   "vesselHeader", "workKindHotCold", "motiveZone", "adjacentAreas", "sketch",
   "performers", "supervisors", "gasTesters", "gasEquipment", "gasResults",
@@ -264,7 +267,7 @@ const FORM_DEFAULTS: Record<TenantFormType, FormDefaults> = {
     effectiveFrom: "29.12.2025",
     codePattern: null,
     footer: PERMIT_FOOTER,
-    config: permitConfig(PERMIT_ENCLOSED_SPACE_SECTIONS),
+    config: permitConfig(PERMIT_ENCLOSED_SPACE_SECTIONS, PERMIT_ENCLOSED_SPACE_COMMUNICATION),
   },
   PERMIT_HOT_WORK: {
     style: "STANDARD",

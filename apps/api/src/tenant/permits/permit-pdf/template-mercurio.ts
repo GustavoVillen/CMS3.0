@@ -22,13 +22,13 @@ import { sanitizePdfText } from "../../pms/pdf-helpers";
 import { fmtDate, fmtDateTime, fmtTime } from "../../../common/tenant-time";
 import {
   mercurioPermitForm, SPECIAL_COMMENTS, SHIP_STATUS_OPTIONS, DEPARTMENT_OPTIONS,
-  HEADER_ROLES, PPE_HEADER, ES_SECTION_1, ES_SECTION_1_TITLE, ES_SECTION_2,
-  ES_SECTION_2_TITLE, ES_SIGNERS, ES_SECTION_3_TITLE, ES_SECTION_3_TEXT,
-  ES_SECTION_3_SIGN, ES_INVALID_WARNING, ES_NOTES, ES_GAS_BLOCK_TITLE,
-  ES_GAS_BLOCK_NOTE, ES_GAS_READINGS, ES_GAS_BLOCK_FOOTNOTE,
+  HEADER_ROLES, PPE_HEADER, ES_SECTION_1, ES_SECTION_1_TITLE, ES_GAS_CHECK_TITLE,
+  ES_GAS_CHECK, ES_CONTRAST_TITLE, ES_GASES, ES_GAS_READINGS_TITLE, ES_GAS_LOCATIONS,
+  ES_SECTION_2, ES_SECTION_2_TITLE, ES_INVALID_WARNING, ES_SECTION_3_TITLE,
+  ES_SECTION_3, ES_EXIT_SIGNERS, ES_SIGNERS, ES_ENTRY_LOG_ROWS,
 } from "./mercurio-permit-forms";
 import {
-  blank, isAuthorized, derivePermitFields, PERMIT_STATUS_LABEL,
+  blank, isAuthorized, derivePermitFields, enclosedSpaceGasRows, PERMIT_STATUS_LABEL,
   type PermitPdfContext,
 } from "./shared";
 
@@ -41,6 +41,8 @@ const MARGIN_T = 36;
 const CONTENT_BOTTOM = PAGE_H - FOOTER_H - 8;
 
 const { NAVY, WHITE, BLACK, GRAY, BORDER, LIGHT } = FORM_COLORS;
+/** Rojo de la advertencia de invalidez del 01.4 (así viene en el papel). */
+const RED = "#E11D1D";
 
 const S = (v: unknown): string => sanitizePdfText(String(v ?? ""));
 
@@ -67,7 +69,7 @@ export async function renderMercurioPermitPdf(ctx: PermitPdfContext): Promise<Bu
   };
 
   // Datos del formulario compartidos con el Word (ver derivePermitFields).
-  const { validFrom, validTo, supervisors, performers, lastGas, gasTesters, gasReading } =
+  const { validFrom, validTo, supervisors, performers, entrants, lastGas, gasTesters, gasReading } =
     derivePermitFields(permit);
 
   return new Promise<Buffer>((resolve, reject) => {
@@ -239,6 +241,24 @@ export async function renderMercurioPermitPdf(ctx: PermitPdfContext): Promise<Bu
           formBox(x + wChk / 2 - 4.5, canvas.y + (rh - 9) / 2);
         }
         if (noteCol) cell(ML + wQ + 3 * wChk, canvas.y, wNote, rh, "", {});
+        canvas.y += rh;
+      }
+    }
+
+    /** Tabla SI/NO | ITEM del 01.4: la respuesta se escribe a mano en la primera columna. */
+    function siNoTable(items: readonly string[]) {
+      const wAns = 40;
+      const wItem = W - wAns;
+      const H = 16;
+      ensureSpace(H * 2);
+      cell(ML, canvas.y, wAns, H, "SI/NO", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
+      cell(ML + wAns, canvas.y, wItem, H, "ITEM", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
+      canvas.y += H;
+      for (const item of items) {
+        const rh = measureCellHeight([item], [wItem], { fontSize: 7.5, minHeight: 15 });
+        ensureSpace(rh);
+        cell(ML, canvas.y, wAns, rh, "", {});
+        cell(ML + wAns, canvas.y, wItem, rh, S(item), { fontSize: 7.5, wrap: true });
         canvas.y += rh;
       }
     }
@@ -613,92 +633,179 @@ export async function renderMercurioPermitPdf(ctx: PermitPdfContext): Promise<Bu
         }], 18);
       },
 
-      // ── REGI-SYE-01.4 (formato IMO) ──
+      // Recuadro EL MISMO FUE COMUNICADO POR (01.4): se tilda a mano.
+      communicatedBy: () => {
+        if (formConfig.communicationMethods.length === 0) return;
+        canvas.y += 6;
+        secHeader(label("communicatedBy", "EL MISMO FUE COMUNICADO POR"), 32);
+        optionsBlock(formConfig.communicationMethods);
+        canvas.y += 6;
+      },
+
+      // ── REGI-SYE-01.4 ──
       esGeneral: () => {
-        secHeader(label("esGeneral", "GENERAL"), 54);
+        secHeader(label("esGeneral", "GENERAL"), 36);
         kvRow([{ label: "LOCALIZACION / NOMBRE DEL ESPACIO CERRADO", value: permit.location, lw: 220 }]);
         kvRow([{ label: "MOTIVO DE LA ENTRADA", value: permit.description, lw: 220 }]);
-        kvRow([
-          { label: "VALIDO DESDE", value: `${fDate(validFrom)}  ${fTime(validFrom)}`, lw: 80 },
-          { label: "HASTA (ver nota 1)", value: `${fDate(validTo)}  ${fTime(validTo)}`, lw: 90 },
-        ]);
+        canvas.y += 6;
+      },
+
+      esValidity: () => {
+        secHeader(label("esValidity", "VALIDEZ"), 36);
+        const H = 18, wRow = 70, wLbl = 50;
+        const wVal = Math.floor((W - wRow - 2 * wLbl) / 2);
+        const head = { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" as const };
+        ensureSpace(H * 2);
+        for (const { row, at } of [{ row: "DESDE", at: validFrom }, { row: "HASTA", at: validTo }]) {
+          let x = ML;
+          cell(x, canvas.y, wRow, H, row, head);               x += wRow;
+          cell(x, canvas.y, wLbl, H, "FECHA", head);            x += wLbl;
+          cell(x, canvas.y, wVal, H, S(fDate(at)), { fontSize: 8, align: "center" }); x += wVal;
+          cell(x, canvas.y, wLbl, H, "HORA", head);             x += wLbl;
+          cell(x, canvas.y, ML + W - x, H, S(fTime(at)), { fontSize: 8, align: "center" });
+          canvas.y += H;
+        }
         canvas.y += 6;
       },
 
       esSection1: () => {
         secHeader(ES_SECTION_1_TITLE, 34);
-        checklistTable(ES_SECTION_1, false);
-        // Contraste del multigas + lecturas con sus límites (literal del papel).
-        secHeader(ES_GAS_BLOCK_TITLE, 40);
-        canvas.y += textArea(ML, canvas.y, W, ES_GAS_BLOCK_NOTE, 22);
-        const wLbl = Math.floor(W * 0.45), wLim = Math.floor(W * 0.3);
-        blankTable(
-          ["LECTURA", "LIMITE", "VALOR"],
-          [wLbl, wLim, W - wLbl - wLim],
-          ES_GAS_READINGS.map(r => [r.label, r.limit, gasReading(r.reading)]),
-          ES_GAS_READINGS.length,
-        );
-        canvas.y += textArea(ML, canvas.y, W, ES_GAS_BLOCK_FOOTNOTE, 24);
+        siNoTable(ES_SECTION_1);
+        canvas.y += 6;
+      },
+
+      esGasCheck: () => {
+        secHeader(label("esGasCheck", ES_GAS_CHECK_TITLE), 34);
+        const head = { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" as const };
+        const wChk = 30, wQ = W - 2 * wChk, H = 16;
+        ensureSpace(H * 2);
+        cell(ML, canvas.y, wQ, H, "ITEM", head);
+        cell(ML + wQ, canvas.y, wChk, H, "SI", head);
+        cell(ML + wQ + wChk, canvas.y, wChk, H, "NO", head);
+        canvas.y += H;
+        for (const item of ES_GAS_CHECK) {
+          const rh = measureCellHeight([item], [wQ], { fontSize: 7.5, minHeight: 15 });
+          ensureSpace(rh);
+          cell(ML, canvas.y, wQ, rh, S(item), { fontSize: 7.5, wrap: true });
+          for (let i = 0; i < 2; i++) {
+            const x = ML + wQ + i * wChk;
+            cell(x, canvas.y, wChk, rh, "", {});
+            formBox(x + wChk / 2 - 4.5, canvas.y + (rh - 9) / 2);
+          }
+          canvas.y += rh;
+        }
+        // Contraste: lo que marca el medidor con el gas patrón. Se completa a
+        // bordo; no es la medición del espacio (esa va en MEDICIONES DE GAS).
+        ensureSpace(H * 3);
+        cell(ML, canvas.y, W, H, ES_CONTRAST_TITLE, { bold: true, fontSize: 8, bg: LIGHT, color: BLACK, align: "center" });
+        canvas.y += H;
+        const wLbl = Math.floor(W * 0.3);
+        const wGas = Math.floor((W - wLbl) / ES_GASES.length);
+        for (const [first, values, isHead] of [
+          ["TIPO DE GAS DETECTADO", ES_GASES.map(g => g.gas), true],
+          ["LECTURA DE EQUIPO", ES_GASES.map(() => ""), false],
+        ] as const) {
+          cell(ML, canvas.y, wLbl, H, first, head);
+          values.forEach((v, i) => {
+            const x = ML + wLbl + i * wGas;
+            const wCol = i === values.length - 1 ? ML + W - x : wGas;
+            cell(x, canvas.y, wCol, H, v, isHead ? head : {});
+          });
+          canvas.y += H;
+        }
+        canvas.y += 6;
+      },
+
+      esGasReadings: () => {
+        secHeader(label("esGasReadings", ES_GAS_READINGS_TITLE), 54);
+        const head = { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" as const };
+        const wItem = 30, wLoc = 110, wHora = 64;
+        const wRead = W - wItem - wLoc - wHora;
+        const wGas = Math.floor(wRead / ES_GASES.length);
+        const gasX = (i: number) => ML + wItem + wLoc + wHora + i * wGas;
+        const gasW = (i: number) => (i === ES_GASES.length - 1 ? wRead - i * wGas : wGas);
+        const H1 = 14, H2 = 14, H3 = 10;
+        ensureSpace(H1 + H2 + H3 + 15);
+        const y0 = canvas.y;
+        cell(ML, y0, wItem, H1 + H2 + H3, "ITEM", head);
+        cell(ML + wItem, y0, wLoc, H1 + H2 + H3, "UBICACION", head);
+        cell(ML + wItem + wLoc, y0, wHora, H1 + H2 + H3, "HORA", head);
+        cell(gasX(0), y0, wRead, H1, "LECTURA", head);
+        ES_GASES.forEach((g, i) => {
+          cell(gasX(i), y0 + H1, gasW(i), H2, g.gas, head);
+          cell(gasX(i), y0 + H1 + H2, gasW(i), H3, g.limit, { fontSize: 5.5, bg: LIGHT, color: GRAY, align: "center" });
+        });
+        canvas.y = y0 + H1 + H2 + H3;
+        // Las mediciones registradas en el sistema caen en el renglón de su
+        // ubicación; el resto de los renglones queda para completar a mano.
+        enclosedSpaceGasRows(ES_GAS_LOCATIONS, permit.gasTests).forEach((r, i) => {
+          const rh = measureCellHeight([r.location], [wLoc], { fontSize: 7.5, minHeight: 15 });
+          ensureSpace(rh);
+          const wrap = rh > 15;
+          cell(ML, canvas.y, wItem, rh, String(i + 1), { fontSize: 7.5, align: "center" });
+          cell(ML + wItem, canvas.y, wLoc, rh, S(r.location), { fontSize: 7.5, wrap });
+          cell(ML + wItem + wLoc, canvas.y, wHora, rh, r.test ? fTime(r.test.testedAt) : "", { fontSize: 7.5, align: "center" });
+          ES_GASES.forEach((g, j) => {
+            cell(gasX(j), canvas.y, gasW(j), rh, gasReading(g.reading, r.test), { fontSize: 7.5, align: "center" });
+          });
+          canvas.y += rh;
+        });
         canvas.y += 6;
       },
 
       esSection2: () => {
         secHeader(ES_SECTION_2_TITLE, 34);
-        checklistTable(ES_SECTION_2, false);
+        siNoTable(ES_SECTION_2);
+        // Advertencia en rojo, centrada y sin recuadro, como en el papel.
+        doc.fontSize(10).font("Helvetica-Bold");
+        const text = S(ES_INVALID_WARNING);
+        const th = doc.heightOfString(text, { width: W - 60, align: "center" });
+        ensureSpace(th + 14);
+        doc.fontSize(10).font("Helvetica-Bold").fillColor(RED)
+          .text(text, ML + 30, canvas.y + 7, { width: W - 60, align: "center" });
+        canvas.y += th + 14;
+      },
+
+      esSection3: () => {
+        secHeader(ES_SECTION_3_TITLE, 34);
+        siNoTable(ES_SECTION_3);
+        // Firmas de la comprobación a la salida. El sistema sólo conoce al
+        // supervisor del trabajo; la firma va siempre en blanco.
+        secHeader(label("esExitSignatures", "NOMBRE Y FIRMA"), 32);
+        const q = Math.floor(W / 4);
+        blankTable(
+          ["PUESTO", "NOMBRE", "FECHA/HORA", "FIRMA"], [q, q, q, W - 3 * q],
+          ES_EXIT_SIGNERS.map((role, i) => [role, i === 0 ? (supervisors[0] ?? "") : "", "", ""]),
+          ES_EXIT_SIGNERS.length, 18,
+        );
         canvas.y += 6;
       },
 
       esSignatures: () => {
-        secHeader(label("esSignatures", "PARA SER FIRMADO POR"), 34);
-        const wRole = Math.floor(W * 0.42);
-        const wName = Math.floor(W * 0.33);
-        const H = 24;
-        const firmantes = [
-          ES_SIGNERS[0],
-          ES_SIGNERS[1],
-          ES_SIGNERS[2],
-        ];
-        ensureSpace(14 + H * firmantes.length);
-        cell(ML, canvas.y, wRole, 14, "", { noStroke: true });
-        cell(ML + wRole, canvas.y, wName, 14, "NOMBRE Y FIRMA", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
-        cell(ML + wRole + wName, canvas.y, W - wRole - wName, 14, "FECHA Y HORA", { bold: true, fontSize: 7, bg: LIGHT, color: GRAY, align: "center" });
-        canvas.y += 14;
-        firmantes.forEach(f => {
-          ensureSpace(H);
-          cell(ML, canvas.y, wRole, H, S(f), { fontSize: 7.5, bg: LIGHT, color: GRAY, wrap: true });
-          cell(ML + wRole, canvas.y, wName, H, "", {});
-          cell(ML + wRole + wName, canvas.y, W - wRole - wName, H, "", {});
-          canvas.y += H;
-        });
-        canvas.y += 6;
-      },
-
-      esSection3: () => {
-        secHeader(ES_SECTION_3_TITLE, 40);
-        canvas.y += textArea(ML, canvas.y, W, `${ES_SECTION_3_TEXT}\n${ES_SECTION_3_SIGN}`, 34);
-        const third = Math.floor(W / 3);
-        blankTable(["FIRMA DEL RESPONSABLE", "ACLARACION", "FECHA Y HORA"], [third, third, W - 2 * third], [], 1, 28);
-        canvas.y += 4;
-        canvas.y += textArea(ML, canvas.y, W, ES_INVALID_WARNING, 24);
-        canvas.y += 6;
-      },
-
-      esNotes: () => {
-        secHeader(label("esNotes", "NOTAS"), 40);
-        canvas.y += textArea(ML, canvas.y, W, ES_NOTES.join("\n"), 40);
+        // Nombres que el sistema conoce: quien midió los gases y los dos
+        // primeros ejecutantes. Capitán, oficial y supervisor de entrada se
+        // completan a bordo.
+        const names: Record<string, string> = { "Supervisor que midió gases": gasTesters.join(", ") };
+        let op = 0;
+        secHeader(label("esSignatures", "NOMBRE Y FIRMA"), 32);
+        const q = Math.floor(W / 4);
+        blankTable(
+          ["PUESTO", "NOMBRE", "FECHA/HORA", "FIRMA"], [q, q, q, W - 3 * q],
+          ES_SIGNERS.map(role => [role, role === "Operador que entra" ? (entrants[op++] ?? "") : (names[role] ?? ""), "", ""]),
+          ES_SIGNERS.length, 18,
+        );
         canvas.y += 6;
       },
 
       esEntryLog: () => {
-        secHeader(label("esEntryLog", "REGISTRO DE PERSONAS QUE INGRESARON AL ESPACIO CERRADO"), 34);
-        const wN = 30, wName = Math.floor(W * 0.42), wIn = 80, wOut = 80;
+        secHeader(label("esEntryLog", "NOMBRE Y FIRMA DE QUIENES ENTRARON EN EL ESPACIO CONFINADO"), 32);
+        const wName = Math.floor(W * 0.4), wDate = Math.floor(W * 0.13), wIn = Math.floor(W * 0.14), wOut = Math.floor(W * 0.14);
         blankTable(
-          ["N°", "NOMBRE Y APELLIDO", "HORA / INGRESO", "HORA / SALIDA", "FIRMA"],
-          [wN, wName, wIn, wOut, W - wN - wName - wIn - wOut],
-          performers.map((n, i) => [String(i + 1), n, "", "", ""]),
-          6,
+          ["NOMBRE Y APELLIDO", "FECHA", "HORA INGRESO", "HORA SALIDA", "FIRMA"],
+          [wName, wDate, wIn, wOut, W - wName - wDate - wIn - wOut],
+          entrants.map(n => [n, "", "", "", ""]),
+          ES_ENTRY_LOG_ROWS,
         );
-        blankBox(label("esObs", "OBSERVACIONES"), 26);
         canvas.y += 6;
       },
     };

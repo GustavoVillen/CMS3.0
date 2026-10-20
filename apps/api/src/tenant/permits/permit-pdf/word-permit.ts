@@ -9,19 +9,19 @@
 
 import { fmtDate, fmtDateTime, fmtTime } from "../../../common/tenant-time";
 import {
-  wrapAsWordDoc, bufferToDataUri, esc, escMultiline, docControlledHeader,
+  wrapAsWordDoc, bufferToDataUri, esc, docControlledHeader,
   docControlledFooter, docSection, docKvRow, docTable, docTextBox, docSpacer, imagePixelSize, fitLogoBox,
 } from "../../pms/doc-export";
 import {
   mercurioPermitForm, SPECIAL_COMMENTS, SHIP_STATUS_OPTIONS, DEPARTMENT_OPTIONS,
-  HEADER_ROLES, PPE_HEADER, ES_SECTION_1, ES_SECTION_1_TITLE, ES_SECTION_2,
-  ES_SECTION_2_TITLE, ES_SIGNERS, ES_SECTION_3_TITLE, ES_SECTION_3_TEXT,
-  ES_SECTION_3_SIGN, ES_INVALID_WARNING, ES_NOTES, ES_GAS_BLOCK_TITLE,
-  ES_GAS_BLOCK_NOTE, ES_GAS_READINGS, ES_GAS_BLOCK_FOOTNOTE,
+  HEADER_ROLES, PPE_HEADER, ES_SECTION_1, ES_SECTION_1_TITLE, ES_GAS_CHECK_TITLE,
+  ES_GAS_CHECK, ES_CONTRAST_TITLE, ES_GASES, ES_GAS_READINGS_TITLE, ES_GAS_LOCATIONS,
+  ES_SECTION_2, ES_SECTION_2_TITLE, ES_INVALID_WARNING, ES_SECTION_3_TITLE,
+  ES_SECTION_3, ES_EXIT_SIGNERS, ES_SIGNERS, ES_ENTRY_LOG_ROWS,
 } from "./mercurio-permit-forms";
 import {
-  derivePermitFields, isAuthorized, val, PERMIT_STATUS_LABEL, PERMIT_TYPE_LABEL,
-  PERMIT_ROLE_LABEL, type PermitPdfContext,
+  derivePermitFields, enclosedSpaceGasRows, isAuthorized, val, PERMIT_STATUS_LABEL,
+  PERMIT_TYPE_LABEL, PERMIT_ROLE_LABEL, type PermitPdfContext,
 } from "./shared";
 import { buildPermitChecklist } from "../../../common/regulations/maritime";
 
@@ -56,6 +56,21 @@ function checkTable(items: string[], noteCol = true): string {
     + `<td class="center">${cbx()}</td><td class="center">${cbx()}</td><td class="center">${cbx()}</td>`
     + (noteCol ? `<td>&nbsp;</td>` : "")
     + `</tr>`).join("");
+  return `<table>${head}${body}</table>`;
+}
+
+/** Tabla SI/NO | ITEM del 01.4: la respuesta se escribe a mano en la primera columna. */
+function siNoTable(items: readonly string[]): string {
+  const head = `<tr class="hdr"><td style="width:8%">SI/NO</td><td style="width:92%">ITEM</td></tr>`;
+  const body = items.map(it => `<tr><td>&nbsp;</td><td style="font-size:8pt;">${esc(it)}</td></tr>`).join("");
+  return `<table>${head}${body}</table>`;
+}
+
+/** Recuadro NOMBRE Y FIRMA del 01.4: PUESTO | NOMBRE | FECHA/HORA | FIRMA. */
+function roleSignTable(rows: Array<[string, string]>): string {
+  const head = `<tr class="hdr"><td style="width:25%">PUESTO</td><td style="width:25%">NOMBRE</td><td style="width:25%">FECHA/HORA</td><td style="width:25%">FIRMA</td></tr>`;
+  const body = rows.map(([role, name]) =>
+    `<tr><td style="height:16pt;">${esc(role)}</td><td>${esc(name)}</td><td>&nbsp;</td><td>&nbsp;</td></tr>`).join("");
   return `<table>${head}${body}</table>`;
 }
 
@@ -99,7 +114,7 @@ export function renderMercurioPermitDoc(ctx: PermitPdfContext): Buffer {
     }
   };
 
-  const { validFrom, validTo, supervisors, performers, lastGas, gasTesters, gasReading } =
+  const { validFrom, validTo, supervisors, performers, entrants, lastGas, gasTesters, gasReading } =
     derivePermitFields(permit);
   const departments = formConfig.departments.length ? formConfig.departments : DEPARTMENT_OPTIONS;
   const authorized = isAuthorized(permit.status);
@@ -301,50 +316,75 @@ export function renderMercurioPermitDoc(ctx: PermitPdfContext): Buffer {
       labelWidth: "34%", valueWidth: "66%",
     }]),
 
-    // ── REGI-SYE-01.4 (formato IMO) ──
+    communicatedBy: () => formConfig.communicationMethods.length === 0 ? ""
+      : docSection(label("communicatedBy", "EL MISMO FUE COMUNICADO POR"))
+        + checkOptions(formConfig.communicationMethods) + docSpacer(),
+
+    // ── REGI-SYE-01.4 ──
     esGeneral: () => docSection(label("esGeneral", "GENERAL"))
       + docKvRow([{ label: "LOCALIZACION / NOMBRE DEL ESPACIO CERRADO", value: permit.location, labelWidth: "42%", valueWidth: "58%" }])
       + docKvRow([{ label: "MOTIVO DE LA ENTRADA", value: permit.description, labelWidth: "42%", valueWidth: "58%" }])
-      + docKvRow([
-        { label: "VALIDO DESDE", value: `${fDate(validFrom)} ${fTime(validFrom)}`, labelWidth: "18%", valueWidth: "32%" },
-        { label: "HASTA (ver nota 1)", value: `${fDate(validTo)} ${fTime(validTo)}`, labelWidth: "20%", valueWidth: "30%" },
-      ])
       + docSpacer(),
 
-    esSection1: () => docSection(ES_SECTION_1_TITLE) + checkTable(ES_SECTION_1, false)
-      + docSection(ES_GAS_BLOCK_TITLE)
-      + `<div class="box" style="min-height:22pt"><p style="margin:1pt 0;">${esc(ES_GAS_BLOCK_NOTE)}</p></div>`
-      + docTable(["LECTURA", "LIMITE", "VALOR"],
-        ES_GAS_READINGS.map(r => [r.label, r.limit, gasReading(r.reading)]))
-      + `<div class="box" style="min-height:24pt"><p style="margin:1pt 0;">${esc(ES_GAS_BLOCK_FOOTNOTE)}</p></div>`
+    esValidity: () => docSection(label("esValidity", "VALIDEZ"))
+      + `<table>${[{ row: "DESDE", at: validFrom }, { row: "HASTA", at: validTo }].map(({ row, at }) =>
+        `<tr><td class="lbl" style="width:14%">${row}</td><td class="lbl" style="width:10%">FECHA</td>`
+        + `<td class="center" style="width:33%">${esc(fDate(at))}</td>`
+        + `<td class="lbl" style="width:10%">HORA</td><td class="center" style="width:33%">${esc(fTime(at))}</td></tr>`).join("")}</table>`
       + docSpacer(),
 
-    esSection2: () => docSection(ES_SECTION_2_TITLE) + checkTable(ES_SECTION_2, false) + docSpacer(),
+    esSection1: () => docSection(ES_SECTION_1_TITLE) + siNoTable(ES_SECTION_1) + docSpacer(),
 
-    esSignatures: () => {
-      const head = `<tr class="hdr"><td style="width:40%">&nbsp;</td><td style="width:33%">NOMBRE Y FIRMA</td><td style="width:27%">FECHA Y HORA</td></tr>`;
-      const body = ES_SIGNERS.map(s =>
-        `<tr><td class="hdr" style="background:#F3F4F6;font-size:7pt;text-align:left;">${esc(s)}</td>`
-        + `<td style="height:28pt;">&nbsp;</td><td style="height:28pt;">&nbsp;</td></tr>`).join("");
-      return docSection(label("esSignatures", "PARA SER FIRMADO POR")) + `<table>${head}${body}</table>` + docSpacer();
+    esGasCheck: () => {
+      const head = `<tr class="hdr"><td style="width:84%">ITEM</td><td style="width:8%">SI</td><td style="width:8%">NO</td></tr>`;
+      const body = ES_GAS_CHECK.map(it =>
+        `<tr><td style="font-size:8pt;">${esc(it)}</td><td class="center">${cbx()}</td><td class="center">${cbx()}</td></tr>`).join("");
+      // Contraste: lo que marca el medidor con el gas patrón, se completa a bordo.
+      const contrast = `<tr class="hdr"><td colspan="5" style="color:#111827;font-size:8pt;">${esc(ES_CONTRAST_TITLE)}</td></tr>`
+        + `<tr class="hdr"><td style="width:30%">TIPO DE GAS DETECTADO</td>${ES_GASES.map(g => `<td style="width:17.5%">${esc(g.gas)}</td>`).join("")}</tr>`
+        + `<tr><td class="hdr" style="background:#F3F4F6;font-size:7pt;text-align:center;"><b>LECTURA DE EQUIPO</b></td>${ES_GASES.map(() => `<td>&nbsp;</td>`).join("")}</tr>`;
+      return docSection(label("esGasCheck", ES_GAS_CHECK_TITLE))
+        + `<table>${head}${body}</table><table>${contrast}</table>` + docSpacer();
     },
 
-    esSection3: () => docSection(ES_SECTION_3_TITLE)
-      + `<div class="box" style="min-height:34pt"><p style="margin:1pt 0;">${escMultiline(`${ES_SECTION_3_TEXT}\n${ES_SECTION_3_SIGN}`)}</p></div>`
-      + docTable(["FIRMA DEL RESPONSABLE", "ACLARACION", "FECHA Y HORA"], [], 1)
-      + `<div class="box" style="min-height:24pt"><p style="margin:1pt 0;"><b>${esc(ES_INVALID_WARNING)}</b></p></div>`
+    esGasReadings: () => {
+      const head = `<tr class="hdr"><td rowspan="3" style="width:6%">ITEM</td><td rowspan="3" style="width:22%">UBICACION</td>`
+        + `<td rowspan="3" style="width:12%">HORA</td><td colspan="${ES_GASES.length}">LECTURA</td></tr>`
+        + `<tr class="hdr">${ES_GASES.map(g => `<td style="width:15%">${esc(g.gas)}</td>`).join("")}</tr>`
+        + `<tr class="hdr">${ES_GASES.map(g => `<td style="font-size:6pt;font-weight:normal;">${esc(g.limit)}</td>`).join("")}</tr>`;
+      // Las mediciones del sistema caen en el renglón de su ubicación.
+      const body = enclosedSpaceGasRows(ES_GAS_LOCATIONS, permit.gasTests).map((r, i) =>
+        `<tr><td class="center">${i + 1}</td><td>${esc(r.location) || "&nbsp;"}</td>`
+        + `<td class="center">${r.test ? esc(fTime(r.test.testedAt)) : ""}</td>`
+        + ES_GASES.map(g => `<td class="center">${esc(gasReading(g.reading, r.test))}</td>`).join("")
+        + `</tr>`).join("");
+      return docSection(label("esGasReadings", ES_GAS_READINGS_TITLE)) + `<table>${head}${body}</table>` + docSpacer();
+    },
+
+    esSection2: () => docSection(ES_SECTION_2_TITLE) + siNoTable(ES_SECTION_2)
+      + `<p style="color:#E11D1D;font-weight:bold;font-size:10pt;text-align:center;margin:6pt 30pt;">${esc(ES_INVALID_WARNING)}</p>`,
+
+    esSection3: () => docSection(ES_SECTION_3_TITLE) + siNoTable(ES_SECTION_3)
+      // Firmas de la salida: el sistema sólo conoce al supervisor del trabajo.
+      + docSection(label("esExitSignatures", "NOMBRE Y FIRMA"))
+      + roleSignTable(ES_EXIT_SIGNERS.map((role, i) => [role, i === 0 ? (supervisors[0] ?? "") : ""]))
       + docSpacer(),
 
-    esNotes: () => docSection(label("esNotes", "NOTAS"))
-      + `<div class="box" style="min-height:40pt">`
-      + ES_NOTES.map(n => `<p style="margin:1pt 0;">${esc(n)}</p>`).join("")
-      + `</div>` + docSpacer(),
+    esSignatures: () => {
+      // Quien midió los gases y los dos primeros ejecutantes; el resto a bordo.
+      const names: Record<string, string> = { "Supervisor que midió gases": gasTesters.join(", ") };
+      let op = 0;
+      return docSection(label("esSignatures", "NOMBRE Y FIRMA"))
+        + roleSignTable(ES_SIGNERS.map(role =>
+          [role, role === "Operador que entra" ? (entrants[op++] ?? "") : (names[role] ?? "")]))
+        + docSpacer();
+    },
 
-    esEntryLog: () => docSection(label("esEntryLog", "REGISTRO DE PERSONAS QUE INGRESARON AL ESPACIO CERRADO"))
-      + docTable(["N°", "NOMBRE Y APELLIDO", "HORA / INGRESO", "HORA / SALIDA", "FIRMA"],
-        performers.map((n, i) => [String(i + 1), n, "", "", ""]),
-        Math.max(0, 6 - performers.length))
-      + docSection(label("esObs", "OBSERVACIONES")) + blankBox("26pt") + docSpacer(),
+    esEntryLog: () => docSection(label("esEntryLog", "NOMBRE Y FIRMA DE QUIENES ENTRARON EN EL ESPACIO CONFINADO"))
+      + docTable(["NOMBRE Y APELLIDO", "FECHA", "HORA INGRESO", "HORA SALIDA", "FIRMA"],
+        entrants.map(n => [n, "", "", "", ""]),
+        Math.max(0, ES_ENTRY_LOG_ROWS - entrants.length))
+      + docSpacer(),
   };
 
   const order = formConfig.sections.length > 0 ? formConfig.sections : ["vesselHeader", "generatedBy"];
