@@ -21,6 +21,8 @@ Pass/
 MisDocs/
 # Adjuntos subidos desde la app
 apps/api/uploads/
+# Copias de Claude antes de cada cambio (acceso directo a OneDrive)
+claude/backups/
 
 # --- Salidas de herramientas y temporales ---------------------------------
 *.log

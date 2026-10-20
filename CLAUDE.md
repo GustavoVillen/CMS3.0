@@ -214,3 +214,19 @@ codear**. Crear o actualizar `claude/plans/CONTEXTO.md` con lo que sí se sabe �
 trabajando el usuario, qué quiere lograr, qué se probó, qué quedó pendiente, qué falta
 definir— y preguntar lo mínimo indispensable a partir de ahí. Ese archivo es la memoria
 viva del trabajo en curso: se lee al retomar y se actualiza al cerrar cada tanda.
+
+## 14. Dos PCs: sincronización con GitHub
+
+Gustavo trabaja desde dos PCs, cada una con su `C:\CMS3.0`. El código pasa de una a otra
+sólo por GitHub: en OneDrive no se puede tener, por los `node_modules`.
+
+- **Al abrir la sesión** el hook `.claude/hooks/git-sync.mjs` baja lo nuevo de GitHub (sólo
+  avance rápido) y deja una línea «[Sincronización con GitHub]» en el contexto. Si dice que
+  la rama se separó o que algo no se pudo bajar, avisarle a Gustavo antes de tocar código.
+- **Al terminar un cambio verificado** (sección 10), commitearlo sin esperar a que lo pida,
+  sólo con lo propio (puede haber otra sesión en el mismo árbol). El hook de cierre sube a
+  GitHub los commits pendientes al final de cada respuesta.
+- **Si Gustavo avisa que se pasa a la otra PC**, commitear también el trabajo a medio hacer,
+  con un mensaje que lo diga, para que viaje.
+- Nunca `push --force`, `reset --hard` ni rebase de algo ya subido para destrabar la
+  sincronización: explicarle a Gustavo qué pasó y decidirlo con él.

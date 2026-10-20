@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh*gpms-vps*)",
+      "Bash(scp*gpms-vps*)",
+      "WebFetch(domain:www.superyachtnews.com)",
+      "WebFetch(domain:www.liscr.com)",
+      "WebFetch(domain:britanniapandi.com)",
+      "WebFetch(domain:www.imo.org)",
+      "WebFetch(domain:www.pexels.com)",
+      "WebFetch(domain:www.cms3.shipcms.cloud)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-sync.mjs\" start",
+            "timeout": 60,
+            "statusMessage": "Sincronizando con GitHub..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-sync.mjs\" stop",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
