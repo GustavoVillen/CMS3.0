@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Avances de OT — propuesta v1</title>
+<style>
+  :root{
+    --bg:#F4F5F7;--surface:#FFFFFF;--surface2:#F0F1F4;--fg:#1A1D24;--muted:#5B6270;--faint:#8A909C;
+    --border:#E2E4E9;--accent:#0284C7;--accentbg:rgba(2,132,199,.08);--accentbd:rgba(2,132,199,.28);
+    --success:#0E9F6E;--successbg:rgba(14,159,110,.10);--danger:#DC2626;--dangerbg:rgba(220,38,38,.08);
+    --warning:#D97706;--warningbg:rgba(217,119,6,.10);--violet:#7C3AED;--violetbg:rgba(124,58,237,.08);
+    --shadow:0 20px 50px rgba(15,23,42,.25);
+  }
+  body.dark{
+    --bg:#080D1D;--surface:#1C2541;--surface2:rgba(255,255,255,.05);--fg:#E0E1DD;--muted:#A9AFBB;--faint:#7D8494;
+    --border:rgba(255,255,255,.10);--accent:#38BDF8;--accentbg:rgba(56,189,248,.10);--accentbd:rgba(56,189,248,.32);
+    --success:#06D6A0;--successbg:rgba(6,214,160,.12);--danger:#F87171;--dangerbg:rgba(248,113,113,.12);
+    --warning:#FBBF24;--warningbg:rgba(251,191,36,.12);--violet:#A78BFA;--violetbg:rgba(167,139,250,.12);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);font-size:14px;line-height:1.45}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accentbd);outline-offset:2px}
+  svg{flex-shrink:0}
+
+  .demo{position:sticky;top:0;z-index:60;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:center;
+    background:#FEF3C7;color:#92400E;font-size:12px;padding:6px 10px;border-bottom:1px solid #FCD34D}
+  .demo label{display:flex;gap:5px;align-items:center;cursor:pointer}
+  .page{padding:28px;filter:saturate(.6)}
+  .page .fake{height:58px;border-radius:14px;background:var(--surface);border:1px solid var(--border);margin-bottom:10px}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;z-index:40}
+
+  .modal{width:100%;max-width:780px;max-height:min(90vh,900px);display:flex;flex-direction:column;background:var(--surface);
+    border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+  .head{display:flex;gap:14px;align-items:flex-start;padding:20px 22px 12px}
+  .head .ttl{flex:1;min-width:0}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .head h2{margin:2px 0 0;font-size:17px;font-weight:800;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+  .meta.facts{gap:4px 18px;margin-top:6px;font-size:12.5px;color:var(--muted)}
+  .meta.facts b{color:var(--fg);font-weight:600}
+  .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:12px;color:var(--muted)}
+  .chip svg{width:13px;height:13px}
+  .chip.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--fg)}
+  .chip.st{font-weight:700;border-color:var(--accentbd);background:var(--accentbg);color:var(--accent)}
+  .chip.due{font-weight:600}
+  .chip.due.warn{border-color:rgba(217,119,6,.35);background:var(--warningbg);color:var(--warning)}
+  .chip.due.bad{border-color:rgba(220,38,38,.35);background:var(--dangerbg);color:var(--danger)}
+  .x{width:38px;height:38px;border-radius:999px;background:#E11D48;color:#fff;display:grid;place-items:center;flex-shrink:0}
+  .x svg{width:18px;height:18px}
+
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);padding:4px 22px 16px;border-bottom:1px solid var(--border)}
+  .step{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;min-width:0}
+  .step:not(:last-child)::after{content:"";position:absolute;top:13px;left:calc(50% + 17px);right:calc(-50% + 17px);height:2px;background:var(--border)}
+  .step.done:not(:last-child)::after{background:var(--success)}
+  .dot{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;border:2px solid var(--border);background:var(--surface);color:var(--faint);z-index:1}
+  .dot svg{width:15px;height:15px}
+  .step.done .dot{background:var(--success);border-color:var(--success);color:#fff}
+  .step.now .dot{border-color:var(--accent);background:var(--accentbg);box-shadow:0 0 0 4px var(--accentbg)}
+  .step.now .dot::after{content:"";width:8px;height:8px;border-radius:99px;background:var(--accent)}
+  .step .lbl{font-size:12.5px;font-weight:700;line-height:1.2}
+  .step.todo .lbl{color:var(--faint);font-weight:600}
+  .step.now .lbl{color:var(--accent)}
+  .step .sub{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .step.todo .sub{color:var(--faint)}
+
+  .listbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 22px 0}
+  .listbar .ttl2{font-size:12px;font-weight:700;color:var(--muted)}
+  .toggle{display:inline-flex;border:1px solid var(--border);border-radius:9px;padding:2px}
+  .toggle button{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;font-size:12px;font-weight:600;color:var(--muted)}
+  .toggle button[aria-pressed="true"]{background:var(--surface2);color:var(--fg)}
+  .toggle svg{width:14px;height:14px}
+
+  .body{flex:1;min-height:200px;overflow-y:auto;padding:0 22px 8px}
+  .day{position:sticky;top:0;z-index:2;background:var(--surface);display:flex;align-items:center;gap:10px;padding:12px 0 6px;font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+  .day::after{content:"";flex:1;height:1px;background:var(--border)}
+  .item{position:relative;display:grid;grid-template-columns:30px 1fr auto;gap:10px;padding:8px 6px;border-radius:10px;align-items:start;transition:background .7s}
+  .item:hover{background:var(--surface2)}
+  .item.flash{background:var(--accentbg)}
+  .ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--accentbg);color:var(--accent)}
+  .ic svg{width:15px;height:15px}
+  .item.ss{padding:4px 6px;align-items:center}
+  .item.ss .ic{width:22px;height:22px;border-radius:999px;margin-left:3px;background:var(--violetbg);color:var(--violet)}
+  .item.ss .ic svg{width:12px;height:12px}
+  .txt{min-width:0}
+  .main{font-size:14px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-line}
+  .who{font-size:12px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+  .item.ss .main{font-size:13px;font-weight:600;color:var(--muted)}
+  .item.ss .by{font-weight:400;color:var(--faint)}
+  .sscode{font-family:ui-monospace,Consolas,monospace;font-size:11px;font-weight:700;color:var(--violet);background:var(--violetbg);border-radius:5px;padding:1px 5px;margin-right:6px}
+  .follow{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px;margin-top:4px}
+  .follow.going{background:var(--accentbg);color:var(--accent)}
+  .follow.waitSpare{background:var(--warningbg);color:var(--warning)}
+  .follow.ready{background:var(--successbg);color:var(--success)}
+  .media{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .thumb{width:64px;height:64px;border-radius:9px;overflow:hidden;border:1px solid var(--border);position:relative;display:grid;place-items:center;color:#fff;font-size:10px}
+  .thumb.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.3);font-size:16px}
+  .doc{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:9px;padding:5px 9px;font-size:12.5px;color:var(--fg)}
+  .doc svg{width:15px;height:15px;color:var(--muted)}
+  .more{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--faint);opacity:0}
+  .item:hover .more,.more:focus-visible,.more[aria-expanded="true"]{opacity:1}
+  @media (hover:none){.more{opacity:1}}
+  .more:hover{background:var(--surface);color:var(--fg)}
+  .menu{position:absolute;right:6px;top:38px;z-index:5;min-width:170px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.18);padding:5px}
+  .menu button{display:flex;gap:9px;align-items:center;width:100%;text-align:left;padding:8px 10px;border-radius:8px;font-size:13px}
+  .menu button:hover{background:var(--surface2)}
+  .menu button.danger{color:var(--danger)}
+  .menu svg{width:15px;height:15px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;padding:12px 0}
+  .grid .ph{aspect-ratio:1;border-radius:10px;border:1px solid var(--border);position:relative;overflow:hidden}
+  .grid .ph span{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff;font-size:10.5px;padding:10px 6px 4px}
+  .empty{text-align:center;padding:30px 10px;color:var(--muted)}
+  .empty b{display:block;color:var(--fg);font-size:15px;margin-bottom:4px}
+  .edit{border:1px solid var(--accentbd);border-radius:12px;padding:10px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+  .edit textarea{width:100%;border:1px solid var(--border);border-radius:9px;padding:8px 10px;font:inherit;font-size:14px;resize:vertical;background:var(--surface);color:var(--fg)}
+  .edit .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .edit .row input{border:1px solid var(--border);border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;background:var(--surface);color:var(--fg);width:150px}
+  .edit .row .sp{flex:1}
+
+  /* ── Registrar avance ── */
+  .composer{border-top:1px solid var(--border);padding:10px 22px 14px;background:var(--surface)}
+  .composer .lab{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .composer .lab span{font-weight:500;color:var(--faint)}
+  .quick{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+  .qc{white-space:nowrap;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:600;color:var(--fg);background:var(--surface)}
+  .qc:hover{border-color:var(--faint)}
+  .qc[aria-pressed="true"]{background:var(--fg);color:var(--surface);border-color:var(--fg)}
+  .box{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;background:var(--surface);transition:border-color .15s}
+  .box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentbg)}
+  .box textarea{border:0;resize:none;background:transparent;color:var(--fg);font:inherit;font-size:14px;padding:10px 12px 4px;min-height:44px;max-height:160px;outline:none}
+  .box textarea::placeholder{color:var(--faint)}
+  .att{display:flex;gap:6px;flex-wrap:wrap;padding:2px 10px 4px}
+  .att .t{position:relative;width:52px;height:52px;border-radius:8px;border:1px solid var(--border);display:grid;place-items:center;font-size:10px;color:#fff}
+  .att .t.docf{width:auto;height:30px;padding:0 8px;color:var(--fg);font-size:12px;display:flex;gap:5px}
+  .att .t button{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:99px;background:#E11D48;color:#fff;font-size:11px;line-height:18px}
+  .bar{display:flex;align-items:center;gap:6px;padding:6px 8px 8px 8px;flex-wrap:wrap}
+  .tool{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--muted);background:var(--surface)}
+  .tool:hover{border-color:var(--accentbd);color:var(--fg)}
+  .tool.on{border-color:var(--danger);color:var(--danger);background:var(--dangerbg)}
+  .tool svg{width:14px;height:14px}
+  .sel{position:relative}
+  .pop{position:absolute;bottom:34px;left:0;z-index:6;min-width:190px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.18);padding:5px}
+  .pop button{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:7px 10px;border-radius:8px;font-size:13px}
+  .pop button:hover{background:var(--surface2)}
+  .pop button[aria-checked="true"]{font-weight:700;color:var(--accent)}
+  .pop input{margin:4px 8px 6px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;width:calc(100% - 16px);background:var(--surface);color:var(--fg)}
+  .spacer{flex:1}
+  .go{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;font-weight:700;font-size:13.5px;border-radius:10px;padding:8px 14px}
+  body.dark .go{color:#0B132B}
+  .go:disabled{opacity:.4;cursor:not-allowed}
+  .go svg{width:15px;height:15px}
+  .hint{font-size:11.5px;color:var(--faint);padding:6px 2px 0;display:flex;justify-content:space-between;gap:8px}
+  .ok{color:var(--success);font-weight:700}
+  .after{border:1px solid rgba(124,58,237,.3);background:var(--violetbg);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+  .after h4{margin:0;font-size:14px;color:var(--violet);display:flex;gap:6px;align-items:center}
+  .after h4 svg{width:16px;height:16px}
+  .after p{margin:0;font-size:12.5px;color:var(--muted)}
+  .after label{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:13.5px;cursor:pointer}
+  .after .row{display:flex;gap:8px;justify-content:flex-end}
+  .btn2{border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px;background:var(--surface)}
+  .btnV{background:var(--violet);color:#fff;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px}
+  .queued{border:1px solid rgba(217,119,6,.35);background:var(--warningbg);border-radius:12px;padding:10px 12px;font-size:13px;display:flex;gap:8px;align-items:center;color:var(--fg)}
+  .queued svg{width:16px;height:16px;color:var(--warning)}
+  .closed{display:flex;gap:8px;align-items:center;justify-content:center;font-size:12.5px;color:var(--muted);padding:12px 22px;border-top:1px solid var(--border)}
+  .closed svg{width:15px;height:15px}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:70;padding:16px}
+  .dlg .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:var(--shadow)}
+  .dlg p{margin:0 0 16px;font-size:14px}
+  .dlg .row{display:flex;justify-content:flex-end;gap:8px}
+  .btnD{background:var(--danger);color:#fff;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px}
+  .lightbox{position:fixed;inset:0;z-index:75;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#fff}
+  .lightbox .big{width:min(80vw,640px);aspect-ratio:4/3;border-radius:12px}
+
+  @media (max-width:620px){
+    .head{padding:16px 16px 10px}.body,.composer,.listbar{padding-left:16px;padding-right:16px}
+    /* En el celular las etapas van en una línea: los puntos y sólo la etapa actual con nombre. */
+    .steps{padding:2px 16px 10px}
+    .dot{width:22px;height:22px}.dot svg{width:12px;height:12px}
+    .step:not(:last-child)::after{top:10px;left:calc(50% + 13px);right:calc(-50% + 13px)}
+    .step .lbl{font-size:11px}
+    .step:not(.now) .lbl,.step .sub{display:none}
+    .step.now .lbl{position:absolute;top:26px;white-space:nowrap}
+    .steps{padding-bottom:28px}
+    .body{min-height:120px}
+    .modal{max-height:96vh}
+    .tool .tx{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo">
+  <span><b>Prototipo v1</b> · datos de ejemplo · esta barra no es parte del diseño</span>
+  <label><input type="checkbox" id="optOp" checked> Puedo operar la OT</label>
+  <label><input type="checkbox" id="optOpen" checked> OT abierta</label>
+  <label><input type="checkbox" id="optOver"> OT vencida</label>
+  <label><input type="checkbox" id="optOffline"> Sin señal</label>
+  <label><input type="checkbox" id="optDark"> Modo oscuro</label>
+</div>
+
+<div class="page" aria-hidden="true"><div class="fake"></div><div class="fake"></div><div class="fake"></div><div class="fake"></div></div>
+
+<div class="scrim">
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="ttl">
+    <header class="head">
+      <div class="ttl">
+        <div class="eyebrow">Avances</div>
+        <h2 id="ttl">Cambio de sello mecánico de la bomba de achique de babor</h2>
+        <div class="meta">
+          <span class="chip code">OT-M02-26-0201</span>
+          <span class="chip st">En ejecución</span>
+          <span class="chip due" id="due"></span>
+        </div>
+        <div class="meta facts">
+          <span>Buque <b>MAO 02</b></span>
+          <span>Equipo <b>Bomba de achique Br</b></span>
+          <span>Responsable <b>Jorge Bael</b></span>
+        </div>
+      </div>
+      <button class="x" aria-label="Cerrar" title="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </header>
+
+    <nav class="steps" id="steps" aria-label="Etapas de la OT"></nav>
+
+    <div class="listbar">
+      <span class="ttl2" id="count"></span>
+      <div class="toggle" role="group" aria-label="Cómo ver los avances">
+        <button id="vList" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg> Historial</button>
+        <button id="vGrid" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg> <span id="nFotos">Fotos</span></button>
+      </div>
+    </div>
+
+    <div class="body" id="list" aria-live="polite"></div>
+    <footer id="foot"></footer>
+  </section>
+</div>
+
+<script>
+const IC = {
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6L9 21H3v-6z"/></svg>',
+  cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  clip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12l-8 8a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8-8"/></svg>',
+  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>',
+  doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>',
+  ss:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg>',
+  cloud:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 18h10a4 4 0 00.5-8A6 6 0 006 9a4.5 4.5 0 001 9z"/><path d="M4 4l16 16"/></svg>'
+};
+const HOY = "21/10/2026";
+const WEEK = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const weekday = d => { const [dd,mm,yy] = d.split("/").map(Number); return WEEK[new Date(yy,mm-1,dd).getDay()]; };
+const key = f => { const [d,m,y] = f.split("/").map(Number); return y*10000 + m*100 + d; };
+const PH = ["#64748B","#0F766E","#7C3AED","#B45309","#1D4ED8","#BE123C"];
+const QUICK = ["Se desarmó","Se cambió la pieza","Se probó y funciona","Falta repuesto","Espera al taller","Trabajo terminado"];
+const WHEN = [["now","Ahora"],["morning","Hoy a la mañana"],["yesterday","Ayer"],["other","Otra fecha"]];
+const FOLLOW = [["","Sin indicar"],["going","Sigue en curso"],["waitSpare","Espera repuesto"],["ready","Listo para cerrar"]];
+
+// Datos de ejemplo. tipo "av" = avance cargado acá; "ss" = novedad de la hoja de ruta de una SS de esta OT (se carga en la SS).
+let rows = [
+  {id:1,fecha:"12/10/2026",hora:"09:10",tipo:"av",texto:"Se desarmó. Sello con desgaste en la cara de carbón, pérdida visible por el eje.",quien:"Jorge Bael",fotos:2},
+  {id:2,fecha:"12/10/2026",hora:"11:40",tipo:"ss",ss:"SS-9-M02-2026",texto:"Enviada al taller CONDOR S.A.C.I",quien:"Jorge Bael"},
+  {id:3,fecha:"15/10/2026",hora:"16:05",tipo:"av",texto:"Falta repuesto: sello mecánico 35 mm. Pedido al depósito.",quien:"Edgar Alvarenga",follow:"waitSpare"},
+  {id:4,fecha:"20/10/2026",hora:"10:30",tipo:"av",texto:"Se cambió la pieza. Se usó 1 sello mecánico 35 mm y 2 o-ring 40x3.",quien:"Jorge Bael",fotos:1,doc:"Informe_taller_CONDOR.pdf"},
+  {id:5,fecha:"20/10/2026",hora:"15:20",tipo:"av",texto:"Se probó y funciona. Sin pérdidas a 2 h de marcha.",quien:"Jorge Bael",follow:"going",video:true},
+];
+let nextId = 100, flash = null, menu = null, editing = null, view = "list";
+let comp = {text:"", phrases:[], files:[], when:"now", other:"", follow:"", pop:null, dictating:false, stage:"form", saved:false};
+
+const $ = s => document.querySelector(s);
+const opt = id => $("#"+id).checked;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function renderHead(){
+  const due = $("#due");
+  if (opt("optOver")) { due.className = "chip due bad"; due.innerHTML = IC.clock + " Venció el 18/10/2026 · hace 3 días"; }
+  else { due.className = "chip due warn"; due.innerHTML = IC.clock + " Vence el 24/10/2026 · faltan 3 días"; }
+  const st = [["Creada","done","05/10/2026"],["Aprobada","done","07/10/2026"],["Autorizada","done","08/10/2026"],
+              ["En ejecución","now","12/10/2026 · hace 9 días"],["Cerrada","todo","Pendiente"]];
+  if (!opt("optOpen")) { st[3] = ["En ejecución","done","12/10/2026"]; st[4] = ["Cerrada","done","21/10/2026"]; }
+  $("#steps").innerHTML = st.map(([l,s,sub]) => `<div class="step ${s}" ${s==="now"?'aria-current="step"':''}><div class="dot">${s==="done"?IC.check:""}</div><div class="lbl">${l}</div><div class="sub">${sub}</div></div>`).join("");
+  const nAv = rows.filter(r => r.tipo === "av").length;
+  const nFotos = rows.reduce((a,r) => a + (r.fotos||0) + (r.video?1:0), 0);
+  $("#count").textContent = `${nAv} ${nAv===1?"avance":"avances"}`;
+  $("#nFotos").textContent = `Fotos (${nFotos})`;
+  $("#vList").setAttribute("aria-pressed", view==="list"); $("#vGrid").setAttribute("aria-pressed", view==="grid");
+}
+
+function renderList(){
+  const list = $("#list");
+  if (view === "grid") {
+    const tiles = [];
+    rows.forEach(r => { for (let i = 0; i < (r.fotos||0); i++) tiles.push({r,i}); if (r.video) tiles.push({r,i:9,v:true}); });
+    list.innerHTML = `<div class="grid">${tiles.map(({r,i,v}) => `<button class="ph" data-light="${r.id}" style="background:${PH[(r.id+i)%PH.length]}">${v?'<b style="color:#fff;font-size:22px">▶</b>':''}<span>${r.fecha} ${r.hora}</span></button>`).join("")}</div>`;
+    return;
+  }
+  const canOp = opt("optOp") && opt("optOpen");
+  let html = "", last = null;
+  for (const r of rows) {
+    if (r.fecha !== last) { html += `<div class="day">${r.fecha===HOY?"Hoy":weekday(r.fecha)} ${r.fecha}</div>`; last = r.fecha; }
+    if (r.tipo === "ss") {
+      html += `<div class="item ss"><div class="ic" title="Novedad de la hoja de ruta de la SS (se carga en la SS)">${IC.ss}</div>
+        <div class="txt"><div class="main"><span class="sscode">${r.ss}</span>${esc(r.texto)} <span class="by">· ${r.hora} · ${esc(r.quien)}</span></div></div><span></span></div>`;
+      continue;
+    }
+    if (editing === r.id) {
+      html += `<div class="item"><div class="ic">${IC.note}</div><div class="edit">
+        <textarea rows="3" id="edTxt">${esc(r.texto)}</textarea>
+        <div class="row"><label style="font-size:12px;color:var(--muted)">Cuándo</label><input id="edWhen" value="${r.fecha} ${r.hora}">
+        <span class="sp"></span><button class="btn2" data-cancel>Cancelar</button><button class="go" data-save="${r.id}">Guardar</button></div></div><span></span></div>`;
+      continue;
+    }
+    const media = [];
+    for (let i = 0; i < (r.fotos||0); i++) media.push(`<button class="thumb" data-light="${r.id}" style="background:${PH[(r.id+i)%PH.length]}" aria-label="Ver foto">foto</button>`);
+    if (r.video) media.push(`<button class="thumb vid" data-light="${r.id}" style="background:${PH[(r.id+3)%PH.length]}" aria-label="Ver video"></button>`);
+    if (r.doc) media.push(`<span class="doc">${IC.doc}${esc(r.doc)}</span>`);
+    const fol = r.follow ? `<div><span class="follow ${r.follow}">${IC.flag.replace('<svg','<svg width="12" height="12"')} ${FOLLOW.find(f=>f[0]===r.follow)[1]}</span></div>` : "";
+    html += `<div class="item ${flash===r.id?"flash":""}" data-id="${r.id}">
+      <div class="ic" title="Avance">${r.fotos||r.video?IC.cam:IC.note}</div>
+      <div class="txt"><div class="main">${esc(r.texto)}</div>${media.length?`<div class="media">${media.join("")}</div>`:""}${fol}
+        <div class="who">${r.hora} · ${esc(r.quien)}</div></div>
+      ${canOp ? `<button class="more" aria-label="Más acciones" aria-haspopup="menu" aria-expanded="${menu===r.id}" data-menu="${r.id}">${IC.dots}</button>` : "<span></span>"}
+      ${menu===r.id ? `<div class="menu" role="menu"><button role="menuitem" data-edit="${r.id}">${IC.pen} Corregir avance</button><button role="menuitem" class="danger" data-del="${r.id}">${IC.trash} Borrar avance</button></div>` : ""}
+    </div>`;
+  }
+  if (!rows.some(r => r.tipo === "av")) html += `<div class="empty"><b>Todavía no hay avances</b>Contá qué se hizo, con fotos si hace falta.</div>`;
+  list.innerHTML = html;
+}
+
+function renderFoot(){
+  const foot = $("#foot");
+  if (!opt("optOpen")) { foot.innerHTML = `<div class="closed">${IC.lock} La OT está cerrada: los avances quedan para consulta.</div>`; return; }
+  if (!opt("optOp")) { foot.innerHTML = ""; return; }
+  if (comp.stage === "spares") {
+    foot.innerHTML = `<div class="composer"><div class="after"><h4>${IC.spark} Avance registrado. ¿Se usaron estos repuestos?</h4>
+      <p>Los vi en el texto. Si se usaron, se descuentan del stock del buque.</p>
+      <label><input type="checkbox" checked> Sello mecánico 35 mm · SKU 10442 · 1 un.</label>
+      <label><input type="checkbox" checked> O-ring 40x3 · SKU 20981 · 2 un.</label>
+      <div class="row"><button class="btn2" data-sp="no">No, ninguno</button><button class="btnV" data-sp="yes">Descontar del stock</button></div></div></div>`;
+    return;
+  }
+  const whenLbl = comp.when === "other" && comp.other ? comp.other : WHEN.find(w=>w[0]===comp.when)[1];
+  const folLbl = comp.follow ? FOLLOW.find(f=>f[0]===comp.follow)[1] : "¿Cómo sigue?";
+  const can = comp.text.trim() || comp.files.length;
+  foot.innerHTML = `
+    <div class="composer">
+      ${opt("optOffline") ? `<div class="queued" style="margin-bottom:8px">${IC.cloud} Sin señal: lo que registres queda guardado en el teléfono y se envía solo.</div>` : ""}
+      <div class="lab">Registrar avance <span>Quién registra: vos (Jorge Bael)</span></div>
+      <div class="quick" role="group" aria-label="Frases rápidas">${QUICK.map(q => `<button class="qc" aria-pressed="${comp.phrases.includes(q)}" data-q="${esc(q)}">${q}</button>`).join("")}</div>
+      <div class="box">
+        <textarea id="txt" rows="1" placeholder="¿Qué se hizo? Escribí o dictá">${esc(comp.text)}</textarea>
+        ${comp.files.length ? `<div class="att">${comp.files.map((f,i) => f.kind==="photo" ? `<div class="t" style="background:${PH[i%PH.length]}">foto<button data-rm="${i}" aria-label="Quitar">×</button></div>` : `<div class="t docf">${IC.doc} ${f.name}<button data-rm="${i}" aria-label="Quitar">×</button></div>`).join("")}</div>` : ""}
+        <div class="bar">
+          <button class="tool ${comp.dictating?"on":""}" id="mic" title="Dictar">${IC.mic}<span class="tx">${comp.dictating?"Escuchando…":"Dictar"}</span></button>
+          <button class="tool" id="addPh" title="Sacar o subir fotos">${IC.cam}<span class="tx">Foto</span></button>
+          <button class="tool" id="addDoc" title="Adjuntar archivo (PDF, imagen, ZIP)">${IC.clip}<span class="tx">Archivo</span></button>
+          <span class="sel"><button class="tool" id="whenB" aria-haspopup="menu">${IC.clock}<span>${whenLbl}</span></button>
+            ${comp.pop==="when" ? `<div class="pop" role="menu">${WHEN.map(([k,l]) => `<button role="menuitemradio" aria-checked="${comp.when===k}" data-when="${k}">${l}</button>`).join("")}${comp.when==="other"?`<input id="otherW" placeholder="dd/mm/aaaa hh:mm" value="${comp.other}">`:""}</div>` : ""}</span>
+          <span class="sel"><button class="tool" id="folB" aria-haspopup="menu">${IC.flag}<span>${folLbl}</span></button>
+            ${comp.pop==="fol" ? `<div class="pop" role="menu">${FOLLOW.map(([k,l]) => `<button role="menuitemradio" aria-checked="${comp.follow===k}" data-fol="${k}">${l}</button>`).join("")}</div>` : ""}</span>
+          <span class="spacer"></span>
+          <button class="go" id="go" ${can?"":"disabled"}>${IC.send} Registrar${comp.files.length?` · ${comp.files.length} adj.`:""}</button>
+        </div>
+      </div>
+      <div class="hint"><span>${comp.saved ? `<span class="ok">✓ ${opt("optOffline")?"Guardado en el teléfono: se envía solo":"Avance registrado"}</span>` : "Enter para registrar · Shift+Enter, otra línea"}</span><span>Frases, fotos y cuándo: opcionales</span></div>
+    </div>`;
+  const ta = $("#txt");
+  const grow = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight,160) + "px"; };
+  grow();
+  ta.addEventListener("input", () => { comp.text = ta.value; $("#go").disabled = !(comp.text.trim() || comp.files.length); grow(); });
+  ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); add(); } });
+  const ow = $("#otherW"); if (ow) ow.addEventListener("input", () => { comp.other = ow.value; });
+}
+
+function add(){
+  if (!(comp.text.trim() || comp.files.length)) return;
+  const now = new Date(); const hh = String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  let fecha = HOY, hora = hh;
+  if (comp.when === "morning") hora = "08:00";
+  if (comp.when === "yesterday") { fecha = "20/10/2026"; hora = "12:00"; }
+  if (comp.when === "other" && /^\d{2}\/\d{2}\/\d{4}/.test(comp.other)) { fecha = comp.other.slice(0,10); hora = comp.other.slice(11,16) || "12:00"; }
+  const r = {id: nextId++, fecha, hora, tipo:"av", texto: comp.text.trim() || "(sin texto)", quien:"Jorge Bael",
+    fotos: comp.files.filter(f=>f.kind==="photo").length, doc: (comp.files.find(f=>f.kind==="doc")||{}).name, follow: comp.follow || undefined};
+  rows.push(r); rows.sort((a,b) => key(a.fecha)-key(b.fecha) || a.hora.localeCompare(b.hora));
+  flash = r.id; setTimeout(() => { flash = null; renderList(); }, 1600);
+  const hadSpares = /sello|o-?ring|repuesto|cambi/i.test(comp.text);
+  comp = {text:"", phrases:[], files:[], when:"now", other:"", follow:"", pop:null, dictating:false, stage: hadSpares && !opt("optOffline") ? "spares" : "form", saved: true};
+  setTimeout(() => { comp.saved = false; if (comp.stage === "form") renderFoot(); }, 2200);
+  view = "list"; render();
+  const el = document.querySelector(`[data-id="${r.id}"]`); el && el.scrollIntoView({block:"nearest", behavior:"smooth"});
+}
+
+document.addEventListener("click", e => {
+  const g = s => e.target.closest(s);
+  if (g("#vList")) { view = "list"; render(); return; }
+  if (g("#vGrid")) { view = "grid"; render(); return; }
+  if (g("[data-light]")) { const d = document.createElement("div"); d.className = "lightbox"; d.innerHTML = `<div class="big" style="background:${PH[1]}"></div><div>Foto ampliada (mismo visor de hoy) · tocá para cerrar</div>`; d.onclick = () => d.remove(); document.body.appendChild(d); return; }
+  const m = g("[data-menu]"); if (m) { menu = menu === +m.dataset.menu ? null : +m.dataset.menu; renderList(); return; }
+  const ed = g("[data-edit]"); if (ed) { editing = +ed.dataset.edit; menu = null; renderList(); return; }
+  if (g("[data-cancel]")) { editing = null; renderList(); return; }
+  const sv = g("[data-save]"); if (sv) { const r = rows.find(x => x.id === +sv.dataset.save); r.texto = $("#edTxt").value; editing = null; renderList(); return; }
+  const dl = g("[data-del]"); if (dl) { const id = +dl.dataset.del; menu = null; const d = document.createElement("div"); d.className = "dlg";
+    d.innerHTML = `<div class="card"><p>¿Borrar este avance? No se puede deshacer.</p><div class="row"><button class="btn2">Cancelar</button><button class="btnD">Borrar</button></div></div>`;
+    document.body.appendChild(d); d.querySelector(".btn2").onclick = () => d.remove(); d.querySelector(".btnD").onclick = () => { rows = rows.filter(r => r.id !== id); d.remove(); render(); }; return; }
+  const q = g("[data-q]"); if (q) { const p = q.dataset.q; const on = comp.phrases.includes(p);
+    comp.phrases = on ? comp.phrases.filter(x => x !== p) : [...comp.phrases, p];
+    const manual = comp.text.replace(`${p}. `, "").replace(`${p}.`, "");
+    comp.text = on ? manual.trim() : `${p}. ${manual}`.trim(); renderFoot(); const t = $("#txt"); t.focus(); t.setSelectionRange(t.value.length, t.value.length); return; }
+  if (g("#mic")) { comp.dictating = !comp.dictating; if (!comp.dictating && !comp.text) comp.text = "Se ajustó el prensaestopa y se verificó la alineación."; renderFoot(); return; }
+  if (g("#addPh")) { comp.files.push({kind:"photo"}); renderFoot(); return; }
+  if (g("#addDoc")) { comp.files.push({kind:"doc", name:"Remito_123.pdf"}); renderFoot(); return; }
+  const rm = g("[data-rm]"); if (rm) { comp.files.splice(+rm.dataset.rm, 1); renderFoot(); return; }
+  if (g("#whenB")) { comp.pop = comp.pop === "when" ? null : "when"; renderFoot(); return; }
+  if (g("#folB")) { comp.pop = comp.pop === "fol" ? null : "fol"; renderFoot(); return; }
+  const w = g("[data-when]"); if (w) { comp.when = w.dataset.when; comp.pop = comp.when === "other" ? "when" : null; renderFoot(); return; }
+  const f = g("[data-fol]"); if (f) { comp.follow = f.dataset.fol; comp.pop = null; renderFoot(); return; }
+  if (g("#go")) { add(); return; }
+  const sp = g("[data-sp]"); if (sp) { comp.stage = "form"; renderFoot(); return; }
+  if (menu !== null && !g(".menu")) { menu = null; renderList(); }
+  if (comp.pop && !g(".pop")) { comp.pop = null; renderFoot(); }
+});
+["optOp","optOpen","optOver","optOffline"].forEach(id => $("#"+id).addEventListener("change", () => { menu = null; editing = null; render(); }));
+$("#optDark").addEventListener("change", e => document.body.classList.toggle("dark", e.target.checked));
+
+function render(){ renderHead(); renderList(); renderFoot(); }
+render();
+$("#list").scrollTop = $("#list").scrollHeight;
+const fitScrim = () => { document.querySelector(".scrim").style.top = document.querySelector(".demo").offsetHeight + "px"; };
+fitScrim(); addEventListener("resize", fitScrim);
+</script>
+</body>
+</html>

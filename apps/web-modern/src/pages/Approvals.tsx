@@ -47,7 +47,8 @@ import { textMatches } from "../lib/text-search";
 // La ficha de la OT y la lista de avances viven en la página de OT, que es
 // pesada: se bajan recién cuando se toca el botón.
 const WorkOrderPopup = React.lazy(() => import("./WorkOrders").then(m => ({ default: m.WorkOrderPopup })));
-const WorkOrderProgressModal = React.lazy(() => import("./WorkOrders").then(m => ({ default: m.WorkOrderProgressModal })));
+// Avances: la ventana de Seguimiento (prototipo avances-ot-v1), no la lista de la ficha.
+const WoProgressWindow = React.lazy(() => import("../components/work-orders/WoProgressWindow").then(m => ({ default: m.WoProgressWindow })));
 const WorkOrderPermitsModal = React.lazy(() => import("./WorkOrders").then(m => ({ default: m.WorkOrderPermitsModal })));
 const ServiceRequestPopup = React.lazy(() => import("./ServiceRequests").then(m => ({ default: m.ServiceRequestPopup })));
 
@@ -1197,10 +1198,9 @@ export const ApprovalsPage: React.FC = () => {
       )}
       <React.Suspense fallback={null}>
         {exec?.kind === "progress" && (
-          <WorkOrderProgressModal
+          <WoProgressWindow
             workOrderId={exec.row.id}
-            title={`${exec.row.code} — ${exec.row.title ?? ""}`}
-            subtitle={exec.row.assetName}
+            title={headlineOf(exec.row)}
             canOperate={!!can?.woOperate}
             onChanged={() => setProgressDirty(true)}
             onClose={() => { setExec(null); if (progressDirty) void reload(); }}

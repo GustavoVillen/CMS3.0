@@ -69,20 +69,20 @@ export function toLocalInput(d: Date): string {
   return x.toISOString().slice(0, 16);
 }
 
-type When = "now" | "morning" | "yesterday" | "other";
-type FollowUp = "" | "going" | "waitSpare" | "ready";
-const QUICK_PHRASES: TranslationKey[] = ["pn.q.disassembled", "pn.q.replaced", "pn.q.tested", "pn.q.missingSpare", "pn.q.waitShop", "pn.q.done"];
+export type When = "now" | "morning" | "yesterday" | "other";
+export type FollowUp = "" | "going" | "waitSpare" | "ready";
+export const QUICK_PHRASES: TranslationKey[] = ["pn.q.disassembled", "pn.q.replaced", "pn.q.tested", "pn.q.missingSpare", "pn.q.waitShop", "pn.q.done"];
 
 interface Attachment { key: string; file: File; kind: "PHOTO" | "DOCUMENT"; preview: string | null }
 
 /**
- * Registrar un avance (preview V29). Un solo formulario para celular y
- * escritorio: se escribe o se dicta, se suman varias fotos o documentos, y se
- * elige cuándo fue. Sin señal, queda guardado en el teléfono y se envía solo.
- * Después de guardar, si la IA ve repuestos en el texto, pregunta antes de
- * descontarlos del stock; si no, se cierra como antes.
+ * Todo lo de registrar un avance, sin la pantalla: texto y dictado, frases
+ * rápidas, adjuntos, cuándo fue, cómo sigue, el envío (con la cola sin señal) y
+ * la pregunta de repuestos. Lo usan la hoja de abajo (ProgressNoteSheet) y la
+ * caja de la ventana de Avances de Seguimiento: una sola forma de registrar.
+ * `onDone` es lo que pasa al terminar: la hoja se cierra, la caja se vacía.
  */
-export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSaved }) => {
+export function useProgressComposer(workOrderId: string, onSaved: (noteText?: string) => void, onDone: () => void) {
   const t = useT();
   const can = useCan();
   const [text, setText] = useState("");
@@ -236,7 +236,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
           }
         } catch { /* la detección es una ayuda: si falla, no molesta */ }
       }
-      onClose();
+      onDone();
     } catch (e) {
       if (isRetryableError(e)) {
         // Sin señal (o servidor caído): queda en el teléfono y se envía solo. Se guarda sólo lo que falta.
@@ -250,16 +250,16 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dictating, files, when, otherWhen, followUp, text, workOrderId, onSaved, can, t]);
+  }, [dictating, files, when, otherWhen, followUp, text, workOrderId, onSaved, onDone, can, t]);
 
   const confirmSpares = async (use: boolean) => {
-    if (!use || picked.size === 0) { onClose(); return; }
+    if (!use || picked.size === 0) { onDone(); return; }
     setConfirming(true);
     try {
       await api.post(`/app/pms/work-orders/${workOrderId}/progress-notes/confirm-spares`, {
         usages: detected.filter(d => picked.has(d.spareId)).map(d => ({ spareId: d.spareId, quantity: d.quantity })),
       });
-      onClose();
+      onDone();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : t("pn.saveError"));
     } finally {
@@ -272,9 +272,34 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
     setText(""); setPhrases([]); setFiles([]); setFollowUp(""); setWhen("now"); setDetected([]); setStage("form");
   };
 
-  const chip = (on: boolean) => `rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${on ? "border-fg bg-fg text-surface" : "border-fg/10 bg-surface text-fg hover:border-fg/25"}`;
+  const canSave = !!(text.trim() || followUp || files.length > 0) && !saving && !compressing;
+
+  return {
+    text, setText, phrases, togglePhrase, when, setWhen, otherWhen, setOtherWhen, followUp, setFollowUp,
+    files, addFiles, removeFile, compressing, saving, err, setErr, stage, detected, picked, setPicked,
+    confirming, pending, SR_AVAILABLE, dictating, interim, startDictation, stopDictation,
+    handleSave, confirmSpares, resetForAnother, canSave,
+  };
+}
+
+/**
+ * Registrar un avance (preview V29). Un solo formulario para celular y
+ * escritorio: se escribe o se dicta, se suman varias fotos o documentos, y se
+ * elige cuándo fue. Sin señal, queda guardado en el teléfono y se envía solo.
+ * Después de guardar, si la IA ve repuestos en el texto, pregunta antes de
+ * descontarlos del stock; si no, se cierra como antes.
+ */
+export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSaved }) => {
+  const t = useT();
+  const {
+    text, setText, phrases, togglePhrase, when, setWhen, otherWhen, setOtherWhen, followUp, setFollowUp,
+    files, addFiles, removeFile, compressing, saving, err, setErr, stage, detected, picked, setPicked,
+    confirming, pending, SR_AVAILABLE, dictating, interim, startDictation, stopDictation,
+    handleSave, confirmSpares, resetForAnother, canSave,
+  } = useProgressComposer(workOrderId, onSaved, onClose);
+
+  const chip =(on: boolean) => `rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${on ? "border-fg bg-fg text-surface" : "border-fg/10 bg-surface text-fg hover:border-fg/25"}`;
   const lbl = "text-xs font-bold text-text-industrial/70 mb-1.5";
-  const canSave = (text.trim() || followUp || files.length > 0) && !saving && !compressing;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={stage === "form" ? undefined : onClose}>
