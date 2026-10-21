@@ -1231,15 +1231,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <h2 className="text-xs font-bold text-fg">{t("dashboard.woTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.woSubtitle")}</p>
             </div>
-            {/* Acceso directo al tablero Kanban de OT. /work-orders abre en
-                Kanban por defecto y sin filtros: no hace falta pasar params. */}
+            {/* Acceso directo a la lista de OT, sin filtros. */}
             <div className="flex items-center gap-1.5 shrink-0">
               {workOrders.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
               <button
                 type="button"
                 onClick={() => navigate("/work-orders")}
-                title={t("dashboard.woKanbanLink")}
-                aria-label={t("dashboard.woKanbanLink")}
+                title={t("dashboard.woListLink")}
+                aria-label={t("dashboard.woListLink")}
                 className="p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors"
               >
                 <LayoutGrid className="w-7 h-7" />
@@ -1280,15 +1279,14 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
               <h2 className="text-xs font-bold text-fg">{t("dashboard.ssTitle")}</h2>
               <p className="text-[10px] text-text-industrial/40">{t("dashboard.ssSubtitle")}</p>
             </div>
-            {/* Acceso directo al tablero Kanban de SS: /service-requests abre
-                en Kanban por defecto y sin filtros. */}
+            {/* Acceso directo a la lista de SS, sin filtros. */}
             <div className="flex items-center gap-1.5 shrink-0">
               {serviceRequests.loading && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
               <button
                 type="button"
                 onClick={() => navigate("/service-requests")}
-                title={t("dashboard.ssKanbanLink")}
-                aria-label={t("dashboard.ssKanbanLink")}
+                title={t("dashboard.ssListLink")}
+                aria-label={t("dashboard.ssListLink")}
                 className="p-1 rounded-md text-text-industrial/40 hover:text-accent hover:bg-fg/10 transition-colors"
               >
                 <LayoutGrid className="w-7 h-7" />

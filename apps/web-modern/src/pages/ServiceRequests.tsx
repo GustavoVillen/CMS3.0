@@ -10,7 +10,7 @@
 
 import React, { useState } from "react";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, List, LayoutGrid, Layers, Pencil, Search, Truck, X, Loader2, Undo2, Ban, ChevronDown, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, Pencil, Search, Truck, X, Loader2, Undo2, Ban } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/hooks";
 import { useOpenNewFromUrl } from "../lib/deep-link";
@@ -159,29 +159,6 @@ const labelCls = "block text-[10px] font-bold text-text-industrial/40 uppercase 
 // queda aplastado a unos pocos píxeles.
 const cellCls = "bg-fg/5 border border-fg/10 rounded-lg px-2.5 py-1.5 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60";
 
-// ---------------------------------------------------------------------------
-// Tablero Kanban — mismo formato que el de la OT
-// ---------------------------------------------------------------------------
-
-/**
- * A diferencia de la OT — donde la etapa se DERIVA de las fechas de firma — acá
- * la columna ES el estado de la SS, así que cada arrastre se traduce directo a
- * una transición que el backend ya expone.
- *
- * Los estados terminales (Completada / Rechazada / Cancelada) no van al tablero,
- * igual que las OT cerradas: se ven con los chips, que en ese caso pasan solos a
- * vista lista. La recepción del servicio (En ejecución → Completada) sigue
- * haciéndose desde el modal porque exige quién recibe y si hubo conformidad —
- * datos que un arrastre no puede aportar.
- */
-
-const PRIORITY_LEFT_CLS: Record<string, string> = {
-  CRITICAL: "border-l-4 border-l-red-600",
-  HIGH:     "border-l-4 border-l-orange-500",
-  MEDIUM:   "border-l-4 border-l-yellow-500",
-  LOW:      "border-l-4 border-l-emerald-500",
-};
-
 const SS_PRIO_CHIP_CLS: Record<string, string> = {
   CRITICAL: "bg-red-700 text-white",
   HIGH: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
@@ -189,29 +166,13 @@ const SS_PRIO_CHIP_CLS: Record<string, string> = {
   LOW: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
 };
 
-type SsStage = "DRAFT" | "SOLICITADA" | "APROBADA" | "AUTORIZADA" | "IN_PROGRESS" | "HIDDEN";
-
-/** Colores alineados con STATUS_COLORS para que la tarjeta y el badge no se contradigan. */
-const SS_KANBAN_COLS: Array<{ colId: Exclude<SsStage, "HIDDEN">; headerCls: string; borderCls: string }> = [
-  { colId: "DRAFT",       headerCls: "text-text-industrial/60",              borderCls: "border-t-2 border-fg/20" },
-  { colId: "SOLICITADA",  headerCls: "text-yellow-700 dark:text-yellow-400", borderCls: "border-t-2 border-yellow-500/40" },
-  { colId: "APROBADA",    headerCls: "text-blue-700 dark:text-blue-400",     borderCls: "border-t-2 border-blue-500/40" },
-  { colId: "AUTORIZADA",  headerCls: "text-violet-700 dark:text-violet-400", borderCls: "border-t-2 border-violet-500/40" },
-  { colId: "IN_PROGRESS", headerCls: "text-amber-700 dark:text-amber-400",   borderCls: "border-t-2 border-amber-500/40" },
-];
-
 const SS_OPEN_STATUSES = ["DRAFT", "SOLICITADA", "APROBADA", "AUTORIZADA", "IN_PROGRESS"];
-const SS_TERMINAL_STATUSES = ["COMPLETED", "REJECTED", "CANCELLED"];
 
 /**
  * Días en el taller a partir de los cuales la SS se marca en rojo. La SS no
  * guarda cuándo se mandó al taller, así que se cuenta desde la fecha de apertura.
  */
 const SS_LONG_IN_SHOP_DAYS = 15;
-
-function ssStage(sr: ServiceRequest): SsStage {
-  return SS_KANBAN_COLS.some(c => c.colId === sr.status) ? (sr.status as SsStage) : "HIDDEN";
-}
 
 /** Días desde la apertura (0 = hoy). */
 function ssAgeDays(sr: ServiceRequest): number {
@@ -241,15 +202,12 @@ function SsPriorityChip({ priority }: { priority: string }) {
   );
 }
 
-/** `compact`: más finito, para la tarjeta del tablero (Preview V51). */
-function SsActionButton({ action, compact = false }: { action: SsCardAction; compact?: boolean }) {
+function SsActionButton({ action }: { action: SsCardAction }) {
   if (!action) return null;
   const Icon = action.icon;
   return (
     <button type="button" onClick={e => { e.stopPropagation(); action.run(); }}
-      className={`flex w-full items-center justify-center gap-1 border px-2 font-bold transition-colors ${
-        compact ? "rounded-md py-px text-[10.5px]" : "rounded-lg py-1 text-[11px]"
-      } ${
+      className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
         action.tone === "green"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
           : "border-accent/35 bg-accent/5 text-accent hover:bg-accent/15"
@@ -269,238 +227,6 @@ function SsAgeLabel({ sr }: { sr: ServiceRequest }) {
     </span>;
   }
   return <span className="text-[11px] text-text-industrial/60" title={fmtDate(sr.openDate)}>{t("ss.card.age").replace("{n}", String(days))}</span>;
-}
-
-function SsKanbanCard({ sr, busy, draggingId, onOpen, onDragStart, showAsset, action }: {
-  sr: ServiceRequest;
-  busy: boolean;
-  draggingId: string | null;
-  onOpen: (sr: ServiceRequest) => void;
-  onDragStart: (sr: ServiceRequest | null) => void;
-  /** Sin agrupar por equipo, el equipo va en la tarjeta. */
-  showAsset: boolean;
-  action: SsCardAction;
-}) {
-  const t = useT();
-  const isDragging = draggingId === sr.id;
-  const prioLeft   = PRIORITY_LEFT_CLS[sr.priority] ?? "border-l-4 border-l-fg/10";
-  const shop       = ssShopName(sr);
-  const long       = isLongInShop(sr);
-
-  return (
-    <div
-      draggable={!busy}
-      onDragStart={e => {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", JSON.stringify({ id: sr.id, stage: ssStage(sr) }));
-        onDragStart(sr);
-      }}
-      onDragEnd={() => onDragStart(null)}
-      onClick={() => !isDragging && !busy && onOpen(sr)}
-      className={`w-full border rounded-xl px-2 pt-1 pb-1.5 space-y-[3px] select-none flex flex-col cursor-grab
-        ${long ? "border-fg/10 bg-red-500/[0.05]" : "border-fg/10 bg-surface"}
-        ${prioLeft}
-        ${isDragging ? "opacity-30" : "hover:shadow-md"}
-        ${busy ? "opacity-60 pointer-events-none" : ""}
-        transition-all`}
-    >
-      <div className="flex items-center gap-1.5 min-w-0">
-        {/* El código nunca se parte: es lo que se busca a simple vista. */}
-        <span className="font-mono font-bold text-fg text-[11px] whitespace-nowrap">{sr.serviceRequestCode}</span>
-        <span className="ml-auto"><SsPriorityChip priority={sr.priority} /></span>
-      </div>
-      {srServicio(sr) && <p className="text-[12.5px] text-fg font-semibold leading-tight line-clamp-2">{srServicio(sr)}</p>}
-      {/* Equipo, taller y antigüedad en un renglón; si no entran, lo que sobra
-          baja al siguiente en vez de quedar cortado (Preview V51). */}
-      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px]">
-        {showAsset && sr.workOrder?.assetName && (
-          <span title={sr.workOrder.assetName} className="flex flex-[1_1_4rem] min-w-0 items-center gap-1 text-text-industrial/60">
-            <Wrench className="w-3 h-3 shrink-0" /><span className="truncate">{sr.workOrder.assetName}</span>
-          </span>
-        )}
-        <span title={shop || t("ss.card.noShop")}
-          className={`flex flex-[1_1_4.5rem] min-w-0 items-center gap-1 ${shop ? "font-semibold text-fg" : "font-bold text-amber-700 dark:text-amber-400"}`}>
-          <Handshake className="w-3 h-3 shrink-0" /><span className="truncate">{shop || t("ss.card.noShop")}</span>
-        </span>
-        <span className="shrink-0"><SsAgeLabel sr={sr} /></span>
-        {sr.workOrder && (
-          <span className="shrink-0 ml-auto rounded-md border border-accent/25 bg-accent/5 px-1.5 font-mono text-[9.5px] font-bold text-accent" title={t("ss.col.wo")}>
-            {sr.workOrder.workOrderCode}
-          </span>
-        )}
-      </div>
-      <SsActionButton action={action} compact />
-    </div>
-  );
-}
-
-/**
- * Agrupa las SS de una columna por equipo, igual que el kanban de OT. El equipo
- * lo aporta la OT de origen (la SS no guarda assetId propio); la clave es el
- * assetId para no fusionar equipos homónimos de distintos buques, y las SS sin
- * OT (o sin equipo resuelto) caen en un grupo aparte.
- */
-function groupSrsByAsset(items: ServiceRequest[]): { key: string; label: string; items: ServiceRequest[] }[] {
-  const map = new Map<string, { label: string; items: ServiceRequest[] }>();
-  for (const sr of items) {
-    const key = sr.workOrder?.assetId ?? sr.workOrder?.assetName ?? "—";
-    const label = sr.workOrder?.assetName ?? "—";
-    const g = map.get(key);
-    if (g) g.items.push(sr); else map.set(key, { label, items: [sr] });
-  }
-  return [...map.entries()]
-    .map(([key, g]) => ({ key, label: g.label, items: g.items }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function SsKanbanBoard({ items, loading, onOpen, onReload, onApproval, grouped, onlyStage, cardAction }: {
-  items: ServiceRequest[];
-  loading: boolean;
-  onOpen: (sr: ServiceRequest) => void;
-  onReload: () => void;
-  /** Arrastre que pide firma: abre el modal de tramitación (lo tiene la página). */
-  onApproval: (sr: ServiceRequest, step: "SOLICITA" | "APRUEBA" | "AUTORIZA") => void;
-  /** Agrupar las tarjetas por equipo (opcional: por defecto se ven todas). */
-  grouped: boolean;
-  /** Con un filtro de etapa, sólo esa columna. */
-  onlyStage?: Exclude<SsStage, "HIDDEN">;
-  cardAction: (sr: ServiceRequest) => SsCardAction;
-}) {
-  const t = useT();
-  const [draggingSr, setDraggingSr] = useState<ServiceRequest | null>(null);
-  const [overCol, setOverCol]       = useState<string | null>(null);
-  const [busyId, setBusyId]         = useState<string | null>(null);
-  const [dropError, setDropError]   = useState<string | null>(null);
-  // Grupos por equipo plegados (clave `${colId}::${assetKey}`). Default: abiertos,
-  // así las SS se ven apenas se agrupa (antes arrancaban cerrados y escondían todo).
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const toggleGroup = React.useCallback((k: string) => {
-    setCollapsedGroups(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  }, []);
-
-  // Mismo criterio que el backend: se chequea acá sólo para explicar el porqué
-  // en vez de dejar que el arrastre termine en un 403 sin mensaje.
-  const can = useCan();
-  const canApprove   = can("sr.approve");
-  const canAuthorize = can("sr.authorize");
-
-  const run = React.useCallback(async (sr: ServiceRequest, action: "unsubmit" | "start") => {
-    setBusyId(sr.id);
-    try {
-      await api.post(`/app/pms/service-requests/${sr.id}/${action}`, {});
-      onReload();
-    } catch (e) {
-      setDropError(e instanceof Error ? e.message : t("ss.list.moveError"));
-    } finally {
-      setBusyId(null);
-    }
-  }, [onReload, t]);
-
-  const handleDrop = React.useCallback((e: React.DragEvent, targetCol: Exclude<SsStage, "HIDDEN">) => {
-    setOverCol(null);
-    setDraggingSr(null);
-    setDropError(null);
-
-    let payload: { id: string; stage: SsStage } | null = null;
-    try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { /* noop */ }
-    if (!payload?.id || !payload?.stage) return;
-
-    const { id, stage } = payload;
-    if (stage === targetCol) return;
-    const sr = items.find(x => x.id === id);
-    if (!sr) return;
-
-    // Solicitar (Borrador → Solicitada): pide quién solicita y con qué fecha.
-    if (stage === "DRAFT" && targetCol === "SOLICITADA") { onApproval(sr, "SOLICITA"); return; }
-    // Volver a borrador para corregir. Sólo desde Solicitada: más adelante ya
-    // hay firmas asentadas y deshacerlas sin registro sería perder la traza.
-    if (stage === "SOLICITADA" && targetCol === "DRAFT") { void run(sr, "unsubmit"); return; }
-    // Aprobar (Solicitada → Aprobada): a bordo, pide quién firma.
-    if (stage === "SOLICITADA" && targetCol === "APROBADA") {
-      if (!canApprove) { setDropError(t("ss.list.noApprovePerm")); return; }
-      onApproval(sr, "APRUEBA");
-      return;
-    }
-    // Autorizar (Aprobada → Autorizada): acá se compromete el gasto, es de tierra.
-    if (stage === "APROBADA" && targetCol === "AUTORIZADA") {
-      if (!canAuthorize) { setDropError(t("wo.guide.authorizeNoPerm")); return; }
-      onApproval(sr, "AUTORIZA");
-      return;
-    }
-    // Mandar al taller (Autorizada → En ejecución).
-    if (stage === "AUTORIZADA" && targetCol === "IN_PROGRESS") { void run(sr, "start"); return; }
-    // Cualquier otro movimiento (saltos de etapa o retrocesos) se ignora.
-  }, [items, canApprove, canAuthorize, run, onApproval, t]);
-
-  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>;
-
-  const renderCard = (sr: ServiceRequest, showAsset: boolean) => (
-    <SsKanbanCard
-      key={sr.id}
-      sr={sr}
-      busy={busyId === sr.id}
-      draggingId={draggingSr?.id ?? null}
-      onOpen={onOpen}
-      onDragStart={setDraggingSr}
-      showAsset={showAsset}
-      action={cardAction(sr)}
-    />
-  );
-
-  return (
-    <>
-      {dropError && <AlertDialog message={dropError} onClose={() => setDropError(null)} />}
-      {/* Columnas de ancho mínimo: en el celular se deslizan de costado en vez de apretarse. */}
-      <div className={`grid grid-flow-col gap-3 pb-4 overflow-x-auto snap-x ${onlyStage ? "auto-cols-[minmax(16rem,28rem)]" : "auto-cols-[minmax(15rem,1fr)]"}`}>
-        {SS_KANBAN_COLS.filter(col => !onlyStage || col.colId === onlyStage).map(col => {
-          const colItems = items.filter(sr => ssStage(sr) === col.colId);
-          const isOver   = overCol === col.colId;
-          return (
-            <div
-              key={col.colId}
-              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverCol(col.colId); }}
-              onDragLeave={() => setOverCol(null)}
-              onDrop={e => { e.preventDefault(); handleDrop(e, col.colId); }}
-              className={`snap-start min-w-0 flex flex-col ${col.borderCls} pt-3 px-1.5 rounded-b-xl bg-fg/[0.02] transition-colors duration-100 ${isOver ? "bg-fg/[0.05] ring-1 ring-accent/30" : ""}`}
-            >
-              <div className="flex items-center gap-2 px-1 mb-3">
-                <span className={`text-[11px] font-bold uppercase tracking-widest ${col.headerCls}`}>{t(`ss.col.${col.colId}` as TranslationKey)}</span>
-                <span className="ml-auto text-[10px] font-bold text-text-industrial/40 bg-fg/5 rounded-full px-1.5 py-0.5">{colItems.length}</span>
-              </div>
-              <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
-                {colItems.length === 0 && <p className="text-[11px] text-text-industrial/30 text-center py-6">{t("wo.fl.nothing")}</p>}
-                {!grouped && colItems.map(sr => renderCard(sr, true))}
-                {grouped && groupSrsByAsset(colItems).map(group => {
-                  const gkey = `${col.colId}::${group.key}`;
-                  const collapsed = collapsedGroups.has(gkey);
-                  return (
-                    <div key={gkey} className="rounded-lg border border-fg/10 bg-fg/[0.02]">
-                      <button
-                        type="button"
-                        onClick={() => toggleGroup(gkey)}
-                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left rounded-lg hover:bg-fg/[0.05] transition-colors"
-                        title={group.label}
-                      >
-                        <ChevronDown className={`w-3.5 h-3.5 text-text-industrial/40 shrink-0 transition-transform duration-150 ${collapsed ? "-rotate-90" : ""}`} />
-                        <Wrench className="w-3 h-3 text-accent/70 shrink-0" />
-                        <span className="text-[11px] font-bold text-fg truncate flex-1">{group.label}</span>
-                        <span className="text-[10px] font-bold text-text-industrial/50 bg-fg/10 rounded-full px-1.5 py-0.5 shrink-0">{group.items.length}</span>
-                      </button>
-                      {!collapsed && (
-                        <div className="flex flex-col gap-2 p-2 pt-0">
-                          {group.items.map(sr => renderCard(sr, false))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -536,16 +262,14 @@ export function ServiceRequestsPage() {
   const location = useLocation();
   const locationKey = location.key;
   const [selected, setSelected] = useState<ServiceRequest | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [search, setSearch] = useState("");
-  // ── Filtros (preview V13): una sola barra para el tablero y la lista ──
+  // ── Filtros (preview V13) ──
   const viewParam = searchParams.get("view") ?? "";
   const cardSel: SsCardKey | "" = (SS_CARD_KEYS as string[]).includes(viewParam) ? (viewParam as SsCardKey) : "";
   const [stageSel, setStageSel] = useState<SsStageKey>(() => LEGACY_VIEW_TO_STAGE[viewParam] ?? "");
   const [shopSel, setShopSel] = useState("");
   const [assetSel, setAssetSel] = useState("");
   const [prioSel, setPrioSel] = useState("");
-  const [groupByAsset, setGroupByAsset] = useState(false);
   const [showNewSs, setShowNewSs] = useState(false);
   // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
   useOpenNewFromUrl(() => setShowNewSs(true), canManage);
@@ -562,7 +286,7 @@ export function ServiceRequestsPage() {
 
   // Se trae todo y se filtra en cliente: el backend no pagina y los filtros
   // cruzan estados, así que un filtro por estado en la query obligaría a
-  // refetchear en cada clic. Mismo criterio que el tablero de OT.
+  // refetchear en cada clic. Mismo criterio que la lista de OT.
   const { data, loading, error, reload } = useFetch<ListResponse>("/app/pms/service-requests", []);
   // El copiloto escribe desde el chat: si esta pantalla está abierta mostrando
   // lo que acaba de cambiar, se recarga sola.
@@ -582,7 +306,7 @@ export function ServiceRequestsPage() {
     if (key) params.set("view", key); else params.delete("view");
     // Una tarjeta es una vista completa: no se suma al ?status= del Dashboard.
     // Si no, "Autorizada" + "En el taller +15 días" no dejaba ninguna SS y el
-    // tablero quedaba vacío aunque la tarjeta dijera que había.
+    // la lista quedaba vacía aunque la tarjeta dijera que había.
     if (key) params.delete("status");
     setSearchParams(params, { replace: true });
     if (key) setStageSel("");
@@ -650,12 +374,8 @@ export function ServiceRequestsPage() {
 
   const displayItems = React.useMemo(() => stageFilter(beforeStage, stageSel), [beforeStage, stageFilter, stageSel]);
 
-  // Completadas, rechazadas y canceladas no tienen columna en el tablero: ahí va la lista.
-  const statusOnlyTerminal = !!statusSet && ![...statusSet].some(s => SS_OPEN_STATUSES.includes(s));
-  const showBoard = viewMode === "kanban" && !SS_TERMINAL_STATUSES.includes(stageSel) && cardSel !== "rejected" && !statusOnlyTerminal;
-
   /** Cuántas solicitudes se están viendo, para el contador del encabezado. */
-  const shownCount = showBoard ? displayItems.filter(sr => ssStage(sr) !== "HIDDEN").length : displayItems.length;
+  const shownCount = displayItems.length;
 
   // ── Tarjetas de resumen (sobre todas las SS, sin filtros) ──
   const summary = React.useMemo(() => {
@@ -708,7 +428,7 @@ export function ServiceRequestsPage() {
     setSearchParams(searchParams, { replace: true });
   };
 
-  // ── Acción visible de cada SS (mismo paso que el arrastre del tablero) ──
+  // ── Acción visible de cada SS ──
   // Mandar al taller y dar el servicio por recibido abren la SS: allá están el
   // aviso de muestras sin numerar, el correo al proveedor y los datos de la
   // recepción, que un botón suelto no puede pedir.
@@ -828,14 +548,6 @@ export function ServiceRequestsPage() {
   return (
     <div className="space-y-4">
       <PageHeader kind="serviceRequest" icon={Handshake} title={t("page.serviceRequests")} total={shownCount} onReload={reload}>
-        <div className="flex items-center gap-0.5 rounded-lg border border-fg/10 bg-fg/5 p-0.5">
-          {([["kanban", t("wo.list.board"), LayoutGrid], ["list", t("wo.list.list"), List]] as const).map(([mode, label, Icon]) => (
-            <button key={mode} type="button" onClick={() => setViewMode(mode)}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${viewMode === mode ? "bg-surface text-fg shadow-sm" : "text-text-industrial/50 hover:text-fg"}`}>
-              <Icon className="w-3.5 h-3.5" /> {label}
-            </button>
-          ))}
-        </div>
         <BlankFormButton url="/app/pms/service-requests/blank/docx" filename="SS-en-blanco" label={t("ss.list.blankForm")} />
         {canManage && (
           <button type="button" onClick={() => setShowNewSs(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-accent text-accent-fg font-bold text-xs hover:brightness-110 transition-all">
@@ -861,7 +573,7 @@ export function ServiceRequestsPage() {
         })}
       </div>
 
-      {/* Filtros: sirven igual para el tablero y la lista. */}
+      {/* Filtros de la lista. */}
       <div className="rounded-2xl border border-fg/10 bg-surface p-3 space-y-2.5">
         <div className="flex flex-wrap gap-1.5">
           {STAGE_BUTTONS.map(b => {
@@ -892,14 +604,6 @@ export function ServiceRequestsPage() {
             <option value="">{t("wo.fl.prioAll")}</option>
             {["CRITICAL", "HIGH", "MEDIUM", "LOW"].map(p => <option key={p} value={p}>{prioLabel(p)}</option>)}
           </select>
-          {showBoard && (
-            <button type="button" onClick={() => setGroupByAsset(v => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                groupByAsset ? "border-accent bg-accent/5 text-accent" : "border-fg/10 bg-surface text-fg"
-              }`}>
-              <Layers className="w-3.5 h-3.5" /> {t("wo.fl.groupByAsset")}
-            </button>
-          )}
           <div className="flex items-center gap-1.5 rounded-lg border border-fg/10 bg-fg/5 px-2.5 py-1.5 w-full sm:w-auto sm:ml-auto">
             <Search className="w-3.5 h-3.5 text-text-industrial/40 shrink-0" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("ss.list.search")}
@@ -928,31 +632,18 @@ export function ServiceRequestsPage() {
         )}
       </div>
 
-      {!showBoard ? (
-        <DataTable
-          columns={columns}
-          data={displayItems}
-          loading={loading}
-          error={error}
-          keyFn={r => r.id}
-          emptyText={t("ss.list.empty")}
-          onRowClick={(row: ServiceRequest) => setSelected(row)}
-          rowClassName={r => (isLongInShop(r) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")}
-        />
-      ) : (
-        <SsKanbanBoard
-          items={displayItems}
-          loading={loading}
-          onOpen={setSelected}
-          onReload={reload}
-          onApproval={(sr, step) => setListApproval({ sr, step })}
-          grouped={groupByAsset}
-          onlyStage={stageSel && !SS_TERMINAL_STATUSES.includes(stageSel) ? (stageSel as Exclude<SsStage, "HIDDEN">) : undefined}
-          cardAction={cardAction}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={displayItems}
+        loading={loading}
+        error={error}
+        keyFn={r => r.id}
+        emptyText={t("ss.list.empty")}
+        onRowClick={(row: ServiceRequest) => setSelected(row)}
+        rowClassName={r => (isLongInShop(r) ? "bg-red-500/[0.06] shadow-[inset_4px_0_0_rgb(220,38,38)]" : "")}
+      />
 
-      {/* Firmas pedidas desde una tarjeta, una fila o un arrastre: mismo modal que dentro de la SS. */}
+      {/* Firmas pedidas desde una fila: mismo modal que dentro de la SS. */}
       {listApproval && (
         <SsApprovalModal
           sr={listApproval.sr}

@@ -4,9 +4,7 @@
 // Toda SS nace de una OT abierta. Los otros caminos del asistente crean primero
 // la OT; este es para cuando la orden ya existe — el caso más común a bordo.
 //
-// Se listan agrupadas por equipo y plegadas, igual que el tablero de OT
-// (KanbanBoard en pages/WorkOrders.tsx): el mismo golpe de vista para el mismo
-// dato. Si un día el tablero cambia de forma, hay que mirar los dos.
+// Se listan agrupadas por equipo y plegadas.
 //
 // El criterio de "OT abierta" (WO_OPEN_STATUSES), el chip de estado y la lista
 // se exportan: el "Registro de Avance" del Dashboard (ProgressFlow) arma su
