@@ -7,6 +7,7 @@
 //   - "confirm": un único candidato de confianza alta → pregunta Sí/No.
 //   - "choose": varios candidatos, o uno de confianza media/baja → checklist.
 import React, { useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { Sparkles } from "lucide-react";
 import { FormModal } from "./FormModal";
 import { useT } from "../lib/i18n";
@@ -86,7 +87,7 @@ export const PlanLinkSuggestionDialog: React.FC<Props> = ({ candidates, mode, on
           </p>
           {(only.nextDueDate || only.nextDueHours != null) && (
             <p className="text-[10px] text-text-industrial/50">
-              {t("wo.ai.planLink.dueDate")}: {only.nextDueDate ? only.nextDueDate.slice(0, 10) : `${only.nextDueHours} h`}
+              {t("wo.ai.planLink.dueDate")}: {only.nextDueDate ? fmtDate(only.nextDueDate) : `${only.nextDueHours} h`}
             </p>
           )}
         </div>
@@ -122,7 +123,7 @@ export const PlanLinkSuggestionDialog: React.FC<Props> = ({ candidates, mode, on
               </p>
               {(c.nextDueDate || c.nextDueHours != null) && (
                 <p className="text-[10px] text-text-industrial/50">
-                  {t("wo.ai.planLink.dueDate")}: {c.nextDueDate ? c.nextDueDate.slice(0, 10) : `${c.nextDueHours} h`}
+                  {t("wo.ai.planLink.dueDate")}: {c.nextDueDate ? fmtDate(c.nextDueDate) : `${c.nextDueHours} h`}
                 </p>
               )}
             </div>

@@ -6,6 +6,7 @@
 // lecturas viejas y ver el historial queda para la PC.
 
 import React, { useMemo, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { Gauge, Check, Loader2, AlertTriangle, CalendarClock, Monitor } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { useFetch } from "../lib/hooks";
@@ -103,7 +104,7 @@ export const OnboardHours: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   }
 
   const now = new Date();
-  const sub = `${t("ob.hours.today")} · ${now.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })} · ${selectedVessel?.name ?? ""}`;
+  const sub = `${t("ob.hours.today")} · ${fmtDate(now)} · ${selectedVessel?.name ?? ""}`;
 
   return (
     <Screen

@@ -13,6 +13,7 @@
 // adjuntos quedan para la PC.
 
 import React, { useEffect, useMemo, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { CalendarClock, CalendarRange, CircleCheck, Clock, ListChecks, Send, Sparkles, Loader2, Monitor, UserCheck, AlertTriangle, Building2, Wrench } from "lucide-react";
 import { useT, useWoTerms, useLocale } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -241,19 +242,12 @@ export const OnboardPlans: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   );
 };
 
-const dm = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-
 /** Un renglón de la agenda: el día del vencimiento, la tarea y su ventana. */
 function AgendaRow({ item, onOpen, hoursLabel }: {
   item: AgendaItem; onOpen: (p: OnboardPlan) => void; hoursLabel?: string | null;
 }) {
   const t = useT();
-  const locale = useLocale();
   const { plan, due, open, estimated, state } = item;
-  const monthShort = due
-    ? new Intl.DateTimeFormat(locale === "en" ? "en-US" : locale === "pt" ? "pt-BR" : "es-AR", { month: "short" })
-        .format(due).replace(".", "").slice(0, 3)
-    : null;
 
   const tone = state === "over" ? "bg-danger/5 border-danger/40"
     : state === "run" ? "bg-success/5 border-success/40"
@@ -266,12 +260,12 @@ function AgendaRow({ item, onOpen, hoursLabel }: {
   const pill = state === "run"
     ? { cls: "bg-success/15 text-success", icon: <Wrench className="w-3.5 h-3.5" />, text: t("ob.plans.hasWoShort").replace("{code}", plan.activeWorkOrderCode ?? "") }
     : state === "over"
-      ? { cls: "bg-danger/15 text-danger", icon: <AlertTriangle className="w-3.5 h-3.5" />, text: hoursLabel ?? t("ob.ag.overdueOn").replace("{d}", due ? dm(due) : "") }
+      ? { cls: "bg-danger/15 text-danger", icon: <AlertTriangle className="w-3.5 h-3.5" />, text: hoursLabel ?? t("ob.ag.overdueOn").replace("{d}", due ? fmtDate(due) : "") }
       : due && due.getTime() === today.getTime()
         ? { cls: "bg-warning/15 text-warning", icon: <AlertTriangle className="w-3.5 h-3.5" />, text: t("ob.ag.dueToday") }
         : state === "open"
           ? { cls: "bg-accent/15 text-accent", icon: <CircleCheck className="w-3.5 h-3.5" />, text: hoursLabel ?? t("ob.ag.canDoNow") }
-          : { cls: "bg-fg/5 text-text-industrial/70", icon: <Clock className="w-3.5 h-3.5" />, text: t("ob.ag.fromDate").replace("{d}", open ? dm(open) : "") };
+          : { cls: "bg-fg/5 text-text-industrial/70", icon: <Clock className="w-3.5 h-3.5" />, text: t("ob.ag.fromDate").replace("{d}", open ? fmtDate(open) : "") };
 
   // Cuánto de la ventana ya pasó (sólo cuando hay ventana y no está vencida).
   let progress: number | null = null;
@@ -285,8 +279,9 @@ function AgendaRow({ item, onOpen, hoursLabel }: {
       className={`w-full text-left rounded-2xl border p-3 flex gap-3 items-stretch ${tone}`}>
       <span className={`w-[52px] shrink-0 rounded-xl flex flex-col items-center justify-center py-1.5 ${badge}`}>
         {due ? <>
-          <b className="text-xl font-extrabold leading-none tabular-nums">{String(due.getDate()).padStart(2, "0")}</b>
-          <span className="text-[10.5px] font-extrabold uppercase tracking-wide mt-0.5">{monthShort}</span>
+          {/* DD/MM arriba y el año abajo: la fecha completa en el ancho de la ficha. */}
+          <b className="text-[15px] font-extrabold leading-none tabular-nums">{fmtDate(due).slice(0, 5)}</b>
+          <span className="text-[10.5px] font-extrabold tabular-nums mt-0.5">{due.getFullYear()}</span>
         </> : <Clock className="w-5 h-5" />}
       </span>
       <span className="min-w-0 flex-1 flex flex-col gap-0.5">
@@ -296,7 +291,7 @@ function AgendaRow({ item, onOpen, hoursLabel }: {
         {open && due && open < due && (
           <span className="flex items-center gap-1.5 text-[12.5px] text-text-industrial/60 mt-0.5">
             <CalendarRange className="w-3.5 h-3.5 shrink-0" />
-            {t("ob.ag.window").replace("{from}", dm(open)).replace("{to}", dm(due))}
+            {t("ob.ag.window").replace("{from}", fmtDate(open)).replace("{to}", fmtDate(due))}
             {estimated && <span className="text-[11px] font-bold px-1.5 py-px rounded-full bg-warning/15 text-warning">{t("ob.ag.estimated")}</span>}
           </span>
         )}

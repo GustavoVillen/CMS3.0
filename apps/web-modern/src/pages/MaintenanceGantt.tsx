@@ -83,12 +83,6 @@ function fmtDMY(date: Date): string {
   return `${d}/${m}/${date.getFullYear()}`;
 }
 
-function fmtDMY2(date: Date): string {
-  const d = String(date.getDate()).padStart(2, "0");
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `${d}/${m}/${String(date.getFullYear()).slice(2)}`;
-}
-
 function daysInMonth(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 }
@@ -613,11 +607,11 @@ export function MaintenanceGanttPage() {
                           la barra fuera todo el ciclo. Ahora dice explícitamente cuál
                           es la última ejecución y cuál la ventana. */}
                       <span className="text-[9px] tabular-nums text-text-industrial/40 leading-tight truncate">
-                        <span className="opacity-70">Últ.</span> {lastD ? fmtDMY2(lastD) : "—"}
+                        <span className="opacity-70">Últ.</span> {lastD ? fmtDMY(lastD) : "—"}
                         <span className="opacity-40"> · </span>
                         {xWin != null && nextD
-                          ? <><span className="opacity-70">Vent.</span> {fmtDMY2(winD!)} <span className="opacity-50">→</span> {fmtDMY2(nextD)}</>
-                          : <><span className="opacity-70">Venc.</span> {nextD ? `${isProjected ? "~" : ""}${fmtDMY2(nextD)}` : "—"}</>}
+                          ? <><span className="opacity-70">Vent.</span> {fmtDMY(winD!)} <span className="opacity-50">→</span> {fmtDMY(nextD)}</>
+                          : <><span className="opacity-70">Venc.</span> {nextD ? `${isProjected ? "~" : ""}${fmtDMY(nextD)}` : "—"}</>}
                       </span>
                     </div>
                     <div className="relative shrink-0 track-bg" style={{ width: timelineW, "--px": `${pxPerMonth}px` } as React.CSSProperties}>

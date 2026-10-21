@@ -15,6 +15,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fmtDateTime } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
@@ -513,7 +514,7 @@ function printReport(content: string) {
   const win = window.open("", "_blank", "width=920,height=720");
   if (!win) { alert("Permitir ventanas emergentes para imprimir."); return; }
   const html = markdownToHtml(content);
-  const ts = new Date().toLocaleString("es-AR");
+  const ts = fmtDateTime(new Date());
   win.document.write(`<!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><title>Reporte CMS3.0</title>
 <style>

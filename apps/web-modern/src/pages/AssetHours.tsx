@@ -8,6 +8,7 @@
 // buques que no usan el M2.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { useSearchParams } from "react-router-dom";
 import { Check, Copy, Gauge, Loader2, Plus, Trash2, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
@@ -174,7 +175,7 @@ export const AssetHoursPage: React.FC = () => {
       if (res.overwrote && patch.readingDate) {
         setError(tRef.current("assetHours.dateOverwrote")
           .replace("{asset}", row.assetName)
-          .replace("{date}", patch.readingDate));
+          .replace("{date}", fmtDate(patch.readingDate)));
       }
       await refreshAfterEdit(row);
     } catch (err) {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { fmtDate, fmtDateTime } from "../lib/utils";
 import { FileBarChart, FileDown, History, Loader2, Package, RefreshCw } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useVesselContext } from "../lib/vessel-context";
@@ -48,13 +49,6 @@ interface ConsumptionReport {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmtDate(s: string | null): string {
-  if (!s) return "—";
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 function downloadReportPdf(url: string, filename: string): Promise<void> {
   // Use .then() chain (NOT async/await) so the click() stays within the
@@ -324,12 +318,6 @@ interface HistoryItem {
   department: string | null;
   actorUserId: string | null;
   actorName: string | null;
-}
-
-function fmtDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function describePeriod(it: HistoryItem): string {

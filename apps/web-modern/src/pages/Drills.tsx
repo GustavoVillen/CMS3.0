@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles, FileText, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -68,11 +69,6 @@ const STATUS_COLOR: Record<string, string> = {
   COMPLETED: "bg-success-sea/10 text-success-sea border-success-sea/20",
   CANCELLED: "bg-fg/5 text-text-industrial/50 border-fg/10",
 };
-
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toISOString().slice(0, 10);
-}
 
 const inputCls = "w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50";
 const labelCls = "block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider mb-1";

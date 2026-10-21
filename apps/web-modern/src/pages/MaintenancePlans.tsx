@@ -74,7 +74,7 @@ import { useAuth, useCan } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
 import { exportMaintenanceSheet } from "../lib/export-maintenance-sheet";
 import { DataTable, StatusBadge, type Column } from "../components/DataTable";
-import { compareSfiGroup, dominantSfiGroup, FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue } from "../lib/utils";
+import { compareSfiGroup, dominantSfiGroup, FILTER_ALL_VALUE, fmtDate, fromFilterSelectValue, parseLocalDate, toFilterSelectValue, fmtDateTime } from "../lib/utils";
 import { PageHeader } from "../components/PageHeader";
 import { VesselLabel } from "../components/EntityLabels";
 import { ExcelPanel } from "../components/ExcelPanel";
@@ -2042,7 +2042,6 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
 
   function downloadPdfLegacy() {
     if (!plan || isNew) return;
-    const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString("es-AR") : "—";
     const v = (x: unknown) => String(x ?? "").trim() || "—";
     const triggerLbl = (t: string) => ({ CALENDAR: "Meses (calendario)", MONTHS: "Meses (calendario)", HOURS: "Horas de operación", RUNNING_HOURS: "Horas de operación" }[t.toUpperCase()] ?? t);
     const resultLbl = (r: string) => ({ DUE_ONLY: "Solo vencimiento", AUTO_WO: `${woTerms.abbr} automática`, APPROVAL_WO: `${woTerms.abbr} con aprobación`, CHECKLIST: "Completar Checklist" }[r] ?? r);
@@ -2118,7 +2117,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
       return out.join("");
     }
 
-    const gen = new Date().toLocaleString("es-AR");
+    const gen = fmtDateTime(new Date());
     const assetDisplay = v(plan.assetName ?? assets.find(a => a.id === plan.assetId)?.name ?? plan.assetId);
 
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">

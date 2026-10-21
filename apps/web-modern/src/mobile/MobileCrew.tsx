@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Loader2, Search, UserMinus, Users } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -171,7 +172,7 @@ export const MobileCrew: React.FC<MobileCrewProps> = ({ onBack }) => {
             )}
             <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Embarque</p>
-              <p className="text-sm text-fg">{String(selected.signOnDate).slice(0, 10)}</p>
+              <p className="text-sm text-fg">{fmtDate(selected.signOnDate)}</p>
             </div>
           </div>
           {selected.notes && (

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { ScrollText, FileSpreadsheet, ExternalLink, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
@@ -126,12 +127,16 @@ const FIELD_LABELS: Record<string, string> = {
   longDescription: "Descripción larga",
 };
 
+/** Valor de un cambio tal como se lee: las fechas, DD/MM/AAAA. */
+const changeValue = (v: unknown): string =>
+  v == null ? "—" : typeof v === "string" && /^\d{4}-\d{2}-\d{2}(T\S+)?$/.test(v) ? fmtDate(v) : String(v);
+
 function formatChanges(changes: Record<string, { from: unknown; to: unknown }>): string {
   return Object.entries(changes)
     .map(([key, { from, to }]) => {
       const label = FIELD_LABELS[key] ?? key;
-      const fv = from != null ? String(from) : "—";
-      const tv = to   != null ? String(to)   : "—";
+      const fv = changeValue(from);
+      const tv = changeValue(to);
       return `${label}: ${fv} → ${tv}`;
     })
     .join(" | ");
@@ -184,7 +189,7 @@ function detailLine(item: AuditLogItem, woAbbr: string): string {
     if (action.includes("deleted"))   return `Plan eliminado: ${code} — ${title}`.replace(/ —\s*$/, "");
     if (action.includes("created"))   return `Plan creado: ${code} — ${title}`.replace(/ —\s*$/, "");
     if (action.includes("postponed") || action.includes("deferred"))
-      return `Plan diferido: ${code}${s(m.newDueDate) ? ` → nuevo vencimiento: ${m.newDueDate}` : ""}`;
+      return `Plan diferido: ${code}${s(m.newDueDate) ? ` → nuevo vencimiento: ${fmtDate(s(m.newDueDate))}` : ""}`;
     if (action.includes("executed") || action.includes("closed"))
       return `Ejecución registrada: ${code}${s(m.result) ? ` — Resultado: ${m.result}` : ""}`;
     if (action === "OPENEDFROMPLAN" || action.includes("opened"))
@@ -403,7 +408,7 @@ export const BitacoraPage: React.FC = () => {
                   return (
                     <tr key={item.id} className="border-b border-fg/5 hover:bg-fg/3 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-text-industrial/50">
-                        <div className="text-xs">{new Date(item.createdAt).toLocaleDateString("es-AR")}</div>
+                        <div className="text-xs">{fmtDate(item.createdAt)}</div>
                         <div className="text-[10px] text-text-industrial/30">
                           {new Date(item.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                         </div>

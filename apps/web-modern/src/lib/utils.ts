@@ -1,33 +1,63 @@
+// Regla del producto: toda fecha que lee una persona sale DD/MM/AAAA, y con
+// hora, DD/MM/AAAA HH:MM (24 h). Nada de "21 oct", "21/10" sin año ni el
+// formato del navegador. Pasar siempre por fmtDate / fmtDateTime.
+
+const DISPLAY_TZ = "America/Argentina/Buenos_Aires";
+
+/** Fecha sola (DD/MM/AAAA) si el texto es una fecha de calendario, si no null. */
+function calendarDay(d: string): string | null {
+  // Date-only strings (YYYY-MM-DD) must NOT go through Date() — UTC parsing shifts the day.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  // Prisma @db.Date fields serialize as ISO at UTC midnight (e.g. "2026-04-23T00:00:00.000Z").
+  // They carry no time component, so converting them to a local timezone would shift the day
+  // (in Argentina, midnight UTC = 21:00 the previous day). Treat them as date-only instead.
+  const utcMidnight = /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.000)?Z$/.exec(d);
+  if (utcMidnight) return `${utcMidnight[3]}/${utcMidnight[2]}/${utcMidnight[1]}`;
+  return null;
+}
+
 /**
- * Formatted date utility for standardizing date display across the platform.
- * Returns a string in 'DD/MM/YYYY' format or '—' if null/undefined.
+ * Día, mes, año, hora y minutos, siempre con dos dígitos. Un texto de la API
+ * (sello de tiempo) se lee en DISPLAY_TZ; un Date armado en el navegador
+ * (hoy, parseLocalDate) ya es un día del almanaque local y se lee en local,
+ * si no a bordo, fuera de la hora argentina, podía correrse un día.
  */
-export function fmtDate(d?: string | null) {
+function dateParts(d: string | Date) {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    timeZone: d instanceof Date ? undefined : DISPLAY_TZ,
+  }).formatToParts(date);
+  const p = (type: Intl.DateTimeFormatPartTypes) => parts.find(x => x.type === type)?.value ?? "";
+  return { day: p("day"), month: p("month"), year: p("year"), hour: p("hour"), minute: p("minute") };
+}
+
+/** DD/MM/AAAA, o "—" si no hay fecha. */
+export function fmtDate(d?: string | Date | null) {
   if (!d) return "—";
-  try {
-    // Date-only strings (YYYY-MM-DD) must NOT go through Date() — UTC parsing shifts the day.
-    // Parse them directly to avoid timezone-induced off-by-one.
-    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(d);
-    if (dateOnly) {
-      const [y, m, day] = d.split("-");
-      return `${day}/${m}/${y}`;
-    }
-    // Prisma @db.Date fields serialize as ISO at UTC midnight (e.g. "2026-04-23T00:00:00.000Z").
-    // They carry no time component, so converting them to a local timezone would shift the day
-    // (in Argentina, midnight UTC = 21:00 the previous day). Treat them as date-only instead.
-    const utcMidnight = /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.000)?Z$/.exec(d);
-    if (utcMidnight) {
-      return `${utcMidnight[3]}/${utcMidnight[2]}/${utcMidnight[1]}`;
-    }
-    return new Date(d).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "America/Argentina/Buenos_Aires",
-    });
-  } catch {
-    return "—";
-  }
+  const day = typeof d === "string" ? calendarDay(d) : null;
+  if (day) return day;
+  const p = dateParts(d);
+  return p ? `${p.day}/${p.month}/${p.year}` : "—";
+}
+
+/** DD/MM/AAAA HH:MM (24 h). Una fecha de calendario sin hora sale como fmtDate. */
+export function fmtDateTime(d?: string | Date | null) {
+  if (!d) return "—";
+  const day = typeof d === "string" ? calendarDay(d) : null;
+  if (day) return day;
+  const p = dateParts(d);
+  return p ? `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}` : "—";
+}
+
+/** Sólo la hora, HH:MM (24 h), para cuando la fecha ya está a la vista. */
+export function fmtTime(d?: string | Date | null) {
+  if (!d) return "—";
+  const p = dateParts(d);
+  return p ? `${p.hour}:${p.minute}` : "—";
 }
 
 /**

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Loader2, CalendarCheck, CheckCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -181,12 +182,12 @@ export const MobileDrills: React.FC<MobileDrillsProps> = ({ initialFilter, onBac
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Programado</p>
-              <p className="text-sm font-bold text-fg">{String(selected.scheduledDate).slice(0, 10)}</p>
+              <p className="text-sm font-bold text-fg">{fmtDate(selected.scheduledDate)}</p>
             </div>
             {selected.completedDate && (
               <div className="bg-fg/5 border border-fg/10 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-text-industrial/40 mb-0.5">Ejecutado</p>
-                <p className="text-sm font-bold text-fg">{String(selected.completedDate).slice(0, 10)}</p>
+                <p className="text-sm font-bold text-fg">{fmtDate(selected.completedDate)}</p>
               </div>
             )}
           </div>

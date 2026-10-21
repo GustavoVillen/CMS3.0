@@ -1,4 +1,5 @@
 import React from "react";
+import { fmtDate } from "../../lib/utils";
 import { Download, Wrench } from "lucide-react";
 import { platformFetch, platformAuthedFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
@@ -84,7 +85,6 @@ function rangeOf(period: Period, cFrom: string, cTo: string): { from: Date | nul
 }
 
 const WEEKDAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-const fmtDM = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
 
 // ── Gráfico de barras por día (HTML/CSS) ─────────────────────────────────────
 
@@ -120,7 +120,7 @@ function DayChart({ days, metric }: { days: Array<{ date: Date; cost: number; us
                     {hover === i && (
                       <div className="absolute z-10 bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-fg/10 bg-surface px-2.5 py-1.5 text-xs shadow-lg pointer-events-none"
                         style={i < 3 ? { left: 0, transform: "none" } : i > n - 4 ? { left: "auto", right: 0, transform: "none" } : undefined}>
-                        <div className="font-semibold text-fg capitalize">{WEEKDAYS[d.date.getDay()]} {fmtDM(d.date)}</div>
+                        <div className="font-semibold text-fg capitalize">{WEEKDAYS[d.date.getDay()]} {fmtDate(d.date)}</div>
                         {metric === "bytes"
                           ? <div className="text-text-industrial/70">{fmtBytes(d.bytes)}</div>
                           : <div className="text-text-industrial/70">{fmtUsd(d.cost)} · {fmtInt(d.uses)} {d.uses === 1 ? "uso" : "usos"}</div>}
@@ -135,7 +135,7 @@ function DayChart({ days, metric }: { days: Array<{ date: Date; cost: number; us
             {labelIdx.map((i) => (
               <span key={i} className={`absolute ${tickCls} whitespace-nowrap`}
                 style={{ left: `${((i + 0.5) / n) * 100}%`, transform: i === 0 ? "none" : i === n - 1 ? "translateX(-100%)" : "translateX(-50%)" }}>
-                {fmtDM(days[i].date)}
+                {fmtDate(days[i].date)}
               </span>
             ))}
           </div>

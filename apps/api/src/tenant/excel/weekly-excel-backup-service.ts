@@ -38,7 +38,7 @@ import { readFile } from "node:fs/promises";
 import { join, normalize, sep } from "node:path";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
-import { resolveTenantTime } from "../../common/tenant-time";
+import { fmtDateTime, resolveTenantTime } from "../../common/tenant-time";
 import { log } from "../../common/logger";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import { listTenantMaintenancePlans } from "../maintenance-plans/maintenance-plans-service";
@@ -598,7 +598,7 @@ export async function buildTenantExcelFiles(tenantId: string, tenantSlug: string
 }
 
 function readme(dateKey: string, files: OutFile[], generatedAt: Date, tz: string): string {
-  const when = generatedAt.toLocaleString("es-AR", { timeZone: tz, dateStyle: "short", timeStyle: "short" });
+  const when = fmtDateTime(generatedAt, tz);
   const main = files.filter(f => !f.folder);
   const onboard = files.filter(f => f.folder === ONBOARD_FOLDER);
   return [

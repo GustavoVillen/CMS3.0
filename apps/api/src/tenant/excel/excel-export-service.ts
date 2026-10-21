@@ -702,14 +702,16 @@ function escapeFormula(s: string): string {
   return s;
 }
 
-function toExcelValue(val: unknown): string | number | null {
+function toExcelValue(val: unknown): string | number | Date | null {
   if (val === null || val === undefined) return null;
   // Un registro con una fecha fuera del rango de JS (año de 5 cifras cargado por
   // error, timestamp corrupto) llega como Invalid Date y toISOString() tira
   // RangeError: eso volteaba el export ENTERO del módulo con un 500 genérico.
   // La celda va vacía y el resto de la planilla se exporta igual.
+  // Las fechas van como fecha de Excel (DD/MM/AAAA, ver buildWorkbook), no como
+  // texto: se ordenan y filtran, y la importación las vuelve a leer igual.
   if (val instanceof Date) {
-    return Number.isNaN(val.getTime()) ? null : val.toISOString().split("T")[0];
+    return Number.isNaN(val.getTime()) ? null : val;
   }
   if (typeof val === "boolean") return val ? "true" : "false";
   if (typeof val === "string") return escapeFormula(val);
@@ -765,11 +767,13 @@ async function buildWorkbook(module: ExcelModule, records: Record<string, unknow
   headerRow.commit();
 
   for (const record of records) {
-    const row: Record<string, string | number | null> = {};
+    const row: Record<string, string | number | Date | null> = {};
     for (const col of exportCols) {
       row[col.key] = toExcelValue(record[col.key]);
     }
-    sheet.addRow(row);
+    sheet.addRow(row).eachCell(cell => {
+      if (cell.value instanceof Date) cell.numFmt = "dd/mm/yyyy";
+    });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

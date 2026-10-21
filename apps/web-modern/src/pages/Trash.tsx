@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtDateTime, fmtTime } from "../lib/utils";
 import { AlertTriangle, Check, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
-import { useT, useLocale, type TranslationKey } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { useVesselContext } from "../lib/vessel-context";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
@@ -67,7 +68,6 @@ const key = (i: { kind: string; id: string }) => `${i.kind}:${i.id}`;
 
 export const TrashPage: React.FC = () => {
   const t = useT();
-  const locale = useLocale();
   const { vessels } = useVesselContext();
 
   const [days, setDays] = useState<number>(30);
@@ -111,10 +111,8 @@ export const TrashPage: React.FC = () => {
   const kindLabel = (k: string) => t(`trash.kind.${k}` as TranslationKey);
 
   const fmtWhen = (iso: string) => {
-    const d = new Date(iso);
-    const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-    if (groupOf(iso) === "today") return `${t("trash.today")} ${time}`;
-    return `${d.toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" })} ${time}`;
+    if (groupOf(iso) === "today") return `${t("trash.today")} ${fmtTime(iso)}`;
+    return fmtDateTime(iso);
   };
 
   // ── Restaurar ─────────────────────────────────────────────────────────────

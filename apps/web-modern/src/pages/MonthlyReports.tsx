@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { FileBarChart, Loader2, Locate, Plus, Printer, Save, Send, Sparkles, X } from "lucide-react";
 
 const KpiPill: React.FC<{ label: string; value: number; alert?: boolean }> = ({ label, value, alert }) => (
@@ -84,12 +85,6 @@ const labelCls  = "block text-[10px] font-semibold text-text-industrial/60 upper
 
 function fmtMonth(year: number, month: number): string {
   return `${MONTH_NAMES[month - 1]} ${year}`;
-}
-function fmtDate(s: string | null): string {
-  if (!s) return "—";
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 // ─── Inventory Tab (live or snapshot) ────────────────────────────────────────

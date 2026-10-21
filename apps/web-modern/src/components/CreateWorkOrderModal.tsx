@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
@@ -1714,7 +1715,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
                     [t("wo.modal.type"),      null, null, <TypeBadge key="t" type={prefill.type} />],
                     [t("wo.modal.criticality"), prefill.criticality ?? "B",         "text-fg"],
                     prefill.dueDate
-                      ? [t("wo.modal.nextDueDate"), prefill.dueDate.slice(0, 10), "text-fg"]
+                      ? [t("wo.modal.nextDueDate"), fmtDate(prefill.dueDate), "text-fg"]
                       : null,
                   ].filter(Boolean) as [string, string | null, string | null, React.ReactNode?][]).map(([label, value, cls, node], i) => (
                     <div key={i} className="bg-fg/5 border border-fg/10 rounded-xl p-2.5">

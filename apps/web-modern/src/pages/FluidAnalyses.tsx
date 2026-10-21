@@ -1436,16 +1436,11 @@ function TrendChart({ assetId, fluidType }: { assetId: string; fluidType: FluidT
   const threshold = thresholds.find(t => t.parameter === param);
 
   // El año va en la etiqueta: la tendencia mezcla muestras de años distintos y
-  // "16-sept" antes de "04-jun" parecía un error de orden. Se arma a mano —
-  // pedirle el año al locale da "16 de sept de 26", demasiado largo para el eje.
-  //
-  // En UTC, como el resto de la app (lib/utils.fmtDate): la fecha de muestreo se
-  // carga sin hora y queda a medianoche UTC, así que leerla en la hora local
-  // argentina (UTC-3) retrocedía la etiqueta un día.
+  // sin él "16/09" antes de "04/06" parecía un error de orden. fmtDate lee la
+  // fecha de muestreo (medianoche UTC) como día del almanaque, sin correrla.
   const data = points.map(p => {
-    const d = new Date(p.sampledAt);
     return {
-      label: `${d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", timeZone: "UTC" })}-${String(d.getUTCFullYear()).slice(-2)}`,
+      label: fmtDate(p.sampledAt),
       sampleCode: p.sampleCode,
       value: p.values[param] ?? null,
       verdict: p.verdict,

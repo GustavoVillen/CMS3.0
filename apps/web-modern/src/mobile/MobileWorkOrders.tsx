@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { fmtDateTime, fmtDate } from "../lib/utils";
 import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useAuth, useCan } from "../lib/auth";
@@ -205,7 +206,7 @@ const ProgressNotesPanel: React.FC<{
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return fmtDateTime(d);
   };
 
   // Avances de esta OT guardados en el teléfono: al enviarse, se recarga la lista.
@@ -1026,7 +1027,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
             {selected.assetName && <p className="text-xs text-text-industrial/50 mt-0.5">{selected.assetName}</p>}
             {isAuth && selected.aprobadoByName && (
               <p className="text-[11px] text-violet-700 dark:text-violet-400 mt-1">
-                Aprobó: {selected.aprobadoByName}{selected.aprobadoAt ? ` · ${selected.aprobadoAt.slice(0, 10)}` : ""}
+                Aprobó: {selected.aprobadoByName}{selected.aprobadoAt ? ` · ${fmtDate(selected.aprobadoAt)}` : ""}
               </p>
             )}
           </div>
@@ -1201,10 +1202,10 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
             <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/50">Tramitación</p>
             <div className="bg-fg/5 border border-fg/10 rounded-xl p-3 space-y-1">
               {selected.aprobadoByName && (
-                <p className="text-xs text-fg"><span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {selected.aprobadoByName}{selected.aprobadoAt ? ` · ${selected.aprobadoAt.slice(0, 10)}` : ""}</p>
+                <p className="text-xs text-fg"><span className="font-bold text-violet-700 dark:text-violet-400">Aprobó:</span> {selected.aprobadoByName}{selected.aprobadoAt ? ` · ${fmtDate(selected.aprobadoAt)}` : ""}</p>
               )}
               {selected.autorizadoByName && (
-                <p className="text-xs text-fg"><span className="font-bold text-emerald-700 dark:text-emerald-400">Autorizó:</span> {selected.autorizadoByName}{selected.autorizadoAt ? ` · ${selected.autorizadoAt.slice(0, 10)}` : ""}</p>
+                <p className="text-xs text-fg"><span className="font-bold text-emerald-700 dark:text-emerald-400">Autorizó:</span> {selected.autorizadoByName}{selected.autorizadoAt ? ` · ${fmtDate(selected.autorizadoAt)}` : ""}</p>
               )}
               {!selected.aprobadoByName && !selected.autorizadoByName && (
                 <p className="text-xs text-text-industrial/40">Sin registros de tramitación.</p>
@@ -1219,7 +1220,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
               <ReadField label="Embarcación"     value={selected.vesselCode} />
               <ReadField label="Equipo"          value={selected.assetName} />
               <ReadField label="Criticidad"      value={selected.criticality} />
-              <ReadField label="Vencimiento"     value={selected.dueDate?.slice(0, 10)} />
+              <ReadField label="Vencimiento"     value={selected.dueDate ? fmtDate(selected.dueDate) : undefined} />
               <ReadField label="Responsable"     value={selected.assignedToUserName ?? selected.assignedToUserId} />
               <ReadField label="Área"            value={areaLabel(selected)} />
               <ReadField label={`Título de la ${woTerms.abbr}`} value={selected.title} full />
@@ -1334,7 +1335,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
                 {selected.completedDate && (
                   <div className="flex justify-between text-xs">
                     <span className="text-text-industrial/50">Fecha</span>
-                    <span className="text-fg">{selected.completedDate.slice(0, 10)}</span>
+                    <span className="text-fg">{fmtDate(selected.completedDate)}</span>
                   </div>
                 )}
                 {selected.runningHoursAtExecution != null && (

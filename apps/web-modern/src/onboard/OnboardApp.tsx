@@ -11,6 +11,7 @@
 // como estaba.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import {
   Ship, CalendarClock, ChevronRight, Plus, MessageSquarePlus, Gauge, ShieldCheck,
@@ -148,7 +149,7 @@ function OnboardHome({ onOpen, onProgress }: { onOpen: (v: View) => void; onProg
   };
 
   const firstName = (user?.name ?? "").split(" ")[0];
-  const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "numeric" });
+  const today = `${new Date().toLocaleDateString(undefined, { weekday: "long" })} ${fmtDate(new Date())}`;
 
   // Orden de la pantalla por uso real (Preview V36, aprobada 2026-09-16):
   //   1. Planes para abrir y Horómetros — lo de todos los días, arriba y grandes.

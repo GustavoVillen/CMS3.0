@@ -8,9 +8,9 @@ import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
 import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
 import { useNavigate } from "react-router-dom";
-import { useT, useLocale, type TranslationKey } from "../lib/i18n";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { ModalCloseButton } from "../components/ModalCloseButton";
-import { parseLocalDate, sfiGroupDigit } from "../lib/utils";
+import { parseLocalDate, sfiGroupDigit, fmtDate } from "../lib/utils";
 import { useCopilotEmitter, CopilotFlowProvider, CopilotChoiceStep, createCopilotFlowKey } from "../lib/copilot-context";
 import { useVesselContext } from "../lib/vessel-context";
 import { ClassCycleStrip } from "../components/ClassCycleBar";
@@ -159,7 +159,6 @@ export const Dashboard: React.FC = () => {
   );
   const navigate     = useNavigate();
   const t            = useT();
-  const locale       = useLocale();
   const { theme }    = useTheme();
   const { user }     = useAuth();
   const can          = useCan();
@@ -760,7 +759,7 @@ const defectsOpen   = defects.data?.items.filter(d => d.status === "OPEN" || d.s
                                     ? "text-red-700 dark:text-red-400 font-bold"
                                     : "text-text-industrial/50"
                                 }`}>
-                                  {parseLocalDate(p.nextDueDate).toLocaleDateString(locale)}
+                                  {fmtDate(p.nextDueDate)}
                                 </span>
                               )}
                               {inspOpeningId === p.id
@@ -1500,7 +1499,7 @@ function buildDropletsChartData(raw: { date: string; liters: number }[]): ChartP
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const date = d.toISOString().slice(0, 10);
-    const label = d.toLocaleDateString("es", { day: "numeric", month: "short" });
+    const label = fmtDate(d);
     points.push({ date, label, realValue: realMap.get(date) ?? null, interpolatedValue: null });
   }
 

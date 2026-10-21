@@ -15,6 +15,7 @@
 
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { fmtDate } from "../../common/tenant-time";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { getOnHandMap } from "../pms/stock-calc-service";
 import { resolveComputedStatus } from "../certificates/certificates-service";
@@ -773,10 +774,8 @@ async function computeOne(
 // distinto al de la tarjeta). El frontend arma un link de navegación por
 // entityType (asset → /assets?open=, workOrder → /work-orders?openId=, etc.).
 
-function isoDateOnly(d: Date | string | null | undefined): string | null {
-  if (!d) return null;
-  const date = new Date(d);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+function dayLabel(d: Date | string | null | undefined): string | null {
+  return fmtDate(d, "UTC", "es-AR", "") || null;
 }
 
 export type TmsaEntityType = "asset" | "workOrder" | "maintenancePlan" | "deferral" | "spare" | "spareRequest" | "fluidAnalysis" | "defect" | "moc" | "certificate" | "inspection" | "permit" | "drydockSpec";
@@ -834,9 +833,9 @@ export async function getTmsaMetricDetail(
   const asAsset = (a: any): TmsaDetailItem =>
     ({ id: a.id, code: a.assetCode, label: a.name ?? a.assetCode, sublabel: `Criticidad ${a.criticality} · ${a.status}`, entityType: "asset" });
   const asWorkOrder = (w: any): TmsaDetailItem =>
-    ({ id: w.id, code: w.workOrderCode, label: w.title ?? w.workOrderCode, sublabel: w.dueDate ? `Vencimiento ${isoDateOnly(w.dueDate)}` : null, entityType: "workOrder" });
+    ({ id: w.id, code: w.workOrderCode, label: w.title ?? w.workOrderCode, sublabel: w.dueDate ? `Vencimiento ${dayLabel(w.dueDate)}` : null, entityType: "workOrder" });
   const asPlan = (pl: any): TmsaDetailItem =>
-    ({ id: pl.id, code: pl.taskCode, label: pl.title, sublabel: pl.nextDueDate ? `Próximo ${isoDateOnly(pl.nextDueDate)}` : null, entityType: "maintenancePlan" });
+    ({ id: pl.id, code: pl.taskCode, label: pl.title, sublabel: pl.nextDueDate ? `Próximo ${dayLabel(pl.nextDueDate)}` : null, entityType: "maintenancePlan" });
   const asDeferral = (d: any): TmsaDetailItem =>
     ({ id: d.id, code: d.deferralCode, label: d.justification ?? d.deferralCode, sublabel: d.status, entityType: "deferral" });
   const asDrydockSpec = (s: any): TmsaDetailItem =>
@@ -848,16 +847,16 @@ export async function getTmsaMetricDetail(
   const asSpare = (s: any): TmsaDetailItem =>
     ({ id: s.id, code: s.sku, label: s.name, entityType: "spare" });
   const asSpareRequest = (r: any): TmsaDetailItem =>
-    ({ id: r.id, code: r.requestCode, label: `${r.priority} · ${r.status}`, sublabel: isoDateOnly(r.requestedAt), entityType: "spareRequest" });
+    ({ id: r.id, code: r.requestCode, label: `${r.priority} · ${r.status}`, sublabel: dayLabel(r.requestedAt), entityType: "spareRequest" });
   const asDefect = (d: any): TmsaDetailItem =>
     ({ id: d.id, code: d.defectCode, label: d.description, sublabel: d.severity, entityType: "defect" });
   const asMoc = (m: any): TmsaDetailItem =>
     ({ id: m.id, code: m.mocCode, label: m.title, sublabel: m.status, entityType: "moc" });
   const asCertificate = (c: any): TmsaDetailItem =>
-    ({ id: c.id, code: c.certificateCode, label: c.name, sublabel: c.expiryDate ? `Vence ${isoDateOnly(c.expiryDate)}` : null, entityType: "certificate" });
+    ({ id: c.id, code: c.certificateCode, label: c.name, sublabel: c.expiryDate ? `Vence ${dayLabel(c.expiryDate)}` : null, entityType: "certificate" });
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- queda para cuando se habilite el motor de plantillas
   const asInspection = (i: any): TmsaDetailItem =>
-    ({ id: i.id, code: i.inspectionCode, label: i.type, sublabel: i.scheduledAt ? `Programada ${isoDateOnly(i.scheduledAt)}` : i.status, entityType: "inspection" });
+    ({ id: i.id, code: i.inspectionCode, label: i.type, sublabel: i.scheduledAt ? `Programada ${dayLabel(i.scheduledAt)}` : i.status, entityType: "inspection" });
   const asPermit = (pw: any): TmsaDetailItem =>
     ({ id: pw.id, code: pw.permitCode, label: pw.type, sublabel: pw.status, entityType: "permit" });
 
@@ -979,7 +978,7 @@ export async function getTmsaMetricDetail(
         select: { id: true, verdict: true, receivedAt: true, sample: { select: { sampleCode: true } } },
         orderBy: { receivedAt: "desc" },
       });
-      return { items: rows.map((r: any) => ({ id: r.id, code: r.sample.sampleCode, label: `Verdict ${r.verdict}`, sublabel: isoDateOnly(r.receivedAt), entityType: "fluidAnalysis" as const })) };
+      return { items: rows.map((r: any) => ({ id: r.id, code: r.sample.sampleCode, label: `Verdict ${r.verdict}`, sublabel: dayLabel(r.receivedAt), entityType: "fluidAnalysis" as const })) };
     }
     case "defectsWithRca": {
       const rows = await p.defect.findMany({

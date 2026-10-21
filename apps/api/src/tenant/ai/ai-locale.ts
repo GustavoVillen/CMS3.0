@@ -59,7 +59,7 @@ const LANGUAGE_LABEL: Record<AiLocale, string> = {
  */
 export function localeInstruction(locale: AiLocale): string {
   const lang = LANGUAGE_LABEL[locale];
-  return `LANGUAGE LOCK / IDIOMA OBLIGATORIO: Toda salida en lenguaje natural (todos los campos de texto libre — descripciones, rationale, sugerencias, bullets, explicaciones, preguntas, mensajes al usuario, justificaciones) DEBE estar en ${lang}. Esta regla anula CUALQUIER ejemplo, plantilla o instrucción posterior que use otro idioma — los ejemplos en otro idioma son sólo referencia de FORMATO, no de IDIOMA. Si ves un ejemplo como "Criticidad B porque..." debés traducirlo al idioma indicado. Los enums técnicos en mayúsculas (CRITICAL, HIGH, MEDIUM, LOW, OPERATIONAL, NORMAL, DEGRADED, etc.), códigos (SFI, ISM, STCW), siglas y claves JSON se mantienen en inglés/originales.`;
+  return `LANGUAGE LOCK / IDIOMA OBLIGATORIO: Toda salida en lenguaje natural (todos los campos de texto libre — descripciones, rationale, sugerencias, bullets, explicaciones, preguntas, mensajes al usuario, justificaciones) DEBE estar en ${lang}. Esta regla anula CUALQUIER ejemplo, plantilla o instrucción posterior que use otro idioma — los ejemplos en otro idioma son sólo referencia de FORMATO, no de IDIOMA. Si ves un ejemplo como "Criticidad B porque..." debés traducirlo al idioma indicado. Los enums técnicos en mayúsculas (CRITICAL, HIGH, MEDIUM, LOW, OPERATIONAL, NORMAL, DEGRADED, etc.), códigos (SFI, ISM, STCW), siglas y claves JSON se mantienen en inglés/originales. FECHAS: en todo texto que lee una persona, las fechas van DD/MM/AAAA y con hora DD/MM/AAAA HH:MM (24 h), aunque los datos de entrada vengan como AAAA-MM-DD; el formato AAAA-MM-DD sólo se usa en los campos de fecha del JSON que lee el sistema.`;
 }
 
 /**

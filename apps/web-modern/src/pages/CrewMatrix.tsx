@@ -3,6 +3,7 @@
 // Reemplaza el sistema viejo de CrewCapability con TrainingItem + CrewTrainingRecord.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { Grid3x3, Loader2, AlertCircle, FileText } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
 import { api, ApiError } from "../lib/api";
@@ -345,8 +346,8 @@ export const CrewMatrixPage: React.FC = () => {
                     titleParts.push(it.name);
                     if (reqLevel) titleParts.push(`Requerimiento: ${REQ_LEVEL_LABEL[reqLevel] ?? reqLevel}`);
                     if (rec) {
-                      titleParts.push(`Realizado: ${rec.completedAt.slice(0, 10)}`);
-                      if (rec.expiryDate) titleParts.push(`Vence: ${rec.expiryDate.slice(0, 10)}`);
+                      titleParts.push(`Realizado: ${fmtDate(rec.completedAt)}`);
+                      if (rec.expiryDate) titleParts.push(`Vence: ${fmtDate(rec.expiryDate)}`);
                       if (rec.notes) titleParts.push(rec.notes);
                     } else if (isMandatory) {
                       titleParts.push("FALTA — entrenamiento obligatorio para este rango");

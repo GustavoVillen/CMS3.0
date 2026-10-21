@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
+import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Plus, Loader2, Camera, Sparkles, X, Mic } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -530,7 +531,7 @@ export const MobileDefects: React.FC<MobileDefectsProps> = ({ prefill, onPrefill
             <p className="text-sm text-fg/80 leading-relaxed">{selected.description}</p>
           </div>
           <p className="text-[10px] text-text-industrial/30">
-            Reportado: {new Date(selected.reportedAt).toLocaleDateString("es-AR")}
+            Reportado: {fmtDate(selected.reportedAt)}
           </p>
         </div>
       </div>

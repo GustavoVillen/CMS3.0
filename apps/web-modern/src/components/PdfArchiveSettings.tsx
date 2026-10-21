@@ -4,6 +4,7 @@
 // un botón; no hay URLs ni claves que copiar (ver docs/drive-archive/).
 
 import React, { useEffect, useState } from "react";
+import { fmtDateTime } from "../lib/utils";
 import { FolderUp, Loader2, CheckCircle, Link2, Unlink, ExternalLink, PlugZap, AlertTriangle } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useT } from "../lib/i18n";
@@ -152,7 +153,7 @@ export const PdfArchiveSettings: React.FC = () => {
               <AlertTriangle className="w-4 h-4 shrink-0 text-warning mt-0.5" />
               <span>
                 <b>{t("config.pdfArchive.lastError")}</b>
-                {config.lastErrorAt && ` (${new Date(config.lastErrorAt).toLocaleString()})`}: {config.lastError}
+                {config.lastErrorAt && ` (${fmtDateTime(config.lastErrorAt)})`}: {config.lastError}
               </span>
             </div>
           )}

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { api } from "../lib/api";
-import { escapeHtml } from "../lib/utils";
+import { escapeHtml, fmtDate } from "../lib/utils";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -74,7 +74,7 @@ export function VesselMapPage() {
     map.eachLayer(layer => { if (layer instanceof L.Marker) map.removeLayer(layer); });
 
     positions.forEach(pos => {
-      const reportDate = pos.userEmail ? new Date(pos.userEmail).toLocaleDateString() : fmtAge(pos.seenAt);
+      const reportDate = pos.userEmail ? fmtDate(pos.userEmail) : fmtAge(pos.seenAt);
       const label = L.divIcon({
         className: "",
         // El icono sale del paquete (ya importado arriba), no de unpkg: una CDN
@@ -150,7 +150,7 @@ export function VesselMapPage() {
               {positions.map((p, i) => (
                 <tr key={i} className="border-b border-fg/5 hover:bg-fg/3 transition-colors">
                   <td className="px-4 py-2 font-bold text-fg">{p.vesselName} <span className="text-fg/30 font-mono text-[10px]">{p.vesselCode}</span></td>
-                  <td className="px-4 py-2 text-fg/50">{p.userEmail ? new Date(p.userEmail).toLocaleDateString() : "—"}</td>
+                  <td className="px-4 py-2 text-fg/50">{p.userEmail ? fmtDate(p.userEmail) : "—"}</td>
                   <td className="px-4 py-2 font-mono text-fg/40">{p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}</td>
                   <td className="px-4 py-2 text-fg/30">{fmtAge(p.seenAt)}</td>
                 </tr>

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
+import { fmtDate } from "../lib/utils";
 import { ChevronLeft, CheckCircle, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -646,7 +647,7 @@ export const MobileDailyReport: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-fg">{r.reportDate.slice(0, 10)}</p>
+                  <p className="text-sm font-medium text-fg">{fmtDate(r.reportDate)}</p>
                   <p className="text-xs text-text-industrial/40 mt-0.5">
                     {r.operationalStatus ? (OP_STATUS_LABEL[r.operationalStatus] ?? r.operationalStatus) : "—"}
                   </p>
@@ -679,7 +680,7 @@ const ReportDetail: React.FC<{ report: DailyReport; onBack: () => void }> = ({ r
         <button type="button" onClick={onBack} className="p-2 -ml-2 text-text-industrial/40 hover:text-fg">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <span className="font-bold text-sm text-fg flex-1">{report.reportDate.slice(0, 10)}</span>
+        <span className="font-bold text-sm text-fg flex-1">{fmtDate(report.reportDate)}</span>
         <span className="text-xs text-text-industrial/40">{STATUS_LABEL[report.status] ?? report.status}</span>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">

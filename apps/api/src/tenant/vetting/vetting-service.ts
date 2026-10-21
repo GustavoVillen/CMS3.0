@@ -25,6 +25,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { log } from "../../common/logger";
+import { fmtDate } from "../../common/tenant-time";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { getDrillsMatrix, type DrillMatrixCell } from "../drills/drills-service";
 import { isVesselCrewed } from "../ai/vessel-ai-context";
@@ -150,7 +151,7 @@ async function safe<T>(fn: () => Promise<T>, fallback: T, label: string): Promis
   }
 }
 
-const isoDate = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+const dayLabel = (d: Date | string | null | undefined) => fmtDate(d, "UTC", "es-AR", "");
 const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
 
 function summarize(groups: VetGroup[]) {
@@ -654,11 +655,11 @@ export async function getVettingMetricDetail(
   const asAsset = (a: AssetRow): VetDetailItem =>
     ({ id: a.id, code: a.assetCode, label: a.name, sublabel: `${vesselName(a.vesselCode)} · Criticidad ${a.criticality}`, entityType: "asset" });
   const asPlan = (pl: PlanRow): VetDetailItem =>
-    ({ id: pl.id, code: pl.taskCode, label: pl.title, sublabel: `${vesselName(pl.vesselCode)}${pl.nextDueDate ? ` · vencía ${isoDate(pl.nextDueDate)}` : ""}`, entityType: "maintenancePlan" });
+    ({ id: pl.id, code: pl.taskCode, label: pl.title, sublabel: `${vesselName(pl.vesselCode)}${pl.nextDueDate ? ` · vencía ${dayLabel(pl.nextDueDate)}` : ""}`, entityType: "maintenancePlan" });
   const asDefect = (d: DefectRow): VetDetailItem =>
     ({ id: d.id, code: d.defectCode, label: d.classification ?? d.defectCode, sublabel: `${vesselName(d.vesselCode)} · ${d.status} · ${d.severity}`, entityType: "defect" });
   const asCert = (c: CertRow, extra?: string): VetDetailItem =>
-    ({ id: c.id, code: c.certificateCode, label: vesselName(c.vesselCode), sublabel: extra ?? `${c.issuingAuthority} · vence ${isoDate(c.expiryDate)}`, entityType: "certificate" });
+    ({ id: c.id, code: c.certificateCode, label: vesselName(c.vesselCode), sublabel: extra ?? `${c.issuingAuthority} · vence ${dayLabel(c.expiryDate)}`, entityType: "certificate" });
   // Nombres, no códigos (CLAUDE.md): el buque se muestra por su nombre.
   const asVessel = (code: string, sub: string): VetDetailItem =>
     ({ id: code, code: vesselName(code), label: sub, entityType: "vessel" });
@@ -711,8 +712,8 @@ export async function getVettingMetricDetail(
         const { cert } = classStateOf(data, s, code, now);
         if (!cert || dockShaftStateOf(cert, now) !== want) continue;
         const parts = [
-          cert.drydockSurveyDueDate ? `Dique ${isoDate(cert.drydockSurveyDueDate)}` : "",
-          cert.tailshaftSurveyDueDate ? `Eje ${isoDate(cert.tailshaftSurveyDueDate)}` : "",
+          cert.drydockSurveyDueDate ? `Dique ${dayLabel(cert.drydockSurveyDueDate)}` : "",
+          cert.tailshaftSurveyDueDate ? `Eje ${dayLabel(cert.tailshaftSurveyDueDate)}` : "",
         ].filter(Boolean).join(" · ");
         items.push(asCert(cert, parts));
       }
@@ -724,7 +725,7 @@ export async function getVettingMetricDetail(
       const rows = metric === "vetVettingInspections12m" ? s.audits12m.filter(a => a.auditType === "VETTING_OIL_MAJOR") : s.audits12m;
       return cap(rows.map(a => ({
         id: a.id, code: a.auditCode, label: `${a.auditType}${a.agencyOrAuthority ? ` · ${a.agencyOrAuthority}` : ""}`,
-        sublabel: `${vesselName(a.vesselCode)} · ${isoDate(a.auditDate)}`, entityType: "externalAudit" as const,
+        sublabel: `${vesselName(a.vesselCode)} · ${dayLabel(a.auditDate)}`, entityType: "externalAudit" as const,
       })));
     }
     case "vetExtFindingsOpen":
@@ -734,7 +735,7 @@ export async function getVettingMetricDetail(
         : s.findingsOpen;
       return cap(rows.map(f => ({
         id: f.id, code: f.findingCode ?? f.findingType, label: f.description,
-        sublabel: `${vesselName(f.vesselCode)}${f.rectificationDeadline ? ` · plazo ${isoDate(f.rectificationDeadline)}` : ""}`,
+        sublabel: `${vesselName(f.vesselCode)}${f.rectificationDeadline ? ` · plazo ${dayLabel(f.rectificationDeadline)}` : ""}`,
         entityType: "externalAudit" as const,
       })));
     }
@@ -751,7 +752,7 @@ export async function getVettingMetricDetail(
           const who = byId.get(c.crewId);
           return {
             id: c.id, code: c.type, label: who ? `${who.lastName}, ${who.firstName}` : c.crewId,
-            sublabel: `${who ? vesselName(who.vesselCode) : ""} · venció ${isoDate(c.expiryDate)}`, entityType: "crew" as const,
+            sublabel: `${who ? vesselName(who.vesselCode) : ""} · venció ${dayLabel(c.expiryDate)}`, entityType: "crew" as const,
           };
         }));
     }
@@ -762,7 +763,7 @@ export async function getVettingMetricDetail(
       return cap(rows.map(r => {
         const who = byId.get(r.crewId);
         return {
-          id: r.id, code: isoDate(r.recordDate), label: who ? `${who.lastName}, ${who.firstName}` : r.crewId,
+          id: r.id, code: dayLabel(r.recordDate), label: who ? `${who.lastName}, ${who.firstName}` : r.crewId,
           sublabel: `${vesselName(r.vesselCode)}${r.hasViolation ? " · con violación" : ""}`, entityType: "crew" as const,
         };
       }));

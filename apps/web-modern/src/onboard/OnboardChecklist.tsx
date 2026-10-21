@@ -6,6 +6,7 @@
 // nota, no fotos (decisión: fotos en otra etapa). El PDF sale desde la PC.
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
+import { fmtDateTime } from "../lib/utils";
 import { ClipboardCheck, ChevronRight, Check, X, Loader2, PenLine, CircleCheck, Monitor } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -68,7 +69,7 @@ export const OnboardChecklist: React.FC<{ onExit: () => void }> = ({ onExit }) =
             className="w-full text-left bg-surface border border-fg/10 rounded-2xl p-3.5 flex items-center gap-3 active:bg-fg/5">
             <span className="min-w-0 flex-1">
               <span className="block text-[12.5px] font-semibold text-text-industrial/60">
-                {t("ob.check.startedAt").replace("{when}", new Date(r.eventDateTime).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))}
+                {t("ob.check.startedAt").replace("{when}", fmtDateTime(r.eventDateTime))}
               </span>
               <span className="block text-base font-extrabold">{r.templateName ?? r.executionCode}</span>
             </span>

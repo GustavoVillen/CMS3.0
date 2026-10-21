@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Loader2, FileCheck, RefreshCw } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { api, ApiError } from "../lib/api";
@@ -147,7 +148,7 @@ export const MobileCrewCerts: React.FC<MobileCrewCertsProps> = ({ initialFilter,
             <p className="text-sm font-bold text-fg">{selected.crewName}</p>
             <p className="text-xs text-text-industrial/40 mt-0.5">{vesselName(selected.vesselCode)}</p>
             <p className="text-xs text-text-industrial/40 mt-1">
-              Vencimiento actual: {selected.expiryDate ? String(selected.expiryDate).slice(0, 10) : "—"}
+              Vencimiento actual: {fmtDate(selected.expiryDate)}
             </p>
           </div>
           {/* Obligatorio: sin fecha no se puede guardar (botón deshabilitado). */}
@@ -233,7 +234,7 @@ export const MobileCrewCerts: React.FC<MobileCrewCertsProps> = ({ initialFilter,
                   </p>
                 </div>
                 <div className={`text-[10px] font-mono shrink-0 mt-0.5 ${dateColor}`}>
-                  {c.expiryDate ? String(c.expiryDate).slice(0, 10) : "—"}
+                  {fmtDate(c.expiryDate)}
                 </div>
               </div>
             );

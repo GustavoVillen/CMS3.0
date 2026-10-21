@@ -38,13 +38,14 @@ export async function exportUsageEventsXlsx(filters: ListUsageFilters): Promise<
   ];
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).alignment = { vertical: "middle" };
+  ws.getColumn("createdAt").numFmt = "dd/mm/yyyy hh:mm:ss";
 
   for (const it of items) {
     const cost = it.kind === "ai_call"
       ? aiCostUsd(it.model ?? "", it.inputTokens, it.outputTokens, it.cacheReadTokens, it.cacheCreationTokens)
       : 0;
     ws.addRow({
-      createdAt:           it.createdAt.toISOString().replace("T", " ").slice(0, 19),
+      createdAt:           it.createdAt,
       tenantSlug:          it.tenantSlug,
       userEmail:           it.userEmail,
       ipAddress:           it.ipAddress ?? "",

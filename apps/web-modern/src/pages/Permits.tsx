@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
+import { fmtDate, fmtDateTime } from "../lib/utils";
 import { useSearchParams } from "react-router-dom";
 import { useOpenNewFromUrl } from "../lib/deep-link";
 import { useCopilotEmitter, useCopilotApplyFields, copilotOptionPicker, CopilotChoiceStep, CopilotFlowProvider, useCopilotFlowKey } from "../lib/copilot-context";
@@ -159,11 +160,6 @@ const ROLE_LABEL: Record<ParticipantRole, string> = {
   ATTENDANT: "Atendente",
   SUPERVISOR: "Supervisor",
 };
-
-function fmtDateTime(s: string | null): string {
-  if (!s) return "—";
-  return new Date(s).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
-}
 
 function toLocalDateTimeInput(s: string | null): string {
   if (!s) return "";
@@ -466,7 +462,7 @@ const WorkOrderPicker: React.FC<{
                     {w.dueDate && (
                       <div className="text-right shrink-0">
                         <p className="text-[10px] text-text-industrial/40">{t("wo.col.dueDate")}</p>
-                        <p className="text-[11px] font-mono text-fg">{new Date(w.dueDate).toLocaleDateString("es-AR")}</p>
+                        <p className="text-[11px] font-mono text-fg">{fmtDate(w.dueDate)}</p>
                       </div>
                     )}
                   </button>

@@ -3,6 +3,7 @@
 
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { fmtDate } from "../../common/tenant-time";
 import { RouteError } from "../../http/route-error";
 import { hasPermission } from "../auth/role-permissions";
 import { publishAudit } from "../../platform/audit/audit-publisher";
@@ -430,7 +431,7 @@ export async function promoteFindingToDefect(
   const head = finding.findingCode ? `[${finding.findingCode}] ${finding.description}` : finding.description;
   const extra: string[] = [];
   if (finding.detentionRelated) extra.push("Detención: SÍ.");
-  if (finding.rectificationDeadline) extra.push(`Plazo de rectificación: ${new Date(finding.rectificationDeadline).toISOString().slice(0, 10)}.`);
+  if (finding.rectificationDeadline) extra.push(`Plazo de rectificación: ${fmtDate(finding.rectificationDeadline, "UTC")}.`);
   extra.push(`Origen: auditoría/inspección externa ${audit.auditCode}.`);
   const description = [head, extra.join(" ")].filter(Boolean).join("\n");
 

@@ -31,6 +31,7 @@
 import type { TenantAccessSession } from "../auth/session-store";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { log } from "../../common/logger";
+import { fmtDate } from "../../common/tenant-time";
 import { listVesselsInScope } from "../compliance/compliance-service";
 import { requireAuditPanelAccess } from "../tmsa/tmsa-service";
 import { assetsCoveredBy, loadPlanAssetOwners } from "../maintenance-plans/plan-coverage";
@@ -680,13 +681,12 @@ export async function getIsmMetricDetail(
     inspectionExecution: { findMany(a: unknown): Promise<any[]> };
   };
 
-  const isoDate = (d: Date | string | null | undefined) =>
-    d ? new Date(d).toISOString().slice(0, 10) : null;
+  const dayLabel = (d: Date | string | null | undefined) => fmtDate(d, "UTC", "es-AR", "") || null;
 
   const asDefect = (d: any): TmsaDetailItem =>
     ({ id: d.id, code: d.defectCode, label: d.classification ?? d.defectCode, sublabel: `${d.status} · ${d.severity}`, entityType: "defect" });
   const asWorkOrder = (w: any): TmsaDetailItem =>
-    ({ id: w.id, code: w.workOrderCode, label: w.title ?? w.workOrderCode, sublabel: w.dueDate ? `Vencimiento ${isoDate(w.dueDate)}` : w.status, entityType: "workOrder" });
+    ({ id: w.id, code: w.workOrderCode, label: w.title ?? w.workOrderCode, sublabel: w.dueDate ? `Vencimiento ${dayLabel(w.dueDate)}` : w.status, entityType: "workOrder" });
   const asAsset = (a: any): TmsaDetailItem =>
     ({ id: a.id, code: a.assetCode, label: a.name ?? a.assetCode, sublabel: `Criticidad ${a.criticality} · ${a.status}`, entityType: "asset" });
   const asPlan = (pl: any): TmsaDetailItem =>
@@ -711,7 +711,7 @@ export async function getIsmMetricDetail(
       });
       return { items: rows.map(i => ({
         id: i.id, code: i.inspectionCode, label: i.type,
-        sublabel: `${i.status}${i.scheduledAt ? ` · ${isoDate(i.scheduledAt)}` : ""}`, entityType: "inspection" as const,
+        sublabel: `${i.status}${i.scheduledAt ? ` · ${dayLabel(i.scheduledAt)}` : ""}`, entityType: "inspection" as const,
       })) };
     }
     case "ismRuleBasedCriteria":
@@ -742,7 +742,7 @@ export async function getIsmMetricDetail(
       });
       return { items: rows.map(e => ({
         id: e.id, code: e.executionCode, label: e.template?.title ?? e.executionCode,
-        sublabel: isoDate(e.completedAt), entityType: "inspection" as const,
+        sublabel: dayLabel(e.completedAt), entityType: "inspection" as const,
       })) };
     }
     case "ismCertificatesWithPlan": {
@@ -753,7 +753,7 @@ export async function getIsmMetricDetail(
       });
       return { items: rows.map(c => ({
         id: c.id, code: c.certificateCode, label: c.name,
-        sublabel: `${c.issuingAuthority} · vence ${isoDate(c.expiryDate)}`, entityType: "certificate" as const,
+        sublabel: `${c.issuingAuthority} · vence ${dayLabel(c.expiryDate)}`, entityType: "certificate" as const,
       })) };
     }
 
@@ -883,7 +883,7 @@ export async function getIsmMetricDetail(
         orderBy: { eventDateTime: "desc" }, take: TAKE,
       });
       return { items: rows.map(c => ({
-        id: c.id, code: c.executionCode, label: `${isoDate(c.eventDateTime)}${c.port ? ` · ${c.port}` : ""}`,
+        id: c.id, code: c.executionCode, label: `${dayLabel(c.eventDateTime)}${c.port ? ` · ${c.port}` : ""}`,
         sublabel: c.notConformingItems > 0 ? `${c.notConformingItems} no conformes` : "Sin observaciones",
         entityType: "inspection" as const,
       })) };

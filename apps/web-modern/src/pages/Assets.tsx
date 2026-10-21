@@ -338,7 +338,7 @@ function fmtHistoryDate(value: string | null): string {
   // Las fechas de ejecución/OT se guardan como medianoche UTC (date-only). Hay
   // que formatearlas en UTC para no retroceder un día en husos negativos
   // (ej. ART UTC-3: 2025-12-17T00:00Z se vería como 16/12 en hora local).
-  return date.toLocaleDateString(undefined, { timeZone: "UTC" });
+  return date.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
 }
 
 const WoTypeBadge: React.FC<{ type: string }> = ({ type }) => {
@@ -1545,7 +1545,7 @@ const AssetModal: React.FC<AssetModalProps> = ({
                         <p className="text-lg font-black text-fg">{currentHours != null ? `${Number(currentHours).toLocaleString()} h` : "—"}</p>
                         {currentHoursDate && (
                           <p className="text-[10px] text-text-industrial/45">
-                            {currentHoursDate}
+                            {fmtDate(currentHoursDate)}
                             {currentHoursSource === "MANUAL" ? ` · ${t("assetHours.source.manual")}`
                               : currentHoursSource === "VOYAGE_TANK_REPORT" ? ` · ${t("assetHours.source.voyage")}`
                               : currentHoursSource === "DAILY_REPORT" ? ` · ${t("assetHours.source.daily")}` : ""}

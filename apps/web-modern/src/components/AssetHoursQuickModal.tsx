@@ -14,6 +14,7 @@
 // historial por equipo, equipos sin seguimiento y export a Excel.
 
 import React, { useRef, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { AlertTriangle, Check, ClockAlert, Copy, Gauge, Loader2, Save, Ship } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useT } from "../lib/i18n";
@@ -33,7 +34,6 @@ interface Props {
 }
 
 const isoDay = (offsetDays = 0) => new Date(Date.now() - offsetDays * 86_400_000).toISOString().slice(0, 10);
-const shortDate = (iso: string) => iso.split("-").slice(1).reverse().join("/");
 
 export const AssetHoursQuickModal: React.FC<Props> = ({
   sheet, readingDate, onDateChange, loading, vesselName, onSaved, onClose,
@@ -80,7 +80,7 @@ export const AssetHoursQuickModal: React.FC<Props> = ({
 
   const whenLabel = readingDate === today ? t("assetHours.quick.whenToday")
     : readingDate === yesterday ? t("assetHours.quick.whenYesterday")
-    : shortDate(readingDate);
+    : fmtDate(readingDate);
   const pct = stats.total > 0 ? (stats.done / stats.total) * 100 : 0;
   const allDone = stats.total > 0 && stats.done === stats.total;
 
@@ -115,8 +115,8 @@ export const AssetHoursQuickModal: React.FC<Props> = ({
             <span className="text-xs font-semibold text-text-industrial/60">{t("assetHours.quick.readingOf")}</span>
             <div className="flex rounded-lg border border-fg/10 bg-fg/5 p-0.5">
               {([
-                ["today", t("assetHours.quick.today").replace("{date}", shortDate(today)), () => { setOtherOpen(false); requestDate(today); }],
-                ["yesterday", t("assetHours.quick.yesterday").replace("{date}", shortDate(yesterday)), () => { setOtherOpen(false); requestDate(yesterday); }],
+                ["today", t("assetHours.quick.today").replace("{date}", fmtDate(today)), () => { setOtherOpen(false); requestDate(today); }],
+                ["yesterday", t("assetHours.quick.yesterday").replace("{date}", fmtDate(yesterday)), () => { setOtherOpen(false); requestDate(yesterday); }],
                 ["other", t("assetHours.quick.otherDate"), () => setOtherOpen(true)],
               ] as const).map(([key, label, onPick]) => {
                 const on = key === "other" ? otherOpen : !otherOpen && readingDate === (key === "today" ? today : yesterday);

@@ -45,20 +45,34 @@ function isDateOnly(date: Date): boolean {
     && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
 }
 
-function safeFormat(date: Date, locale: string, options: Intl.DateTimeFormatOptions): string {
+/**
+ * Día, mes, año, hora y minutos de un instante en una zona horaria, siempre con
+ * dos dígitos. Regla del producto: toda fecha que lee una persona sale
+ * DD/MM/AAAA, y con hora DD/MM/AAAA HH:MM (24 h), sea cual sea el idioma de la
+ * empresa. Por eso el texto se arma acá y no se le deja al locale (en-GB y
+ * pt-BR meten coma, es-AR con dateStyle corto da el año en dos cifras).
+ */
+function parts(date: Date, tz: string) {
+  const opts: Intl.DateTimeFormatOptions = {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  };
+  let list: Intl.DateTimeFormatPart[];
   try {
-    return date.toLocaleString(locale, options);
+    list = new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: tz }).formatToParts(date);
   } catch {
     // Zona horaria mal cargada en la empresa: no se rompe el documento por eso.
-    const { timeZone, ...rest } = options;
-    void timeZone;
-    return date.toLocaleString(locale, rest);
+    list = new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: "UTC" }).formatToParts(date);
   }
+  const p = (type: Intl.DateTimeFormatPartTypes) => list.find(x => x.type === type)?.value ?? "";
+  return { day: p("day"), month: p("month"), year: p("year"), hour: p("hour"), minute: p("minute") };
 }
 
 /**
- * Fecha (sin hora) para un documento. Las fechas de calendario salen tal como se
- * eligieron; los sellos de tiempo, en el día que corresponde a la hora local.
+ * Fecha (sin hora) para un documento, DD/MM/AAAA. Las fechas de calendario salen
+ * tal como se eligieron; los sellos de tiempo, en el día que corresponde a la
+ * hora local. `locale` queda por compatibilidad: el formato es el mismo en todos
+ * los idiomas.
  */
 export function fmtDate(
   d: Date | string | null | undefined,
@@ -66,16 +80,15 @@ export function fmtDate(
   locale = "es-AR",
   empty = "—",
 ): string {
+  void locale;
   if (!d) return empty;
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return empty;
-  return safeFormat(date, locale, {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    timeZone: isDateOnly(date) ? "UTC" : tz,
-  });
+  const p = parts(date, isDateOnly(date) ? "UTC" : tz);
+  return `${p.day}/${p.month}/${p.year}`;
 }
 
-/** Fecha y hora para un documento, en la hora de la empresa. */
+/** Fecha y hora para un documento, DD/MM/AAAA HH:MM en la hora de la empresa. */
 export function fmtDateTime(
   d: Date | string | null | undefined,
   tz: string,
@@ -87,14 +100,22 @@ export function fmtDateTime(
   if (Number.isNaN(date.getTime())) return empty;
   // Una fecha sola no tiene hora que mostrar: se imprime como fecha, si no
   // saldría "00:00" (o "21:00" del día anterior) inventando una precisión falsa.
-  if (isDateOnly(date)) {
-    return safeFormat(date, locale, { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
-  }
-  return safeFormat(date, locale, {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-    timeZone: tz,
-  });
+  if (isDateOnly(date)) return fmtDate(date, tz, locale, empty);
+  const p = parts(date, tz);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+}
+
+/**
+ * DD/MM/AAAA HH:MM siempre como instante, sin la regla de "medianoche UTC =
+ * fecha sola": para horarios elegidos a mano. Un permiso de 21:00 en Argentina
+ * cae justo en las 00:00 UTC y no puede perder la hora ni cambiar de día.
+ */
+export function fmtInstant(d: Date | string | null | undefined, tz: string, empty = "—"): string {
+  if (!d) return empty;
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return empty;
+  const p = parts(date, tz);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }
 
 /**
@@ -121,8 +142,10 @@ export function fmtTime(
   locale = "es-AR",
   empty = "—",
 ): string {
+  void locale;
   if (!d) return empty;
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return empty;
-  return safeFormat(date, locale, { hour: "2-digit", minute: "2-digit", timeZone: tz });
+  const p = parts(date, tz);
+  return `${p.hour}:${p.minute}`;
 }

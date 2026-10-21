@@ -1955,19 +1955,24 @@ export async function streamCopilotoChat(
     const tz = (await getCachedTenantBySlug(req.tenantSlug))?.settings?.timezone || "America/Argentina/Buenos_Aires";
     const now = new Date();
     let iso: string;
-    let human: string;
+    let weekday = "";
     try {
       iso = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-      human = new Intl.DateTimeFormat("es-AR", { timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now);
+      weekday = new Intl.DateTimeFormat("es-AR", { timeZone: tz, weekday: "long" }).format(now);
     } catch {
       iso = now.toISOString().slice(0, 10);
-      human = iso;
     }
+    // Regla del producto: la gente lee las fechas DD/MM/AAAA. El modelo copia el
+    // formato que ve, así que hoy también le llega así (antes "21 de octubre").
+    const dmy = `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
     volatileSystemBlocks.push({
       type: "text",
       text:
-        `## TODAY\nToday is ${human} (${iso}, timezone ${tz}). Compute every relative date from THIS date ` +
-        `("en 1 semana" = ${iso} + 7 days) and write dates for forms as YYYY-MM-DD. Never assume another year.`,
+        `## TODAY\nToday is ${weekday ? `${weekday} ` : ""}${dmy} (${iso}, timezone ${tz}). Compute every relative date from THIS date ` +
+        `("en 1 semana" = ${iso} + 7 days). Never assume another year.\n` +
+        `DATE FORMAT: in every text the user reads (answers, summaries, lists, tables) write dates as DD/MM/YYYY and ` +
+        `date-times as DD/MM/YYYY HH:MM (24 h), even when the data you receive comes as YYYY-MM-DD. ` +
+        `Use YYYY-MM-DD only inside form fields and the [CAMPOS] / [ACCIONES] JSON.`,
     });
   }
 

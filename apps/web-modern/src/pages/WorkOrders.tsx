@@ -12,7 +12,7 @@ import { usePendingProgress } from "../lib/progress-outbox";
 import { AssigneeSelect } from "../components/AssigneeSelect";
 import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
-import { fmtDate, parseLocalDate } from "../lib/utils";
+import { fmtDate, parseLocalDate, fmtDateTime } from "../lib/utils";
 import { woStage, woViewFilter, type WoStage } from "../lib/wo-view";
 import { PageHeader } from "../components/PageHeader";
 import { BlankFormButton } from "../components/BlankFormButton";
@@ -693,7 +693,7 @@ const ProgressNoteRow: React.FC<{
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return fmtDateTime(d);
   };
   const doSave = async () => {
     if (!onSave) return;
@@ -810,7 +810,7 @@ const SsLogRow: React.FC<{ entry: SsLogEntry; canEdit?: boolean; onSaved?: () =>
   const t = useT();
   const d = new Date(entry.fecha);
   const when = Number.isNaN(d.getTime()) ? entry.fecha
-    : d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    : fmtDateTime(d);
   const editable = !!canEdit && !!entry.logId;
   const [editing, setEditing] = useState(false);
   const [fecha, setFecha] = useState("");
@@ -1042,7 +1042,7 @@ export const ProgressNotesPanel: React.FC<{
                 </>
               )}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 text-[9px] text-fg/80 opacity-0 group-hover:opacity-100 transition-opacity">
-                {new Date(n.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                {fmtDateTime(n.createdAt)}
               </div>
             </button>
           ))}
@@ -1101,7 +1101,7 @@ export const ProgressNotesPanel: React.FC<{
               <p className="text-sm text-fg/90 max-w-2xl text-center whitespace-pre-line">{lightbox.text}</p>
             )}
             <p className="text-[10px] text-fg/40">
-              {new Date(lightbox.createdAt).toLocaleString("es-AR")}
+              {fmtDateTime(lightbox.createdAt)}
             </p>
           </div>
         </div>

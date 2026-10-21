@@ -15,6 +15,7 @@
  */
 
 import { getPrismaClient } from "../../platform/data/prisma-client";
+import { fmtDate } from "../../common/tenant-time";
 
 type PrismaClient = NonNullable<ReturnType<typeof getPrismaClient>>;
 
@@ -294,7 +295,7 @@ async function collectCertificateInsights(
     if (!cert.expiryDate) continue;
     const expiry = new Date(cert.expiryDate);
     const item: CertItem = { id: cert.id, code: cert.certificateCode, name: cert.name, expiry };
-    const display = `${cert.certificateCode} (${expiry.toISOString().split("T")[0]})`;
+    const display = `${cert.certificateCode} (${fmtDate(expiry, "UTC")})`;
     if (expiry < today) expired.push({ vesselCode: cert.vesselCode, display, item });
     else if (expiry <= in30Days) expiring.push({ vesselCode: cert.vesselCode, display, item });
   }
@@ -314,7 +315,7 @@ async function collectCertificateInsights(
       targetId:       item.id,
       vesselCode,
       title:          `Certificado vencido: ${item.name ?? item.code}`,
-      summary:        `El certificado ${item.code} venció el ${item.expiry.toISOString().split("T")[0]}.`,
+      summary:        `El certificado ${item.code} venció el ${fmtDate(item.expiry, "UTC")}.`,
       recommendation: "Iniciar proceso de renovación inmediata. Riesgo de incumplimiento regulatorio.",
     }),
   });
@@ -334,7 +335,7 @@ async function collectCertificateInsights(
       targetId:       item.id,
       vesselCode,
       title:          `Certificado próximo a vencer: ${item.name ?? item.code}`,
-      summary:        `El certificado ${item.code} vence el ${item.expiry.toISOString().split("T")[0]} (≤ 30 días).`,
+      summary:        `El certificado ${item.code} vence el ${fmtDate(item.expiry, "UTC")} (≤ 30 días).`,
       recommendation: "Iniciar proceso de renovación para evitar interrupción operacional.",
     }),
   });
@@ -369,7 +370,7 @@ async function collectWorkOrderInsights(
   for (const wo of workOrders) {
     const threshold = wo.criticality === "A" ? overdueA : overdueThreshold;
     if (!wo.dueDate || new Date(wo.dueDate) >= threshold) continue;
-    const dueStr = new Date(wo.dueDate).toISOString().split("T")[0];
+    const dueStr = fmtDate(wo.dueDate, "UTC");
     const hit = { vesselCode: wo.vesselCode, display: `${wo.workOrderCode} (${dueStr})`, item: wo };
     if (wo.criticality === "A") overdueA_list.push(hit);
     else overdueRest.push(hit);
@@ -392,7 +393,7 @@ async function collectWorkOrderInsights(
       targetId:       wo.id,
       vesselCode,
       title:          `Orden de trabajo vencida: ${wo.workOrderCode}`,
-      summary:        `La OT ${wo.workOrderCode} (criticidad A) venció el ${new Date(wo.dueDate!).toISOString().split("T")[0]} y sigue abierta.`,
+      summary:        `La OT ${wo.workOrderCode} (criticidad A) venció el ${fmtDate(wo.dueDate, "UTC")} y sigue abierta.`,
       recommendation: "Revisar y reprogramar o escalar la orden de trabajo.",
     }),
   });
@@ -412,7 +413,7 @@ async function collectWorkOrderInsights(
       targetId:       wo.id,
       vesselCode,
       title:          `Orden de trabajo vencida: ${wo.workOrderCode}`,
-      summary:        `La OT ${wo.workOrderCode} venció el ${new Date(wo.dueDate!).toISOString().split("T")[0]} y sigue abierta.`,
+      summary:        `La OT ${wo.workOrderCode} venció el ${fmtDate(wo.dueDate, "UTC")} y sigue abierta.`,
       recommendation: "Revisar y reprogramar o escalar la orden de trabajo.",
     }),
   });
@@ -444,7 +445,7 @@ async function collectCapaInsights(
   const groupHigh:     Array<{ vesselCode: string | null; display: string; item: Capa }> = [];
 
   for (const capa of capas) {
-    const dueStr = new Date(capa.dueDate!).toISOString().split("T")[0];
+    const dueStr = fmtDate(capa.dueDate, "UTC");
     const hit = { vesselCode: capa.vesselCode, display: `${capa.capaCode} (${dueStr})`, item: capa };
     if (capa.priority === "CRITICAL" || capa.priority === "HIGH") groupCritical.push(hit);
     else groupHigh.push(hit);
@@ -465,7 +466,7 @@ async function collectCapaInsights(
       targetId:       capa.id,
       vesselCode,
       title:          `CAPA vencida: ${capa.capaCode}`,
-      summary:        `La CAPA ${capa.capaCode} venció el ${new Date(capa.dueDate!).toISOString().split("T")[0]} sin completarse.`,
+      summary:        `La CAPA ${capa.capaCode} venció el ${fmtDate(capa.dueDate, "UTC")} sin completarse.`,
       recommendation: "Actualizar el estado de la CAPA o escalar al responsable.",
     }),
   });
@@ -485,7 +486,7 @@ async function collectCapaInsights(
       targetId:       capa.id,
       vesselCode,
       title:          `CAPA vencida: ${capa.capaCode}`,
-      summary:        `La CAPA ${capa.capaCode} venció el ${new Date(capa.dueDate!).toISOString().split("T")[0]} sin completarse.`,
+      summary:        `La CAPA ${capa.capaCode} venció el ${fmtDate(capa.dueDate, "UTC")} sin completarse.`,
       recommendation: "Actualizar el estado de la CAPA o escalar al responsable.",
     }),
   });

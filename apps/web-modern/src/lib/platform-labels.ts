@@ -330,7 +330,7 @@ export function auditActionKind(action: string): "login" | "login_failed" | "con
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** «hoy 08:27», «ayer 11:01», «03/10 09:28», «03/10/2025 09:28». */
+/** «hoy 08:27», «ayer 11:01» o «03/10/2025 09:28». */
 export function fmtWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -341,8 +341,7 @@ export function fmtWhen(iso: string | null | undefined): string {
   if (sameDay(d, now)) return `hoy ${time}`;
   const y = new Date(now); y.setDate(now.getDate() - 1);
   if (sameDay(d, y)) return `ayer ${time}`;
-  const date = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
-  return d.getFullYear() === now.getFullYear() ? `${date} ${time}` : `${date}/${d.getFullYear()} ${time}`;
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${time}`;
 }
 
 /** «hace 3 min», «hace 2 h», «hace 4 días». */

@@ -881,7 +881,7 @@ const DeferralsTab: React.FC<{ vesselCode: string }> = ({ vesselCode }) => {
                   <td className="px-3 py-2 text-fg/50">{d.sourceType.replace(/_/g, " ")}</td>
                   <td className="px-3 py-2 font-mono text-fg/60">{d.sourceCode ?? "—"}</td>
                   <td className="px-3 py-2 text-fg/50">
-                    {d.targetDate ? new Date(d.targetDate).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—"}
+                    {fmtDate(d.targetDate)}
                   </td>
                   <td className="px-3 py-2 text-fg/40 max-w-[180px] truncate">{d.justification ?? "—"}</td>
                 </tr>

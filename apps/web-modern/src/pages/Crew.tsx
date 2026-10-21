@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { fmtDate } from "../lib/utils";
 import { Users, Plus, Loader2, AlertTriangle, CheckCircle, LogOut, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -94,11 +95,6 @@ const CERT_TYPE_TKEY: Record<string, string> = {
   YELLOW_FEVER: "cert.type.yellow_fever",
   OTHER:        "cert.type.other",
 };
-
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toISOString().slice(0, 10);
-}
 
 function CertStatusBadge({ status }: { status: string }) {
   const t = useT();

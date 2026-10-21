@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { fmtInstant } from "../../../common/tenant-time";
 import { buildPermitChecklist } from "../../../common/regulations/maritime";
 import {
   val, PERMIT_TYPE_LABEL as TYPE_LABEL, PERMIT_STATUS_LABEL as STATUS_LABEL,
@@ -22,19 +23,7 @@ export async function renderStandardPermitPdf(ctx: PermitPdfContext): Promise<Bu
    * permiso se firma y se cuelga en el buque: la hora tiene que ser la de
    * abordo, no la del servidor.
    */
-  const fmt = (d: Date | string | null | undefined): string => {
-    if (!d) return "—";
-    const date = new Date(d);
-    try {
-      return date.toLocaleString("es-AR", {
-        dateStyle: "short", timeStyle: "short",
-        ...(tz ? { timeZone: tz } : {}),
-      });
-    } catch {
-      // Zona horaria mal cargada en la empresa: no se rompe el PDF por eso.
-      return date.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
-    }
-  };
+  const fmt = (d: Date | string | null | undefined): string => fmtInstant(d, tz || "UTC");
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 40, info: { Title: permit.permitCode } });

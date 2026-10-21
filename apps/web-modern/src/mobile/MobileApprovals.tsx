@@ -15,6 +15,7 @@
 // hoja de confirmación lo dice para que nadie firme a ciegas.
 
 import React, { useCallback, useEffect, useState } from "react";
+import { fmtDate as fmtDay } from "../lib/utils";
 import { LogOut, ChevronLeft, RefreshCw, Wrench, FileText, Check, X, Lock } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useVesselContext } from "../lib/vessel-context";
@@ -88,7 +89,7 @@ const PRIORITY_TONE: Record<string, string> = {
 const fmtDate = (iso: string | null): string | null => {
   if (!iso) return null;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString();
+  return Number.isNaN(d.getTime()) ? null : fmtDay(iso);
 };
 
 // ─── Pantalla ────────────────────────────────────────────────────────────────

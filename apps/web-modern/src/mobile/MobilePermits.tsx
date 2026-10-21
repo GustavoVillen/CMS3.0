@@ -15,6 +15,7 @@
 // backend vuelve a validar en cada acción.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import {
   LogOut, ChevronLeft, ChevronRight, RefreshCw, Lock, Check, X, FileText, Loader2, CheckCircle2,
   AlertTriangle, Flame, Wind, ArrowUp, Zap, Snowflake, Waves,
@@ -82,14 +83,14 @@ const hhmm = (d: Date) => d.toLocaleTimeString(undefined, { hour: "2-digit", min
 function useFmt() {
   const t = useT();
   return useMemo(() => ({
-    /** "Hoy 08:00", "Mañana 14:00" o "12/10 08:00". */
+    /** "Hoy 08:00", "Mañana 14:00" o "12/10/2026 08:00". */
     when(iso: string): string {
       const d = new Date(iso);
       const today = new Date();
       const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
       const day = d.toDateString() === today.toDateString() ? t("mpermit.today")
         : d.toDateString() === tomorrow.toDateString() ? t("mpermit.tomorrow")
-        : d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
+        : fmtDate(d);
       return `${day} ${hhmm(d)}`;
     },
     range(p: Permit): string {

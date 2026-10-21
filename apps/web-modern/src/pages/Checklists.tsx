@@ -11,7 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { downloadAuthedFile } from "../lib/authed-media";
 import { VesselLabel } from "../components/EntityLabels";
-import { fmtDate } from "../lib/utils";
+import { fmtDate, fmtDateTime } from "../lib/utils";
 import { useMocTrigger, MocTriggerHost, type MocTriggerEvent } from "../lib/use-moc-trigger";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
@@ -360,7 +360,7 @@ const ExecutionModal: React.FC<{
                 </div>
                 <div className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Fecha</p>
-                  <p className="text-xs font-bold text-fg">{new Date(exec.eventDateTime).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</p>
+                  <p className="text-xs font-bold text-fg">{fmtDateTime(exec.eventDateTime)}</p>
                 </div>
                 <div className="bg-fg/5 border border-fg/10 rounded-xl px-3 py-2">
                   <p className="text-[9px] uppercase tracking-wider text-text-industrial/40">Puerto</p>
@@ -412,7 +412,7 @@ const ExecutionModal: React.FC<{
                   <input value={signedByName} onChange={e => setSignedBy(e.target.value)} disabled={isLocked} className={inputCls} placeholder="Capitán / responsable" />
                 </div>
                 <div><label className={labelCls}>Firmado el</label>
-                  <input value={exec.signedAt ? new Date(exec.signedAt).toLocaleString("es-AR") : ""} disabled className={inputCls} />
+                  <input value={exec.signedAt ? fmtDateTime(exec.signedAt) : ""} disabled className={inputCls} />
                 </div>
                 <div className="col-span-2"><label className={labelCls}>Notas</label>
                   <AutoTextArea rows={2} value={notes} onChange={e => setNotes(e.target.value)} disabled={isLocked} className={inputCls + " resize-y"} />

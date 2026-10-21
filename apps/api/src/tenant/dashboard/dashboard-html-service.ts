@@ -94,13 +94,13 @@ function workloadChartSvg(
       + `<text x="${mL - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="#94a3b8">${v}</text>`;
   }).join("");
 
-  // Labels X (~12 marcas máximo, dd/mm)
+  // Labels X (~12 marcas máximo, dd/mm/aaaa)
   const step = Math.max(1, Math.ceil(n / 12));
   const xLabels = weeks.map((w, i) => {
     if (i % step !== 0 && i !== n - 1) return "";
     const d = w.weekStart.slice(0, 10);
-    const [, mm, dd] = d.split("-");
-    const lbl = dd && mm ? `${dd}/${mm}` : esc(d);
+    const [yyyy, mm, dd] = d.split("-");
+    const lbl = dd && mm ? `${dd}/${mm}/${yyyy}` : esc(d);
     return `<text x="${x(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#94a3b8">${lbl}</text>`;
   }).join("");
 

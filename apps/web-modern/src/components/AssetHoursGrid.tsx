@@ -12,6 +12,7 @@
 // El usuario confirma y la lectura entra igual, con nota.
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { fmtDate } from "../lib/utils";
 import { Check, CheckCircle2, History, Loader2, PartyPopper, Pencil, Save, Search } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -181,7 +182,7 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
       if (res.overwrote) {
         setAlert(t("assetHours.dateOverwrote")
           .replace("{asset}", row.assetName)
-          .replace("{date}", date));
+          .replace("{date}", fmtDate(date)));
       }
       onSaved();
     } catch (err) {
@@ -258,7 +259,7 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
           .replace("{asset}", row.assetName)
           .replace("{value}", fmtHours(value))
           .replace("{last}", fmtHours(last.runningHours))
-          .replace("{date}", last.readingDate));
+          .replace("{date}", fmtDate(last.readingDate)));
         continue;
       }
       const days = Math.max(
@@ -798,7 +799,7 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
                         title={prev
                           ? t("assetHours.deltaHint")
                               .replace("{last}", fmtHours(prev.runningHours))
-                              .replace("{date}", prev.readingDate)
+                              .replace("{date}", fmtDate(prev.readingDate))
                           : t("assetHours.deltaNone")}
                       >
                         {delta == null ? (

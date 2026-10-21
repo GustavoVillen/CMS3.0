@@ -14,6 +14,7 @@
 // (viscosidad, hierro, agua…) se siguen cargando en Muestreos y Análisis.
 
 import React, { useCallback, useEffect, useState } from "react";
+import { fmtDate } from "../../lib/utils";
 import { Beaker, Send, PackageCheck, Check, Loader2, TriangleAlert, FlaskConical, Info } from "lucide-react";
 import { api } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -212,7 +213,7 @@ export function SampleStepsBox({ srId, srStatus, providerName, onChanged, onDete
         {!sent && srStatus === "AUTORIZADA" && taken && <>
           <button type="button" onClick={() => void send()} disabled={busy} className={`${btn} bg-violet-600 text-white`}>
             {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-[18px] h-[18px]" />}
-            {t("ss.samp.sendToday").replace("{d}", new Date().toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" }))}
+            {t("ss.samp.sendToday").replace("{d}", fmtDate(new Date()))}
           </button>
           <p className="flex gap-2.5 items-start rounded-xl p-3 text-[13px] bg-violet-500/10 text-fg">
             <Info className="w-[17px] h-[17px] shrink-0 mt-px text-violet-600 dark:text-violet-300" />

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Loader2, Zap, AlertTriangle, Clock } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useWoTerms } from "../lib/i18n";
@@ -51,7 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function formatDue(plan: Plan): string {
   if (plan.nextDueHours != null) return `${plan.nextDueHours.toLocaleString()} h`;
-  if (plan.nextDueDate) return plan.nextDueDate.slice(0, 10);
+  if (plan.nextDueDate) return fmtDate(plan.nextDueDate);
   return "—";
 }
 
