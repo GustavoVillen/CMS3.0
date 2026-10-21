@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hoja de ruta SS — propuesta v1</title>
+<style>
+  :root{
+    --bg:#F4F5F7;--surface:#FFFFFF;--surface2:#F0F1F4;--fg:#1A1D24;--muted:#5B6270;--faint:#8A909C;
+    --border:#E2E4E9;--accent:#0284C7;--accentbg:rgba(2,132,199,.08);--accentbd:rgba(2,132,199,.28);
+    --success:#0E9F6E;--successbg:rgba(14,159,110,.10);--danger:#DC2626;--dangerbg:rgba(220,38,38,.08);
+    --warning:#D97706;--warningbg:rgba(217,119,6,.10);--shadow:0 20px 50px rgba(15,23,42,.25);
+  }
+  body.dark{
+    --bg:#080D1D;--surface:#1C2541;--surface2:rgba(255,255,255,.05);--fg:#E0E1DD;--muted:#A9AFBB;--faint:#7D8494;
+    --border:rgba(255,255,255,.10);--accent:#38BDF8;--accentbg:rgba(56,189,248,.10);--accentbd:rgba(56,189,248,.32);
+    --success:#06D6A0;--successbg:rgba(6,214,160,.12);--danger:#F87171;--dangerbg:rgba(248,113,113,.12);
+    --warning:#FBBF24;--warningbg:rgba(251,191,36,.12);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);font-size:14px;line-height:1.45}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accentbd);outline-offset:2px}
+
+  /* ── Barra del prototipo (no es parte del diseño) ── */
+  .demo{position:sticky;top:0;z-index:60;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:center;
+    background:#FEF3C7;color:#92400E;font-size:12px;padding:6px 10px;border-bottom:1px solid #FCD34D}
+  .demo b{font-weight:700}
+  .demo label{display:flex;gap:5px;align-items:center;cursor:pointer}
+
+  /* ── Pantalla de fondo (Seguimiento, atenuada) ── */
+  .page{padding:28px;filter:saturate(.6)}
+  .page .fake{height:58px;border-radius:14px;background:var(--surface);border:1px solid var(--border);margin-bottom:10px}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;z-index:40}
+
+  /* ── Ventana ── */
+  .modal{width:100%;max-width:760px;max-height:min(88vh,860px);display:flex;flex-direction:column;background:var(--surface);
+    border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+  .head{display:flex;gap:14px;align-items:flex-start;padding:20px 22px 14px}
+  .head .ttl{flex:1;min-width:0}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .head h2{margin:2px 0 0;font-size:17px;font-weight:800;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:8px;font-size:12.5px;color:var(--muted);align-items:center}
+  .meta.facts{gap:4px 18px;margin-top:6px}
+  .meta.facts b{color:var(--fg);font-weight:600}
+  .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:12px;color:var(--muted);background:var(--surface)}
+  .chip.code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--fg)}
+  .chip.status{font-weight:700;border-color:var(--accentbd);background:var(--accentbg);color:var(--accent)}
+  .chip.status.ok{border-color:rgba(14,159,110,.35);background:var(--successbg);color:var(--success)}
+  .chip.status.bad{border-color:rgba(220,38,38,.35);background:var(--dangerbg);color:var(--danger)}
+  .x{width:38px;height:38px;border-radius:999px;background:#E11D48;color:#fff;display:grid;place-items:center;flex-shrink:0}
+  .x:hover{filter:brightness(1.08)}
+  .x svg{width:18px;height:18px}
+
+  /* ── Etapas ── */
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:4px 22px 18px;border-bottom:1px solid var(--border)}
+  .step{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;min-width:0}
+  .step:not(:last-child)::after{content:"";position:absolute;top:13px;left:calc(50% + 17px);right:calc(-50% + 17px);height:2px;background:var(--border)}
+  .step.done:not(:last-child)::after{background:var(--success)}
+  .dot{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;border:2px solid var(--border);background:var(--surface);color:var(--faint);font-size:12px;font-weight:800;z-index:1}
+  .dot svg{width:15px;height:15px}
+  .step.done .dot{background:var(--success);border-color:var(--success);color:#fff}
+  .step.now .dot{border-color:var(--accent);color:var(--accent);background:var(--accentbg);box-shadow:0 0 0 4px var(--accentbg)}
+  .step.bad .dot{background:var(--danger);border-color:var(--danger);color:#fff}
+  .step .lbl{font-size:12.5px;font-weight:700;line-height:1.2}
+  .step.todo .lbl{color:var(--faint);font-weight:600}
+  .step.now .lbl{color:var(--accent)}
+  .step.bad .lbl{color:var(--danger)}
+  .step .sub{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .step.todo .sub{color:var(--faint)}
+
+  /* ── Historial ── */
+  .body{flex:1;min-height:180px;overflow-y:auto;padding:6px 22px 8px}
+  .day{position:sticky;top:0;z-index:2;background:var(--surface);display:flex;align-items:center;gap:10px;padding:12px 0 6px;font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+  .day::after{content:"";flex:1;height:1px;background:var(--border)}
+  .item{position:relative;display:grid;grid-template-columns:30px 1fr auto;gap:10px;padding:8px 6px;border-radius:10px;align-items:start}
+  .item:hover{background:var(--surface2)}
+  .item.flash{animation:flash 1.6s ease-out}
+  @keyframes flash{0%{background:var(--accentbg)}100%{background:transparent}}
+  .ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center}
+  .ic svg{width:15px;height:15px}
+  .ic.paso{background:var(--successbg);color:var(--success)}
+  .ic.paso.bad{background:var(--dangerbg);color:var(--danger)}
+  .ic.nota{background:var(--accentbg);color:var(--accent)}
+  .txt{min-width:0}
+  .txt .main{font-size:14px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-line}
+  .item.paso{padding:4px 6px;align-items:center}
+  .item.paso .ic{width:22px;height:22px;border-radius:999px;margin-left:3px}
+  .item.paso .ic svg{width:12px;height:12px}
+  .item.paso .main{font-size:13px;font-weight:600;color:var(--muted)}
+  .item.paso .main .by{font-weight:400;color:var(--faint)}
+  .txt .who{font-size:12px;color:var(--muted);margin-top:2px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:1px 6px;border-radius:5px;margin-right:6px;vertical-align:1px}
+  .tag.paso{background:var(--successbg);color:var(--success)}
+  .tag.nota{background:var(--accentbg);color:var(--accent)}
+  .more{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--faint);opacity:0}
+  .item:hover .more,.more:focus-visible,.more[aria-expanded="true"]{opacity:1}
+  @media (hover:none){.more{opacity:1}}
+  .more:hover{background:var(--surface);color:var(--fg)}
+  .menu{position:absolute;right:6px;top:38px;z-index:5;min-width:170px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.18);padding:5px}
+  .menu button{display:flex;gap:9px;align-items:center;width:100%;text-align:left;padding:8px 10px;border-radius:8px;font-size:13px}
+  .menu button:hover{background:var(--surface2)}
+  .menu button.danger{color:var(--danger)}
+  .menu svg{width:15px;height:15px}
+  .empty{text-align:center;padding:36px 10px;color:var(--muted)}
+  .empty b{display:block;color:var(--fg);font-size:15px;margin-bottom:4px}
+
+  /* ── Nueva novedad ── */
+  .composer{border-top:1px solid var(--border);padding:12px 22px 16px;background:var(--surface)}
+  .composer .lab{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+  .composer .lab span{font-weight:500;color:var(--faint)}
+  .box{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;background:var(--surface);transition:border-color .15s}
+  .box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentbg)}
+  .box textarea{border:0;resize:none;background:transparent;color:var(--fg);font:inherit;font-size:14px;padding:10px 12px 4px;min-height:44px;max-height:160px;outline:none}
+  .box textarea::placeholder{color:var(--faint)}
+  .bar{display:flex;align-items:center;gap:8px;padding:6px 8px 8px 10px}
+  .when{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--muted)}
+  .when:hover{border-color:var(--accentbd);color:var(--fg)}
+  .when svg{width:14px;height:14px}
+  .when input{border:0;background:transparent;font:inherit;color:var(--fg);width:92px;padding:0;outline:none;font-variant-numeric:tabular-nums}
+  .hint{flex:1;font-size:11.5px;color:var(--faint);text-align:right}
+  .go{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;font-weight:700;font-size:13.5px;border-radius:10px;padding:8px 14px}
+  body.dark .go{color:#0B132B}
+  .go:disabled{opacity:.4;cursor:not-allowed}
+  .go svg{width:15px;height:15px}
+  .closed{display:flex;gap:8px;align-items:center;justify-content:center;font-size:12.5px;color:var(--muted);padding:12px 22px;border-top:1px solid var(--border)}
+  .closed svg{width:15px;height:15px}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0F172A;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;display:flex;gap:8px;align-items:center;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .toast svg{width:15px;height:15px;color:#34D399}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:70;padding:16px}
+  .dlg .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:var(--shadow)}
+  .dlg p{margin:0 0 16px;font-size:14px}
+  .dlg .row{display:flex;justify-content:flex-end;gap:8px}
+  .btn2{border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px}
+  .btnD{background:var(--danger);color:#fff;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px}
+
+  @media (max-width:620px){
+    .head{padding:16px 16px 10px}.body,.composer{padding-left:16px;padding-right:16px}
+    .steps{grid-template-columns:1fr;gap:2px;padding:0 16px 12px}
+    .step{flex-direction:row;text-align:left;gap:10px}
+    .step:not(:last-child)::after{display:none}
+    .step .lbl{min-width:110px}
+    .hint{display:none}
+    .modal{max-height:94vh}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo">
+  <span><b>Prototipo v1</b> · datos de ejemplo · esta barra no es parte del diseño</span>
+  <label><input type="checkbox" id="optAdmin" checked> Soy administrador</label>
+  <label><input type="checkbox" id="optOpen" checked> SS abierta (se puede registrar)</label>
+  <label><input type="checkbox" id="optRej"> Ver como «No aprobada»</label>
+  <label><input type="checkbox" id="optEmpty"> Sin novedades</label>
+  <label><input type="checkbox" id="optDark"> Modo oscuro</label>
+</div>
+
+<div class="page" aria-hidden="true">
+  <div class="fake"></div><div class="fake"></div><div class="fake"></div><div class="fake"></div>
+</div>
+
+<div class="scrim">
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="ttl">
+    <header class="head">
+      <div class="ttl">
+        <div class="eyebrow">Hoja de ruta</div>
+        <h2 id="ttl">M02-MP-BR-18 · Analisis de Aceite · M02-MP-ER-18 · Analisis de Aceite</h2>
+        <div class="meta">
+          <span class="chip code">SS-7-M02-2026</span>
+          <span class="chip status" id="estado">En el taller · hace 12 días</span>
+        </div>
+        <div class="meta facts">
+          <span>Buque <b>MAO 02</b></span>
+          <span>Taller <b>CONDOR S.A.C.I</b></span>
+          <span>Equipo <b>Motores principales</b></span>
+          <span>OT <b>OT-M02-26-0201</b></span>
+        </div>
+      </div>
+      <button class="x" aria-label="Cerrar" title="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </header>
+
+    <nav class="steps" id="steps" aria-label="Etapas de la solicitud"></nav>
+
+    <div class="body" id="list" aria-live="polite"></div>
+
+    <footer id="foot"></footer>
+  </section>
+</div>
+
+<script>
+const IC = {
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  xmark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
+  note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12.5h5"/></svg>',
+  dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  pen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+  ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+};
+const HOY = "21/10/2026";
+const WEEK = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const weekday = d => { const [dd,mm,yy] = d.split("/").map(Number); return WEEK[new Date(yy,mm-1,dd).getDay()]; };
+
+// Datos de ejemplo: los de la captura. tipo "paso" = lo asienta el sistema; "nota" = lo escribió alguien.
+let rows = [
+  {id:1,fecha:"14/09/2026",tipo:"paso",hito:"CREADA",texto:"Solicitud creada",quien:"Edgar Alvarenga"},
+  {id:2,fecha:"17/09/2026",tipo:"paso",hito:"APROBADA",texto:"Aprobada",quien:"Jorge Bael"},
+  {id:3,fecha:"20/09/2026",tipo:"paso",hito:"AUTORIZADA",texto:"Autorizada",quien:"Jorge Bael"},
+  {id:4,fecha:"09/10/2026",tipo:"nota",texto:"Enviada por correo a jbael@mercuriogroup.com.py con el formulario adjunto",quien:"Jorge Bael"},
+  {id:5,fecha:"09/10/2026",tipo:"paso",hito:"ENVIADA",texto:"Enviada al taller CONDOR S.A.C.I",quien:"Jorge Bael"},
+  {id:6,fecha:"09/10/2026",tipo:"nota",texto:"Enviada al laboratorio sin los números de muestra (2 pendiente(s) de numerar)",quien:"Jorge Bael"},
+];
+let nextId = 100, flashId = null, openMenu = null;
+
+const $ = s => document.querySelector(s);
+const opt = id => $("#"+id).checked;
+
+function stepsModel(){
+  const has = h => rows.find(r => r.hito === h);
+  if (opt("optRej")) {
+    return [
+      {lbl:"Creada",st:"done",sub:"14/09/2026"},
+      {lbl:"No aprobada",st:"bad",sub:"17/09/2026"},
+      {lbl:"Autorizada",st:"todo",sub:"—"},{lbl:"En el taller",st:"todo",sub:"—"},{lbl:"Recibida",st:"todo",sub:"—"}];
+  }
+  const order = [["CREADA","Creada"],["APROBADA","Aprobada"],["AUTORIZADA","Autorizada"],["ENVIADA","En el taller"],["RECIBIDA","Recibida"]];
+  let firstTodo = true;
+  return order.map(([h,lbl]) => {
+    const r = has(h);
+    if (r) return {lbl, st: h === "ENVIADA" && !has("RECIBIDA") ? "now" : "done", sub: r.fecha};
+    const s = {lbl, st:"todo", sub: firstTodo ? "Pendiente" : "—"}; firstTodo = false; return s;
+  });
+}
+
+function renderSteps(){
+  $("#steps").innerHTML = stepsModel().map(s => `
+    <div class="step ${s.st}" ${s.st==="now"?'aria-current="step"':''}>
+      <div class="dot">${s.st==="done"?IC.check:s.st==="bad"?IC.xmark:s.st==="now"?"●":""}</div>
+      <div class="lbl">${s.lbl}</div>
+      <div class="sub">${s.st==="now" ? s.sub + " · ahora" : s.sub}</div>
+    </div>`).join("");
+  const est = $("#estado");
+  if (opt("optRej")) { est.className = "chip status bad"; est.textContent = "No aprobada"; }
+  else { est.className = "chip status"; est.textContent = "En el taller · hace 12 días"; }
+}
+
+function renderList(){
+  const list = $("#list");
+  const data = opt("optEmpty") ? rows.filter(r => r.tipo === "paso") : rows;
+  const shown = opt("optRej") ? data.filter(r => ["CREADA"].includes(r.hito)).concat([{id:9,fecha:"17/09/2026",tipo:"paso",hito:"RECHAZADA",texto:"No aprobada — falta la cotización del taller",quien:"Jorge Bael"}]) : data;
+  let html = "", lastDay = null;
+  for (const r of shown) {
+    if (r.fecha !== lastDay) {
+      html += `<div class="day">${r.fecha === HOY ? "Hoy" : weekday(r.fecha)} ${r.fecha}</div>`;
+      lastDay = r.fecha;
+    }
+    const bad = r.hito === "RECHAZADA";
+    const actions = opt("optAdmin") ? `<button class="more" aria-label="Más acciones" aria-haspopup="menu" aria-expanded="${openMenu===r.id}" data-menu="${r.id}">${IC.dots}</button>` : `<span></span>`;
+    html += `
+      <div class="item ${r.tipo} ${flashId===r.id?"flash":""}" data-id="${r.id}">
+        <div class="ic ${r.tipo} ${bad?"bad":""}" title="${r.tipo==="paso"?"Paso de la solicitud (lo registra el sistema)":"Novedad escrita por una persona"}">${r.tipo==="paso"?(bad?IC.xmark:IC.check):IC.note}</div>
+        <div class="txt">
+          ${r.tipo==="paso"
+            ? `<div class="main">${esc(r.texto)} <span class="by">· ${esc(r.quien)}</span></div>`
+            : `<div class="main">${esc(r.texto)}</div><div class="who">${esc(r.quien)}</div>`}
+        </div>
+        ${actions}
+        ${openMenu===r.id ? `<div class="menu" role="menu">
+            <button role="menuitem" data-edit="${r.id}">${IC.pen} ${r.tipo==="paso"?"Corregir paso":"Corregir novedad"}</button>
+            ${r.tipo==="nota"?`<button role="menuitem" class="danger" data-del="${r.id}">${IC.trash} Borrar novedad</button>`:""}
+          </div>` : ""}
+      </div>`;
+  }
+  if (!shown.some(r => r.tipo === "nota")) {
+    html += `<div class="empty"><b>Todavía no hay novedades</b>Anotá acá lo que pase con el pedido: el taller reprogramó, falta un repuesto, llegó la muestra…</div>`;
+  }
+  list.innerHTML = html;
+}
+
+function renderFoot(){
+  const foot = $("#foot");
+  if (!opt("optOpen") || opt("optRej")) {
+    foot.innerHTML = `<div class="closed">${IC.lock} La solicitud está cerrada: la hoja de ruta queda para consulta.</div>`;
+    return;
+  }
+  foot.innerHTML = `
+    <div class="composer">
+      <div class="lab">Nueva novedad <span>Quién asienta: vos (Jorge Bael)</span></div>
+      <div class="box">
+        <textarea id="nov" rows="1" placeholder="¿Qué pasó? Ej.: el taller reprogramó"></textarea>
+        <div class="bar">
+          <label class="when" title="Fecha de la novedad">${IC.cal}<input id="fec" value="${HOY}" inputmode="numeric" aria-label="Fecha de la novedad"></label>
+          <span class="hint">Enter para registrar · Shift+Enter, otra línea</span>
+          <button class="go" id="go" disabled>${IC.send} Registrar</button>
+        </div>
+      </div>
+    </div>`;
+  const nov = $("#nov"), go = $("#go"), fec = $("#fec");
+  const grow = () => { nov.style.height = "auto"; nov.style.height = Math.min(nov.scrollHeight, 160) + "px"; };
+  nov.addEventListener("input", () => { go.disabled = !nov.value.trim(); grow(); });
+  nov.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); add(); } });
+  fec.addEventListener("input", () => {
+    const d = fec.value.replace(/\D/g, "").slice(0, 8);
+    fec.value = d.length > 4 ? `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0,2)}/${d.slice(2)}` : d;
+  });
+  fec.addEventListener("blur", () => { if (fec.value.replace(/\D/g, "").length !== 8) fec.value = HOY; });
+  go.addEventListener("click", add);
+}
+
+function add(){
+  const nov = $("#nov"); const txt = nov.value.trim(); if (!txt) return;
+  const fecha = $("#fec").value;
+  const r = {id: nextId++, fecha, tipo:"nota", texto: txt, quien:"Jorge Bael"};
+  rows.push(r);
+  rows.sort((a,b) => key(a.fecha) - key(b.fecha));
+  flashId = r.id; $("#optEmpty").checked = false;
+  render();
+  const el = document.querySelector(`[data-id="${r.id}"]`); el && el.scrollIntoView({block:"nearest", behavior:"smooth"});
+  toast("Novedad registrada");
+  setTimeout(() => $("#nov") && $("#nov").focus(), 50);
+}
+const key = f => { const [d,m,y] = f.split("/").map(Number); return y*10000 + m*100 + d; };
+
+function toast(msg){
+  const t = document.createElement("div"); t.className = "toast"; t.innerHTML = IC.ok + msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
+}
+function confirmDel(id){
+  const d = document.createElement("div"); d.className = "dlg";
+  d.innerHTML = `<div class="card" role="alertdialog"><p>¿Borrar esta novedad de la hoja de ruta? No se puede deshacer.</p>
+    <div class="row"><button class="btn2">Cancelar</button><button class="btnD">Borrar</button></div></div>`;
+  document.body.appendChild(d);
+  d.querySelector(".btn2").onclick = () => d.remove();
+  d.querySelector(".btnD").onclick = () => { rows = rows.filter(r => r.id !== id); d.remove(); openMenu = null; render(); toast("Novedad borrada"); };
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+document.addEventListener("click", e => {
+  const m = e.target.closest("[data-menu]"), ed = e.target.closest("[data-edit]"), dl = e.target.closest("[data-del]");
+  if (m) { const id = +m.dataset.menu; openMenu = openMenu === id ? null : id; renderList(); return; }
+  if (ed) { openMenu = null; renderList(); alert("Abre la misma ventana de corrección que hoy (fecha, quién asienta, texto). No cambia."); return; }
+  if (dl) { confirmDel(+dl.dataset.del); return; }
+  if (openMenu !== null && !e.target.closest(".menu")) { openMenu = null; renderList(); }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && openMenu !== null) { openMenu = null; renderList(); } });
+["optAdmin","optOpen","optRej","optEmpty"].forEach(id => $("#"+id).addEventListener("change", () => { openMenu = null; render(); }));
+$("#optDark").addEventListener("change", e => document.body.classList.toggle("dark", e.target.checked));
+
+function render(){ renderSteps(); renderList(); renderFoot(); }
+render();
+$("#list").scrollTop = $("#list").scrollHeight;
+// La barra del prototipo no tapa la ventana (en el celular ocupa varios renglones).
+const fitScrim = () => { document.querySelector(".scrim").style.top = document.querySelector(".demo").offsetHeight + "px"; };
+fitScrim(); addEventListener("resize", fitScrim);
+</script>
+</body>
+</html>

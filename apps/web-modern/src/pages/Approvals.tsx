@@ -1207,20 +1207,32 @@ export const ApprovalsPage: React.FC = () => {
           afuera: se sale por la X. */}
       {exec?.kind === "route" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0">
-                <h2 className="text-sm font-bold text-fg truncate">{exec.row.code} — {exec.row.title ?? ""}</h2>
-                <p className="text-xs text-text-industrial/50 mt-0.5 truncate">
-                  {t("approvals.exec.hojaRuta")}{exec.row.providers[0] ? ` · ${exec.row.providers[0]}` : ""}
-                </p>
+          <div className="w-full max-w-3xl bg-surface dark:bg-[#0D1B2A] border border-fg/10 rounded-2xl shadow-2xl max-h-[88vh] flex flex-col overflow-hidden">
+            {/* Qué pedido es y dónde está, de un vistazo (prototipo hoja-de-ruta-v1). */}
+            <div className="flex items-start gap-3 shrink-0 px-6 pt-5 pb-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-text-industrial/45">{t("approvals.exec.hojaRuta")}</p>
+                <h2 className="mt-0.5 text-[17px] font-extrabold leading-snug text-fg line-clamp-2">{headlineOf(exec.row)}</h2>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full border border-fg/15 px-2 py-px font-mono text-[11.5px] text-fg">{exec.row.code}</span>
+                  <span className={`rounded-full border px-2 py-px text-[12px] font-bold ${
+                    exec.row.status === "COMPLETED" ? "border-success/35 bg-success/10 text-success"
+                      : exec.row.status === "REJECTED" || exec.row.status === "CANCELLED" ? "border-danger/35 bg-danger/10 text-danger"
+                      : "border-accent/30 bg-accent/10 text-accent"}`}>
+                    {t(`ss.stage.${exec.row.status}` as TranslationKey)}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[12.5px] text-text-industrial/60">
+                  <span>{t("hr.head.vessel")} <b className="font-semibold text-fg">{exec.row.vesselName ?? exec.row.vesselCode}</b></span>
+                  {exec.row.providers[0] && <span>{t("hr.head.shop")} <b className="font-semibold text-fg">{exec.row.providers[0]}</b></span>}
+                  {exec.row.assetName && <span>{t("hr.head.asset")} <b className="font-semibold text-fg">{exec.row.assetName}</b></span>}
+                  {exec.row.workOrderCode && <b className="font-semibold text-fg">{exec.row.workOrderCode}</b>}
+                </div>
               </div>
               <ModalCloseButton onClose={() => { setExec(null); if (progressDirty) void reload(); }} />
             </div>
-            <div className="flex-1 min-h-[min(18rem,50vh)] overflow-y-auto">
-              <HojaRutaBox srId={exec.row.id} editable={!!can?.srManage && !closedAtOf(exec.row)} isAdmin={user?.role === "TENANT_ADMIN"}
-                variant="list" onChanged={() => setProgressDirty(true)} />
-            </div>
+            <HojaRutaBox srId={exec.row.id} editable={!!can?.srManage && !closedAtOf(exec.row)} isAdmin={user?.role === "TENANT_ADMIN"}
+              variant="list" closed={!!closedAtOf(exec.row)} onChanged={() => setProgressDirty(true)} />
           </div>
         </div>
       )}
