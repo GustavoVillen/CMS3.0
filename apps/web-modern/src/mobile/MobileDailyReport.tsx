@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { ChevronLeft, CheckCircle, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -470,8 +471,7 @@ export const MobileDailyReport: React.FC = () => {
           </div>
           <div className="space-y-1.5">
             <p className={labelCls}>ETA próximo puerto</p>
-            <input
-              type="date"
+            <DateInput
               value={etaNextPort}
               onChange={e => setEtaNextPort(e.target.value)}
               className={inputCls}

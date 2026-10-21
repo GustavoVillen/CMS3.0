@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertOctagon, AlertTriangle, CalendarCheck, CalendarPlus, CalendarX, ChevronRight, Clock, FileDown, FileMinus, FileSpreadsheet, FlaskConical, Gauge, LayoutGrid, List, ListChecks, ListTree,
@@ -1496,9 +1497,9 @@ const AssetModal: React.FC<AssetModalProps> = ({
                   <div><label className={fl}>{t("asset.v23.serial")}</label><input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} className={inp} /></div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div><label className={fl}>{t("asset.v23.installed")}</label><input type="date" value={installationDate} onChange={e => setInstallationDate(e.target.value)} className={inp} /></div>
-                  <div><label className={fl}>{t("asset.v23.lastOverhaul")}</label><input type="date" value={lastOverhaulDate} onChange={e => setLastOverhaulDate(e.target.value)} className={inp} /></div>
-                  <div><label className={fl}>{t("asset.v23.replacement")}</label><input type="date" value={replacementDate} onChange={e => setReplacementDate(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("asset.v23.installed")}</label><DateInput value={installationDate} onChange={e => setInstallationDate(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("asset.v23.lastOverhaul")}</label><DateInput value={lastOverhaulDate} onChange={e => setLastOverhaulDate(e.target.value)} className={inp} /></div>
+                  <div><label className={fl}>{t("asset.v23.replacement")}</label><DateInput value={replacementDate} onChange={e => setReplacementDate(e.target.value)} className={inp} /></div>
                 </div>
                 <label className="flex items-center gap-2.5 rounded-xl border border-fg/10 bg-fg/[0.03] px-3 py-2.5 cursor-pointer hover:bg-fg/5">
                   <input type="checkbox" checked={trackDailyReport} onChange={e => setTrackDailyReport(e.target.checked)} className="w-4 h-4 rounded accent-accent shrink-0" />

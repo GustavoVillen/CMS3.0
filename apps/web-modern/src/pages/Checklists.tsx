@@ -1,6 +1,7 @@
 // Pre-Arrival / Pre-Departure / etc. checklists firmadas (SIRE 2.0 Ch. 4).
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateTimeInput } from "../components/DateField";
 import { ListChecks, Plus, Loader2, X, CheckCircle2, XCircle, MinusCircle, Settings, FileDown } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -338,7 +339,7 @@ const ExecutionModal: React.FC<{
                   </select>
                 </GuideField>
                 <div><label className={labelCls}>Fecha/hora</label>
-                  <input type="datetime-local" value={eventDateTime} onChange={e => setEventDT(e.target.value)} className={inputCls} />
+                  <DateTimeInput value={eventDateTime} onChange={e => setEventDT(e.target.value)} className={inputCls} />
                 </div>
                 <div><label className={labelCls}>Puerto</label>
                   <input value={port} onChange={e => setPort(e.target.value)} className={inputCls} />

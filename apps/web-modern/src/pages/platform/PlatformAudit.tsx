@@ -1,4 +1,5 @@
 import React from "react";
+import { DateInput } from "../../components/DateField";
 import { platformFetch } from "../../lib/platform-auth";
 import { DataTable, type Column } from "../../components/DataTable";
 import { PageIntro, StatusPill, FilterBar, FilterField, EmptyState, TwoLines, inputCls } from "../../components/platform/PlatformUi";
@@ -150,8 +151,8 @@ export const PlatformAuditPage: React.FC = () => {
             <option value="config">Configuración</option>
           </select>
         </FilterField>
-        <FilterField label="Desde"><input type="date" className={inputCls} value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} /></FilterField>
-        <FilterField label="Hasta"><input type="date" className={inputCls} value={to} min={from || undefined} onChange={e => setTo(e.target.value)} /></FilterField>
+        <FilterField label="Desde"><DateInput className={inputCls} value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} /></FilterField>
+        <FilterField label="Hasta"><DateInput className={inputCls} value={to} min={from || undefined} onChange={e => setTo(e.target.value)} /></FilterField>
       </FilterBar>
 
       {!loading && !error && rows.length === 0 ? (

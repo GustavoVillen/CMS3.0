@@ -6,6 +6,7 @@
 // carga a mano, que es como se completa a bordo.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DateInput, TimeInput } from "../DateField";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 
@@ -132,7 +133,7 @@ export function WoScheduleEditor({ workOrderId, canEdit, defaultPlace, defaultCo
               {rows.map(r => (
                 <tr key={r.id}>
                   <td className="px-1">
-                    <input type="date" disabled={!canEdit} className={cellCls}
+                    <DateInput disabled={!canEdit} className={cellCls}
                       value={toDateInput(r.workDate)}
                       onChange={e => patchLocal(r.id, "workDate", e.target.value)}
                       onBlur={e => { void save(r, "workDate", e.target.value); }} />
@@ -156,13 +157,13 @@ export function WoScheduleEditor({ workOrderId, canEdit, defaultPlace, defaultCo
                       onBlur={e => { void save(r, "company", e.target.value); }} />
                   </td>
                   <td className="px-1">
-                    <input type="time" disabled={!canEdit} className={cellCls}
+                    <TimeInput disabled={!canEdit} className={cellCls}
                       value={r.timeFrom ?? ""}
                       onChange={e => patchLocal(r.id, "timeFrom", e.target.value)}
                       onBlur={e => { void save(r, "timeFrom", e.target.value); }} />
                   </td>
                   <td className="px-1">
-                    <input type="time" disabled={!canEdit} className={cellCls}
+                    <TimeInput disabled={!canEdit} className={cellCls}
                       value={r.timeTo ?? ""}
                       onChange={e => patchLocal(r.id, "timeTo", e.target.value)}
                       onBlur={e => { void save(r, "timeTo", e.target.value); }} />

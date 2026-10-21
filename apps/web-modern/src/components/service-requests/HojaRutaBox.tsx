@@ -10,6 +10,7 @@
 // siendo la réplica del papel.
 
 import { useState } from "react";
+import { DateInput } from "../DateField";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFetch } from "../../lib/hooks";
 import { api } from "../../lib/api";
@@ -173,7 +174,7 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
       <div className="space-y-3">
         <div className="space-y-1.5">
           <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.date")}<RequiredMark /></label>
-          <input type="date" value={eFecha} onChange={e => setEFecha(e.target.value)}
+          <DateInput value={eFecha} onChange={e => setEFecha(e.target.value)}
             className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
         </div>
         <div className="space-y-1.5">
@@ -332,7 +333,7 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("hr.col.date")}</label>
-                <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+                <DateInput value={fecha} onChange={e => setFecha(e.target.value)}
                   className="w-full bg-fg/5 border border-fg/10 rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
                 <p className="text-[10px] text-text-industrial/40">{t("hr.add.dateHint")}</p>
               </div>
@@ -429,7 +430,7 @@ export function HojaRutaBox({ srId, editable, isAdmin, variant = "paper", onChan
 
       {editable && (
         <div className="flex divide-x divide-fg/25 border-b border-fg/25 bg-fg/5">
-          <input type="date" className="w-28 shrink-0 px-2 py-1 bg-transparent text-[12px] text-fg outline-none"
+          <DateInput className="w-28 shrink-0 px-2 py-1 bg-transparent text-[12px] text-fg outline-none"
             value={fecha} onChange={e => setFecha(e.target.value)} title="Sin fecha = hoy" />
           <input className="flex-1 min-w-0 px-2 py-1 bg-transparent text-[12px] text-fg placeholder-text-industrial/30 outline-none"
             value={novedad}

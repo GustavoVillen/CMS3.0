@@ -1,6 +1,7 @@
 // SIRE 2.0 Ch. 4 — Near Miss / Hazard Observation reporting.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateTimeInput } from "../components/DateField";
 import { AlertTriangle, Plus, Loader2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -213,7 +214,7 @@ const NearMissModal: React.FC<{ record: NearMiss | null; onClose: () => void; on
               </select>
             </div>
             <div><label className={labelCls}>Fecha/hora</label>
-              <input type="datetime-local" value={occurredAt} onChange={e => setOccurred(e.target.value)} className={inputCls} />
+              <DateTimeInput value={occurredAt} onChange={e => setOccurred(e.target.value)} className={inputCls} />
             </div>
             <div><label className={labelCls}>Lugar</label>
               <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Sala de máquinas, cubierta…" className={inputCls} />

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useSearchParams } from "react-router-dom";
 import { Download, Loader2, ShieldCheck } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -458,7 +459,7 @@ const CapaModal: React.FC<CapaModalProps> = ({ record, onClose, onSuccess }) => 
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.dueDate")}</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+                <DateInput value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={isTerminal} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
               </div>
             </div>
             {actionError && <p className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{actionError}</p>}

@@ -1,4 +1,5 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Activity,
@@ -919,7 +920,7 @@ const ExecutionModal: React.FC<ExecutionModalProps> = ({ plan, userName, userId,
 
               <div>
                 <label className={fl}>{t("mp.exec.executionDate")}</label>
-                <input type="date" value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
+                <DateInput value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
                 <div className="mt-1.5 flex gap-1.5">
                   {quickDays.map(q => {
                     const day = localIsoDay(q.back);
@@ -1179,7 +1180,7 @@ const PostponeModal: React.FC<PostponeModalProps> = ({ plan, onClose, onSuccess 
                 </p>
                 {isHoursBased
                   ? <input type="number" min="0" value={newDueHours} onChange={e => setNewDueHours(e.target.value)} className={`${inputCls} mt-1`} placeholder={t("mp.postpone.newDueHoursPlaceholder")} />
-                  : <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className={`${inputCls} mt-1`} />}
+                  : <DateInput value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className={`${inputCls} mt-1`} />}
               </div>
             </div>
 
@@ -3020,7 +3021,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                             {canEditMilestones ? (
                               needsHours(triggerType)
                                 ? <input type="number" value={lastExecHours} onChange={e => setLastExecHours(e.target.value)} placeholder="Horas" className={`${inputCls} font-mono`} />
-                                : <input type="date" value={lastExecDate} onChange={e => setLastExecDate(e.target.value)} className={`${inputCls} font-mono`} />
+                                : <DateInput value={lastExecDate} onChange={e => setLastExecDate(e.target.value)} className={`${inputCls} font-mono`} />
                             ) : (
                               <p className="py-2 text-sm text-fg font-mono">
                                 {needsHours(plan.triggerType)
@@ -3034,7 +3035,7 @@ export const MaintenancePlanModal: React.FC<MaintenancePlanModalProps> = ({ plan
                             {canEditMilestones ? (
                               needsHours(triggerType)
                                 ? <input type="number" value={autoNextDue ?? nextDueHoursOverride} onChange={e => { setNextDueTouched(true); setNextDueHoursOverride(e.target.value); }} placeholder="Horas" className={`${inputCls} font-mono text-accent`} />
-                                : <input type="date" value={autoNextDue ?? nextDueDateOverride} onChange={e => { setNextDueTouched(true); setNextDueDateOverride(e.target.value); }} className={`${inputCls} font-mono text-accent`} />
+                                : <DateInput value={autoNextDue ?? nextDueDateOverride} onChange={e => { setNextDueTouched(true); setNextDueDateOverride(e.target.value); }} className={`${inputCls} font-mono text-accent`} />
                             ) : (
                               <p className="py-2 text-sm font-mono text-accent">
                                 {isAdmin

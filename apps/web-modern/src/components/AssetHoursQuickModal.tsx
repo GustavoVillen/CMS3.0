@@ -14,6 +14,7 @@
 // historial por equipo, equipos sin seguimiento y export a Excel.
 
 import React, { useRef, useState } from "react";
+import { DateInput } from "./DateField";
 import { fmtDate } from "../lib/utils";
 import { AlertTriangle, Check, ClockAlert, Copy, Gauge, Loader2, Save, Ship } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -129,8 +130,7 @@ export const AssetHoursQuickModal: React.FC<Props> = ({
               })}
             </div>
             {otherOpen && (
-              <input
-                type="date"
+              <DateInput
                 value={readingDate}
                 max={today}
                 onChange={(e) => requestDate(e.target.value || today)}

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Loader2, FileCheck, RefreshCw } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -157,8 +158,7 @@ export const MobileCrewCerts: React.FC<MobileCrewCertsProps> = ({ initialFilter,
               Nuevo vencimiento<RequiredMark />
               {!newExpiry && <GuideNeedTag label="Falta" />}
             </label>
-            <input
-              type="date"
+            <DateInput
               value={newExpiry}
               onChange={e => setNewExpiry(e.target.value)}
               className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"

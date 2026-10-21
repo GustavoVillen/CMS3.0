@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { ChevronLeft, Loader2, CalendarCheck, CheckCircle } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -115,8 +116,7 @@ export const MobileDrills: React.FC<MobileDrillsProps> = ({ initialFilter, onBac
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Fecha de ejecución</label>
-            <input
-              type="date"
+            <DateInput
               value={completedDate}
               onChange={e => setCompletedDate(e.target.value)}
               className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50"

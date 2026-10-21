@@ -9,6 +9,7 @@
 // etapa dice qué toca hacer y quién lo hace.
 
 import React, { useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle, Anchor, BadgeCheck, BarChart3, Check, CheckCircle2, ChevronRight, CircleDashed, ClipboardList, Cog, CornerUpLeft, Cylinder, Download, FileDown,
@@ -799,10 +800,10 @@ const DrydockSpecDrawer: React.FC<{
                       <div><label className={fl}>{t("dds.port")}</label><input value={port} onChange={e => setPort(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div><label className={fl}>{t("dds.v26.dockIn")}</label><input type="date" value={plannedStartDate} onChange={e => setPlannedStartDate(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
+                      <div><label className={fl}>{t("dds.v26.dockIn")}</label><DateInput value={plannedStartDate} onChange={e => setPlannedStartDate(e.target.value)} disabled={!canEdit} className={inputCls} /></div>
                       <div>
                         <label className={fl}>{t("dds.v26.dockOut")}</label>
-                        <input type="date" value={plannedEndDate} min={plannedStartDate || undefined} onChange={e => setPlannedEndDate(e.target.value)} disabled={!canEdit} className={inputCls} />
+                        <DateInput value={plannedEndDate} min={plannedStartDate || undefined} onChange={e => setPlannedEndDate(e.target.value)} disabled={!canEdit} className={inputCls} />
                       </div>
                     </div>
                     <div>

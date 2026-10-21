@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { Users, Plus, Loader2, AlertTriangle, CheckCircle, LogOut, FileText } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -360,11 +361,11 @@ const CrewModal: React.FC<{ crew: Crew | null; onClose: () => void; onSaved: () 
                 </div>
                 <GuideField id="crew-sign-on" missing={!signOnDate}>
                   <label className={labelCls}>{t("crew.field.signOnDate")}<RequiredMark />{!signOnDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-                  <input type="date" value={signOnDate} onChange={e => setSignOnDate(e.target.value)} disabled={isLocked} className={inputCls} />
+                  <DateInput value={signOnDate} onChange={e => setSignOnDate(e.target.value)} disabled={isLocked} className={inputCls} />
                 </GuideField>
                 <div>
                   <label className={labelCls}>{t("crew.field.signOffDate")}</label>
-                  <input type="date" value={(crew?.signOffDate ?? "").slice(0, 10)} disabled className={inputCls} />
+                  <DateInput value={(crew?.signOffDate ?? "").slice(0, 10)} disabled className={inputCls} />
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>{t("crew.field.notes")}</label>
@@ -494,11 +495,11 @@ const CertificationsTab: React.FC<{ crew: Crew; isLocked: boolean; onChanged: ()
             </div>
             <div>
               <label className={labelCls}>{t("cert.issued")}</label>
-              <input type="date" value={issuedDate} onChange={e => setIssued(e.target.value)} className={inputCls} />
+              <DateInput value={issuedDate} onChange={e => setIssued(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>{t("cert.expires")}</label>
-              <input type="date" value={expiryDate} onChange={e => setExpiry(e.target.value)} className={inputCls} />
+              <DateInput value={expiryDate} onChange={e => setExpiry(e.target.value)} className={inputCls} />
             </div>
             <div className="col-span-2">
               <label className={labelCls}>{t("cert.url")}</label>

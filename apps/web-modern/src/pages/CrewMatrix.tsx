@@ -3,6 +3,7 @@
 // Reemplaza el sistema viejo de CrewCapability con TrainingItem + CrewTrainingRecord.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { Grid3x3, Loader2, AlertCircle, FileText } from "lucide-react";
 import { useVesselContext } from "../lib/vessel-context";
@@ -167,13 +168,13 @@ const CellEditor: React.FC<CellEditorProps> = ({ crew, item, existing, requireme
         <div className="p-6 space-y-3">
           <GuideField id="cm-cell-date" missing={!completedAt}>
             <label className={labelCls}>{t("cm.cellDate").replace(/\s*\*\s*$/, "")}<RequiredMark />{!completedAt && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-            <input type="date" value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
+            <DateInput value={completedAt} onChange={e => setCompletedAt(e.target.value)} className={inputCls} />
           </GuideField>
           <div>
             <label className={labelCls}>
               Vencimiento {item.validityYears ? <span className="text-text-industrial/40 normal-case">(auto: {item.validityYears} años)</span> : null}
             </label>
-            <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={inputCls} />
+            <DateInput value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>{t("cm.docUrl")}</label>

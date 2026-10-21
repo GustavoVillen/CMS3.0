@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { FileBarChart, Loader2, Locate, Plus, Printer, Save, Send, Sparkles, X } from "lucide-react";
 
@@ -633,7 +634,7 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ report, vessels
                 </div>
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("mr.etaNextPort")}</label>
-                  <input type="date" value={etaNextPort} onChange={e => setEtaNextPort(e.target.value)} disabled={isClosed} className={inputCls} />
+                  <DateInput value={etaNextPort} onChange={e => setEtaNextPort(e.target.value)} disabled={isClosed} className={inputCls} />
                 </div>
               </div>
 

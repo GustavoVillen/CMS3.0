@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useSearchParams } from "react-router-dom";
 import { ExternalLink, FileSpreadsheet, FileText, Folder, Loader2, Plus, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -425,11 +426,11 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <GuideField id="cert-issue-date" missing={!issueDate}>
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("col.issued")}<RequiredMark />{!issueDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-              <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} required className={inputCls} />
+              <DateInput value={issueDate} onChange={e => setIssueDate(e.target.value)} required className={inputCls} />
             </GuideField>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">Últ. Inspección</label>
-              <input type="date" value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />
+              <DateInput value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />
             </div>
           </div>
           {/* Inspecciones de clase: el certificado manda (se corrigen con el Ship
@@ -445,19 +446,19 @@ const CertificateForm: React.FC<CertFormProps> = ({ initial, onClose, onSaved })
               <span className="text-[10px] font-bold uppercase tracking-wider text-text-industrial/50">{t("cert.survey.due")}</span>
 
               <span className="text-xs font-semibold text-fg">{t("cert.survey.renewal")}</span>
-              <input type="date" aria-label={`${t("cert.survey.renewal")} · ${t("cert.survey.last")}`} value={surveys.classRenewalDate}
+              <DateInput aria-label={`${t("cert.survey.renewal")} · ${t("cert.survey.last")}`} value={surveys.classRenewalDate}
                 onChange={e => setSurvey("classRenewalDate", e.target.value)} className={inputCls} />
               <GuideField id="cert-expiry-date" missing={!expiryDate}>
-                <input type="date" aria-label={`${t("cert.survey.renewal")} · ${t("cert.survey.due")}`} value={expiryDate}
+                <DateInput aria-label={`${t("cert.survey.renewal")} · ${t("cert.survey.due")}`} value={expiryDate}
                   onChange={e => setExpiry(e.target.value)} required className={inputCls} />
               </GuideField>
 
               {SURVEY_ROWS.filter(r => !(isTug && r.last === "periodicSurveyDate")).map(r => (
                 <React.Fragment key={r.last}>
                   <span className="text-xs font-semibold text-fg">{t(r.label)}</span>
-                  <input type="date" aria-label={`${t(r.label)} · ${t("cert.survey.last")}`} value={surveys[r.last]}
+                  <DateInput aria-label={`${t(r.label)} · ${t("cert.survey.last")}`} value={surveys[r.last]}
                     onChange={e => setSurvey(r.last, e.target.value)} className={inputCls} />
-                  <input type="date" aria-label={`${t(r.label)} · ${t("cert.survey.due")}`} value={surveys[r.due]}
+                  <DateInput aria-label={`${t(r.label)} · ${t("cert.survey.due")}`} value={surveys[r.due]}
                     onChange={e => setSurvey(r.due, e.target.value)} className={inputCls} />
                 </React.Fragment>
               ))}

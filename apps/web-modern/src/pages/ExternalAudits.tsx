@@ -2,6 +2,7 @@
 // Registro histórico de inspecciones externas con findings.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ClipboardCheck, Plus, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ShieldAlert, Sparkles } from "lucide-react";
 import { ModalCloseButton } from "../components/ModalCloseButton";
@@ -274,7 +275,7 @@ const AuditModal: React.FC<{ audit: Audit | null; onClose: () => void; onSaved: 
               </select>
             </GuideField>
             <GuideField id="ea-date" missing={!auditDate}><label className={labelCls}>Fecha<RequiredMark />{!auditDate && <GuideNeedTag label="Falta" />}</label>
-              <input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className={inputCls} />
+              <DateInput value={auditDate} onChange={e => setAuditDate(e.target.value)} className={inputCls} />
             </GuideField>
             <div><label className={labelCls}>Resultado general</label>
               <select value={overallResult} onChange={e => setResult(e.target.value)} className={inputCls}>
@@ -588,7 +589,7 @@ const FindingAddForm: React.FC<{ auditId: string; onClose: () => void; onSaved: 
         </div>
         <div><label className={labelCls}>Categoría</label><input value={category} onChange={e => setCategory(e.target.value)} placeholder="Safety, Pollution..." className={inputCls + " text-xs"} /></div>
         <div><label className={labelCls}>Severidad</label><input value={severity} onChange={e => setSeverity(e.target.value)} placeholder="MAJOR / MINOR / CRITICAL" className={inputCls + " text-xs"} /></div>
-        <div><label className={labelCls}>Plazo rectificación</label><input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className={inputCls + " text-xs"} /></div>
+        <div><label className={labelCls}>Plazo rectificación</label><DateInput value={deadline} onChange={e => setDeadline(e.target.value)} className={inputCls + " text-xs"} /></div>
         <div className="flex items-end gap-2">
           <label className="flex items-center gap-2 text-xs text-fg"><input type="checkbox" checked={detentionRelated} onChange={e => setDetention(e.target.checked)} /> Detention-related</label>
         </div>
@@ -645,7 +646,7 @@ const FindingEditForm: React.FC<{ auditId: string; finding: Finding; onClose: ()
           </select>
         </div>
         <div><label className={labelCls}>Fecha de cierre</label>
-          <input type="date" value={clearingDate} onChange={e => setClearingDate(e.target.value)} className={inputCls + " text-xs"} />
+          <DateInput value={clearingDate} onChange={e => setClearingDate(e.target.value)} className={inputCls + " text-xs"} />
         </div>
       </div>
       <div><label className={labelCls}>Notas de evidencia</label>

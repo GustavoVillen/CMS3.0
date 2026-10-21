@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDateTime, fmtDate } from "../lib/utils";
 import { ChevronLeft, ChevronDown, Loader2, Camera, X, Plus, Type, Mic, Video as VideoIcon, Trash2, Pencil, Check, FileText, Upload } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -855,8 +856,7 @@ export const MobileWorkOrders: React.FC<MobileWorkOrdersProps> = ({ initialFilte
             </div>
             <div className="space-y-1.5">
               <p className="text-xs font-bold uppercase tracking-wider text-text-industrial/40">Fecha</p>
-              <input
-                type="date"
+              <DateInput
                 value={executionDate}
                 onChange={e => setExecutionDate(e.target.value)}
                 className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-accent/50"

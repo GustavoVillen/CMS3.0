@@ -7,6 +7,7 @@
 // servidor — sin esto, la pantalla mostraría un dato que no se guardó.
 
 import React, { useEffect, useState } from "react";
+import { DateInput } from "./DateField";
 
 export const cellCls =
   "w-full bg-transparent text-[11px] text-fg px-1.5 py-1 rounded border border-transparent " +
@@ -49,8 +50,7 @@ export const DateCell: React.FC<{
   const [draft, setDraft] = useState(cur);
   useEffect(() => setDraft(cur), [cur, resetKey]);
   return (
-    <input
-      type="date"
+    <DateInput
       className={cellCls + " font-mono"}
       value={draft}
       onChange={e => setDraft(e.target.value)}

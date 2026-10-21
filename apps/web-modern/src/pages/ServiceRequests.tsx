@@ -9,6 +9,7 @@
 // mismo que lo pidió a bordo.
 
 import React, { useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Check, CircleDashed, FileText, Flag, Hourglass, ListChecks, MoreHorizontal, Ship, Handshake, CheckCheck, Send, ShieldCheck, Play, FileDown, PackageCheck, ExternalLink, Save, Plus, Trash2, Pencil, Search, Truck, X, Loader2, Undo2, Ban } from "lucide-react";
 import { api } from "../lib/api";
@@ -846,7 +847,7 @@ function SsApprovalModal({ sr, step, role, onClose, onDone }: {
               : step === "APRUEBA" ? "Fecha de aprobación"
               : "Fecha de autorización"}
           </label>
-          <input type="date" className={inputCls} value={actionDate}
+          <DateInput className={inputCls} value={actionDate}
             onChange={e => setActionDate(e.target.value)} />
         </div>
       )}

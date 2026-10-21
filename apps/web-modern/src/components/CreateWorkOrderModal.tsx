@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { DateInput } from "./DateField";
 import { fmtDate } from "../lib/utils";
 import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
@@ -1798,12 +1799,12 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
               {(!prefill || isAdmin) && (
                 <div className="space-y-1.5">
                   <label className={labelCls}>{t("wo.modal.openDate")}</label>
-                  <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
+                  <DateInput value={openDate} onChange={e => setOpenDate(e.target.value)} className={inputCls} />
                 </div>
               )}
               <GuideField id="wo-new-due" missing={missGuide.dueDate}>
                 <label className={labelCls}>{t("wo.modal.dueDate")}{missGuide.dueDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
+                <DateInput value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
               </GuideField>
               <GuideField id="wo-new-hours" missing={missGuide.estimatedHours}>
                 <label className={labelCls}>{t("wo.modal.estimatedHours")}{missGuide.estimatedHours && <GuideNeedTag label={t("mp.guide.missing")} />}</label>

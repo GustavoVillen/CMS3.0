@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate, fmtDateTime } from "../lib/utils";
 import { FileBarChart, FileDown, History, Loader2, Package, RefreshCw } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -114,7 +115,7 @@ const InventoryTab: React.FC<{ vesselCode: string; onDownloaded?: () => void }> 
         </div>
         <div className="min-w-[140px]">
           <label className={labelCls}>Fecha snapshot</label>
-          <input type="date" value={asOfDate} onChange={e => setAsOfDate(e.target.value)} className={inputCls} />
+          <DateInput value={asOfDate} onChange={e => setAsOfDate(e.target.value)} className={inputCls} />
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => void reload()} className="px-3 py-1.5 text-xs font-semibold bg-fg/5 border border-fg/10 text-fg/60 rounded-lg hover:bg-fg/10 hover:text-fg transition-colors">

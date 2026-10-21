@@ -15,6 +15,7 @@
 // backend vuelve a validar en cada acción.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateTimeInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import {
   LogOut, ChevronLeft, ChevronRight, RefreshCw, Lock, Check, X, FileText, Loader2, CheckCircle2,
@@ -502,11 +503,11 @@ const ApproveSheet: React.FC<{
         <div className="space-y-2">
           <label className="block">
             <span className="block text-[11px] font-bold uppercase tracking-wider text-text-industrial/55 mb-1">{t("pm.validFrom")}</span>
-            <input type="datetime-local" value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
+            <DateTimeInput value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
           </label>
           <label className="block">
             <span className="block text-[11px] font-bold uppercase tracking-wider text-text-industrial/55 mb-1">{t("pm.validUntil")}</span>
-            <input type="datetime-local" value={to} onChange={e => setTo(e.target.value)} className={`${inputCls} ${badRange ? "border-amber-500 border-2" : ""}`} />
+            <DateTimeInput value={to} onChange={e => setTo(e.target.value)} className={`${inputCls} ${badRange ? "border-amber-500 border-2" : ""}`} />
           </label>
           {badRange && <p className="text-xs font-bold text-amber-700 dark:text-amber-300">{t("mpermit.badRange")}</p>}
         </div>

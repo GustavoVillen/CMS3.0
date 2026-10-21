@@ -12,6 +12,7 @@
 // El usuario confirma y la lectura entra igual, con nota.
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { DateInput } from "./DateField";
 import { fmtDate } from "../lib/utils";
 import { Check, CheckCircle2, History, Loader2, PartyPopper, Pencil, Save, Search } from "lucide-react";
 import { api, ApiError } from "../lib/api";
@@ -753,8 +754,7 @@ export const AssetHoursGrid = forwardRef<AssetHoursGridHandle, Props>(({
                           historial (de ahí salen los planes por horas), así que
                           es sólo del administrador; el backend lo revalida. */}
                       {canEditReadings && row.lastReading ? (
-                        <input
-                          type="date"
+                        <DateInput
                           value={row.lastReading.readingDate}
                           disabled={savingDateId === row.lastReading.id}
                           onChange={e => { void changeReadingDate(row, e.target.value); }}

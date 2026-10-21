@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2, Lock } from "lucide-react";
 import { AutoTextArea } from "../AutoTextArea";
+import { DateInput } from "../DateField";
 import {
   EVAL_GROUPS, EVAL_QUESTIONS, EFFECTIVENESS_QUESTIONS,
   EVALUATOR_AREAS, CHANGE_TYPES, LOCATION_TYPES,
@@ -164,7 +165,9 @@ const Field: React.FC<{ label: string; children: React.ReactNode; className?: st
 );
 
 const Text: React.FC<{ value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string; type?: string }> = ({ value, onChange, disabled, placeholder, type = "text" }) => (
-  <input type={type} value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} className={inputCls} />
+  type === "date"
+    ? <DateInput value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className={inputCls} />
+    : <input type={type} value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} className={inputCls} />
 );
 const Area: React.FC<{ value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string; rows?: number }> = ({ value, onChange, disabled, placeholder, rows = 2 }) => (
   <AutoTextArea value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} rows={rows} className={inputCls + " resize-y"} />

@@ -1,6 +1,7 @@
 // Management of Change (MOC) — workflow formal de cambios significativos.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useSearchParams } from "react-router-dom";
 import { GitBranch, Plus, Loader2, X, CheckCircle2, XCircle, Clock as ClockIcon, Sparkles, Download } from "lucide-react";
 import { downloadAuthedFile } from "../lib/authed-media";
@@ -587,7 +588,7 @@ export const MocModal: React.FC<{ moc: Moc | null; prefill?: MocPrefill; onClose
               </select>
             </div>
             <div><label className={labelCls}>{t("moc.plannedDate")}</label>
-              <input type="date" value={plannedDate} onChange={e => setPlanned(e.target.value)} disabled={isLocked} className={inputCls} />
+              <DateInput value={plannedDate} onChange={e => setPlanned(e.target.value)} disabled={isLocked} className={inputCls} />
             </div>
             <div className="col-span-2"><label className={labelCls}>{t("moc.impactAreas")}</label>
               <div className="flex flex-wrap gap-1.5">

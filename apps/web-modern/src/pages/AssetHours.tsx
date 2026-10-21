@@ -8,6 +8,7 @@
 // buques que no usan el M2.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { useSearchParams } from "react-router-dom";
 import { Check, Copy, Gauge, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -261,8 +262,7 @@ export const AssetHoursPage: React.FC = () => {
 
         <label className="flex items-center gap-2 text-xs text-text-industrial/60">
           {t("assetHours.readingDate")}
-          <input
-            type="date"
+          <DateInput
             value={readingDate}
             max={todayIso()}
             onChange={(e) => setReadingDate(e.target.value || todayIso())}
@@ -334,8 +334,7 @@ export const AssetHoursPage: React.FC = () => {
                             única forma de corregir una lectura mal cargada. */}
                         <td className="py-1.5 pr-2 whitespace-nowrap">
                           {canEditReadings ? (
-                            <input
-                              type="date"
+                            <DateInput
                               defaultValue={e.readingDate}
                               disabled={busyEntryId === e.id}
                               onBlur={ev => {

@@ -8,6 +8,7 @@
 // gas y adjuntos quedan para la PC. Lo aprueba el Superintendente o el Jefe SSMA.
 
 import React, { useEffect, useRef, useState } from "react";
+import { TimeInput } from "../components/DateField";
 import {
   Flame, Wind, ArrowUp, Zap, Snowflake, Waves, ShieldCheck, ArrowRight, Send, Loader2, Sparkles, Plus, Check,
   UserCheck, Monitor, Clock,
@@ -245,10 +246,10 @@ export const OnboardPermit: React.FC<{ onExit: () => void }> = ({ onExit }) => {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1 text-[12.5px] text-text-industrial/60">{t("ob.permit.from")}
-              <input id="ob-ptw-from" type="time" className={`${inputCls} font-mono`} value={from} onChange={e => setFrom(e.target.value)} />
+              <TimeInput id="ob-ptw-from" className={`${inputCls} font-mono`} value={from} onChange={e => setFrom(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1 text-[12.5px] text-text-industrial/60">{t("ob.permit.to")}
-              <input id="ob-ptw-to" type="time" className={`${inputCls} font-mono`} value={to} onChange={e => setTo(e.target.value)} />
+              <TimeInput id="ob-ptw-to" className={`${inputCls} font-mono`} value={to} onChange={e => setTo(e.target.value)} />
             </label>
           </div>
         </Field>

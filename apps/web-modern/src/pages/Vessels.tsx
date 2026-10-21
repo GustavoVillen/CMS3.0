@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { Ship, FileSpreadsheet, Plus, Trash2, Map } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "../lib/hooks";
@@ -306,7 +307,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
               <input value={buildCountry} onChange={e => setBuildCountry(e.target.value)} maxLength={80} placeholder="Paraguay" className="input-field" />
             </Field>
             <Field label="Fecha_Incorporacion">
-              <input value={incorporationDate} onChange={e => setIncorporationDate(e.target.value)} type="date" className="input-field" />
+              <DateInput value={incorporationDate} onChange={e => setIncorporationDate(e.target.value)} className="input-field" />
             </Field>
             <Field label="Tipo_Incorporacion">
               <input value={incorporationType} onChange={e => setIncorporationType(e.target.value)} maxLength={40} placeholder="Propio / Charteado" className="input-field" />

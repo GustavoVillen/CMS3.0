@@ -1,4 +1,5 @@
 import React from "react";
+import { DateInput } from "../../components/DateField";
 import { fmtDate } from "../../lib/utils";
 import { Download, Wrench } from "lucide-react";
 import { platformFetch, platformAuthedFetch } from "../../lib/platform-auth";
@@ -440,8 +441,8 @@ export const PlatformUsagePage: React.FC = () => {
         </FilterField>
         {period === "custom" && (
           <>
-            <FilterField label="Desde"><input type="date" className={inputCls} value={cFrom} onChange={(e) => setCFrom(e.target.value)} /></FilterField>
-            <FilterField label="Hasta"><input type="date" className={inputCls} value={cTo} onChange={(e) => setCTo(e.target.value)} /></FilterField>
+            <FilterField label="Desde"><DateInput className={inputCls} value={cFrom} onChange={(e) => setCFrom(e.target.value)} /></FilterField>
+            <FilterField label="Hasta"><DateInput className={inputCls} value={cTo} onChange={(e) => setCTo(e.target.value)} /></FilterField>
           </>
         )}
         <FilterField label="Empresa">

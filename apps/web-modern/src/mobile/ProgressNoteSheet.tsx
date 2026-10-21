@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { DateTimeInput } from "../components/DateField";
 import { Camera, Check, CheckCircle2, CloudOff, FileText, Loader2, Mic, Paperclip, Plus, Sparkles, Square, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { useCan } from "../lib/auth";
@@ -343,7 +344,7 @@ export const ProgressNoteSheet: React.FC<Props> = ({ workOrderId, onClose, onSav
                   ))}
                 </div>
                 {when === "other" && (
-                  <input type="datetime-local" value={otherWhen} max={toLocalInput(new Date())} onChange={e => setOtherWhen(e.target.value)}
+                  <DateTimeInput value={otherWhen} max={toLocalInput(new Date())} onChange={e => setOtherWhen(e.target.value)}
                     className="mt-2 w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent/50" />
                 )}
               </div>

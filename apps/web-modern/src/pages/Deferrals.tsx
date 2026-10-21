@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Clock, Download, ExternalLink, GitBranch, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -224,7 +225,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ deferralId, initialTargetDa
           </GuideField>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.targetDate")}</label>
-            <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
+            <DateInput value={targetDate} onChange={e => setTargetDate(e.target.value)} className="w-full bg-fg/5 border border-fg/10 rounded-xl px-3 py-2 text-sm text-fg placeholder-text-industrial/30 focus:outline-none focus:border-accent/50 disabled:opacity-60" />
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-text-industrial/60 uppercase tracking-wider">{t("def2.compensatory")}</label>

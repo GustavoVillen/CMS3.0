@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DateInput, DateTimeInput } from "../components/DateField";
 
 import { useSearchParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Camera, Check, CheckCheck, ChevronDown, CircleDashed, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Hammer, Hourglass, LayoutGrid, List, ListChecks, Loader2, Maximize2, Minimize2, MoreHorizontal, Paperclip, Pause, Pencil, Plus, RotateCcw, Search, Send, Ship, ShieldAlert, ShieldCheck, Sparkles, Trash2, Upload, User, Video as VideoIcon, Wrench, X, XCircle } from "lucide-react";
@@ -444,7 +445,7 @@ const HoldModal: React.FC<{ workOrder: WorkOrder; onClose: () => void; onSuccess
           </div>
           <div>
             <label className={labelCls}>{t("wo.holdTargetDate")}</label>
-            <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className={`${inputCls} mt-1`} />
+            <DateInput value={targetDate} onChange={e => setTargetDate(e.target.value)} className={`${inputCls} mt-1`} />
           </div>
           <div className="rounded-xl border border-fg/10 bg-fg/5 px-3 py-2.5">
             <label className="flex items-start gap-2.5 cursor-pointer">
@@ -715,7 +716,7 @@ const ProgressNoteRow: React.FC<{
       <td className="px-1">
         <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
           {editing ? (
-            <input type="datetime-local" value={draftWhen} max={toLocalInput(new Date())} disabled={saving}
+            <DateTimeInput value={draftWhen} max={toLocalInput(new Date())} disabled={saving}
               onChange={e => setDraftWhen(e.target.value)} aria-label={t("pn.when")}
               className="w-[150px] bg-fg/5 border-0 rounded-md px-1 py-0.5 text-[11px] text-fg focus:outline-none disabled:opacity-60" />
           ) : fmtTime(note.createdAt)}
@@ -846,7 +847,7 @@ const SsLogRow: React.FC<{ entry: SsLogEntry; canEdit?: boolean; onSaved?: () =>
         <div className={`${noteCellCls} text-text-industrial/70 whitespace-nowrap`}>
           {editing ? (
             <>
-              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} disabled={saving} aria-label={t("hr.col.date")} className={`${inCls} w-[150px]`} />
+              <DateInput value={fecha} onChange={e => setFecha(e.target.value)} disabled={saving} aria-label={t("hr.col.date")} className={`${inCls} w-[150px]`} />
               <input value={asienta} onChange={e => setAsienta(e.target.value)} disabled={saving} aria-label={t("hr.col.by")}
                 placeholder={t("hr.col.by")} className={`${inCls} mt-1 w-[150px]`} />
             </>
@@ -3161,14 +3162,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                       <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
                         {t("wo.modal.startDate")}
                       </label>
-                      <input type="date" value={startDate} onChange={e => changeStartDate(e.target.value)}
+                      <DateInput value={startDate} onChange={e => changeStartDate(e.target.value)}
                         disabled={!isEditable} className={inputCls} />
                     </div>
                     <div>
                       <label className="block text-[9px] font-bold uppercase tracking-wide text-text-industrial/50 mb-0.5">
                         {t("wo.modal.endDate")}
                       </label>
-                      <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)}
+                      <DateInput value={executionDate} onChange={e => setExecutionDate(e.target.value)}
                         disabled={!isEditable} className={inputCls} />
                     </div>
                   </div>
@@ -3616,8 +3617,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               /* FECHA del encabezado: la de apertura de la OT. Es el mismo dato
                  y el mismo estado que el campo de la sección de datos. */
               fecha={
-                <input
-                  type="date"
+                <DateInput
                   className={paperFieldCls}
                   value={openDate}
                   disabled={!((tramitaPhase === "SOLICITADA" || isAdmin) && isEditable)}
@@ -4248,7 +4248,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
           <div className="space-y-1.5">
             {guideLabel(t("wo.modal.openDate"))}
-            <input type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
+            <DateInput value={openDate} onChange={e => setOpenDate(e.target.value)}
               disabled={!((tramitaPhase === "SOLICITADA" || isAdmin) && isEditable)} className={inputCls} />
           </div>
         </div>
@@ -4403,7 +4403,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </>)}
           {needWrap("executionDate", <>
             {guideLabel(t("wo.modal.executionDate"), "executionDate")}
-            <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
+            <DateInput value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
           </>)}
         </div>
         {hoursFields(true)}
@@ -4453,8 +4453,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   {t("wo.modal.dueDate")}
                 </span>
                 {(tramitaPhase === "SOLICITADA" || isAdmin) && isEditable ? (
-                  <input
-                    type="date"
+                  <DateInput
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
                     title={tramitaPhase === "AUTORIZADA" ? t("wo.modal.dueDateAuthorizedHint") : undefined}
@@ -4853,7 +4852,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 [t("wo.modal.criticality"),workOrder.criticality,           "text-fg"],
                 [t("wo.modal.openDate"),   fmtDate(workOrder.openDate),     "text-fg",
                   (tramitaPhase === "SOLICITADA" || isAdmin) && isEditable
-                    ? <input key="od" type="date" value={openDate} onChange={e => setOpenDate(e.target.value)}
+                    ? <DateInput key="od" value={openDate} onChange={e => setOpenDate(e.target.value)}
                         className="mt-0.5 w-full bg-transparent text-xs text-fg border border-fg/10 rounded-md px-1.5 py-1 focus:outline-none focus:border-accent/50" />
                     : undefined],
                 // El VENCIMIENTO ya no está acá: vive al lado del badge de estado,
@@ -5027,7 +5026,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
               </div>
               <div className="space-y-1.5">
                 <label className={labelCls}>{t("wo.modal.executionDate")}</label>
-                <input type="date" value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
+                <DateInput value={executionDate} onChange={e => setExecutionDate(e.target.value)} disabled={!isEditable} className={inputCls} />
               </div>
             </div>
             {hoursFields(false)}
@@ -5279,8 +5278,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">Fecha de cierre</label>
-            <input
-              type="date"
+            <DateInput
               value={closeDate}
               onChange={e => setCloseDate(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"
@@ -5673,8 +5671,7 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
             <label className="text-xs font-semibold uppercase tracking-wider text-text-industrial/60">
               {step === "APRUEBA" ? "Fecha de aprobación" : "Fecha de autorización"}
             </label>
-            <input
-              type="date"
+            <DateInput
               value={actionDate}
               onChange={e => setActionDate(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-fg/5 border border-fg/10 text-fg text-sm focus:outline-none focus:ring-1 focus:ring-accent/40"

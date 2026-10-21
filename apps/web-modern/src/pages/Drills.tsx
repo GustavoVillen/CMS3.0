@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { DateInput, TimeInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { CalendarCheck, Plus, X, Loader2, AlertTriangle, Settings, ChevronDown, ChevronRight, Sparkles, FileText, Trash2 } from "lucide-react";
@@ -325,11 +326,11 @@ const DrillModal: React.FC<{
             </GuideField>
             <GuideField id="drill-scheduled-date" missing={!scheduledDate}>
               <label className={labelCls}>{t("drill.scheduledDate")}<RequiredMark />{!scheduledDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-              <input type="date" value={scheduledDate} onChange={e => setScheduled(e.target.value)} disabled={isLocked} className={inputCls} />
+              <DateInput value={scheduledDate} onChange={e => setScheduled(e.target.value)} disabled={isLocked} className={inputCls} />
             </GuideField>
             <div>
               <label className={labelCls}>{t("drill.scheduledTime")}</label>
-              <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} disabled={isLocked} className={inputCls} />
+              <TimeInput value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} disabled={isLocked} className={inputCls} />
               <p className="mt-1 text-[10px] text-text-industrial/40">{t("drill.scheduledTimeHelp")}</p>
             </div>
             {isLocked ? (
@@ -337,11 +338,11 @@ const DrillModal: React.FC<{
                 <>
                   <div>
                     <label className={labelCls}>{t("drill.completedDate")}</label>
-                    <input type="date" value={drill.completedDate.slice(0, 10)} disabled className={inputCls} />
+                    <DateInput value={drill.completedDate.slice(0, 10)} disabled className={inputCls} />
                   </div>
                   <div>
                     <label className={labelCls}>{t("drill.completedTime")}</label>
-                    <input type="time" value={drill.completedTime ?? ""} disabled className={inputCls} />
+                    <TimeInput value={drill.completedTime ?? ""} disabled className={inputCls} />
                   </div>
                 </>
               ) : null
@@ -349,12 +350,12 @@ const DrillModal: React.FC<{
               <>
                 <div>
                   <label className={labelCls}>{t("drill.completedDate")}</label>
-                  <input type="date" value={completedDate} onChange={e => setCompletedDate(e.target.value)} className={inputCls} />
+                  <DateInput value={completedDate} onChange={e => setCompletedDate(e.target.value)} className={inputCls} />
                   <p className="mt-1 text-[10px] text-text-industrial/40">{t("drill.completedHelp")}</p>
                 </div>
                 <div>
                   <label className={labelCls}>{t("drill.completedTime")}</label>
-                  <input type="time" value={completedTime} onChange={e => setCompletedTime(e.target.value)} className={inputCls} />
+                  <TimeInput value={completedTime} onChange={e => setCompletedTime(e.target.value)} className={inputCls} />
                 </div>
               </>
             )}

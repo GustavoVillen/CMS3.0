@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "./DateField";
 import { Gauge, History, List, Loader2, Ship, Table2, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -88,8 +89,7 @@ const DateCell: React.FC<{ value: string | null; onCommit: (v: string | null) =>
   const [draft, setDraft] = useState(cur);
   useEffect(() => setDraft(cur), [cur, resetKey]);
   return (
-    <input
-      type="date"
+    <DateInput
       className={cellCls + " font-mono"}
       value={draft}
       onChange={e => setDraft(e.target.value)}

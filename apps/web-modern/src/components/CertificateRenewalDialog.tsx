@@ -12,6 +12,7 @@
 // queda marcado como "pendiente de actualizar" en /certificates).
 
 import React, { useMemo, useRef, useState } from "react";
+import { DateInput } from "./DateField";
 import { ExternalLink, Folder, Loader2, RefreshCw } from "lucide-react";
 import { ModalCloseButton } from "./ModalCloseButton";
 import { GuideField, GuideNeedTag, RequiredMark } from "./GuideKit";
@@ -179,11 +180,11 @@ export const CertificateRenewalDialog: React.FC<{
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <GuideField id="cert-renew-issue" missing={!issueDate}>
               <label className={labelCls}>Nueva emisión<RequiredMark />{!issueDate && <GuideNeedTag label="Falta" />}</label>
-              <input type="date" value={issueDate} onChange={e => handleIssueChange(e.target.value)} className={inputCls} />
+              <DateInput value={issueDate} onChange={e => handleIssueChange(e.target.value)} className={inputCls} />
             </GuideField>
             <GuideField id="cert-renew-expiry" missing={!expiryDate}>
               <label className={labelCls}>Nuevo vencimiento<RequiredMark />{!expiryDate && <GuideNeedTag label="Falta" />}</label>
-              <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={inputCls} />
+              <DateInput value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className={inputCls} />
               {!validityDays && (
                 <p className="text-[11px] text-text-industrial/40">
                   No se pudo deducir la vigencia anterior: cargalo a mano.
@@ -194,7 +195,7 @@ export const CertificateRenewalDialog: React.FC<{
 
           <div className="space-y-1.5">
             <label className={labelCls}>Últ. inspección</label>
-            <input type="date" value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />
+            <DateInput value={lastInsp} onChange={e => setLastInsp(e.target.value)} className={inputCls} />
           </div>
 
           <div className="space-y-1.5">

@@ -12,6 +12,7 @@
 // Tres pasos: datos del remito → revisión → resumen. Nada se escribe en la base
 // hasta el botón de confirmar.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "../DateField";
 import { GuideNeedTag, RequiredMark } from "../GuideKit";
 import {
   PackagePlus, Upload, Loader2, CheckCircle2, AlertTriangle, Search, Plus, Trash2, FileText,
@@ -392,7 +393,7 @@ const SetupStep: React.FC<{
         </div>
         <div>
           <label className={labelCls}>{t("rcp.date")}</label>
-          <input type="date" value={p.receivedAt} onChange={e => p.setReceivedAt(e.target.value)} className={inputCls} />
+          <DateInput value={p.receivedAt} onChange={e => p.setReceivedAt(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className={labelCls}>{t("rcp.docNumber")}</label>

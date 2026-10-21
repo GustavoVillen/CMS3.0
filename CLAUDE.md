@@ -97,7 +97,10 @@ internacionalizar una pantalla y `audit-i18n` para detectar faltantes.
 y con hora DD/MM/AAAA HH:MM (24 h), en pantalla, PDF, Excel, correos y textos de la IA, en
 cualquier idioma. Front: `fmtDate` / `fmtDateTime` / `fmtTime` de `lib/utils.ts`. Back: los
 de `common/tenant-time.ts`. Nada de `toLocaleDateString`, `month: "short"`, `slice(0, 10)`
-a la vista ni fechas sin año. AAAA-MM-DD sólo en inputs, claves, JSON y nombres de archivo.
+a la vista ni fechas sin año. AAAA-MM-DD sólo en valores de inputs, claves, JSON y nombres de
+archivo. Campos para cargar fechas: `DateInput` / `DateTimeInput` / `TimeInput` de
+`components/DateField.tsx`, nunca `<input type="date|datetime-local|time">` (el navegador
+los dibuja con el idioma de Chrome: en inglés salen mm/dd/yyyy y AM/PM).
 
 **UX:** priorizar legibilidad operativa y menos fricción de carga para tripulación,
 superintendencia y admin. Estados importantes visibles. No recargar la interfaz. No mover

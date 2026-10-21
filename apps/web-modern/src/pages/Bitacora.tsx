@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DateInput } from "../components/DateField";
 import { fmtDate } from "../lib/utils";
 import { ScrollText, FileSpreadsheet, ExternalLink, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -360,9 +361,9 @@ export const BitacoraPage: React.FC = () => {
             <option value="">{t("common.allTypes")}</option>
             {ENTITY_TYPE_VALUES.map(v => <option key={v} value={v}>{t(ENTITY_TKEY[v])}</option>)}
           </select>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
+          <DateInput value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
           <span className="text-text-industrial/30 text-xs">→</span>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} className={inputCls} />
+          <DateInput value={to} onChange={e => setTo(e.target.value)} className={inputCls} />
           {hasFilters && (
             <button onClick={clearFilters} className="px-3 py-1.5 rounded-lg bg-fg/5 border border-fg/10 text-xs text-text-industrial/80 hover:text-fg transition-all">
               {t("bit.clear")}

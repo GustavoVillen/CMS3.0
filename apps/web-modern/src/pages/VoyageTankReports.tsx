@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { DateTimeInput } from "../components/DateField";
 import { useSearchParams } from "react-router-dom";
 import { CheckCircle, FileText, Fuel, Loader2, Plus, Trash2 } from "lucide-react";
 import { useFetch } from "../lib/hooks";
@@ -393,7 +394,7 @@ const VoyageTankReportDrawer: React.FC<DrawerProps> = ({ report, onClose, onSave
               </GuideField>
               <div className="space-y-1.5">
                 <label className={labelCls}>Fecha / hora</label>
-                <input type="datetime-local" value={reportDateTime} onChange={e => setReportDateTime(e.target.value)} disabled={isClosed} className={inputCls} />
+                <DateTimeInput value={reportDateTime} onChange={e => setReportDateTime(e.target.value)} disabled={isClosed} className={inputCls} />
               </div>
               <div className="space-y-1.5">
                 <label className={labelCls}>Estado</label>
@@ -519,8 +520,8 @@ const VoyageTankReportDrawer: React.FC<DrawerProps> = ({ report, onClose, onSave
                   <div className="space-y-1.5"><label className={labelCls}>Km inicio</label><input type="number" value={kmStart} onChange={e => setKmStart(e.target.value)} disabled={isClosed} placeholder="773" className={inputCls} /></div>
                   <div className="space-y-1.5"><label className={labelCls}>Km fin</label><input type="number" value={kmEnd} onChange={e => setKmEnd(e.target.value)} disabled={isClosed} placeholder="1578" className={inputCls} /></div>
                   <div className="space-y-1.5"><label className={labelCls}>Días de navegación</label><input type="number" value={daysNav} onChange={e => setDaysNav(e.target.value)} disabled={isClosed} placeholder="auto" className={inputCls} /></div>
-                  <div className="space-y-1.5"><label className={labelCls}>Fecha inicio</label><input type="datetime-local" value={dateStart} onChange={e => setDateStart(e.target.value)} disabled={isClosed} className={inputCls} /></div>
-                  <div className="space-y-1.5"><label className={labelCls}>Fecha fin</label><input type="datetime-local" value={dateEnd} onChange={e => setDateEnd(e.target.value)} disabled={isClosed} className={inputCls} /></div>
+                  <div className="space-y-1.5"><label className={labelCls}>Fecha inicio</label><DateTimeInput value={dateStart} onChange={e => setDateStart(e.target.value)} disabled={isClosed} className={inputCls} /></div>
+                  <div className="space-y-1.5"><label className={labelCls}>Fecha fin</label><DateTimeInput value={dateEnd} onChange={e => setDateEnd(e.target.value)} disabled={isClosed} className={inputCls} /></div>
                   <div className="space-y-1.5"><label className={labelCls}>Jefe de Máquinas</label><input value={signatory} onChange={e => setSignatory(e.target.value)} disabled={isClosed} className={inputCls} /></div>
                   <div className="space-y-1.5"><label className={labelCls}>Recepción bunker (L)</label><input type="number" value={bunkerReceived} onChange={e => setBunkerReceived(e.target.value)} disabled={isClosed} placeholder="0" className={inputCls} /></div>
                   <div className="space-y-1.5"><label className={labelCls}>Entrega a barcazas (L)</label><input type="number" value={bargeDelivered} onChange={e => setBargeDelivered(e.target.value)} disabled={isClosed} placeholder="0" className={inputCls} /></div>

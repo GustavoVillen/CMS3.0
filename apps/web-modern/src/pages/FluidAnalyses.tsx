@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   FlaskConical, Plus, Upload, Sparkles, Loader2, X, Eye, Edit3, Save,
@@ -671,7 +672,7 @@ function SampleFormModal({
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className={labelCls}>{t("fa.sampleDate").replace(/\s*\*\s*$/, "")}<RequiredMark /></label>
-            <input type="date" value={sampledAt} onChange={e => setSampledAt(e.target.value)} className={inputCls} />
+            <DateInput value={sampledAt} onChange={e => setSampledAt(e.target.value)} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>{t("fa.runHours")}</label>
@@ -1721,7 +1722,7 @@ function ResultFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Fecha de recepción</label>
-              <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
+              <DateInput value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
             </div>
             <GuideField id="fa-f-verdict" missing={!verdict}>
               <label className={labelCls}>{t("fa.verdict").replace(/\s*\*\s*$/, "")}<RequiredMark />{!verdict && <GuideNeedTag label={t("mp.guide.missing")} />}</label>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { DateInput } from "../components/DateField";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   CheckCircle, ClipboardCopy, Droplets, FileText, Fuel, Loader2, Locate, Plus, RotateCcw, Send, Trash2,
@@ -1314,7 +1315,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                   </GuideField>
                   <GuideField id="dr-new-date" missing={!newReportDate}>
                     <label className={labelCls}>{t("dr.dateReq").replace(/\s*\*\s*$/, "")}<RequiredMark />{!newReportDate && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-                    <input type="date" value={newReportDate} onChange={e => setNewReportDate(e.target.value)} className={inputCls} />
+                    <DateInput value={newReportDate} onChange={e => setNewReportDate(e.target.value)} className={inputCls} />
                   </GuideField>
                 </div>
               )}
@@ -1415,7 +1416,7 @@ const DailyReportDetailDrawer: React.FC<DetailDrawerProps> = ({ report, onClose,
                 </div>
                 <div className="space-y-1.5">
                   <label className={labelCls}>ETA próximo puerto</label>
-                  <input type="date" value={etaNextPort} onChange={e => setEtaNextPort(e.target.value)} disabled={isClosed} className={inputCls} />
+                  <DateInput value={etaNextPort} onChange={e => setEtaNextPort(e.target.value)} disabled={isClosed} className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

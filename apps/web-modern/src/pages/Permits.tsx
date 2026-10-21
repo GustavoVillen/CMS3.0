@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
+import { DateTimeInput } from "../components/DateField";
 import { fmtDate, fmtDateTime } from "../lib/utils";
 import { useSearchParams } from "react-router-dom";
 import { useOpenNewFromUrl } from "../lib/deep-link";
@@ -903,7 +904,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <GuideField id="pm-f-start" missing={missingNew.start}>
             <label className={fl}>{t("pm.wiz.starts")}<RequiredMark />{missingNew.start && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-            <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} className={inputCls} />
+            <DateTimeInput value={plannedStart} onChange={e => setPlannedStart(e.target.value)} className={inputCls} />
             <div className="flex flex-wrap gap-1.5">
               <button type="button" className={quickBtn} onClick={() => setStartAt(0)}>{t("pm.wiz.today8")}</button>
               <button type="button" className={quickBtn} onClick={() => setStartAt(1)}>{t("pm.wiz.tomorrow8")}</button>
@@ -911,7 +912,7 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
           </GuideField>
           <GuideField id="pm-f-end" missing={missingNew.end}>
             <label className={fl}>{t("pm.wiz.ends")}<RequiredMark />{missingNew.end && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-            <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} className={inputCls} />
+            <DateTimeInput value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} className={inputCls} />
             <div className="flex flex-wrap gap-1.5">
               <button type="button" className={quickBtn} onClick={() => setEndAt(4)}>+4 h</button>
               <button type="button" className={quickBtn} onClick={() => setEndAt(8)}>+8 h</button>
@@ -1085,8 +1086,8 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
           return canApprove
             ? card("border-yellow-400/70 bg-yellow-500/[0.08]", "bg-yellow-600", PenLine, t("pm.edit.reqTitle"), t("pm.edit.reqDesc"),
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
-                  <div><label className={fl}>{t("pm.validFrom")}</label><input type="datetime-local" value={approveFrom} onChange={e => setApproveFrom(e.target.value)} className={inputCls} /></div>
-                  <div><label className={fl}>{t("pm.validUntil")}</label><input type="datetime-local" value={approveTo} onChange={e => setApproveTo(e.target.value)} className={inputCls} /></div>
+                  <div><label className={fl}>{t("pm.validFrom")}</label><DateTimeInput value={approveFrom} onChange={e => setApproveFrom(e.target.value)} className={inputCls} /></div>
+                  <div><label className={fl}>{t("pm.validUntil")}</label><DateTimeInput value={approveTo} onChange={e => setApproveTo(e.target.value)} className={inputCls} /></div>
                   {/* Aprobar activa en el mismo momento; espacio confinado sin prueba de gases vigente queda sólo aprobado. */}
                   {isEnclosed && !gasOk && <p className="sm:col-span-2 text-xs font-semibold text-amber-700 dark:text-amber-300">{t("pm.edit.approveNoActivate")}</p>}
                 </div>,
@@ -1217,11 +1218,11 @@ export const PermitModal: React.FC<PermitModalProps> = ({ permit, prefill, onClo
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <GuideField id="pm-e-start" missing={isEditable && !plannedStart}>
                       <label className={fl}>{t("pm.wiz.starts")}<RequiredMark />{isEditable && !plannedStart && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-                      <input type="datetime-local" value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
+                      <DateTimeInput value={plannedStart} onChange={e => setPlannedStart(e.target.value)} disabled={!isEditable} className={inputCls} />
                     </GuideField>
                     <GuideField id="pm-e-end" missing={isEditable && !plannedEnd}>
                       <label className={fl}>{t("pm.wiz.ends")}<RequiredMark />{isEditable && !plannedEnd && <GuideNeedTag label={t("mp.guide.missing")} />}</label>
-                      <input type="datetime-local" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
+                      <DateTimeInput value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} disabled={!isEditable} className={inputCls} />
                     </GuideField>
                   </div>
                 </GuideSection>

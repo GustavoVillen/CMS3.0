@@ -8,6 +8,7 @@
 // se pierde pase lo que pase con el resto del flujo — cualquier falla
 // posterior es un aviso, nunca un rollback.
 import React, { useCallback, useMemo, useState } from "react";
+import { DateInput } from "../DateField";
 import { Camera, Loader2, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import { confirmPlanWoDuplicate } from "../../lib/plan-wo-guard";
@@ -354,7 +355,7 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
                       <label className={labelCls + " mb-0"}>{t("fa.sampleDate")}</label>
                       {conf.sampledAt && <ConfidenceBadge confidence={conf.sampledAt} />}
                     </div>
-                    <input type="date" value={sampledAt} onChange={e => setSampledAt(e.target.value)} className={inputCls} />
+                    <DateInput value={sampledAt} onChange={e => setSampledAt(e.target.value)} className={inputCls} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -367,7 +368,7 @@ export const ScanFluidSampleWizard: React.FC<Props> = ({ assets, vessels, onClos
                   </div>
                   <div>
                     <label className={labelCls}>{t("fa.receivedAt")}</label>
-                    <input type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
+                    <DateInput value={receivedAt} onChange={e => setReceivedAt(e.target.value)} className={inputCls} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
