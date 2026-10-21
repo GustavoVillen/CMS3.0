@@ -16,9 +16,9 @@
 // `POST /app/pms/maintenance-plans/:id/open-work-order` y el PATCH del plan.
 // Acá no hay reglas de negocio propias, y no debería agregarse ninguna.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardCheck, ClipboardList, FileSpreadsheet, IdCard, ListTree, Loader2, Search, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardCheck, ClipboardList, FileSpreadsheet, IdCard, ListTree, Loader2, Search, Wrench, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { AlertDialog } from "../components/AlertDialog";
 import { DateCell, NumberCell } from "../components/InlineCells";
@@ -95,6 +95,73 @@ const WoSignMark: React.FC<{ sign?: SheetRow["activeWorkOrderSign"] }> = ({ sign
   );
 };
 
+type RowMenuItem = { key: string; icon: LucideIcon; label: string; onSelect: () => void };
+
+/**
+ * Menú del botón derecho sobre una tarea (pedido de Gustavo, oct 2026): abrir
+ * el plan de esa tarea o la ficha de su equipo. Se cierra con Escape, con un
+ * clic afuera o si la planilla se mueve por debajo.
+ */
+const RowContextMenu: React.FC<{ x: number; y: number; items: RowMenuItem[]; onClose: () => void }> = ({ x, y, items, onClose }) => {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+
+  // Cerca del borde derecho o del pie de la pantalla se abre hacia el otro
+  // lado, como el menú del sistema, para que no quede cortado.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const m = 4;
+    setPos({
+      left: x + width > window.innerWidth - m ? Math.max(m, x - width) : x,
+      top: y + height > window.innerHeight - m ? Math.max(m, y - height) : y,
+    });
+    el.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+  }, [x, y]);
+
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
+    // Se escucha antes que nadie (captura en window): el Escape global de la
+    // app vuelve a la pantalla anterior, y acá sólo tiene que cerrar el menú.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); return; }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+      const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+      const next = e.key === "ArrowDown" ? (i + 1) % btns.length : (i - 1 + btns.length) % btns.length;
+      btns[next]?.focus();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    window.addEventListener("blur", onClose);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+      window.removeEventListener("blur", onClose);
+    };
+  }, [onClose]);
+
+  return (
+    <div ref={ref} role="menu" style={{ left: pos.left, top: pos.top }}
+      className="fixed z-50 min-w-[14rem] rounded-lg border border-fg/10 bg-surface py-1 shadow-lg">
+      {items.map(it => (
+        <button key={it.key} type="button" role="menuitem"
+          onClick={() => { onClose(); it.onSelect(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-fg hover:bg-fg/5 focus:bg-fg/5 focus:outline-none">
+          <it.icon className="w-3.5 h-3.5 shrink-0 text-accent" />
+          {it.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 /** Sin agrupar por equipo, dentro de cada grupo va primero lo más urgente. */
 const SEV_RANK: Record<Severity, number> = { overdue: 0, soon: 1, none: 2, outOfService: 3 };
 
@@ -138,16 +205,19 @@ export function MaintenanceSheetPage() {
   // por acá: eso lo mueve solo el cierre de la OT. El backend valida lo mismo,
   // así que la celda se muestra editable sólo a quien va a poder guardarla.
   const { user, tenant } = useAuth();
-  // Botón a Seguimiento: lo decide el mismo ítem del menú (roles y lo que la
-  // empresa ocultó en Configuración), igual que el del Dashboard.
+  // Los accesos a otras pantallas los decide el mismo ítem del menú (roles y lo
+  // que la empresa ocultó en Configuración), igual que en el Dashboard.
   const hiddenNavPaths = useHiddenNavPaths();
-  const followUpNav = NAV.flatMap(s => s.items).find(i => i.path === "/approvals");
-  const canSeeFollowUp = !!followUpNav && !hiddenNavPaths.includes("/approvals")
-    && (!followUpNav.roles || followUpNav.roles.includes((user?.role ?? "") as never));
-  // Ícono "Ficha" de cada equipo: mismo criterio que el ítem Equipos del menú.
-  const equipmentNav = NAV.flatMap(s => s.items).find(i => i.path === "/equipment");
-  const canSeeEquipment = !!equipmentNav && !hiddenNavPaths.includes("/equipment")
-    && (!equipmentNav.roles || equipmentNav.roles.includes((user?.role ?? "") as never));
+  const navAllowed = (path: string) => {
+    const item = NAV.flatMap(s => s.items).find(i => i.path === path);
+    return !!item && !hiddenNavPaths.includes(path)
+      && (!item.roles || item.roles.includes((user?.role ?? "") as never));
+  };
+  // Botón a Seguimiento.
+  const canSeeFollowUp = navAllowed("/approvals");
+  // Ícono "Ficha" de cada equipo y el menú del botón derecho de cada tarea.
+  const canSeeEquipment = navAllowed("/equipment");
+  const canSeePlans = navAllowed("/maintenance-plans");
   const canEditMilestones = user?.role === "TENANT_ADMIN";
   // "Ficha" del grupo SFI = informe de salud del conjunto de equipos de la banda.
   // Mismos permisos que el informe de un equipo (el backend valida lo mismo).
@@ -526,6 +596,33 @@ export function MaintenanceSheetPage() {
     navigate(`/equipment?open=${encodeURIComponent(p.assetId)}`, { state: { closeTo: "/maintenance-sheet" } });
   }, [navigate]);
 
+  /** La ficha del plan de ESA tarea; al cerrarla se vuelve a la planilla. */
+  const openPlanSheet = useCallback((p: SheetRow) => {
+    navigate(`/maintenance-plans/${encodeURIComponent(p.taskCode)}`, { state: { closeTo: "/maintenance-sheet" } });
+  }, [navigate]);
+
+  // Botón derecho sobre una tarea: menú con su plan y la ficha de su equipo.
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number; plan: SheetRow } | null>(null);
+  const closeRowMenu = useCallback(() => setRowMenu(null), []);
+  const openRowMenu = (e: React.MouseEvent<HTMLElement>, p: SheetRow) => {
+    // En las fechas que corrige el administrador queda el menú del navegador
+    // (copiar y pegar). Sin nada para ofrecer, también.
+    if ((e.target as HTMLElement).closest("input:not([type=checkbox])")) return;
+    if (!canSeePlans && !(canSeeEquipment && p.assetId)) return;
+    e.preventDefault();
+    let { clientX: x, clientY: y } = e;
+    // Abierto con la tecla de menú (sin mouse): se lo pone debajo de la celda.
+    if (x === 0 && y === 0) {
+      const r = e.currentTarget.getBoundingClientRect();
+      x = r.left; y = r.bottom;
+    }
+    setRowMenu({ x, y, plan: p });
+  };
+  const rowMenuItems = (p: SheetRow): RowMenuItem[] => [
+    ...(canSeePlans ? [{ key: "plan", icon: ClipboardList, label: t("msheet.ctx.openPlan"), onSelect: () => openPlanSheet(p) }] : []),
+    ...(canSeeEquipment && p.assetId ? [{ key: "asset", icon: IdCard, label: t("msheet.assetSheetHint"), onSelect: () => openAssetSheet(p) }] : []),
+  ];
+
   const groupTitle = useCallback((g: number): string => {
     if (g === NO_GROUP) return t("msheet.noGroup");
     return `G${g}: ${t(`sfi.g.${g}` as TranslationKey)}`;
@@ -693,11 +790,14 @@ export function MaintenanceSheetPage() {
     const hasWo = !!p.activeWorkOrderCode;
     const selectable = p.status === "ACTIVE" && !hasWo;
     const hb = isHours(p.triggerType);
+    // Botón derecho en cualquier celda de la tarea. No en las del equipo: en la
+    // vista por equipo ocupan todo el bloque y no dicen de qué tarea se trata.
+    const menu = { onContextMenu: (e: React.MouseEvent<HTMLElement>) => openRowMenu(e, p) };
     return (
       <>
         {/* Selector / número de OT: entre la descripción del equipo y la
             tarea (pedido del usuario). */}
-        <td className={cls + " text-center"}>
+        <td {...menu} className={cls + " text-center"}>
           {hasWo ? (
             <span className="inline-flex items-center gap-1">
               <button
@@ -722,9 +822,9 @@ export function MaintenanceSheetPage() {
         </td>
 
         {/* La tarea TILDA el selector de su fila: en la planilla se marca lo
-            que va a OT, no se navega. La ficha del plan se sigue abriendo
-            desde la celda del equipo. */}
-        <td className={cls + " p-0"}>
+            que va a OT, no se navega. El plan de la tarea y la ficha del
+            equipo se abren con el botón derecho. */}
+        <td {...menu} className={cls + " p-0"}>
           <button
             type="button"
             onClick={() => toggle(p.id)}
@@ -735,9 +835,9 @@ export function MaintenanceSheetPage() {
             {p.title}
           </button>
         </td>
-        <td className={cls + " text-center font-mono"}>{everyText(p)}</td>
+        <td {...menu} className={cls + " text-center font-mono"}>{everyText(p)}</td>
 
-        <td className={cls + " text-center font-mono"}>
+        <td {...menu} className={cls + " text-center font-mono"}>
           {canEditMilestones ? (
             hb
               ? <NumberCell value={p.lastExecutionHours ?? null} resetKey={resetTick}
@@ -746,7 +846,7 @@ export function MaintenanceSheetPage() {
                   onCommit={v => void patchPlan(p, { lastExecutionDate: v })} />
           ) : milestoneText(p, "last")}
         </td>
-        <td className={cls + " text-center font-mono"}>
+        <td {...menu} className={cls + " text-center font-mono"}>
           {canEditMilestones ? (
             hb
               ? <NumberCell value={p.nextDueHours ?? null} resetKey={resetTick}
@@ -757,7 +857,7 @@ export function MaintenanceSheetPage() {
           {savingId === p.id && <Loader2 className="w-3 h-3 animate-spin inline ml-1" />}
         </td>
 
-        <td className={cls}>
+        <td {...menu} className={cls}>
           {p.department === "PROVEEDOR" && (
             <span className="text-[10px]">
               {ICON_PROVIDER} {providerNamesOf(p).join(", ")}
@@ -1163,6 +1263,10 @@ export function MaintenanceSheetPage() {
           onClose={() => setGroupHealth(null)}
           onChanged={items => setGroupHealth(prev => (prev ? { ...prev, items } : prev))}
         />
+      )}
+
+      {rowMenu && (
+        <RowContextMenu x={rowMenu.x} y={rowMenu.y} items={rowMenuItems(rowMenu.plan)} onClose={closeRowMenu} />
       )}
 
       {alert && <AlertDialog message={alert} onClose={() => setAlert(null)} />}

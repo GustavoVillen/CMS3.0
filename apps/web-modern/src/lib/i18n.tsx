@@ -3730,6 +3730,7 @@ const dict = {
   "msheet.groupHealthNone": { es: "Este grupo todavía no tiene informes de salud. Lo genera el DPA o el Superintendente.", en: "This group has no health reports yet. The DPA or the Superintendent generates them.", pt: "Este grupo ainda não tem relatórios de saúde. O DPA ou o Superintendente os gera." },
   "msheet.groupHealthHint": { es: "Informe de salud del conjunto de equipos de este grupo", en: "Health report for all the equipment in this group", pt: "Relatório de saúde do conjunto de equipamentos deste grupo" },
   "msheet.assetSheetHint": { es: "Abrir la ficha del equipo", en: "Open the equipment record", pt: "Abrir a ficha do equipamento" },
+  "msheet.ctx.openPlan":   { es: "Abrir el plan de mantenimiento", en: "Open the maintenance plan", pt: "Abrir o plano de manutenção" },
   "approvals.col.permits":     { es: "Permisos de trabajo",      en: "Work permits",              pt: "Permissões de trabalho" },
   "approvals.exec.permitsOne": { es: "1 permiso",                en: "1 permit",                  pt: "1 permissão" },
   "approvals.exec.permitsMany": { es: "{n} permisos",            en: "{n} permits",               pt: "{n} permissões" },

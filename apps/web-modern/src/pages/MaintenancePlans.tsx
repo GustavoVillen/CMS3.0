@@ -3727,7 +3727,12 @@ export const MaintenancePlansPage: React.FC = () => {
   // El copiloto abre el alta vacía con ?nuevo=1 y la completa (ver useOpenNewFromUrl).
   useOpenNewFromUrl(() => { setEditing(null); setShowModal(true); });
   // `close` no se usa: el cierre del plan es determinista (ver onClose del modal).
-  const { code: linkCode, open: openLink } = useDeepLink("/maintenance-plans");
+  const { code: linkCode, open: openLink, closeTo } = useDeepLink("/maintenance-plans");
+  // Quien abrió el plan desde otra pantalla (la Planilla a Bordo) pide volver
+  // ahí al cerrarlo. Se guarda aparte porque al guardar el plan la URL se
+  // vuelve a escribir sin ese pedido.
+  const closeToRef = useRef<string | null>(null);
+  useEffect(() => { if (closeTo) closeToRef.current = closeTo; }, [closeTo]);
   // "Número de turno" de apertura. La ventana se abre al instante con la fila y
   // el detalle completo llega por un fetch de fondo; si para cuando ese fetch
   // vuelve el turno ya cambió (cerraste, o abriste otro plan), su resultado se
@@ -4865,7 +4870,9 @@ export const MaintenancePlansPage: React.FC = () => {
           onClose={() => {
             openTokenRef.current++;
             setShowModal(false);
-            if (linkCode) navigate(`/maintenance-plans${window.location.search}`, { replace: true });
+            const back = closeToRef.current;
+            closeToRef.current = null;
+            if (linkCode) navigate(back ?? `/maintenance-plans${window.location.search}`, { replace: true });
           }}
           onSaved={async (savedId) => {
             void reload();
