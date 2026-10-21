@@ -21,6 +21,7 @@ import { RouteError } from "../../http/route-error";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { hasPermission } from "../auth/role-permissions";
 import { SR_LOG_SENT_PREFIX, SR_LOG_UNNUMBERED_PREFIX } from "../service-requests/service-requests-service";
+import { ssRequiredStatusByWorkOrder, type SsRequiredReason } from "../work-orders/wo-ss-required";
 
 /** Una fila de cualquiera de las cuatro bandejas. */
 export interface PendingApprovalItem {
@@ -91,6 +92,12 @@ export interface PendingApprovalItem {
    * el de su OT.
    */
   sfiGroupNumber: number | null;
+  /**
+   * Sólo OT: necesita SS (tercerizada o con muestra de aceite al laboratorio),
+   * no la tiene y nadie escribió por qué. Seguimiento la marca "Falta SS" en la
+   * columna del envío al proveedor (ver wo-ss-required.ts). null = no le falta.
+   */
+  ssMissingReason?: SsRequiredReason | null;
 }
 
 export interface PendingApprovalsResult {
@@ -162,6 +169,7 @@ const WO_SELECT = {
   enviadoAprobacionByName: true, enviadoAprobacionAt: true,
   aprobadoByName: true, aprobadoAt: true,
   autorizadoByName: true, autorizadoAt: true, taskCompleted: true,
+  assignedToArea: true, serviceRequestNotRequiredReason: true,
 } as const;
 
 const SR_SELECT = {
@@ -433,7 +441,7 @@ export async function listPendingApprovals(
   // OT cuyo grupo SFI hace falta: las listadas y las OT de origen de las SS.
   const groupWoIds = [...new Set([...woIds, ...srWoIds])];
 
-  const [assetRows, providerRows, planLinkRows] = await Promise.all([
+  const [assetRows, providerRows, planLinkRows, ssByWo] = await Promise.all([
     assetIds.length > 0
       ? (prisma as any).asset.findMany({ where: { id: { in: assetIds }, tenantId }, select: { id: true, name: true, sfiCode: true } })
       : Promise.resolve([]),
@@ -448,6 +456,7 @@ export async function listPendingApprovals(
           select: { workOrderId: true, maintenancePlanId: true },
         })
       : Promise.resolve([]),
+    ssRequiredStatusByWorkOrder(prisma, tenantId, woRows),
   ]);
 
   const planIds = [...new Set([
@@ -560,6 +569,7 @@ export async function listPendingApprovals(
       workOrderCode: null,
       purchaseRequestKinds: [],
       sfiGroupNumber: woSfiGroup(r),
+      ssMissingReason: ssByWo.get(r.id)?.missing ? ssByWo.get(r.id)!.reason : null,
     };
   };
 

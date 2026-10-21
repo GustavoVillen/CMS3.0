@@ -16,6 +16,7 @@ import { assertNotLocked, assertCanReopen, assertReopenReason } from "../../comm
 import { withUniqueRetry } from "../../common/unique-retry";
 import { resolveWoFormDefaults, addDays } from "./wo-form-defaults";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "./wo-inspection-flow";
+import { ssRequiredStatusByWorkOrder, findWorkOrderDefectLabOrigins, findPlanLabProvider, firstActiveProvider, type SsRequiredReason } from "./wo-ss-required";
 import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
 
 export interface WorkOrderListFilters {
@@ -1281,6 +1282,17 @@ export async function setWorkOrderApproval(
     // el que abrió la OT diciendo "ya está lista, fírmenla". Limpia el rechazo
     // para que el ciclo corregir-y-reenviar salga del rojo.
     if (current.enviadoAprobacionAt) throw new RouteError(409, "ALREADY_SUBMITTED", "La OT ya fue enviada a aprobar.");
+    // Trabajo de un tercero o muestra al laboratorio: va con su SS. Sin ella (y
+    // sin un motivo escrito) la OT no sale a firmar. La pantalla atrapa este
+    // código y ofrece abrir la SS o dejar el motivo ahí mismo (ver wo-ss-required.ts).
+    const ss = (await ssRequiredStatusByWorkOrder(prismaRaw, current.tenantId, [current])).get(current.id);
+    if (ss?.missing) {
+      throw new RouteError(
+        409,
+        "SERVICE_REQUEST_MISSING",
+        "Esta orden necesita una Solicitud de Servicio y no tiene ninguna. Abrí la SS o indicá por qué no la lleva.",
+      );
+    }
     data = {
       enviadoAprobacionByName: name, enviadoAprobacionByUserId: signerUserId, enviadoAprobacionAt: actionAt,
       rechazadoByName: null, rechazadoAt: null, rechazoReason: null,
@@ -1436,6 +1448,37 @@ export async function setWorkOrderApproval(
         });
         if (created) createdFluidSamples.push({ ...created, kind: planKind || "FLUID" });
       }
+
+      // Retoma: la correctiva de un análisis de aceite fuera de rango vuelve a
+      // tomar la muestra. No tiene plan de muestreo detrás, así que el bloque de
+      // arriba no la creaba y el resultado nuevo no tenía dónde cargarse. Si la
+      // OT también ejecuta un plan de muestreo, la muestra ya salió de ahí; si
+      // alguien dejó escrito que no lleva muestra, no se crea.
+      const ss = (await ssRequiredStatusByWorkOrder(prismaRaw, current.tenantId, [current])).get(current.id);
+      if (ss?.labDefect && !ss.labPlan && !ss.notRequiredReason) {
+        for (const origin of await findWorkOrderDefectLabOrigins(prismaRaw, current.tenantId, current.id)) {
+          const existing = await (prismaRaw as any).fluidSample.findFirst({
+            where: { tenantId: current.tenantId, sourceWorkOrderId: current.id, assetId: origin.assetId, kind: "FLUID", deletedAt: null },
+            select: { id: true },
+          });
+          if (existing) continue;
+          const created = await createFluidSampleFromWorkOrder({
+            tenantId:        current.tenantId,
+            vesselCode:      current.vesselCode,
+            assetId:         origin.assetId,
+            kind:            "FLUID",
+            fluidType:       origin.fluidType as FluidTypeEnum | null,
+            workOrderId:     current.id,
+            workOrderCode:   current.workOrderCode,
+            planId:          null,
+            runningHours:    null,
+            completedAt:     actionAt,
+            createdByUserId: session.user.id,
+            notes:           `Retoma de la muestra ${origin.sampleCode}, generada al autorizar OT ${current.workOrderCode}.`,
+          });
+          if (created) createdFluidSamples.push({ ...created, kind: "FLUID" });
+        }
+      }
     } catch (err) {
       log.error("[setWorkOrderApproval] auto-create Sample failed", err);
     }
@@ -1463,6 +1506,102 @@ export async function setWorkOrderApproval(
   }
 
   return { ...updated, createdFluidSamples, createdPermits, cascadedServiceRequestIds };
+}
+
+// ── SS que la OT tiene que llevar (ver wo-ss-required.ts) ───────────────────
+
+export interface WorkOrderSsRequired {
+  /** La OT necesita SS: está tercerizada o lleva muestra de aceite al laboratorio. */
+  required: boolean;
+  reason: SsRequiredReason | null;
+  hasServiceRequest: boolean;
+  notRequiredReason: string | null;
+  /** Necesita SS, no la tiene y nadie dijo por qué: no se envía a aprobar. */
+  missing: boolean;
+  /** A quién proponer la SS: el laboratorio que analizó la muestra anterior, el de la rutina o el taller de la OT. */
+  provider: { id: string; name: string } | null;
+  /** Muestra que se retoma (correctiva de un análisis fuera de rango). */
+  originSampleCode: string | null;
+}
+
+/**
+ * Lo que necesita la ventana que frena el envío a aprobar (y la marca de
+ * Seguimiento): si la OT necesita SS, si ya la tiene y a quién proponer
+ * mandarla. Sólo lectura, con el alcance de la OT.
+ */
+export async function getWorkOrderSsRequired(session: TenantAccessSession, id: string): Promise<WorkOrderSsRequired> {
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const scope = await requireWorkOrderScope(session, id);
+  const wo = await (prismaRaw as any).workOrder.findFirst({
+    where: { id: scope.id, tenantId: scope.tenantId },
+    select: {
+      id: true, maintenancePlanId: true, assignedToArea: true, department: true, providerId: true,
+      serviceRequestNotRequiredReason: true,
+    },
+  });
+  const status = (await ssRequiredStatusByWorkOrder(prismaRaw, scope.tenantId, [wo])).get(wo.id);
+  if (!status) {
+    return { required: false, reason: null, hasServiceRequest: false, notRequiredReason: null, missing: false, provider: null, originSampleCode: null };
+  }
+
+  let found: { providerId: string; providerName: string } | null = null;
+  let originSampleCode: string | null = null;
+  if (status.labDefect) {
+    const origin = (await findWorkOrderDefectLabOrigins(prismaRaw, scope.tenantId, wo.id))[0];
+    originSampleCode = origin?.sampleCode ?? null;
+    found = origin?.provider ?? null;
+  }
+  if (!found && status.labPlan) {
+    const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
+    found = await findPlanLabProvider(prismaRaw, scope.tenantId, await listWorkOrderPlanIds(prismaRaw, wo));
+  }
+  // El taller que ya figura en la OT ("Asignado a: Tercerizado").
+  if (!found) found = await firstActiveProvider(prismaRaw, scope.tenantId, [wo.providerId]);
+
+  return {
+    required: true,
+    reason: status.reason,
+    hasServiceRequest: status.hasServiceRequest,
+    notRequiredReason: status.notRequiredReason,
+    missing: status.missing,
+    provider: found ? { id: found.providerId, name: found.providerName } : null,
+    originSampleCode,
+  };
+}
+
+/**
+ * "No lleva SS": el motivo que deja enviar a aprobar sin SS una OT que la
+ * necesitaría (o null para borrarlo). Lo deja quien puede enviarla a aprobar:
+ * es parte de prepararla. Con el motivo puesto tampoco se crea la muestra de
+ * retoma al autorizar.
+ */
+export async function setWorkOrderSsNotRequired(
+  session: TenantAccessSession,
+  id: string,
+  payload: { reason?: string | null },
+): Promise<WorkOrderSsRequired> {
+  ensureCanOperateWorkOrders(session);
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+  const scope = await requireWorkOrderScope(session, id);
+  assertNotLocked("WORK_ORDER", scope.status);
+  const reason = normalizeOptionalText(payload?.reason);
+
+  const updated = await (prismaRaw as any).workOrder.update({
+    where: { id: scope.id },
+    data: { serviceRequestNotRequiredReason: reason, updatedByUserId: session.user.id },
+    select: { workOrderCode: true },
+  });
+  void publishAudit(prismaRaw, {
+    tenantId: scope.tenantId,
+    actorUserId: session.user.id,
+    action: reason ? "WorkOrder.serviceRequestNotRequired" : "WorkOrder.serviceRequestNotRequiredCleared",
+    entityType: "WorkOrder",
+    entityId: scope.id,
+    metadata: { workOrderCode: updated.workOrderCode, vesselCode: scope.vesselCode, reason },
+  });
+  return getWorkOrderSsRequired(session, id);
 }
 
 const PERMIT_TYPE_NAME: Record<string, string> = {

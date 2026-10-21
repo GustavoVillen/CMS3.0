@@ -1904,6 +1904,12 @@ model WorkOrder {
   // { replacesAssetId: string | null, mocRequired: boolean, mocNotRequiredReason: string | null }.
   // replacesAssetId es puntero suelto, mismo criterio que standbyTestPlanId.
   assetInstallation   Json?
+  // OT que tendría que llevar SS (está "Tercerizado" o lleva muestra de aceite
+  // al laboratorio) y aun así no la lleva: por qué. Sin SS y sin este motivo la
+  // OT no se envía a aprobar (ver wo-ss-required.ts). Ej.: el taller viene con
+  // la SS de otra OT; la correctiva fue el cambio de aceite a bordo y la muestra
+  // va en la rutina siguiente. Null en todas las OT anteriores.
+  serviceRequestNotRequiredReason String?
 
   vessel              Vessel            @relation(fields: [tenantId, vesselCode], references: [tenantId, code])
   workLogs            WorkLog[]

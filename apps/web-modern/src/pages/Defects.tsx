@@ -65,6 +65,8 @@ interface Defect {
   workOrderStatus?: string | null;
   originSampleId?: string | null;
   originSampleCode?: string | null;
+  /** Defecto de un análisis de aceite: la muestra que se retoma y su laboratorio. */
+  labRetake?: { sampleCode: string; providerId: string | null; providerName: string | null } | null;
   // Origen auditoría/inspección externa (cuando classification=EXTERNAL_AUDIT_FINDING).
   sourceType?: string | null;
   sourceId?: string | null;
@@ -1421,6 +1423,7 @@ const DefectModal: React.FC<DefectModalProps> = ({ defect, onClose, onSaved, onR
           type: "CORRECTIVE",
           priority: defect.severity,
           description: woTaskFromDefect(description || defect.description, rcaPreventiveActions, defect.defectCode, t),
+          labRetake: defect.labRetake ?? null,
         }}
         onClose={() => { setShowCreateWo(false); onClose(); }}
         onSaved={async (woId) => {

@@ -56,6 +56,14 @@ export interface WoPrefill {
    * cerrar la OT avanzan todos. Solo aplica con source = "plan".
    */
   additionalPlans?: Array<{ id: string; taskCode: string; title: string; assetName?: string | null }>;
+  /**
+   * Correctiva de un análisis de aceite fuera de rango (source = "defect"): la
+   * muestra se retoma y el frasco va al laboratorio que analizó la anterior. La
+   * OT arranca "Tercerizado" con ese laboratorio y al guardar se abre su SS
+   * (regla en wo-ss-required.ts de la API). Sin laboratorio conocido, arranca
+   * "Tercerizado" con el renglón vacío para elegirlo.
+   */
+  labRetake?: { sampleCode: string; providerId: string | null; providerName: string | null } | null;
 }
 
 /**
@@ -417,7 +425,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // si no hay proveedores→Tripulación. Sólo en modo prefill.
   useEffect(() => {
     if (!prefill || assignedToAreaTouchedRef.current) return;
-    setAssignedToArea(planProviders.length > 0 ? "TERCERIZADO" : "TRIPULACION");
+    setAssignedToArea(planProviders.length > 0 || prefill.labRetake ? "TERCERIZADO" : "TRIPULACION");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill, planProviders.length]);
   // El usuario puede mandarlo a otro taller distinto del que trae el plan,
@@ -442,6 +450,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   const [standaloneProviderRequests, setStandaloneProviderRequests] = useState<{ providerId: string; purpose: string }[]>(
     () => initialProviderIds?.length
       ? initialProviderIds.map(providerId => ({ providerId, purpose: "" }))
+      : prefill?.labRetake?.providerId ? [{ providerId: prefill.labRetake.providerId, purpose: "" }]
       : requireProvider ? [{ providerId: "", purpose: "" }] : [],
   );
   const [description, setDescription]           = useState(prefill?.description ?? initialValues?.description ?? "");
@@ -1055,7 +1064,7 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
   // defecto que no trae taller y quien abre marca "Tercerizado" (antes ahí no
   // aparecía el campo y la OT quedaba tercerizada sin empresa ni SS).
   const showsStandaloneProviders = planProviders.length === 0
-    && (isMercurio ? assignedToArea === "TERCERIZADO" : (!prefill && !!requireProvider));
+    && (isMercurio ? assignedToArea === "TERCERIZADO" : ((!prefill && !!requireProvider) || !!prefill?.labRetake));
   // Desde un plan el backend abre UNA SS con los ítems del plan: un solo
   // taller, sin "para qué" (el servicio sale del plan).
   const singleProvider = prefill?.source === "plan";
@@ -1565,6 +1574,11 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
             >
               <Plus className="w-3.5 h-3.5" /> {t("mp.providerRequests.add")}
             </button>
+          )}
+          {prefill?.labRetake && (
+            <p className="text-[10px] text-text-industrial/60">
+              {t(prefill.labRetake.providerId ? "wo.modal.labRetake" : "wo.modal.labRetakePick").replace("{sample}", prefill.labRetake.sampleCode)}
+            </p>
           )}
           {cleanStandaloneProviders.length > 0 && (
             <p className="text-[10px] text-text-industrial/50">{t("wo.modal.providerHint")}</p>

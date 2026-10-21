@@ -43,6 +43,8 @@ import {
   reopenWorkOrder,
   resumeWorkOrder,
   setWorkOrderApproval,
+  getWorkOrderSsRequired,
+  setWorkOrderSsNotRequired,
 } from "../work-orders/work-orders-service";
 import { getWoFormDefaults } from "../work-orders/wo-form-defaults";
 import {
@@ -535,6 +537,19 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof setWorkOrderApproval>[2];
     sendJson(response, 200, await setWorkOrderApproval(session, id, body));
+    return true;
+  }
+
+  // SS que la OT tiene que llevar: si la necesita, si ya la tiene y a quién
+  // proponerla (GET), o el motivo por el que no la lleva (POST).
+  if (/^\/app\/pms\/work-orders\/[^/]+\/ss-required$/.test(url.pathname) && (method === "GET" || method === "POST")) {
+    const id = url.pathname.split("/")[4]!;
+    if (method === "GET") {
+      sendJson(response, 200, await getWorkOrderSsRequired(session, id));
+    } else {
+      const body = await readJsonBody(request) as Parameters<typeof setWorkOrderSsNotRequired>[2];
+      sendJson(response, 200, await setWorkOrderSsNotRequired(session, id, body ?? {}));
+    }
     return true;
   }
 

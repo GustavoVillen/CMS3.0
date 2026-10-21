@@ -36,6 +36,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ModalCloseButton } from "../components/ModalCloseButton";
 import { SpareConsumptionModal } from "../components/work-orders/SpareConsumptionFlow";
 import { HojaRutaBox } from "../components/service-requests/HojaRutaBox";
+import { MissingSsDialog } from "../components/work-orders/MissingSsDialog";
 import { api, ApiError } from "../lib/api";
 import { downloadDocx } from "../lib/download-docx";
 import { useFetch } from "../lib/hooks";
@@ -97,6 +98,8 @@ interface PendingItem {
   readyToClose?: boolean;
   /** Grupo SFI (filtro G0…G9). La SS trae el de su OT. */
   sfiGroupNumber?: number | null;
+  /** Sólo OT: necesita SS (tercerizada o con muestra al laboratorio) y no la tiene. null = no le falta. */
+  ssMissingReason?: "LAB_DEFECT" | "LAB_PLAN" | "OUTSOURCED" | null;
 }
 
 interface PendingApprovals {
@@ -208,6 +211,8 @@ const BTN_WAIT = `${BTN_BASE} border-dashed border-fg/20 text-fg/35`;
 /** OT en preparación: todavía nadie la mandó a aprobar. Ámbar, como su columna del tablero. */
 const BTN_PREP = `${BTN_BASE} bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25`;
 const BTN_OFF  = `${BTN_BASE} border-fg/15 text-fg/30`;
+/** OT que necesita SS y no la tiene: rojo, sin la SS el trabajo no se le pide a nadie. */
+const BTN_WARN = `${BTN_BASE} bg-danger/10 border-danger text-danger`;
 /** Columna EQUIPO: verde (pedido de Gustavo, oct 2026; antes salmón como la Planilla). */
 const ASSET_CELL = "bg-[#C6EFCE] text-[#1F3864]";
 
@@ -253,6 +258,8 @@ export const ApprovalsPage: React.FC = () => {
   const [sent, setSent]       = useState<Record<string, { at: string; to: string }>>({});
   const [sendAsk, setSendAsk] = useState<Row | null>(null);
   const [samplesAsk, setSamplesAsk] = useState<{ row: Row; message: string } | null>(null);
+  // OT marcada "Falta SS": la ventana que abre la SS o deja el motivo.
+  const [ssAsk, setSsAsk] = useState<Row | null>(null);
 
   // El nombre que se imprime en el PDF como la firma. Es el del usuario
   // conectado: el backend lo exige y un botón de un toque no puede inventarlo.
@@ -667,6 +674,27 @@ export const ApprovalsPage: React.FC = () => {
   /** Celda de una columna que a la fila no le aplica (el envío en la OT, los
    *  repuestos en la SS): vacía y sombreada, para que no parezca pendiente. */
   const naCell = <td className={`${td} bg-fg/[0.04]`} />;
+
+  /** La OT no se manda al proveedor (lo hacen sus SS), salvo que necesite SS y no
+   *  la tenga: entonces la celda lo avisa y lo resuelve (MissingSsDialog). */
+  const ssCell = (r: Row) => {
+    const sub = r.ssMissingReason === "OUTSOURCED"
+      ? (r.providers[0] ?? t("approvals.exec.noProvider"))
+      : t("wo.ssReq.subLab");
+    return (
+      <td className={`${td} p-1 bg-surface`}>
+        {can?.srManage || can?.woOperate ? (
+          <button type="button" className={`${BTN_WARN} hover:bg-danger hover:text-white`} onClick={() => setSsAsk(r)}>
+            {btnBody(t("wo.ssReq.missingShort"), sub)}
+          </button>
+        ) : (
+          <span className={BTN_WARN} title={t("approvals.noPermission")}>
+            {btnBody(t("wo.ssReq.missingShort"), sub)}
+          </span>
+        )}
+      </td>
+    );
+  };
 
   /** Las celdas de la derecha: ENVIAR AL PROVEEDOR · AVANCES · REPUESTOS ·
    *  CERRAR OT / SS. La OT no se manda al proveedor (lo hacen sus SS). */
@@ -1111,7 +1139,7 @@ export const ApprovalsPage: React.FC = () => {
                       </td>
                       <td className={`${td} p-1 bg-surface`}><SignButton row={r} step="APRUEBA" /></td>
                       <td className={`${td} p-1 bg-surface`}><SignButton row={r} step="AUTORIZA" /></td>
-                      {r.kind === "WO" && naCell}
+                      {r.kind === "WO" && (r.ssMissingReason && !closedAtOf(r) ? ssCell(r) : naCell)}
                       {execCells(r)}
                     </tr>
                   </React.Fragment>
@@ -1249,6 +1277,13 @@ export const ApprovalsPage: React.FC = () => {
           cancelLabel={t("approvals.cancel")}
           onCancel={() => setSendAsk(null)}
           onConfirm={() => { const r = sendAsk; setSendAsk(null); void sendToProvider(r, false); }}
+        />
+      )}
+      {ssAsk && (
+        <MissingSsDialog
+          workOrder={{ id: ssAsk.id, workOrderCode: ssAsk.code, title: ssAsk.title, priority: ssAsk.priority }}
+          onClose={() => setSsAsk(null)}
+          onResolved={() => { setSsAsk(null); void reload(); }}
         />
       )}
       {samplesAsk && (

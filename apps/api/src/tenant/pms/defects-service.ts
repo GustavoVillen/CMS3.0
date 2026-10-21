@@ -10,6 +10,7 @@ import { log } from "../../common/logger";
 import { withUniqueRetry } from "../../common/unique-retry";
 import { enqueueNotificationForRoles } from "../notifications/notifications-service";
 import { linkLabReportToDefect } from "../fluid-analyses/lab-report-links";
+import { findDefectLabOrigin } from "../work-orders/wo-ss-required";
 
 export interface DefectListFilters {
   vesselCode?: string | null;
@@ -398,6 +399,7 @@ export async function getDefect(session: TenantAccessSession, id: string) {
   const withOrigin = await attachAuditOrigin(prismaRaw, tenantId, enriched);
   const out = withOrigin[0] as typeof withOrigin[0] & {
     workOrderStatus?: string | null; originSampleId?: string | null; originSampleCode?: string | null;
+    labRetake?: { sampleCode: string; providerId: string | null; providerName: string | null } | null;
   };
   // Para el flujograma del defecto (preview V49): en qué está la OT y, si nació
   // de un análisis, qué muestra lo generó.
@@ -417,6 +419,17 @@ export async function getDefect(session: TenantAccessSession, id: string) {
       out.originSampleCode = res?.sample?.sampleCode ?? null;
     }
   } catch { /* complemento visual: el detalle sale igual */ }
+  // Defecto de un análisis de aceite: la correctiva retoma la muestra y el
+  // frasco vuelve al laboratorio. La ventana de la OT arranca "Tercerizado"
+  // con ese laboratorio (ver wo-ss-required.ts). Sin el dato, abre como antes.
+  try {
+    const origin = await findDefectLabOrigin(prismaRaw, tenantId, out.id);
+    out.labRetake = origin
+      ? { sampleCode: origin.sampleCode, providerId: origin.provider?.providerId ?? null, providerName: origin.provider?.providerName ?? null }
+      : null;
+  } catch (err) {
+    log.error("[getDefect] no se pudo resolver el laboratorio de la muestra:", err);
+  }
   return out;
 }
 

@@ -528,16 +528,34 @@ async function applyCreateWorkOrderFromDefect(
 
   log.info(`[copilot-action] create_work_order_from_defect target=${defectCode} user=${session.user.email}`);
 
+  // Defecto de un análisis de aceite: la correctiva retoma la muestra y el
+  // frasco vuelve al laboratorio que analizó la anterior. Igual que el botón,
+  // la OT sale "Tercerizado" con su SS a ese laboratorio (ver wo-ss-required.ts).
+  const lab = defect.labRetake?.providerId ? defect.labRetake : null;
+
   // Prioridad = severidad del defecto, como el botón; la IA sólo la cambia si el usuario lo pidió.
+  const priority = patch.priority ?? (defect.severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL");
   const workOrder = await createTenantWorkOrder(session, {
     vesselCode: defect.vesselCode,
     assetId: defect.assetId,
     type: "CORRECTIVE",
-    priority: patch.priority ?? (defect.severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"),
+    priority,
     title: patch.title,
     description: patch.description ?? defect.description,
     dueDate: patch.dueDate,
+    ...(lab ? { assignedToArea: "TERCERIZADO" as const, providerId: lab.providerId } : {}),
   });
+  if (lab) {
+    // No bloqueante, como en la ventana: si falla, la OT ya existe y el envío
+    // a aprobar pide la SS antes de salir.
+    try {
+      await createServiceRequestForWorkOrder(session, workOrder.id, {
+        providerId: lab.providerId, title: patch.title, description: patch.title, priority,
+      });
+    } catch (err) {
+      log.error(`[copilot-action] create_work_order_from_defect: no se abrió la SS al laboratorio de ${workOrder.workOrderCode}`, err);
+    }
+  }
 
   // Vincular y cerrar: mismo orden que el botón (RESOLVED primero, el backend no deja saltar a CLOSED).
   const locale = await getTenantAiLocale(session.tenantSlug);

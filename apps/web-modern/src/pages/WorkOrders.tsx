@@ -32,6 +32,7 @@ import { usePlanSparePrompt } from "../components/work-orders/PlanSparePrompt";
 import { WoWorkSummary } from "../components/work-orders/WoWorkSummary";
 import { WoPlansPanel, type WoPlanRow } from "../components/work-orders/WoPlansPanel";
 import { WoScheduleEditor } from "../components/work-orders/WoScheduleEditor";
+import { MissingSsDialog } from "../components/work-orders/MissingSsDialog";
 import { WoPaperForm, WO_FORM_FALLBACK, type WoFormDoc } from "../components/work-orders/WoPaperForm";
 import { paperFieldCls } from "../components/paper/PaperKit";
 import {
@@ -5540,6 +5541,10 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
   // entre a Análisis de Fluidos a buscarlo por su cuenta.
   const [createdSampleCodes, setCreatedSampleCodes] = useState<string[] | null>(null);
   const [createdPermitCodes, setCreatedPermitCodes] = useState<string[] | null>(null);
+  // El backend frenó el envío: la OT necesita su SS (tercerizada o con muestra
+  // al laboratorio) y no la tiene. Se resuelve en MissingSsDialog y el envío se
+  // reintenta solo.
+  const [ssGate, setSsGate] = useState(false);
 
   // Solo TENANT_ADMIN puede aprobar/autorizar en nombre de otro usuario (no en RECHAZA):
   // se elige de una lista y la firma del PDF se toma de ESE usuario.
@@ -5614,8 +5619,9 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
         return;
       }
       onSuccess();
-    } catch {
+    } catch (e) {
       setSaving(false);
+      if (e instanceof ApiError && e.code === "SERVICE_REQUEST_MISSING") { setSsGate(true); return; }
       setError("No se pudo registrar. Intentá de nuevo.");
     }
   }
@@ -5700,6 +5706,13 @@ function ApprovalModal({ workOrder, step, onClose, onSuccess }: {
         </div>
       </div>
 
+      {ssGate && (
+        <MissingSsDialog
+          workOrder={workOrder}
+          onClose={() => setSsGate(false)}
+          onResolved={() => { setSsGate(false); void submit(); }}
+        />
+      )}
       {createdSampleCodes && (
         <AlertDialog
           title={t("wo.ai.fluidSampleCreatedTitle")}
