@@ -1,5 +1,22 @@
 HISTORY.txt
 
+[2026-10-22] DATOS: alta de las barcazas YT 001 y YT 004 como gemelas de YT 010 (produccion)
+Agent: Claude Opus 5.5
+- Buques nuevos YT001 / YT004 (Barcaza Tanque - Box, bandera Paraguay, clase LR, charteados) con los
+  datos de familia de YT 010. Matricula, IMO, medidas, arqueo y año de construccion quedan en blanco
+  para cargarlos en la ficha del buque.
+- A cada una: 9 equipos, 23 planes y 8 repuestos copiados de YT 010 con todos sus campos (LOTO,
+  criterios, riesgo, proveedores, permisos, origen del criterio) y el codigo cambiado (YT010-BOMBA ->
+  YT001-BOMBA, DET-YT010-OIL -> DET-YT001-OIL). La rutina YT0xx-3-002 sigue cubriendo el equipo de venteo.
+- Sin historial: planes sin ultima ejecucion y con vencimiento hoy + frecuencia (la regla de la app
+  para un plan nuevo); repuestos con stock 0. No se copiaron OT, SS, certificados ni muestras.
+- H. Portillo y C. Villasanti (los que tenian YT010 asignada) ven tambien YT001 y YT004.
+- Script nuevo scripts/clone-sister-vessel.ts (copia la fila entera; clone-vessel-mp.ts no copiaba los
+  campos nuevos de planes, equipos cubiertos ni el remapeo de repuestos previstos). Verificado campo a
+  campo contra YT 010: 0 diferencias. AuditEvent Vessel.created por buque.
+- Backup: /root/backups-cms3/cms3-antes-alta-yt001-yt004-20261022-172012.dump. La demo no se toco.
+  Sin cambio de codigo de la app: no hace falta deploy.
+
 [2026-10-20] Permiso de espacio confinado: formulario REGI-SYE-01.4 nuevo (papel del 02.10.2026)
 Agent: Claude Opus 5.5
 - Mercurio actualizó el formulario (sigue diciendo rev 3 / 29.12.2025). El PDF y el Word del permiso
