@@ -1,5 +1,32 @@
 HISTORY.txt
 
+[2026-10-23] OT abierta dos veces por error: aviso al crear, aviso en la ficha y "Anular por duplicada"
+Agent: Claude Opus 5.5
+- Pedido de Gustavo: detectar la OT abierta dos veces e informar al usuario. Caso tipico: se abre la
+  OT y despues "Nueva SS -> Mantenimiento/Reparacion/Clase", que abre otra OT junto con la SS.
+- Criterio (work-orders/wo-duplicates.ts): mismo buque y equipo, la otra OT abierta, y comparten un
+  item del plan o el titulo se parece (Jaccard de palabras >= 0,5). Si las dos ejecutan items del plan
+  distintos no avisa. Calibrado contra la base: detecta 11 de las 14 OT anuladas como repetidas y
+  avisa en ~8% de las aperturas.
+- Al crear (alta comun, desde defecto, "Nueva SS" y App a bordo): ventana WoDuplicateHost con la OT
+  parecida: "Ir a la OT", "Pedir la SS en esta OT" (alta de SS: no abre otra OT) o "Es otro trabajo:
+  abrir igual". Avisa, no bloquea. GET /app/pms/work-orders/possible-duplicates.
+- En la ficha de la OT abierta (vista guiada, papel y comun): aviso "Posible OT duplicada" con "Ir a
+  la OT", "Anular esta por duplicada" (wo.manage) y "No es duplicada" (wo.operate; AuditEvent
+  WorkOrder.duplicateDismissed, vale para las dos). Rutas GET :id/possible-duplicates, POST
+  :id/not-duplicate y :id/cancel-duplicate.
+- Anular por duplicada: cancela con "Duplicada de OT-X" y resuelve sus SS (antes quedaban vivas en la
+  OT cancelada: hay 7 asi, entre ellas SS-1 y SS-2-MGT19-2026 autorizadas). Si la que queda ya tiene
+  SS al mismo taller y esta no salio, se cancela; si no, pasa a la OT que queda con nota en la hoja de
+  ruta. Con muestras de aceite no se anula desde ahi (409).
+- cancelWorkOrder: ya no restaura un item del plan que otra OT abierta sigue ejecutando (lo dejaba
+  pendiente con una OT en curso).
+- Verificado en la base local (18 comprobaciones, archivo en Drive apagado durante la prueba, datos
+  restaurados), typecheck api/web y build de la web. Pantallas no probadas en el navegador.
+- Fuera de alcance: la OT creada por el copiloto en el chat no pasa por el aviso.
+- Respaldo previo: claude/backups/ot-duplicadas-2026-10-23/.
+- Deploy: pull + build web + restart de la API. Sin cambios de base.
+
 [2026-10-23] SS y OT al proveedor: boton "Enviar al proveedor" en la OT, maquinas del buque y copias comunes
 Agent: Claude Opus 5.5
 - Pedido de Gustavo: la SS y la OT van al proveedor asignado, a maquinas del remolcador y con copia a

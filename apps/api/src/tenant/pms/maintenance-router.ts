@@ -47,6 +47,12 @@ import {
   getWorkOrderSsRequired,
   setWorkOrderSsNotRequired,
 } from "../work-orders/work-orders-service";
+import {
+  checkWorkOrderDuplicatesBeforeCreate,
+  listWorkOrderPossibleDuplicates,
+  dismissWorkOrderDuplicate,
+  cancelWorkOrderAsDuplicate,
+} from "../work-orders/wo-duplicates";
 import { getWoFormDefaults } from "../work-orders/wo-form-defaults";
 import {
   createServiceRequestForWorkOrder,
@@ -418,6 +424,19 @@ export async function handleMaintenanceRoutes(
     return true;
   }
 
+  // Antes de crear una OT a mano: OT abiertas del mismo equipo que parecen la
+  // misma (ver wo-duplicates.ts). La pantalla avisa; no bloquea.
+  if (method === "GET" && url.pathname === "/app/pms/work-orders/possible-duplicates") {
+    sendJson(response, 200, {
+      items: await checkWorkOrderDuplicatesBeforeCreate(session, {
+        vesselCode: url.searchParams.get("vesselCode"),
+        assetId: url.searchParams.get("assetId"),
+        title: url.searchParams.get("title"),
+      }),
+    });
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/app/pms/work-orders") {
     const items = await listTenantWorkOrders(session, {
       vesselCode: url.searchParams.get("vesselCode"),
@@ -603,6 +622,26 @@ export async function handleMaintenanceRoutes(
     const id = url.pathname.split("/")[4]!;
     const body = await readJsonBody(request) as Parameters<typeof cancelWorkOrder>[2];
     sendJson(response, 200, await cancelWorkOrder(session, id, body));
+    return true;
+  }
+
+  // OT abierta dos veces: aviso de la ficha, "No es duplicada" y "Anular esta
+  // por duplicada" (que además resuelve sus SS). Ver wo-duplicates.ts.
+  if (method === "GET" && /^\/app\/pms\/work-orders\/[^/]+\/possible-duplicates$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    sendJson(response, 200, { items: await listWorkOrderPossibleDuplicates(session, id) });
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/not-duplicate$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as { otherId?: unknown } | null;
+    sendJson(response, 200, await dismissWorkOrderDuplicate(session, id, body?.otherId));
+    return true;
+  }
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/cancel-duplicate$/.test(url.pathname)) {
+    const id = url.pathname.split("/")[4]!;
+    const body = await readJsonBody(request) as { keepId?: unknown } | null;
+    sendJson(response, 200, await cancelWorkOrderAsDuplicate(session, id, body?.keepId));
     return true;
   }
 

@@ -2268,12 +2268,24 @@ export async function cancelWorkOrder(session: TenantAccessSession, id: string, 
   }
 
   // Cancelar devuelve a su vencimiento real a TODOS los planes incluidos, no
-  // sólo al principal: ninguno se va a ejecutar por esta OT.
+  // sólo al principal: ninguno se va a ejecutar por esta OT. Salvo el que otra
+  // OT abierta sigue ejecutando (típico al anular una duplicada): ese sigue en
+  // curso, y restaurarlo lo mostraba pendiente con una OT abierta.
   void (async () => {
     try {
       const { listWorkOrderPlanIds } = await import("./work-order-plans-service");
       const planIds = await listWorkOrderPlanIds(prismaRaw, current);
       for (const planId of planIds) {
+        const stillRunning = await (prismaRaw as any).workOrder.count({
+          where: {
+            tenantId: current.tenantId,
+            id: { not: current.id },
+            deletedAt: null,
+            status: { in: ["PLANNED", "IN_PROGRESS", "ON_HOLD"] },
+            OR: [{ maintenancePlanId: planId }, { planLinks: { some: { maintenancePlanId: planId } } }],
+          },
+        });
+        if (stillRunning > 0) continue;
         await restorePlanAfterWoCancellation(session, planId);
       }
     } catch (err) {

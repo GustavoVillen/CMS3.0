@@ -4,6 +4,7 @@ import { fmtDate } from "../lib/utils";
 import { Camera, ChevronDown, ChevronUp, Cog, Droplets, Handshake, Info, Link2, Loader2, Plus, Ship, Sparkles, Wrench, X } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { confirmPlanWoDuplicate } from "../lib/plan-wo-guard";
+import { confirmWoDuplicate } from "../lib/wo-dup-guard";
 import { useT, type TranslationKey } from "../lib/i18n";
 import { useAuth, useCan } from "../lib/auth";
 import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
@@ -244,7 +245,11 @@ interface CreateWorkOrderModalProps {
    */
   initialValues?: StandaloneInitialValues;
   onClose: () => void;
-  onSaved: (woId: string, workOrderCode?: string) => void | Promise<void>;
+  /**
+   * `serviceRequestIds`: las SS que se abrieron con la OT (o en la OT que ya
+   * estaba, si el usuario eligió pedirlas ahí en vez de abrir otra).
+   */
+  onSaved: (woId: string, workOrderCode?: string, serviceRequestIds?: string[]) => void | Promise<void>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1120,8 +1125,35 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       if (ok === null) return;
       allowDuplicate = ok;
     }
+    // Alta a mano: ¿el equipo ya tiene una OT abierta que parece la misma? Pasa
+    // sobre todo al pedir una SS que abre su propia OT cuando la OT ya estaba.
+    let existingWo: { id: string; workOrderCode: string } | null = null;
+    if (prefill?.source !== "plan") {
+      const dup = await confirmWoDuplicate({
+        vesselCode: (prefill?.vesselCode ?? vesselCode).trim().toUpperCase(),
+        assetId: prefill?.assetSelectable ? assetId : (prefill?.assetId ?? assetId),
+        title: title.trim(),
+        offerUse: !!serviceRequestMode && cleanStandaloneProviders.length > 0,
+      });
+      if (dup.kind === "cancel") { if (dup.navigated) onClose(); return; }
+      if (dup.kind === "use") existingWo = dup.workOrder;
+    }
     setSaving(true);
     try {
+      // SS pedidas en la OT que ya estaba: no se abre otra OT.
+      if (existingWo) {
+        const ids: string[] = [];
+        for (const r of cleanStandaloneProviders) {
+          const servicio = r.purpose.trim() || title.trim() || undefined;
+          const sr = await api.post<{ id?: string }>(`/app/pms/work-orders/${existingWo.id}/service-requests`, {
+            providerId: r.providerId, title: servicio, description: servicio, priority,
+          });
+          if (sr?.id) ids.push(sr.id);
+        }
+        await onSaved(existingWo.id, existingWo.workOrderCode, ids);
+        return;
+      }
+
       let woId: string;
       let woCode: string | undefined;
 
@@ -1231,16 +1263,18 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       // No bloqueante: si una falla, la OT ya quedó guardada y se puede abrir
       // a mano después.
       // Desde un plan la SS ya la abrió el backend (providerId de arriba).
+      const createdSrIds: string[] = [];
       if (prefill?.source !== "plan" && cleanStandaloneProviders.length > 0 && woId) {
         for (const r of cleanStandaloneProviders) {
           const servicio = r.purpose.trim() || title.trim() || undefined;
           try {
-            await api.post(`/app/pms/work-orders/${woId}/service-requests`, {
+            const sr = await api.post<{ id?: string }>(`/app/pms/work-orders/${woId}/service-requests`, {
               providerId:  r.providerId,
               title:       servicio,
               description: servicio,
               priority,
             });
+            if (sr?.id) createdSrIds.push(sr.id);
           } catch (e) { console.error("[create-sr] failed:", e); }
         }
       }
@@ -1264,13 +1298,13 @@ export const CreateWorkOrderModal: React.FC<CreateWorkOrderModalProps> = ({ pref
       // La ficha de la OT muestra el aviso "¡Orden de trabajo abierta!" con los
       // pasos que siguen. En el alta de SS el flujo termina en la solicitud.
       if (!serviceRequestMode) markJustCreated("wo", woCode);
-      await onSaved(woId, woCode);
+      await onSaved(woId, woCode, prefill?.source !== "plan" ? createdSrIds : undefined);
     } catch (e) { setErr(e instanceof ApiError ? e.message : t("common.saveError")); }
     finally { setSaving(false); }
   }, [prefill, allowDuplicateProp, vesselCode, assetId, type, priority, criticality, openDate, dueDate, today,
       title, description, assignedTo, acceptanceCriteria, loto, riskLevel, riskAnalysisResult,
       consequenceCategory, consequenceRationale, estimatedHours,
-      checklistDocFile, confirmedPlanIds, providerOverride, planProviders, isAdmin, onBehalfUserId, onSaved, t,
+      checklistDocFile, confirmedPlanIds, providerOverride, planProviders, isAdmin, onBehalfUserId, onSaved, onClose, t,
       standaloneProviderRequests, hasAnyProvider, requireProvider, isMercurio, serviceRequestMode,
       requestedByArea, assignedToArea, systemArea, voyageNumber, operatingCondition, location]);
 

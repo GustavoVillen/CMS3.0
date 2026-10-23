@@ -10,6 +10,7 @@ import { ModalCloseButton } from "../components/ModalCloseButton";
 import { AlertDialog } from "../components/AlertDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePendingProgress } from "../lib/progress-outbox";
+import type { PossibleDuplicateWo } from "../lib/wo-dup-guard";
 import { AssigneeSelect } from "../components/AssigneeSelect";
 import { FormModal } from "../components/FormModal";
 import { VesselLabel } from "../components/EntityLabels";
@@ -1294,6 +1295,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const [providerBusy, setProviderBusy] = useState(false);
   const [providerDone, setProviderDone] = useState<{ to: string[]; cc: string[]; fellBack: boolean } | null>(null);
   const [sendProviderErr, setSendProviderErr] = useState<string | null>(null);
+  // OT abierta dos veces: aviso arriba de la ficha (ver lib/wo-dup-guard y
+  // tenant/work-orders/wo-duplicates.ts en la API). Sólo con la OT abierta.
+  const { data: dupData, reload: reloadDups } = useFetch<{ items: PossibleDuplicateWo[] }>(
+    canEditStatus(workOrder.status) ? `/app/pms/work-orders/${workOrder.id}/possible-duplicates` : null,
+    [workOrder.id, workOrder.status]);
+  const [dupCancelAsk, setDupCancelAsk] = useState<PossibleDuplicateWo | null>(null);
+  const [dupBusy, setDupBusy] = useState(false);
+  const [dupMsg, setDupMsg] = useState<{ text: string; cancelled: boolean } | null>(null);
 
   // Linked deferrals (current + history). Cargamos todas las APLs vinculadas a esta OT.
   interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null; toNextDrydock?: boolean }
@@ -2960,6 +2969,85 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                 if (patch.riskAnalysisResult !== undefined) setRiskAnalysisResult(patch.riskAnalysisResult);
                 if (patch.loto !== undefined)               setLoto(patch.loto);
   };
+  // ── Posible OT duplicada ──
+  const dupItems = dupData?.items ?? [];
+  const canDismissDup = canManage || canWo("wo.operate");
+  const dismissDup = async (other: PossibleDuplicateWo) => {
+    setDupBusy(true);
+    try {
+      await api.post(`/app/pms/work-orders/${workOrder.id}/not-duplicate`, { otherId: other.id });
+      void reloadDups();
+    } catch (e) {
+      setDupMsg({ text: e instanceof ApiError ? e.message : t("common.saveError"), cancelled: false });
+    } finally {
+      setDupBusy(false);
+    }
+  };
+  // Anula ESTA OT (la que se está mirando) y deja la otra. Sus SS las resuelve
+  // el servidor: pasan a la otra o se cancelan si repiten el pedido.
+  const cancelAsDup = async (keep: PossibleDuplicateWo) => {
+    setDupCancelAsk(null);
+    setDupBusy(true);
+    try {
+      const r = await api.post<{ workOrderCode: string; keptWorkOrderCode: string; movedServiceRequests: string[]; cancelledServiceRequests: string[]; failedServiceRequests: string[] }>(
+        `/app/pms/work-orders/${workOrder.id}/cancel-duplicate`, { keepId: keep.id });
+      const lines = [t("woDup.cancel.done").replace("{code}", r.workOrderCode).replace("{keep}", r.keptWorkOrderCode)];
+      if (r.movedServiceRequests.length) lines.push(t("woDup.cancel.moved").replace("{keep}", r.keptWorkOrderCode).replace("{codes}", r.movedServiceRequests.join(", ")));
+      if (r.cancelledServiceRequests.length) lines.push(t("woDup.cancel.cancelled").replace("{codes}", r.cancelledServiceRequests.join(", ")));
+      if (r.failedServiceRequests.length) lines.push(t("woDup.cancel.failed").replace("{codes}", r.failedServiceRequests.join(", ")));
+      setDupMsg({ text: lines.join("\n"), cancelled: true });
+    } catch (e) {
+      setDupMsg({ text: e instanceof ApiError ? e.message : t("common.saveError"), cancelled: false });
+    } finally {
+      setDupBusy(false);
+    }
+  };
+  const ownLiveSrCodes = linkedServiceRequests
+    .filter(sr => sr.status !== "CANCELLED" && sr.status !== "REJECTED")
+    .map(sr => sr.serviceRequestCode);
+  const dupBanner = dupItems.length > 0 && (
+    <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-3 space-y-2">
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{t("woDup.banner.title")}</p>
+          <p className="text-xs text-fg/70">{t("woDup.banner.body")}</p>
+        </div>
+      </div>
+      {dupItems.map(o => (
+        <div key={o.id} className="rounded-lg border border-fg/10 bg-surface/70 px-3 py-2 space-y-1.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
+            <span className="font-mono text-[13px] font-bold text-fg">{o.workOrderCode}</span>
+            {o.title && <span className="text-xs text-fg/80 truncate" title={o.title}>{o.title}</span>}
+          </div>
+          <p className="text-[11px] text-text-industrial/60">
+            {t("woDup.openedOn").replace("{date}", fmtDate(o.openDate))}
+            {o.createdByName && <> {t("woDup.openedBy").replace("{name}", o.createdByName)}</>}
+            {" · "}{t(`woDup.reason.${o.reason}` as TranslationKey)}
+            {o.serviceRequests.length > 0 && <> · {t("woDup.ss").replace("{codes}", o.serviceRequests.map(sr => sr.serviceRequestCode).join(", "))}</>}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={dupBusy} onClick={() => { void saveThenNavigate(`/work-orders/${encodeURIComponent(o.workOrderCode)}`); }}
+              className="inline-flex items-center gap-1 rounded-lg bg-accent/10 border border-accent/20 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent/20 disabled:opacity-50">
+              <ExternalLink className="w-3.5 h-3.5" /> {t("woDup.goTo")}
+            </button>
+            {canManage && (
+              <button type="button" disabled={dupBusy} onClick={() => setDupCancelAsk(o)}
+                className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2.5 py-1 text-[11px] font-bold text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50">
+                <XCircle className="w-3.5 h-3.5" /> {t("woDup.banner.cancelThis")}
+              </button>
+            )}
+            {canDismissDup && (
+              <button type="button" disabled={dupBusy} onClick={() => { void dismissDup(o); }}
+                className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-fg/60 hover:text-fg hover:bg-fg/5 disabled:opacity-50">
+                {t("woDup.banner.notDup")}
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
   const defAiBanner = (
     <>
           {/* ── IA: posible deficiencia detectada en el texto de la OT ── */}
@@ -4194,6 +4282,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const guidedBody = (
     <>
       {defAiBanner}
+      {dupBanner}
       <div className="grid gap-3 lg:grid-cols-2 items-stretch">
         {nextStepCard}
         {commentsBox}
@@ -4470,6 +4559,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
 
   const paperBody = (
     <>
+      {dupBanner}
       <p className="text-xs text-text-industrial/60 text-center">{t("wo.guide.paperNote")}</p>
       {paperFormEl}
     </>
@@ -4574,6 +4664,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
           {isMercurio ? (woView === "paper" ? paperBody : guidedBody) : (<>
 
           {defAiBanner}
+          {dupBanner}
 
           {/* ── 0. TRAMITACIÓN (En preparación → Envía → Aprueba → Autoriza) ── */}
           {isEditable && (
@@ -5473,6 +5564,29 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       </FormModal>
     )}
     {sendProviderErr && <AlertDialog message={sendProviderErr} onClose={() => setSendProviderErr(null)} />}
+
+    {/* Posible OT duplicada: confirmar la anulación y mostrar qué pasó con sus SS. */}
+    {dupCancelAsk && (
+      <ConfirmDialog
+        message={[
+          t("woDup.cancel.confirm").replaceAll("{code}", workOrder.workOrderCode).replaceAll("{keep}", dupCancelAsk.workOrderCode),
+          ownLiveSrCodes.length > 0
+            ? t("woDup.cancel.confirmSs").replace("{codes}", ownLiveSrCodes.join(", ")).replaceAll("{keep}", dupCancelAsk.workOrderCode)
+            : null,
+        ].filter(Boolean).join("\n\n")}
+        confirmLabel={t("woDup.cancel.button")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => { void cancelAsDup(dupCancelAsk); }}
+        onCancel={() => setDupCancelAsk(null)}
+      />
+    )}
+    {dupMsg && (
+      <AlertDialog
+        title={dupMsg.cancelled ? t("woDup.banner.title") : undefined}
+        message={dupMsg.text}
+        onClose={() => { const done = dupMsg.cancelled; setDupMsg(null); if (done) onSaved(); }}
+      />
+    )}
     </>
   );
 };

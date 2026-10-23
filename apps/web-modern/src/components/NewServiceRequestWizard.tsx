@@ -288,8 +288,16 @@ const NewServiceRequestWizardSteps: React.FC<NewServiceRequestWizardProps> = ({ 
         initialProviderIds={providerIds}
         onChangeContext={() => { setShowForm(false); setStep("provider"); }}
         onClose={onClose}
-        onSaved={async (woId) => {
+        onSaved={async (woId, _woCode, serviceRequestIds) => {
           // El flujo termina en la solicitud: si se abrió una sola SS, se abre esa.
+          // Con las SS que devuelve el alta alcanza; hace falta así cuando se
+          // pidieron en una OT que ya estaba y que puede tener otras SS.
+          if (serviceRequestIds && serviceRequestIds.length > 0) {
+            const only = serviceRequestIds.length === 1 ? serviceRequestIds[0]! : null;
+            if (only) markJustCreated("ss", only);
+            onFinished(only);
+            return;
+          }
           try {
             const res = await api.get<{ items: Array<{ id: string }> }>(`/app/pms/work-orders/${encodeURIComponent(woId)}/service-requests`);
             const only = res.items?.length === 1 ? res.items[0]!.id : null;

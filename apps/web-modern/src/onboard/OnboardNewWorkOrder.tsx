@@ -13,6 +13,7 @@ import { useT, useWoTerms } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useFetch } from "../lib/hooks";
 import { api } from "../lib/api";
+import { confirmWoDuplicate } from "../lib/wo-dup-guard";
 import { useVesselContext } from "../lib/vessel-context";
 import { AlertDialog } from "../components/AlertDialog";
 import {
@@ -146,6 +147,10 @@ function NewWorkOrderFlow({ onExit, onAgain, prefill, onCreated }: {
 
   const send = async () => {
     if (!selectedVesselCode || !asset) return;
+    // ¿El equipo ya tiene una OT abierta que parece la misma? Se pregunta antes
+    // de mandar nada (ver lib/wo-dup-guard).
+    const dup = await confirmWoDuplicate({ vesselCode: selectedVesselCode, assetId: asset.id, title: titleFrom(text.trim()) });
+    if (dup.kind !== "new") return;
     setBusy(true);
     const name = user?.name ?? "";
     const warnings: string[] = [];
