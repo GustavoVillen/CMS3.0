@@ -184,7 +184,7 @@ export const FluidAnalysesPage: React.FC = () => {
     const q = search.trim().toLowerCase();
     if (q) {
       items = items.filter(s =>
-        textMatches(s.sampleCode, q) || textMatches(assetLabel(s.assetId, assets), q) ||
+        textMatches(s.sampleCode, q) || textMatches(assetLabel(s.assetId, assets, s.assetName), q) ||
         textMatches(s.sourceWorkOrderCode ?? "", q) || textMatches(vesselName(s.vesselCode), q) ||
         textMatches(s.fluidType ? (FLUID_LABELS[s.fluidType] ?? "") : "", q),
       );
@@ -206,7 +206,7 @@ export const FluidAnalysesPage: React.FC = () => {
       let av: string | number | null = null;
       let bv: string | number | null = null;
       if (sortKey === "sampleCode")  { av = a.sampleCode;  bv = b.sampleCode; }
-      if (sortKey === "assetId")     { av = assetLabel(a.assetId, assets); bv = assetLabel(b.assetId, assets); }
+      if (sortKey === "assetId")     { av = assetLabel(a.assetId, assets, a.assetName); bv = assetLabel(b.assetId, assets, b.assetName); }
       if (sortKey === "kind")        { av = a.kind;        bv = b.kind; }
       if (sortKey === "sampledAt")   { av = a.sampledAt;   bv = b.sampledAt; }
       if (sortKey === "status")      { av = a.status;      bv = b.status; }
@@ -220,8 +220,8 @@ export const FluidAnalysesPage: React.FC = () => {
   }, [beforeStage, stageFilter, stageSel, sortKey, sortDir, assets]);
 
   const assetOptions = useMemo(() => {
-    const ids = [...new Set(scoped.map(s => s.assetId))];
-    return ids.map(id => ({ id, label: assetLabel(id, assets) })).sort((a, b) => a.label.localeCompare(b.label));
+    const labelById = new Map(scoped.map(s => [s.assetId, assetLabel(s.assetId, assets, s.assetName)]));
+    return [...labelById].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
   }, [scoped, assets]);
 
   // Borrado desde la propia fila (mismo endpoint y mismo permiso que el botón
@@ -437,7 +437,7 @@ export const FluidAnalysesPage: React.FC = () => {
                         {/* Nombre del buque, no el código. */}
                         <div className="text-[10.5px] text-text-industrial/50">{vesselName(s.vesselCode)}</div>
                       </td>
-                      <td className="px-4 py-2.5 font-semibold text-fg">{assetLabel(s.assetId, assets)}</td>
+                      <td className="px-4 py-2.5 font-semibold text-fg">{assetLabel(s.assetId, assets, s.assetName)}</td>
                       <td className="px-4 py-2.5">{kindCell(s)}</td>
                       <td className="px-4 py-2.5 text-text-industrial/70">
                         {s.status === "DRAFT" ? <span className="text-text-industrial/40">{t("fa.list.notTaken")}</span> : (
@@ -488,7 +488,7 @@ export const FluidAnalysesPage: React.FC = () => {
                     {s.result && <VerdictBadge verdict={s.result.verdict} />}
                   </div>
                   {repairWoLink(s)}
-                  <div className="text-[13px] font-bold text-fg">{assetLabel(s.assetId, assets)}</div>
+                  <div className="text-[13px] font-bold text-fg">{assetLabel(s.assetId, assets, s.assetName)}</div>
                   <div className="flex flex-wrap items-center gap-2.5 text-xs">
                     {kindCell(s)}
                     {waitCell(s)}
@@ -808,7 +808,7 @@ function SampleDetailModal({
   }
 
   // ── Vista del detalle (preview V20) ──
-  const headerAssetName = assets.find(a => a.id === sample.assetId)?.name ?? null;
+  const headerAssetName = assets.find(a => a.id === sample.assetId)?.name ?? sample.assetName ?? null;
   const kindLabel = t(`mp.samp.kind.${sample.kind}` as TranslationKey);
   const KindIcon = KIND_ICON[sample.kind] ?? FlaskConical;
   const vesselLabel = contextVessels.find(v => v.code === sample.vesselCode)?.name || sample.vesselCode;

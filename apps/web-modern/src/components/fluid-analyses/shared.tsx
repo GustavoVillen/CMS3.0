@@ -95,6 +95,8 @@ export interface FluidSample {
   sourceWorkOrderId: string | null;
   /** Código de la OT que generó la muestra, resuelto por el backend en el listado. */
   sourceWorkOrderCode?: string | null;
+  /** Nombre del equipo resuelto por el backend, también si el equipo está dado de baja. */
+  assetName?: string | null;
   sourcePlanId: string | null;
 }
 
@@ -113,9 +115,10 @@ export function VerdictBadge({ verdict }: { verdict: Verdict }) {
   );
 }
 
-export function assetLabel(assetId: string, assets: AssetItem[]): string {
+/** `fallbackName`: el nombre que trae la muestra, para los equipos dados de baja que `assets` no incluye. */
+export function assetLabel(assetId: string, assets: AssetItem[], fallbackName?: string | null): string {
   const a = assets.find(x => x.id === assetId);
-  if (!a) return assetId.slice(0, 8) + "…";
+  if (!a) return fallbackName ?? assetId.slice(0, 8) + "…";
   return a.name ?? a.assetCode ?? assetId;
 }
 

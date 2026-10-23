@@ -178,6 +178,25 @@ async function nextSampleCode(prisma: any, tenantId: string, vesselCode: string)
   return `FA-${vesselCode}-${String(n).padStart(4, "0")}`;
 }
 
+/**
+ * Nombre del equipo de cada muestra, resuelto en lote. Incluye los equipos
+ * dados de baja: la muestra sigue siendo historia de ese equipo, y la lista de
+ * equipos vigentes que usa la pantalla no los trae (antes se veía el id
+ * interno cortado, "cmuo5mxa…").
+ */
+async function attachAssetNames(prisma: any, tenantId: string, samples: any[]): Promise<void> {
+  const ids = [...new Set(samples.map(s => s.assetId).filter(Boolean))] as string[];
+  const assets: Array<{ id: string; name: string; assetCode: string }> = ids.length > 0
+    ? await prisma.asset.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true, name: true, assetCode: true } })
+    : [];
+  const byId = new Map(assets.map(a => [a.id, a]));
+  for (const s of samples) {
+    const a = byId.get(s.assetId);
+    s.assetName = a?.name ?? null;
+    s.assetCode = a?.assetCode ?? null;
+  }
+}
+
 // ── Verdict computation from parameters + thresholds ─────────────────────────
 
 export interface ThresholdRow {
@@ -279,6 +298,8 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
     for (const s of filtered) s.sourceWorkOrderCode = null;
   }
 
+  await attachAssetNames(prisma, tenantId, filtered);
+
   // OT correctiva con la que se cerró el defecto del resultado (preview V47):
   // el listado la muestra debajo del veredicto. En lote: defectos y después OTs.
   const defectIds = [...new Set(filtered.map((s: any) => s.result?.defectId).filter(Boolean))] as string[];
@@ -335,6 +356,7 @@ export async function getFluidSample(session: TenantAccessSession, id: string) {
     include: { result: true },
   });
   if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+  await attachAssetNames(prisma, tenantId, [sample]);
 
   // Defensa contra Prisma client desactualizado: si el include no trajo aiAnalysis,
   // lo traemos con raw SQL para no perder datos en producción durante migraciones.
