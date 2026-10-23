@@ -1374,6 +1374,11 @@ model Vessel {
   // Auditoría de IA al cerrar OT y completar SS (oct 2026). La enciende o apaga
   // el administrador por embarcación; apagada, el cierre va directo sin informe.
   aiCloseAuditEnabled   Boolean       @default(true)
+  // Correo de la sala de máquinas (oct 2026). La OT y la SS que se mandan al
+  // proveedor le llegan también acá. Las barcazas no lo tienen: sin correo, no
+  // se suma nadie. No se deduce de los usuarios porque varias tripulaciones
+  // entran con usuarios internos sin casilla real.
+  engineRoomEmail       String?
   crewPasswordHash      String?
   crewPasswordUpdatedAt DateTime?
   createdAt             DateTime      @default(now())

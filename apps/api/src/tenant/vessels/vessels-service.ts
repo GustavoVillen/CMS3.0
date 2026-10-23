@@ -47,6 +47,7 @@ const VESSEL_SELECT = {
   incorporationType: true,
   status: true,
   aiCloseAuditEnabled: true,
+  engineRoomEmail: true,
   createdAt: true,
 } as const;
 
@@ -123,12 +124,25 @@ export interface VesselWriteInput {
   status?: string;
   /** Auditoría de IA al cerrar OT / completar SS en esta embarcación. */
   aiCloseAuditEnabled?: boolean;
+  /** Correo de la sala de máquinas: recibe la OT y la SS que se mandan al proveedor. */
+  engineRoomEmail?: string | null;
 }
 
 function normalizeOptionalText(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   const text = String(value).trim();
   return text || null;
+}
+
+// Misma validación que las copias de Configuración (service-request-mail-config-service).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function normalizeOptionalEmail(value: unknown): string | null {
+  const text = normalizeOptionalText(value)?.toLowerCase() ?? null;
+  if (text && (text.length > 200 || !EMAIL_RE.test(text))) {
+    throw new RouteError(400, "INVALID_EMAIL", `"${text}" no es una dirección de correo válida.`);
+  }
+  return text;
 }
 
 function normalizeOptionalNumber(value: unknown): number | null {
@@ -175,6 +189,7 @@ function buildVesselDetailsData(input: Partial<VesselWriteInput>): Record<string
     buildCountry: normalizeOptionalText(input.buildCountry),
     incorporationDate: normalizeOptionalDate(input.incorporationDate),
     incorporationType: normalizeOptionalText(input.incorporationType),
+    engineRoomEmail: normalizeOptionalEmail(input.engineRoomEmail),
   };
 }
 
@@ -182,7 +197,7 @@ const DETAIL_FIELDS = new Set([
   "owner", "vesselType", "isCrewed", "imo", "registration",
   "flag", "portOfRegistry", "classSociety", "manager",
   "powerHp", "dwtTons", "lengthM", "beamM", "depthM", "trnTn", "trbTn",
-  "buildYear", "buildCountry", "incorporationDate", "incorporationType",
+  "buildYear", "buildCountry", "incorporationDate", "incorporationType", "engineRoomEmail",
 ]);
 
 async function updateVesselDetails(
@@ -222,6 +237,8 @@ export async function createTenantVessel(session: TenantAccessSession, input: Ve
   if (existing && !existing.deletedAt) {
     throw new RouteError(409, "DUPLICATE_CODE", `Ya existe un vessel con código ${code}.`);
   }
+  // Se arma antes de crear: un correo de máquinas mal escrito corta acá, sin dejar el buque a medias.
+  const details = buildVesselDetailsData(input);
 
   const vessel = await prisma.vessel.upsert({
     where: { tenantId_code: { tenantId: tenant.id, code } },
@@ -242,7 +259,7 @@ export async function createTenantVessel(session: TenantAccessSession, input: Ve
     },
   });
 
-  await updateVesselDetails(prisma, vessel.id, tenant.id, buildVesselDetailsData(input));
+  await updateVesselDetails(prisma, vessel.id, tenant.id, details);
   void publishAudit(prisma, {
     tenantId: tenant.id,
     actorUserId: session.user.id,
@@ -265,6 +282,8 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
     where: { id, tenantId: tenant.id, deletedAt: null },
   });
   if (!vessel) throw new RouteError(404, "NOT_FOUND", "Vessel no encontrado.");
+  // Antes de tocar nada: un correo de máquinas mal escrito no deja la ficha a medio guardar.
+  const engineRoomEmail = input.engineRoomEmail !== undefined ? normalizeOptionalEmail(input.engineRoomEmail) : undefined;
 
   const data: Record<string, unknown> = { updatedByUserId: session.user.id };
   if (input.name !== undefined) {
@@ -297,6 +316,7 @@ export async function updateTenantVessel(session: TenantAccessSession, id: strin
   if (input.buildCountry !== undefined) detailsToUpdate.buildCountry = normalizeOptionalText(input.buildCountry);
   if (input.incorporationDate !== undefined) detailsToUpdate.incorporationDate = normalizeOptionalDate(input.incorporationDate);
   if (input.incorporationType !== undefined) detailsToUpdate.incorporationType = normalizeOptionalText(input.incorporationType);
+  if (engineRoomEmail !== undefined) detailsToUpdate.engineRoomEmail = engineRoomEmail;
 
   await updateVesselDetails(prisma, id, tenant.id, detailsToUpdate);
   // El tipo y la tripulación viajan a los prompts de IA cacheados 5 min: si se

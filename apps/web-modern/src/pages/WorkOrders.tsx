@@ -240,6 +240,9 @@ interface WorkOrder {
   department: "CUBIERTA" | "MAQUINAS" | "BARCAZA" | "PROVEEDOR" | "OTROS" | null;
   providerId: string | null;
   providerName: string | null;
+  // Último "Enviar al proveedor" (sale de la auditoría). Sólo viene en el DETALLE.
+  sentToProviderAt?: string | null;
+  sentToProviderTo?: string[];
   location: string | null;
   communicationMethod: string[];
   distribution: string[];
@@ -1283,6 +1286,14 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
   const canAuthorizeWo = canWo("wo.authorize");
   // step de tramitación pendiente (abre ApprovalModal). null = cerrado.
   const [tramita, setTramita] = useState<"ENVIA" | "APRUEBA" | "AUTORIZA" | "RECHAZA" | null>(null);
+  // "Enviar al proveedor" (OT autorizada con proveedor). El último envío se
+  // guarda acá además de venir en la OT: la ficha no se relee al enviar.
+  const [providerSent, setProviderSent] = useState<{ at: string; to: string[] } | null>(
+    workOrder.sentToProviderAt ? { at: workOrder.sentToProviderAt, to: workOrder.sentToProviderTo ?? [] } : null);
+  const [providerAsk, setProviderAsk] = useState(false);
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [providerDone, setProviderDone] = useState<{ to: string[]; cc: string[]; fellBack: boolean } | null>(null);
+  const [sendProviderErr, setSendProviderErr] = useState<string | null>(null);
 
   // Linked deferrals (current + history). Cargamos todas las APLs vinculadas a esta OT.
   interface DeferralLite { id: string; deferralCode: string; status: string; requestedAt: string; targetDate: string | null; justification: string | null; toNextDrydock?: boolean }
@@ -3987,6 +3998,47 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
       </button>
     </div>
   );
+  // ── Enviar al proveedor ──
+  // Sólo con el botón (nunca sale sola), con la OT autorizada y con proveedor
+  // guardado. Antes se guarda lo pendiente: el PDF sale de lo que hay en la base.
+  const canSendToProvider = (canWo("wo.operate") || canWo("wo.manage"))
+    && isAuthorized && !woClosedReadOnly && !!(workOrder.providerId || workOrder.providerName);
+  const sendToProvider = async () => {
+    setProviderAsk(false);
+    if (isDirty && !(await onSave())) return;
+    setProviderBusy(true);
+    try {
+      const r = await api.post<{ sent: boolean; to: string[]; cc?: string[]; fellBackToMailbox?: boolean; reason?: string; error?: string }>(
+        `/app/pms/work-orders/${workOrder.id}/send-to-provider`, {});
+      if (r.sent) {
+        setProviderSent({ at: new Date().toISOString(), to: r.to });
+        setProviderDone({ to: r.to, cc: r.cc ?? [], fellBack: !!r.fellBackToMailbox });
+        onReload();
+      } else if (r.reason === "NOT_CONFIGURED") {
+        setSendProviderErr(t("wo.sendProvider.notConfigured"));
+      } else {
+        setSendProviderErr(`${t("wo.sendProvider.failed")} ${r.error ?? ""}`.trim());
+      }
+    } catch (e) {
+      setSendProviderErr(e instanceof ApiError ? e.message : t("wo.sendProvider.failed"));
+    } finally {
+      setProviderBusy(false);
+    }
+  };
+  const sendProviderRow = canSendToProvider && (
+    <div className="space-y-1">
+      <button type="button" disabled={providerBusy || saving} onClick={() => setProviderAsk(true)} className={btnSoft}>
+        {providerBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+        {providerSent ? t("wo.sendProvider.resend") : t("wo.sendProvider.button")}
+      </button>
+      {providerSent && (
+        <p className="text-[11px] text-text-industrial/60">
+          {t("wo.sendProvider.sentOn").replace("{date}", fmtDateTime(providerSent.at)).replace("{to}", providerSent.to.join(", "))}
+        </p>
+      )}
+    </div>
+  );
+
   const signersLine = tramitaPhase === "AUTORIZADA" && workOrder.type === "INSPECTION" && workOrder.autorizadoByName === "Sistema"
     ? <p className="text-xs text-text-industrial/60">{t("wo.tramita.inspectionAutoAuthorized")}</p>
     : (
@@ -4071,6 +4123,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         {signersLine}
         {tramitaPhase === "APROBADA" && <p className="text-xs text-text-industrial/60">{t("wo.guide.exec.pendingAuth")}</p>}
         {authorizeRow}
+        {sendProviderRow}
         <div className="flex flex-wrap gap-2 pt-1">
           {isResultEditable && (
             <button type="button" onClick={() => setShowProgressSheet(true)} className={btnPrimary}>
@@ -4558,6 +4611,7 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
                   {workOrder.aprobadoByName && <p><span className="font-bold">Aprobó:</span> {workOrder.aprobadoByName}{workOrder.aprobadoAt ? ` · ${fmtDate(workOrder.aprobadoAt)}` : ""}</p>}
                   <p><span className="font-bold">Autorizó:</span> {workOrder.autorizadoByName}{workOrder.autorizadoAt ? ` · ${fmtDate(workOrder.autorizadoAt)}` : ""}</p>
                   <p className="text-text-industrial/60 normal-case">{woTerms.abbr} autorizada — avances y resultado habilitados.</p>
+                  {sendProviderRow && <div className="pt-1.5">{sendProviderRow}</div>}
                 </div>
               ) : tramitaPhase === "EN_PREPARACION" ? (
                 /* Todavía la está completando quien la abrió: un solo botón,
@@ -5382,6 +5436,43 @@ const WorkOrderModal: React.FC<WorkOrderModalProps> = ({ workOrder, canManage, o
         }}
       />
     )}
+
+    {/* Enviar al proveedor: confirmación, resultado y errores. */}
+    {providerAsk && (
+      <ConfirmDialog
+        message={providerSent
+          ? t("wo.sendProvider.confirmResend").replace("{date}", fmtDateTime(providerSent.at))
+          : t("wo.sendProvider.confirm")
+              .replace("{code}", workOrder.workOrderCode)
+              .replace("{provider}", workOrder.providerName ?? "—")}
+        confirmLabel={t("wo.sendProvider.send")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => { void sendToProvider(); }}
+        onCancel={() => setProviderAsk(false)}
+      />
+    )}
+    {providerDone && (
+      <FormModal
+        title={t("wo.sendProvider.doneTitle")}
+        subtitle={workOrder.workOrderCode}
+        onClose={() => setProviderDone(null)}
+        footer={
+          <button type="button" onClick={() => setProviderDone(null)}
+            className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg text-[11px] font-bold">
+            {t("common.ok")}
+          </button>
+        }
+      >
+        <p className="text-sm text-text-industrial">{t("wo.sendProvider.doneTo").replace("{to}", providerDone.to.join(", "))}</p>
+        {providerDone.cc.length > 0 && (
+          <p className="text-[11px] text-text-industrial/60">{t("wo.sendProvider.doneCc").replace("{cc}", providerDone.cc.join(", "))}</p>
+        )}
+        {providerDone.fellBack && (
+          <p className="text-[11px] text-amber-700 dark:text-amber-400">{t("wo.sendProvider.fellBack")}</p>
+        )}
+      </FormModal>
+    )}
+    {sendProviderErr && <AlertDialog message={sendProviderErr} onClose={() => setSendProviderErr(null)} />}
     </>
   );
 };

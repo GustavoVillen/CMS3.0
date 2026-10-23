@@ -38,6 +38,7 @@ import {
   holdWorkOrder,
   listTenantWorkOrders,
   startWorkOrder,
+  sendWorkOrderToProvider,
   updateTenantWorkOrder,
   setWorkOrderType,
   reopenWorkOrder,
@@ -517,6 +518,18 @@ export async function handleMaintenanceRoutes(
   if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/start$/.test(url.pathname)) {
     const id = url.pathname.split("/")[4]!;
     sendJson(response, 200, await startWorkOrder(session, id));
+    return true;
+  }
+
+  // "Enviar al proveedor": manda la OT autorizada en PDF al proveedor, a máquinas
+  // del buque y con las copias de Configuración. Sin casilla SMTP devuelve
+  // sent:false y no se manda nada. No cambia el estado de la OT.
+  if (method === "POST" && /^\/app\/pms\/work-orders\/[^/]+\/send-to-provider$/.test(url.pathname)) {
+    enforceRateLimit(request, `pdf:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    const id = url.pathname.split("/")[4]!;
+    const wo = await getTenantWorkOrder(session, id);
+    const buffer = await buildWorkOrderPdf(session, wo.id);
+    sendJson(response, 200, await sendWorkOrderToProvider(session, wo.id, { filename: `${wo.workOrderCode}.pdf`, buffer }));
     return true;
   }
 

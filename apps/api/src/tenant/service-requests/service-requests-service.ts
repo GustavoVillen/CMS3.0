@@ -42,7 +42,7 @@ import { buildHojaRuta, HITO_FIELDS, type HojaRutaHito, type HojaRutaHitosExtra 
 import { dayKey, resolveTenantTime } from "../../common/tenant-time";
 import { resolveServiceRequestSignatures } from "./signatures";
 import { isMailConfigured, sendMail } from "../../common/mailer";
-import { readServiceRequestMailConfig } from "../settings/service-request-mail-config-service";
+import { resolveProviderMailRecipients } from "../settings/service-request-mail-config-service";
 
 // Estados de OT desde los que se puede pedir un servicio externo. DEFERRED entra
 // a pedido del cliente: diferir el trabajo no impide gestionar el servicio del
@@ -1563,17 +1563,6 @@ export async function startServiceRequest(
   return updated;
 }
 
-/**
- * Casilla a la que se manda toda SS lista para el proveedor.
- *
- * El correo NO sale para afuera: llega a Mercurio y desde ahi se reenvia al
- * taller (decision de negocio, ago 2026). Configurable por si cambia la casilla:
- *   SERVICE_REQUEST_MAILBOX=otra@mercuriogroup.com.py
- */
-function providerMailbox(): string {
-  return (process.env.SERVICE_REQUEST_MAILBOX || "").trim() || "jbael@mercuriogroup.com.py";
-}
-
 export interface SendToProviderResult {
   /** Salio el correo. Si es false, la SS NO avanzo de estado. */
   sent: boolean;
@@ -1602,13 +1591,15 @@ export interface SendToProviderResult {
  * (descargar el documento y mandarlo desde el correo propio).
  *
  * El PDF lo arma el router y llega por parametro: este service no depende del
- * generador de documentos.
+ * generador de documentos. `workOrderPdf` es el de la OT de la que cuelga la SS
+ * (oct 2026): viaja como segundo adjunto; si no se pudo armar, la SS sale igual.
  */
 export async function sendServiceRequestToProvider(
   session: TenantAccessSession,
   id: string,
   pdf: { filename: string; buffer: Buffer },
   payload: { acknowledgeMissingSampleNumbers?: boolean } = {},
+  workOrderPdf: { filename: string; buffer: Buffer; code: string } | null = null,
 ): Promise<SendToProviderResult> {
   ensureCanManage(session);
   const prisma = getPrismaClient()!;
@@ -1626,22 +1617,15 @@ export async function sendServiceRequestToProvider(
     prisma, current, !!payload.acknowledgeMissingSampleNumbers,
   );
 
-  // A quién se manda: lo decide la empresa en Configuración. Apagado (default)
-  // va a la casilla interna y desde ahí se reenvía al taller; encendido va
-  // directo al correo del proveedor de la SS.
-  const mailConfig = await readServiceRequestMailConfig(current.tenantId);
-  const providerRow = current.providerId
-    ? await (prisma as any).provider.findFirst({
-        where: { id: current.providerId, tenantId: current.tenantId },
-        select: { name: true, contactEmail: true },
-      }) as { name: string | null; contactEmail: string | null } | null
-    : null;
-  const providerEmail = mailConfig.toProvider ? (providerRow?.contactEmail ?? "").trim() : "";
-  // Si se pidió mandar al proveedor pero no tiene correo cargado, NO se inventa
-  // un destinatario: cae en la casilla interna y el resultado lo avisa.
-  const fellBackToMailbox = mailConfig.toProvider && !providerEmail;
-  const to = providerEmail || providerMailbox();
-  if (!isMailConfigured()) return { sent: false, to: [to], reason: "NOT_CONFIGURED" };
+  // A quién se manda: lo decide la empresa en Configuración (proveedor o casilla
+  // interna, y las copias) más la sala de máquinas del buque. Misma regla que la
+  // OT: ver resolveProviderMailRecipients.
+  const recipients = await resolveProviderMailRecipients(current.tenantId, {
+    vesselCode: current.vesselCode,
+    providerId: current.providerId ?? null,
+  });
+  const { fellBackToMailbox } = recipients;
+  if (!isMailConfigured()) return { sent: false, to: recipients.to, reason: "NOT_CONFIGURED" };
 
   // Nombre del buque, nunca el codigo (ver CLAUDE.md "Nombres, no codigos").
   const vessel = await (prisma as any).vessel.findFirst({
@@ -1649,7 +1633,7 @@ export async function sendServiceRequestToProvider(
     select: { name: true },
   });
   const vesselName: string = vessel?.name ?? current.vesselCode;
-  const taller = providerRow ? providerRow.name : normalizeOptionalText(current.tallerNotes);
+  const taller = recipients.providerName ?? normalizeOptionalText(current.tallerNotes);
   const servicio = normalizeOptionalText(current.description) ?? normalizeOptionalText(current.title);
 
   // Muestras que viajan con el pedido, con su número y su equipo: es la lista de
@@ -1661,13 +1645,15 @@ export async function sendServiceRequestToProvider(
     : [];
 
   const result = await sendMail({
-    to,
-    cc: mailConfig.ccRecipients,
+    to: recipients.to,
+    cc: recipients.cc,
     subject: `Solicitud de Servicio ${current.serviceRequestCode} — ${vesselName}`,
     text: [
       "Estimados,",
       "",
-      `Adjunto la Solicitud de Servicio ${current.serviceRequestCode} del buque ${vesselName}.`,
+      workOrderPdf
+        ? `Adjunto la Solicitud de Servicio ${current.serviceRequestCode} y la Orden de Trabajo ${workOrderPdf.code} del buque ${vesselName}.`
+        : `Adjunto la Solicitud de Servicio ${current.serviceRequestCode} del buque ${vesselName}.`,
       taller ? `Taller: ${taller}` : null,
       servicio ? `Servicio solicitado: ${servicio}` : null,
       ...(muestras.length > 0 ? ["", "Muestras que se envían:", ...muestras] : []),
@@ -1676,7 +1662,10 @@ export async function sendServiceRequestToProvider(
       "",
       "Saludos.",
     ].filter((l): l is string => l !== null).join("\n"),
-    attachments: [{ filename: pdf.filename, content: pdf.buffer, contentType: "application/pdf" }],
+    attachments: [
+      { filename: pdf.filename, content: pdf.buffer, contentType: "application/pdf" },
+      ...(workOrderPdf ? [{ filename: workOrderPdf.filename, content: workOrderPdf.buffer, contentType: "application/pdf" }] : []),
+    ],
   });
 
   if (!result.sent) {

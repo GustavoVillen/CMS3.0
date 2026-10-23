@@ -1,5 +1,35 @@
 HISTORY.txt
 
+[2026-10-23] SS y OT al proveedor: boton "Enviar al proveedor" en la OT, maquinas del buque y copias comunes
+Agent: Claude Opus 5.5
+- Pedido de Gustavo: la SS y la OT van al proveedor asignado, a maquinas del remolcador y con copia a
+  Humberto Portillo, Ronald Silva y Jorge Bael. Sale solo con el boton, nunca automatico.
+- Regla unica de destinatarios (settings/service-request-mail-config-service.ts,
+  resolveProviderMailRecipients), igual para SS y OT. Para: el proveedor si Configuracion lo pide y
+  tiene correo; si no, la casilla interna (SERVICE_REQUEST_MAILBOX, jbael), como antes. Mas el correo
+  de maquinas del buque si esta cargado. Copia: las direcciones de Configuracion (ahora valen para SS y
+  OT) y la casilla de archivo del mailer. Las barcazas no tienen maquinas: va proveedor + copias.
+- Base: Vessel.engineRoomEmail (nuevo, nullable). Se carga en la ficha del buque ("Correo de
+  maquinas"), se valida el formato y se guarda en minuscula.
+- SS: el correo de "Enviar al Proveedor" lleva tambien el PDF de su OT como segundo adjunto (si el PDF
+  de la OT falla, la SS sale igual). El resto del flujo no cambia.
+- OT: boton "Enviar al proveedor" con confirmacion, visible con la OT autorizada, abierta y con
+  proveedor, para quien puede operar OT (wo.operate / wo.manage). POST
+  /app/pms/work-orders/:id/send-to-provider. No cambia el estado; queda AuditEvent
+  WorkOrder.sentToProvider y el detalle de la OT devuelve sentToProviderAt / sentToProviderTo
+  ("Enviada al proveedor el ... a ...", y el boton pasa a "Reenviar").
+- Configuracion: la seccion pasa a "Envio de SS y OT al proveedor" (textos es/en/pt).
+- Verificado en la base local con el SMTP interceptado (22 comprobaciones: destinatarios con y sin
+  correo del proveedor, con la opcion apagada, barcaza, OT sin autorizar o sin proveedor, sin SMTP,
+  SS con la OT adjunta) y la ficha del buque (minuscula, correo invalido, vacio). Datos de prueba
+  restaurados. Pantallas no probadas en el navegador.
+- Respaldo previo: claude/backups/envio-ss-ot-proveedor-2026-10-23/.
+- Deploy: pull + build web + db push + prisma generate + restart de la API.
+- A cargar en produccion (datos, no codigo): Configuracion -> tildar "directo al proveedor" y sumar en
+  copia hportillo@, rsilva@ y jbael@mercuriogroup.com.py; correo de maquinas en DON CHICUETO
+  (maquinas.donchicueto@), LATERE (maquinas.latere@), MAO 01 (maquinas.mao01@) y MAO 02
+  (maquinas.mao02@mercuriogroup.com.py); correo de los proveedores que no lo tienen (26 de 30).
+
 [2026-10-22] DATOS: alta de las barcazas YT 001 y YT 004 como gemelas de YT 010 (produccion)
 Agent: Claude Opus 5.5
 - Buques nuevos YT001 / YT004 (Barcaza Tanque - Box, bandera Paraguay, clase LR, charteados) con los

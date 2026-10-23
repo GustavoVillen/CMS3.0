@@ -14,6 +14,8 @@ import { enforceRateLimit } from "../../http/rate-limiter";
 import { resolveTenantSlugFromRequest } from "../bootstrap/public-bootstrap-route";
 import { requireTenantAccessSession } from "../auth/tenant-route-auth";
 import { buildServiceRequestPdf, buildServiceRequestDoc, buildServiceRequestDocx } from "./service-request-pdf";
+import { buildWorkOrderPdf } from "./work-order-pdf-service";
+import { log } from "../../common/logger";
 import { serveDoc } from "./doc-export";
 import { resolveTenantForm } from "./tenant-forms-service";
 import { serveDocx } from "./docx-export";
@@ -222,10 +224,23 @@ export async function handleServiceRequestsRoutes(
     const body = await readJsonBody(request) as { acknowledgeMissingSampleNumbers?: boolean } | null;
     const sr = await getServiceRequest(session, id);
     const buffer = await buildServiceRequestPdf(session, id);
+    // La OT de la que cuelga la SS viaja como segundo adjunto. Si no se puede
+    // armar, la SS sale igual: el pedido al taller no se traba por eso.
+    const woId = (sr as any).workOrderId as string | null;
+    let workOrderPdf: { filename: string; buffer: Buffer; code: string } | null = null;
+    if (woId) {
+      try {
+        const woBuffer = await buildWorkOrderPdf(session, woId);
+        const code = String((sr as any).workOrder?.workOrderCode ?? woId);
+        workOrderPdf = { filename: `${code}.pdf`, buffer: woBuffer, code };
+      } catch (e) {
+        log.error("ss.send.wo_pdf_failed", { serviceRequestId: id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
     const result = await sendServiceRequestToProvider(session, id, {
       filename: `${(sr as any).serviceRequestCode}.pdf`,
       buffer,
-    }, body ?? {});
+    }, body ?? {}, workOrderPdf);
     sendJson(response, 200, result);
     return true;
   }

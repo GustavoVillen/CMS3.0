@@ -18,6 +18,8 @@ import { resolveWoFormDefaults, addDays } from "./wo-form-defaults";
 import { isInspectionWorkOrder, inspectionSkipsApproval, inspectionApprovalStamps } from "./wo-inspection-flow";
 import { ssRequiredStatusByWorkOrder, findWorkOrderDefectLabOrigins, findPlanLabProvider, firstActiveProvider, type SsRequiredReason } from "./wo-ss-required";
 import { applyClassSurveyToCertificate } from "../certificates/class-cycle";
+import { isMailConfigured, sendMail } from "../../common/mailer";
+import { resolveProviderMailRecipients } from "../settings/service-request-mail-config-service";
 
 export interface WorkOrderListFilters {
   vesselCode?: string | null;
@@ -583,7 +585,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
   // independientes entre sí: se resuelven en paralelo para no encadenar RTTs a
   // la DB. Mismo criterio que ya usa listTenantWorkOrders. Cada bloque conserva
   // su try/catch para seguir siendo non-blocking.
-  const [assetName, providerFromCatalog, spareUsages, plans] = await Promise.all([
+  const [assetName, providerFromCatalog, spareUsages, plans, lastSentToProvider] = await Promise.all([
     (async (): Promise<string | null> => {
       try {
         const asset = await (prismaRaw as unknown as { asset: { findFirst: (a: unknown) => Promise<{ name: string | null } | null> } }).asset.findFirst({
@@ -648,7 +650,22 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
         return await listWorkOrderPlans(prismaRaw, tenantId, record as any);
       } catch { return []; /* non-blocking */ }
     })(),
+    // Último "Enviar al proveedor" (sendWorkOrderToProvider): la pantalla muestra
+    // cuándo salió y a quién, para no mandarla dos veces sin querer.
+    (async (): Promise<{ createdAt: Date; metadata: unknown } | null> => {
+      try {
+        return await (prismaRaw as any).auditEvent.findFirst({
+          where: { tenantId, entityType: "WorkOrder", entityId: record.id, action: WO_SENT_TO_PROVIDER_ACTION },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true, metadata: true },
+        });
+      } catch { return null; /* non-blocking */ }
+    })(),
   ]);
+  const sentToProviderAt = lastSentToProvider?.createdAt ?? null;
+  const sentToProviderTo: string[] = Array.isArray((lastSentToProvider?.metadata as { to?: unknown } | null)?.to)
+    ? ((lastSentToProvider!.metadata as { to: unknown[] }).to.filter((a): a is string => typeof a === "string"))
+    : [];
 
   const providerName = providerFromCatalog ?? ((record as unknown as { providerOther?: string | null }).providerOther ?? null);
 
@@ -666,7 +683,7 @@ export async function getTenantWorkOrder(session: TenantAccessSession, id: strin
     } catch { /* non-blocking */ }
   }
 
-  return { ...record, assetName, providerName, createdByName, spareUsages, plans };
+  return { ...record, assetName, providerName, createdByName, spareUsages, plans, sentToProviderAt, sentToProviderTo };
 }
 
 export async function createTenantWorkOrder(session: TenantAccessSession, payload: CreateWorkOrderInput) {
@@ -1057,6 +1074,116 @@ export async function startWorkOrder(session: TenantAccessSession, id: string) {
     metadata: { workOrderCode: current.workOrderCode, vesselCode: current.vesselCode },
   });
   return started;
+}
+
+const WO_SENT_TO_PROVIDER_ACTION = "WorkOrder.sentToProvider";
+
+export interface SendWorkOrderToProviderResult {
+  /** Salió el correo. */
+  sent: boolean;
+  to: string[];
+  cc?: string[];
+  /** El proveedor no tiene correo cargado: salió a la casilla interna. */
+  fellBackToMailbox?: boolean;
+  /** Por qué no salió: sin casilla configurada, o falló el envío. */
+  reason?: "NOT_CONFIGURED" | "SEND_FAILED";
+  error?: string;
+}
+
+/**
+ * "Enviar al proveedor" de la OT (pedido de Gustavo, oct 2026): manda la OT
+ * autorizada en PDF al proveedor asignado y a la sala de máquinas del buque, con
+ * las copias de Configuración. Misma regla de destinatarios que la SS
+ * (resolveProviderMailRecipients).
+ *
+ * Sale sólo cuando el usuario toca el botón, nunca sola. No cambia el estado de
+ * la OT: el envío queda en la auditoría y getTenantWorkOrder lo devuelve como
+ * sentToProviderAt / sentToProviderTo.
+ *
+ * El PDF lo arma el router y llega por parámetro, igual que en la SS.
+ */
+export async function sendWorkOrderToProvider(
+  session: TenantAccessSession,
+  id: string,
+  pdf: { filename: string; buffer: Buffer },
+): Promise<SendWorkOrderToProviderResult> {
+  ensureCanOperateWorkOrders(session);
+
+  const prismaRaw = getPrismaClient();
+  if (!prismaRaw) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
+
+  // Ya filtra por empresa y por los buques del usuario.
+  const current = await getTenantWorkOrder(session, id);
+  if (current.status === "CLOSED" || current.status === "CANCELLED") {
+    throw new RouteError(409, "WO_NOT_OPEN", "La OT está cerrada o cancelada: no se manda al proveedor.");
+  }
+  // El tipo de lectura no declara los campos del formulario: se leen así, como
+  // en el resto del módulo.
+  const extra = current as unknown as {
+    autorizadoAt?: Date | null; providerId?: string | null; title?: string | null; description?: string | null;
+  };
+  if (!extra.autorizadoAt) {
+    throw new RouteError(409, "NOT_AUTHORIZED_YET", "La OT tiene que estar autorizada antes de mandarla al proveedor.");
+  }
+  const providerId = extra.providerId ?? null;
+  if (!providerId && !current.providerName) {
+    throw new RouteError(409, "NO_PROVIDER", "La OT no tiene proveedor asignado.");
+  }
+
+  const recipients = await resolveProviderMailRecipients(current.tenantId, {
+    vesselCode: current.vesselCode,
+    providerId,
+  });
+  if (!isMailConfigured()) return { sent: false, to: recipients.to, reason: "NOT_CONFIGURED" };
+
+  // Nombre del buque, nunca el código (ver CLAUDE.md "Nombres, no códigos").
+  const vessel = await (prismaRaw as any).vessel.findFirst({
+    where: { tenantId: current.tenantId, code: current.vesselCode },
+    select: { name: true },
+  });
+  const vesselName: string = vessel?.name ?? current.vesselCode;
+  const trabajo = normalizeOptionalText(extra.title) ?? normalizeOptionalText(extra.description);
+
+  const result = await sendMail({
+    to: recipients.to,
+    cc: recipients.cc,
+    subject: `Orden de Trabajo ${current.workOrderCode} — ${vesselName}`,
+    text: [
+      "Estimados,",
+      "",
+      `Adjunto la Orden de Trabajo ${current.workOrderCode} del buque ${vesselName}.`,
+      current.providerName ? `Taller: ${current.providerName}` : null,
+      current.assetName ? `Equipo: ${current.assetName}` : null,
+      trabajo ? `Trabajo: ${trabajo}` : null,
+      "",
+      "Quedamos a la espera de confirmación.",
+      "",
+      "Saludos.",
+    ].filter((l): l is string => l !== null).join("\n"),
+    attachments: [{ filename: pdf.filename, content: pdf.buffer, contentType: "application/pdf" }],
+  });
+
+  if (!result.sent) {
+    return { sent: false, to: result.to, reason: result.reason ?? "SEND_FAILED", error: result.error };
+  }
+
+  // Con await: la pantalla relee la OT apenas vuelve y tiene que ver el envío.
+  await publishAudit(prismaRaw, {
+    tenantId: current.tenantId,
+    actorUserId: session.user.id,
+    action: WO_SENT_TO_PROVIDER_ACTION,
+    entityType: "WorkOrder",
+    entityId: current.id,
+    metadata: {
+      workOrderCode: current.workOrderCode,
+      vesselCode: current.vesselCode,
+      to: result.to,
+      cc: result.cc,
+      fellBackToMailbox: recipients.fellBackToMailbox,
+    },
+  });
+
+  return { sent: true, to: result.to, cc: result.cc, fellBackToMailbox: recipients.fellBackToMailbox };
 }
 
 export async function holdWorkOrder(session: TenantAccessSession, id: string, payload: HoldWorkOrderInput) {

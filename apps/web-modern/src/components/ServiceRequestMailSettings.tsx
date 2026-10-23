@@ -1,4 +1,6 @@
-// A quién se le manda la Solicitud de Servicio (Configuración → sección).
+// A quién se le manda la Solicitud de Servicio y la OT autorizada al tocar
+// "Enviar al proveedor" (Configuración → sección). La sala de máquinas se carga
+// en la ficha de cada buque, no acá.
 // Sólo TENANT_ADMIN: la pantalla no la renderiza para otros roles y el backend
 // lo vuelve a chequear. Mismo patrón que WeeklyReportSettings.
 

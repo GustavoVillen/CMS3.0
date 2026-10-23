@@ -24,6 +24,7 @@ interface Vessel {
   vesselType?: string | null;
   isCrewed?: boolean | null;
   aiCloseAuditEnabled?: boolean;
+  engineRoomEmail?: string | null;
   imo?: string | null;
   registration?: string | null;
   flag?: string | null;
@@ -93,6 +94,8 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
   const [isCrewed, setIsCrewed] = useState<string>(initial?.isCrewed == null ? "" : String(initial.isCrewed));
   // Auditoría de IA al cerrar OT y SS: encendida salvo que el admin la suspenda.
   const [closeAudit, setCloseAudit] = useState<string>(initial?.aiCloseAuditEnabled === false ? "false" : "true");
+  // Sala de máquinas: recibe la OT y la SS que se mandan al proveedor.
+  const [engineRoomEmail, setEngineRoomEmail] = useState(asInputText(initial?.engineRoomEmail));
   const [imo, setImo] = useState(asInputText(initial?.imo));
   const [registration, setRegistration] = useState(asInputText(initial?.registration));
   const [flag, setFlag] = useState(asInputText(initial?.flag));
@@ -165,6 +168,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
         vesselType: asNullableText(vesselType),
         isCrewed: isCrewed === "" ? null : isCrewed === "true",
         aiCloseAuditEnabled: closeAudit === "true",
+        engineRoomEmail: asNullableText(engineRoomEmail),
         imo: asNullableText(imo),
         registration: asNullableText(registration),
         flag: asNullableText(flag),
@@ -194,7 +198,7 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
 
   // ESC guard
   const isDirty = useDirtyTracker({
-    code, name, owner, vesselType, isCrewed, closeAudit, imo, registration, flag, portOfRegistry, classSociety, manager, powerHp, dwtTons,
+    code, name, owner, vesselType, isCrewed, closeAudit, engineRoomEmail, imo, registration, flag, portOfRegistry, classSociety, manager, powerHp, dwtTons,
     lengthM, beamM, depthM, trnTn, trbTn, buildYear, buildCountry,
     incorporationDate, incorporationType, status,
   });
@@ -312,6 +316,13 @@ const VesselForm: React.FC<{ initial?: Vessel | null; onClose: () => void; onSav
             <Field label="Tipo_Incorporacion">
               <input value={incorporationType} onChange={e => setIncorporationType(e.target.value)} maxLength={40} placeholder="Propio / Charteado" className="input-field" />
             </Field>
+          </div>
+          <div>
+            <Field label={t("vessel.engineRoomEmail")}>
+              <input type="email" value={engineRoomEmail} onChange={e => setEngineRoomEmail(e.target.value)} maxLength={200}
+                placeholder={t("vessel.engineRoomEmail.placeholder")} className="input-field" />
+            </Field>
+            <p className="mt-1.5 text-[10px] text-text-industrial/50">{t("vessel.engineRoomEmail.hint")}</p>
           </div>
           <Field label={t("col.status")}>
             <select value={status} onChange={e => setStatus(e.target.value)} className="input-field">

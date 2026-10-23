@@ -1,10 +1,13 @@
-// A quién se le manda la Solicitud de Servicio (Configuración → sección).
+// A quién se le manda la Solicitud de Servicio y la Orden de Trabajo
+// (Configuración → sección).
 //
 // Hasta ahora el correo iba SIEMPRE a la casilla interna de Mercurio y desde
 // ahí una persona lo reenviaba al taller. Desde sep 2026 la empresa elige:
 // apagado, sigue igual; encendido, el PDF va directo al correo del proveedor de
 // esa SS. En los dos casos se manda copia a las direcciones que se carguen acá
-// (más la casilla del sistema, que copia todo — ver common/mailer.ts).
+// (más la casilla del sistema, que copia todo — ver common/mailer.ts). Desde oct
+// 2026 la OT con proveedor se manda con la misma regla y también le llega a la
+// sala de máquinas del buque (ver resolveProviderMailRecipients).
 //
 // Mismo patrón que weekly-report-config-service y spare-request-config-service:
 // vive en TenantSetting y se sanea en el servidor.
@@ -42,6 +45,67 @@ export async function readServiceRequestMailConfig(tenantId: string): Promise<Se
     toProvider: settings?.serviceRequestToProvider ?? false,
     ccRecipients: (settings?.serviceRequestCcRecipients ?? []).filter(Boolean),
   };
+}
+
+/**
+ * Casilla interna a la que va el envío cuando no sale directo al proveedor.
+ *
+ * El correo NO sale para afuera: llega a Mercurio y desde ahi se reenvia al
+ * taller (decision de negocio, ago 2026). Configurable por si cambia la casilla:
+ *   SERVICE_REQUEST_MAILBOX=otra@mercuriogroup.com.py
+ */
+function providerMailbox(): string {
+  return (process.env.SERVICE_REQUEST_MAILBOX || "").trim() || "jbael@mercuriogroup.com.py";
+}
+
+export interface ProviderMailRecipients {
+  to: string[];
+  cc: string[];
+  /** Se pidió mandar al proveedor pero no tiene correo: salió a la casilla interna. */
+  fellBackToMailbox: boolean;
+  /** Nombre del proveedor del catálogo, si lo hay. */
+  providerName: string | null;
+}
+
+/**
+ * A quién va una SS o una OT que se manda al proveedor (pedido de Gustavo, oct
+ * 2026). Misma regla para las dos:
+ *   Para:  el proveedor (si Configuración lo pide y tiene correo) o, si no, la
+ *          casilla interna; más la sala de máquinas del buque, si está cargada
+ *          (las barcazas no la tienen y no se suma nadie).
+ *   Copia: las direcciones de Configuración. La casilla de archivo la agrega
+ *          common/mailer.ts y los repetidos los saca el mismo mailer.
+ */
+export async function resolveProviderMailRecipients(
+  tenantId: string,
+  ref: { vesselCode: string; providerId: string | null },
+): Promise<ProviderMailRecipients> {
+  const prisma = getPrismaClient();
+  const mailConfig = await readServiceRequestMailConfig(tenantId);
+  const [providerRow, vesselRow] = prisma
+    ? await Promise.all([
+        ref.providerId
+          ? (prisma as any).provider.findFirst({
+              where: { id: ref.providerId, tenantId },
+              select: { name: true, contactEmail: true },
+            }) as Promise<{ name: string | null; contactEmail: string | null } | null>
+          : Promise.resolve(null),
+        (prisma as any).vessel.findFirst({
+          where: { tenantId, code: ref.vesselCode },
+          select: { engineRoomEmail: true },
+        }) as Promise<{ engineRoomEmail: string | null } | null>,
+      ])
+    : [null, null];
+
+  const providerEmail = mailConfig.toProvider ? (providerRow?.contactEmail ?? "").trim() : "";
+  // Si se pidió mandar al proveedor pero no tiene correo cargado, NO se inventa
+  // un destinatario: cae en la casilla interna y el resultado lo avisa.
+  const fellBackToMailbox = mailConfig.toProvider && !providerEmail;
+  const engineRoom = (vesselRow?.engineRoomEmail ?? "").trim();
+  const to = [providerEmail || providerMailbox()];
+  if (engineRoom && !to.some(a => a.toLowerCase() === engineRoom.toLowerCase())) to.push(engineRoom);
+
+  return { to, cc: mailConfig.ccRecipients, fellBackToMailbox, providerName: providerRow?.name ?? null };
 }
 
 export async function getServiceRequestMailConfig(session: TenantAccessSession): Promise<ServiceRequestMailConfig> {
