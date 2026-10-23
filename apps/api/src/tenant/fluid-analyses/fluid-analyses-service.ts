@@ -6,7 +6,7 @@ import { readFluidReportFile } from "./fluid-uploads-service";
 import { publishAudit } from "../../platform/audit/audit-publisher";
 import { resolveTenantTime, fmtDate } from "../../common/tenant-time";
 import { buildResultDefectDescription } from "./analysis-text";
-import { generateFluidAiAnalysis } from "./fluid-analyses-ai-insights";
+import { generateFluidAiAnalysis, hasAiAnalysis } from "./fluid-analyses-ai-insights";
 import { applyAssignedVesselScope } from "../auth/vessel-scope";
 import { ensurePermission } from "../auth/role-permissions";
 import { linkLabReportToDefect } from "./lab-report-links";
@@ -330,7 +330,18 @@ export async function listFluidSamples(session: TenantAccessSession, filters: Li
 }
 
 export async function regenerateFluidAiAnalysis(session: TenantAccessSession, id: string) {
+  const prisma = getPrismaClient();
+  if (!prisma) throw new RouteError(503, "DATABASE_UNAVAILABLE", "Base de datos no disponible.");
   const tenantId = await resolveTenantId(session);
+  // Antes de lanzarlo: la muestra tiene que ser de un buque del usuario y de un
+  // tipo con prompt propio (aceite o vibraciones).
+  const where: Record<string, unknown> = { id, tenantId, deletedAt: null };
+  applyAssignedVesselScope(session, where);
+  const sample = await (prisma as any).fluidSample.findFirst({ where, select: { kind: true } });
+  if (!sample) throw new RouteError(404, "FLUID_SAMPLE_NOT_FOUND", "Muestra no encontrada.");
+  if (!hasAiAnalysis(sample.kind)) {
+    throw new RouteError(422, "AI_ANALYSIS_NOT_AVAILABLE", "El análisis IA no está disponible para este tipo de muestra.");
+  }
   // El informe es extenso (~60s). Se genera en SEGUNDO PLANO y se responde al
   // instante; el frontend sondea GET /app/fluid-analyses/:id hasta que aparece
   // el nuevo análisis. Así el request HTTP no queda colgado ~60s (evita cortes

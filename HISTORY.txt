@@ -1,5 +1,30 @@
 HISTORY.txt
 
+[2026-10-23] Analisis IA de vibraciones con prompt propio (antes salia como analisis de aceite)
+Agent: Claude Opus 5.5
+- Pedido de Gustavo: FA-M01-0074 (vibracion, Caja reductora Estribor) mostraba en "Que dice la IA" un
+  analisis de lubricante ("DATOS INSUFICIENTES / analisis no lubricacional"). Causa: un solo prompt,
+  de aceite, para todos los tipos de muestra, y a la IA no se le decia el tipo.
+- fluid-analyses-ai-insights.ts: VIBRATION_SYSTEM_PROMPT. Parte de la severidad y la prioridad del
+  analista (no la rebaja por falta de historial), valida unidades y puntos, compara con las mediciones
+  anteriores del mismo equipo, con los equipos del mismo informe y dia (el gemelo de la otra banda) y
+  con el ultimo analisis de aceite del equipo, y marca la incoherencia severidad / prioridad. Misma
+  politica que el de aceite: sin zonas ISO ni limites sin norma, parte y clase de maquina.
+- Historial que recibe la IA (aceite y vibraciones): mismo tipo de muestra (antes filtraba solo por
+  fluidType, null fuera de aceite, y mezclaba megados y termografias), solo anteriores a la muestra y
+  con resultado. En la copia local 103 de 125 analisis de aceite tenian en el historial una muestra
+  posterior (casi siempre el pedido pendiente de la proxima toma): la ventana de OTs quedaba despues
+  de la muestra y la IA no veia ninguna intervencion.
+- Solo aceite y vibraciones ofrecen el analisis (AI_ANALYSIS_KINDS): la tarjeta no se muestra en
+  megado, termografia, ultrasonido ni otro; POST generate-ai-analysis responde 422
+  AI_ANALYSIS_NOT_AVAILABLE y ahora respeta los buques del usuario (404 si no es suyo). El PDF de
+  vibraciones incluye el analisis (antes solo aceite, decision V44, por este mismo problema).
+- Verificado en la base local con una medicion de prueba igual a FA-M01-0074 + la caja Babor + un
+  megado del mismo equipo (borrados al terminar): analisis orientado a vibraciones, el megado no entra
+  en el historial, 422 en megado, 404 con usuario de otro buque. Typecheck api/web y build de la web.
+  Pantalla no probada en el navegador.
+- En produccion: el analisis ya guardado de FA-M01-0074 es el de aceite; se reemplaza con "regenerar".
+
 [2026-10-23] OT abierta dos veces por error: aviso al crear, aviso en la ficha y "Anular por duplicada"
 Agent: Claude Opus 5.5
 - Pedido de Gustavo: detectar la OT abierta dos veces e informar al usuario. Caso tipico: se abre la

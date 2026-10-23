@@ -27,7 +27,7 @@ import { useEscapeGuard, useDirtyTracker } from "../lib/escape-guard";
 import { AuthedDocLink } from "../lib/authed-media";
 import { useTmsaFilter, applyTmsaFilter, TmsaFilterBanner } from "../lib/tmsa-filter";
 import {
-  FLUID_TYPES, FLUID_LABELS, VERDICTS, VERDICT_STYLES, SAMPLE_STATUSES, SAMPLE_KIND_LABELS,
+  FLUID_TYPES, FLUID_LABELS, VERDICTS, VERDICT_STYLES, SAMPLE_STATUSES, SAMPLE_KIND_LABELS, AI_ANALYSIS_KINDS,
   VerdictBadge, assetLabel, ConfidenceBadge, ModalShell,
   inputCls, labelCls,
   type FluidType, type Verdict, type SampleStatus, type FluidParameter, type FluidResult,
@@ -961,7 +961,9 @@ function SampleDetailModal({
                 </div>
               )}
 
-              {sample.result && <AiInsightCard result={sample.result} sampleId={sample.id} onRefresh={load} />}
+              {sample.result && AI_ANALYSIS_KINDS.includes(sample.kind) && (
+                <AiInsightCard result={sample.result} sampleId={sample.id} onRefresh={load} />
+              )}
 
               {sample.notes && (
                 <div className="p-3 rounded-xl bg-fg/5 border border-fg/10">

@@ -74,6 +74,9 @@ export const SAMPLE_KIND_LABELS: Record<SampleKind, string> = {
   OTHER:      "Otro",
 };
 
+/** Tipos con análisis IA propio (mismo criterio que AI_ANALYSIS_KINDS del backend). */
+export const AI_ANALYSIS_KINDS: readonly SampleKind[] = ["FLUID", "VIBRATION"];
+
 export interface FluidSample {
   id: string;
   vesselCode: string;

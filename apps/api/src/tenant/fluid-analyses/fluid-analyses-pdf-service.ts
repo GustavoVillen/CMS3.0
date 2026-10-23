@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import type { TenantAccessSession } from "../auth/session-store";
 import { getFluidSample } from "./fluid-analyses-service";
+import { hasAiAnalysis } from "./fluid-analyses-ai-insights";
 import { getPrismaClient } from "../../platform/data/prisma-client";
 import { LOGO_PATH, resolveTenantLogo, splitTextIntoPageSegments, sanitizePdfText, renderInlineBoldText, renderLabeledTextBox } from "../pms/pdf-helpers";
 import { resolveTenantForm } from "../pms/tenant-forms-service";
@@ -642,9 +643,9 @@ export async function buildFluidAnalysisPdf(session: TenantAccessSession, sample
     }
 
     // ── Análisis IA ─────────────────────────────────────────────────────────
-    // Sólo en fluidos: el análisis automático hoy está pensado para aceite y en
-    // otros tipos de muestra sale fuera de contexto (decisión V44).
-    if (isFluid && sample.result?.aiAnalysis) {
+    // Sólo en los tipos con prompt propio (aceite y vibraciones): en el resto el
+    // análisis saldría fuera de contexto (decisión V44).
+    if (hasAiAnalysis(kind) && sample.result?.aiAnalysis) {
       sectionHeader("Análisis", 80);
       if (sample.result.aiAnalysisGeneratedAt) {
         ensureSpace(12);
