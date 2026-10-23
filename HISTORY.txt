@@ -24,6 +24,9 @@ Agent: Claude Opus 5.5
   en el historial, 422 en megado, 404 con usuario de otro buque. Typecheck api/web y build de la web.
   Pantalla no probada en el navegador.
 - En produccion: el analisis ya guardado de FA-M01-0074 es el de aceite; se reemplaza con "regenerar".
+- Deploy 2026-10-23: commit acdaadb (con aa2d45f del asesor) en v3, produccion y demo (pull + build +
+  restart, sin dependencias ni db push). Health 200 en :3106 y :3107, NODE_ENV=production en los dos,
+  bundle publico = el recien armado, franja de practica solo en la demo.
 
 [2026-10-23] OT abierta dos veces por error: aviso al crear, aviso en la ficha y "Anular por duplicada"
 Agent: Claude Opus 5.5
