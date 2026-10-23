@@ -18,26 +18,41 @@ const btnDark = "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-fg t
 
 // ─── Evidencia (registros reales, con link) ──────────────────────────────────
 
+/** Cuántos registros se ven de entrada; el resto, con "Ver más". */
+const EVIDENCE_SHOWN = 3;
+const noMarks = (s: string) => s.replace(/\*\*|__|`/g, "");
+
 export const EvidenceList: React.FC<{ items: EvidenceItem[] }> = ({ items }) => {
   const t = useT();
   const navigate = useNavigate();
+  const [all, setAll] = useState(false);
   if (items.length === 0) return <p className="text-xs text-text-industrial/60">{t("advisor.evidence.none")}</p>;
+  const hidden = items.length - EVIDENCE_SHOWN;
   return (
     <div className="space-y-1.5">
-      {items.map(e => (
-        <div key={e.id} className="flex items-start gap-2 bg-surface border border-fg/10 rounded-xl px-2.5 py-2">
-          <span className="text-sm leading-none mt-0.5" aria-hidden>{EVIDENCE_ICON[e.kind] ?? "•"}</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[12.5px] font-bold text-fg leading-snug">{[e.assetName, e.title].filter(Boolean).join(" — ")}</p>
-            <p className="text-[11.5px] text-text-industrial/70 leading-snug">{[e.detail, e.code].filter(Boolean).join(" · ")}</p>
+      {(all ? items : items.slice(0, EVIDENCE_SHOWN)).map(e => {
+        // En la tarjeta de un equipo el título ES el equipo: no repetirlo.
+        const same = !!e.assetName && e.assetName.trim().toLowerCase() === e.title.trim().toLowerCase();
+        return (
+          <div key={e.id} className="flex items-start gap-2 bg-surface border border-fg/10 rounded-xl px-2.5 py-2">
+            <span className="text-sm leading-none mt-0.5" aria-hidden>{EVIDENCE_ICON[e.kind] ?? "•"}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-bold text-fg leading-snug">{noMarks([same ? null : e.assetName, e.title].filter(Boolean).join(" — "))}</p>
+              <p className="text-[11.5px] text-text-industrial/70 leading-snug">{noMarks([e.detail, e.code].filter(Boolean).join(" · "))}</p>
+            </div>
+            {e.link && (
+              <button className="text-[12px] font-bold text-blue-700 dark:text-blue-400 hover:underline shrink-0" onClick={() => navigate(e.link!)}>
+                {t("advisor.open")}
+              </button>
+            )}
           </div>
-          {e.link && (
-            <button className="text-[12px] font-bold text-blue-700 dark:text-blue-400 hover:underline shrink-0" onClick={() => navigate(e.link!)}>
-              {t("advisor.open")}
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
+      {hidden > 0 && (
+        <button className="text-[12px] font-extrabold text-blue-700 dark:text-blue-400 hover:underline" onClick={() => setAll(a => !a)} aria-expanded={all}>
+          {all ? t("advisor.evidence.less") : hidden === 1 ? t("advisor.evidence.moreOne") : t("advisor.evidence.more").replace("{n}", String(hidden))}
+        </button>
+      )}
     </div>
   );
 };

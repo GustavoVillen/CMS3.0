@@ -19,6 +19,7 @@ import { getOnHandMap } from "../pms/stock-calc-service";
 import { getVesselAiContext } from "../ai/vessel-ai-context";
 import { buildAssetHealth, signalText, type AssetHealthResult } from "./advisor-asset-health";
 import { log } from "../../common/logger";
+import { fmtDate, resolveTenantTime } from "../../common/tenant-time";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -95,10 +96,42 @@ const STATIC_DATA_GAPS = [
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const d = (v: unknown): string | null => (v ? new Date(v as string).toISOString().slice(0, 10) : null);
-const cut = (v: unknown, n: number): string | null =>
-  (typeof v === "string" && v.trim() ? v.trim().replace(/\s+/g, " ").slice(0, n) : null);
+/** Texto libre para una tarjeta: sin marcas de markdown y cortado en palabra completa, con «…». */
+const cut = (v: unknown, n: number): string | null => {
+  if (typeof v !== "string") return null;
+  const s = v.replace(/\*\*|__|`|^\s*#+\s*/gm, "").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  if (s.length <= n) return s;
+  const head = s.slice(0, n);
+  const space = head.lastIndexOf(" ");
+  return `${(space > n * 0.6 ? head.slice(0, space) : head).replace(/[\s,;:.(–-]+$/, "")}…`;
+};
 const daysBetween = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / DAY);
 const isBlank = (v: unknown) => !(typeof v === "string" && v.trim());
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+// Los estados y severidades se guardan como códigos en inglés; en las tarjetas
+// que lee el Director van en palabras, como el resto del detalle.
+const ES = {
+  severity: { LOW: "baja", MEDIUM: "media", HIGH: "alta", CRITICAL: "crítica" },
+  risk: { LOW: "bajo", MEDIUM: "medio", HIGH: "alto", CRITICAL: "crítico" },
+  defectStatus: { OPEN: "abierto", UNDER_REVIEW: "en revisión", IN_PROGRESS: "en curso", DEFERRED: "postergado", RESOLVED: "resuelto", CLOSED: "cerrado" },
+  operational: { NORMAL: "equipo en servicio normal", DEGRADED: "equipo degradado", RESTRICTED: "equipo con restricciones", NO_GO: "equipo fuera de servicio" },
+  deferral: { REQUESTED: "solicitada", UNDER_REVIEW: "en revisión", APPROVED: "aprobada", REJECTED: "rechazada", ACTIVE: "vigente", EXPIRED: "vencida", CLOSED: "cerrada" },
+  woType: { PREVENTIVE: "preventiva", CORRECTIVE: "correctiva", INSPECTION: "de inspección" },
+  woStatus: { PLANNED: "planificada", IN_PROGRESS: "en curso", ON_HOLD: "en espera", DEFERRED: "postergada", CLOSED: "cerrada", CANCELLED: "anulada" },
+  request: { DRAFT: "borrador", SUBMITTED: "enviada", APPROVED: "aprobada", REJECTED: "rechazada", PARTIALLY_FULFILLED: "entregada en parte", FULFILLED: "entregada", CANCELLED: "anulada" },
+  verdict: { NORMAL: "normal", CAUTION: "en precaución", CRITICAL: "crítico", ACTION_REQUIRED: "requiere acción" },
+  sampleKind: { VIBRATION: "de vibraciones", THERMAL: "termográfico", ULTRASOUND: "de ultrasonido", INSULATION: "de aislación (megado)", OTHER: "" },
+  fluid: {
+    ENGINE_OIL: "aceite de motor", HYDRAULIC_OIL: "aceite hidráulico", GEARBOX_OIL: "aceite de caja reductora", TRANSMISSION_OIL: "aceite de transmisión",
+    FUEL_DIESEL: "combustible diésel", FUEL_GASOIL: "gasoil", COOLING_WATER: "agua de refrigeración", BOILER_WATER: "agua de caldera",
+    POTABLE_WATER: "agua potable", REFRIGERANT: "refrigerante", OTHER: "fluido",
+  },
+} satisfies Record<string, Record<string, string>>;
+const es = (map: Record<string, string>, code: unknown): string =>
+  (code == null ? "—" : map[String(code)] ?? String(code).toLowerCase().replace(/_/g, " "));
 
 class EvidenceBook {
   private items: EvidenceItem[] = [];
@@ -126,6 +159,9 @@ export async function buildAdvisorEvidence(
   const since180 = new Date(now.getTime() - 180 * DAY);
   const since365 = new Date(now.getTime() - 365 * DAY);
   const in60 = new Date(now.getTime() + 60 * DAY);
+  // Fechas dentro del texto de las tarjetas: DD/MM/AAAA en la hora de la empresa.
+  const { tz } = await resolveTenantTime(session.tenantSlug);
+  const day = (v: unknown) => fmtDate(v as Date | string | null, tz, undefined, "?");
 
   const book = new EvidenceBook();
   const gaps: string[] = [...STATIC_DATA_GAPS];
@@ -235,7 +271,7 @@ export async function buildAdvisorEvidence(
           ev: book.add({
             kind: "PLAN", code: p.taskCode, vesselCode: p.vesselCode, vesselName: vName(p.vesselCode), assetName: aName(p.assetId),
             date: d(p.nextDueDate), title: p.title,
-            detail: [unreliable(p) ? `Próximo vencimiento registrado ${d(p.nextDueDate)}: fecha no confiable (probable carga sin historial de ejecución)` : late != null ? `Vencido hace ${late} días (desde ${d(p.nextDueDate)})` :p.nextDueHours != null ? `Vencido por horas (tocaba a las ${p.nextDueHours} h, lleva ${p.currentHours ?? "?"} h)` : "Vencido", riskTag(p.assetId), "sin OT abierta"].filter(Boolean).join(" · "),
+            detail: [unreliable(p) ? `Próximo vencimiento registrado ${day(p.nextDueDate)}: fecha no confiable (probable carga sin historial de ejecución)` : late != null ? `Vencido hace ${pl(late, "día", "días")} (desde ${day(p.nextDueDate)})` : p.nextDueHours != null ? `Vencido por horas (tocaba a las ${p.nextDueHours} h, lleva ${p.currentHours ?? "?"} h)` : "Vencido", riskTag(p.assetId), "sin OT abierta"].filter(Boolean).join(" · "),
             link: `/maintenance-plans/${encodeURIComponent(p.taskCode)}`,
           }),
           plan: p.taskCode, titulo: p.title, buque: vName(p.vesselCode), equipo: aName(p.assetId), riesgoEquipo: riskTag(p.assetId),
@@ -260,7 +296,7 @@ export async function buildAdvisorEvidence(
     const evDeferral = (x: any) => book.add({
       kind: "DEFERRAL", code: x.deferralCode, vesselCode: x.vesselCode, vesselName: vName(x.vesselCode), assetName: aName(x.assetId),
       date: d(x.requestedAt), title: `Postergación ${x.deferralCode}`,
-      detail: [`Estado ${x.status}`, x.targetDate ? `hasta ${d(x.targetDate)}` : x.toNextDrydock ? "hasta la próxima varada" : "sin fecha objetivo", x.riskLevel ? `riesgo ${x.riskLevel}` : "sin análisis de riesgo", isBlank(x.compensatoryMeasures) ? "sin medidas compensatorias" : null, riskTag(x.assetId), cut(x.justification, 140) ? `motivo: "${cut(x.justification, 140)}"` : null].filter(Boolean).join(" · "),
+      detail: [cap(es(ES.deferral, x.status)), x.targetDate ? `hasta ${day(x.targetDate)}` : x.toNextDrydock ? "hasta la próxima varada" : "sin fecha objetivo", x.riskLevel ? `riesgo ${es(ES.risk, x.riskLevel)}` : "sin análisis de riesgo", isBlank(x.compensatoryMeasures) ? "sin medidas compensatorias" : null, riskTag(x.assetId), cut(x.justification, 140) ? `motivo: "${cut(x.justification, 140)}"` : null].filter(Boolean).join(" · "),
       link: `/deferrals/${encodeURIComponent(x.deferralCode)}`,
     });
 
@@ -346,8 +382,8 @@ export async function buildAdvisorEvidence(
       conCausaRaiz: list.filter((x: any) => !isBlank(x.rcaRootCause)).length,
       ev: list.slice(0, 4).map((x: any) => book.add({
         kind: "DEFECT", code: x.defectCode, vesselCode: x.vesselCode, vesselName: vName(x.vesselCode), assetName: aName(assetId),
-        date: d(x.reportedAt), title: cut(x.description, 90) ?? x.defectCode,
-        detail: [`Severidad ${x.severity}`, `estado ${x.status}`, isBlank(x.rcaRootCause) ? "sin causa raíz" : `causa raíz: ${cut(x.rcaRootCause, 100)}`].join(" · "),
+        date: d(x.reportedAt), title: cut(x.description, 140) ?? x.defectCode,
+        detail: [`Reportado el ${day(x.reportedAt)}`, `severidad ${es(ES.severity, x.severity)}`, es(ES.defectStatus, x.status), isBlank(x.rcaRootCause) ? "sin causa raíz" : `causa raíz: ${cut(x.rcaRootCause, 140)}`].join(" · "),
         link: `/defects/${encodeURIComponent(x.defectCode)}`,
       })),
     }));
@@ -385,14 +421,14 @@ export async function buildAdvisorEvidence(
       const pendingReq = req.filter((r: any) => OPEN_SPARE_REQUEST.includes(r.status));
       const missing: string[] = [];
       if (!wo) missing.push("sin OT vinculada");
-      else if (["PLANNED", "ON_HOLD"].includes(wo.status)) missing.push(`OT ${wo.workOrderCode} sin avance (${wo.status})`);
+      else if (["PLANNED", "ON_HOLD"].includes(wo.status)) missing.push(`OT ${wo.workOrderCode} sin avance (${es(ES.woStatus, wo.status)})`);
       if (pendingReq.length) missing.push(`repuesto pendiente (${pendingReq.map((r: any) => r.requestCode).join(", ")})`);
       const age = daysBetween(now, new Date(x.reportedAt));
       return {
         ev: book.add({
           kind: "DEFECT", code: x.defectCode, vesselCode: x.vesselCode, vesselName: vName(x.vesselCode), assetName: aName(x.assetId),
-          date: d(x.reportedAt), title: cut(x.description, 90) ?? x.defectCode,
-          detail: [`Severidad ${x.severity}`, `estado operativo ${x.operationalState}`, `abierto hace ${age} días`, riskTag(x.assetId), ...missing].filter(Boolean).join(" · "),
+          date: d(x.reportedAt), title: cut(x.description, 140) ?? x.defectCode,
+          detail: [`Reportado el ${day(x.reportedAt)}`, `severidad ${es(ES.severity, x.severity)}`, es(ES.operational, x.operationalState), `abierto hace ${pl(age, "día", "días")}`, riskTag(x.assetId), ...missing].filter(Boolean).join(" · "),
           link: `/defects/${encodeURIComponent(x.defectCode)}`,
         }),
         buque: vName(x.vesselCode), equipo: aName(x.assetId), diasAbierto: age,
@@ -431,7 +467,7 @@ export async function buildAdvisorEvidence(
       ejemplos: bare.slice(0, 12).map((w: any) => book.add({
         kind: "WORK_ORDER", code: w.workOrderCode, vesselCode: w.vesselCode, vesselName: vName(w.vesselCode), assetName: aName(w.assetId),
         date: d(w.completedDate), title: w.title ?? w.workOrderCode,
-        detail: `OT ${w.type} cerrada el ${d(w.completedDate)} sin resultado, sin mediciones, sin adjuntos ni notas de avance · ${riskTag(w.assetId)}`,
+        detail: [`OT ${es(ES.woType, w.type)} cerrada el ${day(w.completedDate)} sin resultado, sin mediciones, sin adjuntos ni notas de avance`, riskTag(w.assetId)].filter(Boolean).join(" · "),
         link: `/work-orders/${encodeURIComponent(w.workOrderCode)}`,
       })),
     };
@@ -468,8 +504,8 @@ export async function buildAdvisorEvidence(
         return {
           ev: book.add({
             kind: "LAB", code: s.sampleCode, vesselCode: s.vesselCode, vesselName: vName(s.vesselCode), assetName: aName(s.assetId),
-            date: d(s.sampledAt), title: `${s.kind === "FLUID" ? `Análisis de ${s.fluidType ?? "fluido"}` : `Análisis ${s.kind}`} — ${s.result?.verdict}`,
-            detail: [cut(s.result?.summary, 160), r.acted ? (r.wo ? `acción posterior: OT ${r.wo.workOrderCode}` : "vinculado a un defecto") : `sin OT ni defecto posterior (${age} días)`, riskTag(s.assetId)].filter(Boolean).join(" · "),
+            date: d(s.sampledAt), title: `${s.kind === "FLUID" ? `Análisis de ${es(ES.fluid, s.fluidType ?? "OTHER")}` : `Análisis ${es(ES.sampleKind, s.kind)}`.trim()} — ${es(ES.verdict, s.result?.verdict)}`,
+            detail: [`Muestra del ${day(s.sampledAt)}`, cut(s.result?.summary, 160), r.acted ? (r.wo ? `acción posterior: OT ${r.wo.workOrderCode}` : "vinculado a un defecto") : `sin OT ni defecto posterior (${pl(age, "día", "días")})`, riskTag(s.assetId)].filter(Boolean).join(" · "),
             link: `/fluid-analyses?openId=${encodeURIComponent(s.id)}`,
           }),
           buque: vName(s.vesselCode), equipo: aName(s.assetId), conAccionPosterior: r.acted,
@@ -529,7 +565,7 @@ export async function buildAdvisorEvidence(
         ev: book.add({
           kind: "SPARE_REQUEST", code: x.r.requestCode, vesselCode: x.r.requestedForVesselCode, vesselName: vName(x.r.requestedForVesselCode), assetName: aName(x.r.requestedForAssetId),
           date: d(x.r.requestedAt), title: `Solicitud de repuestos ${x.r.requestCode}`,
-          detail: `${x.r.status} hace ${x.age} días · prioridad ${x.r.priority} · ${x.lead ? `plazo teórico ${x.lead} días` : "sin plazo teórico (se toma 30 días)"} · ${x.r.items.length} ítems`,
+          detail: `${cap(es(ES.request, x.r.status))} hace ${pl(x.age, "día", "días")} · prioridad ${es(ES.severity, x.r.priority)} · ${x.lead ? `plazo teórico ${x.lead} días` : "sin plazo teórico (se toma 30 días)"} · ${pl(x.r.items.length, "ítem", "ítems")}`,
           link: "/spare-requests",
         }),
         buque: vName(x.r.requestedForVesselCode), diasAbierta: x.age,
@@ -562,7 +598,7 @@ export async function buildAdvisorEvidence(
       const dates = [
         ["vencimiento", c.expiryDate], ["inspección intermedia", c.intermediateSurveyDueDate], ["inspección periódica", c.periodicSurveyDueDate],
         ["inspección en dique", c.drydockSurveyDueDate], ["eje de cola", c.tailshaftSurveyDueDate],
-      ].filter(([, v]) => real(v) && new Date(v as Date) <= in60).map(([k, v]) => `${k} ${d(v)}${new Date(v as Date) < now ? " (VENCIDA)" : ""}`);
+      ].filter(([, v]) => real(v) && new Date(v as Date) <= in60).map(([k, v]) => `${k} ${day(v)}${new Date(v as Date) < now ? " (VENCIDA)" : ""}`);
       return {
         ev: book.add({
           kind: "CERTIFICATE", code: c.certificateCode, vesselCode: c.vesselCode, vesselName: vName(c.vesselCode), assetName: null,
@@ -587,7 +623,7 @@ export async function buildAdvisorEvidence(
       ev: book.add({
         kind: "PROVIDER_NC", code: n.nonconformityCode, vesselCode: n.vesselCode, vesselName: vName(n.vesselCode), assetName: null,
         date: d(n.reportedAt), title: `${n.provider?.name ?? "Proveedor"} — no conformidad`,
-        detail: `Severidad ${n.severity} · abierta hace ${daysBetween(now, new Date(n.reportedAt))} días · ${cut(n.description, 140) ?? ""}`,
+        detail: [`Severidad ${es(ES.severity, n.severity)}`, `abierta hace ${pl(daysBetween(now, new Date(n.reportedAt)), "día", "días")}`, cut(n.description, 140)].filter(Boolean).join(" · "),
         link: "/providers",
       }),
       proveedor: n.provider?.name ?? null,
@@ -634,7 +670,7 @@ export async function buildAdvisorEvidence(
     payload.alertasAutomaticas = alerts.map((a: any) => ({
       ev: book.add({
         kind: "ALERT", code: null, vesselCode: a.vesselCode, vesselName: vName(a.vesselCode), assetName: null,
-        date: d(a.detectedAt), title: a.title, detail: `${a.insightType} · prioridad ${a.priority} · ${cut(a.summary, 160) ?? ""}`,
+        date: d(a.detectedAt), title: a.title, detail: [`Alerta del ${day(a.detectedAt)}`, `prioridad ${es(ES.severity, a.priority)}`, cut(a.summary, 160)].filter(Boolean).join(" · "),
         link: null,
       }),
     }));
@@ -647,10 +683,31 @@ export async function buildAdvisorEvidence(
     assetHealth = await buildAssetHealth(prisma, tenantId, vesselCodes, vName, overdueByAsset);
     metrics.fragileAssets = assetHealth.fragile;
     metrics.watchAssets = assetHealth.watch;
+    // Qué fueron esas reparaciones y defectos: sin esto la IA sólo ve cantidades
+    // y no puede recomendar nada puntual sobre el equipo.
+    const ids = assetHealth.rows.map(r => r.assetId);
+    const [repairs, faults] = ids.length ? await Promise.all([
+      prisma.workOrder.findMany({
+        where: { ...inScope, deletedAt: null, assetId: { in: ids }, type: "CORRECTIVE", openDate: { gte: since365 } },
+        orderBy: { openDate: "desc" },
+        select: { assetId: true, workOrderCode: true, title: true, openDate: true },
+      }),
+      prisma.defect.findMany({
+        where: { ...inScope, deletedAt: null, assetId: { in: ids }, reportedAt: { gte: since365 } },
+        orderBy: { reportedAt: "desc" },
+        select: { assetId: true, defectCode: true, description: true, reportedAt: true },
+      }),
+    ]) : [[], []];
+    const recent = new Map<string, Array<{ at: Date; text: string }>>();
+    const push = (assetId: string, at: Date, text: string) => recent.set(assetId, [...(recent.get(assetId) ?? []), { at, text }]);
+    for (const w of repairs) push(w.assetId, new Date(w.openDate), `${day(w.openDate)} OT correctiva ${w.workOrderCode}: ${cut(w.title, 120) ?? "sin título"}`);
+    for (const x of faults) push(x.assetId, new Date(x.reportedAt), `${day(x.reportedAt)} defecto ${x.defectCode}: ${cut(x.description, 120) ?? "sin descripción"}`);
+    const lastFailures = (assetId: string) =>
+      (recent.get(assetId) ?? []).sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 8).map(x => x.text);
     payload.saludDeEquipos = {
       delicados: assetHealth.fragile,
       enObservacion: assetHealth.watch,
-      nota: "Un equipo delicado sigue siéndolo aunque se lo esté reparando: la señal es que se repara seguido, sin planificar, o el laboratorio lo marca.",
+      nota: "Un equipo delicado sigue siéndolo aunque se lo esté reparando: la señal es que se repara seguido, sin planificar, o el laboratorio lo marca. Las señales y los números cubren los últimos 12 meses; ultimasFallas son sus últimas OT correctivas y defectos.",
       equipos: assetHealth.rows.map(r => ({
         ev: book.add({
           kind: "ASSET", code: r.assetCode, vesselCode: r.vesselCode, vesselName: r.vesselName, assetName: r.assetName,
@@ -661,6 +718,7 @@ export async function buildAdvisorEvidence(
         equipo: r.assetName, buque: r.vesselName, estado: r.state === "FRAGILE" ? "DELICADO" : "EN_OBSERVACION",
         riesgoEquipo: riskTagOf(r.criticality, r.safetyCritical), sinRespaldo: r.noBackup,
         senales: r.signals.map(signalText), numeros: r.counts,
+        ultimasFallas: lastFailures(r.assetId),
       })),
       mismoModeloEnVariosBuques: assetHealth.fleetModels.map(m => ({
         fabricante: m.manufacturer, modelo: m.model, buques: m.vessels, equipos: m.assets,
@@ -722,7 +780,7 @@ export async function buildAdvisorEvidence(
         ev: book.add({
           kind: "PLAN", code: r.p.taskCode, vesselCode: r.p.vesselCode, vesselName: vName(r.p.vesselCode), assetName: aName(r.p.assetId),
           date: d(r.when), title: r.p.title,
-          detail: `Vence a las ${r.p.nextDueHours} h; hoy lleva ${r.current} h y suma ${r.perDay} h por día → llega ${r.days <= 0 ? "ya" : `en ${r.days} días`} (estimado ${d(r.when)})`,
+          detail: `Vence a las ${r.p.nextDueHours} h; hoy lleva ${r.current} h y suma ${r.perDay} h por día → llega ${r.days <= 0 ? "ya" : `en ${pl(r.days, "día", "días")}`} (estimado ${day(r.when)})`,
           link: `/maintenance-plans/${encodeURIComponent(r.p.taskCode)}`,
         }),
         plan: r.p.taskCode, equipo: aName(r.p.assetId), buque: vName(r.p.vesselCode), diasEstimados: r.days, horasPorDia: r.perDay,

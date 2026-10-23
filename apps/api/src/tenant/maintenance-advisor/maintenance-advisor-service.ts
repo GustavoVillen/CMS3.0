@@ -204,6 +204,11 @@ const OUTPUT_CONTRACT = `
 
 You receive a JSON "evidence pack" built by CMS3 with exact database queries across the whole fleet in scope.
 - Every record you may cite carries an evidence tag "ev": "E-<n>". The numbers in each section are exact: quote them, never recompute them.
+- "registros" gives, for each tag, what that record actually says (vessel, equipment, title, detail). Read it: it is how
+  you know WHICH failure, task, certificate or spare a tag is about. Use it to explain concretely what happened and to
+  make the recommendation specific to that equipment.
+- In "saludDeEquipos", "ultimasFallas" lists each equipment's latest corrective work orders and defects (date, code,
+  what was reported). Use it to say what keeps failing (e.g. the same leak, the same seal), not only how many times.
 - "dataGaps" lists what CMS3 does NOT record. For any topic depending on those data, state that information is insufficient instead of estimating.
 - "sobreElBuque" says if a vessel is a manned tug or an unmanned barge: adapt recommendations (no crew duties on unmanned units).
 - Name vessels by NAME, never by code.
@@ -231,15 +236,15 @@ Return ONLY this JSON (no markdown fences, no text around it):
       "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
       "title": string,                // WHAT REQUIRES YOUR ATTENTION — one short plain sentence a non-expert understands (no jargon, no codes, max 15 words)
       "vessels": string[],            // vessel names involved ([] = whole fleet)
-      "whyItMatters": string,         // WHY IT MATTERS
+      "whyItMatters": string,         // WHY IT MATTERS — the concrete consequence for THIS vessel and THIS equipment (operation, safety, class, environment), 1–2 sentences. Not a general statement that would fit any vessel
       "evidenceIds": string[],        // tags E-n supporting it (ONLY tags present in the pack)
-      "facts": string,                // EVIDENCE — only facts from the pack, citing tags in brackets [E-3]
-      "assessment": string,           // MY ASSESSMENT — interpretation, clearly worded as such
-      "recommendedAction": string,    // RECOMMENDED ACTION
+      "facts": string,                // WHAT IS HAPPENING — what the records show, in plain words a non-expert understands: which equipment, what failed or is overdue (from "registros" / "ultimasFallas"), the exact numbers and the period they cover ("in 12 months", "in 180 days"). 2–4 short sentences. Only facts from the pack, each followed by its tag in brackets [E-3]
+      "assessment": string,           // MY ASSESSMENT — what the pattern suggests, worded as interpretation (in Spanish e.g. "Esto indica…", "Lo más probable es…"). 1–2 sentences. Never state a cause as fact unless a record says it
+      "recommendedAction": string,    // RECOMMENDED ACTION — 2 to 4 concrete steps, each on its own line starting "1. ", "2. "… Each step names the equipment or record and says exactly what to check, measure, request, execute or change. Forbidden: advice that would fit any vessel ("review the preventive routines", "improve planning", "check the spares are adequate") unless the step says which routine, what to look for and what to change
       "responsibleRole": string,      // RESPONSIBLE — a role written in the OUTPUT LANGUAGE (e.g. in Spanish "Jefe de Máquinas de <buque>", "Capitán", "Superintendente técnico", "Compras"), never a person's name
       "targetDays": number,           // TARGET in days from today
       "target": string,               // TARGET as text (e.g. "answer in 48 h, test within 7 days")
-      "verify": string,               // VERIFY — evidence that proves completion
+      "verify": string,               // VERIFY — the specific record or document that proves completion (e.g. "corrective work order closed with the alignment readings attached"), not a generic "updated list"
       "managementAdvice": string,     // MANAGEMENT ADVICE — how to handle it with the people involved
       "systemic": boolean,            // true if it reflects a management-system weakness, not a single event
       "alternatives": [               // only when there are real options; otherwise []
@@ -251,7 +256,8 @@ Return ONLY this JSON (no markdown fences, no text around it):
     { "topic": string, "missingData": string }
   ]
 }
-Keep every text field short and operational (1–3 sentences). Do not blame individuals.
+Write for a Technical Manager reading quickly: short sentences, everyday words, no internal tags outside "facts",
+no markdown (no **, no #). Keep the other text fields short and operational (1–3 sentences). Do not blame individuals.
 Every free-text field — including role names — must be in the output language: no English words mixed in.`;
 
 const MAX_FINDINGS = 10;
@@ -299,6 +305,9 @@ export async function generateAdvisorReport(session: TenantAccessSession, vessel
       role: "user",
       content: `${localeUserReminder(locale)}\nToday: ${today}\n${JSON.stringify({
         ...pack.payload,
+        // Lo que dice cada registro citable: sin esto la IA sólo ve etiquetas y
+        // conteos, y su explicación y su recomendación salen genéricas.
+        registros: pack.evidence.map(e => ({ ev: e.id, buque: e.vesselName, equipo: e.assetName, codigo: e.code, titulo: e.title, detalle: e.detail })),
         dataGaps: pack.dataGaps,
         comparacionConElAnalisisAnterior: trend
           ? { desde: trend.previousAt.slice(0, 10), numeros: trend.metrics, nota: "before = análisis anterior, now = éste. Si algo empeoró, decilo; si mejoró, reconocelo." }

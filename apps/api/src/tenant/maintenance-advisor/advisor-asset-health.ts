@@ -68,18 +68,23 @@ export interface AssetHealthResult {
 // mercurio casi todos los motores caían ahí y nadie quedaba "en observación".
 const STATE_FROM_SCORE = (score: number): AssetHealthState => (score >= 9 ? "FRAGILE" : score >= 5 ? "WATCH" : "OK");
 
-/** Texto corto para la IA (la UI usa `signals` traducidas). */
+/**
+ * Texto corto para la IA y para la tarjeta del equipo en el tema (la radiografía
+ * usa `signals` traducidas). Lo que se cuenta en el tiempo cubre 12 meses.
+ */
 export function signalText(s: AssetHealthSignal): string {
+  const n = s.n ?? 0;
+  const pl = (one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   switch (s.code) {
-    case "UNPLANNED": return `${s.n} reparaciones no planificadas o de emergencia`;
-    case "CORRECTIVE": return `${s.n} reparaciones correctivas`;
-    case "DEFECTS_REPEATED": return `${s.n} defectos en el período (se repiten)`;
-    case "DEFECT_REOPENED": return `${s.n} defectos reabiertos`;
-    case "LAB_ALARM": return `${s.n} análisis de laboratorio o vibraciones en alarma`;
-    case "LAB_CAUTION": return `${s.n} análisis en precaución`;
-    case "DEFERRAL": return `${s.n} postergaciones activas`;
-    case "OVERDUE": return `${s.n} tareas del plan vencidas`;
-    case "SPARES": return `consume muchos más repuestos que equipos iguales (${s.n} consumos)`;
+    case "UNPLANNED": return `${pl("reparación no planificada o de emergencia", "reparaciones no planificadas o de emergencia")} en 12 meses`;
+    case "CORRECTIVE": return `${pl("reparación correctiva", "reparaciones correctivas")} en 12 meses`;
+    case "DEFECTS_REPEATED": return `${pl("defecto", "defectos")} en 12 meses (se repiten)`;
+    case "DEFECT_REOPENED": return pl("defecto reabierto", "defectos reabiertos");
+    case "LAB_ALARM": return `${pl("análisis de laboratorio o vibraciones en alarma", "análisis de laboratorio o vibraciones en alarma")} en 12 meses`;
+    case "LAB_CAUTION": return `${pl("análisis en precaución", "análisis en precaución")} en 12 meses`;
+    case "DEFERRAL": return pl("postergación activa", "postergaciones activas");
+    case "OVERDUE": return pl("tarea del plan vencida", "tareas del plan vencidas");
+    case "SPARES": return `consume muchos más repuestos que equipos iguales (${pl("consumo", "consumos")} en 12 meses)`;
     case "NO_BACKUP": return "equipo crítico sin otro que lo reemplace";
     case "DEGRADED": return "hoy está degradado o fuera de servicio";
   }

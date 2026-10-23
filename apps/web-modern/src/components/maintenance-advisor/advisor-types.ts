@@ -81,6 +81,16 @@ export interface AdvisorMessage {
   createdByName: string | null;
 }
 
+// Etiquetas internas con que la IA cita los registros: [E-3], [E-19 a E-22],
+// [E-13, E-14] o [?] (cita que no existía). Sirven para validar, no para leer.
+const TAGS = String.raw`E-\d+(?:\s*(?:,|;|a|y|e|to|and|até|–|-)\s*E-\d+)*`;
+const TAG_RE = new RegExp(String.raw`[ \t]*(?:\[\s*(?:${TAGS}|\?)\s*\]|\(\s*${TAGS}\s*\))`, "g");
+
+/** Texto de la IA listo para leer: sin etiquetas internas ni marcas de markdown. */
+export function cleanAiText(s: string | null | undefined): string {
+  return (s ?? "").replace(TAG_RE, "").replace(/\*\*|__|`/g, "").replace(/[ \t]+([.,;:])/g, "$1").trim();
+}
+
 /**
  * Plan vigente del tema: la última propuesta del asesor que el Director adoptó;
  * si no hay ninguna, el plan original del informe.
@@ -89,8 +99,12 @@ export function currentPlan(f: AdvisorFinding, messages: AdvisorMessage[]): Advi
   const applied = messages
     .filter(m => m.findingKey === f.key && m.appliedAt && m.proposal)
     .sort((a, b) => (a.appliedAt! < b.appliedAt! ? 1 : -1))[0];
-  if (applied?.proposal) return { ...applied.proposal, adjusted: true, appliedId: applied.id };
-  return { action: f.recommendedAction, who: f.responsibleRole, when: f.target, targetDays: f.targetDays, verify: f.verify, adjusted: false, appliedId: null };
+  const p = applied?.proposal
+    ?? { action: f.recommendedAction, who: f.responsibleRole, when: f.target, targetDays: f.targetDays, verify: f.verify };
+  return {
+    action: cleanAiText(p.action), who: p.who, when: cleanAiText(p.when), targetDays: p.targetDays, verify: cleanAiText(p.verify),
+    adjusted: !!applied?.proposal, appliedId: applied?.proposal ? applied.id : null,
+  };
 }
 
 // ── "Crear la OT" desde un tema (01/10/2026) ─────────────────────────────────
@@ -131,7 +145,7 @@ export function woValuesFromFinding(
   return {
     description: [
       plan.action,
-      f.whyItMatters && `${labels.reason}: ${f.whyItMatters}`,
+      f.whyItMatters && `${labels.reason}: ${cleanAiText(f.whyItMatters)}`,
       codes.length > 0 && `${labels.background}: ${codes.join(", ")}`,
     ].filter(Boolean).join("\n\n"),
     dueDate: plan.targetDays != null ? inDays(plan.targetDays) : undefined,

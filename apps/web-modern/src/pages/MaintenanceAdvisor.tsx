@@ -27,7 +27,7 @@ import { EvidenceList, DraftPanel, FollowPanel, TalkBox } from "../components/ma
 import {
   AREAS, AREA_ICON, AREA_LABEL, ASSET_STATE_STYLE, BUCKETS, BUCKET_ICON, BUCKET_LABEL, BUCKET_OF, BUCKET_STYLE,
   HEALTH_LABEL, HEALTH_STYLE, SIGNAL_LABEL, SIGNAL_STRONG,
-  areaHealth, currentPlan, dueBadge, findingAreas, findingEvidence, findingVesselCodes, trendOf, woValuesFromFinding,
+  areaHealth, cleanAiText, currentPlan, dueBadge, findingAreas, findingEvidence, findingVesselCodes, trendOf, woValuesFromFinding,
   type AdvisorAction, type AdvisorFinding, type AdvisorMessage, type AdvisorMetrics, type AdvisorTrend, type Area, type Bucket,
   type AssetHealthResult, type AssetHealthRow, type EvidenceItem,
 } from "../components/maintenance-advisor/advisor-types";
@@ -601,6 +601,9 @@ const Topic: React.FC<{
   const t = useT();
   // Si el Director ajustó el plan con el asesor, ese plan manda en todo el tema.
   const plan = currentPlan(f, messages);
+  const facts = cleanAiText(f.facts);
+  const why = cleanAiText(f.whyItMatters);
+  const reading = cleanAiText(f.assessment);
   const [showOriginal, setShowOriginal] = useState(false);
   const [panel, setPanel] = useState<"mail" | "follow" | null>(null);
   const bucket = BUCKET_OF[f.priority];
@@ -628,8 +631,18 @@ const Topic: React.FC<{
 
       {open && (
         <div className="border-t border-fg/5 p-3 md:p-4 grid gap-3 lg:grid-cols-3">
+          {/* Primero lo que muestran los registros; después por qué importa y la
+              lectura del asesor, marcada aparte porque es interpretación. */}
           <Step n={1} title={t("advisor.step.what")}>
-            <p className="text-[13px] text-fg leading-relaxed mb-2">{f.whyItMatters || "—"}</p>
+            <p className="text-[13px] text-fg leading-relaxed mb-2 whitespace-pre-line">{facts || why || "—"}</p>
+            {facts && why && (
+              <p className="text-[12.5px] text-fg leading-relaxed mb-2"><b>{t("advisor.what.why")}:</b> {why}</p>
+            )}
+            {reading && (
+              <p className="text-[12.5px] text-text-industrial leading-relaxed mb-2 border-l-2 border-violet-400 pl-2">
+                <b className="text-violet-700 dark:text-violet-300">🧠 {t("advisor.what.reading")}:</b> {reading}
+              </p>
+            )}
             <EvidenceList items={evidence} />
             <TalkBox reportId={reportId} findingKey={f.key} step="WHAT" messages={messages.filter(m => m.step === "WHAT")} appliedId={plan.appliedId} onChanged={onMessages} />
           </Step>
@@ -643,19 +656,18 @@ const Topic: React.FC<{
                 </span>
                 {showOriginal && (
                   <p className="mt-1.5 rounded-lg border border-dashed border-fg/20 bg-fg/[0.03] px-2.5 py-1.5 text-[12px] text-text-industrial/80">
-                    <b>{t("advisor.talk.original")}</b> {[f.recommendedAction, f.responsibleRole, f.target, f.verify].filter(Boolean).join(" · ")}
+                    <b>{t("advisor.talk.original")}</b> {[f.recommendedAction, f.responsibleRole, f.target, f.verify].map(cleanAiText).filter(Boolean).join(" · ")}
                   </p>
                 )}
               </div>
             )}
-            <p className="text-[13px] text-fg leading-relaxed mb-2">{plan.action || "—"}</p>
+            <p className="text-[13px] text-fg leading-relaxed mb-2 whitespace-pre-line">{plan.action || "—"}</p>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px] mb-2">
               <dt className="text-text-industrial/70 font-bold">{t("advisor.kv.who")}</dt><dd className="font-bold text-fg">{plan.who || "—"}</dd>
               <dt className="text-text-industrial/70 font-bold">{t("advisor.kv.when")}</dt><dd className="font-bold text-fg">{plan.when || (plan.targetDays != null ? t("advisor.days").replace("{n}", String(plan.targetDays)) : "—")}</dd>
               <dt className="text-text-industrial/70 font-bold">{t("advisor.kv.closeWith")}</dt><dd className="font-bold text-fg">{plan.verify || "—"}</dd>
             </dl>
-            {f.managementAdvice && <More title={`💡 ${t("advisor.howToHandle")}`}>{f.managementAdvice}</More>}
-            {(f.assessment || f.facts) && <More title={`🧠 ${t("advisor.whyAdvisor")}`}>{f.assessment}</More>}
+            {f.managementAdvice && <More title={`💡 ${t("advisor.howToHandle")}`}>{cleanAiText(f.managementAdvice)}</More>}
             {f.alternatives.length > 0 && (
               <More title={`⚖️ ${t("advisor.alternatives")}`}>
                 <ul className="space-y-1.5">
